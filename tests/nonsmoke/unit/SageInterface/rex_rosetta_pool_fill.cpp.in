@@ -1,0 +1,79 @@
+#include <cassert>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <new>
+#include <vector>
+#define HAVE_PTHREAD_H 1
+#define DEFAULT_CLASS_ALLOCATION_POOL_SIZE 4
+#define ROSE_MALLOC std::malloc
+#define ROSE_FREE std::free
+#define ROSE_ASSERT assert
+#define V_RexPoolProbe 1
+struct SgNode {
+  struct PoolEntry {
+    unsigned char *base;
+    size_t size, stride;
+    unsigned char *live;
+    int variant;
+    void (*reset)();
+  };
+  template <class T> struct PoolResetter {
+    static void reset() {}
+  };
+  static std::vector<PoolEntry> &allPools() {
+    static std::vector<PoolEntry> entries;
+    return entries;
+  }
+};
+struct RexPoolProbe {
+  virtual ~RexPoolProbe() = default;
+  unsigned char payload[56];
+  struct PoolFreeNode {
+    size_t pool_index, slot_index;
+    PoolFreeNode *next;
+  };
+  static const unsigned pool_size;
+  static PoolFreeNode *next_node;
+  static std::vector<unsigned char *> pools;
+  static std::vector<std::vector<PoolFreeNode>> pool_free_nodes;
+  static std::vector<std::vector<unsigned char>> pool_live_flags;
+  static void *operator new(size_t);
+  static void operator delete(void *, size_t);
+};
+@ALLOCATOR@
+int main() {
+  std::vector<unsigned char *> allocations;
+  for (int pass = 0; pass < 2; ++pass) {
+    for (int i = 0; i < 9; ++i) {
+      auto *raw = static_cast<unsigned char *>(
+          RexPoolProbe::operator new(sizeof(RexPoolProbe)));
+#if ROSE_ALLOC_MEMSET == 2 || ROSE_ALLOC_MEMSET == 3
+      for (size_t k = sizeof(char *); k < sizeof(RexPoolProbe); ++k)
+        assert(raw[k] == (ROSE_ALLOC_MEMSET == 2 ? 0 : 0xBB));
+#endif
+      std::memset(raw, 0x4F, sizeof(RexPoolProbe));
+      allocations.push_back(raw);
+    }
+    for (auto *raw : allocations) {
+      RexPoolProbe::operator delete(raw, sizeof(RexPoolProbe));
+#if ROSE_ALLOC_MEMSET == 2 || ROSE_ALLOC_MEMSET == 3
+      for (size_t k = 0; k < sizeof(char *); ++k)
+        assert(raw[k] == 0x4F);
+      for (size_t k = sizeof(char *); k < sizeof(RexPoolProbe); ++k)
+        assert(raw[k] == (ROSE_ALLOC_MEMSET == 2 ? 0 : 0xDD));
+#endif
+    }
+    allocations.clear();
+  }
+  void *oversized = RexPoolProbe::operator new(sizeof(RexPoolProbe) + 16);
+  RexPoolProbe::operator delete(oversized, sizeof(RexPoolProbe) + 16);
+  auto *node = new RexPoolProbe;
+  delete node;
+  for (auto &pool : RexPoolProbe::pool_live_flags)
+    for (unsigned char live : pool)
+      assert(live == 0);
+  for (auto *pool : RexPoolProbe::pools)
+    std::free(pool);
+}

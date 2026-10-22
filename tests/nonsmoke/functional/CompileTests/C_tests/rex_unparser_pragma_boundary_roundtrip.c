@@ -1,20 +1,38 @@
 // REX pragma boundary prefix marker.
 
 #pragma rex_global_marker
+#pragma ompx(
+#pragma accx)
+#pragma omp opaque(
+#pragma acc opaque)
 
 int rex_unparser_pragma_boundary_roundtrip(int value)
 #pragma rex_function_body_marker
+#pragma omp parallel
+#pragma acc parallel
 {
-  int result = value;
+  int result =
+#pragma rex_initializer_marker
+      value
+#pragma rex_initializer_end_marker
+      ;
 
 #pragma rex_continued_marker first second
-  result = result +
+  result = result
+#pragma rex_expression_after_lhs_marker
+           +
 #pragma rex_expression_marker
            1;
 
-  switch (result) {
+  switch (
+#pragma rex_selector_marker
+      result
+#pragma rex_selector_end_marker
+  ) {
 #pragma rex_case_marker
-  case 1:
+  case
+#pragma rex_case_value_marker
+      1:
 #pragma rex_case_body_marker
     result += 2;
     break;
@@ -33,5 +51,7 @@ int rex_unparser_pragma_boundary_roundtrip(int value)
   }
   }
 
-  return result;
+  return
+#pragma rex_return_marker
+      result;
 }

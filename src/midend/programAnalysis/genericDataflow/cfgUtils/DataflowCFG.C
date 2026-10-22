@@ -1,12 +1,11 @@
 #include "featureTests.h"
 #ifdef ROSE_ENABLE_SOURCE_ANALYSIS
 
+#include "Cxx_Grammar.h"
 #include "DataflowCFG.h"
 
 #include <cassert>
 using namespace std;
-
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
 namespace VirtualCFG {
 // the default interesting filter
@@ -44,21 +43,16 @@ vector<DataflowEdge> makeClosureDF(
                      const CFGPath &), // merge two paths into one
     bool (*filter)(CFGNode))           // filter function
 {
-  // a filter function here
   // A set of CFG paths, each of them is made from a raw CFG edge initially
   vector<CFGPath> currentPaths(orig.begin(), orig.end());
-  // cerr << "makeClosure starting with " << orig.size() << endl;
   while (true) {
   top:
-    // cerr << "makeClosure loop: " << currentPaths.size() << endl;
-
     // CH (5/27/2010): 'push_back' may invalidate iterators of a vector.
     // Using index instead to fix this subtle bug.
     for (size_t i = 0; i < currentPaths.size();
          ++i) { // check each of the current paths
       // if a path has a node from the other side which is not interesting, do
       // the path merge
-      // if (!(currentPaths[i].*otherSide)().isInteresting()) {
       if (!filter((currentPaths[i].*otherSide)())) {
         unsigned int oldSize =
             currentPaths.size(); // the number of unique paths before merge
@@ -83,23 +77,15 @@ vector<DataflowEdge> makeClosureDF(
     break; // If the iteration got all of the way through: all dest nodes of all
            // paths are interesting or no new merges are made.
   }
-  // cerr << "makeClosure loop done: " << currentPaths.size() << endl;
-
   // Now convert the set of CFG paths with interesting src and dest nodes into a
   // set of DataflowEdge
   vector<DataflowEdge> edges;
   for (vector<CFGPath>::const_iterator i = currentPaths.begin();
        i != currentPaths.end(); ++i) {
     // Only if the end node of the path is interesting
-    // if (((*i).*otherSide)().isInteresting())
     if (filter(((*i).*otherSide)()))
       edges.push_back(DataflowEdge(*i, filter));
   }
-  // cout << "makeClosure done: #edges=" << edges.size() << endl;
-  // for(vector<DataflowEdge>::iterator e=edges.begin(); e!=edges.end(); e++)
-  //     printf("Current Node %p<%s | %s>\n", e.target().getNode(),
-  //     e.target().getNode()->unparseToString().c_str(),
-  //     e.target().getNode()->class_name().c_str());
 #ifndef NDEBUG
   for (vector<DataflowEdge>::const_iterator i = edges.begin(); i != edges.end();
        ++i) {
@@ -121,31 +107,7 @@ vector<DataflowEdge> DataflowNode::inEdges() const {
                        &mergePathsReversed, filter);
 }
 
-bool DataflowNode::isInteresting() const {
-  //  return (n.getNode())->cfgIsIndexInteresting(n.getIndex());
-  // return isDataflowInteresting(n);
-  return filter(n);
-}
-
-bool isDataflowInteresting(CFGNode cn) {
-  ROSE_ASSERT(cn.getNode());
-  return (cn.getNode()->cfgIsIndexInteresting(cn.getIndex()) &&
-          //! isSgFunctionRefExp(cn.getNode()) &&
-          !isSgExprListExp(cn.getNode()) &&
-          !isSgForInitStatement(cn.getNode()) &&
-          //! isSgVarRefExp(cn.getNode()) &&
-          //! isSgValueExp(cn.getNode()) &&
-          //! isSgExprStatement(cn.getNode()) &&
-          !(isSgInitializedName(cn.getNode()) && cn.getIndex() == 0)) ||
-         // The line breaks in the following logic clause make it look like the
-         // author intended to write
-         //    (isSgIfStmt(..) && (cn.getIndex()==1 || cn.getIndex==2))
-         // but it is being parsed as
-         //    ((isSgIfStmt(..) && cn.getIndex()==1) || cn.getIndex==2)
-         // [Robb Matzke 2019-07-10]
-         (isSgIfStmt(cn.getNode()) &&
-          (cn.getIndex() == 1 || cn.getIndex() == 2));
-}
+bool DataflowNode::isInteresting() const { return filter(n); }
 
 } // namespace VirtualCFG
 

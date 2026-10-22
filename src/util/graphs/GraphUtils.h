@@ -2,9 +2,7 @@
 #ifndef GRAPH_UTILS
 #define GRAPH_UTILS
 
-#include "GraphUtils.h"
-
-#include "IteratorTmpl.h"
+#include "GraphAccess.h"
 
 #include <string>
 

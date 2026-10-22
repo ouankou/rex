@@ -1,11 +1,21 @@
+#include "BuildExprVisitor.h"
+#include "RoseAst.h"
 #include "rose.h"
 #include "sage-build.h"
 
+#include <flang/Evaluate/expression.h>
+#include <flang/Evaluate/tools.h>
+
+#include <algorithm>
+#include <array>
+#include <cmath>
 #include <cstdint>
 #include <iostream>
 #include <limits>
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <vector>
 
 namespace {
 
@@ -162,19 +172,14 @@ void publishComponentLengthContract(const std::string &statement,
 SgFunctionType *buildFunctionTypeWithArgument(SgType *result, SgType *argument,
                                               bool sourceSyntax) {
   ROSE_ASSERT(result != nullptr && argument != nullptr);
-  SgFunctionType *function = new SgFunctionType(result, false);
-  ROSE_ASSERT(function != nullptr);
-  function->set_fortran_source_syntax(sourceSyntax);
   SgFunctionParameterTypeList *arguments = new SgFunctionParameterTypeList();
   ROSE_ASSERT(arguments != nullptr);
   arguments->append_argument(argument);
-  SgFunctionParameterTypeList *empty = function->get_argument_list();
-  ROSE_ASSERT(empty != nullptr && empty->get_parent() == function);
-  function->set_argument_list(arguments);
-  arguments->set_parent(function);
-  empty->set_parent(nullptr);
-  SageInterface::deleteAST(
-      empty, SageInterface::DeleteAstMode::kSkipExternalReferences);
+  SgFunctionType *function = new SgFunctionType(result, false, arguments);
+  ROSE_ASSERT(function != nullptr);
+  function->set_fortran_source_syntax(sourceSyntax);
+  ROSE_ASSERT(function->get_argument_list() == arguments &&
+              arguments->get_parent() == function);
   return function;
 }
 
@@ -282,11 +287,329 @@ void requireSemanticStringInterning() {
 } // namespace
 
 int main(int argc, char **argv) {
-  if (argc != 2) {
-    std::cerr << "usage: " << argv[0] << " MODE\n";
+  if (argc < 2 ||
+      (argc != 2 &&
+       !(argc == 3 &&
+         (std::string(argv[1]) == "valid-real-literals" ||
+          std::string(argv[1]) == "valid-complex-integer-parts" ||
+          std::string(argv[1]) == "valid-native-unsigned-literals" ||
+          std::string(argv[1]) == "valid-native-boz-literals" ||
+          std::string(argv[1]) == "valid-signed-integer-minimum" ||
+          std::string(argv[1]) == "valid-wide-complex-integer-parts")))) {
+    std::cerr << "usage: " << argv[0] << " MODE [SOURCE]\n";
     return 2;
   }
   const std::string mode = argv[1];
+  if (mode == "valid-signed-integer-minimum") {
+    SgProject *project = frontend(std::vector<std::string>{argv[0], argv[2]});
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    const std::array<int, 5> kinds{1, 2, 4, 8, 16};
+    const std::array<std::int64_t, 4> narrowValues{INT8_MIN, INT16_MIN,
+                                                   INT32_MIN, INT64_MIN};
+    std::array<bool, 5> seen{};
+    for (SgNode *node : NodeQuery::querySubTree(project, V_SgInitializedName)) {
+      const auto *name = isSgInitializedName(node);
+      for (std::size_t index = 0; index < kinds.size(); ++index) {
+        if (name->get_name().getString() !=
+            "minimum" + std::to_string(kinds[index]))
+          continue;
+        ROSE_ASSERT(!seen[index]);
+        const auto *initializer =
+            isSgAssignInitializer(name->get_initializer());
+        ROSE_ASSERT(initializer != nullptr);
+        const auto *value = isSgValueExp(initializer->get_operand());
+        ROSE_ASSERT(value != nullptr && value->get_parent() == initializer);
+        if (index == 4) {
+          const auto *wide = isSgInteger128Val(value);
+          ROSE_ASSERT(wide != nullptr);
+          ROSE_ASSERT(wide->get_value() == Rose::Integer128Value::fromBits(
+                                               {0, UINT64_C(1) << 63}, false));
+        } else if (const auto *small = isSgIntVal(value)) {
+          ROSE_ASSERT(small->get_value() == narrowValues[index]);
+        } else {
+          const auto *large = isSgLongLongIntVal(value);
+          ROSE_ASSERT(large != nullptr &&
+                      large->get_value() == narrowValues[index]);
+        }
+        const auto *type = isSgTypeInt(value->get_literal_type());
+        ROSE_ASSERT(type != nullptr);
+        const auto *kind = isSgIntVal(type->get_type_kind());
+        ROSE_ASSERT(kind != nullptr && kind->get_value() == kinds[index]);
+        seen[index] = true;
+      }
+    }
+    ROSE_ASSERT(std::all_of(seen.begin(), seen.end(),
+                            [](bool value) { return value; }));
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (mode == "valid-native-boz-literals") {
+    SgProject *project = frontend(std::vector<std::string>{argv[0], argv[2]});
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    const std::array<Rose::Integer128Value::Words, 5> expected{
+        {{UINT64_MAX, 0},
+         {UINT64_C(0x0123456789abcdef), UINT64_C(0xfedcba9876543210)},
+         {45, 0},
+         {493, 0},
+         {0, 0}}};
+    std::array<int, 5> occurrences{};
+    const auto values = NodeQuery::querySubTree(project, V_SgFortranBOZVal);
+    ROSE_ASSERT(values.size() == 10);
+    for (SgNode *node : values) {
+      const auto *value = isSgFortranBOZVal(node);
+      ROSE_ASSERT(value != nullptr && value->get_parent() != nullptr);
+      ROSE_ASSERT(value->get_bits().isUnsigned());
+      ROSE_ASSERT(value->get_type() == SgTypeFortranBOZ::createType());
+      const auto words = value->get_bits().words();
+      const auto found = std::find(expected.begin(), expected.end(), words);
+      ROSE_ASSERT(found != expected.end());
+      ++occurrences[found - expected.begin()];
+    }
+    ROSE_ASSERT(std::all_of(occurrences.begin(), occurrences.end(),
+                            [](int count) { return count == 2; }));
+    const auto dataValues =
+        NodeQuery::querySubTree(project, V_SgDataStatementValue);
+    ROSE_ASSERT(dataValues.size() == 5);
+    for (SgNode *node : dataValues) {
+      const auto *data = isSgDataStatementValue(node);
+      const auto *literal = isSgFortranBOZVal(data->get_constant_expression());
+      ROSE_ASSERT(literal != nullptr && literal->get_parent() == data);
+    }
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (mode == "valid-native-unsigned-literals") {
+    SgProject *project =
+        frontend(std::vector<std::string>{argv[0], "-funsigned", argv[2]});
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    const std::array<std::string, 6> names{"u1", "u2",      "u4",
+                                           "u8", "wrapped", "negated"};
+    const std::array<std::uint64_t, 6> values{
+        UINT8_MAX, UINT16_MAX, UINT32_MAX, UINT64_MAX, 0, 1};
+    const std::array<int, 6> kinds{1, 2, 4, 8, 1, 8};
+    std::array<bool, 6> seen{};
+    for (SgNode *node : NodeQuery::querySubTree(project, V_SgInitializedName)) {
+      auto *name = isSgInitializedName(node);
+      const auto found =
+          std::find(names.begin(), names.end(), name->get_name().getString());
+      if (found == names.end())
+        continue;
+      const auto index = found - names.begin();
+      ROSE_ASSERT(!seen[index]);
+      auto *initializer = isSgAssignInitializer(name->get_initializer());
+      ROSE_ASSERT(initializer != nullptr);
+      auto *operand = initializer->get_operand_i();
+      ROSE_ASSERT(operand != nullptr && operand->get_parent() == initializer);
+      if (name->get_name() == "negated") {
+        auto *minus = isSgMinusOp(operand);
+        ROSE_ASSERT(minus != nullptr);
+        operand = minus->get_operand();
+        ROSE_ASSERT(operand != nullptr && operand->get_parent() == minus);
+        ROSE_ASSERT(minus->get_type() == operand->get_type());
+      }
+      auto *value = isSgValueExp(operand);
+      ROSE_ASSERT(value != nullptr);
+      if (auto *narrow = isSgUnsignedIntVal(value)) {
+        ROSE_ASSERT(narrow->get_value() == values[index]);
+      } else {
+        auto *wide = isSgUnsignedLongLongIntVal(value);
+        ROSE_ASSERT(wide != nullptr && wide->get_value() == values[index]);
+      }
+      auto *type = isSgTypeUnsignedInt(value->get_literal_type());
+      ROSE_ASSERT(type != nullptr);
+      auto *kind = isSgIntVal(type->get_type_kind());
+      ROSE_ASSERT(kind != nullptr && kind->get_value() == kinds[index]);
+      seen[index] = true;
+    }
+    ROSE_ASSERT(std::all_of(seen.begin(), seen.end(),
+                            [](bool value) { return value; }));
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (mode == "valid-wide-complex-integer-parts") {
+    std::vector<std::string> arguments{argv[0], argv[2]};
+    SgProject *project = frontend(arguments);
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    const auto complexes = NodeQuery::querySubTree(project, V_SgComplexVal);
+    ROSE_ASSERT(complexes.size() == 1);
+    auto *complex = isSgComplexVal(complexes.front());
+    const std::array<Rose::Integer128Value::Words, 2> expected{
+        Rose::Integer128Value::Words{UINT64_MAX, UINT64_C(0x7fffffffffffffff)},
+        Rose::Integer128Value::Words{1, UINT64_C(0x8000000000000000)}};
+    const std::array<SgExpression *, 2> parts{complex->get_real_value(),
+                                              complex->get_imaginary_value()};
+    for (std::size_t i = 0; i < parts.size(); ++i) {
+      auto *integer = isSgInteger128Val(parts[i]);
+      ROSE_ASSERT(integer != nullptr && integer->get_parent() == complex);
+      auto *type = isSgTypeInt(integer->get_literal_type());
+      ROSE_ASSERT(type != nullptr);
+      auto *kind = isSgIntVal(type->get_type_kind());
+      ROSE_ASSERT(kind != nullptr && kind->get_value() == 16);
+      ROSE_ASSERT(integer->get_value() ==
+                  Rose::Integer128Value::fromBits(expected[i], false));
+    }
+    std::size_t initializers = 0;
+    for (SgNode *node : NodeQuery::querySubTree(project, V_SgInitializedName)) {
+      auto *name = isSgInitializedName(node);
+      if (name->get_name() != "positive" && name->get_name() != "negative") {
+        continue;
+      }
+      auto *initializer = isSgAssignInitializer(name->get_initializer());
+      ROSE_ASSERT(initializer != nullptr && initializer->get_parent() == name);
+      SgExpression *operand = initializer->get_operand();
+      ROSE_ASSERT(operand != nullptr && operand->get_parent() == initializer);
+      if (name->get_name() == "negative") {
+        auto *minus = isSgMinusOp(operand);
+        ROSE_ASSERT(minus != nullptr);
+        operand = minus->get_operand();
+        ROSE_ASSERT(operand != nullptr && operand->get_parent() == minus);
+      }
+      auto *integer = isSgInteger128Val(operand);
+      ROSE_ASSERT(integer != nullptr);
+      ROSE_ASSERT(integer->get_value() ==
+                  Rose::Integer128Value::fromBits(expected[0], false));
+      auto *type = isSgTypeInt(integer->get_literal_type());
+      ROSE_ASSERT(type != nullptr);
+      auto *kind = isSgIntVal(type->get_type_kind());
+      ROSE_ASSERT(kind != nullptr && kind->get_value() == 16);
+      ++initializers;
+    }
+    ROSE_ASSERT(initializers == 2);
+    const auto dataValues =
+        NodeQuery::querySubTree(project, V_SgDataStatementValue);
+    ROSE_ASSERT(dataValues.size() == 2);
+    for (SgNode *node : dataValues) {
+      auto *value = isSgDataStatementValue(node);
+      auto *repeat = isSgIntVal(value->get_repeat_expression());
+      ROSE_ASSERT(repeat != nullptr && repeat->get_parent() == value);
+      ROSE_ASSERT(repeat->get_value() == 2);
+      auto *type = isSgTypeInt(repeat->get_literal_type());
+      ROSE_ASSERT(type != nullptr);
+      auto *kind = isSgIntVal(type->get_type_kind());
+      ROSE_ASSERT(kind != nullptr && kind->get_value() == 8);
+    }
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (mode == "valid-complex-integer-parts") {
+    std::vector<std::string> arguments{argv[0], argv[2]};
+    SgProject *project = frontend(arguments);
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    std::size_t integers = 0;
+    for (SgNode *node : NodeQuery::querySubTree(project, V_SgComplexVal)) {
+      auto *complex = isSgComplexVal(node);
+      for (auto *part :
+           {complex->get_real_value(), complex->get_imaginary_value()}) {
+        if (auto *integer = isSgIntVal(part)) {
+          auto *type = isSgTypeInt(integer->get_literal_type());
+          ROSE_ASSERT(type != nullptr);
+          auto *kind = isSgIntVal(type->get_type_kind());
+          ROSE_ASSERT(kind != nullptr && kind->get_value() == 8);
+          ROSE_ASSERT(integer->get_value() == 1 || integer->get_value() == 2);
+          ROSE_ASSERT(integer->get_parent() == complex);
+          ++integers;
+        }
+      }
+    }
+    ROSE_ASSERT(integers == 3);
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (mode == "valid-real-literals") {
+    std::vector<std::string> arguments{argv[0], argv[2]};
+    SgProject *project = frontend(arguments);
+    ROSE_ASSERT(project != nullptr && project->get_frontendErrorCode() == 0);
+    const std::array<std::string, 8> names{"half",          "bfloat", "small",
+                                           "dexp",          "named",  "wide",
+                                           "negative_zero", "mixed"};
+    const std::array<int, 9> kinds{2, 3, 4, 8, 8, 10, 8, 4, 8};
+    const std::array<double, 9> values{0.5, 0.5, 1.25, 125.0, 0.125,
+                                       2.5, 0.0, 1.0,  2.0};
+    std::array<bool, 9> seen{};
+    auto check = [&](SgExpression *expression, std::size_t index) {
+      auto *literal = isSgValueExp(expression);
+      ROSE_ASSERT(literal != nullptr && !seen[index]);
+      switch (kinds[index]) {
+      case 2: {
+        auto *value = isSgFloat16Val(literal);
+        ROSE_ASSERT(value != nullptr && value->get_value() == values[index]);
+        break;
+      }
+      case 3: {
+        auto *value = isSgBFloat16Val(literal);
+        ROSE_ASSERT(value != nullptr && value->get_value() == values[index]);
+        break;
+      }
+      case 4: {
+        auto *value = isSgFloatVal(literal);
+        ROSE_ASSERT(value != nullptr && value->get_value() == values[index]);
+        break;
+      }
+      case 8: {
+        auto *value = isSgDoubleVal(literal);
+        ROSE_ASSERT(value != nullptr && value->get_value() == values[index]);
+        break;
+      }
+      case 10: {
+        auto *value = isSgFloat80Val(literal);
+        ROSE_ASSERT(value != nullptr);
+        const auto expected =
+            Rose::FloatingValue(values[index])
+                .converted(Rose::FloatingValue::Format::x87_binary80);
+        ROSE_ASSERT(value->get_value() == expected);
+        break;
+      }
+      default:
+        ROSE_ABORT();
+      }
+      auto *type = isSgTypeFloat(literal->get_literal_type());
+      auto *selector =
+          type != nullptr ? isSgIntVal(type->get_type_kind()) : nullptr;
+      ROSE_ASSERT(selector != nullptr && selector->get_value() == kinds[index]);
+      seen[index] = true;
+    };
+    for (SgNode *node : RoseAst(project)) {
+      auto *name = isSgInitializedName(node);
+      if (name == nullptr)
+        continue;
+      const auto entry =
+          std::find(names.begin(), names.end(), name->get_name().getString());
+      if (entry == names.end())
+        continue;
+      const std::size_t index = entry - names.begin();
+      auto *initializer = isSgAssignInitializer(name->get_initializer());
+      ROSE_ASSERT(initializer != nullptr && initializer->get_parent() == name);
+      auto *expression = initializer->get_operand();
+      ROSE_ASSERT(expression != nullptr &&
+                  expression->get_parent() == initializer);
+      if (index == 6) {
+        auto *negative = isSgMinusOp(expression);
+        ROSE_ASSERT(negative != nullptr);
+        auto *zero = isSgDoubleVal(negative->get_operand());
+        ROSE_ASSERT(zero != nullptr && zero->get_parent() == negative);
+        ROSE_ASSERT(!std::signbit(zero->get_value()) &&
+                    std::signbit(-zero->get_value()));
+        ROSE_ASSERT(SageInterface::isEquivalentType(negative->get_type(),
+                                                    zero->get_type()));
+        check(zero, index);
+      } else if (index == 7) {
+        auto *sum = isSgAddOp(expression);
+        ROSE_ASSERT(sum != nullptr);
+        ASSERT_not_null(sum->get_lhs_operand());
+        ASSERT_not_null(sum->get_rhs_operand());
+        ROSE_ASSERT(sum->get_lhs_operand()->get_parent() == sum &&
+                    sum->get_rhs_operand()->get_parent() == sum);
+        check(sum->get_lhs_operand(), 7);
+        check(sum->get_rhs_operand(), 8);
+      } else {
+        check(expression, index);
+      }
+    }
+    for (bool found : seen)
+      ROSE_ASSERT(found);
+    SageInterface::deleteAST(project);
+    return 0;
+  }
   SgTypeInt *semantic = buildSemanticInteger(4);
 
   if (mode == "valid-explicit") {
@@ -371,11 +694,9 @@ int main(int argc, char **argv) {
         static_cast<std::uint64_t>(std::numeric_limits<long long>::max());
     std::optional<Fortran::parser::KindParam> kind(
         Fortran::parser::KindParam(std::uint64_t{maximum}));
-    std::uint64_t kindValue = 0;
     std::string kindSpelling;
-    Rose::builder::BuildImpl(kind, kindValue, kindSpelling);
-    ROSE_ASSERT(kindValue == maximum &&
-                kindSpelling == std::to_string(maximum));
+    Rose::builder::BuildImpl(kind, kindSpelling);
+    ROSE_ASSERT(kindSpelling == std::to_string(maximum));
 
     SgExpression *starExpression = nullptr;
     Rose::builder::BuildImpl(
@@ -390,25 +711,47 @@ int main(int argc, char **argv) {
                : 1;
   }
   if (mode == "valid-literals") {
-    const std::string signedText = "42";
-    Fortran::parser::IntLiteralConstant signedLiteral(
-        sourceBlock(signedText), std::optional<Fortran::parser::KindParam>{});
-    SgExpression *signedExpression = nullptr;
-    Rose::builder::BuildImpl(signedLiteral, signedExpression);
-    SgIntVal *signedValue = isSgIntVal(signedExpression);
-    ROSE_ASSERT(signedValue != nullptr && signedValue->get_value() == 42);
-
-    const std::string unsignedText = "18446744073709551615";
-    Fortran::parser::UnsignedLiteralConstant unsignedLiteral(
-        sourceBlock(unsignedText), std::optional<Fortran::parser::KindParam>{});
-    SgExpression *unsignedExpression = nullptr;
-    Rose::builder::BuildImpl(unsignedLiteral, unsignedExpression);
-    SgUnsignedLongLongIntVal *unsignedValue =
-        isSgUnsignedLongLongIntVal(unsignedExpression);
-    ROSE_ASSERT(unsignedValue != nullptr);
-    ROSE_ASSERT(unsignedValue->get_value() ==
-                std::numeric_limits<unsigned long long>::max());
-
+    auto checkUnsigned = [](auto kind, std::uint64_t expected,
+                            std::uint64_t spelled) {
+      constexpr int k = decltype(kind)::value;
+      using Type =
+          Fortran::evaluate::Type<Fortran::common::TypeCategory::Unsigned, k>;
+      Fortran::parser::TypedExpr semantic(
+          new Fortran::evaluate::GenericExprWrapper(
+              Fortran::evaluate::AsGenericExpr(
+                  Fortran::evaluate::Constant<Type>(
+                      typename Type::Scalar(expected)))),
+          Fortran::evaluate::GenericExprWrapper::Deleter);
+      const std::string digits = std::to_string(spelled);
+      Fortran::parser::UnsignedLiteralConstant literal(
+          sourceBlock(digits), Fortran::parser::KindParam(std::uint64_t{k}));
+      Rose::builder::BuildExprVisitor visitor(semantic);
+      visitor.Walk(literal);
+      SgExpression *expression = nullptr;
+      visitor.get(expression);
+      auto *value = isSgValueExp(expression);
+      ROSE_ASSERT(value != nullptr);
+      if (auto *narrow = isSgUnsignedIntVal(value)) {
+        ROSE_ASSERT(narrow->get_value() == expected);
+        ROSE_ASSERT(narrow->get_valueString() ==
+                    digits + "u_" + std::to_string(k));
+      } else {
+        auto *wide = isSgUnsignedLongLongIntVal(value);
+        ROSE_ASSERT(wide != nullptr && wide->get_value() == expected);
+        ROSE_ASSERT(wide->get_valueString() ==
+                    digits + "u_" + std::to_string(k));
+      }
+      auto *type = isSgTypeUnsignedInt(value->get_literal_type());
+      ROSE_ASSERT(type != nullptr);
+      auto *selector = isSgIntVal(type->get_type_kind());
+      ROSE_ASSERT(selector != nullptr && selector->get_value() == k);
+      SageInterface::deleteAST(value);
+    };
+    checkUnsigned(std::integral_constant<int, 1>{}, UINT8_MAX, UINT8_MAX);
+    checkUnsigned(std::integral_constant<int, 2>{}, UINT16_MAX, UINT16_MAX);
+    checkUnsigned(std::integral_constant<int, 4>{}, UINT32_MAX, UINT32_MAX);
+    checkUnsigned(std::integral_constant<int, 8>{}, UINT64_MAX, UINT64_MAX);
+    checkUnsigned(std::integral_constant<int, 1>{}, 0, 256);
     const std::string statement = "( + 1.0, 2.0)";
     const std::size_t realOffset = statement.find("1.0");
     ROSE_ASSERT(realOffset != std::string::npos);
@@ -436,30 +779,17 @@ int main(int argc, char **argv) {
                sourceFunction, semanticFunction)
                ? 0
                : 1;
-  } else if (mode == "invalid-integer-literal") {
+  } else if (mode == "literal-category-before-value") {
     const std::string text = "12x";
     Fortran::parser::IntLiteralConstant literal(
         sourceBlock(text), std::optional<Fortran::parser::KindParam>{});
-    SgExpression *expression = nullptr;
-    Rose::builder::BuildImpl(literal, expression);
-  } else if (mode == "integer-literal-range") {
-    const std::string text = "9223372036854775808";
-    Fortran::parser::IntLiteralConstant literal(
-        sourceBlock(text), std::optional<Fortran::parser::KindParam>{});
-    SgExpression *expression = nullptr;
-    Rose::builder::BuildImpl(literal, expression);
-  } else if (mode == "unsigned-literal-sign") {
-    const std::string text = "-1";
-    Fortran::parser::UnsignedLiteralConstant literal(
-        sourceBlock(text), std::optional<Fortran::parser::KindParam>{});
-    SgExpression *expression = nullptr;
-    Rose::builder::BuildImpl(literal, expression);
+    Rose::builder::BuildExprVisitor visitor{SageBuilder::buildBoolType()};
+    visitor.Walk(literal);
   } else if (mode == "kind-param-range") {
     std::optional<Fortran::parser::KindParam> kind{
         Fortran::parser::KindParam{std::numeric_limits<std::uint64_t>::max()}};
-    std::uint64_t value = 0;
     std::string spelling;
-    Rose::builder::BuildImpl(kind, value, spelling);
+    Rose::builder::BuildImpl(kind, spelling);
   } else if (mode == "kind-star-range") {
     SgExpression *expression = nullptr;
     Rose::builder::BuildImpl(Fortran::parser::KindSelector::StarSize(

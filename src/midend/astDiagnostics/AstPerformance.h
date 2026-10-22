@@ -1,18 +1,12 @@
 // Author: Dan Quinlan
-// $Id: AstPerformance.h,v 1.5 2008/01/25 19:53:30 dquinlan Exp $
-
 #ifndef AST_PERFORMANCE_H
 #define AST_PERFORMANCE_H
-
-// #include <rose.h>
 
 #include <list>
 
 #include <string>
 
 #include <vector>
-
-#include <assert.h>
 
 #include "rosedll.h"
 
@@ -31,32 +25,9 @@
 
  */
 
-// Future Design:
-//   1) Different levels of output
-//   2) External file output (for more complete statistics)
-//   3) A mechanism to report on hotspots, performance data, etc. ???
-
-// namespace ROSE_Performance {
-// This namespace represents the support for performance
-// monitoring of the difference phases of processing
-// within ROSE.
-
-// using namespace std;
-
-// DQ (2/20/2013): Change the type to support better timer from Liao.
-// typedef clock_t RoseTimeType;
 typedef double RoseTimeType;
 
 class ROSE_MemoryUsage {
-  //! Function that I got from Bill Henshaw (originally from PetSc), for
-  //! computing current memory in use.
-
-  // DQ (12/11/2006): Added simpler function than ramust mechanism, used for
-  // computing the memory in use. long int getCurrentMemoryUsage(); // reported
-  // in Kilobytes.
-
-  // JJW 1-25-2008: Added struct to allow only a single access to
-  // /proc/self/statm, and to replace the STATM_CODE macro
   int memory_pages;
   int resident_pages;
   int shared_pages;
@@ -81,8 +52,6 @@ private:
   //! it is not.
   bool getStatmInfo();
 
-  // DQ (12/12/2006): Supporting functions (available from reading
-  // /proc/<pid>/statm file).
 public:
   int getPageSizeBytes() const;
   int getAvailableMemoryPages() const;
@@ -94,7 +63,6 @@ public:
   int getNumberOfDirtyPages() const;
 
   int getNumberOfCodePlusLibraryPages() const;
-  long getMemoryUsageKilobytes() const;
 
   double getPageSizeMegabytes() const;
   double getAvailableMemoryMegabytes() const;
@@ -121,34 +89,19 @@ protected:
   //! the information if it can
   ROSE_MemoryUsage memoryUsage;
 
-  // DQ (12/11/2006): Mechanism based on PetSc implementation (used in
-  // Overture).
   double internalMemoryUsageData;
   // Permit a hierarchy of performance monitors
   std::vector<ProcessingPhase *> childList;
 
 public:
-  ProcessingPhase();
   ProcessingPhase(const std::string &s, double p, ProcessingPhase *parent);
 
-  // DQ (7/21/2010): We need a destructor so that we can set the
-  // internalMemoryUsageData in the destructor instead of the constructor.  This
-  // way the memory usage is for the operation that is being evaluated instead
-  // of the memory usage just before the operation being evaluated.
   virtual ~ProcessingPhase();
 
   void outputReport(int n);
   void outputReportToFile(std::ofstream &datafile);
-  void outputReportHeaderToFile(std::ofstream &datafile);
-
-  void stopTiming(const RoseTimeType &timer);
   static double getCurrentDelta(const RoseTimeType &timer);
 
-  // DQ (9/1/2006): These are defined in the class because
-  // timer functions should have the lowest possible overhead.
-  std::string get_name() const { return name; }
-  void set_name(std::string &s) { name = s; }
-  double get_performance() const { return performance; }
   void set_performance(const double &p) { performance = p; }
   double get_resolution() const { return resolution; }
   void set_resolution(const double &r) { resolution = r; }
@@ -156,98 +109,36 @@ public:
   void set_memory_usage(const double &m) { internalMemoryUsageData = m; }
 };
 
-// Forward reference required from "void
-// AstPerformance::generateReportToFile(SgProject*);"
 class SgProject;
 
 class ROSE_DLL_API AstPerformance {
 public:
   // DQ (9/1/2006): Note that we don't have the project yet when this is called
   // within "main()" to summarize the total time.
-  AstPerformance(std::string s, bool outputReport = false);
+  AstPerformance(std::string s);
   virtual ~AstPerformance();
 
   // This is the evolving data (built locally so that parents in the hierarchy
   // can refer to it)
   ProcessingPhase *localData;
 
-  // DQ (10/28/2020): Adding control over output of performance report.
   static bool outputCompilationPerformance;
-
-  // DQ (9/1/2006): Moved to the base class.
-  // Use the Linux timer to provide nanosecond resolution
-  // JJW (5/21/2008): Changed back to clock(3) for portability
 
   std::string label;
   static SgProject *project;
 
-  // DQ (7/16/2025): Added counters for a suspected performance issue in ROSE.
-  // Specifically when processing large projects we spend a significant amount
-  // of time in FixupAstSymbolTablesToSupportAliasedSymbols().
-  static size_t numberOfCallsToInjectSymbolsFromReferencedScopeIntoCurrentScope;
-  static size_t numberOfSymbolsCopiedIntoAliasSymbols;
-  static size_t numberOfUsingDirectivesProcessingAliasSymbols;
-  static size_t numberOfUsingBaseClassesProcessingAliasSymbols;
-  static size_t isSubset_numberOfCalls;
-  static size_t isSubset_numberOf_a_vector_size;
-  static size_t isSubset_numberOf_b_set_size;
-  static size_t isSubset_a_vector_size_max;
-  static size_t isSubset_b_set_size_max;
-
-  // DQ (7/19/2025): Adding more debugging...
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_range_size_max;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfBaseClass;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_symbolExistsInBaseScope;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_symbolExistsInBaseScope_SgVariableSymbol;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_calledFromUsingDirective;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_numberOfTimes_alreadyExistsAndIsInterestingCase;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_range_count;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_false_addingNewSgAliasSymbol;
-  static size_t
-      injectSymbolsFromReferencedScopeIntoCurrentScope_alreadyExists_true_addingCausalNode;
-
-  // DQ (8/14/2025): Adding support to count the number of statements traversed
-  // in the name qualification when using traverseInputFile(). It should be only
-  // the statements in the source file, but it appears to include statements
-  // marked as compilerGenerated.
-  static size_t
-      numberOfStatementsProcessedInNameQualificationUsingTraverseInputFile;
-  static size_t numberOfCallsToHashOperator;
-
   static void set_project(SgProject *projectParameter);
-
-  bool outputReportInDestructor;
 
   void generateReportFromObject() const;
   void generateReportToFile(SgProject *project) const;
   static void generateReport();
   static void cleanup();
 
-  // virtual double performanceResolution();
-  static double performanceResolution();
-
   // Support for file locking (so that the performance file is not
   // corrupted by parallel writes as used in parallel compiles with
   // the "-j#" make option).
   static int getLock();
   static void releaseLock(int fd);
-
-  // Timer function support
-  static void reportAccumulatedTime(const std::string &s,
-                                    const double &accumulatedTime,
-                                    const double &numberFunctionCalls);
-
-  static void startTimer(RoseTimeType &time);
-  static void accumulateTime(RoseTimeType &startTime, double &accumulatedTime,
-                             double &numberFunctionCalls);
 
 protected:
   // Storage of all performance information about
@@ -268,7 +159,6 @@ protected:
 // huge.
 class ROSE_DLL_API TracingPerformance {
 protected:
-  // MS (11/9/2020): tracing related fields
   static std::ofstream *trace_stream;
   static double trace_zero_time;
   static bool first_event;
@@ -293,7 +183,7 @@ private:
   std::string label;
 
 public:
-  TraceOnlyPerformance(std::string s, bool outputReport = false);
+  TraceOnlyPerformance(std::string s);
   virtual ~TraceOnlyPerformance();
   void endTimer();
   typedef RoseTimeType time_type;
@@ -306,7 +196,7 @@ private:
 
   // Used for timing compilation within ROSE
 public:
-  TimingPerformance(std::string s, bool outputReport = false);
+  TimingPerformance(std::string s);
   virtual ~TimingPerformance();
 
   // DQ (6/30/2013): Refactored this function to be something that can be called
@@ -314,13 +204,9 @@ public:
   // before report generation (so we can compute total elapsed time).
   void endTimer();
 
-  // virtual double performanceResolution();
   static double performanceResolution();
 
   typedef RoseTimeType time_type; // For compatibility
 };
-
-// comment out use of namespace
-// }
 
 #endif

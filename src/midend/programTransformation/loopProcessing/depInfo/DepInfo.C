@@ -152,30 +152,30 @@ bool DepInfo ::operator&=(const DepInfo &d2) {
 }
 
 bool DepInfo::operator*=(const DepInfo &info2) {
-  if (cols() == 0)
-    return false;
-  if (cols() != info2.rows()) {
-    std::cerr << "info1=" << toString() << "; info2=" << info2.toString()
-              << "\n";
-    ROSE_ABORT();
+  const DepInfo info1(*this);
+  const DepInfo right(info2);
+  if (ConstPtr() == nullptr || right.ConstPtr() == nullptr) {
+    *this = DepInfo();
+    return info1 != *this;
   }
-  DepInfo info1(*this);
+  ASSERT_require(cols() == right.rows());
   int commLevel1 = info1.CommonLevel();
-  int commLevel2 = info2.CommonLevel();
+  int commLevel2 = right.CommonLevel();
   if (commLevel1 > commLevel2)
     commLevel1 = commLevel2;
-  *this = DepInfoGenerator::GetDepInfo(info1.rows(), info2.cols(),
-                                       static_cast<int>(DEPTYPE_TRANS) != 0,
-                                       commLevel1);
+  *this = DepInfoGenerator::GetDepInfo(
+      info1.rows(), right.cols(), DEPTYPE_TRANS,
+      info1.is_precise() && right.is_precise(), commLevel1);
   for (int i = 0; i < info1.rows(); i++) {
-    for (int j = 0; j < info2.cols(); j++) {
+    for (int j = 0; j < right.cols(); j++) {
       for (int k = 0; k < info1.cols(); k++) {
-        DepRel r = info1.Entry(i, k) * info2.Entry(k, j);
+        DepRel r = info1.Entry(i, k) * right.Entry(k, j);
         Entry(i, j) &= r;
       }
     }
   }
-  return info1 != (*this);
+  return info1.GetDepType() != GetDepType() ||
+         info1.is_precise() != is_precise() || info1 != *this;
 }
 
 DepInfo operator&(const DepInfo &info1, const DepInfo &info2) {
@@ -293,39 +293,20 @@ void DepInfo::InsertLoop(int level, DepDirection dir) {
   int incr1 = (dir & DEP_SRC) ? 1 : 0;
   int incr2 = (dir & DEP_SINK) ? 1 : 0;
 
-  ASSERT_require((incr1 == 0 || level < d1) && (incr2 == 0 || level < d2));
+  ASSERT_require(level >= 0);
+  ASSERT_require(dir == DEP_SRC || dir == DEP_SINK || dir == DEP_SRC_SINK);
+  ASSERT_require((incr1 == 0 || level <= d1) && (incr2 == 0 || level <= d2));
   UpdateRef().Reset(d1 + incr1, d2 + incr2);
-  if (d1 == 0 || d2 == 0)
-    return;
-
-  int i, j;
-  if (level < d1) {
-    for (i = 0; i < level; ++i) {
-      if (level < d2) {
-        for (j = 0; j < level; ++j)
-          Entry(i, j) = tmp.Entry(i, j);
-      } else
-        j = 0;
-      for (; j < d2; ++j)
-        Entry(i, j + incr2) = tmp.Entry(i, j);
-    }
-  } else
-    i = 0;
-  for (; i < d1; ++i) {
-    if (level < d2) {
-      for (j = 0; j < level; ++j)
-        Entry(i + incr1, j) = tmp.Entry(i, j);
-    } else
-      j = 0;
-    for (; j < d2; ++j)
-      Entry(i + incr1, j + incr2) = tmp.Entry(i, j);
-  }
+  for (int i = 0; i < d1; ++i)
+    for (int j = 0; j < d2; ++j)
+      Entry(i + (incr1 && i >= level), j + (incr2 && j >= level)) =
+          tmp.Entry(i, j);
   if (incr1) {
-    for (j = 0; j < d2 + incr2; ++j)
+    for (int j = 0; j < d2 + incr2; ++j)
       Entry(level, j) = DEPDIR_ALL;
   }
   if (incr2) {
-    for (i = 0; i < d1 + incr1; ++i)
+    for (int i = 0; i < d1 + incr1; ++i)
       Entry(i, level) = DEPDIR_ALL;
   }
   if (level <= CommonLevel() && incr1 && incr2)
@@ -333,11 +314,7 @@ void DepInfo::InsertLoop(int level, DepDirection dir) {
   ASSERT_require(CommonLevel() <= rows() && CommonLevel() <= cols());
 }
 
-void DepInfo::DistLoop(int level) {
-  /* QY: 3/4/2018: changing common level here is problematic for some tests
-    if ( level < CommonLevel());
-        CommonLevel() = level;
-  */
+void DepInfo::DistLoop(int) {
   ASSERT_require(CommonLevel() <= rows() && CommonLevel() <= cols());
 }
 
@@ -423,7 +400,6 @@ int DepInfo::CarryLevel() const {
 void DepInfo ::CarryLevels(int &minLevel, int &maxLevel) const {
   minLevel = -1;
   maxLevel = -1;
-  // int nr = rows(), nc = cols();
   int num = CommonLevel();
   for (int i = 0; i < num; i++) {
     DepRel r = Entry(i, i);

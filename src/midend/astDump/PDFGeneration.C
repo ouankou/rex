@@ -1,12 +1,10 @@
 // Author: Markus Schordan
-// $Id: PDFGeneration.C,v 1.4 2008/01/08 02:56:19 dquinlan Exp $
 
-// DQ (3/6/2003): added from AstProcessing.h to avoid referencing
-// the traversal classes in AstFixes.h before they are defined.
 #include "roseInternal.h"
 
 #include "sage3basic.h"
 
+#include "AstNodeVisitMapping.h"
 #include "PDFGeneration.h"
 
 #include <iomanip>
@@ -22,7 +20,8 @@ static void pdfErrorHandler(HPDF_STATUS errorNumber, HPDF_STATUS detail,
 
 // Setup PDF file
 void PDFGeneration::pdf_setup(std::string filename, size_t numPages) {
-
+  ROSE_ASSERT(pdfFile == nullptr && pages.empty() && pageDests.empty());
+  ROSE_ASSERT(currentPageNumber == 0 && currentPage == nullptr);
   pdfFile = HPDF_New(&pdfErrorHandler, NULL); // Build a PDF file
   theFont = HPDF_GetFont(pdfFile, "Helvetica", NULL);
   this->filename = filename;
@@ -48,8 +47,7 @@ void PDFGeneration::pdf_setup(std::string filename, size_t numPages) {
 }
 
 void PDFGeneration::begin_page() {
-  // Specify the page size (can be much larger than letter size)
-  assert(currentPageNumber < pages.size());
+  ROSE_ASSERT(currentPageNumber < pages.size());
   currentPage = pages[currentPageNumber];
 
   // use default coordinates
@@ -98,22 +96,30 @@ void PDFGeneration::pdf_finalize() {
   // Now close the PDF file
   HPDF_SaveToFile(pdfFile, filename.c_str());
   HPDF_Free(pdfFile);
+  pdfFile = nullptr;
+  theFont = nullptr;
+  currentPage = nullptr;
+  currentPageNumber = 0;
+  pages.clear();
+  pageDests.clear();
 }
 
-std::string PDFGeneration::text_page(SgNode *node) { return ""; }
-
 std::string PDFGeneration::get_bookmark_name(SgNode *node) {
-  return typeid(node).name();
+  ROSE_ASSERT(node != nullptr);
+  return node->class_name();
 }
 
 void PDFGeneration::edit_page(size_t pageNumber, SgNode *node,
                               PDFInheritedAttribute inheritedValue) {}
 
 void PDFGeneration::generate(std::string filename, SgNode *node) {
+  ROSE_ASSERT(node != nullptr);
+  AstNodeVisitMapping page_mapping(0);
+  page_mapping.traverse(node, preorder);
   std::string pdffilename = filename + ".pdf";
   std::cout << "generating PDF file: " << pdffilename << " ... ";
-  pdf_setup(pdffilename, 0);
-  PDFInheritedAttribute pdfIA(pdfFile);
+  pdf_setup(pdffilename, page_mapping.pagenum);
+  PDFInheritedAttribute pdfIA;
   traverse(node, pdfIA);
   pdf_finalize();
   std::cout << "done (full AST)." << std::endl;
@@ -121,10 +127,7 @@ void PDFGeneration::generate(std::string filename, SgNode *node) {
 
 PDFInheritedAttribute PDFGeneration::evaluateInheritedAttribute(
     SgNode *node, PDFInheritedAttribute inheritedValue) {
-  std::string stext = text_page(node);
-  const char *text = stext.c_str();
   begin_page();
-  HPDF_Page_ShowText(currentPage, text);
   std::string bookmarktext = get_bookmark_name(node);
   edit_page(currentPageNumber, node, inheritedValue);
   HPDF_Outline outline = HPDF_CreateOutline(

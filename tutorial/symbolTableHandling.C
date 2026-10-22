@@ -14,7 +14,7 @@ void visitorTraversal::visit(SgNode* n)
      if (globalScope != NULL)
         {
           printf ("Looking for \"x\" in the global symbol table ... \n");
-          SgSymbol* symbol = globalScope->lookup_var_symbol("x");
+          SgSymbol *symbol = globalScope->lookup_variable_symbol("x");
           ROSE_ASSERT(symbol != NULL);
 
        // Iterate through the symbol table
@@ -47,4 +47,3 @@ main ( int argc, char* argv[] )
 
      return 0;
    }
-

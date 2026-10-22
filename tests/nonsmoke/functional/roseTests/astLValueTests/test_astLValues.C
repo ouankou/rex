@@ -47,8 +47,10 @@ void HasLValues()
 #if TEST & TEST_CASTS
 	{
 		int d;
-		float f;
-		double g;
+                *(&d);
+                (&d)[0];
+                float f;
+                double g;
 		char c;
 //		const_cast<const int&>(4);
 //		dynamic_cast<const float&>(4);
@@ -81,8 +83,10 @@ void NoLValues()
 //		reinterpret_cast<char>(4);
 		(int)(5.4);
 		HasInt L_VALUE_hs;
-		const_cast<HasInt*>(&L_VALUE_hs);
-//		dynamic_cast<HasDouble*>(&L_VALUE_hs);
+                &L_VALUE_hs;
+                &L_VALUE_hs.d;
+                const_cast<HasInt *>(&L_VALUE_hs);
+                //		dynamic_cast<HasDouble*>(&L_VALUE_hs);
 		static_cast<HasInt>(L_VALUE_hs);
 		reinterpret_cast<HasFloat*>(&L_VALUE_hs);
 		(HasFloat)(L_VALUE_hs);

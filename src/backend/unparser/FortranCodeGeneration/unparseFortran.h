@@ -7,6 +7,8 @@
 
 bool fortranAttributeStatementOwnsArrayShape(
     const SgInitializedName *initializedName);
+SgName requireFortranSourceDerivedTypeName(SgClassType *classType,
+                                           SgUnparse_Info &info);
 
 class FortranCodeGeneration_locatedNode
     : public UnparseLanguageIndependentConstructs {
@@ -106,6 +108,8 @@ public:
   virtual void unparseTypeRef(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseTypeExpression(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseInitializerList(SgExpression *expr, SgUnparse_Info &info);
+  void unparseDataValues(const SgDataStatementValuePtrList &values,
+                         SgUnparse_Info &info);
   virtual void unparseAggrInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseConInit(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseAssnInit(SgExpression *expr, SgUnparse_Info &info);
@@ -121,9 +125,6 @@ public:
   virtual void unparseImpliedDo(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseConcatenationOp(SgExpression *expr, SgUnparse_Info &info);
 
-  virtual void unparseUnknownArrayOrFunctionReference(SgExpression *expr,
-                                                      SgUnparse_Info &info);
-
   virtual bool isSubroutineCall(SgFunctionCallExp *fcall);
 
   virtual void unparseUserDefinedUnaryOp(SgExpression *expr,
@@ -131,7 +132,6 @@ public:
   virtual void unparseUserDefinedBinaryOp(SgExpression *expr,
                                           SgUnparse_Info &info);
 
-  virtual void unparseModuleStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseProgHdrStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseProcHdrStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void genPUAutomaticStmts(SgStatement *stmt, SgUnparse_Info &info);
@@ -151,7 +151,6 @@ public:
   virtual void unparseVarDecl(SgStatement *stmt,
                               SgInitializedName *initializedName,
                               SgUnparse_Info &info);
-  virtual void unparseParamDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseUseStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseDoStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseProcessControlStmt(SgStatement *stmt,
@@ -177,6 +176,8 @@ public:
                                           SgUnparse_Info &info);
   virtual void unparseSyncTeamStatement(SgStatement *stmt,
                                         SgUnparse_Info &info);
+  virtual void unparseFormTeamStatement(SgStatement *stmt,
+                                        SgUnparse_Info &info);
   virtual void unparseLockStatement(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseUnlockStatement(SgStatement *stmt, SgUnparse_Info &info);
 
@@ -197,7 +198,6 @@ public:
                                  SgUnparse_Info &info);
 
   virtual void unparseImplicitStmt(SgStatement *stmt, SgUnparse_Info &info);
-  virtual void unparseBlockDataStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseStatementFunctionStmt(SgStatement *stmt,
                                             SgUnparse_Info &info);
   virtual void unparseWhereStmt(SgStatement *stmt, SgUnparse_Info &info);
@@ -273,8 +273,6 @@ public:
   //! begin the unparser (unparser.C)
   void run_unparser();
 
-  // unparsing for Rice Coarray Fortran 2.0
-  void unparseWithTeamStatement(SgStatement *stmt, SgUnparse_Info &info);
   void unparseCAFImageSelectorExp(SgExpression *expr, SgUnparse_Info &info);
   void unparseCoArrayExpression(SgExpression *expr, SgUnparse_Info &info);
   void unparseCudaKernelCall(SgExpression *expr, SgUnparse_Info &info);

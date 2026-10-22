@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <map>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -90,6 +91,58 @@ void roundTrip(SgProject *project) {
   constexpr Checkpoint checkpoint = Checkpoint::PreOmpConstruction;
   AstFileRecord ast = parseAstFileJson(buildJson(source, checkpoint, source),
                                        checkpointName(checkpoint));
+
+  AstFileRecord missingTarget = ast;
+  bool corrupted = false;
+  for (NodeRecord &record : missingTarget.nodes) {
+    if (record.kind != "SgUsingDeclarationStatement")
+      continue;
+    record.properties.object.at("declaration") = parseJson("0");
+    record.properties.object.at("initialized_name") = parseJson("0");
+    for (EdgeRecord &edge : record.edges) {
+      if (edge.field == "declaration" || edge.field == "initializedName")
+        edge.target = 0;
+    }
+    corrupted = true;
+    break;
+  }
+  ROSE_ASSERT(corrupted);
+  const size_t usingCount = SgUsingDeclarationStatement::numberOfNodes();
+  bool rejected = false;
+  try {
+    (void)reconstructSourceFile(missingTarget, source);
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  ROSE_ASSERT(rejected);
+  ROSE_ASSERT(SgUsingDeclarationStatement::numberOfNodes() == usingCount);
+
+  AstFileRecord cyclicTarget = ast;
+  bool cycled = false;
+  for (NodeRecord &record : cyclicTarget.nodes) {
+    if (record.kind != "SgUsingDeclarationStatement" ||
+        record.properties.requiredInt("declaration") == 0)
+      continue;
+    record.properties.object.at("declaration") =
+        parseJson(std::to_string(record.id));
+    for (EdgeRecord &edge : record.edges) {
+      if (edge.field == "declaration") {
+        edge.target = record.id;
+        cycled = true;
+      }
+    }
+    break;
+  }
+  ROSE_ASSERT(cycled);
+  bool rejectedCycle = false;
+  try {
+    (void)reconstructSourceFile(cyclicTarget, source);
+  } catch (const std::runtime_error &error) {
+    rejectedCycle = std::string(error.what()) ==
+                    "AST JSON using declaration has a cyclic typed target";
+  }
+  ROSE_ASSERT(rejectedCycle);
+  ROSE_ASSERT(SgUsingDeclarationStatement::numberOfNodes() == usingCount);
 
   std::multimap<std::pair<std::string, bool>, const NodeRecord *> records;
   for (const NodeRecord &record : ast.nodes) {

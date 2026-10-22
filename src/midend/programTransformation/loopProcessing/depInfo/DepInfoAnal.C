@@ -26,13 +26,6 @@
 
 #include "ROSE_ASSERT.h"
 
-#ifdef BD_OMEGA
-#include "DepTestStatistics.h"
-
-#include "PlatoOmegaInterface.h"
-
-extern DepTestStatistics DepStats;
-#endif
 
 DebugLog DebugDepInfo("-debugdeupinfo");
 
@@ -80,6 +73,22 @@ bool AnalyzeStmtRefs(AstInterface &fa, const AstNodePtr &n,
   // ReportOnly suppresses synthetic AST_UNKNOWN references; it does not turn
   // an incomplete interprocedural result into a complete one.
   return complete && !has_unknown;
+}
+
+bool AnalyzeConditionRefs(AstInterface &fa, const AstNodePtr &n,
+                          CollectObject<AstNodePtr> &wRefs,
+                          CollectObject<AstNodePtr> &rRefs) {
+  bool complete = AnalyzeStmtRefs(fa, n, wRefs, rRefs);
+  if (fa.IsVariableDecl(n)) {
+    AstNodePtr declaration;
+    const auto value =
+        fa.GetRuntimeDeclarationCondition(fa.GetParent(n), &declaration);
+    if (declaration == n && value != AST_NULL) {
+      const bool predicateComplete = AnalyzeStmtRefs(fa, value, wRefs, rRefs);
+      complete = complete && predicateComplete;
+    }
+  }
+  return complete;
 }
 
 std::string toString(std::vector<SymbolicVal> &analvec) {
@@ -153,7 +162,7 @@ const DepInfoAnal::LoopDepInfo &DepInfoAnal::GetLoopInfo(const AstNodePtr &s) {
   SymbolicVal lb, ub;
   if (s == AST_NULL ||
       !SymbolicValGenerator::IsFortranLoop(ai, s, &ivar, &lb, &ub))
-    return stmtInfo[AST_NULL];
+    return stmtInfo.at(AST_NULL);
   LoopDepInfo &info = stmtInfo[s];
   if (info.IsTop()) {
     AstNodePtr l = GetEnclosingLoop(s, ai);
@@ -235,34 +244,21 @@ void DepInfoAnal ::ComputeGlobalScalarDep(const StmtRefDep &ref,
 }
 
 AdhocDependenceTesting AdhocTest;
-#ifdef OMEGA
-PlatoOmegaInterface::PlatoOmegaDepTesting OmegaTest;
-PlatoOmegaInterface::PlatoOmegaDepTesting PlatoTest;
-#endif
 
 DepInfoAnal ::DepInfoAnal(AstInterface &fa)
     : handle(AdhocTest),
+      stmtInfo{{AST_NULL, LoopDepInfo{DomainCond(0), {}, {}}}},
       varmodInfo(fa, SelectLoop(),
                  LoopTransformInterface::getSideEffectInterface()) {
 
-#ifdef OMEGA
-  if (CmdOptions::GetInstance()->HasOption("-plato")) {
-    handle = PlatoTest;
-    PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::PLATO);
-  } else if (CmdOptions::GetInstance()->HasOption("-omega")) {
-    handle = OmegaTest;
-    PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::OMEGA);
-  } else {
-    PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-  }
-#endif
   AstNodePtr root = fa.GetRoot();
   varmodInfo.Collect(root);
 }
 
 DepInfoAnal ::DepInfoAnal(AstInterface &fa, DependenceTesting &h)
-    : handle(h), varmodInfo(fa, SelectLoop(),
-                            LoopTransformInterface::getSideEffectInterface()) {
+    : handle(h), stmtInfo{{AST_NULL, LoopDepInfo{DomainCond(0), {}, {}}}},
+      varmodInfo(fa, SelectLoop(),
+                 LoopTransformInterface::getSideEffectInterface()) {
   AstNodePtr root = fa.GetRoot();
   varmodInfo.Collect(root);
 }
@@ -272,96 +268,9 @@ void DepInfoAnal ::ComputeArrayDep(const StmtRefDep &ref, DepType deptype,
                                    DepInfoCollect &inDeps) {
   DepInfo d;
 
-#ifdef OMEGA
-  DepInfo plato_d, omega_d;
-  unsigned int test = 0;
-  if (CmdOptions::GetInstance()->HasOption("-omega"))
-    test |= PlatoOmegaInterface::OMEGA;
-  if (CmdOptions::GetInstance()->HasOption("-plato"))
-    test |= PlatoOmegaInterface::PLATO;
-  if (CmdOptions::GetInstance()->HasOption("-adhoc") || !test)
-    test |= PlatoOmegaInterface::ADHOC;
-#endif
-
   if (ref.commLevel > 0 || ref.r1.ref != ref.r2.ref) {
-    /*AstInterface& ai  = fa;
-    AstNodePtr root = ai.GetRoot();
-    ai.get_fileInfo(ref.r1.stmt,&fileName,&lineNo1);
-    ai.get_fileInfo(ref.r2.stmt,&fileName,&lineNo2);
-    ai.get_fileInfo(root,&fileName,&dummy);
-    */
-    /** Due to the time they take, do only the tests that are
-     *         called for
-     **/
-#ifdef OMEGA
-    switch (test) {
-    case PlatoOmegaInterface::ADHOC: {
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-#endif
-
-      handle = AdhocTest;
-      d = handle.ComputeArrayDep(*this, ref, deptype);
-
-#ifdef OMEGA
-    } break;
-    case PlatoOmegaInterface::OMEGA: {
-      handle = OmegaTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::OMEGA);
-      d = omega_d = OmegaTest.ComputeArrayDep(*this, ref, deptype);
-    } break;
-    case PlatoOmegaInterface::PLATO: {
-      handle = PlatoTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::PLATO);
-      d = plato_d = PlatoTest.ComputeArrayDep(*this, ref, deptype);
-    } break;
-    case PlatoOmegaInterface::ADHOC | PlatoOmegaInterface::OMEGA: {
-      handle = AdhocTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-      d = handle.ComputeArrayDep(fa, *this, ref, deptype);
-
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::OMEGA);
-      omega_d = OmegaTest.ComputeArrayDep(fa, *this, ref, deptype);
-    } break;
-    case PlatoOmegaInterface::ADHOC | PlatoOmegaInterface::PLATO: {
-      handle = AdhocTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-      d = handle.ComputeArrayDep(fa, *this, ref, deptype);
-
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::PLATO);
-      plato_d = PlatoTest.ComputeArrayDep(fa, *this, ref, deptype);
-    } break;
-    case PlatoOmegaInterface::OMEGA | PlatoOmegaInterface::PLATO: {
-      handle = OmegaTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::OMEGA);
-      d = omega_d = OmegaTest.ComputeArrayDep(fa, *this, ref, deptype);
-
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::PLATO);
-      plato_d = PlatoTest.ComputeArrayDep(fa, *this, ref, deptype);
-    } break;
-    case PlatoOmegaInterface::ADHOC | PlatoOmegaInterface::OMEGA |
-        PlatoOmegaInterface::PLATO: {
-      handle = AdhocTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-      d = handle.ComputeArrayDep(fa, *this, ref, deptype);
-
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::OMEGA);
-      omega_d = OmegaTest.ComputeArrayDep(fa, *this, ref, deptype);
-
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::PLATO);
-      plato_d = PlatoTest.ComputeArrayDep(fa, *this, ref, deptype);
-
-      DepStats.SetDepChoice(test);
-      if (ref.commLevel > 0) {
-        DepStats.CompareDepTests(test, d, plato_d, omega_d);
-      }
-    } break;
-    default: {
-      handle = AdhocTest;
-      PlatoOmegaInterface::SetDepChoice(PlatoOmegaInterface::ADHOC);
-      d = handle.ComputeArrayDep(fa, *this, ref, deptype);
-    } break;
-    }
-#endif
+    handle = AdhocTest;
+    d = handle.ComputeArrayDep(*this, ref, deptype);
 
     if (!d.IsTop()) {
       if (ref.commLevel > 0) {
@@ -485,9 +394,6 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep(
     std::cerr << "analyzing relation matrix : \n"
               << toString(analMatrix) << std::endl;
 
-#ifdef OMEGA
-  DepStats.InitAdhocTime();
-#endif
 
   if (!NormalizeMatrix(analMatrix, analMatrix.size(), dim + 1)) {
     return false;
@@ -517,24 +423,6 @@ DepInfo AdhocDependenceTesting::ComputeArrayDep(
     }
   }
 
-#ifdef OMEGA
-  DepStats.SetAdhocTime();
-
-  AstInterface *temp = (AstInterface *)&fa;
-  std::string adhocDV;
-  temp->get_fileInfo(ref.r1.ref, &filename, &lineNo1);
-  temp->get_fileInfo(ref.r2.ref, &filename, &lineNo2);
-  if (ref.commLevel > 0) {
-    adhocProbNum++;
-    // adhocDV = PlatoOmegaInterface::DirVector(result);
-    // buffer << "Prob\t" << adhocProbNum << " between " << lineNo1 << " and "
-    // << lineNo2 << "\tAdhoc\t" << DepType2String(result.GetDepType()) <<
-    // "\tTime\t" << adhocTime << std::endl;
-    // buffer << "Prob\t" << adhocProbNum << "\tAdhoc\t" <<
-    // DepType2String(result.GetDepType()) << "\tDV\t" << adhocDV << "\tTime\t"
-    // << adhocTime <<  std::endl; PrintResults(buffer.str());
-  }
-#endif
 
   if (!setdep)
     return DepInfo();
@@ -664,8 +552,8 @@ void DepInfoAnal ::ComputeDataDep(const AstNodePtr &s1, const AstNodePtr &s2,
   DoublyLinkedListWrap<AstNodePtr> rRef1, wRef1, rRef2, wRef2;
   CollectDoublyLinkedList<AstNodePtr> crRef1(rRef1), cwRef1(wRef1),
       crRef2(rRef2), cwRef2(wRef2);
-  if (!AnalyzeStmtRefs(fa, s1, cwRef1, crRef1) ||
-      (s1 != s2 && !AnalyzeStmtRefs(fa, s2, cwRef2, crRef2))) {
+  if (!AnalyzeConditionRefs(fa, s1, cwRef1, crRef1) ||
+      (s1 != s2 && !AnalyzeConditionRefs(fa, s2, cwRef2, crRef2))) {
     if (DebugDepInfo())
       std::cerr << "cannot determine side effects of statements: "
                 << AstInterface::AstToString(s1) << "; or "

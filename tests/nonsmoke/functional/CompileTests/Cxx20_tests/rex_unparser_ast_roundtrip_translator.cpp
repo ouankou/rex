@@ -59,10 +59,12 @@ int main(int argc, char *argv[]) {
         initialized_name->get_name() != "choice") {
       continue;
     }
-    SgConstructorInitializer *initializer =
-        isSgConstructorInitializer(initialized_name->get_initializer());
+    SgAggregateInitializer *initializer =
+        isSgAggregateInitializer(initialized_name->get_initializer());
     ROSE_ASSERT(initializer != nullptr);
-    ROSE_ASSERT(initializer->get_is_braced_initialized());
+    ROSE_ASSERT(initializer->get_source_form() ==
+                SgAggregateInitializer::e_aggregate_initializer_source_braced);
+    ROSE_ASSERT(initialized_name->get_is_braced_initialized());
     found_braced_union_variable_initializer = true;
   }
   ROSE_ASSERT(found_braced_union_variable_initializer);
@@ -136,20 +138,37 @@ int main(int argc, char *argv[]) {
   }
   ROSE_ASSERT(found_structural_catch_all);
 
-  bool found_semantic_nonreal_template_name = false;
+  bool found_nonreal_template_identity = false;
+  bool found_owned_argument_prototype = false;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgNonrealDecl)) {
     SgNonrealDecl *declaration = isSgNonrealDecl(node);
     if (declaration == nullptr || declaration->get_nonreal_template_role() !=
                                       SgNonrealDecl::e_nonreal_template_id) {
       continue;
     }
-    const std::string semantic_name =
-        declaration->get_semantic_name().getString();
-    ROSE_ASSERT(semantic_name.find('<') != std::string::npos);
-    ROSE_ASSERT(semantic_name.rfind('>') != std::string::npos);
-    found_semantic_nonreal_template_name = true;
+    ROSE_ASSERT(!declaration->get_name().is_null());
+    ROSE_ASSERT(declaration->get_templateDeclaration() != nullptr);
+    for (SgTemplateArgument *argument : declaration->get_tpl_args()) {
+      ROSE_ASSERT(argument != nullptr);
+      ROSE_ASSERT(argument->get_parent() == declaration);
+      SgType *source = argument->get_sourceSpelledType();
+      if (source != nullptr && source->has_source_prototype()) {
+        ROSE_ASSERT(source->get_parent() == argument);
+        auto *copy = isSgTemplateArgument(SageInterface::deepCopy(argument));
+        ROSE_ASSERT(copy != nullptr && copy != argument);
+        ROSE_ASSERT(copy->get_type() == argument->get_type());
+        ROSE_ASSERT(copy->get_sourceSpelledType() != source);
+        ROSE_ASSERT(copy->get_sourceSpelledType()->get_parent() == copy);
+        SageInterface::deleteAST(
+            copy, SageInterface::DeleteAstMode::kRequireIsolated);
+        ROSE_ASSERT(source->get_parent() == argument);
+        found_owned_argument_prototype = true;
+      }
+    }
+    found_nonreal_template_identity = true;
   }
-  ROSE_ASSERT(found_semantic_nonreal_template_name);
+  ROSE_ASSERT(found_nonreal_template_identity);
+  ROSE_ASSERT(found_owned_argument_prototype);
 
   SgInitializedName *unnamed_template_parameter = nullptr;
   for (SgNode *node :
@@ -202,10 +221,11 @@ int main(int argc, char *argv[]) {
           semantic_declaration->get_firstNondefiningDeclaration());
     }
     ROSE_ASSERT(semantic_instantiation != nullptr);
-    ROSE_ASSERT(semantic_instantiation->get_templateArguments().size() == 1);
+    ROSE_ASSERT(
+        semantic_instantiation->get_semanticTemplateArguments().size() == 1);
 
     SgTemplateArgument *semantic_argument =
-        semantic_instantiation->get_templateArguments().front();
+        semantic_instantiation->get_semanticTemplateArguments().front();
     SgPointerMemberType *semantic_type =
         semantic_argument != nullptr
             ? isSgPointerMemberType(semantic_argument->get_type())
@@ -225,6 +245,10 @@ int main(int argc, char *argv[]) {
     ROSE_ASSERT(written_declaration->get_tpl_args().size() == 1);
     SgTemplateArgument *written_argument =
         written_declaration->get_tpl_args().front();
+    ROSE_ASSERT(written_declaration->get_templateDeclaration() ==
+                semantic_instantiation);
+    ROSE_ASSERT(written_argument != semantic_argument);
+    ROSE_ASSERT(written_argument->get_parent() == written_declaration);
     ROSE_ASSERT(SageInterface::templateArgumentEquivalence(semantic_argument,
                                                            written_argument));
     ROSE_ASSERT(written_argument->get_type() == semantic_type);
@@ -274,7 +298,18 @@ int main(int argc, char *argv[]) {
         closure != nullptr ? closure->get_definition() : nullptr;
     ROSE_ASSERT(lambda != nullptr);
     ROSE_ASSERT(closure != nullptr);
-    ROSE_ASSERT(closure->get_parent() == lambda);
+    ROSE_ASSERT(closure->get_lambda_expression() == lambda);
+    ROSE_ASSERT(closure->get_class_type() ==
+                SgClassDeclaration::e_lambda_closure);
+    SgAuxiliaryDeclarationList *closure_owner =
+        isSgAuxiliaryDeclarationList(closure->get_parent());
+    ROSE_ASSERT(closure_owner != nullptr &&
+                closure_owner->get_parent() == closure->get_scope() &&
+                closure->get_scope()->get_auxiliary_declarations() ==
+                    closure_owner);
+    ROSE_ASSERT(std::count(closure_owner->get_declarations().begin(),
+                           closure_owner->get_declarations().end(),
+                           closure) == 1);
     ROSE_ASSERT(lambda->get_type() == closure->get_type());
     ROSE_ASSERT(isSgClassType(lambda->get_type()) != nullptr);
     ROSE_ASSERT(definition != nullptr);
@@ -336,6 +371,7 @@ int main(int argc, char *argv[]) {
     ROSE_ASSERT(capture->get_parent() == capture_list);
     ROSE_ASSERT(!capture->get_capture_by_reference());
     ROSE_ASSERT(!capture->get_implicit());
+    ROSE_ASSERT(capture->get_is_init_capture());
     ROSE_ASSERT(!capture->get_pack_expansion());
     ROSE_ASSERT(capture->get_closure_variable() == nullptr);
     ROSE_ASSERT(capture->get_startOfConstruct()->get_line() == 119);
@@ -358,7 +394,7 @@ int main(int argc, char *argv[]) {
     ROSE_ASSERT(capture_reference->get_endOfConstruct()->get_col() == 37);
 
     SgIntVal *capture_initializer =
-        isSgIntVal(capture->get_source_closure_variable());
+        isSgIntVal(capture->get_capture_initializer());
     ROSE_ASSERT(capture_initializer != nullptr);
     ROSE_ASSERT(capture_initializer->get_parent() == capture);
     ROSE_ASSERT(capture_initializer->get_value() == 11);

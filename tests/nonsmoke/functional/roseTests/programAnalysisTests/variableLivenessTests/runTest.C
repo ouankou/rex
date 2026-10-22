@@ -24,7 +24,7 @@ void testOneFunction(
     std::string funcParamName,                          // function in question
     vector<string> argvList, bool debug, int nrOfNodes, // number of CFG nodes
     multimap<int, vector<string>> resultsIn,            // expected live-in set
-    multimap<int, vector<string>> resultsOut) {
+    multimap<int, vector<string>> resultsOut, bool checkMacroLiteral = false) {
   cout << " \n\n------------------------------------------\nrunning "
           "(variable)... "
        << argvList[1] << endl;
@@ -46,7 +46,7 @@ void testOneFunction(
   std::unique_ptr<LivenessAnalysis> liv(
       new LivenessAnalysis(debug, (DefUseAnalysis *)defuse.get()));
   // iterate all function definitions
-  std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions;
+  std::vector<VirtualCFG::FilteredCFGNode<IsDFAFilter>> dfaFunctions;
   NodeQuerySynthesizedAttributeType vars =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
   NodeQuerySynthesizedAttributeType::const_iterator i = vars.begin();
@@ -59,7 +59,8 @@ void testOneFunction(
     string funcName = func->get_declaration()->get_qualified_name().str();
     if (debug)
       cerr << " .. running live analysis for func : " << funcName << endl;
-    FilteredCFGNode<IsDFAFilter> rem_source = liv->run(func, abortme);
+    VirtualCFG::FilteredCFGNode<IsDFAFilter> rem_source =
+        liv->run(func, abortme);
     if (abortme)
       break;
     if (funcName != funcParamName) { // skip function definition which does not
@@ -106,6 +107,30 @@ void testOneFunction(
       if (debug)
         cerr << "Investigating total number of nodes : " << nodes.size()
              << endl;
+    }
+
+    if (checkMacroLiteral) {
+      // A macro owns its exact expanded operand, not a second wrapper around
+      // the surrounding addition. Check semantic liveness directly instead
+      // of allowing a redundant syntax node to satisfy the old node count.
+      const auto macros = NodeQuery::querySubTree(func, V_SgMacroExpansionExp);
+      ASSERT_require(macros.size() == 1);
+      auto *macro = isSgMacroExpansionExp(macros.front());
+      auto *literal = isSgIntVal(macro->get_expanded_expression_checked());
+      ASSERT_require(literal != nullptr && literal->get_value() == 100);
+      auto *sum = isSgAddOp(macro->get_parent());
+      ASSERT_require(sum != nullptr && sum->get_lhs_operand() == macro);
+      const auto references =
+          NodeQuery::querySubTree(sum->get_rhs_operand(), V_SgVarRefExp);
+      ASSERT_require(references.size() == 1);
+      auto *reference = isSgVarRefExp(references.front());
+      auto *variable = reference->get_symbol()->get_declaration();
+      ASSERT_require(variable->get_name() == "b");
+      const std::vector<SgInitializedName *> expected{variable};
+      ASSERT_require(liv->getIn(literal) == expected);
+      ASSERT_require(liv->getOut(literal) == expected);
+      ASSERT_require(liv->getIn(reference) == expected);
+      ASSERT_require(liv->getOut(reference).empty());
     }
     // For nodes, except for type nodes, we do the check for in and out sets.
     NodeQuerySynthesizedAttributeType::const_iterator nodesIt = nodes.begin();
@@ -279,7 +304,7 @@ void testOneFunction(
   // iterate again and write second var.dot file
   i = vars.begin();
   abortme = false;
-  std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions2;
+  std::vector<VirtualCFG::FilteredCFGNode<IsDFAFilter>> dfaFunctions2;
   for (; i != vars.end(); ++i) {
     SgFunctionDefinition *func = isSgFunctionDefinition(*i);
     std::string name = func->class_name();
@@ -287,7 +312,8 @@ void testOneFunction(
     if (debug)
       cerr << " .. running live analysis for func (fixupStatementsINOUT): "
            << funcName << endl;
-    FilteredCFGNode<IsDFAFilter> rem_source = liv->run(func, abortme);
+    VirtualCFG::FilteredCFGNode<IsDFAFilter> rem_source =
+        liv->run(func, abortme);
     liv->fixupStatementsINOUT(func);
     if (rem_source.getNode() != NULL)
       dfaFunctions2.push_back(rem_source);
@@ -331,7 +357,7 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
 
   // example usage
   //  testing
-  std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions;
+  std::vector<VirtualCFG::FilteredCFGNode<IsDFAFilter>> dfaFunctions;
   bool abortme = false;
   NodeQuerySynthesizedAttributeType vars =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
@@ -341,7 +367,8 @@ void runCurrentFile(vector<string> &argvList, bool debug, bool debug_map) {
     string funcName = func->get_declaration()->get_qualified_name().str();
     if (debug)
       cerr << " running live analysis for func : " << funcName << endl;
-    FilteredCFGNode<IsDFAFilter> rem_source = liv->run(func, abortme);
+    VirtualCFG::FilteredCFGNode<IsDFAFilter> rem_source =
+        liv->run(func, abortme);
     if (rem_source.getNode() != NULL)
       dfaFunctions.push_back(rem_source);
     if (abortme)
@@ -441,7 +468,8 @@ int main(int argc, char *argv[]) {
       outputResults.clear();
       vector<string> as;
       results.insert(pair<int, vector<string>>(make_pair(8, as)));
-      testOneFunction("::foo", argvList, debug, 23, results, outputResults);
+      testOneFunction("::user_operator", argvList, debug, 23, results,
+                      outputResults);
     }
 
     if (startNr <= 2 && 2 <= stopNr) {
@@ -616,7 +644,7 @@ int main(int argc, char *argv[]) {
       argvList[1] = srcdir + "tests/test14.C";
       results.clear();
       outputResults.clear();
-      testOneFunction("::f", argvList, debug, 17, results, outputResults);
+      testOneFunction("::f", argvList, debug, 16, results, outputResults, true);
     }
 
     if (startNr <= 15 && 15 <= stopNr) {

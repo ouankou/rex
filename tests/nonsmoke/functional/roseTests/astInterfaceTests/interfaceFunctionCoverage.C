@@ -1,27 +1,10 @@
 // A translator to call many SageInterface functions to improve code coverage
 // reported by LCOV.
-//
-// Initially add analysis interface functions,
-//
-// Later to add transformation interface functions
-//  SageInterface::initializeSwitchStatement(SgSwitchStatement*
-//  switchStatement,SgStatement *item_selector,SgStatement *body)
-//  SageInterface::appendStatement(SgStatement *stmt, SgForInitStatement*
-//  for_init_stmt)
-//   insertStatementListBeforeFirstNonDeclaration()
-//   moveToSubdirectory()
-//   attachComment()
-// by traversing memory pools
-//
-// Liao, 4/4/2017
 #include "rose.h"
 
 #include <iostream>
 using namespace std;
 using namespace SageInterface;
-
-// used to cover SageInterface::DeclarationSets:: *
-SageInterface::DeclarationSets *decl_set = NULL;
 
 class RoseVisitor : public ROSE_VisitTraversal {
 public:
@@ -30,9 +13,14 @@ public:
   }
 
   void visit(SgNode *node);
+  void verifyOverloadCoverage() const {
+    ROSE_ASSERT(sawOverloadedFamily_ && sawSingleFamily_);
+  }
 
 private:
   SgProject *project_;
+  bool sawOverloadedFamily_ = false;
+  bool sawSingleFamily_ = false;
 };
 
 void RoseVisitor::visit(SgNode *node) {
@@ -41,10 +29,6 @@ void RoseVisitor::visit(SgNode *node) {
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {
     cout << "calling enclosingNamespaceScope() " << endl;
     enclosingNamespaceScope(decl);
-
-    // TODO: not working SageInterface::DeclarationSets::getDeclarations ()
-    //       decl_set  = buildDeclarationSets(decl);
-    //       decl_set->getDeclarations(decl);
 
     cout << "calling "
             "SageInterface::generateUniqueNameForUseAsIdentifier_support ( "
@@ -112,11 +96,6 @@ void RoseVisitor::visit(SgNode *node) {
     //  getNonInstantiatonDeclarationForClass (temp_decl);
 
     templateDefinitionIsInClass(temp_decl);
-
-    // TODO: this function causes assertion failure
-    // SgTemplateInstantiationMemberFunctionDecl* copy =
-    // buildForwardFunctionDeclaration (temp_decl); prependStatement(copy,
-    // temp_decl->get_scope());
   }
 
   if (SgFunctionDeclaration *func = isSgFunctionDeclaration(node)) {
@@ -147,8 +126,20 @@ void RoseVisitor::visit(SgNode *node) {
 
   if (SgMemberFunctionDeclaration *memfunc =
           isSgMemberFunctionDeclaration(node)) {
-    // this function only accepts member functions
-    if (isOverloaded(memfunc))
+    const bool overloaded = isOverloaded(memfunc);
+    SgClassDeclaration *owner =
+        isSgClassDeclaration(memfunc->get_associatedClassDeclaration());
+    if (projectOwned && owner != nullptr && owner->get_name() == "Derived" &&
+        memfunc->get_name() == "f") {
+      ROSE_ASSERT(overloaded);
+      sawOverloadedFamily_ = true;
+    }
+    if (projectOwned && owner != nullptr && owner->get_name() == "MyList" &&
+        memfunc->get_name() == "operator[]") {
+      ROSE_ASSERT(!overloaded);
+      sawSingleFamily_ = true;
+    }
+    if (overloaded)
       cout << "calling isOverloaded() returns true" << endl;
   }
   // TODO: this never should work since we don't use
@@ -167,6 +158,11 @@ void RoseVisitor::visit(SgNode *node) {
 
     getDeclarationOfNamedFunction(exp);
 
+    if (projectOwned) {
+      isConstantTrue(exp);
+      isConstantFalse(exp);
+    }
+
     // TODO: assert failure for this function
     // if (getInitializerOfExpression (exp)!= NULL)
     //    cout<<"calling SageInterface::getInitializerOfExpression(SgExpression*
@@ -184,9 +180,6 @@ void RoseVisitor::visit(SgNode *node) {
       }
     }
 
-    isConstantTrue(exp);
-    isConstantFalse(exp);
-
     isPostfixOperator(exp);
     isIndexOperator(exp);
     if (isSgCharVal(exp) || isSgUnsignedCharVal(exp) || isSgShortVal(exp) ||
@@ -199,8 +192,6 @@ void RoseVisitor::visit(SgNode *node) {
   }
 
   if (SgFunctionCallExp *node2 = isSgFunctionCallExp(node)) {
-    // TODO: this function has many assertions for unsupported cases.
-    // functionCallExpressionPreceedsDeclarationWhichAssociatesScope(node2);
     isCallToParticularFunction("test_splitVariableDeclaration", 0, node2);
 
     if (SgFunctionSymbol *fsym = node2->getAssociatedFunctionSymbol()) {
@@ -260,7 +251,10 @@ void RoseVisitor::visit(SgNode *node) {
 }
 
 int main(int argc, char *argv[]) {
-  SgProject *project = frontend(argc, argv);
+  std::vector<std::string> arguments(argv, argv + argc);
+  const bool requireOverloadCoverage = CommandlineProcessing::isOption(
+      arguments, "--", "require-overload-coverage", true);
+  SgProject *project = frontend(arguments);
   ROSE_ASSERT(project != NULL);
 
   cout << "begin test output .." << endl;
@@ -292,6 +286,8 @@ int main(int argc, char *argv[]) {
   //  visible AST
   RoseVisitor visitor(project);
   visitor.traverseMemoryPool();
+  if (requireOverloadCoverage)
+    visitor.verifyOverloadCoverage();
 
   // 3. Call some functions in the end
   reset_name_collision_map();

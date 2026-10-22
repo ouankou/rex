@@ -100,14 +100,14 @@ void translateGraph(_GraphStructure &graph, _NodePredicate _nodePred,
   }
 };
 
-struct testPredNodes : public unary_function<Vertex *, void> {
+struct testPredNodes {
 public:
   void operator()(Vertex *test) {
     // std::cout << "Found a Node" << std::endl;
   }
 };
 
-struct testPredEdges : public unary_function<EdgeImpl *, void> {
+struct testPredEdges {
 public:
   void operator()(EdgeImpl *test) {
     // std::cout << "Found an Edge" << std::endl;

@@ -4,13 +4,16 @@ __attribute__((visibility("default"))) int rex_visibility_default();
 __attribute__((visibility("internal"))) int rex_visibility_internal();
 __attribute__((visibility("hidden"))) int rex_visibility_hidden_variable = 1;
 
-#define REX_VISIBILITY_KIND "hidden"
+#define REX_VISIBILITY_KIND                                                    \
+  "hid"                                                                        \
+  "den"
+#define REX_VISIBILITY_UNUSED_ARGUMENT(unused)                                 \
+  __attribute__((visibility(REX_VISIBILITY_KIND)))
 #define REX_VISIBILITY_ATTRIBUTE(kind) __attribute__((visibility(#kind)))
 #define REX_TYPE_VISIBILITY_ATTRIBUTE(kind)                                    \
   __attribute__((type_visibility(#kind)))
 
-__attribute__((visibility(REX_VISIBILITY_KIND))) int
-rex_visibility_macro_hidden();
+REX_VISIBILITY_UNUSED_ARGUMENT(internal) int rex_visibility_macro_hidden();
 REX_VISIBILITY_ATTRIBUTE(default) int rex_visibility_macro_default();
 REX_VISIBILITY_ATTRIBUTE(internal) int rex_visibility_macro_internal();
 

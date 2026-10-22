@@ -3,23 +3,7 @@
 #ifndef SIMPLE_FRONTIER_DETECTION_HEADER
 #define SIMPLE_FRONTIER_DETECTION_HEADER
 
-// The support for unparsing from the token stream is a feature in
-// ROSE to provide a new level of portability for the generated code.
-
-// This support for frontier detection on the AST distinguishes
-// the subtrees that must be unparsed from the AST vs. those that
-// may be unparsed from the token stream.  The solution is not to
-// simply unparse the whole file from the token stream starting
-// at the SgSourceFile, since this would not reflect transformations
-// and might not reflect parts of the AST for which there is some
-// lack of precise enough information in the mapping of the token
-// stream to the AST  (to support this feature of unparsing from
-// the token stream).
-
-// This SIMPLE version is an attempt to build a more precise unparsing
-// which is simpler and which will divide the unparsing from the
-// token stream into pieces that surround the subtree that must be
-// unparsed from the AST (because it was transformed).
+#include <unordered_map>
 
 class SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute {
 public:
@@ -36,17 +20,8 @@ public:
   bool unparseFromTheAST;
   bool containsNodesToBeUnparsedFromTheAST;
 
-  // DQ (12/1/2013): Support specific restrictions in where frontiers can be
-  // placed. For now: avoid class declarations in typedefs using a mixture of
-  // unparsing from tokens and unparsing from the AST. bool
-  // isPartOfTypedefDeclaration; For now: avoid unparing the SgIfStmt from the
-  // AST and the conditional expression/statement from the token stream. bool
-  // isPartOfConditionalStatement;
-
-  // Specific constructors are required
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute();
 
-  // DQ (11/13/2018): Added constructor.
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute(
       SgSourceFile *input_sourceFile);
 
@@ -54,8 +29,7 @@ public:
       SgSourceFile *input_sourceFile, int start, int end, bool processed);
 
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute(
-      const SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
-          &X); // : processChildNodes(X.processChildNodes) {};
+      const SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute &X);
 };
 
 class SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute {
@@ -68,9 +42,6 @@ public:
   bool unparseFromTheAST;
   bool containsNodesToBeUnparsedFromTheAST;
   bool containsNodesToBeUnparsedFromTheTokenStream;
-
-  // std::vector<SgStatement*> frontierNodes;
-  // std::vector<FrontierNode*> frontierNodes;
 
   SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute();
   SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute(SgNode *n);
@@ -88,25 +59,30 @@ public:
   explicit SimpleFrontierDetectionForTokenStreamMapping(
       TokenUnparseFrontierFileContext &frontierContext);
 
-  // virtual function must be defined
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
   evaluateInheritedAttribute(
       SgNode *n, SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
-                     inheritedAttribute);
+                     inheritedAttribute) override;
 
-  // virtual function must be defined
   SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute
   evaluateSynthesizedAttribute(
       SgNode *n,
       SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute
           inheritedAttribute,
-      SubTreeSynthesizedAttributes synthesizedAttributeList);
+      SubTreeSynthesizedAttributes synthesizedAttributeList) override;
 
 private:
+  void atTraversalStart() override;
+  void atTraversalEnd() override;
+
   TokenUnparseFrontierFileContext &frontierContext;
+  // Frontier traversal changes output flags, not structural ownership. These
+  // checked facts live only for this traversal and never become AST metadata.
+  std::unordered_map<SgNode *, bool> semanticAuxiliaryClassification;
+  std::unordered_map<SgNode *, std::unordered_map<SgNode *, size_t>>
+      structuralChildCounts;
 };
 
-// DQ (5/9/2021): Activate this code.
 void simpleFrontierDetectionForTokenStreamMapping(
     SgSourceFile *sourceFile, bool traverseHeaderFiles,
     TokenUnparseFrontierFileContext &frontierContext,

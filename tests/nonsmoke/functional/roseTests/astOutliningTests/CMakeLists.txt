@@ -99,6 +99,71 @@ unset(_rex_outliner_class_conversion_mode)
 unset(_rex_outliner_class_conversion_flags)
 
 add_test(
+  NAME rex_outliner_class_conversion_json_contract
+  COMMAND $<TARGET_FILE:rex_outliner_class_conversion_contract_driver>
+    --rex-class-conversion-mode=direct
+    -rose:outline:enable_classic
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${CMAKE_CURRENT_BINARY_DIR}/rex_outliner_class_conversion_json
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_class_conversion_contract.cpp)
+set_tests_properties(rex_outliner_class_conversion_json_contract
+  PROPERTIES LABELS "rex;OUTLINER;AST;CAST;ASTJSON")
+
+foreach(_rex_static_member_mode IN ITEMS direct new_file)
+  if(_rex_static_member_mode STREQUAL "direct")
+    set(_rex_static_member_flag -rose:outline:enable_classic)
+  else()
+    set(_rex_static_member_flag -rose:outline:new_file)
+  endif()
+  set(_rex_static_member_executable
+    rex_outliner_static_member_${_rex_static_member_mode})
+  add_test(NAME ${_rex_static_member_executable}_compile
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND $<TARGET_FILE:outline> ${_rex_static_member_flag}
+      -o ${_rex_static_member_executable}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_class_conversion_contract.cpp)
+  add_test(NAME ${_rex_static_member_executable}_runtime
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND ${CMAKE_CURRENT_BINARY_DIR}/${_rex_static_member_executable})
+  set_tests_properties(${_rex_static_member_executable}_compile
+    ${_rex_static_member_executable}_runtime
+    PROPERTIES LABELS "rex;OUTLINER;RUNTIME")
+  set_tests_properties(${_rex_static_member_executable}_compile
+    PROPERTIES FIXTURES_SETUP ${_rex_static_member_executable})
+  set_tests_properties(${_rex_static_member_executable}_runtime
+    PROPERTIES FIXTURES_REQUIRED ${_rex_static_member_executable})
+endforeach()
+unset(_rex_static_member_mode)
+unset(_rex_static_member_flag)
+unset(_rex_static_member_executable)
+
+set(_rex_friend_library_directory
+  ${CMAKE_CURRENT_BINARY_DIR}/rex_outliner_friend_library)
+file(MAKE_DIRECTORY ${_rex_friend_library_directory})
+add_test(NAME rex_outliner_friend_copied_library_unparse
+  WORKING_DIRECTORY ${_rex_friend_library_directory}
+  COMMAND $<TARGET_FILE:outline>
+    -I${CMAKE_SOURCE_DIR}/src/midend/programTransformation/astOutlining
+    -rose:outline:use_dlopen -rose:outline:copy_orig_file
+    -rose:outline:output_path . -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_access_chain_contract.cpp)
+add_test(NAME rex_outliner_friend_copied_library_compile
+  WORKING_DIRECTORY ${_rex_friend_library_directory}
+  COMMAND ${CMAKE_CXX_COMPILER} -std=c++17 -c
+    -I${CMAKE_SOURCE_DIR}/src/midend/programTransformation/astOutlining
+    ${_rex_friend_library_directory}/rose_rex_outliner_access_chain_contract_lib.cpp
+    -o ${_rex_friend_library_directory}/rex_outliner_friend_library.o)
+set_tests_properties(rex_outliner_friend_copied_library_unparse
+  rex_outliner_friend_copied_library_compile
+  PROPERTIES LABELS "rex;OUTLINER;LINKAGE")
+set_tests_properties(rex_outliner_friend_copied_library_unparse
+  PROPERTIES FIXTURES_SETUP rex_outliner_friend_library
+    ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_rex_friend_library_directory}")
+set_tests_properties(rex_outliner_friend_copied_library_compile
+  PROPERTIES FIXTURES_REQUIRED rex_outliner_friend_library)
+unset(_rex_friend_library_directory)
+
+add_test(
   NAME rex_outliner_friend_linkage_contract
   COMMAND $<TARGET_FILE:rex_outliner_friend_linkage_contract_driver>
     -rose:outline:parameter_wrapper
@@ -979,7 +1044,7 @@ foreach(specimen IN LISTS _outline_c_and_cxx_tests)
 endforeach()
 
 # Fortran tests without outline-specific switches
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   set(_outline_use_module1_fixture outline_use_module1_fortran_module)
   set(_outline_use_module1_fixture_dir
     "${CMAKE_CURRENT_BINARY_DIR}/fortran_module_fixtures/use_module1")
@@ -1050,7 +1115,7 @@ foreach(specimen IN LISTS OUTLINE_EXTERNAL_CXX_TESTS)
 endforeach()
 
 # outlineSelection: seq7 tests on local Fortran specimens
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   foreach(specimen IN LISTS OUTLINE_FORTRAN_TESTS)
     string(REPLACE "." "_" _name ${specimen})
     if(specimen MATCHES "\\.f$")
@@ -1273,3 +1338,40 @@ if(REX_EXTENDED_TEST_TIMEOUTS AND _outline_registered_tests)
   set_tests_properties(${_outline_registered_tests} PROPERTIES
     PROCESSORS 16)
 endif()
+
+find_program(REX_OUTLINER_TEST_PYTHON NAMES python3 REQUIRED)
+foreach(language IN ITEMS c cpp)
+  if(language STREQUAL c)
+    set(_rex_output_compiler ${CMAKE_C_COMPILER})
+  else()
+    set(_rex_output_compiler ${CMAKE_CXX_COMPILER})
+  endif()
+  foreach(construction IN ITEMS generated copied)
+    set(_rex_copy_source)
+    if(construction STREQUAL copied)
+      set(_rex_copy_source --copy-source)
+    endif()
+    foreach(mode IN ITEMS default explicit link)
+      add_test(NAME rex_outliner_output_${language}_${construction}_${mode}
+        COMMAND ${REX_OUTLINER_TEST_PYTHON}
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_output_ownership.py
+          --outline $<TARGET_FILE:outline> --compiler ${_rex_output_compiler}
+          --nm ${CMAKE_NM} --runtime $<TARGET_FILE:outlining>
+          --include ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/astOutlining
+          --language ${language} --mode ${mode} ${_rex_copy_source})
+      set_tests_properties(rex_outliner_output_${language}_${construction}_${mode}
+        PROPERTIES LABELS "rex;outliner;backend")
+    endforeach()
+  endforeach()
+  add_test(NAME rex_outliner_output_${language}_static
+    COMMAND ${REX_OUTLINER_TEST_PYTHON}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_output_ownership.py
+      --outline $<TARGET_FILE:outline> --compiler ${_rex_output_compiler}
+      --nm ${CMAKE_NM} --runtime $<TARGET_FILE:outlining>
+      --include ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/astOutlining
+      --language ${language} --mode static)
+  set_tests_properties(rex_outliner_output_${language}_static
+    PROPERTIES LABELS "rex;outliner;backend")
+endforeach()
+unset(_rex_output_compiler)
+unset(_rex_copy_source)

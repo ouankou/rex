@@ -7,7 +7,7 @@ int
 main( int argc, char * argv[] )
    {
   // Introduces tracking of performance of ROSE at the top most level.
-     TimingPerformance timer ("AST translation (main): time (sec) = ",true);
+  TimingPerformance timer("AST translation (main): time (sec) = ");
 
      SgProject* project = frontend(argc,argv);
 

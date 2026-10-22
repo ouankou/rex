@@ -39,7 +39,20 @@ int main(int argc, char *argv[]) {
         isSgTemplateInstantiationDecl(class_decl->get_definingDeclaration());
   }
   ROSE_ASSERT(inst_decl != nullptr);
-  ROSE_ASSERT(!inst_decl->get_templateArguments().empty());
+  ROSE_ASSERT(inst_decl->get_templateArguments().empty());
+  const auto &arguments = inst_decl->get_semanticTemplateArguments();
+  ROSE_ASSERT(arguments.size() == 2);
+  ROSE_ASSERT(arguments[0] != nullptr && arguments[1] != nullptr);
+  ROSE_ASSERT(arguments[0]->get_parent() == inst_decl);
+  ROSE_ASSERT(arguments[1]->get_parent() == inst_decl);
+  ROSE_ASSERT(arguments[0]->get_argumentType() ==
+              SgTemplateArgument::type_argument);
+  ROSE_ASSERT(isSgTypeInt(arguments[0]->get_type()) != nullptr);
+  ROSE_ASSERT(arguments[1]->get_argumentType() ==
+              SgTemplateArgument::nontype_argument);
+  ROSE_ASSERT(isSgTypeInt(arguments[1]->get_type()) != nullptr);
+  SgIntVal *extent = isSgIntVal(arguments[1]->get_expression());
+  ROSE_ASSERT(extent != nullptr && extent->get_value() == 4);
 
   SgClassSymbol *class_sym =
       isSgClassSymbol(inst_decl->search_for_symbol_from_symbol_table());

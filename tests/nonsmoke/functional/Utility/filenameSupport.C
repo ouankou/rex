@@ -4,37 +4,50 @@
 
 #include "Rose/StringUtility.h"
 
+#include <utility>
+
 using namespace std;
 using namespace Rose;
 
-void stringTest(string s) {
-  string s_absolute = StringUtility::getAbsolutePathFromRelativePath(s);
-  string s_filename = StringUtility::stripPathFromFileName(s);
-  string s_path = StringUtility::getPathFromFileName(s);
-  string s_nosuffix = StringUtility::stripFileSuffixFromFileName(s);
+int main() {
+  const pair<string, string> filenames[] = {
+      {"./.", "./."},
+      {"logical/../source.cpp", "logical/../source.cpp"},
+      {"", ""},
+      {"quote\"name.cpp", "quote\\\"name.cpp"},
+      {"back\\slash.cpp", "back\\\\slash.cpp"},
+      {"line\nname.cpp", "line\\nname.cpp"},
+      {"?"
+       "?/name.cpp",
+       "\\?\\?/name.cpp"},
+#ifdef SKIP_HASH_LINE_NUMBER_DECLARATIONS_IN_GENERATED_FILES
+      {"end*/name.cpp", "end*\\057name.cpp"},
+      {"begin/*name.cpp", "begin\\057*name.cpp"},
+      {"edge/*/name.cpp", "edge\\057*\\057name.cpp"},
+#else
+      {"end*/name.cpp", "end*/name.cpp"},
+      {"begin/*name.cpp", "begin/*name.cpp"},
+      {"edge/*/name.cpp", "edge/*/name.cpp"},
+#endif
+  };
+  for (const auto &[filename, escaped] : filenames) {
+    StringUtility::StringWithLineNumber line("int value;", filename, 37);
+#ifdef SKIP_HASH_LINE_NUMBER_DECLARATIONS_IN_GENERATED_FILES
+    const string directive = "/* #line 37 \"" + escaped + "\" */\n";
+#else
+    const string directive = "#line 37 \"" + escaped + "\"\n";
+#endif
+    ROSE_ASSERT(line.toString() == directive + "int value;\n");
+    if (!filename.empty())
+      ROSE_ASSERT(StringUtility::toString({line}) == line.toString());
+  }
+  const StringUtility::FileWithLineNumbers lines{
+      {"one", "./.", 37}, {"two", "./.", 38}, {"generated", "", 1}};
+  ROSE_ASSERT(
+      StringUtility::toString(lines, "emitted.cpp", 1) ==
+      StringUtility::StringWithLineNumber("one\ntwo", "./.", 37).toString() +
+          StringUtility::StringWithLineNumber("generated", "emitted.cpp", 5)
+              .toString());
 
-  printf("s = %s s_absolute = %s \n", s.c_str(), s_absolute.c_str());
-  printf("s = %s s_filename = %s \n", s.c_str(), s_filename.c_str());
-  printf("s = %s s_path     = %s \n", s.c_str(), s_path.c_str());
-  printf("s = %s s_nosuffix = %s \n", s.c_str(), s_nosuffix.c_str());
-  printf("\n");
-}
-
-int main(int argc, char *argv[]) {
-  // Test code for string utility library
-
-  string currentExecutable = argv[0];
-  printf("currentExecutable = %s \n", currentExecutable.c_str());
-  stringTest(currentExecutable);
-
-  currentExecutable = "./" + currentExecutable;
-  printf("currentExecutable = %s \n", currentExecutable.c_str());
-  stringTest(currentExecutable);
-
-  currentExecutable = "././" + currentExecutable;
-  printf("currentExecutable = %s \n", currentExecutable.c_str());
-  stringTest(currentExecutable);
-
-  printf("Program Terminated Normally! \n");
   return 0;
 }

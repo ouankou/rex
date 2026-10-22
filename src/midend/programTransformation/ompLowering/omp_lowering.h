@@ -1,5 +1,4 @@
 #include "astQuery.h"
-// #include "sage3basic.h"
 
 #ifndef OMP_LOWERING_H
 #define OMP_LOWERING_H
@@ -7,39 +6,10 @@
 #include "ASTtools.hh"
 #include "ompSupport.h"
 
-/*!
- * Translation (directive lowering) support for OpenMP 3.0 C/C++
- *
- *  Like other OpenMP related work within ROSE,
- *  all things go to the OmpSupport namespace to avoid conflicts
- * Liao, 8/10/2009
- */
 extern std::vector<SgFunctionDeclaration *> *target_outlined_function_list;
 extern std::vector<SgDeclarationStatement *> *target_outlined_struct_list;
 namespace OmpSupport {
-// static std::vector<SgFunctionDeclaration* >* outlined_function_list = new
-// std::vector<SgFunctionDeclaration *>();
-
-// OpenMP version info.
 extern bool enable_accelerator;
-
-// A flag to control if device data environment runtime functions are used to
-// automatically manage data as much as possible. instead of generating explicit
-// data allocation, copy, free functions.
-extern bool useDDE /* = true */;
-//! makeDataSharingExplicit() can call some of existing functions for some work
-//! in OmpSupport namespace by Hongyi 07/16/2012
-//! TODO: add a function within the OmpSupport namespace, the function should
-//! transform the AST, so all variables' data-sharing attributes are explicitied
-//! represented in the AST. ROSE has dedicated AST nodes for OpenMP directives
-//! and the associated clauses, such as private, shared, reduction.
-
-int patchUpSharedVariables(SgFile *);
-// TODO:  patchUpDefaultVariables(SgFile* );
-
-int makeDataSharingExplicit(SgFile *);
-
-// last edited by Hongyi on 07/24/2012.
 
 extern unsigned int nCounter; // translation generated variable counter, used to
                               // avoid name collision
@@ -72,17 +42,7 @@ buildFortranOutlinedFunctionRef(SgFunctionDeclaration *declaration);
 //! Insert #include "xxx.h", the interface of a runtime library to the compiler
 void insertRTLHeaders(SgSourceFile *);
 
-//! Insert runtime init and terminate routines to main() entry
-
-// Pei-Hung Insert accelerator init
 void insertAcceleratorInit(SgSourceFile *);
-
-//! A driver to traverse AST trees and invoke individual translators for OpenMP
-//! constructs, (not in use) Postorder is preferred.
-class translationDriver : public AstSimpleProcessing {
-protected:
-  void visit(SgNode *);
-}; // translationDriver
 
 //! Translate omp parallel
 void transOmpParallel(SgNode *node);
@@ -95,6 +55,7 @@ void transOmpSections(SgNode *node);
 
 //! Translate omp task
 void transOmpTask(SgNode *node);
+void retireConsumedOmpDirective(SgStatement *directive);
 
 //! Translate omp for or omp do loops
 void transOmpLoop(SgNode *node);
@@ -155,19 +116,6 @@ ROSE_DLL_API ClauseVariableCopyIdentity requireExactClauseVariableCopyIdentity(
     SgInitializedName *originalClauseVariable,
     SgVariableSymbol *originalBackingSymbol);
 
-//! Translate omp for or omp do loops affected by the "omp target" directive,
-//! using naive 1-to-1 mapping Liao 1/28/2013
-// The loop iteration count may exceed the max number of threads within a CUDA
-// thread block. A loop scheduler is needed for real application.
-void transOmpTargetLoop(SgNode *node);
-
-//! Translate omp for or omp do loops affected by the "omp target" directive,
-//! using a round robin-scheduler Liao 7/10/2014
-void transOmpTargetLoop_RoundRobin(SgNode *node);
-
-//! Translate Fortran omp do
-// void transOmpDo(SgNode* node);
-
 //! Translate "omp target"
 void transOmpTarget(SgNode *node);
 
@@ -227,7 +175,6 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
                                             std::string &wrapper_name,
                                             ASTtools::VarSymSet_t &syms,
                                             ASTtools::VarSymSet_t &pdSyms3,
-                                            bool use_task_param = false,
                                             bool insert_runtime_ids = true);
 
 //! Translate OpenMP variables associated with an OpenMP pragma, such as
@@ -280,9 +227,6 @@ ROSE_DLL_API int replaceVariableReferences(SgNode *root,
 //! new symbols
 ROSE_DLL_API int replaceVariableReferences(SgNode *root,
                                            VariableSymbolMap_t varRemap);
-// I decided to reuse the existing Outliner work instead of coding a new one
-// SgFunctionDeclaration* generateOutlinedFunction(SgNode* node);
-
 //! Replace all variable references in a set by pointers to the variable
 int replaceVariablesWithPointerDereference(SgNode *root,
                                            std::set<SgVariableSymbol *> &vars);
@@ -322,16 +266,6 @@ getReductionOperationType(SgInitializedName *init_name,
 ROSE_DLL_API SgExpression *
 createInitialValueExp(SgOmpClause::omp_reduction_identifier_enum r_operator);
 
-//! Generate XOMP loop schedule start function's name
-ROSE_DLL_API std::string
-generateXOMPLoopStartFuncName(bool isOrdered,
-                              SgOmpClause::omp_schedule_kind_enum s_kind);
-
-//! Generate XOMP loop schedule next function's name
-ROSE_DLL_API std::string
-generateXOMPLoopNextFuncName(bool isOrdered,
-                             SgOmpClause::omp_schedule_kind_enum s_kind);
-
 //! Convert a schedule kind enum value to a small case string
 ROSE_DLL_API std::string toString(SgOmpClause::omp_schedule_kind_enum s_kind);
 
@@ -343,12 +277,6 @@ ROSE_DLL_API int patchUpPrivateVariables(SgFile *);
 //! Patch up private variables for omp for. The reason is that loop indices
 //! should be private by default and this function will make this explicit
 ROSE_DLL_API int patchUpPrivateVariables(SgStatement *omp_loop);
-
-//! Patch up firstprivate variables for omp task. The reason is that the
-//! specification 3.0 defines rules for implicitly determined data-sharing
-//! attributes and this function will make the firstprivate variable of omp task
-//! explicit.
-ROSE_DLL_API int patchUpFirstprivateVariables(SgFile *);
 
 //! Collect threadprivate variables within the current project, return a set to
 //! avoid duplicated elements. No input parameters are needed since it finds
@@ -363,9 +291,6 @@ buildAndInsertDeclarationForOmp(const std::string &name, SgType *type,
                                 SgBasicBlock *orig_scope);
 //! Find an enclosing parallel region or function definition's body
 SgBasicBlock *getEnclosingRegionOrFuncDefinition(SgNode *);
-
-//! Check if a variable is in the clause's variable list
-ROSE_DLL_API bool isInClauseVariableList(SgOmpClause *cls, SgSymbol *var);
 
 //! Check if a variable is a threadprivate variable. It will search for all
 //! threadprivate directives to find the answer.

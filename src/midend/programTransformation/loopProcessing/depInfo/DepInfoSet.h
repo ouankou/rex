@@ -34,10 +34,7 @@ public:
   bool operator|=(const DepInfoSet &that);
   bool operator&=(const DepInfoSet &that);
 
-  void UpdateDepInfo(bool (*Update)(DepInfo &info));
-
   DepInfoConstIterator GetConstIterator() const;
-  DepInfoUpdateIterator GetUpdateIterator();
 
   friend class DepInfoSetGenerator;
 };

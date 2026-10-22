@@ -74,12 +74,27 @@ TranslationUnitDeclarations collectTranslationUnit(SgSourceFile *source_file) {
   ROSE_ASSERT(result.class_declaration->get_parent() == definition);
   ROSE_ASSERT(result.class_declaration->get_scope() == semantic_definition);
   ROSE_ASSERT(result.class_declaration->get_type() != nullptr);
-  ROSE_ASSERT(semantic_definition->get_type_table()->lookup_type(
-                  result.class_declaration->get_type()->get_mangled()) ==
+  auto *canonicalClass = isSgClassDeclaration(
+      result.class_declaration->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonicalClass != nullptr);
+  ROSE_ASSERT(canonicalClass->get_firstNondefiningDeclaration() ==
+              canonicalClass);
+  ROSE_ASSERT(canonicalClass->get_type() ==
               result.class_declaration->get_type());
+  ROSE_ASSERT(SageInterface::isExactTagTypeIdentity(canonicalClass->get_type(),
+                                                    result.class_declaration));
+  ROSE_ASSERT(SgClassType::createType(canonicalClass) ==
+              canonicalClass->get_type());
   ROSE_ASSERT(result.enum_declaration->get_type() != nullptr);
-  ROSE_ASSERT(semantic_definition->get_type_table()->lookup_type(
-                  result.enum_declaration->get_type()->get_mangled()) ==
+  auto *canonicalEnum = isSgEnumDeclaration(
+      result.enum_declaration->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonicalEnum != nullptr);
+  ROSE_ASSERT(canonicalEnum->get_firstNondefiningDeclaration() ==
+              canonicalEnum);
+  ROSE_ASSERT(canonicalEnum->get_type() == result.enum_declaration->get_type());
+  ROSE_ASSERT(SageInterface::isExactTagTypeIdentity(canonicalEnum->get_type(),
+                                                    result.enum_declaration));
+  ROSE_ASSERT(SgEnumType::createType(canonicalEnum) ==
               result.enum_declaration->get_type());
   std::sort(
       result.functions.begin(), result.functions.end(),

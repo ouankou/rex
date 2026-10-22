@@ -1,113 +1,134 @@
-
-// tps (01/14/2010) : Switching from rose.h to sage3.
-#include "inliner.h"
-
 #include "sage3basic.h"
 
-#include <iomanip>
-
-#include <iostream>
-
-#include <list>
-
-// DQ (12/31/2005): This is OK if not declared in a header file
-using namespace std;
-
-// DQ (8/1/2005): test use of new static function to create
-// Sg_File_Info object that are marked as transformations
-#undef SgNULL_FILE
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
+namespace {
+SgNode *referenceOrigin(SgNode *node) {
+  ROSE_ASSERT(node != nullptr);
+  while (true) {
+    if (auto *initializer = isSgAssignInitializer(node)) {
+      node = initializer->get_operand();
+      continue;
+    }
+    auto *cast = isSgCastExp(node);
+    if (cast == nullptr)
+      return node;
+    cast->validate_semantic_conversion();
+    if (cast->get_value_category() == SgCastExp::e_value_category_prvalue)
+      return node;
+    switch (cast->get_semantic_conversion_kind()) {
+    case SgCastExp::e_semantic_conversion_NoOp:
+    case SgCastExp::e_semantic_conversion_LValueBitCast:
+    case SgCastExp::e_semantic_conversion_BaseToDerived:
+    case SgCastExp::e_semantic_conversion_DerivedToBase:
+    case SgCastExp::e_semantic_conversion_UncheckedDerivedToBase:
+      node = cast->get_operand();
+      break;
+    default:
+      return node;
+    }
+  }
+}
+} // namespace
 
 bool containsNonConst(SgNode *n, SgExpression *lhs) {
-  bool result = false;
-  if (isSgAssignInitializer(n))
-    n = isSgAssignInitializer(n)->get_operand();
-  if (isSgAssignInitializer(lhs))
-    lhs = isSgAssignInitializer(lhs)->get_operand();
-  // cout << n->unparseToString() << " <--> " << lhs->unparseToString() << endl;
-  // cout << "containsNonConst: n is a " << n->sage_class_name() << ", lhs is a
-  // " << lhs->sage_class_name() << endl;
+  n = referenceOrigin(n);
+  lhs = isSgExpression(referenceOrigin(lhs));
+  ROSE_ASSERT(n != nullptr && lhs != nullptr);
   if (n == lhs)
-    result = true;
+    return true;
   if (isSgVarRefExp(lhs) && isSgVarRefExp(n)) {
-    // cout << "n@" << hex <<
-    // (int)(isSgVarRefExp(n)->get_symbol()->get_declaration()) << " = " <<
-    // isSgVarRefExp(n)->get_symbol()->get_name().str() << ", lhs@" << hex <<
-    // (int)(isSgVarRefExp(lhs)->get_symbol()->get_declaration()) << " = " <<
-    // isSgVarRefExp(lhs)->get_symbol()->get_name().str() << endl;
     if (isSgVarRefExp(lhs)->get_symbol()->get_declaration() ==
         isSgVarRefExp(n)->get_symbol()->get_declaration())
-      result = true;
+      return true;
   }
-  if (isSgDotExp(n) && containsNonConst(isSgDotExp(n)->get_lhs_operand(), lhs))
-    result = true;
-  // cout << " ==> " << result << endl;
-  return result;
+  return isSgDotExp(n) &&
+         containsNonConst(isSgDotExp(n)->get_lhs_operand(), lhs);
 }
 
-bool isInitializerForReferenceVar(SgAssignInitializer *n, SgExpression *expr) {
-  // cout << "In isInitializerForReferenceVar, n is " << n->unparseToString() <<
-  // endl;
-  string expr_str;
-  if (isSgVarRefExp(expr)) {
-    SgName n = isSgVarRefExp(expr)->get_symbol()->get_name();
-    expr_str = n.str();
-  } else {
-    expr_str = expr->unparseToString();
-  }
+bool containsNonConst(SgNode *n, SgVariableSymbol *symbol) {
+  n = referenceOrigin(n);
+  ROSE_ASSERT(n != nullptr && symbol != nullptr);
+  if (SgVarRefExp *reference = isSgVarRefExp(n))
+    return reference->get_symbol()->get_declaration() ==
+           symbol->get_declaration();
+  return isSgDotExp(n) &&
+         containsNonConst(isSgDotExp(n)->get_lhs_operand(), symbol);
+}
+
+template <typename Target>
+bool isInitializerForReferenceVar(SgAssignInitializer *n, Target target) {
   SgInitializedName *in = isSgInitializedName(n->get_parent());
   if (!in)
     return false;
-  if (!in->get_type())
-    in = isSgInitializedName(in->get_parent());
-  assert(in);
-  assert(in->get_type());
-  // cout << "Type is " << in->get_type()->unparseToString() << ", var is " <<
-  // in->get_name().str() << endl;
-  bool isNonconstRef = SageInterface::isNonconstReference(in->get_type());
-  bool containsNonConstUse = containsNonConst(n, expr);
-  bool result = isNonconstRef && containsNonConstUse;
-  // cout << "isNonconstReference is " << isNonconstRef << ", containsNonConst
-  // is " << containsNonConstUse << endl; cout << "Result is " << (result ?
-  // "true" : "false") << endl;
-  return result;
+  ROSE_ASSERT(in->get_type() != nullptr);
+  auto *type = in->get_type()->stripTypedefsAndModifiers();
+  return (isSgReferenceType(type) || isSgRvalueReferenceType(type)) &&
+         containsNonConst(n, target);
 }
 
-class IsPotentiallyModifiedVisitor : public AstSimpleProcessing {
-  SgExpression *expr;
+namespace {
+template <typename Target>
+bool referenceArgumentsExpose(SgExprListExp *arguments,
+                              const SgFunctionType *functionType,
+                              Target target) {
+  ROSE_ASSERT(arguments != nullptr);
+  size_t index = 0;
+  for (auto *argument : arguments->get_expressions()) {
+    const size_t position = index++;
+    if (!containsNonConst(argument, target))
+      continue;
+    if (functionType == nullptr)
+      return true;
+    const auto &parameters = functionType->get_arguments();
+    if (position >= parameters.size()) {
+      ROSE_ASSERT(functionType->get_has_ellipses());
+      continue;
+    }
+    auto *type = parameters[position]->stripTypedefsAndModifiers();
+    if (isSgReferenceType(type) || isSgRvalueReferenceType(type))
+      return true;
+  }
+  return false;
+}
+
+SgFunctionType *referenceCallType(SgFunctionCallExp *call) {
+  auto *callee = call->get_function();
+  ROSE_ASSERT(callee != nullptr);
+  if (isSgDotExp(callee) || isSgArrowExp(callee))
+    callee = isSgBinaryOp(callee)->get_rhs_operand();
+  if (auto *dependent = isSgNonrealRefExp(callee);
+      dependent != nullptr &&
+      dependent->get_semantic_role() == SgNonrealRefExp::e_dependent_callable) {
+    ROSE_ASSERT(dependent->get_resolved_function_declaration() == nullptr);
+    ROSE_ASSERT(dependent->get_resolved_variable_declaration() == nullptr);
+    ROSE_ASSERT(isSgNonrealType(dependent->get_type()) != nullptr);
+    return nullptr;
+  }
+  const unsigned char strip =
+      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE |
+      SgType::STRIP_DECLTYPE_TYPE;
+  auto *type = call->get_function()->get_type()->stripType(strip);
+  if (auto *pointer = isSgPointerType(type))
+    type = pointer->get_base_type()->stripType(strip);
+  auto *functionType = isSgFunctionType(type);
+  ROSE_ASSERT(functionType != nullptr);
+  return functionType;
+}
+
+enum class EffectQuery { writes_or_escapes, escapes };
+
+template <typename Target> class EffectVisitor : public AstSimpleProcessing {
+  Target expr;
   bool &result;
+  EffectQuery query;
 
 public:
-  IsPotentiallyModifiedVisitor(SgExpression *expr, bool &result)
-      : expr(expr), result(result) {}
+  EffectVisitor(Target expr, bool &result, EffectQuery query)
+      : expr(expr), result(result), query(query) {}
 
   virtual void visit(SgNode *n) {
-    // cout << "Checking for modifications to " << expr->unparseToString() << "
-    // in " << (isSgInitializedName(n) ? "initname" : n->unparseToString()) <<
-    // ", result is " << result << endl;
     if (result)
       return;
-
-    // skip things in a system/user header, Liao 1/23/2018
-    if (Inliner::skipHeaders) {
-      if (SgLocatedNode *lnode = isSgLocatedNode(n)) {
-        string filename = lnode->get_file_info()->get_filename();
-        string suffix = Rose::StringUtility ::fileNameSuffix(filename);
-
-        // vector.tcc: This is an internal header file, included by other
-        // library headers
-        if (suffix == "h" || suffix == "hpp" || suffix == "hh" ||
-            suffix == "H" || suffix == "hxx" || suffix == "h++" ||
-            suffix == "tcc")
-          return;
-
-        // also check if it is compiler generated. Not from user code
-        // skip compiler generated codes, mostly from template headers
-        if (lnode->get_file_info()->isCompilerGenerated())
-          return;
-      }
-    }
-
     switch (n->variantT()) {
     case V_SgAndAssignOp:
     case V_SgAssignOp:
@@ -121,87 +142,62 @@ public:
     case V_SgRshiftAssignOp:
     case V_SgXorAssignOp:
     case V_SgDotStarOp:
-    case V_SgPntrArrRefExp: // FIXME should handle all references
-      result |= containsNonConst(isSgBinaryOp(n)->get_lhs_operand(), expr);
+    case V_SgPntrArrRefExp:
+      if (query == EffectQuery::writes_or_escapes)
+        result |= containsNonConst(isSgBinaryOp(n)->get_lhs_operand(), expr);
       break;
 
-    case V_SgAssignInitializer:
-      result |= isInitializerForReferenceVar(isSgAssignInitializer(n), expr);
+    case V_SgMinusMinusOp:
+    case V_SgPlusPlusOp:
+      if (query == EffectQuery::writes_or_escapes)
+        result |= containsNonConst(isSgUnaryOp(n)->get_operand(), expr);
       break;
 
     case V_SgAddressOfOp:
-    case V_SgMinusMinusOp:
-    case V_SgPlusPlusOp:
       result |= containsNonConst(isSgUnaryOp(n)->get_operand(), expr);
       break;
 
     case V_SgFunctionCallExp: {
-      SgFunctionCallExp *fc = isSgFunctionCallExp(n);
-      SgExprListExp *args1 = fc->get_args();
-      SgFunctionType *ft = isSgFunctionType(fc->get_function()->get_type());
-      if (ft == nullptr) {
-        if (SgPointerType *pointer =
-                isSgPointerType(fc->get_function()->get_type())) {
-          ft = isSgFunctionType(pointer->get_base_type());
+      auto *call = isSgFunctionCallExp(n);
+      auto *functionType = referenceCallType(call);
+      if (auto *member = isSgDotExp(call->get_function())) {
+        auto *reference = isSgMemberFunctionRefExp(member->get_rhs_operand());
+        bool exposesReceiver = functionType == nullptr;
+        if (reference != nullptr) {
+          auto *declaration = reference->get_symbol()->get_declaration();
+          ROSE_ASSERT(declaration != nullptr);
+          exposesReceiver |= !declaration->get_declarationModifier()
+                                  .get_storageModifier()
+                                  .isStatic();
         }
+        if (exposesReceiver)
+          result |= containsNonConst(member->get_lhs_operand(), expr);
       }
-
-      if (ft) {
-        const SgTypePtrList &params = ft->get_arguments();
-        SgExpressionPtrList &args = args1->get_expressions();
-        SgTypePtrList::const_iterator pi = params.begin();
-        SgExpressionPtrList::iterator ai = args.begin();
-        // Some call expressions carry more actual arguments than are recorded
-        // on the lowered function type (e.g., hidden/implicit call operands).
-        // Only compare pairs that exist in both lists.
-        for (; ai != args.end() && pi != params.end(); ++ai, ++pi) {
-          if (SageInterface::isNonconstReference(*pi))
-            result |= containsNonConst(*ai, expr);
-        }
-      }
+      result |= referenceArgumentsExpose(call->get_args(), functionType, expr);
       break;
     }
 
-    case V_SgInitializedName: {
-    }
-
-    default: // Do nothing
+    case V_SgConstructorInitializer: {
+      auto *initializer = isSgConstructorInitializer(n);
+      auto *declaration = initializer->get_declaration();
+      auto *type = initializer->get_type()->stripTypedefsAndModifiers();
+      if (declaration == nullptr &&
+          (SageInterface::isScalarType(type) || isSgPointerType(type) ||
+           isSgPointerMemberType(type) || isSgEnumType(type) ||
+           isSgTypeNullptr(type)))
+        break;
+      result |= referenceArgumentsExpose(
+          initializer->get_args(),
+          declaration != nullptr ? declaration->get_type() : nullptr, expr);
       break;
     }
-  }
-};
 
-// Is expression expr potentially modified (assigned to, address taken,
-// passed by non-const reference) somewhere in the tree pointed to by
-// root?
-bool isPotentiallyModified(SgExpression *expr, SgNode *root) {
-  bool result = false;
-  // cout << "Checking for modifications to " << expr->unparseToString() << " in
-  // " << (isSgInitializedName(root) ? "initname" : root ?
-  // root->unparseToString() : "NULL") << endl;
-  if (root)
-    IsPotentiallyModifiedVisitor(expr, result).traverse(root, preorder);
-  // cout << "Result is " << result << endl;
-  return result;
-}
-
-class HasAddressTakenVisitor : public AstSimpleProcessing {
-  SgExpression *expr;
-  bool &result;
-
-public:
-  HasAddressTakenVisitor(SgExpression *expr, bool &result)
-      : expr(expr), result(result) {}
-
-  virtual void visit(SgNode *n) {
-    switch (n->variantT()) {
-    case V_SgAddressOfOp:
-      result |= containsNonConst(isSgUnaryOp(n)->get_operand(), expr);
+    case V_SgLambdaCapture: {
+      auto *capture = isSgLambdaCapture(n);
+      if (capture->get_capture_by_reference())
+        result |= containsNonConst(capture->get_capture_initializer(), expr);
       break;
-
-    case V_SgFunctionCallExp:
-      result |= isPotentiallyModified(expr, n);
-      break;
+    }
 
     case V_SgAssignInitializer:
       result |= isInitializerForReferenceVar(isSgAssignInitializer(n), expr);
@@ -212,13 +208,31 @@ public:
     }
   }
 };
+} // namespace
+
+bool isPotentiallyModified(SgExpression *expr, SgNode *root) {
+  ROSE_ASSERT(expr != nullptr && root != nullptr);
+  bool result = false;
+  EffectVisitor(expr, result, EffectQuery::writes_or_escapes)
+      .traverse(root, preorder);
+  return result;
+}
+
+bool isPotentiallyModified(SgVariableSymbol *symbol, SgNode *root) {
+  ROSE_ASSERT(symbol != nullptr && root != nullptr);
+  bool result = false;
+  EffectVisitor(symbol, result, EffectQuery::writes_or_escapes)
+      .traverse(root, preorder);
+  return result;
+}
 
 // Does expression expr potentially have its address taken somewhere in the
 // tree pointed to by root?
 bool hasAddressTaken(SgExpression *expr, SgNode *root) {
+  ROSE_ASSERT(expr != nullptr && root != nullptr);
   bool result = false;
   if (isSgPntrArrRefExp(expr) || isSgPointerDerefExp(expr))
     return true;
-  HasAddressTakenVisitor(expr, result).traverse(root, preorder);
+  EffectVisitor(expr, result, EffectQuery::escapes).traverse(root, preorder);
   return result;
 }

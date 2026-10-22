@@ -2,30 +2,92 @@
 
 #include "sageInterface.h" // for isConstType
 
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 #include "CallGraph.h"
-#endif
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
+#include <limits>
+#include <set>
 #include <vector>
 using namespace std;
 
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 using namespace VirtualCFG;
-#endif
 
 bool virtualInterproceduralControlFlowGraphs = false;
 
-#define DEBUG_CALLGRAPH 0
-
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-
 namespace {
 
+SgTryStmt *owningTry(SgCatchStatementSeq *sequence) {
+  ASSERT_not_null(sequence);
+  auto *statement = isSgTryStmt(sequence->get_parent());
+  ROSE_ASSERT(statement != nullptr &&
+              statement->get_catch_statement_seq_root() == sequence &&
+              !sequence->get_catch_statement_seq().empty());
+  return statement;
+}
+
+SgTryStmt *functionTry(SgFunctionDeclaration *declaration) {
+  auto *definition = declaration->get_definition();
+  ROSE_ASSERT(definition != nullptr && definition->get_body() != nullptr);
+  SgTryStmt *result = nullptr;
+  for (auto *statement : definition->get_body()->get_statements())
+    if (auto *candidate = isSgTryStmt(statement);
+        candidate != nullptr && candidate->get_is_function_try_block()) {
+      ROSE_ASSERT(result == nullptr);
+      result = candidate;
+    }
+  ROSE_ASSERT(result == nullptr ||
+              definition->get_body()->get_statements().size() == 1);
+  return result;
+}
+
+SgCatchStatementSeq *exceptionDestination(SgNode *source) {
+  ASSERT_not_null(source);
+  SgNode *child = source;
+  for (SgNode *parent = child->get_parent(); parent != nullptr;
+       child = parent, parent = parent->get_parent()) {
+    if (auto *statement = isSgTryStmt(parent);
+        statement != nullptr && child == statement->get_body()) {
+      auto *sequence = statement->get_catch_statement_seq_root();
+      ROSE_ASSERT(owningTry(sequence) == statement);
+      return sequence;
+    }
+    if (isSgFunctionDefinition(parent))
+      return nullptr;
+    if (auto *declaration = isSgFunctionDeclaration(parent)) {
+      auto *member = isSgMemberFunctionDeclaration(declaration);
+      if (member != nullptr && child == member->get_CtorInitializerList())
+        if (auto *statement = functionTry(member))
+          return statement->get_catch_statement_seq_root();
+      return nullptr;
+    }
+  }
+  return nullptr;
+}
+
+bool handlerRethrows(SgCatchOptionStmt *handler) {
+  auto *statement = owningTry(isSgCatchStatementSeq(handler->get_parent()));
+  if (!statement->get_is_function_try_block())
+    return false;
+  auto *declaration = SageInterface::getEnclosingFunctionDeclaration(statement);
+  ASSERT_not_null(declaration);
+  const auto &modifier = declaration->get_specialFunctionModifier();
+  return modifier.isConstructor() || modifier.isDestructor();
+}
+
+std::array<SgExpression *, 4>
+cudaConfigurationOperands(const SgCudaKernelExecConfig *config) {
+  std::array<SgExpression *, 4> operands = {
+      config->get_grid(), config->get_blocks(), config->get_shared(),
+      config->get_stream()};
+  ROSE_ASSERT(operands[0] != nullptr && operands[1] != nullptr);
+  for (SgExpression *operand : operands)
+    ROSE_ASSERT(operand == nullptr || operand->get_parent() == config);
+  return operands;
+}
+
 SgExpression *getLambdaCaptureExpression(const SgLambdaCapture *capture);
-std::vector<SgLambdaCapture *>
-getExecutableLambdaCaptures(const SgLambdaCaptureList *capture_list);
 SgLambdaExp *getLambdaForCapture(const SgLambdaCapture *capture);
 SgExpression *
 getFirstExecutableLambdaCaptureExpression(const SgLambdaExp *lambda);
@@ -74,6 +136,36 @@ std::vector<CFGEdge> SgNode::cfgInEdges(unsigned int idx) {
   return std::vector<CFGEdge>();
 }
 
+static bool isUnevaluatedOperatorOperand(SgNode *node, SgNode *operand) {
+  if (auto *choice = isSgChooseExpression(node)) {
+    choice->validate();
+    return operand == choice->get_condition() ||
+           (choice->get_selection_kind() ==
+                SgChooseExpression::e_choose_selection_true &&
+            operand == choice->get_false_expression()) ||
+           (choice->get_selection_kind() ==
+                SgChooseExpression::e_choose_selection_false &&
+            operand == choice->get_true_expression());
+  }
+  if (auto *statement = isSgIfStmt(node))
+    if (statement->get_is_if_constexpr_statement() &&
+        isSgExprStatement(statement->get_conditional()) != nullptr)
+      return operand == statement->get_conditional();
+  if (auto *operation = isSgNoexceptOp(node))
+    return operand == operation->get_operand_expr();
+  if (auto *operation = isSgAlignOfOp(node))
+    return operand == operation->get_operand_expr();
+  if (auto *operation = isSgSizeOfOp(node)) {
+    if (!operation->expression_operand_is_evaluated())
+      return operand == operation->get_operand_expr();
+  }
+  if (auto *operation = isSgTypeIdOp(node)) {
+    if (!operation->get_operand_is_evaluated())
+      return operand == operation->get_operand_expr();
+  }
+  return false;
+}
+
 template <class NodeT, class EdgeT>
 void makeEdge(NodeT from, NodeT to, vector<EdgeT> &result) {
   // Makes a CFG edge, adding appropriate labels
@@ -83,11 +175,42 @@ void makeEdge(NodeT from, NodeT to, vector<EdgeT> &result) {
   SgNode *toNode = to.getNode();
   ASSERT_not_null(toNode);
 
+  if (isUnevaluatedOperatorOperand(fromNode, toNode) ||
+      isUnevaluatedOperatorOperand(toNode, fromNode))
+    return;
+
+  if (isSgThrowOp(fromNode) && fromIndex == fromNode->cfgIndexForEnd()) {
+    auto *destination = exceptionDestination(fromNode);
+    if (destination == nullptr || to != destination->cfgForBeginning())
+      return;
+  }
+
+  if (auto *statement = isSgIfStmt(fromNode)) {
+    if (fromIndex == 1 && statement->runtime_branch_is_known()) {
+      SgNode *selected = statement->runtime_branch_is_true()
+                             ? statement->get_true_body()
+                             : statement->get_false_body();
+      if (toNode != selected &&
+          !(selected == nullptr && toNode == statement && to.getIndex() == 2))
+        return;
+    }
+  }
+  if (auto *statement = isSgIfStmt(toNode)) {
+    if (to.getIndex() == 2 && statement->runtime_branch_is_known()) {
+      SgNode *discarded = statement->runtime_branch_is_true()
+                              ? statement->get_false_body()
+                              : statement->get_true_body();
+      if (fromNode == discarded)
+        return;
+    }
+  }
+
   // Exit early if the edge should not exist because of a control flow
   // discontinuity
-  if (fromIndex == 1 &&
-      (isSgGotoStatement(fromNode) || isSgBreakStmt(fromNode) ||
-       isSgContinueStmt(fromNode))) {
+  if ((isSgGotoStatement(fromNode) &&
+       fromIndex == fromNode->cfgIndexForEnd()) ||
+      (fromIndex == 1 &&
+       (isSgBreakStmt(fromNode) || isSgContinueStmt(fromNode)))) {
     return;
   }
   if (isSgReturnStmt(fromNode) && toNode == fromNode->get_parent()) {
@@ -134,70 +257,81 @@ static void addIncomingFortranGotos(SgStatement *stmt, unsigned int index,
   SgFunctionDefinition *thisFunction =
       SageInterface::getEnclosingProcedure(stmt, true);
 
-  // Liao 5/20/2010, NodeQuery::querySubTree() is very expensive
-  // using memory pool traversal instead as a workaround
-  VariantVector vv(V_SgGotoStatement);
-  Rose_STL_Container<SgNode *> allGotos = NodeQuery::queryMemoryPool(vv);
-  for (Rose_STL_Container<SgNode *>::const_iterator i = allGotos.begin();
-       i != allGotos.end(); ++i) {
-    if (SageInterface::isAncestor(thisFunction, *i)) {
-      SgGotoStatement *goto_stmt = isSgGotoStatement(*i);
-      ASSERT_not_null(goto_stmt);
-
-      SgLabelRefExp *lRef = goto_stmt->get_label_expression();
-      if (!lRef) {
-        if (goto_stmt->get_selector_expression() != nullptr && index == 0 &&
-            isSgLabelStatement(stmt) != nullptr) {
-          SgLabelStatement *label_stmt = isSgLabelStatement(stmt);
-          if (label_stmt->get_scope() == thisFunction) {
-            makeEdge(CFGNode(goto_stmt, 0), cfgNode, result);
-          }
-        }
+  if (thisFunction != nullptr) {
+    VariantVector branchKinds(V_SgGotoStatement);
+    branchKinds.push_back(V_SgComputedGotoStatement);
+    branchKinds.push_back(V_SgArithmeticIfStatement);
+    for (SgNode *branch : NodeQuery::querySubTree(thisFunction, branchKinds)) {
+      if (SageInterface::getEnclosingProcedure(branch) != thisFunction)
         continue;
-      }
-      SgLabelSymbol *sym = lRef->get_symbol();
-      ASSERT_not_null(sym);
-      if (getCFGTargetOfFortranLabelSymbol(sym) == cfgNode) {
-        makeEdge(CFGNode(goto_stmt, 0), cfgNode, result);
-      }
-    }
-  }
-
-  // Liao 5/20/2010, NodeQuery::querySubTree() is very expensive when used to
-  // generate virtual CFG on the fly I have to skip unnecessary queries here
-  if (SageInterface::is_Fortran_language()) {
-    Rose_STL_Container<SgNode *> allComputedGotos =
-        NodeQuery::querySubTree(thisFunction, V_SgComputedGotoStatement);
-    for (Rose_STL_Container<SgNode *>::const_iterator i =
-             allComputedGotos.begin();
-         i != allComputedGotos.end(); ++i) {
-      const Rose_STL_Container<SgExpression *> &labels =
-          isSgComputedGotoStatement(*i)->get_labelList()->get_expressions();
-      for (Rose_STL_Container<SgExpression *>::const_iterator j =
-               labels.begin();
-           j != labels.end(); ++j) {
-        SgLabelRefExp *lRef = isSgLabelRefExp(*j);
-        ASSERT_not_null(lRef);
-        SgLabelSymbol *sym = lRef->get_symbol();
-        ASSERT_not_null(sym);
-        if (getCFGTargetOfFortranLabelSymbol(sym) == cfgNode) {
-          makeEdge(CFGNode(isSgComputedGotoStatement(*i), 1), cfgNode, result);
+      if (auto *statement = isSgGotoStatement(branch)) {
+        if (auto *label = statement->get_label_expression())
+          if (getCFGTargetOfFortranLabelRef(label) == cfgNode)
+            makeEdge(CFGNode(statement, 0), cfgNode, result);
+      } else if (auto *statement = isSgComputedGotoStatement(branch)) {
+        ASSERT_not_null(statement->get_labelList());
+        for (SgExpression *expression :
+             statement->get_labelList()->get_expressions()) {
+          auto *label = isSgLabelRefExp(expression);
+          ASSERT_not_null(label);
+          if (getCFGTargetOfFortranLabelRef(label) == cfgNode)
+            makeEdge(CFGNode(statement, 1), cfgNode, result);
         }
-      }
-    }
-    Rose_STL_Container<SgNode *> allArithmeticIfs =
-        NodeQuery::querySubTree(thisFunction, V_SgArithmeticIfStatement);
-    for (Rose_STL_Container<SgNode *>::const_iterator i =
-             allArithmeticIfs.begin();
-         i != allArithmeticIfs.end(); ++i) {
-      SgArithmeticIfStatement *aif = isSgArithmeticIfStatement(*i);
-      if (getCFGTargetOfFortranLabelRef(aif->get_less_label()) == cfgNode ||
-          getCFGTargetOfFortranLabelRef(aif->get_equal_label()) == cfgNode ||
-          getCFGTargetOfFortranLabelRef(aif->get_greater_label()) == cfgNode) {
-        makeEdge(CFGNode(aif, 1), cfgNode, result);
+      } else {
+        auto *arithmeticIf = isSgArithmeticIfStatement(branch);
+        ASSERT_not_null(arithmeticIf);
+        if (getCFGTargetOfFortranLabelRef(arithmeticIf->get_less_label()) ==
+                cfgNode ||
+            getCFGTargetOfFortranLabelRef(arithmeticIf->get_equal_label()) ==
+                cfgNode ||
+            getCFGTargetOfFortranLabelRef(arithmeticIf->get_greater_label()) ==
+                cfgNode)
+          makeEdge(CFGNode(arithmeticIf, 1), cfgNode, result);
       }
     }
   }
+}
+
+static SgInitializedName *structuredBindingExecutionOwner(SgNode *node) {
+  auto *name = isSgInitializedName(node);
+  if (name == nullptr)
+    return nullptr;
+  switch (name->get_structured_binding_kind()) {
+  case SgInitializedName::e_dependent_structured_binding:
+  case SgInitializedName::e_resolved_structured_binding:
+    return name->get_structured_binding_owner();
+  case SgInitializedName::e_structured_binding_holding_variable:
+    return name->get_structured_binding_alias();
+  case SgInitializedName::e_not_structured_binding:
+    return nullptr;
+  default:
+    ROSE_ABORT();
+  }
+}
+
+static SgExpression *executedDeclarationConditionValue(SgNode *node) {
+  SgStatement *condition = nullptr;
+  if (auto *owner = isSgIfStmt(node)) {
+    if (owner->get_is_if_constexpr_statement())
+      return nullptr;
+    condition = owner->get_conditional();
+  } else if (auto *owner = isSgWhileStmt(node))
+    condition = owner->get_condition();
+  else if (auto *owner = isSgForStatement(node))
+    condition = owner->get_test();
+  else if (auto *owner = isSgSwitchStatement(node))
+    condition = owner->get_item_selector();
+  if (isSgVariableDeclaration(condition) == nullptr)
+    return nullptr;
+  return SageInterface::getConditionValue(isSgScopeStatement(node));
+}
+
+static CFGNode conditionCompletion(SgStatement *condition,
+                                   SgScopeStatement *owner) {
+  if (auto *value = executedDeclarationConditionValue(owner))
+    return value->cfgForEnd();
+  ROSE_ASSERT(condition != nullptr);
+  return condition->cfgForEnd();
 }
 
 static CFGNode getNodeJustAfterInContainer(SgNode *n) {
@@ -206,10 +340,23 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
 
   ASSERT_not_null(parent);
 
-#if DEBUG_CALLGRAPH
-  printf("In getNodeJustAfterInContainer(): n = %p = %s parent = %p = %s \n", n,
-         n->class_name().c_str(), parent, parent->class_name().c_str());
-#endif
+  if (auto *value = executedDeclarationConditionValue(parent)) {
+    if (n == value)
+      return CFGNode(parent, isSgForStatement(parent) != nullptr ? 2 : 1);
+    if (isSgVariableDeclaration(n) != nullptr)
+      return value->cfgForBeginning();
+  }
+
+  if (auto *owner = structuredBindingExecutionOwner(n))
+    return CFGNode(owner, owner->cfgFindNextChildIndex(n));
+
+  if (auto *binding = isSgCxxArrayInitBinding(parent)) {
+    binding->validate();
+    auto *loop = isSgCxxArrayInitLoop(binding->get_parent());
+    ROSE_ASSERT(loop != nullptr && loop->get_binding() == binding &&
+                binding->get_common_source() == n);
+    return CFGNode(loop, 1);
+  }
 
   if (isSgFunctionParameterList(n)) {
     SgFunctionDeclaration *decl = isSgFunctionDeclaration(parent);
@@ -220,6 +367,15 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
     SgFunctionDeclaration *decl = isSgFunctionDeclaration(parent);
     ASSERT_not_null(decl);
     return CFGNode(decl->get_definition(), 2);
+  }
+  if (isSgCatchOptionStmt(n)) {
+    auto *sequence = isSgCatchStatementSeq(parent);
+    ASSERT_not_null(sequence);
+    auto *owner = isSgTryStmt(sequence->get_parent());
+    ASSERT_not_null(owner);
+    ROSE_ASSERT(owner->get_catch_statement_seq_root() == sequence);
+    return handlerRethrows(isSgCatchOptionStmt(n)) ? sequence->cfgForEnd()
+                                                   : owner->cfgForEnd();
   }
   if (SgInitializedName *init_name = isSgInitializedName(n)) {
     if (SgProcedureHeaderStatement *proc =
@@ -246,36 +402,13 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
 
   if (isSgCaseOptionStmt(n) && isSgLabelStatement(parent) == nullptr) {
     unsigned int idx = parent->cfgFindNextChildIndex(n);
-#if DEBUG_CALLGRAPH
-    printf(
-        "In getNodeJustAfterInContainer(): found SgCaseOptionStmt: idx = %u \n",
-        idx);
-#endif
-
     return CFGNode(parent, idx);
   }
 
-  SgLabelStatement *labelStatement = isSgLabelStatement(n);
-
-  // DQ (1/16/2018): Handle the case of where the parent is a SgLabelStatement.
   SgLabelStatement *parentLabelStatement = isSgLabelStatement(parent);
   if (parentLabelStatement != nullptr) {
-#if DEBUG_CALLGRAPH
-    printf("In getNodeJustAfterInContainer(): found parent as "
-           "SgLabelStatement: parentLabelStatement = %p = %s \n",
-           parentLabelStatement, parentLabelStatement->class_name().c_str());
-#endif
     return CFGNode(parentLabelStatement,
                    parentLabelStatement->cfgIndexForEnd());
-  } else {
-    if (labelStatement != nullptr) {
-#if DEBUG_CALLGRAPH
-      unsigned int idx = parent->cfgFindNextChildIndex(n);
-      printf("In getNodeJustAfterInContainer(): FORTRAN case: "
-             "labelStatement successor index: idx = %u \n",
-             idx);
-#endif
-    }
   }
 
   if (SgOmpClauseBodyStatement *omp_clause_body =
@@ -296,10 +429,11 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
                 << parent->get_file_info()->get_line() << std::endl;
       std::cerr << parent->unparseToString() << std::endl;
     }
-    printf("Error: idx <= parent->cfgIndexForEnd() failed: idx = %u n = %p = "
-           "%s parent = %p = %s \n",
-           idx, n, n->class_name().c_str(), parent,
-           parent->class_name().c_str());
+    fprintf(stderr,
+            "Error: idx <= parent->cfgIndexForEnd() failed: idx = %u n = %p = "
+            "%s parent = %p = %s \n",
+            idx, n, n->class_name().c_str(), parent,
+            parent->class_name().c_str());
     ROSE_ASSERT(!"Bad index in getNodeJustAfterInContainer");
   }
   return CFGNode(parent, idx);
@@ -307,12 +441,29 @@ static CFGNode getNodeJustAfterInContainer(SgNode *n) {
 
 static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
   SgNode *parent = n->get_parent();
-  ASSERT_not_null(parent);
 
-#if DEBUG_CALLGRAPH
-  printf("In getNodeJustBeforeInContainer(): n = %p = %s parent = %p = %s \n",
-         n, n->class_name().c_str(), parent, parent->class_name().c_str());
-#endif
+  if (auto *value = executedDeclarationConditionValue(parent);
+      n == value && value != nullptr) {
+    if (auto *owner = isSgIfStmt(parent))
+      return owner->get_conditional()->cfgForEnd();
+    if (auto *owner = isSgWhileStmt(parent))
+      return owner->get_condition()->cfgForEnd();
+    if (auto *owner = isSgForStatement(parent))
+      return owner->get_test()->cfgForEnd();
+    return isSgSwitchStatement(parent)->get_item_selector()->cfgForEnd();
+  }
+
+  if (auto *owner = structuredBindingExecutionOwner(n))
+    return CFGNode(owner, owner->cfgFindChildIndex(n));
+
+  if (auto *binding = isSgCxxArrayInitBinding(parent)) {
+    binding->validate();
+    auto *loop = isSgCxxArrayInitLoop(binding->get_parent());
+    ROSE_ASSERT(loop != nullptr && loop->get_binding() == binding &&
+                binding->get_common_source() == n);
+    return CFGNode(loop, 0);
+  }
+  ASSERT_not_null(parent);
 
   if (isSgFunctionDefinition(n))
     return CFGNode(0, 0); // Should not be used
@@ -363,22 +514,7 @@ static CFGNode getNodeJustBeforeInContainer(SgNode *n) {
 
   SgLabelStatement *parentLabelStatement = isSgLabelStatement(parent);
   if (parentLabelStatement != nullptr) {
-#if DEBUG_CALLGRAPH
-    printf("In getNodeJustBeforeInContainer(): found parent as "
-           "SgLabelStatement: parentLabelStatement = %p = %s \n",
-           parentLabelStatement, parentLabelStatement->class_name().c_str());
-#endif
     return CFGNode(parentLabelStatement, 0);
-  } else {
-    if (isSgLabelStatement(n) != nullptr) {
-      if (SageInterface::is_Fortran_language() == true) {
-#if DEBUG_CALLGRAPH
-        unsigned int idx = parent->cfgFindChildIndex(n);
-        printf("In getNodeJustBeforeInContainer(): FORTRAN case: idx = %u \n",
-               idx);
-#endif
-      }
-    }
   }
 
   unsigned int idx = parent->cfgFindChildIndex(n);
@@ -421,6 +557,10 @@ static std::vector<CFGEdge> simpleDeclarationCfgInEdges(StatementT *node,
 //---------------------------------------
 
 unsigned int SgStatement::cfgIndexForEnd() const {
+  if (const auto *statement = isSgAttributedStatement(this)) {
+    statement->validate();
+    return 1;
+  }
   if (isSgFortranContinueStmt(this) != nullptr ||
       isSgStatementFunctionStatement(this) != nullptr) {
     return 0;
@@ -431,6 +571,13 @@ unsigned int SgStatement::cfgIndexForEnd() const {
 }
 
 bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
+  if (const auto *initializers = isSgCtorInitializerList(this);
+      initializers != nullptr && idx < initializers->get_ctors().size()) {
+    auto *entry = initializers->get_ctors()[idx];
+    ROSE_ASSERT(entry != nullptr && entry->get_parent() == initializers);
+    return entry->get_preinitialization() ==
+           SgInitializedName::e_virtual_base_class;
+  }
   // Default -- overridden in some cases
   if (isSgFortranContinueStmt(this) != nullptr ||
       isSgStatementFunctionStatement(this) != nullptr) {
@@ -440,6 +587,68 @@ bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
 }
 
 unsigned int SgStatement::cfgFindChildIndex(SgNode *n) {
+  if (auto *statement = isSgExprStatement(this)) {
+    ROSE_ASSERT(n != nullptr && n == statement->get_expression());
+    return 0;
+  }
+  if (auto *sequence = isSgCatchStatementSeq(this)) {
+    const auto &handlers = sequence->get_catch_statement_seq();
+    const auto position = std::find(handlers.begin(), handlers.end(), n);
+    ROSE_ASSERT(position != handlers.end() &&
+                std::count(handlers.begin(), handlers.end(), n) == 1);
+    return position - handlers.begin();
+  }
+  if (auto *statement = isSgCatchOptionStmt(this)) {
+    if (n == statement->get_condition())
+      return 0;
+    ROSE_ASSERT(n == statement->get_body());
+    return 1;
+  }
+  if (auto *statement = isSgGotoStatement(this)) {
+    ROSE_ASSERT(statement->get_selector_expression() != nullptr &&
+                n == statement->get_selector_expression());
+    return 0;
+  }
+  if (auto *statement = isSgWhileStmt(this)) {
+    if (n == statement->get_condition())
+      return 0;
+    ROSE_ASSERT(n == statement->get_body());
+    return 1;
+  }
+  if (auto *statement = isSgDoWhileStmt(this)) {
+    ROSE_ASSERT(n != nullptr && n->get_parent() == statement);
+    if (n == statement->get_body())
+      return 0;
+    ROSE_ASSERT(n == statement->get_condition());
+    return 1;
+  }
+  if (auto *statement = isSgSwitchStatement(this)) {
+    if (n == statement->get_item_selector()) {
+      return 0;
+    }
+    ROSE_ASSERT(n == statement->get_body());
+    return 1;
+  }
+  if (auto *statement = isSgWhereStatement(this)) {
+    if (n == statement->get_condition())
+      return 0;
+    if (n == statement->get_body())
+      return 1;
+    ROSE_ASSERT(n != nullptr && n == statement->get_elsewhere());
+    return 2;
+  }
+  if (auto *statement = isSgElseWhereStatement(this)) {
+    if (n == statement->get_condition())
+      return 0;
+    if (n == statement->get_body())
+      return 1;
+    ROSE_ASSERT(n != nullptr && n == statement->get_elsewhere());
+    return 2;
+  }
+  if (auto *statement = isSgAttributedStatement(this)) {
+    ROSE_ASSERT(n == statement->get_statement());
+    return 0;
+  }
   // Default -- overridden in some cases
   return this->get_childIndex(n);
 }
@@ -449,7 +658,16 @@ unsigned int SgStatement::cfgFindNextChildIndex(SgNode *n) {
   return this->cfgFindChildIndex(n) + 1;
 }
 
-std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int /*idx*/) {
+std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int idx) {
+  if (auto *statement = isSgAttributedStatement(this)) {
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    makeEdge(CFGNode(this, idx),
+             idx == 0 ? statement->get_statement()->cfgForBeginning()
+                      : getNodeJustAfterInContainer(this),
+             result);
+    return result;
+  }
   if (isSgFortranContinueStmt(this) != nullptr ||
       isSgStatementFunctionStatement(this) != nullptr) {
     std::vector<CFGEdge> result;
@@ -461,7 +679,15 @@ std::vector<CFGEdge> SgStatement::cfgOutEdges(unsigned int /*idx*/) {
   ROSE_ABORT();
 }
 
-std::vector<CFGEdge> SgStatement::cfgInEdges(unsigned int /*idx*/) {
+std::vector<CFGEdge> SgStatement::cfgInEdges(unsigned int idx) {
+  if (auto *statement = isSgAttributedStatement(this)) {
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    makeEdge(idx == 0 ? getNodeJustBeforeInContainer(this)
+                      : statement->get_statement()->cfgForEnd(),
+             CFGNode(this, idx), result);
+    return result;
+  }
   if (isSgFortranContinueStmt(this) != nullptr ||
       isSgStatementFunctionStatement(this) != nullptr) {
     std::vector<CFGEdge> result;
@@ -538,35 +764,16 @@ std::vector<CFGEdge> SgBasicBlock::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
 
-#if DEBUG_CALLGRAPH
-  printf("In SgBasicBlock::cfgInEdges(): idx = %u \n", idx);
-#endif
-
   if (idx == 0) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
   } else {
-#if DEBUG_CALLGRAPH
-    printf(
-        "In SgBasicBlock::cfgInEdges(): this->get_statements().size() = %zu \n",
-        this->get_statements().size());
-#endif
-
     if (idx <= this->get_statements().size()) {
       SgStatement *statement = this->get_statements()[idx - 1];
-#if DEBUG_CALLGRAPH
-      printf("In SgBasicBlock::cfgInEdges(): idx = %u Compute the starting "
-             "node: statement = %p = %s \n",
-             idx, statement, statement->class_name().c_str());
-#endif
       makeEdge(statement->cfgForEnd(), CFGNode(this, idx), result);
     } else {
       ROSE_ASSERT(!"Bad index for SgBasicBlock");
     }
   }
-
-#if DEBUG_CALLGRAPH
-  printf("Leaving SgBasicBlock::cfgInEdges(): idx = %u \n", idx);
-#endif
 
   return result;
 }
@@ -593,8 +800,13 @@ std::vector<CFGEdge> SgIfStmt::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
-    makeEdge(CFGNode(this, idx), this->get_conditional()->cfgForBeginning(),
-             result);
+    if (get_is_if_consteval_statement() ||
+        (get_is_if_constexpr_statement() &&
+         isSgExprStatement(get_conditional()) != nullptr))
+      makeEdge(CFGNode(this, idx), CFGNode(this, 1), result);
+    else
+      makeEdge(CFGNode(this, idx), this->get_conditional()->cfgForBeginning(),
+               result);
     break;
   case 1:
     makeEdge(CFGNode(this, idx), this->get_true_body()->cfgForBeginning(),
@@ -623,7 +835,13 @@ std::vector<CFGEdge> SgIfStmt::cfgInEdges(unsigned int idx) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
   case 1:
-    makeEdge(this->get_conditional()->cfgForEnd(), CFGNode(this, idx), result);
+    if (get_is_if_consteval_statement() ||
+        (get_is_if_constexpr_statement() &&
+         isSgExprStatement(get_conditional()) != nullptr))
+      makeEdge(CFGNode(this, 0), CFGNode(this, idx), result);
+    else
+      makeEdge(conditionCompletion(this->get_conditional(), this),
+               CFGNode(this, idx), result);
     break;
   case 2:
     makeEdge(this->get_true_body()->cfgForEnd(), CFGNode(this, idx), result);
@@ -756,7 +974,8 @@ std::vector<CFGEdge> SgForStatement::cfgInEdges(unsigned int idx) {
     makeEdge(this->get_increment()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   case 2:
-    makeEdge(this->get_test()->cfgForEnd(), CFGNode(this, idx), result);
+    makeEdge(conditionCompletion(this->get_test(), this), CFGNode(this, idx),
+             result);
     break;
   case 3: {
     makeEdge(this->get_loop_body()->cfgForEnd(), CFGNode(this, idx), result);
@@ -1094,10 +1313,16 @@ std::vector<CFGEdge> SgFunctionParameterList::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgFunctionDefinition::cfgIndexForEnd() const { return 3; }
+unsigned int SgFunctionDefinition::cfgIndexForEnd() const {
+  return get_destructor_epilogue() != nullptr ||
+                 get_destructor_epilogue_dependent()
+             ? 4
+             : 3;
+}
 
 bool SgFunctionDefinition::cfgIsIndexInteresting(unsigned int idx) const {
-  return idx == 0 || idx == 3;
+  return idx == 0 || idx == cfgIndexForEnd() ||
+         (idx == 3 && get_destructor_epilogue_dependent());
 }
 
 unsigned int SgFunctionDefinition::cfgFindChildIndex(SgNode *n) {
@@ -1108,6 +1333,8 @@ unsigned int SgFunctionDefinition::cfgFindChildIndex(SgNode *n) {
     return 1;
   } else if (n == this->get_body()) {
     return 2;
+  } else if (n == this->get_destructor_epilogue()) {
+    return 3;
   } else {
     ROSE_ASSERT(!"Bad child in function definition");
   }
@@ -1136,7 +1363,27 @@ std::vector<CFGEdge> SgFunctionDefinition::cfgOutEdges(unsigned int idx) {
     break;
   }
   case 3: {
-    // Terminal case for constructors
+    if (get_destructor_epilogue_dependent()) {
+      ROSE_ASSERT(get_destructor_epilogue() == nullptr);
+      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
+      break;
+    }
+    if (get_destructor_epilogue() != nullptr) {
+      makeEdge(CFGNode(this, idx), get_destructor_epilogue()->cfgForBeginning(),
+               result);
+      break;
+    }
+    [[fallthrough]];
+  }
+  case 4: {
+    ROSE_ASSERT(idx == cfgIndexForEnd());
+    if (virtualInterproceduralControlFlowGraphs) {
+      ClassHierarchyWrapper classHierarchy(SageInterface::getProject());
+      Rose_STL_Container<SgExpression *> exps;
+      CallTargetSet::getExpressionsForDefinition(this, &classHierarchy, exps);
+      for (SgExpression *exp : exps)
+        makeEdge(CFGNode(this, idx), exp->cfgForEnd(), result);
+    }
     break;
   }
   default:
@@ -1155,7 +1402,8 @@ std::vector<CFGEdge> SgFunctionDefinition::cfgInEdges(unsigned int idx) {
       Rose_STL_Container<SgExpression *> exps;
       CallTargetSet::getExpressionsForDefinition(this, &classHierarchy, exps);
       for (SgExpression *exp : exps)
-        makeEdge(exp->cfgForEnd(), CFGNode(this, idx), result);
+        makeEdge(CFGNode(exp, exp->cfgIndexForEnd() - 1), CFGNode(this, idx),
+                 result);
     }
     break;
   }
@@ -1174,18 +1422,20 @@ std::vector<CFGEdge> SgFunctionDefinition::cfgInEdges(unsigned int idx) {
   }
   case 3: {
     makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
-    // Liao, 5/21/2010. bad implementation since vectors are created/destroyed
-    // multiple times
-    // std::vector<SgReturnStmt*> returnStmts =
-    // SageInterface::findReturnStmts(this);
-    //      Rose_STL_Container <SgNode*> returnStmts =
-    //      NodeQuery::querySubTree(this,V_SgReturnStmt);
-    VariantVector vv(V_SgReturnStmt);
-    Rose_STL_Container<SgNode *> returnStmts = NodeQuery::queryMemoryPool(vv);
-    for (unsigned int i = 0; i < returnStmts.size(); ++i) {
-      if (SageInterface::isAncestor(this, returnStmts[i]))
-        makeEdge(isSgReturnStmt(returnStmts[i])->cfgForEnd(),
-                 CFGNode(this, idx), result);
+    for (SgNode *node : NodeQuery::querySubTree(this, V_SgReturnStmt)) {
+      if (SageInterface::getEnclosingProcedure(node) == this)
+        makeEdge(node->cfgForEnd(), CFGNode(this, idx), result);
+    }
+    break;
+  }
+  case 4: {
+    if (get_destructor_epilogue_dependent()) {
+      ROSE_ASSERT(get_destructor_epilogue() == nullptr);
+      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
+    } else {
+      ASSERT_not_null(get_destructor_epilogue());
+      makeEdge(get_destructor_epilogue()->cfgForEnd(), CFGNode(this, idx),
+               result);
     }
     break;
   }
@@ -1354,10 +1604,6 @@ std::vector<CFGEdge> SgExprStatement::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
 
-#if DEBUG_CALLGRAPH
-  printf("In SgExprStatement::cfgInEdges(): idx = %u \n", idx);
-#endif
-
   switch (idx) {
   case 0:
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
@@ -1385,10 +1631,6 @@ unsigned int SgLabelStatement::cfgFindChildIndex(SgNode *n) {
 std::vector<CFGEdge> SgLabelStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
 
-#if DEBUG_CALLGRAPH
-  printf("In SgLabelStatement::cfgOutEdges(): idx = %u \n", idx);
-#endif
-
   switch (idx) {
   case 0:
     if (this->get_statement()) {
@@ -1411,22 +1653,26 @@ std::vector<CFGEdge> SgLabelStatement::cfgOutEdges(unsigned int idx) {
 std::vector<CFGEdge> SgLabelStatement::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
 
-#if DEBUG_CALLGRAPH
-  printf("In SgLabelStatement::cfgInEdges(): idx = %u \n", idx);
-#endif
-
   addIncomingFortranGotos(this, idx, result);
   switch (idx) {
   case 0: {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
 
-    // Find all gotos to this label, functionwide
     SgFunctionDefinition *thisFunction =
         SageInterface::getEnclosingProcedure(this);
-    std::vector<SgGotoStatement *> gotos =
-        SageInterface::findGotoStmts(thisFunction, this);
-    for (unsigned int i = 0; i < gotos.size(); ++i) {
-      makeEdge(CFGNode(gotos[i], 0), CFGNode(this, idx), result);
+    ASSERT_not_null(thisFunction);
+    for (SgNode *node :
+         NodeQuery::querySubTree(thisFunction, V_SgGotoStatement)) {
+      auto *statement = isSgGotoStatement(node);
+      ASSERT_not_null(statement);
+      if (statement->get_selector_expression() != nullptr &&
+          get_scope() == thisFunction &&
+          SageInterface::getEnclosingProcedure(statement, true) ==
+              thisFunction) {
+        makeEdge(CFGNode(statement, 1), CFGNode(this, idx), result);
+      } else if (statement->get_label() == this) {
+        makeEdge(CFGNode(statement, 0), CFGNode(this, idx), result);
+      }
     }
     break;
   }
@@ -1495,7 +1741,8 @@ std::vector<CFGEdge> SgWhileStmt::cfgInEdges(unsigned int idx) {
     break;
   }
   case 1:
-    makeEdge(this->get_condition()->cfgForEnd(), CFGNode(this, idx), result);
+    makeEdge(conditionCompletion(this->get_condition(), this),
+             CFGNode(this, idx), result);
     break;
   case 2: {
     makeEdge(CFGNode(this, 1), CFGNode(this, idx), result);
@@ -1622,8 +1869,8 @@ std::vector<CFGEdge> SgSwitchStatement::cfgInEdges(unsigned int idx) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
   case 1:
-    makeEdge(this->get_item_selector()->cfgForEnd(), CFGNode(this, idx),
-             result);
+    makeEdge(conditionCompletion(this->get_item_selector(), this),
+             CFGNode(this, idx), result);
     break;
   case 2: {
     makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
@@ -1733,6 +1980,12 @@ std::vector<CFGEdge> SgTryStmt::cfgInEdges(unsigned int idx) {
     break;
   case 1:
     makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
+    for (SgStatement *statement : get_catch_statement_seq()) {
+      auto *handler = isSgCatchOptionStmt(statement);
+      ASSERT_not_null(handler);
+      if (!handlerRethrows(handler))
+        makeEdge(handler->cfgForEnd(), CFGNode(this, idx), result);
+    }
     break;
   default: {
     if (SgProject::get_verbose() >= 3) {
@@ -1751,35 +2004,55 @@ unsigned int SgCatchStatementSeq::cfgIndexForEnd() const {
   return this->get_catch_statement_seq().size();
 }
 
-bool SgCatchStatementSeq::cfgIsIndexInteresting(unsigned int) const {
-  return false;
+bool SgCatchStatementSeq::cfgIsIndexInteresting(unsigned int index) const {
+  ROSE_ASSERT(index <= cfgIndexForEnd());
+  return true;
 }
 
 std::vector<CFGEdge> SgCatchStatementSeq::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
-  // FIXME
-  if (idx == this->get_catch_statement_seq().size()) {
-    // makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  } else if (idx < this->get_catch_statement_seq().size()) {
-    makeEdge(CFGNode(this, idx),
-             this->get_catch_statement_seq()[idx]->cfgForBeginning(), result);
-  } else {
-    ROSE_ASSERT(!"Bad index for SgCatchStatementSeq");
+  owningTry(this);
+  ROSE_ASSERT(idx <= get_catch_statement_seq().size());
+  if (idx < this->get_catch_statement_seq().size()) {
+    auto *handler = isSgCatchOptionStmt(get_catch_statement_seq()[idx]);
+    ROSE_ASSERT(handler != nullptr && handler->get_parent() == this);
+    makeEdge(CFGNode(this, idx), handler->cfgForBeginning(), result);
+    if (handler->get_condition() != nullptr)
+      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
+    else
+      ROSE_ASSERT(idx + 1 == get_catch_statement_seq().size());
+  } else if (auto *destination = exceptionDestination(this)) {
+    makeEdge(CFGNode(this, idx), destination->cfgForBeginning(), result);
   }
   return result;
 }
 
 std::vector<CFGEdge> SgCatchStatementSeq::cfgInEdges(unsigned int idx) {
+  ROSE_ASSERT(idx <= get_catch_statement_seq().size());
+  auto *statement = owningTry(this);
   std::vector<CFGEdge> result;
-  addIncomingFortranGotos(this, idx, result);
-  // FIXME
   if (idx == 0) {
-    // makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  } else if (idx <= this->get_catch_statement_seq().size()) {
-    makeEdge(this->get_catch_statement_seq()[idx - 1]->cfgForEnd(),
-             CFGNode(this, idx), result);
-  } else
-    ROSE_ASSERT(!"Bad index for SgCatchStatementSeq");
+    SgNode *root = SageInterface::getEnclosingFunctionDeclaration(statement);
+    if (root == nullptr)
+      root = statement;
+    VariantVector transfers(V_SgThrowOp);
+    transfers.push_back(V_SgCatchStatementSeq);
+    for (SgNode *source : NodeQuery::querySubTree(root, transfers))
+      if (exceptionDestination(source) == this)
+        makeEdge(source->cfgForEnd(), CFGNode(this, idx), result);
+  } else {
+    auto *previous = isSgCatchOptionStmt(get_catch_statement_seq()[idx - 1]);
+    ASSERT_not_null(previous);
+    if (previous->get_condition() != nullptr)
+      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
+  }
+  if (idx == cfgIndexForEnd())
+    for (auto *node : get_catch_statement_seq()) {
+      auto *handler = isSgCatchOptionStmt(node);
+      ASSERT_not_null(handler);
+      if (handlerRethrows(handler))
+        makeEdge(handler->cfgForEnd(), CFGNode(this, idx), result);
+    }
   return result;
 }
 
@@ -1789,7 +2062,9 @@ std::vector<CFGEdge> SgCatchOptionStmt::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
-    makeEdge(CFGNode(this, idx), this->get_condition()->cfgForBeginning(),
+    makeEdge(CFGNode(this, idx),
+             get_condition() != nullptr ? get_condition()->cfgForBeginning()
+                                        : CFGNode(this, 1),
              result);
     break;
   case 1:
@@ -1812,7 +2087,9 @@ std::vector<CFGEdge> SgCatchOptionStmt::cfgInEdges(unsigned int idx) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
   case 1:
-    makeEdge(this->get_condition()->cfgForEnd(), CFGNode(this, idx), result);
+    makeEdge(get_condition() != nullptr ? get_condition()->cfgForEnd()
+                                        : CFGNode(this, 0),
+             CFGNode(this, idx), result);
     break;
   case 2:
     makeEdge(this->get_body()->cfgForEnd(), CFGNode(this, idx), result);
@@ -2021,18 +2298,33 @@ std::vector<CFGEdge> SgReturnStmt::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgGotoStatement::cfgIndexForEnd() const {
-  return 1; // So the end of this construct will be an unreachable node
+  return get_selector_expression() != nullptr ? 2 : 1;
 }
 
 bool SgGotoStatement::cfgIsIndexInteresting(unsigned int idx) const {
-  return idx == 0;
+  return idx < cfgIndexForEnd();
 }
 
 std::vector<CFGEdge> SgGotoStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0: {
-    if (this->get_selector_expression()) { // A C/C++ computed goto
+    if (get_selector_expression() != nullptr) {
+      makeEdge(CFGNode(this, idx), get_selector_expression()->cfgForBeginning(),
+               result);
+    } else if (this->get_label_expression()) { // A Fortran goto
+      makeEdge(CFGNode(this, idx),
+               getCFGTargetOfFortranLabelRef(this->get_label_expression()),
+               result);
+    } else { // A C/C++ goto
+      ASSERT_not_null(this->get_label());
+      makeEdge(CFGNode(this, idx), this->get_label()->cfgForBeginning(),
+               result);
+    }
+    break;
+  }
+  case 1:
+    if (get_selector_expression() != nullptr) {
       SgFunctionDefinition *thisFunction =
           SageInterface::getEnclosingProcedure(this, true);
       ASSERT_not_null(thisFunction);
@@ -2047,18 +2339,10 @@ std::vector<CFGEdge> SgGotoStatement::cfgOutEdges(unsigned int idx) {
           makeEdge(CFGNode(this, idx), label_stmt->cfgForBeginning(), result);
         }
       }
-    } else if (this->get_label_expression()) { // A Fortran goto
-      makeEdge(CFGNode(this, idx),
-               getCFGTargetOfFortranLabelRef(this->get_label_expression()),
-               result);
-    } else { // A C/C++ goto
-      ASSERT_not_null(this->get_label());
-      makeEdge(CFGNode(this, idx), this->get_label()->cfgForBeginning(),
-               result);
     }
     break;
-  }
-  case 1: /* No out edges */
+  case 2:
+    ROSE_ASSERT(get_selector_expression() != nullptr);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgGotoStatement");
@@ -2073,7 +2357,13 @@ std::vector<CFGEdge> SgGotoStatement::cfgInEdges(unsigned int idx) {
   case 0:
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
-  case 1: /* No in edges */
+  case 1:
+    if (get_selector_expression() != nullptr)
+      makeEdge(get_selector_expression()->cfgForEnd(), CFGNode(this, idx),
+               result);
+    break;
+  case 2:
+    ROSE_ASSERT(get_selector_expression() != nullptr);
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgGotoStatement");
@@ -2458,6 +2748,21 @@ std::vector<CFGEdge> SgSyncTeamStatement::cfgOutEdges(unsigned int idx) {
   return result;
 }
 std::vector<CFGEdge> SgSyncTeamStatement::cfgInEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  addIncomingFortranGotos(this, idx, result);
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
+
+unsigned int SgFormTeamStatement::cfgIndexForEnd() const { return 0; }
+std::vector<CFGEdge> SgFormTeamStatement::cfgOutEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+std::vector<CFGEdge> SgFormTeamStatement::cfgInEdges(unsigned int idx) {
   ASSERT_require(idx == 0);
   std::vector<CFGEdge> result;
   addIncomingFortranGotos(this, idx, result);
@@ -4002,40 +4307,17 @@ std::vector<CFGEdge> SgFormatStatement::cfgInEdges(unsigned int idx) {
 namespace {
 
 SgExpression *getLambdaCaptureExpression(const SgLambdaCapture *capture) {
-  if (capture == nullptr) {
-    return nullptr;
-  }
-
-  if (SgExpression *source = capture->get_source_closure_variable()) {
-    return source;
-  }
-
-  return capture->get_capture_variable();
-}
-
-std::vector<SgLambdaCapture *>
-getExecutableLambdaCaptures(const SgLambdaCaptureList *capture_list) {
-  std::vector<SgLambdaCapture *> result;
-  if (capture_list == nullptr) {
-    return result;
-  }
-
-  for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
-    if (getLambdaCaptureExpression(capture) != nullptr) {
-      result.push_back(capture);
-    }
-  }
-
-  return result;
+  ROSE_ASSERT(capture != nullptr);
+  SgExpression *initializer = capture->get_capture_initializer();
+  ROSE_ASSERT(initializer != nullptr && initializer->get_parent() == capture);
+  return initializer;
 }
 
 SgLambdaCaptureList *getExecutableLambdaCaptureList(const SgLambdaExp *lambda) {
-  if (lambda == nullptr) {
-    return nullptr;
-  }
-
+  ROSE_ASSERT(lambda != nullptr);
   SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list();
-  if (getExecutableLambdaCaptures(capture_list).empty()) {
+  ROSE_ASSERT(capture_list != nullptr && capture_list->get_parent() == lambda);
+  if (capture_list->get_capture_list().empty()) {
     return nullptr;
   }
 
@@ -4043,13 +4325,13 @@ SgLambdaCaptureList *getExecutableLambdaCaptureList(const SgLambdaExp *lambda) {
 }
 
 SgLambdaExp *getLambdaForCapture(const SgLambdaCapture *capture) {
-  if (capture == nullptr) {
-    return nullptr;
-  }
-
-  return isSgLambdaExp(capture->get_parent() != nullptr
-                           ? capture->get_parent()->get_parent()
-                           : nullptr);
+  ROSE_ASSERT(capture != nullptr);
+  auto *capture_list = isSgLambdaCaptureList(capture->get_parent());
+  ROSE_ASSERT(capture_list != nullptr);
+  auto *lambda = isSgLambdaExp(capture_list->get_parent());
+  ROSE_ASSERT(lambda != nullptr &&
+              lambda->get_lambda_capture_list() == capture_list);
+  return lambda;
 }
 
 SgExpression *
@@ -4059,10 +4341,9 @@ getFirstExecutableLambdaCaptureExpression(const SgLambdaExp *lambda) {
     return nullptr;
   }
 
-  std::vector<SgLambdaCapture *> captures =
-      getExecutableLambdaCaptures(capture_list);
-  ROSE_ASSERT(!captures.empty());
-  return getLambdaCaptureExpression(captures.front());
+  SgLambdaCapture *capture = capture_list->get_capture_list().front();
+  ROSE_ASSERT(capture != nullptr && capture->get_parent() == capture_list);
+  return getLambdaCaptureExpression(capture);
 }
 
 SgExpression *
@@ -4072,73 +4353,68 @@ getLastExecutableLambdaCaptureExpression(const SgLambdaExp *lambda) {
     return nullptr;
   }
 
-  std::vector<SgLambdaCapture *> captures =
-      getExecutableLambdaCaptures(capture_list);
-  ROSE_ASSERT(!captures.empty());
-  return getLambdaCaptureExpression(captures.back());
+  SgLambdaCapture *capture = capture_list->get_capture_list().back();
+  ROSE_ASSERT(capture != nullptr && capture->get_parent() == capture_list);
+  return getLambdaCaptureExpression(capture);
 }
 
 SgExpression *
 getPreviousExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
-  SgLambdaCaptureList *capture_list = isSgLambdaCaptureList(
-      capture != nullptr ? capture->get_parent() : nullptr);
-  if (capture_list == nullptr) {
-    return nullptr;
-  }
+  SgLambdaCaptureList *capture_list =
+      getLambdaForCapture(capture)->get_lambda_capture_list();
 
   const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
   SgLambdaCapturePtrList::const_iterator current =
       std::find(captures.begin(), captures.end(), capture);
-  if (current == captures.end()) {
-    ROSE_ASSERT(
-        !"Bad capture in getPreviousExecutableLambdaCaptureExpression()");
+  ROSE_ASSERT(current != captures.end());
+
+  if (current == captures.begin()) {
     return nullptr;
   }
-
-  while (current != captures.begin()) {
-    --current;
-    if (SgExpression *capture_expression =
-            getLambdaCaptureExpression(*current)) {
-      return capture_expression;
-    }
-  }
-
-  return nullptr;
+  --current;
+  ROSE_ASSERT(*current != nullptr && (*current)->get_parent() == capture_list);
+  return getLambdaCaptureExpression(*current);
 }
 
 SgExpression *
 getNextExecutableLambdaCaptureExpression(const SgLambdaCapture *capture) {
-  SgLambdaCaptureList *capture_list = isSgLambdaCaptureList(
-      capture != nullptr ? capture->get_parent() : nullptr);
-  if (capture_list == nullptr) {
-    return nullptr;
-  }
+  SgLambdaCaptureList *capture_list =
+      getLambdaForCapture(capture)->get_lambda_capture_list();
 
   const SgLambdaCapturePtrList &captures = capture_list->get_capture_list();
   SgLambdaCapturePtrList::const_iterator current =
       std::find(captures.begin(), captures.end(), capture);
-  if (current == captures.end()) {
-    ROSE_ASSERT(!"Bad capture in getNextExecutableLambdaCaptureExpression()");
+  ROSE_ASSERT(current != captures.end());
+
+  if (++current == captures.end()) {
     return nullptr;
   }
-
-  for (++current; current != captures.end(); ++current) {
-    if (SgExpression *capture_expression =
-            getLambdaCaptureExpression(*current)) {
-      return capture_expression;
-    }
-  }
-
-  return nullptr;
+  ROSE_ASSERT(*current != nullptr && (*current)->get_parent() == capture_list);
+  return getLambdaCaptureExpression(*current);
 }
 
 } // namespace
 
 unsigned int SgExpression::cfgIndexForEnd() const {
+  if (auto *choice = isSgChooseExpression(this)) {
+    choice->validate();
+    return 1;
+  }
+  if (isSgCudaKernelExecConfig(this))
+    return 4;
+  if (isSgCxxDefaultInitExp(this))
+    return 1;
+  if (isSgCxxArrayInitLoop(this)) {
+    return 4;
+  }
+  if (isSgCxxArrayInitReference(this)) {
+    return 0;
+  }
   if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
     return getFirstExecutableLambdaCaptureExpression(lambda) != nullptr ? 1 : 0;
   }
-  if (isSgFoldExpression(this) != nullptr) {
+  if (isSgFoldExpression(this) != nullptr ||
+      isSgPackExpansionExpr(this) != nullptr) {
     return 1;
   }
   std::cerr << "Bad expression case " << this->class_name()
@@ -4147,32 +4423,57 @@ unsigned int SgExpression::cfgIndexForEnd() const {
 }
 
 bool SgExpression::cfgIsIndexInteresting(unsigned int idx) const {
+  if (auto *choice = isSgChooseExpression(this)) {
+    choice->validate();
+    ROSE_ASSERT(idx <= 1);
+    return idx == 1 || choice->get_selection_kind() ==
+                           SgChooseExpression::e_choose_selection_dependent;
+  }
+  if (isSgCxxArrayInitLoop(this)) {
+    ROSE_ASSERT(idx <= 4);
+    return idx == 1 || idx == 3 || idx == 4;
+  }
   // Default -- overridden in short-circuiting operators
   return idx == this->cfgIndexForEnd();
 }
 
 unsigned int SgExpression::cfgFindChildIndex(SgNode *n) {
-  ASSERT_this();
-
-  if (isSgBoolValExp(this) != nullptr) {
-    SgBoolValExp *value = isSgBoolValExp(this);
-    printf("value->get_value() = %s \n", value->get_value() ? "true" : "false");
-    ROSE_ASSERT(value->get_originalExpressionTree() == nullptr);
-
-    this->get_startOfConstruct()->display(
-        "SgExpression::cfgFindChildIndex() should never have a SgBoolValExp at "
-        "this point: debug");
-
-    SgNode *parent = this->get_parent();
-    while (parent != nullptr) {
-      if (parent->get_file_info() != nullptr)
-        parent->get_file_info()->display(
-            "SgExpression::cfgFindChildIndex() parent: should never have a "
-            "SgBoolValExp at this point: debug");
-
-      parent = parent->get_parent();
-    }
+  if (auto *choice = isSgChooseExpression(this)) {
+    choice->validate();
+    ROSE_ASSERT(n == choice->get_condition() ||
+                n == choice->get_true_expression() ||
+                n == choice->get_false_expression());
+    return 0;
   }
+  if (auto *launch = isSgCudaKernelCallExp(this)) {
+    if (n == launch->get_function())
+      return 0;
+    if (n == launch->get_exec_config())
+      return 1;
+    ROSE_ASSERT(n == launch->get_args());
+    return 2;
+  }
+  if (auto *config = isSgCudaKernelExecConfig(this)) {
+    const auto operands = cudaConfigurationOperands(config);
+    const auto position = std::find(operands.begin(), operands.end(), n);
+    ROSE_ASSERT(n != nullptr && position != operands.end());
+    return position - operands.begin();
+  }
+  if (auto *use = isSgCxxDefaultInitExp(this)) {
+    ROSE_ASSERT(n == use->get_expression());
+    return 0;
+  }
+  if (auto *loop = isSgCxxArrayInitLoop(this)) {
+    ROSE_ASSERT(n == loop->get_element_initializer());
+    return 2;
+  }
+  if (auto *expansion = isSgPackExpansionExpr(this)) {
+    ROSE_ASSERT(n == expansion->get_pattern_expression());
+    return 0;
+  }
+
+  if (auto *value = isSgBoolValExp(this))
+    ROSE_ASSERT(value->get_originalExpressionTree() == nullptr);
 
   // Default -- overridden in some cases
   size_t idx = this->get_childIndex(n);
@@ -4184,6 +4485,94 @@ unsigned int SgExpression::cfgFindNextChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int idx) {
+  if (auto *choice = isSgChooseExpression(this)) {
+    choice->validate();
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    if (idx == 0) {
+      for (auto *arm :
+           {choice->get_true_expression(), choice->get_false_expression()})
+        if (!isUnevaluatedOperatorOperand(choice, arm))
+          makeEdge(CFGNode(this, idx), arm->cfgForBeginning(), result);
+    } else {
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    }
+    return result;
+  }
+  if (auto *config = isSgCudaKernelExecConfig(this)) {
+    const auto operands = cudaConfigurationOperands(config);
+    ROSE_ASSERT(idx <= operands.size());
+    std::vector<CFGEdge> result;
+    if (idx == operands.size())
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    else
+      makeEdge(CFGNode(this, idx),
+               operands[idx] != nullptr ? operands[idx]->cfgForBeginning()
+                                        : CFGNode(this, idx + 1),
+               result);
+    return result;
+  }
+  if (auto *use = isSgCxxDefaultInitExp(this)) {
+    use->validate();
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    makeEdge(CFGNode(this, idx),
+             idx == 0 ? use->get_expression()->cfgForBeginning()
+                      : getNodeJustAfterInContainer(this),
+             result);
+    return result;
+  }
+  if (auto *loop = isSgCxxArrayInitLoop(this)) {
+    loop->validate();
+    std::vector<CFGEdge> result;
+    switch (idx) {
+    case 0:
+      makeEdge(CFGNode(this, idx),
+               loop->get_binding()->get_common_source()->cfgForBeginning(),
+               result);
+      break;
+    case 1:
+      makeEdge(CFGNode(this, idx),
+               CFGNode(this, loop->get_element_count() == 0 ? 4 : 2), result);
+      break;
+    case 2:
+      makeEdge(CFGNode(this, idx),
+               loop->get_element_initializer()->cfgForBeginning(), result);
+      break;
+    case 3:
+      if (loop->get_element_count() > 1) {
+        makeEdge(CFGNode(this, idx), CFGNode(this, 2), result);
+      }
+      if (loop->get_element_count() != 0) {
+        makeEdge(CFGNode(this, idx), CFGNode(this, 4), result);
+      }
+      break;
+    case 4:
+      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+      break;
+    default:
+      ROSE_ABORT();
+    }
+    return result;
+  }
+  if (auto *reference = isSgCxxArrayInitReference(this)) {
+    reference->validate();
+    ROSE_ASSERT(idx == 0);
+    std::vector<CFGEdge> result;
+    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+    return result;
+  }
+  if (auto *expansion = isSgPackExpansionExpr(this)) {
+    ROSE_ASSERT(idx <= 1);
+    SgExpression *pattern = expansion->get_pattern_expression();
+    ROSE_ASSERT(pattern != nullptr && pattern->get_parent() == this);
+    std::vector<CFGEdge> result;
+    makeEdge(CFGNode(this, idx),
+             idx == 0 ? pattern->cfgForBeginning()
+                      : getNodeJustAfterInContainer(this),
+             result);
+    return result;
+  }
   if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
     std::vector<CFGEdge> result;
     SgExpression *first_capture =
@@ -4225,6 +4614,90 @@ std::vector<CFGEdge> SgExpression::cfgOutEdges(unsigned int idx) {
 }
 
 std::vector<CFGEdge> SgExpression::cfgInEdges(unsigned int idx) {
+  if (auto *choice = isSgChooseExpression(this)) {
+    choice->validate();
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    if (idx == 0) {
+      makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    } else {
+      for (auto *arm :
+           {choice->get_true_expression(), choice->get_false_expression()})
+        if (!isUnevaluatedOperatorOperand(choice, arm))
+          makeEdge(arm->cfgForEnd(), CFGNode(this, idx), result);
+    }
+    return result;
+  }
+  if (auto *config = isSgCudaKernelExecConfig(this)) {
+    const auto operands = cudaConfigurationOperands(config);
+    ROSE_ASSERT(idx <= operands.size());
+    std::vector<CFGEdge> result;
+    if (idx == 0)
+      makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    else
+      makeEdge(operands[idx - 1] != nullptr ? operands[idx - 1]->cfgForEnd()
+                                            : CFGNode(this, idx - 1),
+               CFGNode(this, idx), result);
+    return result;
+  }
+  if (auto *use = isSgCxxDefaultInitExp(this)) {
+    use->validate();
+    ROSE_ASSERT(idx <= 1);
+    std::vector<CFGEdge> result;
+    makeEdge(idx == 0 ? getNodeJustBeforeInContainer(this)
+                      : use->get_expression()->cfgForEnd(),
+             CFGNode(this, idx), result);
+    return result;
+  }
+  if (auto *loop = isSgCxxArrayInitLoop(this)) {
+    loop->validate();
+    std::vector<CFGEdge> result;
+    switch (idx) {
+    case 0:
+      makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+      break;
+    case 1:
+      makeEdge(loop->get_binding()->get_common_source()->cfgForEnd(),
+               CFGNode(this, idx), result);
+      break;
+    case 2:
+      if (loop->get_element_count() != 0) {
+        makeEdge(CFGNode(this, 1), CFGNode(this, idx), result);
+      }
+      if (loop->get_element_count() > 1) {
+        makeEdge(CFGNode(this, 3), CFGNode(this, idx), result);
+      }
+      break;
+    case 3:
+      makeEdge(loop->get_element_initializer()->cfgForEnd(), CFGNode(this, idx),
+               result);
+      break;
+    case 4:
+      makeEdge(CFGNode(this, loop->get_element_count() == 0 ? 1 : 3),
+               CFGNode(this, idx), result);
+      break;
+    default:
+      ROSE_ABORT();
+    }
+    return result;
+  }
+  if (auto *reference = isSgCxxArrayInitReference(this)) {
+    reference->validate();
+    ROSE_ASSERT(idx == 0);
+    std::vector<CFGEdge> result;
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    return result;
+  }
+  if (auto *expansion = isSgPackExpansionExpr(this)) {
+    ROSE_ASSERT(idx <= 1);
+    SgExpression *pattern = expansion->get_pattern_expression();
+    ROSE_ASSERT(pattern != nullptr && pattern->get_parent() == this);
+    std::vector<CFGEdge> result;
+    makeEdge(idx == 0 ? getNodeJustBeforeInContainer(this)
+                      : pattern->cfgForEnd(),
+             CFGNode(this, idx), result);
+    return result;
+  }
   if (const SgLambdaExp *lambda = isSgLambdaExp(this)) {
     std::vector<CFGEdge> result;
     SgExpression *last_capture =
@@ -4366,129 +4839,109 @@ std::vector<CFGEdge> SgUnaryOp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgSizeOfOp::cfgIndexForEnd() const { return 1; }
-
-std::vector<CFGEdge> SgSizeOfOp::cfgOutEdges(unsigned int idx) {
+static std::vector<CFGEdge>
+unevaluatedOperatorCfgOutEdges(SgExpression *operation, unsigned int idx) {
+  ASSERT_not_null(operation->get_type());
   std::vector<CFGEdge> result;
 
   switch (idx) {
   case 0:
-    if (get_operand_expr())
-      makeEdge(CFGNode(this, idx), get_operand_expr()->cfgForBeginning(),
-               result);
-    else
-      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
+    makeEdge(CFGNode(operation, idx), CFGNode(operation, idx + 1), result);
     break;
   case 1:
-    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
+    makeEdge(CFGNode(operation, idx), getNodeJustAfterInContainer(operation),
+             result);
     break;
   default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
+    ROSE_ASSERT(!"Bad index for unevaluated operator");
   }
   return result;
 }
 
-std::vector<CFGEdge> SgSizeOfOp::cfgInEdges(unsigned int idx) {
+static std::vector<CFGEdge>
+unevaluatedOperatorCfgInEdges(SgExpression *operation, unsigned int idx) {
+  ASSERT_not_null(operation->get_type());
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
-    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+    makeEdge(getNodeJustBeforeInContainer(operation), CFGNode(operation, idx),
+             result);
     break;
   case 1:
-    if (get_operand_expr())
-      makeEdge(get_operand_expr()->cfgForEnd(), CFGNode(this, idx), result);
-    else
-      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
+    makeEdge(CFGNode(operation, idx - 1), CFGNode(operation, idx), result);
     break;
   default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
+    ROSE_ASSERT(!"Bad index for unevaluated operator");
   }
   return result;
+}
+
+static std::vector<CFGEdge> operandOperatorCfgOutEdges(SgExpression *operation,
+                                                       SgExpression *operand,
+                                                       unsigned int idx) {
+  (void)operation->get_type();
+  if (operand == nullptr)
+    return unevaluatedOperatorCfgOutEdges(operation, idx);
+  ASSERT_require(operand->get_parent() == operation);
+  ASSERT_require(idx <= 1);
+  std::vector<CFGEdge> result;
+  if (idx == 0)
+    makeEdge(CFGNode(operation, idx), operand->cfgForBeginning(), result);
+  else
+    makeEdge(CFGNode(operation, idx), getNodeJustAfterInContainer(operation),
+             result);
+  return result;
+}
+
+static std::vector<CFGEdge> operandOperatorCfgInEdges(SgExpression *operation,
+                                                      SgExpression *operand,
+                                                      unsigned int idx) {
+  (void)operation->get_type();
+  if (operand == nullptr)
+    return unevaluatedOperatorCfgInEdges(operation, idx);
+  ASSERT_require(operand->get_parent() == operation);
+  ASSERT_require(idx <= 1);
+  std::vector<CFGEdge> result;
+  if (idx == 0)
+    makeEdge(getNodeJustBeforeInContainer(operation), CFGNode(operation, idx),
+             result);
+  else
+    makeEdge(operand->cfgForEnd(), CFGNode(operation, idx), result);
+  return result;
+}
+
+unsigned int SgSizeOfOp::cfgIndexForEnd() const { return 1; }
+
+std::vector<CFGEdge> SgSizeOfOp::cfgOutEdges(unsigned int idx) {
+  return operandOperatorCfgOutEdges(
+      this, expression_operand_is_evaluated() ? get_operand_expr() : nullptr,
+      idx);
+}
+
+std::vector<CFGEdge> SgSizeOfOp::cfgInEdges(unsigned int idx) {
+  return operandOperatorCfgInEdges(
+      this, expression_operand_is_evaluated() ? get_operand_expr() : nullptr,
+      idx);
 }
 
 unsigned int SgAlignOfOp::cfgIndexForEnd() const { return 1; }
 
 std::vector<CFGEdge> SgAlignOfOp::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-
-  switch (idx) {
-  case 0:
-    if (get_operand_expr())
-      makeEdge(CFGNode(this, idx), get_operand_expr()->cfgForBeginning(),
-               result);
-    else
-      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
-    break;
-  case 1:
-    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
-  }
-  return result;
+  return unevaluatedOperatorCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgAlignOfOp::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
-    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-    break;
-  case 1:
-    if (get_operand_expr())
-      makeEdge(get_operand_expr()->cfgForEnd(), CFGNode(this, idx), result);
-    else
-      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
-  }
-  return result;
+  return unevaluatedOperatorCfgInEdges(this, idx);
 }
 
-// DQ (2/4/2015): Added support for C++11 noexcept operator (structurally
-// similar to SgAlignOfOp operator).
 unsigned int SgNoexceptOp::cfgIndexForEnd() const { return 1; }
 
 std::vector<CFGEdge> SgNoexceptOp::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-
-  switch (idx) {
-  case 0:
-    if (get_operand_expr())
-      makeEdge(CFGNode(this, idx), get_operand_expr()->cfgForBeginning(),
-               result);
-    else
-      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
-    break;
-  case 1:
-    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
-  }
-  return result;
+  return unevaluatedOperatorCfgOutEdges(this, idx);
 }
 
 std::vector<CFGEdge> SgNoexceptOp::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
-    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-    break;
-  case 1:
-    if (get_operand_expr())
-      makeEdge(get_operand_expr()->cfgForEnd(), CFGNode(this, idx), result);
-    else
-      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgUnaryOp");
-  }
-  return result;
+  return unevaluatedOperatorCfgInEdges(this, idx);
 }
 
 unsigned int SgThrowOp::cfgIndexForEnd() const {
@@ -4497,20 +4950,13 @@ unsigned int SgThrowOp::cfgIndexForEnd() const {
 
 std::vector<CFGEdge> SgThrowOp::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0: {
-    if (get_operand() == nullptr)
-      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    else
-      makeEdge(CFGNode(this, idx), this->get_operand()->cfgForBeginning(),
-               result);
-    break;
-  }
-  case 1:
-    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgThrowOp");
+  ROSE_ASSERT(idx <= cfgIndexForEnd());
+  if (idx == cfgIndexForEnd()) {
+    if (auto *destination = exceptionDestination(this))
+      makeEdge(CFGNode(this, idx), destination->cfgForBeginning(), result);
+  } else {
+    ASSERT_not_null(get_operand());
+    makeEdge(CFGNode(this, idx), get_operand()->cfgForBeginning(), result);
   }
   return result;
 }
@@ -4589,6 +5035,15 @@ std::vector<CFGEdge> SgExprListExp::cfgOutEdges(unsigned int idx) {
   } else
     ROSE_ASSERT(!"Bad index for SgExprListExp");
 
+  if (idx == 1) {
+    if (auto *constructor = isSgConstructorInitializer(get_parent())) {
+      constructor->validate_elision();
+      ROSE_ASSERT(constructor->get_args() == this);
+      if (constructor->get_elision_permitted())
+        makeEdge(CFGNode(this, idx), constructor->cfgForEnd(), result);
+    }
+  }
+
   return result;
 }
 
@@ -4606,6 +5061,22 @@ std::vector<CFGEdge> SgExprListExp::cfgInEdges(unsigned int idx) {
 }
 
 unsigned int SgVarRefExp::cfgIndexForEnd() const { return 0; }
+
+unsigned int SgCxxDecompositionRefExp::cfgIndexForEnd() const { return 0; }
+
+std::vector<CFGEdge> SgCxxDecompositionRefExp::cfgOutEdges(unsigned int idx) {
+  ROSE_ASSERT(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgCxxDecompositionRefExp::cfgInEdges(unsigned int idx) {
+  ROSE_ASSERT(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
 
 std::vector<CFGEdge> SgVarRefExp::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
@@ -4761,10 +5232,6 @@ std::vector<CFGEdge> SgValueExp::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
-    // Liao 10/3/2012, we no longer keep both folded and original expressions in
-    // the same AST Original expression trees are either totally removed OR used
-    // to replace the folded expressions In either case, we should not dive into
-    // original expression trees in virtual CFG
     makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
     break;
   case 1:
@@ -4783,10 +5250,6 @@ std::vector<CFGEdge> SgValueExp::cfgInEdges(unsigned int idx) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
     break;
   case 1:
-    // Liao 10/3/2012, we no longer keep both folded and original expressions in
-    // the same AST Original expression trees are either totally removed OR used
-    // to replace the folded expressions In either case, we should not dive into
-    // original expression trees in virtual CFG
     makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
     break;
   default:
@@ -4795,20 +5258,79 @@ std::vector<CFGEdge> SgValueExp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgFunctionCallExp::cfgIndexForEnd() const { return 3; }
+unsigned int SgCxxSubobjectDestruction::cfgIndexForEnd() const { return 2; }
+
+bool SgCxxSubobjectDestruction::cfgIsIndexInteresting(unsigned int idx) const {
+  return idx == 1 || (idx == 0 && get_target_kind() == e_virtual_base);
+}
+
+std::vector<CFGEdge> SgCxxSubobjectDestruction::cfgOutEdges(unsigned int idx) {
+  validate();
+  ROSE_ASSERT(idx <= 2);
+  std::vector<CFGEdge> result;
+  if (idx == 0) {
+    makeEdge(CFGNode(this, 0), CFGNode(this, 1), result);
+    if (get_target_kind() == e_virtual_base)
+      makeEdge(CFGNode(this, 0), CFGNode(this, 2), result);
+  } else if (idx == 1) {
+    if (virtualInterproceduralControlFlowGraphs) {
+      ClassHierarchyWrapper hierarchy(SageInterface::getProject());
+      Rose_STL_Container<SgFunctionDefinition *> definitions;
+      CallTargetSet::getDefinitionsForExpression(this, &hierarchy, definitions);
+      for (auto *definition : definitions)
+        makeEdge(CFGNode(this, idx), definition->cfgForBeginning(), result);
+    } else {
+      makeEdge(CFGNode(this, 1), CFGNode(this, 2), result);
+    }
+  } else {
+    makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  }
+  return result;
+}
+
+std::vector<CFGEdge> SgCxxSubobjectDestruction::cfgInEdges(unsigned int idx) {
+  validate();
+  ROSE_ASSERT(idx <= 2);
+  std::vector<CFGEdge> result;
+  if (idx == 0) {
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  } else if (idx == 1) {
+    makeEdge(CFGNode(this, 0), CFGNode(this, 1), result);
+  } else {
+    if (virtualInterproceduralControlFlowGraphs) {
+      ClassHierarchyWrapper hierarchy(SageInterface::getProject());
+      Rose_STL_Container<SgFunctionDefinition *> definitions;
+      CallTargetSet::getDefinitionsForExpression(this, &hierarchy, definitions);
+      for (auto *definition : definitions)
+        makeEdge(definition->cfgForEnd(), CFGNode(this, idx), result);
+    } else {
+      makeEdge(CFGNode(this, 1), CFGNode(this, 2), result);
+    }
+    if (get_target_kind() == e_virtual_base)
+      makeEdge(CFGNode(this, 0), CFGNode(this, 2), result);
+  }
+  return result;
+}
+
+unsigned int SgFunctionCallExp::cfgIndexForEnd() const {
+  return isSgCudaKernelCallExp(this) != nullptr ? 4 : 3;
+}
 
 std::vector<CFGEdge> SgFunctionCallExp::cfgOutEdges(unsigned int idx) {
-  ASSERT_this();
+  const unsigned int end = cfgIndexForEnd();
+  ROSE_ASSERT(idx <= end);
   std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
+  if (idx == 0) {
     makeEdge(CFGNode(this, idx), this->get_function()->cfgForBeginning(),
              result);
-    break;
-  case 1:
+  } else if (auto *launch = isSgCudaKernelCallExp(this); launch && idx == 1) {
+    ROSE_ASSERT(launch->get_exec_config() != nullptr &&
+                launch->get_exec_config()->get_parent() == this);
+    makeEdge(CFGNode(this, idx), launch->get_exec_config()->cfgForBeginning(),
+             result);
+  } else if (idx == end - 2) {
     makeEdge(CFGNode(this, idx), this->get_args()->cfgForBeginning(), result);
-    break;
-  case SGFUNCTIONCALLEXP_INTERPROCEDURAL_INDEX: {
+  } else if (idx == end - 1) {
     if (virtualInterproceduralControlFlowGraphs) {
       ClassHierarchyWrapper classHierarchy(SageInterface::getProject());
       Rose_STL_Container<SgFunctionDefinition *> defs;
@@ -4818,31 +5340,30 @@ std::vector<CFGEdge> SgFunctionCallExp::cfgOutEdges(unsigned int idx) {
     } else {
       makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
     }
-    break;
-  }
-  case 3:
+  } else {
+    ROSE_ASSERT(idx == end);
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-  default:
-    ROSE_ASSERT(!"Bad index for SgFunctionCallExp");
   }
   return result;
 }
 
 std::vector<CFGEdge> SgFunctionCallExp::cfgInEdges(unsigned int idx) {
-  ASSERT_this();
+  const unsigned int end = cfgIndexForEnd();
+  ROSE_ASSERT(idx <= end);
   std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
+  if (idx == 0) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-    break;
-  case 1:
+  } else if (idx == 1) {
     makeEdge(this->get_function()->cfgForEnd(), CFGNode(this, idx), result);
-    break;
-  case 2:
+  } else if (auto *launch = isSgCudaKernelCallExp(this); launch && idx == 2) {
+    ROSE_ASSERT(launch->get_exec_config() != nullptr &&
+                launch->get_exec_config()->get_parent() == this);
+    makeEdge(launch->get_exec_config()->cfgForEnd(), CFGNode(this, idx),
+             result);
+  } else if (idx == end - 1) {
     makeEdge(this->get_args()->cfgForEnd(), CFGNode(this, idx), result);
-    break;
-  case 3: {
+  } else {
+    ROSE_ASSERT(idx == end);
     if (virtualInterproceduralControlFlowGraphs) {
       ClassHierarchyWrapper classHierarchy(SageInterface::getProject());
       Rose_STL_Container<SgFunctionDefinition *> defs;
@@ -4851,10 +5372,6 @@ std::vector<CFGEdge> SgFunctionCallExp::cfgInEdges(unsigned int idx) {
         makeEdge(def->cfgForEnd(), CFGNode(this, idx), result);
     } else
       makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
-    break;
-  }
-  default:
-    ROSE_ASSERT(!"Bad index for SgFunctionCallExp");
   }
   return result;
 }
@@ -4990,20 +5507,16 @@ std::vector<CFGEdge> SgOrOp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgTypeIdOp::cfgIndexForEnd() const { return 0; }
+unsigned int SgTypeIdOp::cfgIndexForEnd() const { return 1; }
 
 std::vector<CFGEdge> SgTypeIdOp::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
+  return operandOperatorCfgOutEdges(
+      this, get_operand_is_evaluated() ? get_operand_expr() : nullptr, idx);
 }
 
 std::vector<CFGEdge> SgTypeIdOp::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
+  return operandOperatorCfgInEdges(
+      this, get_operand_is_evaluated() ? get_operand_expr() : nullptr, idx);
 }
 
 unsigned int SgVarArgStartOp::cfgIndexForEnd() const { return 2; }
@@ -5194,16 +5707,16 @@ unsigned int SgCastExp::cfgFindChildIndex(SgNode *n) {
   return 0;
 }
 
-unsigned int SgNewExp::cfgIndexForEnd() const {
-  return 2; // At most one of constructor args or array size are present
-}
+unsigned int SgNewExp::cfgIndexForEnd() const { return 3; }
 
 unsigned int SgNewExp::cfgFindChildIndex(SgNode *n) {
   if (n == this->get_placement_args()) {
     return 0;
+  } else if (n == get_array_bound()) {
+    return 1;
   } else {
     if (n == this->get_constructor_args() || n == this->get_builtin_args()) {
-      return 1;
+      return 2;
     } else {
       ROSE_ASSERT(!"Bad child in new expression");
     }
@@ -5224,6 +5737,14 @@ std::vector<CFGEdge> SgNewExp::cfgOutEdges(unsigned int idx) {
     break;
   }
   case 1: {
+    if (get_array_bound())
+      makeEdge(CFGNode(this, idx), get_array_bound()->cfgForBeginning(),
+               result);
+    else
+      makeEdge(CFGNode(this, idx), CFGNode(this, 2), result);
+    break;
+  }
+  case 2: {
     if (this->get_builtin_args()) {
       ROSE_ASSERT(get_builtin_args());
       makeEdge(CFGNode(this, idx), this->get_builtin_args()->cfgForBeginning(),
@@ -5232,11 +5753,11 @@ std::vector<CFGEdge> SgNewExp::cfgOutEdges(unsigned int idx) {
       makeEdge(CFGNode(this, idx),
                this->get_constructor_args()->cfgForBeginning(), result);
     } else {
-      makeEdge(CFGNode(this, idx), CFGNode(this, 2), result);
+      makeEdge(CFGNode(this, idx), CFGNode(this, 3), result);
     }
     break;
   }
-  case 2:
+  case 3:
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
     break;
   default:
@@ -5261,6 +5782,13 @@ std::vector<CFGEdge> SgNewExp::cfgInEdges(unsigned int idx) {
     break;
   }
   case 2: {
+    if (get_array_bound())
+      makeEdge(get_array_bound()->cfgForEnd(), CFGNode(this, idx), result);
+    else
+      makeEdge(CFGNode(this, 1), CFGNode(this, idx), result);
+    break;
+  }
+  case 3: {
     if (this->get_builtin_args()) {
       makeEdge(this->get_builtin_args()->cfgForEnd(), CFGNode(this, idx),
                result);
@@ -5268,7 +5796,7 @@ std::vector<CFGEdge> SgNewExp::cfgInEdges(unsigned int idx) {
       makeEdge(this->get_constructor_args()->cfgForEnd(), CFGNode(this, idx),
                result);
     } else {
-      makeEdge(CFGNode(this, 1), CFGNode(this, idx), result);
+      makeEdge(CFGNode(this, 2), CFGNode(this, idx), result);
     }
     break;
   }
@@ -5329,39 +5857,23 @@ std::vector<CFGEdge> SgThisExp::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgSuperExp::cfgIndexForEnd() const { return 0; }
-
-std::vector<CFGEdge> SgSuperExp::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
-}
-
-std::vector<CFGEdge> SgSuperExp::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
-}
-
-unsigned int SgClassExp::cfgIndexForEnd() const { return 0; }
-
-std::vector<CFGEdge> SgClassExp::cfgOutEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-  return result;
-}
-
-std::vector<CFGEdge> SgClassExp::cfgInEdges(unsigned int idx) {
-  std::vector<CFGEdge> result;
-  ASSERT_require(idx == 0);
-  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-  return result;
-}
-
 unsigned int SgInitializer::cfgIndexForEnd() const { return 1; }
+
+unsigned int SgFortranDataInitializer::cfgIndexForEnd() const { return 0; }
+
+std::vector<CFGEdge> SgFortranDataInitializer::cfgOutEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgFortranDataInitializer::cfgInEdges(unsigned int idx) {
+  ASSERT_require(idx == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
 
 std::vector<CFGEdge> SgAggregateInitializer::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
@@ -5432,6 +5944,8 @@ std::vector<CFGEdge> SgBracedInitializer::cfgInEdges(unsigned int idx) {
 unsigned int SgConstructorInitializer::cfgIndexForEnd() const { return 2; }
 
 std::vector<CFGEdge> SgConstructorInitializer::cfgOutEdges(unsigned int idx) {
+  validate_elision();
+  validate_argument_context();
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
@@ -5439,14 +5953,13 @@ std::vector<CFGEdge> SgConstructorInitializer::cfgOutEdges(unsigned int idx) {
     break;
   case SGCONSTRUCTORINITIALIZER_INTERPROCEDURAL_INDEX: {
     if (virtualInterproceduralControlFlowGraphs) {
-      SgFunctionDeclaration *decl = get_declaration();
-      if (decl != nullptr) {
-        SgFunctionDefinition *def = decl->get_definition();
-        if (def != nullptr) {
-          makeEdge(CFGNode(this, idx), def->cfgForBeginning(), result);
-          break;
-        }
-      }
+      ClassHierarchyWrapper classHierarchy(SageInterface::getProject());
+      Rose_STL_Container<SgFunctionDefinition *> defs;
+      CallTargetSet::getDefinitionsForExpression(this, &classHierarchy, defs);
+      for (SgFunctionDefinition *def : defs)
+        makeEdge(CFGNode(this, idx), def->cfgForBeginning(), result);
+      if (!defs.empty())
+        break;
     }
     makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
     break;
@@ -5461,6 +5974,8 @@ std::vector<CFGEdge> SgConstructorInitializer::cfgOutEdges(unsigned int idx) {
 }
 
 std::vector<CFGEdge> SgConstructorInitializer::cfgInEdges(unsigned int idx) {
+  validate_elision();
+  validate_argument_context();
   std::vector<CFGEdge> result;
   switch (idx) {
   case 0:
@@ -5470,15 +5985,17 @@ std::vector<CFGEdge> SgConstructorInitializer::cfgInEdges(unsigned int idx) {
     makeEdge(this->get_args()->cfgForEnd(), CFGNode(this, idx), result);
     break;
   case 2: {
+    if (get_elision_permitted()) {
+      makeEdge(CFGNode(get_args(), 1), CFGNode(this, idx), result);
+    }
     if (virtualInterproceduralControlFlowGraphs) {
-      SgFunctionDeclaration *decl = get_declaration();
-      if (decl != nullptr) {
-        SgFunctionDefinition *def = decl->get_definition();
-        if (def != nullptr) {
-          makeEdge(def->cfgForEnd(), CFGNode(this, idx), result);
-          break;
-        }
-      }
+      ClassHierarchyWrapper classHierarchy(SageInterface::getProject());
+      Rose_STL_Container<SgFunctionDefinition *> defs;
+      CallTargetSet::getDefinitionsForExpression(this, &classHierarchy, defs);
+      for (SgFunctionDefinition *def : defs)
+        makeEdge(def->cfgForEnd(), CFGNode(this, idx), result);
+      if (!defs.empty())
+        break;
     }
     makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
     break;
@@ -5541,33 +6058,36 @@ unsigned int SgCtorInitializerList::cfgIndexForEnd() const {
 }
 
 std::vector<CFGEdge> SgCtorInitializerList::cfgOutEdges(unsigned int idx) {
+  const auto &initializers = get_ctors();
+  ROSE_ASSERT(idx <= initializers.size());
   std::vector<CFGEdge> result;
-  if (idx == this->get_ctors().size()) {
+  if (idx == initializers.size()) {
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
   } else {
-    if (idx < this->get_ctors().size()) {
-      makeEdge(CFGNode(this, idx), this->get_ctors()[idx]->cfgForBeginning(),
-               result);
-    } else {
-      ROSE_ASSERT(!"Bad index for SgCtorInitializerList");
-    }
+    auto *entry = initializers[idx];
+    ROSE_ASSERT(entry != nullptr && entry->get_parent() == this);
+    makeEdge(CFGNode(this, idx), entry->cfgForBeginning(), result);
+    if (entry->get_preinitialization() ==
+        SgInitializedName::e_virtual_base_class)
+      makeEdge(CFGNode(this, idx), CFGNode(this, idx + 1), result);
   }
   return result;
 }
 
 std::vector<CFGEdge> SgCtorInitializerList::cfgInEdges(unsigned int idx) {
+  const auto &initializers = get_ctors();
+  ROSE_ASSERT(idx <= initializers.size());
   std::vector<CFGEdge> result;
-  ASSERT_this();
 
   if (idx == 0) {
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
   } else {
-    if (idx <= this->get_ctors().size()) {
-      makeEdge(this->get_ctors()[idx - 1]->cfgForEnd(), CFGNode(this, idx),
-               result);
-    } else {
-      ROSE_ASSERT(!"Bad index for SgCtorInitializerList");
-    }
+    auto *entry = initializers[idx - 1];
+    ROSE_ASSERT(entry != nullptr && entry->get_parent() == this);
+    makeEdge(entry->cfgForEnd(), CFGNode(this, idx), result);
+    if (entry->get_preinitialization() ==
+        SgInitializedName::e_virtual_base_class)
+      makeEdge(CFGNode(this, idx - 1), CFGNode(this, idx), result);
   }
   return result;
 }
@@ -5843,12 +6363,47 @@ unsigned int SgDesignatedInitializer::cfgFindChildIndex(SgNode *n) {
   return 0;
 }
 
+namespace {
+size_t initializedNameEvaluationCount(const SgInitializedName *name) {
+  if (isSgFunctionParameterList(name->get_parent()) != nullptr)
+    return 0;
+  if (name->get_structured_binding_kind() ==
+      SgInitializedName::e_resolved_structured_binding)
+    return name->get_structured_binding_holding_variable() != nullptr ? 2 : 1;
+  const auto *pattern = name->get_structured_binding_pattern();
+  return (name->get_initializer() != nullptr ? 1 : 0) +
+         (pattern != nullptr ? pattern->get_expressions().size() : 0);
+}
+
+SgNode *initializedNameEvaluation(const SgInitializedName *name, size_t index) {
+  ROSE_ASSERT(index < initializedNameEvaluationCount(name));
+  if (name->get_structured_binding_kind() ==
+      SgInitializedName::e_resolved_structured_binding) {
+    name->validate_structured_binding();
+    auto *holding = name->get_structured_binding_holding_variable();
+    if (holding != nullptr && index == 0)
+      return holding;
+    return name->get_structured_binding_value();
+  }
+  if (auto *initializer = name->get_initializer()) {
+    if (index == 0)
+      return initializer;
+    --index;
+  }
+  auto *pattern = name->get_structured_binding_pattern();
+  ASSERT_not_null(pattern);
+  auto *reference = isSgVarRefExp(pattern->get_expressions().at(index));
+  ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+  auto *alias = reference->get_symbol()->get_declaration();
+  alias->validate_structured_binding();
+  return alias;
+}
+} // namespace
+
 unsigned int SgInitializedName::cfgIndexForEnd() const {
-  return this->get_initializer()
-             ? 1
-             : 0; // SgInitializedName may have one or two CFGNodes, depending
-                  // on if it  has initializer (2 CFG nodes) or not (only 1, so
-                  // the end index is 0)
+  const auto count = initializedNameEvaluationCount(this);
+  ROSE_ASSERT(count <= std::numeric_limits<unsigned int>::max());
+  return count;
 }
 
 bool SgInitializedName::cfgIsIndexInteresting(unsigned int /*idx*/) const {
@@ -5856,12 +6411,10 @@ bool SgInitializedName::cfgIsIndexInteresting(unsigned int /*idx*/) const {
 }
 
 unsigned int SgInitializedName::cfgFindChildIndex(SgNode *n) {
-  if (n == this->get_initializer()) {
-    return 0;
-  } else {
-    ROSE_ASSERT(!"Bad child in initialized name");
-  }
-  return 0;
+  for (unsigned int index = 0; index < cfgIndexForEnd(); ++index)
+    if (initializedNameEvaluation(this, index) == n)
+      return index;
+  ROSE_ABORT();
 }
 
 unsigned int SgInitializedName::cfgFindNextChildIndex(SgNode *n) {
@@ -5869,43 +6422,25 @@ unsigned int SgInitializedName::cfgFindNextChildIndex(SgNode *n) {
 }
 
 std::vector<CFGEdge> SgInitializedName::cfgOutEdges(unsigned int idx) {
+  const auto count = cfgIndexForEnd();
+  ROSE_ASSERT(idx <= count);
   std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
-    if (this->get_initializer()) {
-      makeEdge(CFGNode(this, idx), this->get_initializer()->cfgForBeginning(),
-               result);
-    } else {
-      makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    }
-    break;
-
-  case 1:
-    ASSERT_not_null(this->get_initializer());
+  if (idx < count)
+    makeEdge(CFGNode(this, idx),
+             initializedNameEvaluation(this, idx)->cfgForBeginning(), result);
+  else
     makeEdge(CFGNode(this, idx), getNodeJustAfterInContainer(this), result);
-    break;
-
-  default:
-    ROSE_ASSERT(!"Bad index in SgInitializedName");
-  }
   return result;
 }
 
 std::vector<CFGEdge> SgInitializedName::cfgInEdges(unsigned int idx) {
+  ROSE_ASSERT(idx <= cfgIndexForEnd());
   std::vector<CFGEdge> result;
-  switch (idx) {
-  case 0:
+  if (idx == 0)
     makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
-    break;
-
-  case 1:
-    ASSERT_not_null(this->get_initializer());
-    makeEdge(this->get_initializer()->cfgForEnd(), CFGNode(this, idx), result);
-    break;
-
-  default:
-    ROSE_ASSERT(!"Bad index in SgInitializedName");
-  }
+  else
+    makeEdge(initializedNameEvaluation(this, idx - 1)->cfgForEnd(),
+             CFGNode(this, idx), result);
   return result;
 }
 // Liao, 6/11/2009 support for OpenMP nodes
@@ -6027,9 +6562,6 @@ std::vector<CFGEdge> SgOmpClauseBodyStatement::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-// case of ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
-#endif
-
 bool SgStatement::isChildUsedAsLValue(const SgExpression * /*child*/) const {
   return false;
 }
@@ -6047,10 +6579,36 @@ bool SgExpression::isUsedAsDefinable() const {
   return false;
 }
 
-bool SgExpression::isLValue() const { return false; }
+bool SgExpression::isLValue() const {
+  if (const auto *reference = isSgCxxArrayInitReference(this)) {
+    reference->validate();
+    return reference->get_value_category() ==
+           SgCastExp::e_value_category_lvalue;
+  }
+  return false;
+}
+
+bool SgVectorElementExp::isLValue() const {
+  ROSE_ASSERT(get_operand() != nullptr && !get_components().empty());
+  if (!get_is_arrow() && !get_operand()->isLValue())
+    return false;
+  const auto &components = get_components();
+  std::set<unsigned int> unique(components.begin(), components.end());
+  return unique.size() == components.size();
+}
+
+bool SgVectorElementExp::isChildUsedAsLValue(const SgExpression *child) const {
+  ROSE_ASSERT(child == get_operand());
+  return !get_is_arrow() && isUsedAsLValue();
+}
 
 bool SgExpression::isUsedAsLValue() const {
   if (isLValue()) {
+    if (const auto *binding = isSgCxxArrayInitBinding(get_parent())) {
+      binding->validate();
+      ROSE_ASSERT(binding->get_common_source() == this);
+      return true;
+    }
     SgStatement *stmt = isSgStatement(get_parent());
     if (stmt) {
       return stmt->isChildUsedAsLValue(this);
@@ -6104,44 +6662,29 @@ bool SgScopeOp::isChildUsedAsLValue(const SgExpression *child) const {
 bool SgPntrArrRefExp::isLValue() const { return true; }
 
 bool SgPntrArrRefExp::isChildUsedAsLValue(const SgExpression *child) const {
-  if (child == get_lhs_operand()) {
-    if (!child->isLValue()) {
-      ROSE_ASSERT(!"Left-hand-side of a pointer-index expression must be an "
-                   "lvalue in isChildUsedAsLValue on SgPntrArrayRefExp");
-      return true;
-    }
-    return true;
-  } else if (child == get_rhs_operand()) {
+  ROSE_ASSERT(child != nullptr &&
+              (child == get_lhs_operand() || child == get_rhs_operand()));
+  if (!child->has_semantic_value_type())
     return false;
-  } else {
-    ROSE_ASSERT(!"Bad child in isChildUsedAsLValue on SgPntrArrayRefExp");
-    return false;
-  }
-  return true;
+  SgType *type = child->get_type();
+  ASSERT_not_null(type);
+  return isSgArrayType(type->stripType(
+             SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+             SgType::STRIP_REFERENCE_TYPE |
+             SgType::STRIP_RVALUE_REFERENCE_TYPE)) != nullptr;
 }
 
 /*! std:5.2.1 par:1*/ bool SgPointerDerefExp::isLValue() const { return true; }
 
 bool SgPointerDerefExp::isChildUsedAsLValue(const SgExpression *child) const {
-  if (child == get_operand()) {
-    return true;
-  } else {
-    ROSE_ASSERT(!"Bad child in isChildUsedAsLValue on SgPointerDerefExp");
-    return true;
-  }
-  return true;
+  ROSE_ASSERT(child != nullptr && child == get_operand());
+  return false;
 }
 
-/*! std:5.3.1 par:2 */
-bool SgAddressOfOp::isLValue() const { return true; }
+bool SgAddressOfOp::isLValue() const { return false; }
 
-/*! std:5.3.1 par:2 */
 bool SgAddressOfOp::isChildUsedAsLValue(const SgExpression *child) const {
-  /*! std:5.3.1 par:2 */
-  if (child != this->get_operand()) {
-    ROSE_ASSERT(!"Bad child in isChildUsedAsLValue on SgAddressOfOp");
-    return false;
-  }
+  ROSE_ASSERT(child != nullptr && child == get_operand());
   return true;
 }
 
@@ -6273,58 +6816,20 @@ bool SgPlusPlusOp::isChildUsedAsLValue(const SgExpression *child) const {
   }
 }
 
-/*! std:5.2.2 par:1,10 */
 bool SgFunctionCallExp::isLValue() const {
-  //! Function Pointers don't have a declaration!
-  SgType *type = get_function()->get_type();
-  while (SgTypedefType *type2 = isSgTypedefType(type))
-    type = type2->get_base_type();
-  // Liao 10/20/2015 . We may encounter a function pointer, strip the pointer
-  type = type->stripType(SgType::STRIP_POINTER_TYPE);
-  SgFunctionType *ftype = isSgFunctionType(type);
-  if (ftype) {
-    if (SageInterface::isReferenceType(ftype->get_return_type()))
-      return true;
-    else
-      return false;
-  } else if (isSgClassType(type)) {
-    // Liao, 4/19/2017. Support calls to class member functions.
-    SgExpression *func = get_function();
-    if (isSgDotExp(func) || isSgArrowExp(func) || isSgVarRefExp(func))
-      return func->isLValue();
-    else if (isSgConstructorInitializer(
-                 func)) // TODO: double check this. Now assume it is similar to
-                        // SgVarRefExp::isLValue().
-      return true;
-    else {
-      cerr << "SgFunctionCallExp function class name:" << func->class_name()
-           << endl;
-      ROSE_ASSERT(!"Error when handling a member function call in "
-                   "SgFunctionCallExp::isLValue");
-      abort();
-    }
-  } else {
-    // cout<<this->get_file_info()->get_filename()<<":"<<
-    // this->get_file_info()->get_line()<<endl;;
-    this->get_file_info()->display();
-    cerr << "SgFunctionCallExp function base type:" << type->class_name()
-         << endl;
-    cerr << "unparsed: " << unparseToString() << endl;
-    ROSE_ASSERT(!"Error calling a function through a non-function type in "
-                 "isLValue on SgFunctionCallExp");
-    abort();
-  }
+  SgType *type = get_type()->stripTypedefsAndModifiers();
+  if (isSgReferenceType(type) != nullptr)
+    return true;
+  auto *reference = isSgRvalueReferenceType(type);
+  return reference != nullptr &&
+         isSgFunctionType(
+             reference->get_base_type()->stripTypedefsAndModifiers()) !=
+             nullptr;
 }
 
 bool SgFunctionCallExp::isChildUsedAsLValue(const SgExpression *child) const {
-  if (get_function() == child) {
-    // King84: I'm unsure if the function itself is an lvalue or an rvalue.  I'm
-    // just playing it safe here.
-    return false;
-  } else {
-    ROSE_ASSERT(!"Bad child in isChildUsedAsLValue on SgFunctionCallExp");
-    return false;
-  }
+  ROSE_ASSERT(child != nullptr && child == get_function());
+  return false;
 }
 
 /*! std:5.4 par:1; std:5.2.11 par:1; std:5.2.9 par:1; std:5.2.7 par:2;
@@ -6508,19 +7013,25 @@ bool SgCommaOpExp::isChildUsedAsLValue(const SgExpression *child) const {
 bool SgExprListExp::isChildUsedAsLValue(const SgExpression *child) const {
   ROSE_ASSERT(child);
 
-  // King84 (2010.10.05) This is very context-dependant, depending even on the
-  // parent expression.  Note that it does not depend on if the parent is used
-  // as an lvalue.
   int idx = 0;
   for (SgExpressionPtrList::const_iterator i = get_expressions().begin();
        i != get_expressions().end(); ++i) {
     ++idx;
     if (child == *i) {
       SgFunctionType *funt = nullptr;
-      if (SgFunctionCallExp *fun = isSgFunctionCallExp(get_parent()))
-        funt = isSgFunctionType(fun->get_function()->get_type());
-      else if (SgConstructorInitializer *construct =
-                   isSgConstructorInitializer(get_parent()))
+      if (SgFunctionCallExp *fun = isSgFunctionCallExp(get_parent())) {
+        SgType *calleeType = fun->get_function()->get_type();
+        ROSE_ASSERT(calleeType != nullptr);
+        calleeType = calleeType->stripType(SgType::STRIP_TYPEDEF_TYPE |
+                                           SgType::STRIP_MODIFIER_TYPE);
+        if (SgPointerType *pointer = isSgPointerType(calleeType)) {
+          ROSE_ASSERT(pointer->get_base_type() != nullptr);
+          calleeType = pointer->get_base_type()->stripType(
+              SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
+        }
+        funt = isSgFunctionType(calleeType);
+      } else if (SgConstructorInitializer *construct =
+                     isSgConstructorInitializer(get_parent()))
         funt = isSgFunctionType(construct->get_declaration()->get_type());
       else if (SgAggregateInitializer *aggri =
                    isSgAggregateInitializer(get_parent())) {
@@ -6532,8 +7043,7 @@ bool SgExprListExp::isChildUsedAsLValue(const SgExpression *child) const {
               ctype->get_declaration()->get_definingDeclaration());
           ROSE_ASSERT(decl);
           SgClassDefinition *defn = decl->get_definition();
-          // King84 (2010.10.05): Note that it is illegal to initialize with an
-          // aggregate intitializer if there is any inheritance going on
+          ROSE_ASSERT(defn != nullptr);
           int jdx = 0;
           // Go through all the declarations in order and find the corresponding
           // index for the current child.
@@ -6546,10 +7056,7 @@ bool SgExprListExp::isChildUsedAsLValue(const SgExpression *child) const {
                    j != fun->get_variables().end(); ++j) {
                 ++jdx;
                 if (jdx == idx) {
-                  if (SageInterface::isNonconstReference((*j)->get_type()))
-                    return true;
-                  else
-                    return false;
+                  return SageInterface::isNonconstReference((*j)->get_type());
                 }
               }
             }
@@ -6558,37 +7065,24 @@ bool SgExprListExp::isChildUsedAsLValue(const SgExpression *child) const {
                        "child in isChildUsedAsLValue on SgExprListExp");
 
         } else {
-          if (SageInterface::isNonconstReference(
-                  destType)) // note that currently we cannot have arrays of
-                             // references
-            return true;
-          else
-            return false;
+          return SageInterface::isNonconstReference(destType);
         }
       }
       if (funt) {
         int jdx = 0;
         for (SgTypePtrList::const_iterator j = funt->get_arguments().begin();
-             j != funt->get_arguments().end(); ++i) {
+             j != funt->get_arguments().end(); ++j) {
           ++jdx;
           if (jdx == idx) {
-            if (SageInterface::isNonconstReference(*j))
-              return true;
-            else
-              return false;
+            return SageInterface::isNonconstReference(*j);
           }
         }
-        ROSE_ASSERT(!"Unable to find parameter for child as argument in "
-                     "isChildUsedAsLValue on SgExprListExp");
+        ROSE_ASSERT(funt->get_has_ellipses());
+        return false;
       }
     }
   }
 
-  auto parent = get_parent();
-  std::cerr << unparseToString() << " <this   child> "
-            << child->unparseToString() << '\n'
-            << typeid(*parent).name() << " <parent child> "
-            << typeid(*child).name() << std::endl;
   ROSE_ASSERT(!"Bad child in isChildUsedAsLValue on SgExprListExp");
 
   return false;
@@ -6623,5 +7117,90 @@ std::vector<CFGEdge> SgTypeExpression::cfgInEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
   ASSERT_require(idx == 0);
   makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, idx), result);
+  return result;
+}
+
+unsigned int SgOpaqueValueBinding::cfgIndexForEnd() const { return 1; }
+
+bool SgOpaqueValueBinding::cfgIsIndexInteresting(unsigned int index) const {
+  ASSERT_require(index <= 1);
+  return index == 1;
+}
+
+std::vector<CFGEdge> SgOpaqueValueBinding::cfgOutEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index <= 1);
+  std::vector<CFGEdge> result;
+  if (index == 0)
+    makeEdge(CFGNode(this, index), get_source_expression()->cfgForBeginning(),
+             result);
+  else
+    makeEdge(CFGNode(this, index), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgOpaqueValueBinding::cfgInEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index <= 1);
+  std::vector<CFGEdge> result;
+  if (index == 0)
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, index), result);
+  else
+    makeEdge(get_source_expression()->cfgForEnd(), CFGNode(this, index),
+             result);
+  return result;
+}
+
+unsigned int SgOpaqueValueReference::cfgIndexForEnd() const { return 0; }
+
+bool SgOpaqueValueReference::cfgIsIndexInteresting(unsigned int index) const {
+  ASSERT_require(index == 0);
+  return true;
+}
+
+std::vector<CFGEdge> SgOpaqueValueReference::cfgOutEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(CFGNode(this, index), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgOpaqueValueReference::cfgInEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index == 0);
+  std::vector<CFGEdge> result;
+  makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, index), result);
+  return result;
+}
+
+unsigned int SgPseudoObjectExp::cfgIndexForEnd() const { return 1; }
+
+bool SgPseudoObjectExp::cfgIsIndexInteresting(unsigned int index) const {
+  ASSERT_require(index <= 1);
+  return index == 1;
+}
+
+std::vector<CFGEdge> SgPseudoObjectExp::cfgOutEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index <= 1);
+  std::vector<CFGEdge> result;
+  if (index == 0)
+    makeEdge(CFGNode(this, index),
+             get_semantic_evaluations()->cfgForBeginning(), result);
+  else
+    makeEdge(CFGNode(this, index), getNodeJustAfterInContainer(this), result);
+  return result;
+}
+
+std::vector<CFGEdge> SgPseudoObjectExp::cfgInEdges(unsigned int index) {
+  validate();
+  ASSERT_require(index <= 1);
+  std::vector<CFGEdge> result;
+  if (index == 0)
+    makeEdge(getNodeJustBeforeInContainer(this), CFGNode(this, index), result);
+  else
+    makeEdge(get_semantic_evaluations()->cfgForEnd(), CFGNode(this, index),
+             result);
   return result;
 }

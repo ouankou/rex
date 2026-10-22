@@ -1,26 +1,33 @@
 #include "transformationTracking.h"
+#include "sage3basic.h"
 
-#include "sage3basic.h" // must be the first to be included
+#include <limits>
 
 using namespace std;
 
 namespace TransformationTracking {
 
-// the following data structures are for internal use only
+namespace {
+bool trackingActive = false;
+bool tablesAlive = true;
 std::map<SgNode *, unsigned int> AstToIdTable;
-// reverse lookup , oops, if they are one-to-one mapping, how a single node
-// obtains multiple IDs?
 std::map<unsigned int, SgNode *> IdToAstTable;
-// IDs start from 1, Default value of 0 means a node has not assigned an ID.
-// Using this will save the initialization of the Id value to be uninitialized!
-static int nextId = 1;
-
-// internal storage to store the original file info for each node
+AST_NODE_ID nextId = 1;
 std::map<AST_NODE_ID, std::pair<Sg_File_Info *, Sg_File_Info *>>
     IdToFileInfoTable;
+} // namespace
 
 // IDs of all input Nodes of a transformation
 std::map<AST_NODE_ID, std::set<AST_NODE_ID>> inputIDs;
+
+namespace {
+struct TrackingTableLifetime {
+  ~TrackingTableLifetime() {
+    trackingActive = false;
+    tablesAlive = false;
+  }
+} trackingTableLifetime;
+} // namespace
 
 // To simplify the problem,
 // we keep track of information at a single line statement level for now.
@@ -44,16 +51,21 @@ void addInputNode(SgNode *affected_node, SgNode *input_node) {
 
 bool hasId(SgNode *n) { return (getId(n) != 0); }
 
-SgNode *getNode(AST_NODE_ID id) { return IdToAstTable[id]; }
+SgNode *getNode(AST_NODE_ID id) {
+  ROSE_ASSERT(tablesAlive);
+  const auto found = IdToAstTable.find(id);
+  return found == IdToAstTable.end() ? nullptr : found->second;
+}
 
 // public interface implementation
 AST_NODE_ID getNextId() { return nextId; }
 
 AST_NODE_ID getId(SgNode *n) {
-  // TODO ROSE reuses released memory space to be reused by new AST nodes.
-  // Using  memory address as the key is not reliable to indicate unique AST
-  // nodes!
-  return AstToIdTable[n];
+  ROSE_ASSERT(tablesAlive);
+  if (!trackingActive)
+    return 0;
+  const auto found = AstToIdTable.find(n);
+  return found == AstToIdTable.end() ? 0 : found->second;
 }
 
 // an internal helper function
@@ -62,8 +74,6 @@ copyBeginAndEndFileInfo(SgNode *n) {
   std::pair<Sg_File_Info *, Sg_File_Info *> rtvalue;
   ROSE_ASSERT(n != NULL);
   if (isSgPragma(n) || isSgLocatedNode(n)) {
-    // rtvalue = std::make_pair (n->get_startOfConstruct(),
-    // n->get_endOfConstruct());
     rtvalue = std::make_pair(SageInterface::deepCopy(n->get_startOfConstruct()),
                              SageInterface::deepCopy(n->get_endOfConstruct()));
   }
@@ -71,30 +81,33 @@ copyBeginAndEndFileInfo(SgNode *n) {
 }
 
 std::pair<Sg_File_Info *, Sg_File_Info *> getFileInfo(AST_NODE_ID id) {
-  return IdToFileInfoTable[id];
+  ROSE_ASSERT(tablesAlive);
+  return IdToFileInfoTable.at(id);
 }
 
-void clearId(SgNode *n) { ROSE_ASSERT(n != NULL); }
+void clearId(SgNode *n) {
+  if (!trackingActive)
+    return;
+  const auto found = AstToIdTable.find(n);
+  if (found != AstToIdTable.end()) {
+    IdToAstTable.erase(found->second);
+    AstToIdTable.erase(found);
+  }
+}
 
 void setId(SgNode *n) {
   ROSE_ASSERT(n != NULL);
+  ROSE_ASSERT(tablesAlive);
+  trackingActive = true;
   AST_NODE_ID cur_id = getId(n);
   // only set when the node has no ID assigned right now
   if (cur_id == 0) {
-    // find  a unused Id
-    while (IdToAstTable[nextId] != NULL)
-      nextId++;
-    // Update the lookup tables
+    ROSE_ASSERT(nextId < std::numeric_limits<AST_NODE_ID>::max());
     AstToIdTable[n] = nextId;
-    //      cout<<n->class_name() <<" @ "<<n <<" cur_id is set to \n\t"<< nextId
-    //      << "."<<endl;
     IdToAstTable[nextId] = n;
     // We store the file info at the same time
     IdToFileInfoTable[nextId] = copyBeginAndEndFileInfo(n);
     nextId++;
-  } else {
-    //      cout<<n->class_name() <<" @ "<<n <<" skipped since cur_id is already
-    //      set." <<endl;
   }
 }
 class visitorTraversal : public AstSimpleProcessing {

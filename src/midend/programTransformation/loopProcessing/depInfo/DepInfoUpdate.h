@@ -1,8 +1,6 @@
 #ifndef UPDATE_DEPINFO
 #define UPDATE_DEPINFO
 
-#include "DepInfoSet.h"
-
 #include "DomainInfo.h"
 
 template <class Update> class UpdateDepInfo {
@@ -11,11 +9,6 @@ template <class Update> class UpdateDepInfo {
 public:
   UpdateDepInfo(Update _T) : T(_T) {}
   bool operator()(DepInfo &d, DepDirection dir) { return T(d, dir); }
-  bool operator()(DepInfoSet &infoset, DepDirection dir) {
-    DepInfoUpdateIterator p = infoset.GetUpdateIterator();
-    UpdateEach(p, UpdateDepInfo1(T, dir));
-    return infoset.NumOfDeps() > 0;
-  }
 };
 
 class DepInfoInsertLoop {

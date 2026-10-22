@@ -28,7 +28,6 @@ void RoseIRnodeVisitor::visit ( SgNode* node)
      switch(node->variantT())
         {
           IR_NODE_VISIT_CASE(Sg_File_Info)
-          IR_NODE_VISIT_CASE(SgPartialFunctionType)
           IR_NODE_VISIT_CASE(SgFunctionType)
           IR_NODE_VISIT_CASE(SgPointerType)
           IR_NODE_VISIT_CASE(SgFunctionDeclaration)

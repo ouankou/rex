@@ -1,8 +1,20 @@
 #include "sage3basic.h"
 
 void SgCallExpression::post_construction_initialization() {
-  if (p_function != NULL)
+  if ((p_function != nullptr && p_function == p_args) ||
+      (p_function != nullptr && p_function->get_parent() != nullptr &&
+       p_function->get_parent() != this) ||
+      (p_args != nullptr && p_args->get_parent() != nullptr &&
+       p_args->get_parent() != this)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[call-ownership]: callee and argument list "
+            "must be distinct and exclusively owned\n");
+    ROSE_ABORT();
+  }
+  if (p_function != nullptr && p_function->get_parent() != this)
     p_function->set_parent(this);
+  if (p_args != nullptr && p_args->get_parent() != this)
+    p_args->set_parent(this);
 }
 
 SgExpression *SgCallExpression::get_next(int &n) const {
@@ -17,7 +29,6 @@ SgExpression *SgCallExpression::get_next(int &n) const {
   return 0;
 }
 
-// DQ: trying to remove the nested iterator class
 void SgCallExpression::append_arg(SgExpression *what) {
   if (p_args == nullptr || what == nullptr) {
     fprintf(stderr,
@@ -31,31 +42,27 @@ void SgCallExpression::append_arg(SgExpression *what) {
 }
 
 int SgCallExpression::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
+  const int edges = (get_function() == o) + (p_args == o);
+  if (edges == 0)
+    return 0;
+  ROSE_ASSERT(edges == 1);
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+  ROSE_ASSERT(n->get_parent() == nullptr);
 
   if (get_function() == o) {
     set_function(n);
-    n->set_parent(this);
-
-    return 1;
-  } else {
-    if (p_args == o) {
-      // DQ (12/17/2006): Make this code safer (avoid passing NULL pointers to
-      // functions that we call! set_args(isSgExprListExp(n));
-      SgExprListExp *expressionList = isSgExprListExp(n);
-      ROSE_ASSERT(expressionList != NULL);
-      set_args(expressionList);
-      n->set_parent(this);
-      return 1;
-    }
+  } else if (p_args == o) {
+    SgExprListExp *expressionList = isSgExprListExp(n);
+    ROSE_ASSERT(expressionList != NULL);
+    set_args(expressionList);
   }
-
-  return 0;
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 SgType *SgCallExpression::get_type() const {

@@ -47,7 +47,6 @@ public:
     return impl.GetStmtInfo(s).domain;
   }
 
-  void ComputeStmtDep(const StmtNodeInfo &n1, const StmtNodeInfo &n2, int t);
   void ComputeDataDep(const StmtNodeInfo &n1, const StmtNodeInfo &n2,
                       DepType t = DEPTYPE_ALL);
   void ComputeCtrlDep(const StmtNodeInfo &nc, const StmtNodeInfo &ns,
@@ -58,20 +57,27 @@ class BuildAstTreeDepGraph : public AstTreeDepGraphAnal,
                              public ProcessAstTree<AstNodePtr> {
 private:
   typedef SinglyLinkedListWrap<StmtNodeInfo> StmtStackType;
-  StmtStackType stmtNodes, ctrlNodes, gotoNodes, inputNodes, outputNodes;
+  StmtStackType stmtNodes, ctrlNodes, gotoNodes;
+  bool supportNonFortranLoop;
 
 public:
-  BuildAstTreeDepGraph(AstTreeDepGraphBuildImpl *g, DepInfoAnal &_impl)
-      : AstTreeDepGraphAnal(g, _impl) {}
+  BuildAstTreeDepGraph(AstTreeDepGraphBuildImpl *g, DepInfoAnal &_impl,
+                       bool supportNonFortranLoop = true)
+      : AstTreeDepGraphAnal(g, _impl),
+        supportNonFortranLoop(supportNonFortranLoop) {}
 
-  bool ProcessStmt(AstInterface &fa, const AstNodePtr &s);
+  bool ProcessStmt(AstInterface &fa, const AstNodePtr &s) override;
+  bool ProcessDecls(AstInterface &fa, const AstNodePtr &s) override {
+    return ProcessStmt(fa, s);
+  }
   bool ProcessGoto(AstInterface &fa, const AstNodePtr &s,
-                   const AstNodePtr &dest);
+                   const AstNodePtr &dest) override;
   bool ProcessIf(AstInterface &fa, const AstNodePtr &l, const AstNodePtr &cond,
                  const AstNodePtr &truebody, const AstNodePtr &falsebody,
-                 AstInterface::TraversalVisitType t);
+                 AstInterface::TraversalVisitType t) override;
   bool ProcessLoop(AstInterface &fa, const AstNodePtr &l,
-                   const AstNodePtr &body, AstInterface::TraversalVisitType t);
+                   const AstNodePtr &body,
+                   AstInterface::TraversalVisitType t) override;
   GraphAccessInterface::Node *LastProcessedStmt() {
     return stmtNodes.First()->GetEntry().node;
   }

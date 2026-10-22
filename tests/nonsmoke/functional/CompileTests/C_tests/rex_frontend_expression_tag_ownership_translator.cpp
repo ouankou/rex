@@ -1,4 +1,5 @@
 #include "rose.h"
+#include "src/frontend/SageIII/astJson/sageAstJsonPrivate.h"
 
 #include <algorithm>
 #include <string>
@@ -135,6 +136,7 @@ int main(int argc, char **argv) {
 
   size_t ownedSizeof = 0;
   size_t ownedAlignof = 0;
+  size_t preferredAlignof = 0;
   size_t ownedCast = 0;
   size_t ownedAnonymousCast = 0;
   SgDeclarationStatement *corruptionTarget = nullptr;
@@ -152,6 +154,13 @@ int main(int argc, char **argv) {
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgAlignOfOp)) {
     SgAlignOfOp *alignOf = isSgAlignOfOp(node);
     ROSE_ASSERT(alignOf != nullptr);
+    if (alignOf->get_operator_kind() == SgExpression::e_preferred_alignof) {
+      ROSE_ASSERT(alignOf->unparseToString().find("__alignof__(") == 0);
+      ++preferredAlignof;
+    } else {
+      ROSE_ASSERT(alignOf->get_operator_kind() == SgExpression::e_alignof);
+      ROSE_ASSERT(alignOf->unparseToString().find("_Alignof(") == 0);
+    }
     SgDeclarationStatement *declaration =
         alignOf->get_type_defining_declaration();
     if (declaration != nullptr) {
@@ -179,6 +188,7 @@ int main(int argc, char **argv) {
   }
   ROSE_ASSERT(ownedSizeof == 1);
   ROSE_ASSERT(ownedAlignof == 1);
+  ROSE_ASSERT(preferredAlignof == 1);
   ROSE_ASSERT(ownedCast == 1);
   ROSE_ASSERT(ownedAnonymousCast == 1);
 
@@ -216,6 +226,50 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(std::count(hiddenOwner->get_declarations().begin(),
                            hiddenOwner->get_declarations().end(),
                            hiddenDeclaration) == 1);
+    {
+      using namespace Rose::AstJson;
+      auto *typeDeclaration =
+          isSgNamedType(initializedName->get_type()->findBaseType())
+              ->get_declaration();
+      const std::unordered_map<const SgNode *, uint64_t> ids{
+          {initializedName, 1}, {body, 2}, {typeDeclaration, 3}};
+      const NodeMap nodes{
+          {1, initializedName}, {2, body}, {3, typeDeclaration}};
+      const auto owned =
+          parseJson(rawTypeOwnedExpressionRef(compoundLiteral, ids));
+      const auto baseline = SgCompoundLiteralExp::numberOfNodes();
+      auto *restored = isSgCompoundLiteralExp(expressionFromRef(owned, nodes));
+      ROSE_ASSERT(restored != nullptr && restored->get_symbol() == symbol);
+      ROSE_ASSERT(restored->get_type() == initializedName->get_type());
+      SageInterface::deleteAST(restored);
+      ROSE_ASSERT(SgCompoundLiteralExp::numberOfNodes() == baseline);
+      for (bool missingSymbol : {false, true}) {
+        auto malformed = owned;
+        auto &properties = malformed.object.at("properties");
+        if (missingSymbol)
+          properties.object.erase("symbol");
+        else
+          properties.object.at("type") =
+              parseJson(rawTypeJson(SageBuilder::buildFloatType(), {}));
+        bool rejected = false;
+        try {
+          auto *unexpected = expressionFromRef(malformed, nodes);
+          SageInterface::deleteAST(unexpected);
+        } catch (const std::runtime_error &error) {
+          const std::string expected =
+              missingSymbol ? "missing key: symbol"
+                            : "requires its exact typed initialized variable";
+          ROSE_ASSERT(std::string(error.what()).find(expected) !=
+                      std::string::npos);
+          rejected = true;
+        }
+        ROSE_ASSERT(rejected);
+        ROSE_ASSERT(SgCompoundLiteralExp::numberOfNodes() == baseline);
+        ROSE_ASSERT(initializedName->get_initializer() == aggregateInitializer);
+        ROSE_ASSERT(aggregateInitializer->get_parent() == initializedName);
+        ROSE_ASSERT(symbol->get_declaration() == initializedName);
+      }
+    }
     ++ownedCompoundLiteral;
   }
   ROSE_ASSERT(ownedCompoundLiteral == 1);
@@ -249,9 +303,12 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(variable != nullptr);
     if (variable->get_baseTypeDefiningDeclaration() != nullptr) {
       ROSE_ASSERT(variable->get_variables().size() == 1);
-      ROSE_ASSERT(
-          variable->get_variables().front()->get_name().getString().find(
-              "compound_literal_") == 0);
+      auto *initializer = isSgAggregateInitializer(
+          variable->get_variables().front()->get_initializer());
+      ROSE_ASSERT(initializer != nullptr);
+      ROSE_ASSERT(initializer->get_source_form() ==
+                  SgAggregateInitializer::
+                      e_aggregate_initializer_source_compound_literal);
       continue;
     }
     for (SgNode *successor : variable->get_traversalSuccessorContainer()) {

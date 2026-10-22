@@ -18,8 +18,8 @@ int main(int argc, char **argv) {
   size_t await_void_type_count = 0;
   size_t await_nonvoid_type_count = 0;
   size_t co_return_count = 0;
-  size_t semantic_size_declaration_count = 0;
-  size_t semantic_size_field_count = 0;
+  size_t size_declaration_count = 0;
+  size_t physical_size_field_count = 0;
   size_t semantic_size_first_parameter_count = 0;
   size_t semantic_size_defining_parameter_count = 0;
   for (SgNode *node : RoseAst(project)) {
@@ -42,6 +42,12 @@ int main(int argc, char **argv) {
         ++co_await_count;
         break;
       case SgAwaitExpression::e_coroutine_keyword_co_yield:
+        if (source_name == "test2020_43.C") {
+          ROSE_ASSERT(isSgPlusPlusOp(await_expression->get_value()) != nullptr);
+        } else if (source_name == "rex_coroutine_yield_operator.C") {
+          SgIntVal *value = isSgIntVal(await_expression->get_value());
+          ROSE_ASSERT(value != nullptr && value->get_value() == 7);
+        }
         ++co_yield_count;
         break;
       case SgAwaitExpression::e_coroutine_keyword_unspecified:
@@ -68,8 +74,6 @@ int main(int argc, char **argv) {
       if (name->get_name() == "size") {
         Sg_File_Info *source = name->get_startOfConstruct();
         ROSE_ASSERT(source != nullptr);
-        ROSE_ASSERT(source->isCompilerGenerated());
-        ROSE_ASSERT(source->isFrontendSpecific());
         ROSE_ASSERT(name->get_source_type_qualification_present());
         ROSE_ASSERT(!name->get_source_type_global_qualification());
         ROSE_ASSERT(type_tokens.size() == 1);
@@ -79,34 +83,41 @@ int main(int argc, char **argv) {
         ROSE_ASSERT(name->get_source_name_qualification_tokens().empty());
         ROSE_ASSERT(name->get_name_qualification_length() == 0);
         ROSE_ASSERT(!name->get_global_qualification_required());
-        ++semantic_size_declaration_count;
+        ++size_declaration_count;
 
-        if (source_name == "test2020_42.C") {
-          if (SgVariableDeclaration *field =
-                  isSgVariableDeclaration(name->get_parent())) {
-            ROSE_ASSERT(field->get_variables().size() == 1);
-            ROSE_ASSERT(field->get_variables().front() == name);
-            ROSE_ASSERT(isSgAuxiliaryDeclarationList(field->get_parent()) !=
-                        nullptr);
-            ++semantic_size_field_count;
+        if (SgVariableDeclaration *field =
+                isSgVariableDeclaration(name->get_parent())) {
+          ROSE_ASSERT(!source->isCompilerGenerated());
+          ROSE_ASSERT(!source->isFrontendSpecific());
+          ROSE_ASSERT(source->get_physical_file_id() >= 0);
+          ROSE_ASSERT(source->get_physical_line() > 0);
+          ROSE_ASSERT(field->get_variables().size() == 1);
+          ROSE_ASSERT(field->get_variables().front() == name);
+          ROSE_ASSERT(isSgAuxiliaryDeclarationList(field->get_parent()) !=
+                      nullptr);
+          ++physical_size_field_count;
+        } else {
+          SgFunctionParameterList *parameters =
+              isSgFunctionParameterList(name->get_parent());
+          ROSE_ASSERT(parameters != nullptr);
+          ROSE_ASSERT(source->isCompilerGenerated());
+          ROSE_ASSERT(source->isFrontendSpecific());
+          ROSE_ASSERT(source->get_physical_file_id() ==
+                      Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+          ROSE_ASSERT(source->get_raw_line() == 0);
+          SgFunctionDeclaration *function =
+              isSgFunctionDeclaration(parameters->get_parent());
+          ROSE_ASSERT(function != nullptr);
+          ROSE_ASSERT(function->get_name() == "buffer");
+          ROSE_ASSERT(function->get_firstNondefiningDeclaration() != nullptr);
+          ROSE_ASSERT(function->get_definingDeclaration() != nullptr);
+          ROSE_ASSERT(function->get_firstNondefiningDeclaration() !=
+                      function->get_definingDeclaration());
+          if (function == function->get_firstNondefiningDeclaration()) {
+            ++semantic_size_first_parameter_count;
           } else {
-            SgFunctionParameterList *parameters =
-                isSgFunctionParameterList(name->get_parent());
-            ROSE_ASSERT(parameters != nullptr);
-            SgFunctionDeclaration *function =
-                isSgFunctionDeclaration(parameters->get_parent());
-            ROSE_ASSERT(function != nullptr);
-            ROSE_ASSERT(function->get_name() == "buffer");
-            ROSE_ASSERT(function->get_firstNondefiningDeclaration() != nullptr);
-            ROSE_ASSERT(function->get_definingDeclaration() != nullptr);
-            ROSE_ASSERT(function->get_firstNondefiningDeclaration() !=
-                        function->get_definingDeclaration());
-            if (function == function->get_firstNondefiningDeclaration()) {
-              ++semantic_size_first_parameter_count;
-            } else {
-              ROSE_ASSERT(function == function->get_definingDeclaration());
-              ++semantic_size_defining_parameter_count;
-            }
+            ROSE_ASSERT(function == function->get_definingDeclaration());
+            ++semantic_size_defining_parameter_count;
           }
         }
       }
@@ -119,8 +130,8 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(await_void_type_count == 1);
     ROSE_ASSERT(await_nonvoid_type_count == 1);
     ROSE_ASSERT(co_return_count == 0);
-    ROSE_ASSERT(semantic_size_declaration_count == 3);
-    ROSE_ASSERT(semantic_size_field_count == 1);
+    ROSE_ASSERT(size_declaration_count == 3);
+    ROSE_ASSERT(physical_size_field_count == 1);
     ROSE_ASSERT(semantic_size_first_parameter_count == 1);
     ROSE_ASSERT(semantic_size_defining_parameter_count == 1);
   } else if (source_name == "test2020_43.C") {
@@ -135,6 +146,12 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(await_void_type_count == 0);
     ROSE_ASSERT(await_nonvoid_type_count == 0);
     ROSE_ASSERT(co_return_count == 1);
+  } else if (source_name == "rex_coroutine_yield_operator.C") {
+    ROSE_ASSERT(co_await_count == 0);
+    ROSE_ASSERT(co_yield_count == 1);
+    ROSE_ASSERT(await_void_type_count == 1);
+    ROSE_ASSERT(await_nonvoid_type_count == 0);
+    ROSE_ASSERT(co_return_count == 0);
   } else {
     ROSE_ABORT();
   }

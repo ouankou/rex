@@ -3,59 +3,39 @@
  *
  *  \brief This preprocessing phase collects local function
  *  declarations into a to-be-outlined basic block.
- *
- *  \todo Implement gathering of local type declarations.
  */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-#include <iostream>
-
-#include <list>
-
-#include <string>
-
-#include "Copy.hh"
+#include <map>
 
 #include "Preprocess.hh"
 
-// =====================================================================
-
-using namespace std;
-
-// =====================================================================
-
-static void copyNonLocalFuncDecls(SgBasicBlock *b) {
-  typedef Rose_STL_Container<SgNode *> NodeList_t;
-  NodeList_t refs = NodeQuery::querySubTree(b, V_SgFunctionRefExp);
-  for (NodeList_t::iterator i = refs.begin(); i != refs.end(); ++i) {
-    SgFunctionRefExp *ref = isSgFunctionRefExp(*i);
+void Outliner::Preprocess::gatherNonLocalDecls(SgBasicBlock *b) {
+  ROSE_ASSERT(b != nullptr);
+  std::map<SgFunctionSymbol *, SgFunctionSymbol *> bindings;
+  for (SgNode *node : NodeQuery::querySubTree(b, V_SgFunctionRefExp)) {
+    SgFunctionRefExp *ref = isSgFunctionRefExp(node);
     ROSE_ASSERT(ref);
     SgFunctionSymbol *sym = ref->get_symbol();
     ROSE_ASSERT(sym);
     SgFunctionDeclaration *decl = sym->get_declaration();
     ROSE_ASSERT(decl);
 
-    SgBasicBlock *bb_parent = isSgBasicBlock(decl->get_parent());
-    if (bb_parent && bb_parent != b) {
-      SgFunctionDeclaration *proto_copy =
-          isSgFunctionDeclaration(ASTtools::deepCopy(decl));
-      ROSE_ASSERT(proto_copy);
-      ROSE_ASSERT(!proto_copy->get_definition());
-      b->prepend_statement(proto_copy);
-      proto_copy->set_parent(b);
-      // Liao, 11/5/2007, maintain symbol table
-      // it shares the same function symbol, bug 104
-      //  just some clue obtained from AST graph, don't quite understand why.
-      proto_copy->set_firstNondefiningDeclaration(decl);
+    SgBasicBlock *owner = isSgBasicBlock(decl->get_parent());
+    if (owner == nullptr || owner == b)
+      continue;
+    auto binding = bindings.find(sym);
+    if (binding == bindings.end()) {
+      auto *anchor =
+          b->get_statements().empty() ? nullptr : b->get_statements().front();
+      auto *copy = copyNonLocalFunctionDeclaration(decl, b, anchor);
+      auto *copiedSymbol =
+          isSgFunctionSymbol(copy->get_symbol_from_symbol_table());
+      ROSE_ASSERT(copiedSymbol != nullptr && copiedSymbol != sym &&
+                  copiedSymbol->get_declaration() == copy &&
+                  copiedSymbol->get_parent() == b->get_symbol_table());
+      binding = bindings.emplace(sym, copiedSymbol).first;
     }
+    ref->set_symbol(binding->second);
   }
 }
-
-// =====================================================================
-
-void Outliner::Preprocess::gatherNonLocalDecls(SgBasicBlock *b) {
-  copyNonLocalFuncDecls(b);
-}
-
-// eof

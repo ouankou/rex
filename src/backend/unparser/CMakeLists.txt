@@ -3,8 +3,6 @@ add_subdirectory(languageIndependenceSupport)
 add_subdirectory(formatSupport)
 add_subdirectory(FortranCodeGeneration)
 
-########### next target ###############
-
 add_library (unparser OBJECT
   FortranLineWrapSupport.C
   FortranCodeGeneration/unparseFortran_expressions.C
@@ -36,13 +34,9 @@ add_library (unparser OBJECT
 add_dependencies(unparser rosetta_generated)
 target_include_directories(unparser PRIVATE ${LLVM_INCLUDE_DIRS})
 
-########### install files ###############
-
-set(unparser_headers
+install(FILES
   IncludedFilesUnparser.h
   nameQualificationSupport.h
   UnparserDelegate.h
   unparser.h
-)
-
-install(FILES ${unparser_headers} DESTINATION ${INCLUDE_INSTALL_DIR})
+  DESTINATION ${INCLUDE_INSTALL_DIR})

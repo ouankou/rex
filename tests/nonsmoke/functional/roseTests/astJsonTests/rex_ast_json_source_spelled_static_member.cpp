@@ -58,6 +58,14 @@ size_t verifySourceSpelledStaticMembers(SgNode *root) {
     SgTemplateParameterList *header =
         decl->get_sourceSpelledTemplateHeaders().front();
     ROSE_ASSERT(header != nullptr);
+    if (!header->get_args().empty()) {
+      ROSE_ASSERT(header->get_args().size() == 1);
+      SgInitializedName *parameter_name =
+          header->get_args().front()->get_initializedName();
+      ROSE_ASSERT(parameter_name != nullptr);
+      ROSE_ASSERT(parameter_name->get_scope() ==
+                  isSgScopeStatement(decl->get_parent()));
+    }
     if (header->get_source_header_separator() ==
         SgTemplateParameterList::e_source_header_separator_newline) {
       ++newline_header_count;
@@ -83,7 +91,16 @@ size_t verifySourceSpelledStaticMembers(SgNode *root) {
     if (isSgIntVal(argument_expression) != nullptr) {
       ++concrete_argument_count;
     } else {
-      ROSE_ASSERT(isSgTemplateParameterVal(argument_expression) != nullptr);
+      SgTemplateParameterVal *value =
+          isSgTemplateParameterVal(argument_expression);
+      ROSE_ASSERT(value != nullptr);
+      SgTemplateParameter *parameter = value->get_template_parameter();
+      ROSE_ASSERT(parameter != nullptr);
+      SgTemplateParameter *canonical =
+          parameter->get_canonicalNonTypeParameter();
+      ROSE_ASSERT(canonical->get_canonical_source_identity().has_value());
+      ROSE_ASSERT(parameter->get_canonical_source_identity() ==
+                  canonical->get_canonical_source_identity());
       ++dependent_argument_count;
     }
     SgInitializedName *name = decl->get_variables().front();
@@ -143,9 +160,16 @@ void verifyTypedStaticMemberParameterOwners(SgNode *root) {
     ROSE_ASSERT(owner_argument != nullptr);
     ROSE_ASSERT(owner_argument->get_argumentType() ==
                 SgTemplateArgument::type_argument);
-    SgTemplateType *owner_use_type =
+    SgTemplateType *semantic_owner_type =
         isSgTemplateType(owner_argument->get_type());
+    ROSE_ASSERT(semantic_owner_type != nullptr);
+    ROSE_ASSERT(semantic_owner_type->get_template_parameter() != nullptr);
+    ROSE_ASSERT(semantic_owner_type->get_canonical_source_identity() ==
+                parameter_type->get_canonical_source_identity());
+    SgTemplateType *owner_use_type =
+        isSgTemplateType(owner_argument->get_sourceSpelledType());
     ROSE_ASSERT(owner_use_type != nullptr);
+    ROSE_ASSERT(owner_use_type != semantic_owner_type);
     ROSE_ASSERT(owner_use_type->get_name() == "WrittenType");
     ROSE_ASSERT(owner_use_type->get_template_parameter() == parameter);
     ROSE_ASSERT(owner_use_type->get_template_parameter_position() ==
@@ -210,10 +234,11 @@ void verifySourceSpelledVariableInstantiation(SgNode *root) {
     SgTemplateInstantiationDecl *instantiation =
         isSgTemplateInstantiationDecl(class_type->get_declaration());
     ROSE_ASSERT(instantiation != nullptr);
-    ROSE_ASSERT(instantiation->get_templateArguments().size() == 1);
+    ROSE_ASSERT(instantiation->get_templateArguments().empty());
+    ROSE_ASSERT(instantiation->get_semanticTemplateArguments().size() == 1);
 
     SgTemplateArgument *argument =
-        instantiation->get_templateArguments().front();
+        instantiation->get_semanticTemplateArguments().front();
     ROSE_ASSERT(argument != nullptr);
     SgClassType *semantic_type = isSgClassType(argument->get_type());
     ROSE_ASSERT(semantic_type != nullptr);
@@ -270,6 +295,7 @@ void verifySourceSpelledDeclarationHeaders(SgNode *root) {
   size_t function_empty = 0;
   size_t function_immediate = 0;
   size_t function_source_owned_specialization = 0;
+  SgTemplateMemberFunctionDeclaration *function_pattern = nullptr;
   for (SgNode *node : NodeQuery::querySubTree(root, V_SgFunctionDeclaration)) {
     SgFunctionDeclaration *decl = isSgFunctionDeclaration(node);
     ROSE_ASSERT(decl != nullptr);
@@ -285,6 +311,8 @@ void verifySourceSpelledDeclarationHeaders(SgNode *root) {
             template_member->get_templateParameters().front();
         ROSE_ASSERT(parameter != nullptr);
         ROSE_ASSERT(parameter->get_parent() == template_member);
+        ROSE_ASSERT(function_pattern == nullptr);
+        function_pattern = template_member;
         ++function_immediate;
       }
       continue;
@@ -297,8 +325,16 @@ void verifySourceSpelledDeclarationHeaders(SgNode *root) {
       if (specialization != nullptr &&
           specialization->get_specialization() ==
               SgDeclarationStatement::e_specialization &&
-          specialization->get_templateDeclaration() == nullptr &&
           specialization->get_definition() != nullptr) {
+        ROSE_ASSERT(function_pattern != nullptr);
+        auto *primary = specialization->get_templateDeclaration();
+        ROSE_ASSERT(primary != nullptr &&
+                    primary->get_firstNondefiningDeclaration() ==
+                        function_pattern->get_firstNondefiningDeclaration());
+        ROSE_ASSERT(specialization->get_specializedTemplateDeclaration() ==
+                    primary);
+        ROSE_ASSERT(specialization->get_templateArguments().empty());
+        ROSE_ASSERT(specialization->get_deducedTemplateArguments().empty());
         ++function_source_owned_specialization;
       }
       ++function_empty;

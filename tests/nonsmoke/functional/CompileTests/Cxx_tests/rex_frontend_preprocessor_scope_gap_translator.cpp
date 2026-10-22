@@ -93,9 +93,25 @@ int main(int argc, char **argv) {
     SgFunctionDeclaration *lambdaFunction = lambdaDefinition->get_declaration();
     ROSE_ASSERT(lambdaFunction != nullptr);
     ROSE_ASSERT(lambdaFunction->get_definition() == lambdaDefinition);
-    SgLambdaExp *lambda = isSgLambdaExp(lambdaFunction->get_parent());
+    SgClassDefinition *closureDefinition =
+        isSgClassDefinition(lambdaFunction->get_scope());
+    ROSE_ASSERT(closureDefinition != nullptr);
+    SgClassDeclaration *closure = closureDefinition->get_declaration();
+    ROSE_ASSERT(closure != nullptr && closure->get_class_type() ==
+                                          SgClassDeclaration::e_lambda_closure);
+    SgLambdaExp *lambda = closure->get_lambda_expression();
     ROSE_ASSERT(lambda != nullptr);
+    ROSE_ASSERT(lambda->get_lambda_closure_class() == closure);
     ROSE_ASSERT(lambda->get_lambda_function() == lambdaFunction);
+    SgAuxiliaryDeclarationList *functionOwner =
+        isSgAuxiliaryDeclarationList(lambdaFunction->get_parent());
+    ROSE_ASSERT(functionOwner != nullptr &&
+                functionOwner->get_parent() == closureDefinition &&
+                closureDefinition->get_auxiliary_declarations() ==
+                    functionOwner);
+    ROSE_ASSERT(std::count(functionOwner->get_declarations().begin(),
+                           functionOwner->get_declarations().end(),
+                           lambdaFunction) == 1);
 
     Sg_File_Info *recordLocation = record->get_file_info();
     Sg_File_Info *bodyStart = lambdaBody->get_startOfConstruct();
@@ -262,5 +278,37 @@ int main(int argc, char **argv) {
   }
   ROSE_ASSERT(foundConditionalIfdef);
   ROSE_ASSERT(foundConditionalEndif);
+  unsigned foundConditionalTemplates = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgTemplateClassDeclaration)) {
+    auto *declaration = isSgTemplateClassDeclaration(node);
+    if (declaration->get_definition() == nullptr)
+      continue;
+    const auto name = declaration->get_name();
+    if (name == "RexFrontendTemplateAfterDirectiveComment" ||
+        name == "RexFrontendTemplateInsideConditional" ||
+        name == "RexFrontendTemplateContainingConditional") {
+      if (declaration->get_unparse_template_ast() !=
+          (name == "RexFrontendTemplateContainingConditional"))
+        std::cerr << "template emission policy: " << name
+                  << " ast=" << declaration->get_unparse_template_ast() << '\n';
+      ROSE_ASSERT(declaration->get_unparse_template_ast() ==
+                  (name == "RexFrontendTemplateContainingConditional"));
+      ++foundConditionalTemplates;
+    }
+  }
+  ROSE_ASSERT(foundConditionalTemplates == 3);
+  unsigned foundTemplateAfterComment = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgTemplateFunctionDeclaration)) {
+    auto *declaration = isSgTemplateFunctionDeclaration(node);
+    if (declaration->get_definition() != nullptr &&
+        declaration->get_name() ==
+            "rex_frontend_template_after_directive_comment") {
+      ROSE_ASSERT(declaration->get_unparse_template_ast());
+      ++foundTemplateAfterComment;
+    }
+  }
+  ROSE_ASSERT(foundTemplateAfterComment == 1);
   return 0;
 }

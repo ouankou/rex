@@ -1,5 +1,7 @@
 #include "rex_kmp.h"
 
+#include "libxomp.h"
+
 #include "ROSE_ABORT.h"
 
 #include <assert.h>
@@ -341,6 +343,34 @@ void rex_kmpc_barrier_(int *loc_ref, int *gtid_ref) {
   __kmpc_barrier(NULL, *gtid_ref);
 }
 
+void rex_kmpc_ordered_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL)
+    ROSE_ABORT();
+  __kmpc_ordered(NULL, *gtid_ref);
+}
+
+void rex_kmpc_end_ordered_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL)
+    ROSE_ABORT();
+  __kmpc_end_ordered(NULL, *gtid_ref);
+}
+
+void rex_kmpc_dispatch_fini_4_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL)
+    ROSE_ABORT();
+  __kmpc_dispatch_fini_4(NULL, *gtid_ref);
+}
+
+void rex_kmpc_dispatch_fini_8_(int *loc_ref, int *gtid_ref) {
+  (void)loc_ref;
+  if (gtid_ref == NULL)
+    ROSE_ABORT();
+  __kmpc_dispatch_fini_8(NULL, *gtid_ref);
+}
+
 void xomp_critical_start(int *lock_ref);
 void xomp_critical_end(int *lock_ref);
 void xomp_flush(void);
@@ -561,32 +591,30 @@ typedef struct rex_kmp_task {
   rex_kmp_cmplrdata_t data2;
 } rex_kmp_task_t;
 
-typedef struct rex_fortran_task_payload {
+typedef struct rex_task_payload {
   void (*runner)(void *);
   void *runner_data;
-  void *heap_to_free;
-} rex_fortran_task_payload_t;
+  void (*cleanup)(void *);
+  void *cleanup_data;
+} rex_task_payload_t;
 
-static int rex_fortran_task_entry(int gtid, void *task_ptr) {
+static int rex_task_entry(int gtid, void *task_ptr) {
   (void)gtid;
   rex_kmp_task_t *task = (rex_kmp_task_t *)task_ptr;
   if (task == NULL || task->shareds == NULL) {
-    fprintf(
-        stderr,
-        "REX Fortran OpenMP lowering: invalid task payload for xomp_task\n");
+    fprintf(stderr,
+            "REX OpenMP lowering: invalid task payload for xomp_task\n");
     ROSE_ABORT();
   }
 
-  rex_fortran_task_payload_t *payload =
-      (rex_fortran_task_payload_t *)task->shareds;
-  if (payload->runner == NULL) {
-    fprintf(stderr, "REX Fortran OpenMP lowering: missing task runner\n");
+  rex_task_payload_t *payload = (rex_task_payload_t *)task->shareds;
+  if (payload->runner == NULL || payload->cleanup == NULL) {
+    fprintf(stderr, "REX OpenMP lowering: missing task runner or cleanup\n");
     ROSE_ABORT();
   }
 
   payload->runner(payload->runner_data);
-  free(payload->heap_to_free);
-  payload->heap_to_free = NULL;
+  payload->cleanup(payload->cleanup_data);
   return 0;
 }
 
@@ -595,41 +623,141 @@ static void rex_run_fortran_zero_arg(void *fn_ptr) {
   fn0();
 }
 
-static void rex_submit_fortran_task(void (*runner)(void *), void *runner_data,
-                                    void *heap_to_free, bool if_clause,
-                                    unsigned untied) {
-  if (runner == NULL) {
-    fprintf(stderr, "REX Fortran OpenMP lowering: null task runner\n");
+static void rex_submit_task(void (*runner)(void *), void *runner_data,
+                            void (*cleanup)(void *), void *cleanup_data,
+                            bool if_clause, unsigned untied) {
+  if (runner == NULL || cleanup == NULL || untied > 1) {
+    fprintf(stderr, "REX OpenMP lowering: invalid task submission\n");
     ROSE_ABORT();
-  }
-
-  if (!if_clause) {
-    runner(runner_data);
-    free(heap_to_free);
-    return;
   }
 
   const int gtid = __kmpc_global_thread_num(NULL);
   const int flags = untied ? 0 : 1;
   rex_kmp_task_t *task = (rex_kmp_task_t *)__kmpc_omp_task_alloc(
-      NULL, gtid, flags, sizeof(rex_kmp_task_t),
-      sizeof(rex_fortran_task_payload_t), (void *)rex_fortran_task_entry);
+      NULL, gtid, flags, sizeof(rex_kmp_task_t), sizeof(rex_task_payload_t),
+      (void *)rex_task_entry);
   if (task == NULL || task->shareds == NULL) {
-    fprintf(stderr,
-            "REX Fortran OpenMP lowering: __kmpc_omp_task_alloc failed\n");
+    fprintf(stderr, "REX OpenMP lowering: __kmpc_omp_task_alloc failed\n");
     ROSE_ABORT();
   }
 
-  rex_fortran_task_payload_t *payload =
-      (rex_fortran_task_payload_t *)task->shareds;
+  rex_task_payload_t *payload = (rex_task_payload_t *)task->shareds;
   payload->runner = runner;
   payload->runner_data = runner_data;
-  payload->heap_to_free = heap_to_free;
+  payload->cleanup = cleanup;
+  payload->cleanup_data = cleanup_data;
 
-  (void)__kmpc_omp_task(NULL, gtid, task);
+  if (if_clause) {
+    (void)__kmpc_omp_task(NULL, gtid, task);
+  } else {
+    __kmpc_omp_task_begin_if0(NULL, gtid, task);
+    rex_task_entry(gtid, task);
+    __kmpc_omp_task_complete_if0(NULL, gtid, task);
+  }
+}
+
+void XOMP_task(void (*fn)(void *), void *data, void (*cpyfn)(void *, void *),
+               long arg_size, long arg_align, bool if_clause, unsigned untied) {
+  if (fn == NULL || arg_size < 0 || arg_align < 0 || untied > 1 ||
+      (arg_size > 0 && (data == NULL || arg_align == 0))) {
+    fprintf(stderr, "REX OpenMP lowering: invalid task capture arguments\n");
+    ROSE_ABORT();
+  }
+
+  void *capture = NULL;
+  if (arg_size > 0) {
+    const size_t size = (size_t)arg_size;
+    const size_t alignment = (size_t)arg_align;
+    if ((alignment & (alignment - 1)) != 0 ||
+        size > SIZE_MAX - (alignment - 1)) {
+      fprintf(stderr, "REX OpenMP lowering: invalid task capture layout\n");
+      ROSE_ABORT();
+    }
+    capture = alignment <= _Alignof(max_align_t)
+                  ? malloc(size)
+                  : aligned_alloc(alignment,
+                                  (size + alignment - 1) & ~(alignment - 1));
+    if (capture == NULL) {
+      fprintf(stderr, "REX OpenMP lowering: task capture allocation failed\n");
+      ROSE_ABORT();
+    }
+    if (cpyfn != NULL)
+      cpyfn(capture, data);
+    else
+      memcpy(capture, data, size);
+  }
+  rex_submit_task(fn, capture, free, capture, if_clause, untied);
+}
+
+void rex_omp_task_owned(void (*fn)(void *), void *capture,
+                        void (*destroy)(void *), bool if_clause,
+                        unsigned untied) {
+  rex_submit_task(fn, capture, destroy, capture, if_clause, untied);
+}
+
+void XOMP_taskwait(void) {
+  (void)__kmpc_omp_taskwait(NULL, __kmpc_global_thread_num(NULL));
+}
+
+void XOMP_barrier(void) {
+  __kmpc_barrier(NULL, __kmpc_global_thread_num(NULL));
+}
+
+static void rex_unpack_fortran_task_arguments(const char *data, size_t count,
+                                              void **arguments,
+                                              bool *by_value) {
+  for (size_t i = 0; i < count; ++i) {
+    memcpy(&by_value[i], data, sizeof(bool));
+    data += sizeof(bool);
+    int value_size;
+    memcpy(&value_size, data, sizeof(value_size));
+    data += sizeof(value_size);
+    if (value_size <= 0) {
+      fprintf(stderr,
+              "Fatal error in xomp, run_me_task_(). Invalid value size %d.\n",
+              value_size);
+      ROSE_ABORT();
+    }
+    if (by_value[i]) {
+      arguments[i] = malloc((size_t)value_size);
+      if (arguments[i] == NULL) {
+        fprintf(stderr,
+                "Fatal error in xomp, run_me_task_(). Cannot allocate memory "
+                "for a value parameter!\n");
+        ROSE_ABORT();
+      }
+      memcpy(arguments[i], data, (size_t)value_size);
+    } else {
+      if (value_size != (int)sizeof(void *)) {
+        fprintf(stderr,
+                "Fatal error in xomp, run_me_task_(). Invalid reference size "
+                "%d.\n",
+                value_size);
+        ROSE_ABORT();
+      }
+      memcpy(&arguments[i], data, sizeof(void *));
+    }
+    data += (size_t)value_size;
+  }
+}
+
+static void rex_release_fortran_task_arguments(size_t count, void **arguments,
+                                               const bool *by_value) {
+  for (size_t i = 0; i < count; ++i) {
+    if (by_value[i])
+      free(arguments[i]);
+  }
 }
 
 #include "run_me_task_defs.inc"
+
+static void (*const rex_fortran_task_runners[])(void *) = {
+#include "run_me_callers2.inc"
+};
+_Static_assert(sizeof(rex_fortran_task_runners) /
+                       sizeof(rex_fortran_task_runners[0]) ==
+                   MAX_OUTLINED_FUNC_PARAMETER_COUNT,
+               "Fortran task runner count must match the lowering limit");
 
 typedef struct rex_fortran_task_arg_meta {
   bool by_value;
@@ -637,43 +765,39 @@ typedef struct rex_fortran_task_arg_meta {
   void *storage;
 } rex_fortran_task_arg_meta_t;
 
-void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
-               int *arg_size, int *arg_align, int *if_clause, int *untied,
-               int *argcount, ...);
+void xomp_task(void (*func)(void *), int *if_clause, int *untied, int *argcount,
+               ...);
 #pragma weak xomp_task_ = xomp_task
 
-void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
-               int *arg_size, int *arg_align, int *if_clause, int *untied,
-               int *argcount, ...) {
-  (void)cpyfn;
+void xomp_task(void (*func)(void *), int *if_clause, int *untied, int *argcount,
+               ...) {
   rex_fortran_task_arg_meta_t *meta = NULL;
   char *packed = NULL;
   va_list ap;
   bool ap_active = false;
 
-  if (func == NULL || arg_size == NULL || arg_align == NULL ||
-      if_clause == NULL || untied == NULL || argcount == NULL) {
+  if (func == NULL || if_clause == NULL || untied == NULL || argcount == NULL) {
     fprintf(stderr,
             "REX Fortran OpenMP lowering: invalid xomp_task arguments\n");
     ROSE_ABORT();
   }
 
   const long largcount = (long)(*argcount) / 3;
-  if ((largcount * 3) != *argcount || largcount < 0) {
+  if ((largcount * 3) != *argcount || largcount < 0 ||
+      (size_t)largcount > sizeof(rex_fortran_task_runners) /
+                              sizeof(rex_fortran_task_runners[0])) {
     fprintf(stderr,
             "REX Fortran OpenMP lowering: invalid xomp_task argcount=%d\n",
             *argcount);
     ROSE_ABORT();
   }
 
-  long larg_size = (long)(*arg_size);
-  long larg_align = (long)(*arg_align);
   bool bif_clause = (bool)(*if_clause);
   unsigned uuntied = (unsigned)(*untied);
 
   if (largcount == 0) {
-    rex_submit_fortran_task(rex_run_fortran_zero_arg, (void *)func, NULL,
-                            bif_clause, uuntied);
+    rex_submit_task(rex_run_fortran_zero_arg, (void *)func, free, NULL,
+                    bif_clause, uuntied);
     return;
   }
 
@@ -741,38 +865,8 @@ void xomp_task(void (*func)(void *), void (*cpyfn)(void *, void *),
   free(meta);
   meta = NULL;
 
-  void (*runner)(void *) = NULL;
-  void *runner_data = NULL;
-  char *pg_parameter = packed;
-  switch (largcount) {
-#define XOMP_task(fn, data, cpyfn0, arg_size0, arg_align0, if_clause0,         \
-                  untied0)                                                     \
-  do {                                                                         \
-    (void)(cpyfn0);                                                            \
-    (void)(arg_size0);                                                         \
-    (void)(arg_align0);                                                        \
-    (void)(if_clause0);                                                        \
-    (void)(untied0);                                                           \
-    runner = (fn);                                                             \
-    runner_data = (data);                                                      \
-  } while (0)
-#include "run_me_callers2.inc"
-#undef XOMP_task
-  default:
-    fprintf(stderr,
-            "REX Fortran OpenMP lowering: unsupported xomp_task argument "
-            "count=%ld\n",
-            largcount);
-    goto xomp_task_fail;
-  }
-
-  if (runner == NULL) {
-    fprintf(stderr,
-            "REX Fortran OpenMP lowering: unresolved xomp_task runner\n");
-    goto xomp_task_fail;
-  }
-
-  rex_submit_fortran_task(runner, runner_data, packed, bif_clause, uuntied);
+  void (*runner)(void *) = rex_fortran_task_runners[largcount - 1];
+  rex_submit_task(runner, packed, free, packed, bif_clause, uuntied);
   return;
 
 xomp_task_fail:

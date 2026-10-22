@@ -1,12 +1,3 @@
-// This file implements constant folding, but leverages the work done
-// by the frontend and adds support for constant folding on any transformations
-// introduced after the frontend processing (the transformations are typically
-// not seen by the frontend, so we have to handle constant folding directly
-// for transformations.  Since many transformations are introduced automatically
-// there is a substantial requirement for constant folding to clean the
-// generated code up a bit.  However, since the backend compiler (vendor's
-// compiler)
-
 #ifndef ROSE_CONSTANT_FOLDING_H
 #define ROSE_CONSTANT_FOLDING_H
 
@@ -14,10 +5,9 @@
 
 #include "sageInterface.h"
 
-#include <cmath>
-
-#include <iostream>
-
+#include <limits>
+#include <optional>
+#include <type_traits>
 #include <vector>
 
 namespace ConstantFolding {
@@ -27,19 +17,11 @@ namespace ConstantFolding {
 class ConstantFoldingInheritedAttribute {
 public:
   bool isConstantFoldedValue;
-  bool isPartOfFoldedExpression;
-  bool internalTestingAgainstFrontend;
 
-  //! Specific constructors are required
-  ConstantFoldingInheritedAttribute()
-      : isConstantFoldedValue(false), isPartOfFoldedExpression(false),
-        internalTestingAgainstFrontend(false) {};
+  ConstantFoldingInheritedAttribute() : isConstantFoldedValue(false) {}
 
-  // Need to implement the copy constructor
-  ConstantFoldingInheritedAttribute(const ConstantFoldingInheritedAttribute &X)
-      : isConstantFoldedValue(X.isConstantFoldedValue),
-        isPartOfFoldedExpression(X.isPartOfFoldedExpression),
-        internalTestingAgainstFrontend(X.internalTestingAgainstFrontend) {};
+  ConstantFoldingInheritedAttribute(const ConstantFoldingInheritedAttribute &) =
+      default;
 };
 
 class ConstantFoldingSynthesizedAttribute {
@@ -71,21 +53,9 @@ private:
 
   std::vector<SgExpression *> deferred_deletes_;
 };
-//! This is the external interface of constant folding:
-// It relies on the legacy frontend frontend to do constant folding by
-// default.
-//  The original source code pass trough legacy frontend will have all
-//  constant fold already  (not know how) Only new constant folding
-//  opportunities introduced by custom transformations will be actually
-//  handled by this function itself. Note: It will fold children nodes of the
-//  input node to some constants, not folding the input node itself.
-ROSE_DLL_API void
-constantFoldingOptimization(SgNode *n,
-                            bool internalTestingAgainstFrontend = false);
+ROSE_DLL_API void constantFoldingOptimization(SgNode *n);
 
-// DQ (6/13/2015): Added support to return the constant valued expression.
-ROSE_DLL_API SgValueExp *returnConstantFoldedValueExpression(
-    SgNode *n, bool internalTestingAgainstFrontend = false);
+ROSE_DLL_API SgValueExp *returnConstantFoldedValueExpression(SgNode *n);
 
 // ***************************************************************************
 // Constant un-folding is implemented here as a test to verify the
@@ -111,18 +81,13 @@ class ConstantUnFoldingTraversal
 public:
   // Functions required by the traversal mechanism
   ConstantUnFoldingSynthesizedAttribute evaluateSynthesizedAttribute(
-      SgNode *n,
-      // ConstantUnFoldingInheritedAttribute inheritedAttribute,
-      SubTreeSynthesizedAttributes synthesizedAttributeList);
+      SgNode *n, SubTreeSynthesizedAttributes synthesizedAttributeList);
 };
 
 // This test transforms the AST to turn constant values into expressions that
 // have the same value. This is a test for the constant folding optimization
 // implemented above.
 ROSE_DLL_API void constantUnFoldingTest(SgNode *n);
-
-// We move many template functions into this header since they are generally
-// useful for others to use. Liao 8/1/2018
 
 // A helper function: get value if it fits into int type
 // T1: the internal value's type
@@ -141,9 +106,7 @@ template <typename T1, typename T2> T1 cf_get_value_t(T2 *sg_value_exp) {
 //
 template <typename T>
 T calculate_float_t(SgBinaryOp *binaryOperator, T lhsValue, T rhsValue) {
-  // DQ (3/27/2017): Initialize this to avoid Clang warning: from default case.
-  // T foldedValue; // to be converted to result type
-  T foldedValue = 0; // to be converted to result type
+  T foldedValue{};
 
   switch (binaryOperator->variantT()) {
   // Basic arithmetic
@@ -163,13 +126,6 @@ T calculate_float_t(SgBinaryOp *binaryOperator, T lhsValue, T rhsValue) {
     foldedValue = lhsValue / rhsValue;
     break;
   }
-    // Fortran only? a**b
-    //    case V_SgExponentiationOp:
-    //      {
-    //        foldedValue = lhsValue ** rhsValue;
-    //        break;
-    //      }
-
   case V_SgIntegerDivideOp: // TODO what is this ??
   {
     foldedValue = lhsValue / rhsValue;
@@ -212,191 +168,161 @@ T calculate_float_t(SgBinaryOp *binaryOperator, T lhsValue, T rhsValue) {
     break;
   }
   default: {
-    std::cerr << "warning: calculuate - unhandled operator type:"
-              << binaryOperator->class_name() << std::endl;
-    // ROSE_ABORT(); // not every binary operation type can be evaluated
-  }
-
-  } // end switch
-
-  return foldedValue;
-}
-//! string type and binary operator: the allowed operations on string values
-// + , <, >, <=, >=, ==, !=
-template <typename T>
-T calculate_string_t(SgBinaryOp *binaryOperator, T lhsValue, T rhsValue) {
-  T foldedValue; // to be converted to result type
-
-  switch (binaryOperator->variantT()) {
-  // Basic arithmetic
-  case V_SgAddOp: {
-    foldedValue = lhsValue + rhsValue;
-    break;
-  }
-    // relational operations
-  case V_SgEqualityOp: {
-    foldedValue = (lhsValue == rhsValue);
-    break;
-  }
-  case V_SgNotEqualOp: {
-    foldedValue = (lhsValue != rhsValue);
-    break;
-  }
-  case V_SgGreaterOrEqualOp: {
-    foldedValue = (lhsValue >= rhsValue);
-    break;
-  }
-  case V_SgGreaterThanOp: {
-    foldedValue = (lhsValue > rhsValue);
-    break;
-  }
-  case V_SgLessOrEqualOp: {
-    foldedValue = (lhsValue <= rhsValue);
-    break;
-  }
-  case V_SgLessThanOp: {
-    foldedValue = (lhsValue < rhsValue);
-    break;
-  }
-  default: {
-    std::cerr << "warning: calculate_string_t - unacceptable operator type:"
-              << binaryOperator->class_name() << std::endl;
     ROSE_ABORT();
   }
+
   } // end switch
+
   return foldedValue;
 }
-// For T type which is compatible for all binary operators we are interested in.
+template <typename T> bool checkedIntegralProduct(T lhs, T rhs, T &result) {
+  bool overflow = __builtin_mul_overflow(lhs, rhs, &result);
+  return !std::is_signed_v<T> || !overflow;
+}
+
 template <typename T>
-T calculate_t(SgBinaryOp *binaryOperator, T lhsValue, T rhsValue) {
-  // DQ (3/27/2017): Initialize this value to avoid Clang warning from default
-  // case. T foldedValue; // to be converted to result type
-  T foldedValue = 0; // to be converted to result type
+std::optional<T> calculateIntegral(SgBinaryOp *op, T lhs, T rhs) {
+  static_assert(std::is_integral_v<T> && !std::is_same_v<T, bool>);
+  T result{};
+  switch (op->variantT()) {
+  case V_SgModOp:
+  case V_SgDivideOp:
+  case V_SgIntegerDivideOp:
+    if (rhs == 0)
+      return std::nullopt;
+    if constexpr (std::is_signed_v<T>) {
+      if (lhs == std::numeric_limits<T>::min() && rhs == -1)
+        return std::nullopt;
+    }
+    if (op->variantT() == V_SgModOp)
+      return static_cast<T>(lhs % rhs);
+    return static_cast<T>(lhs / rhs);
 
-  switch (binaryOperator->variantT()) {
-  // integer-exclusive oprations
-  case V_SgModOp: {
-    foldedValue = lhsValue % rhsValue;
-    break;
-  }
-  case V_SgLshiftOp: {
-    foldedValue = (lhsValue << rhsValue);
-    break;
-  }
-  case V_SgRshiftOp: {
-    foldedValue = (lhsValue >> rhsValue);
-    break;
-  }
-    // bitwise operations
-  case V_SgBitAndOp: {
-    foldedValue = lhsValue & rhsValue;
-    break;
-  }
-  case V_SgBitOrOp: {
-    foldedValue = lhsValue | rhsValue;
-    break;
-  }
-  case V_SgBitXorOp: {
-    foldedValue = lhsValue ^ rhsValue;
-    break;
-  }
-    // non-integer-exclusive operations
-  case V_SgAddOp: {
-    foldedValue = lhsValue + rhsValue;
-    break;
-  }
-  case V_SgSubtractOp: {
-    foldedValue = lhsValue - rhsValue;
-    break;
-  }
-  case V_SgMultiplyOp: {
-    foldedValue = lhsValue * rhsValue;
-    break;
-  }
-  case V_SgDivideOp: {
-    foldedValue = lhsValue / rhsValue;
-    break;
-  }
-    // Fortran only? a**b
-    //    case V_SgExponentiationOp:
-    //      {
-    //        foldedValue = lhsValue ** rhsValue;
-    //        break;
-    //      }
+  case V_SgLshiftOp:
+    if constexpr (std::is_signed_v<T>) {
+      if (lhs < 0 || rhs < 0)
+        return std::nullopt;
+    }
+    if (static_cast<unsigned long long>(rhs) >= std::numeric_limits<T>::digits)
+      return std::nullopt;
+    if constexpr (std::is_signed_v<T>) {
+      if (lhs > (std::numeric_limits<T>::max() >> rhs))
+        return std::nullopt;
+    }
+    return static_cast<T>(static_cast<unsigned long long>(lhs) << rhs);
 
-  case V_SgIntegerDivideOp: // TODO what is this ??
-  {
-    foldedValue = lhsValue / rhsValue;
-    break;
-  }
-  // logic operations
-  case V_SgAndOp: {
-    foldedValue = lhsValue && rhsValue;
-    break;
-  }
+  case V_SgRshiftOp:
+    if constexpr (std::is_signed_v<T>) {
+      if (lhs < 0 || rhs < 0)
+        return std::nullopt;
+    }
+    if (static_cast<unsigned long long>(rhs) >=
+        std::numeric_limits<T>::digits + std::is_signed_v<T>)
+      return std::nullopt;
+    return static_cast<T>(lhs >> rhs);
 
-  case V_SgOrOp: {
-    foldedValue = lhsValue || rhsValue;
-    break;
-  }
+  case V_SgBitAndOp:
+    return static_cast<T>(lhs & rhs);
+  case V_SgBitOrOp:
+    return static_cast<T>(lhs | rhs);
+  case V_SgBitXorOp:
+    return static_cast<T>(lhs ^ rhs);
 
-    // relational operations
-  case V_SgEqualityOp: {
-    foldedValue = (lhsValue == rhsValue);
-    break;
-  }
-  case V_SgNotEqualOp: {
-    foldedValue = (lhsValue != rhsValue);
-    break;
-  }
-  case V_SgGreaterOrEqualOp: {
-    foldedValue = (lhsValue >= rhsValue);
-    break;
-  }
-  case V_SgGreaterThanOp: {
-    foldedValue = (lhsValue > rhsValue);
-    break;
-  }
-  case V_SgLessOrEqualOp: {
-    foldedValue = (lhsValue <= rhsValue);
-    break;
-  }
-  case V_SgLessThanOp: {
-    foldedValue = (lhsValue < rhsValue);
-    break;
-  }
+  case V_SgAddOp:
+    if (__builtin_add_overflow(lhs, rhs, &result) && std::is_signed_v<T>)
+      return std::nullopt;
+    return result;
+  case V_SgSubtractOp:
+    if (__builtin_sub_overflow(lhs, rhs, &result) && std::is_signed_v<T>)
+      return std::nullopt;
+    return result;
+  case V_SgMultiplyOp:
+    if (!checkedIntegralProduct(lhs, rhs, result))
+      return std::nullopt;
+    return result;
+
+  case V_SgAndOp:
+    return static_cast<T>(lhs && rhs);
+  case V_SgOrOp:
+    return static_cast<T>(lhs || rhs);
+  case V_SgEqualityOp:
+    return static_cast<T>(lhs == rhs);
+  case V_SgNotEqualOp:
+    return static_cast<T>(lhs != rhs);
+  case V_SgGreaterOrEqualOp:
+    return static_cast<T>(lhs >= rhs);
+  case V_SgGreaterThanOp:
+    return static_cast<T>(lhs > rhs);
+  case V_SgLessOrEqualOp:
+    return static_cast<T>(lhs <= rhs);
+  case V_SgLessThanOp:
+    return static_cast<T>(lhs < rhs);
+
   case V_SgExponentiationOp: {
-    // TODO: 2^64 can be a problem!! too large
-    // A workaroud is that another separated phase is called before calling
-    // constant folding to do the translation
-    foldedValue = (T)pow(lhsValue, rhsValue);
-    break;
+    if constexpr (std::is_signed_v<T>) {
+      if (rhs < 0)
+        return std::nullopt;
+    }
+    unsigned long long exponent = static_cast<unsigned long long>(rhs);
+    T base = lhs;
+    result = 1;
+    while (exponent != 0) {
+      if ((exponent & 1) != 0) {
+        T product;
+        if (!checkedIntegralProduct(result, base, product))
+          return std::nullopt;
+        result = product;
+      }
+      exponent >>= 1;
+      if (exponent != 0) {
+        T square;
+        if (!checkedIntegralProduct(base, base, square))
+          return std::nullopt;
+        base = square;
+      }
+    }
+    return result;
   }
 
-  default: {
-    std::cerr << "warning: calculuate - unhandled binary operator type:"
-              << binaryOperator->class_name() << std::endl;
-    // ROSE_ABORT(); // not every binary operation type can be evaluated
+  default:
+    ROSE_ABORT();
   }
-  }
-  return foldedValue;
 }
 
 // For T type which is compatible for all unary operators we are interested in.
 template <typename T> T calculate_u_t(SgUnaryOp *unaryOperator, T theValue) {
-  T foldedValue = 0; // to be converted to result type
-  switch (unaryOperator->variantT()) {
-  // integer-exclusive oprations
-  case V_SgMinusOp: {
-    foldedValue = -theValue;
-    break;
+  ROSE_ASSERT(isSgMinusOp(unaryOperator) != nullptr);
+  return -theValue;
+}
+
+inline bool isPredicateBinaryOperator(VariantT kind) {
+  switch (kind) {
+  case V_SgAndOp:
+  case V_SgOrOp:
+  case V_SgEqualityOp:
+  case V_SgNotEqualOp:
+  case V_SgGreaterOrEqualOp:
+  case V_SgGreaterThanOp:
+  case V_SgLessOrEqualOp:
+  case V_SgLessThanOp:
+    return true;
+  default:
+    return false;
   }
-  default: {
-    std::cerr << "warning: calculuate - unhandled unary operator type:"
-              << unaryOperator->class_name() << std::endl;
-  }
-  }
-  return foldedValue;
+}
+
+inline SgValueExp *buildPredicateResult(SgBinaryOp *op, bool value) {
+  SgType *resultType = op->get_type();
+  ROSE_ASSERT(resultType != nullptr);
+  SgValueExp *result = nullptr;
+  if (SageInterface::isEquivalentType(resultType, SgTypeBool::createType()))
+    result = new SgBoolValExp(value);
+  else if (SageInterface::isEquivalentType(resultType, SgTypeInt::createType()))
+    result = new SgIntVal(value, "");
+  else
+    return nullptr;
+  SageInterface::setOneSourcePositionForTransformation(result);
+  return result;
 }
 
 // T1: a SgValExp's child SAGE class type,
@@ -413,9 +339,31 @@ static SgValueExp *buildResultValueExp_t(SgBinaryOp *binaryOperator,
 
   T2 lhs = cf_get_value_t<T2>(lhs_v);
   T2 rhs = cf_get_value_t<T2>(rhs_v);
-  T2 foldedValue;
-  foldedValue = calculate_t(binaryOperator, lhs, rhs);
-  result = new T1(foldedValue, "");
+  if (!isPredicateBinaryOperator(binaryOperator->variantT()) &&
+      !SageInterface::isEquivalentType(binaryOperator->get_type(),
+                                       lhs_v->get_type())) {
+    if constexpr (std::is_integral_v<T2> &&
+                  std::numeric_limits<T2>::digits <
+                      std::numeric_limits<int>::digits) {
+      if (SageInterface::isEquivalentType(binaryOperator->get_type(),
+                                          SgTypeInt::createType())) {
+        std::optional<int> promoted = calculateIntegral(
+            binaryOperator, static_cast<int>(lhs), static_cast<int>(rhs));
+        if (!promoted)
+          return nullptr;
+        result = new SgIntVal(*promoted, "");
+        SageInterface::setOneSourcePositionForTransformation(result);
+        return result;
+      }
+    }
+    return nullptr;
+  }
+  std::optional<T2> foldedValue = calculateIntegral(binaryOperator, lhs, rhs);
+  if (!foldedValue)
+    return nullptr;
+  if (isPredicateBinaryOperator(binaryOperator->variantT()))
+    return buildPredicateResult(binaryOperator, *foldedValue != 0);
+  result = new T1(*foldedValue, "");
   ROSE_ASSERT(result != NULL);
   SageInterface::setOneSourcePositionForTransformation(result);
   return result;
@@ -429,7 +377,27 @@ static SgValueExp *buildResultValueExp_u_t(SgUnaryOp *unaryOperator,
   SgValueExp *result = NULL;
   T1 *t1_v = dynamic_cast<T1 *>(theValue);
   ROSE_ASSERT(t1_v);
+  ROSE_ASSERT(unaryOperator->get_type() != nullptr);
   T2 t2_v = cf_get_value_t<T2>(t1_v);
+  if (!SageInterface::isEquivalentType(unaryOperator->get_type(),
+                                       t1_v->get_type())) {
+    if constexpr (std::is_integral_v<T2> &&
+                  std::numeric_limits<T2>::digits <
+                      std::numeric_limits<int>::digits) {
+      if (SageInterface::isEquivalentType(unaryOperator->get_type(),
+                                          SgTypeInt::createType())) {
+        result = new SgIntVal(-static_cast<int>(t2_v), "");
+        SageInterface::setOneSourcePositionForTransformation(result);
+        return result;
+      }
+    }
+    return nullptr;
+  }
+  if constexpr (std::numeric_limits<T2>::is_integer &&
+                std::numeric_limits<T2>::is_signed) {
+    if (t2_v == std::numeric_limits<T2>::min())
+      return nullptr;
+  }
   T2 foldedValue;
   foldedValue = calculate_u_t(unaryOperator, t2_v);
   result = new T1(foldedValue, "");
@@ -454,8 +422,14 @@ static SgValueExp *buildResultValueExp_float_t(SgBinaryOp *binaryOperator,
 
   T2 lhs = cf_get_value_t<T2>(lhs_v);
   T2 rhs = cf_get_value_t<T2>(rhs_v);
+  if (!isPredicateBinaryOperator(binaryOperator->variantT()) &&
+      !SageInterface::isEquivalentType(binaryOperator->get_type(),
+                                       lhs_v->get_type()))
+    return nullptr;
   T2 foldedValue;
   foldedValue = calculate_float_t(binaryOperator, lhs, rhs);
+  if (isPredicateBinaryOperator(binaryOperator->variantT()))
+    return buildPredicateResult(binaryOperator, foldedValue != 0);
   result = new T1(foldedValue, "");
   ROSE_ASSERT(result != NULL);
   SageInterface::setOneSourcePositionForTransformation(result);

@@ -118,9 +118,28 @@ void retireDetachedFunctionCopy(SgFunctionDeclaration *function,
   SageInterface::deleteAST(copiedCanonical,
                            SageInterface::DeleteAstMode::kRequireIsolated);
   ROSE_ASSERT(!SgNode::isLiveNode(copiedCanonical));
+  ROSE_ASSERT(function->get_parameterList_syntax() == nullptr &&
+              sourceFunction->get_parameterList_syntax() == nullptr);
+  SgFunctionParameterList *parameters = function->get_parameterList();
+  SgFunctionParameterList *sourceParameters =
+      sourceFunction->get_parameterList();
+  ROSE_ASSERT(parameters != nullptr && parameters != sourceParameters &&
+              parameters->get_parent() == function);
+  const auto arguments = parameters->get_args();
+  ROSE_ASSERT(arguments.size() == 1 &&
+              sourceParameters->get_args().size() == 1);
+  ROSE_ASSERT(arguments.front() != sourceParameters->get_args().front() &&
+              arguments.front()->get_parent() == parameters &&
+              arguments.front()->get_type() ==
+                  sourceParameters->get_args().front()->get_type());
   SageInterface::deleteAST(function,
                            SageInterface::DeleteAstMode::kRequireIsolated);
   ROSE_ASSERT(!SgNode::isLiveNode(function));
+  ROSE_ASSERT(!SgNode::isLiveNode(parameters));
+  for (SgInitializedName *argument : arguments)
+    ROSE_ASSERT(!SgNode::isLiveNode(argument));
+  ROSE_ASSERT(SgNode::isLiveNode(sourceParameters) &&
+              sourceParameters->get_parent() == sourceFunction);
   ROSE_ASSERT(sourceCanonical->get_definingDeclaration() == sourceFunction &&
               sourceSymbol->get_symbol_basis() == sourceCanonical);
 }
@@ -148,6 +167,25 @@ void requireExactOutlinedVariableOwnership(
   size_t relocatedGeneratedCastCount = 0;
   for (SgFunctionDeclaration *function : functions) {
     ROSE_ASSERT(function != nullptr && function->get_definition() != nullptr);
+    auto *canonical =
+        isSgFunctionDeclaration(function->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(canonical != nullptr && canonical != function &&
+                canonical->get_definingDeclaration() == function &&
+                canonical->get_type() == function->get_type());
+    const auto &parameters = function->get_parameterList()->get_args();
+    const auto &canonical_parameters =
+        canonical->get_parameterList()->get_args();
+    const auto &argument_types = function->get_type()->get_arguments();
+    ROSE_ASSERT(parameters.size() >= 2 &&
+                parameters.size() == canonical_parameters.size() &&
+                parameters.size() == argument_types.size());
+    for (size_t index = 0; index < parameters.size(); ++index) {
+      ROSE_ASSERT(parameters[index] != canonical_parameters[index] &&
+                  parameters[index]->get_type() == argument_types[index] &&
+                  canonical_parameters[index]->get_type() ==
+                      argument_types[index] &&
+                  canonical_parameters[index]->get_declptr() == canonical);
+    }
     SgSourceFile *outputFile = SageInterface::getEnclosingSourceFile(function);
     ROSE_ASSERT(outputFile != nullptr &&
                 outputFile->get_file_info() != nullptr);

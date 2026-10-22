@@ -3,16 +3,9 @@
 
 #include "PrePostTransformation.h"
 
-#include "SinglyLinkedList.h"
-
 class LoopUnrolling : public PrePostTransformation {
 public:
-  typedef enum {
-    DEFAULT = 0,
-    COND_LEFTOVER = 1,
-    USE_NEWVAR = 2,
-    POET_TUNING = 4
-  } UnrollOpt;
+  typedef enum { DEFAULT = 0, COND_LEFTOVER = 1, USE_NEWVAR = 2 } UnrollOpt;
 
 private:
   static unsigned unrollsize;

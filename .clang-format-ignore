@@ -1,8 +1,13 @@
 src/frontend/SageIII/omp_lib.h
 src/frontend/SageIII/omp_lib_kinds.h
-tests/nonsmoke/functional/CompileTests/Cxx_tests/Makefile-fail.inc
 tests/nonsmoke/functional/CompileTests/frontend_integration/Cxx-tests.inc
 
 # Byte-for-byte regression fixtures; formatting them changes expected output.
+tests/nonsmoke/functional/CompileTests/C_tests/rex_frontend_diagnostic_options.c
+tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_frontend_statement_attributes.cpp
+tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_frontend_udl_structural_ownership.cpp
+tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_unparser_string_literal_surface.cpp
+tests/nonsmoke/functional/CompileTests/OpenMP_tests/rex_omp_declare_variant_semantic_identity.c
+tests/nonsmoke/functional/CompileTests/OpenACC_tests/rex_openacc_session_first.c
 tests/nonsmoke/functional/CompileTests/sourcePosition_tests/statements.C
 tests/nonsmoke/functional/moveDeclarationTool/referenceResults/**

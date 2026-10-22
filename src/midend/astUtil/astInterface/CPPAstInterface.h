@@ -20,11 +20,6 @@ public:
 
   AstNodePtr CreateFunctionCall(const AstNodePtr &func,
                                 const AstInterface::AstNodeList &args);
-  //! Check whether $n$ is a pointer or reference variable reference.
-  bool IsPointerVariable(const AstNodePtr &n);
-  AstNodePtr GetVarScope(const AstNodePtr &n);
-
-  bool IsPlusPlus(const AstNodePtr &s, AstNodePtr *opd = 0);
 };
 
 #endif

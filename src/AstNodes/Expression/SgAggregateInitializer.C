@@ -1,18 +1,67 @@
 #include "sage3basic.h"
 
-void SgAggregateInitializer::post_construction_initialization() {
-  if (get_source_form() == e_aggregate_initializer_source_unclassified) {
+#include <unordered_set>
+
+namespace {
+void requireAggregateInitializerInputs(
+    SgExprListExp *initializers, SgType *type,
+    SgAggregateInitializer::aggregate_initializer_source_form_enum
+        source_form) {
+  bool valid_source_form = false;
+  switch (source_form) {
+  case SgAggregateInitializer::e_aggregate_initializer_source_braced:
+  case SgAggregateInitializer::e_aggregate_initializer_source_unbraced:
+  case SgAggregateInitializer::e_aggregate_initializer_source_typed_braced:
+  case SgAggregateInitializer::e_aggregate_initializer_source_compound_literal:
+  case SgAggregateInitializer::e_aggregate_initializer_source_fortran:
+  case SgAggregateInitializer::e_aggregate_initializer_source_fortran_structure:
+    valid_source_form = true;
+    break;
+  default:
+    break;
+  }
+  if (initializers == nullptr || SageInterface::containsUnknownType(type) ||
+      !valid_source_form) {
     fprintf(stderr,
-            "REX_AST_INVARIANT[aggregate-initializer-source-form]: source "
-            "form is unclassified\n");
+            "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact "
+            "initializer list, semantic type, and source form are required\n");
     ROSE_ABORT();
   }
-  if (get_initializers()) {
-    get_initializers()->set_parent(this);
+  if (initializers->get_parent() != nullptr) {
+    fprintf(stderr, "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-owner]: "
+                    "initializer list already has a structural owner\n");
+    ROSE_ABORT();
+  }
+  std::unordered_set<SgExpression *> seen;
+  for (SgExpression *element : initializers->get_expressions()) {
+    if (element == nullptr || element == initializers ||
+        element->get_parent() != initializers || !seen.insert(element).second) {
+      fprintf(stderr,
+              "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: "
+              "initializer elements must be distinct and owned by the list\n");
+      ROSE_ABORT();
+    }
+    if (auto *list = isSgExprListExp(element))
+      ROSE_ASSERT(list->get_source_form() ==
+                  SgExprListExp::e_expression_list_braced);
   }
 }
+} // namespace
 
-// DQ: trying to remove the nested iterator class
+void SgAggregateInitializer::post_construction_initialization() {
+  requireAggregateInitializerInputs(p_initializers, p_expression_type,
+                                    p_source_form);
+  if (p_initializers->get_source_form() ==
+      SgExprListExp::e_expression_list_braced) {
+    ROSE_ASSERT(p_source_form == e_aggregate_initializer_source_braced ||
+                p_source_form == e_aggregate_initializer_source_typed_braced ||
+                p_source_form ==
+                    e_aggregate_initializer_source_compound_literal);
+    p_initializers->set_source_form(SgExprListExp::e_expression_list_plain);
+  }
+  p_initializers->set_parent(this);
+}
+
 void SgAggregateInitializer::append_initializer(SgExpression *what) {
   if (p_initializers == nullptr || what == nullptr ||
       what->get_parent() != nullptr) {
@@ -22,33 +71,43 @@ void SgAggregateInitializer::append_initializer(SgExpression *what) {
     ROSE_ABORT();
   }
   p_initializers->append_expression(what);
-  what->set_parent(p_initializers);
 }
 
 SgExpression *SgAggregateInitializer::get_next(int &n) const {
   if (n == 0) {
     n++;
     return get_initializers();
-  } else
-    return 0;
+  }
+  return nullptr;
 }
 
 int SgAggregateInitializer::replace_expression(SgExpression *o,
                                                SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
-
-  if (get_initializers() == o) {
-    set_initializers(isSgExprListExp(n));
-    n->set_parent(this);
-    return 1;
-  } else {
+  if (get_initializers() != o)
     return 0;
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+
+  auto *initializers = isSgExprListExp(n);
+  ROSE_ASSERT(initializers != nullptr);
+  ROSE_ASSERT(n->get_parent() == nullptr);
+  requireAggregateInitializerInputs(initializers, p_expression_type,
+                                    p_source_form);
+  if (initializers->get_source_form() ==
+      SgExprListExp::e_expression_list_braced) {
+    ROSE_ASSERT(p_source_form == e_aggregate_initializer_source_braced ||
+                p_source_form == e_aggregate_initializer_source_typed_braced ||
+                p_source_form ==
+                    e_aggregate_initializer_source_compound_literal);
+    initializers->set_source_form(SgExprListExp::e_expression_list_plain);
   }
+  set_initializers(initializers);
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 SgType *SgAggregateInitializer::get_type() const {
@@ -68,60 +127,40 @@ SgType *SgAggregateInitializer::get_type() const {
 // which is a problem in the name qualification support for C++ (interfering
 // with the token-based unparsing).
 bool SgAggregateInitializer::get_requiresGlobalNameQualificationOnType() const {
-  ROSE_ASSERT(this != NULL);
   return p_requiresGlobalNameQualificationOnType;
 }
 
 void SgAggregateInitializer::set_requiresGlobalNameQualificationOnType(
     bool requiresGlobalNameQualificationOnType) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_requiresGlobalNameQualificationOnType =
       requiresGlobalNameQualificationOnType;
 }
 
 int SgAggregateInitializer::get_name_qualification_length_for_type() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length_for_type;
 }
 
 void SgAggregateInitializer::set_name_qualification_length_for_type(
     int name_qualification_length_for_type) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_length_for_type = name_qualification_length_for_type;
 }
 
 bool SgAggregateInitializer::get_type_elaboration_required_for_type() const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_required_for_type;
 }
 
 void SgAggregateInitializer::set_type_elaboration_required_for_type(
     bool type_elaboration_required_for_type) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_required_for_type = type_elaboration_required_for_type;
 }
 
 bool SgAggregateInitializer::get_global_qualification_required_for_type()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required_for_type;
 }
 
 void SgAggregateInitializer::set_global_qualification_required_for_type(
     bool global_qualification_required_for_type) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_global_qualification_required_for_type =
       global_qualification_required_for_type;
 }

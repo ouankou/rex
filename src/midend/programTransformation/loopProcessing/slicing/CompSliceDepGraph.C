@@ -200,7 +200,6 @@ void CompSliceDepGraphNode::UpdateAlignEntry(
 void CompSliceDepGraphCreate::MoveEdgeEndPoint(DepInfoEdge *e,
                                                EdgeDirection dir,
                                                CompSliceDepGraphNode *n) {
-  // CompSliceDepGraphNode *n1 = GetEdgeEndPoint(e, dir);
   CompSliceDepGraphNode *n2 = GetEdgeEndPoint(e, GraphAccess::Reverse(dir));
   if (n == n2) {
     DeleteEdge(e);

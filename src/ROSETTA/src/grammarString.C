@@ -1,7 +1,3 @@
-// ################################################################
-// #                           Header Files                       #
-// ################################################################
-
 #include "AstNodeClass.h"
 
 #include "Rose/StringUtility/FileUtility.h"
@@ -10,16 +6,11 @@
 
 #include "grammarString.h"
 
-#include <sstream>
-
+#include <cstdio>
 #include <string>
 
 using namespace std;
 using namespace Rose;
-
-// ################################################################
-// #            GrammarString Member Functions                    #
-// ################################################################
 
 const string &GrammarString::getTypeNameString() const {
   return typeNameString;
@@ -33,52 +24,11 @@ const string &GrammarString::getDefaultInitializerString() const {
   return defaultInitializerString;
 }
 
-std::string GrammarString::infoFieldsToString() const {
-  //  typeNameString
-  //   variableNameString
-  //  toBeTraversed
-  stringstream ss;
-  // ss<<   key;
-  // ss<<","<<functionNameString;
-  // ss<<","<<pureVirtualFunction;
-  ss << "access=";
-  switch (automaticGenerationOfDataAccessFunctions) {
-  case NO_ACCESS_FUNCTIONS:
-    ss << "no";
-    break;
-  case BUILD_ACCESS_FUNCTIONS:
-    ss << "yes";
-    break;
-  case BUILD_FLAG_ACCESS_FUNCTIONS:
-    ss << "yes(non-mod)";
-    break;
-  case BUILD_LIST_ACCESS_FUNCTIONS:
-    ss << "list";
-    break;
-  default:
-    cerr << "Error: unknown data access function type." << endl;
-    ROSE_ABORT();
-  }
-  ss << "," << "constr=" << getIsInConstructorParameterList();
-  ss << "," << "init=" << "\"" << defaultInitializerString << "\"";
-  ss << "," << "copy=" << toBeCopied;
-  ss << "," << "del=" << toBeDeleted;
-  return ss.str();
-}
-
-bool GrammarString::isInConstructorParameterList() const {
-  return p_isInConstructorParameterList == CONSTRUCTOR_PARAMETER;
-}
-
 ConstructParamEnum GrammarString::getIsInConstructorParameterList() const {
   return p_isInConstructorParameterList;
 }
 
 TraversalEnum GrammarString::getToBeTraversed() const { return toBeTraversed; }
-
-bool GrammarString::hasTraversalCardinality() const {
-  return p_traversalCardinality.has_value();
-}
 
 TraversalCardinalityEnum GrammarString::getTraversalCardinality() const {
   if (!p_traversalCardinality.has_value()) {
@@ -100,79 +50,19 @@ TraversalStorageEnum GrammarString::getTraversalStorage() const {
   return p_traversalStorage;
 }
 
-const string &GrammarString::getTraversalElementTypeName() const {
-  return p_traversalElementTypeName;
-}
-
-SchemaStorageEnum GrammarString::getSchemaStorage() const {
-  return p_schemaStorage;
-}
-
-SchemaElementEnum GrammarString::getSchemaElement() const {
-  return p_schemaElement;
-}
-
-const string &GrammarString::getSchemaElementTypeName() const {
-  return p_schemaElementTypeName;
-}
-
-string GrammarString::getFunctionPrototypeString() const {
-  // return the prebuild string (from which the keys are computed!)
-  // This function returns the "functionNameString" which is used to
-  // hold source code and header file prototypes.  Other functions return
-  // more specialized strings for constructor parameter lists etc.
-
-  // printf ("In GrammarString::getFunctionPrototypeString(): typeNameString =
-  // %s \n",typeNameString.c_str()); printf ("In
-  // GrammarString::getFunctionPrototypeString(): functionNameString = \n %s
-  // \n",functionNameString.c_str());
-
-  return functionNameString;
-}
-
-string GrammarString::getRawString() const {
-  // return the prebuild string (from which the keys are computed!)
-  // This function returns the "functionNameString" which is used to
-  // hold source code and header file prototypes.  Other functions return
-  // more specialized strings for constructor parameter lists etc.
-  return functionNameString;
-}
-
-// Helper function to detect if a string represents a function call
-// Checks for presence of '(' followed by ')' to catch all function call
-// patterns
-static bool isFunctionCallExpression(const string &expr) {
-  size_t openParen = expr.find('(');
-  size_t closeParen = expr.find(')');
-  return (openParen != string::npos && closeParen != string::npos &&
-          openParen < closeParen);
-}
-
-// Helper function to get the container variable name for storing temporary list
-// results This ensures consistency between listIteratorInitialization and
-// forLoopOpening
-static string getContainerVariableName(const string &iteratorName) {
-  return iteratorName + "_container";
-}
+string GrammarString::getRawString() const { return functionNameString; }
 
 string listIteratorInitialization(string typeName, string iteratorName,
                                   string listName, string accessOperator) {
-  // Check if listName is a function call (contains parentheses) to avoid
-  // dangling-gsl warnings
-  bool isFunctionCall = isFunctionCallExpression(listName);
   string returnString;
 
-  if (isFunctionCall && accessOperator == ".") {
-    // Store the list in a temporary reference variable to avoid calling
-    // .begin() on a temporary Use const reference to preserve reference
-    // semantics and avoid copying
-    string tempListName = getContainerVariableName(iteratorName);
+  if (accessOperator == ".") {
+    string tempListName = iteratorName + "_container";
     returnString = "     const " + typeName + "& " + tempListName + " = " +
                    listName + "; \n";
     returnString += "     " + typeName + "::const_iterator " + iteratorName +
                     " = " + tempListName + ".begin(); \n";
   } else {
-    // Original behavior for non-function-call cases or pointer access
     returnString = "     " + typeName + "::const_iterator " + iteratorName +
                    " = " + listName + accessOperator + "begin(); \n";
   }
@@ -182,16 +72,8 @@ string listIteratorInitialization(string typeName, string iteratorName,
 
 string forLoopOpening(string iteratorName, string listName,
                       string accessOperator) {
-  // Check if we're using a container variable (to match
-  // listIteratorInitialization behavior)
-  bool isFunctionCall = isFunctionCallExpression(listName);
-  string endTarget = listName;
-
-  if (isFunctionCall && accessOperator == ".") {
-    // Use the container variable created in listIteratorInitialization
-    endTarget = getContainerVariableName(iteratorName);
-    accessOperator = ".";
-  }
+  string endTarget =
+      accessOperator == "." ? iteratorName + "_container" : listName;
 
   string returnString = "     for ( /* empty by design */; " + iteratorName +
                         " != " + endTarget + accessOperator + "end(); ++" +
@@ -206,11 +88,8 @@ string forLoopBody(string typeName, string variableName, string iteratorName) {
 }
 
 string conditionalToSetParent(string variableName, bool ownsType = false) {
-  // DQ (8/29/2006): Skip setting the parents of types since they are shared and
-  // it is enforced that they have NULL valued parent pointers. A field marked
-  // DEF_DELETE + CLONE_TREE is the exception: that metadata declares an
-  // exclusive structural type shell, such as a function declaration's
-  // source-syntax type, and its reciprocal parent must be published here.
+  // Shared types retain their parent; owned type syntax receives its copied
+  // owner.
   string returnString =
       "          if ( (" + variableName + " != NULL) && (" + variableName +
       "->get_parent() == NULL)" +
@@ -225,8 +104,6 @@ string conditionalToSetParent(string variableName, bool ownsType = false) {
 string conditionalToCopyVariable(string typeName, string variableNameSource,
                                  string variableNameCopy, string iteratorName,
                                  bool exclusiveOwner) {
-  // string returnString = "          " + typeName + " " + variableNameCopy + "
-  // = NULL; \n" PC (8/3/2006): Flexibility improvement to copy mechanism
   string returnString =
       "          if (" + variableNameSource + " != NULL) \n" +
       "             { \n" + "               " + variableNameCopy +
@@ -255,55 +132,19 @@ string variableDeclaration(string typeName, string variableName) {
   return returnString;
 }
 
-// DQ (9/28/2022): Fixing compiler warning for argument not used.
-// string stringCopyConditional ( string typeName, string variableName, string
-// copyVariableName )
-string stringCopyConditional(string variableName, string copyVariableName) {
-  // string returnString = "     " + typeName + " " + copyVariableName + " =
-  // NULL; \n"
-  string returnString = "     if (" + variableName + " != NULL) \n" +
-                        "          " + copyVariableName + " = strdup(" +
-                        variableName + "); \n";
-  // + "     result->" + variableName + " = " + copyVariableName + "; \n";
-  return returnString;
-}
-
 string conditionalToBuildNewVariable(string typeName, string variableNameSource,
                                      string newVariableName) {
-  string rhs;
-  // Handle special case of Sg_File_Info, where we want to build the source file
-  // position information to be marked as a transformation (using the static
-  // member fuction:
-  // "Sg_File_Info::generateDefaultFileInfoForTransformationNode()").
-  if (typeName == "$GRAMMAR_PREFIX__File_Info") {
-    // DQ (10/21/2005): The copy should be a semantic preserving as possible
-    // (so don't make copies as transformations and call the copy constructor).
-    // rhs = "          " + newVariableName + " =
-    // Sg_File_Info::generateDefaultFileInfoForTransformationNode(); \n";
-    rhs = "          " + newVariableName + " = new Sg_File_Info(*" +
-          variableNameSource + "); \n";
-  } else {
-    rhs = "          " + newVariableName + " = new " + typeName + "( *" +
-          variableNameSource + "); \n";
-  }
+  const string rhs = "          " + newVariableName + " = new " + typeName +
+                     "( *" + variableNameSource + "); \n";
   string returnString = "     if ( " + variableNameSource + " != NULL ) \n" +
                         "        { \n" + rhs + "        } \n" +
                         "       else \n" + "        { \n" + "          " +
                         newVariableName + " = NULL; \n" + "        } \n";
 
-  // printf ("returnString = %s \n",returnString.c_str());
-  // ROSE_ASSERT(typeName != "Sg_File_Info");
-
   return returnString;
 }
 
-// DQ (9/28/2022): Fixing compiler warning for argument not used.
-// string GrammarString::buildCopyMemberFunctionSetParentSource ( string
-// copyString )
 string GrammarString::buildCopyMemberFunctionSetParentSource() {
-  // DQ (9/25/2005): This function builds code to reset parent pointers in the
-  // copy function
-
   string returnString;
 
   string variableName = getVariableNameString();
@@ -312,119 +153,82 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
   ROSE_ASSERT(typeName.empty() == false);
   ROSE_ASSERT(variableName.empty() == false);
 
-  // printf ("In GrammarString::buildCopyMemberFunctionSetParentSource(): type =
-  // %s variable = %s \n",typeName.c_str(),variableName.c_str());
+  if (typeName == "SgFunctionParameterScope*" &&
+      variableName == "functionParameterScope")
+    return "";
 
-  // Check if the type name is "char*"
-  bool typeIsCharString = typeName.find("char*") != string::npos &&
-                          typeName.find("char**") == string::npos;
-
-  // if ( strstr(typeName.c_str(),"char*") != NULL &&
-  // strstr(typeName.c_str(),"char**") == NULL)
-  if (typeIsCharString) {
-    // Nothing to do since strings don't have parents
-    returnString =
-        "  // case: typeName == char* or char** for " + variableName + "\n";
-    returnString += "";
-    return returnString;
+  if (toBeDeleted == DELETE_IF_OWNED &&
+      p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE) {
+    const string source = "p_" + variableName;
+    const string target = "result->" + source;
+    return "     ROSE_ASSERT(" + source + ".size() == " + target +
+           ".size());\n" + "     for (size_t index = 0; index < " + source +
+           ".size(); ++index) {\n" + "       if (" + source +
+           "[index] != nullptr && " + source +
+           "[index]->get_parent() == this) {\n" + "         ROSE_ASSERT(" +
+           target + "[index] != nullptr && " + target + "[index] != " + source +
+           "[index] && " + target + "[index]->get_parent() == result);\n" +
+           "       } else {\n" + "         help.bindCopiedReference(" + target +
+           "[index], " + source + "[index]);\n       }\n     }\n";
   }
 
-  // Structural ownership, not traversal visibility alone, determines
-  // parentage. Most owned AST edges are traversed. The intentionally hidden
-  // originalExpressionTree and alternativeExpr edges are the other exact
-  // ownership form: DEF_DELETE + CLONE_TREE means the referring expression
-  // exclusively owns the cloned source-spelling subtree even though normal
-  // semantic traversals skip it. Publish the reciprocal parent while the
-  // generated copy function constructs that owner; copy fixup must only
-  // validate this producer contract.
+  if (toBeTraversed == NO_TRAVERSAL && toBeCopied == CLONE_TREE &&
+      toBeDeleted == NO_DELETE && p_schemaStorage == SCALAR_SCHEMA_STORAGE &&
+      p_schemaElement == POINTER_SCHEMA_ELEMENT) {
+    const string source = "p_" + variableName;
+    const string copy = variableName + "_copy";
+    return "     if (" + source + " != nullptr && " + source +
+           "->get_parent() == this) {\n" + "       ROSE_ASSERT(" + copy +
+           " != nullptr && " + copy + " != " + source + ");\n" +
+           "       ROSE_ASSERT(" + copy + "->get_parent() == nullptr || " +
+           copy + "->get_parent() == result);\n" + "       " + copy +
+           "->set_parent(result);\n     }\n";
+  }
+
+  // Traversed and explicitly destroyed subtrees have structural parents.
   const bool ownsCopiedAstSubtree =
       toBeTraversed == DEF_TRAVERSAL ||
       (toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
   if (ownsCopiedAstSubtree) {
-    // Control variables for code generation
-    bool typeIsPointerToListOfPointers =
-        typeName.find("PtrListPtr") != string::npos;
-    bool typeIsPointerToListOfNonpointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("ListPtr") != string::npos;
-    bool typeIsPointerToList =
-        typeIsPointerToListOfPointers || typeIsPointerToListOfNonpointers;
+    const bool typeIsPointerToList =
+        p_schemaStorage == POINTER_CONTAINER_SCHEMA_STORAGE;
+    const bool typeIsList = p_schemaStorage != SCALAR_SCHEMA_STORAGE;
+    const bool typeIsSgNode = p_schemaStorage == SCALAR_SCHEMA_STORAGE &&
+                              p_schemaElement == POINTER_SCHEMA_ELEMENT;
 
-    // By "simple list" we mean NOT a pointer to a list (just a list, e.g. STL
-    // list)
-    bool typeIsSimpleListOfPointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("PtrList") != string::npos;
-    bool typeIsList = typeIsPointerToList || typeIsSimpleListOfPointers;
-    bool typeIsSgNode = typeName.find('*') != string::npos;
-
-    // One of these should be true!
     ROSE_ASSERT(typeIsList == true || typeIsSgNode == true);
     ROSE_ASSERT(typeIsList == false || typeIsSgNode == false);
 
-    // Support for adding commented to generated source code
-    string commentString;
-
     if (typeIsList == true) {
-      // Comment to add to generated source code
-      commentString += "  // case: listType for " + variableName + "\n";
-
-      // name constant for all cases below (in this scope)
       string listElementName = "list_element";
 
-      // names that are set differently for different cases
       string iteratorBaseType;
       string needPointer;
       string listElementType;
       string copyOfList;
       string iteratorName;
 
-      // Access member functions using "->" or "." (set to some string
-      // that will cause an error if used, instead of empty string).
       string accessOperator = "error string for access operator";
 
       if (typeIsPointerToList == true) {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == true) for " +
-            variableName + "\n";
-        if (typeIsPointerToListOfPointers == true) {
-          commentString += "  // case: listType (typeIsPointerToList == true "
-                           "&& typeIsPointerToListOfPointers == true) for " +
-                           variableName + "\n";
+        if (p_schemaElement == POINTER_SCHEMA_ELEMENT) {
           needPointer = "*";
           accessOperator = "->";
         } else {
-          commentString += "  // case: listType (typeIsPointerToList == true "
-                           "&& typeIsPointerToListOfPointers == false) for " +
-                           variableName + "\n";
-          ROSE_ASSERT(typeIsPointerToListOfNonpointers == true);
+          ROSE_ASSERT(p_schemaElement == VALUE_SCHEMA_ELEMENT);
           accessOperator = ".";
         }
 
-        // iteratorBaseType = string("NeedBaseType_of_") + typeName;
-        int positionOfListPtrSubstring = typeName.find("ListPtr");
-        int positionOfPtrSubstring =
-            typeName.find("Ptr", positionOfListPtrSubstring);
-        iteratorBaseType = typeName.substr(0, positionOfPtrSubstring);
+        iteratorBaseType = typeName.substr(0, typeName.size() - 3);
 
         copyOfList = variableName + "_copy";
         iteratorName = copyOfList + "_iterator";
       } else {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == false) for " +
-            variableName + "\n";
-
-        ROSE_ASSERT(typeIsSimpleListOfPointers == true);
+        ROSE_ASSERT(p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE &&
+                    p_schemaElement == POINTER_SCHEMA_ELEMENT);
         iteratorBaseType = typeName;
         needPointer = "*";
         accessOperator = ".";
-
-        // Need to generate different code, for example:
-        //      SgStatementPtrList::const_iterator cpinit_stmt =
-        //      get_init_stmt().begin();
-        // instead of:
-        //      SgStatementPtrList::const_iterator init_stmt_copy_iterator =
-        //      init_stmt_copy.begin();
 
         // The copied children do not acquire their new structural owner until
         // the loop emitted below.  Calling a public getter here is therefore
@@ -436,68 +240,44 @@ string GrammarString::buildCopyMemberFunctionSetParentSource() {
         iteratorName = variableName + "_iterator";
       }
 
-      // Need to get the prefix substring to strings like "SgFilePtrList" (i.e.
-      // "SgFile")
-      int positionOfPtrListSubstring = iteratorBaseType.find("PtrList");
-      int positionOfListSubstring =
-          iteratorBaseType.find("Ptr", positionOfPtrListSubstring);
-      listElementType =
-          typeName.substr(0, positionOfListSubstring) + needPointer;
+      listElementType = p_schemaElementTypeName + needPointer;
 
-      // Declare the loop index iterator
-      returnString += commentString +
-                      listIteratorInitialization(iteratorBaseType, iteratorName,
+      returnString += listIteratorInitialization(iteratorBaseType, iteratorName,
                                                  copyOfList, accessOperator);
 
-      // Open up the loop over the list elements
       returnString += forLoopOpening(iteratorName, copyOfList, accessOperator);
 
-      // Declare the a loop variable (reference to current element of list)
       returnString +=
           forLoopBody(listElementType, listElementName, iteratorName);
 
-      // insert the conditional test (also used below)
       returnString +=
           conditionalToSetParent(listElementName, toBeDeleted == DEF_DELETE &&
                                                       toBeCopied == CLONE_TREE);
 
-      // close off the loop
       returnString += forLoopClosing();
     } else {
       ROSE_ASSERT(typeIsSgNode == true);
 
-      commentString +=
-          "  // case: not a listType for (using conditionalToSetParent)" +
-          variableName + "\n";
-
       string copyOfVariable = variableName + "_copy";
-      // insert the conditional test (also used above)
       returnString +=
-          commentString +
           conditionalToSetParent(copyOfVariable, toBeDeleted == DEF_DELETE &&
                                                      toBeCopied == CLONE_TREE);
     }
   }
 
+  if (getTraversalAccessor() == COMPUTED_BASE_TYPE_DECLARATION_ACCESS) {
+    returnString +=
+        "     if (compute_baseTypeDefiningDeclaration() == nullptr)\n";
+    returnString += "       help.bindCopiedReference(result->p_" +
+                    variableName + ", p_" + variableName + ");\n";
+  }
+
   return returnString;
 }
 
-// DQ (9/26/2005): This is the new source code generator for the copy mechanism.
-// the previous version was coplex and didn't generate the correct code to
-// support the copy of a SgFile within the pointer to the list of SgFile in
-// SgProject. I will see if I can fix this :-).
-
-// Note that the input parameter is never used!
 string
 GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
-  // DQ (9/25/2005): This function builds code to copy the data members (within
-  // the copy function)
-
-  // Return value for this function
   string returnString;
-
-  // Support for adding commented to generated source code
-  string commentString;
 
   string variableName = getVariableNameString();
   string typeName = getTypeNameString();
@@ -505,220 +285,258 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
   ROSE_ASSERT(typeName.empty() == false);
   ROSE_ASSERT(variableName.empty() == false);
 
-  // printf ("In GrammarString::buildCopyMemberFunctionSetParentSource(): type =
-  // %s variable = %s \n",typeName.c_str(),variableName.c_str());
+  if (typeName == "SgFunctionParameterScope*" &&
+      variableName == "functionParameterScope") {
+    ROSE_ASSERT(!buildConstructorArgument &&
+                p_isInConstructorParameterList == NO_CONSTRUCTOR_PARAMETER &&
+                toBeTraversed == DEF_TRAVERSAL && toBeCopied == COPY_DATA);
+    return R"(     if (p_functionParameterScope != nullptr &&
+         p_functionParameterScope->get_parent() == this) {
+       auto *scope = isSgFunctionParameterScope(
+           help.copyOrLookupOwnedAst(p_functionParameterScope));
+       ROSE_ASSERT(scope != nullptr && scope != p_functionParameterScope);
+       SageInterface::completeDetachedFunctionParameterScopeConstruction(
+           isSgFunctionDeclaration(result), scope);
+     } else {
+       help.bindCopiedReference(result->p_functionParameterScope,
+                                p_functionParameterScope);
+     }
+)";
+  }
 
-  // Check if the type name is "char*"
-  bool typeIsCharString = typeName.find("char*") != string::npos &&
-                          typeName.find("char**") == string::npos;
-
-  // if ( strstr(typeName.c_str(),"char*") != NULL &&
-  // strstr(typeName.c_str(),"char**") == NULL)
-  if (typeIsCharString) {
-    // Always copy C style strings
-    string copyOfVariableName = variableName + "_copy";
-    string sourceVariableName = "p_" + variableName;
-    commentString =
-        "  // case: typeName == char* or char** for " + variableName + "\n";
-    // Declare the copy of the variable
-    // returnString += "     " + typeName + " " + variableName + "_copy; \n";
-    returnString += "     " + typeName + " " + copyOfVariableName + "; \n";
-    // DQ (9/28/2022): Fixing compiler warning for argument not used.
-    // returnString += commentString +
-    // stringCopyConditional(typeName,sourceVariableName,copyOfVariableName);
-    returnString += commentString + stringCopyConditional(sourceVariableName,
-                                                          copyOfVariableName);
-
-    // string copyOfVariableName = "result->p_" + variableName;
-    // printf ("\n\n*****************************************************\n");
-    // printf ("Case of typeIsCharString: buildConstructorArgument = %s
-    // \n",buildConstructorArgument ? "true" : "false"); printf ("Case of
-    // typeIsCharString (before variableInitialization): returnString = %s
-    // \n",returnString.c_str());
-
-    if (buildConstructorArgument == false) {
-      // For constructor arguments we can't reference the "result" pointer in
-      // the generated code because it will be set with the call to the
-      // constructor.  So don't output this generated code when generating code
-      // to handle constructor arguments.
-      returnString +=
-          variableInitialization(copyOfVariableName, sourceVariableName);
-
-      // DQ (3/23/2006): Set the internal value by calling the access function
-      // to set it. Need to add (for example): "result->set_value(value_copy);"
-      returnString += "     result->" + sourceVariableName + " = " +
-                      copyOfVariableName + ";\n";
+  if (toBeCopied == COPY_REFERENCE ||
+      (toBeDeleted == DELETE_IF_OWNED &&
+       p_schemaStorage == SCALAR_SCHEMA_STORAGE)) {
+    if (p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE) {
+      ROSE_ASSERT(toBeCopied == COPY_REFERENCE &&
+                  p_schemaElement == POINTER_SCHEMA_ELEMENT &&
+                  !buildConstructorArgument);
+      const string source = "p_" + variableName;
+      const string target = "result->" + source;
+      return "     " + target + ".resize(" + source + ".size());\n" +
+             "     for (size_t index = 0; index < " + source +
+             ".size(); ++index)\n" + "       help.bindCopiedReference(" +
+             target + "[index], " + source + "[index]);\n";
     }
+    const bool conditional_owner = toBeDeleted == DELETE_IF_OWNED;
+    ROSE_ASSERT(conditional_owner ? toBeCopied == CLONE_TREE
+                                  : toBeTraversed == NO_TRAVERSAL &&
+                                        toBeDeleted == NO_DELETE);
+    const string source = "p_" + variableName;
+    const string copy = variableName + "_copy";
+    if (buildConstructorArgument) {
+      returnString = "     " + typeName + " " + copy + " = " + source + ";\n";
+      returnString += "     if (" + source + " != nullptr) {\n";
+      if (conditional_owner) {
+        returnString += "       if (" + source + "->get_parent() == this) {\n";
+        returnString += "         " + copy + " = static_cast<" + typeName +
+                        ">(help.copyOrLookupOwnedAst(" + source + "));\n";
+        returnString += "       } else {\n";
+      }
+      const string indent = conditional_owner ? "         " : "       ";
+      returnString += indent +
+                      "const auto reference = help.get_copiedNodeMap().find(" +
+                      source + ");\n";
+      returnString +=
+          indent + "if (reference != help.get_copiedNodeMap().end()) {\n";
+      returnString += indent + "  " + copy + " = dynamic_cast<" + typeName +
+                      ">(reference->second);\n";
+      returnString += indent + "  ASSERT_not_null(" + copy + ");\n";
+      returnString += indent + "}\n";
+      if (conditional_owner)
+        returnString += "       }\n";
+      returnString += "     }\n";
+      return returnString;
+    }
+    if (conditional_owner) {
+      returnString = "     if (" + source + " != nullptr && " + source +
+                     "->get_parent() == this) {\n";
+      if (p_isInConstructorParameterList == NO_CONSTRUCTOR_PARAMETER)
+        returnString += "       result->" + source + " = dynamic_cast<" +
+                        typeName + ">(help.copyOrLookupOwnedAst(" + source +
+                        "));\n";
+      return returnString + "       ASSERT_not_null(result->" + source +
+             ");\n" + "       ROSE_ASSERT(result->" + source + " != " + source +
+             " &&\n" + "                   (result->" + source +
+             "->get_parent() == nullptr ||\n" + "                    result->" +
+             source + "->get_parent() == result));\n" + "       result->" +
+             source + "->set_parent(result);\n" + "     } else {\n" +
+             "       help.bindCopiedReference(result->" + source + ", " +
+             source + ");\n" + "     }\n";
+    }
+    return returnString + "     help.bindCopiedReference(result->" + source +
+           ", " + source + ");\n";
+  }
 
-    // printf ("Case of typeIsCharString: returnString = %s
-    // \n",returnString.c_str());
+  if (typeName == "SgInitializedName*" &&
+      variableName == "source_declaration") {
+    ROSE_ASSERT(buildConstructorArgument && toBeCopied == COPY_DATA &&
+                toBeTraversed == NO_TRAVERSAL);
+    return "     ASSERT_not_null(p_source_declaration);\n"
+           "     SgInitializedName *source_declaration_copy = "
+           "p_source_declaration;\n"
+           "     const auto parameter_entry = "
+           "help.get_copiedNodeMap().find(p_source_declaration);\n"
+           "     if (parameter_entry != help.get_copiedNodeMap().end()) {\n"
+           "       source_declaration_copy = "
+           "isSgInitializedName(parameter_entry->second);\n"
+           "       ASSERT_not_null(source_declaration_copy);\n"
+           "     } else {\n"
+           "       ROSE_ASSERT(!help.isCopyingOriginal(p_source_declaration) "
+           "&&\n"
+           "                   !help.isCopyingOriginal("
+           "p_source_declaration->get_parent()) &&\n"
+           "                   !help.isCopyingOriginal("
+           "p_source_declaration->get_declptr()));\n"
+           "     }\n";
+  }
 
-    return returnString;
+  if (typeName == "SgCxxArrayInitBinding*" && toBeCopied == COPY_DATA) {
+    ROSE_ASSERT(buildConstructorArgument && toBeTraversed == NO_TRAVERSAL);
+    return "     ROSE_ASSERT(p_binding != nullptr &&\n"
+           "                 SgNode::isLiveNode(p_binding));\n"
+           "     const auto binding_entry = "
+           "help.get_copiedNodeMap().find(p_binding);\n"
+           "     SgCxxArrayInitBinding *binding_copy = p_binding;\n"
+           "     if (binding_entry != help.get_copiedNodeMap().end()) {\n"
+           "       binding_copy = "
+           "isSgCxxArrayInitBinding(binding_entry->second);\n"
+           "       ROSE_ASSERT(binding_copy != nullptr);\n"
+           "       ROSE_ASSERT(\n"
+           "           !help.isCopyingOriginal(p_binding->get_parent()) ||\n"
+           "           binding_copy != p_binding);\n"
+           "     } else {\n"
+           "       const auto *binding_owner = "
+           "isSgCxxArrayInitLoop(p_binding->get_parent());\n"
+           "       ROSE_ASSERT(binding_owner != nullptr &&\n"
+           "                   binding_owner->get_binding() == p_binding &&\n"
+           "                   !help.isCopyingOriginal(binding_owner));\n"
+           "     }\n";
   }
 
   if (typeName == "AttachedPreprocessingInfoType*" &&
       variableName == "attachedPreprocessingInfoPtr") {
     if (buildConstructorArgument == false) {
       returnString +=
-          "     result->cloneAttachedPreprocessingInfoFrom(this); \n";
+          "     result->cloneAttachedPreprocessingInfoFrom(this, &help); \n";
     }
 
     return returnString;
   }
 
-  // The rule is that if it is not a char* or char** then if it ia a pointer
-  // type it is a pointer to a Sage IR node
-  bool typeIsSgNode = typeName.find('*') != string::npos;
+  // Pointer members in the grammar are Sage IR nodes.
+  const bool typeIsSgNode = p_schemaStorage == SCALAR_SCHEMA_STORAGE &&
+                            p_schemaElement == POINTER_SCHEMA_ELEMENT;
 
-  // check if the member is accessed in tree traversal
   if (toBeTraversed == DEF_TRAVERSAL || toBeCopied == CLONE_TREE) {
-    // Control variables for code generation
-    bool typeIsPointerToListOfPointers =
-        typeName.find("PtrListPtr") != string::npos;
-    bool typeIsPointerToListOfNonpointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("ListPtr") != string::npos;
-    bool typeIsPointerToList =
-        typeIsPointerToListOfPointers || typeIsPointerToListOfNonpointers;
+    const bool typeIsPointerToList =
+        p_schemaStorage == POINTER_CONTAINER_SCHEMA_STORAGE;
+    const bool typeIsList = p_schemaStorage != SCALAR_SCHEMA_STORAGE;
 
-    // By "simple list" we mean NOT a pointer to a list (just a list, e.g. STL
-    // list)
-    bool typeIsSimpleListOfPointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("PtrList") != string::npos;
-    bool typeIsList = typeIsPointerToList || typeIsSimpleListOfPointers;
-
-    //~ std::cerr << typeName << std::endl;
-
-    // One of these should be true!
     ROSE_ASSERT(typeIsList == true || typeIsSgNode == true);
     ROSE_ASSERT(typeIsList == false || typeIsSgNode == false);
 
     string listElementType = "default-error-type";
 
-    // Declare the copy of the variable
     returnString += "     " + typeName + " " + variableName + "_copy; \n";
 
     if (typeIsList == true) {
-      // Comment to add to generated source code
-      commentString += "  // case: listType for " + variableName + "\n";
-
-      // name constant for all cases below (in this scope)
       string listElementName = "source_list_element";
       string copyOfListElementName = "copy_list_element";
 
-      // names that are set differently for different cases
       string iteratorBaseType;
       string needPointer;
       string originalList;
       string iteratorName;
 
-      // Access member functions using "->" or "." (set to some string
-      // that will cause an error if used, instead of empty string).
       string accessOperator = "error string for access operator";
 
       if (typeIsPointerToList == true) {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == true) for " +
-            variableName + "\n";
-        if (typeIsPointerToListOfPointers == true) {
-          commentString += "  // case: listType (typeIsPointerToList == true "
-                           "&& typeIsPointerToListOfPointers == true) for " +
-                           variableName + "\n";
+        if (p_schemaElement == POINTER_SCHEMA_ELEMENT) {
           needPointer = "*";
           accessOperator = "->";
         } else {
-          commentString += "  // case: listType (typeIsPointerToList == true "
-                           "&& typeIsPointerToListOfPointers == false) for " +
-                           variableName + "\n";
-          ROSE_ASSERT(typeIsPointerToListOfNonpointers == true);
+          ROSE_ASSERT(p_schemaElement == VALUE_SCHEMA_ELEMENT);
           accessOperator = ".";
         }
 
-        // iteratorBaseType = string("NeedBaseType_of_") + typeName;
-        int positionOfListPtrSubstring = typeName.find("ListPtr");
-        int positionOfPtrSubstring =
-            typeName.find("Ptr", positionOfListPtrSubstring);
-        iteratorBaseType = typeName.substr(0, positionOfPtrSubstring);
+        iteratorBaseType = typeName.substr(0, typeName.size() - 3);
 
-        // copyOfList = variableName + "_source";
         originalList = string("get_") + variableName + "()";
         iteratorName = variableName + "_iterator";
 
-        // Initialize the pointer to the list (of pointers)
         returnString += "     " + variableName + "_copy" + " = new " +
                         iteratorBaseType +
                         "; // initialize the pointer to the list \n";
       } else {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == false) for " +
-            variableName + "\n";
-
-        ROSE_ASSERT(typeIsSimpleListOfPointers == true);
+        ROSE_ASSERT(p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE &&
+                    p_schemaElement == POINTER_SCHEMA_ELEMENT);
         iteratorBaseType = typeName;
         needPointer = "*";
         accessOperator = ".";
-
-        // Need to generate different code, for example:
-        //      SgStatementPtrList::const_iterator cpinit_stmt =
-        //      get_init_stmt().begin();
-        // instead of:
-        //      SgStatementPtrList::const_iterator init_stmt_copy_iterator =
-        //      init_stmt_copy.begin();
 
         originalList = string("get_") + variableName + "()";
         iteratorName = string("source_") + variableName + "_iterator";
       }
 
-      // Need to get the prefix substring to strings like "SgFilePtrList" (i.e.
-      // "SgFile")
-      int positionOfPtrListSubstring = iteratorBaseType.find("PtrList");
-      int positionOfListSubstring =
-          iteratorBaseType.find("Ptr", positionOfPtrListSubstring);
-      listElementType =
-          typeName.substr(0, positionOfListSubstring) + needPointer;
+      listElementType = p_schemaElementTypeName + needPointer;
 
-      // Declare the loop index iterator
-      returnString += commentString +
-                      listIteratorInitialization(iteratorBaseType, iteratorName,
+      returnString += listIteratorInitialization(iteratorBaseType, iteratorName,
                                                  originalList, accessOperator);
 
-      // Open up the loop over the list elements
       returnString +=
           forLoopOpening(iteratorName, originalList, accessOperator);
 
-      // Declare the a loop variable (reference to current element of list)
       returnString +=
           forLoopBody(listElementType, listElementName, iteratorName);
 
       returnString +=
           "     " + variableDeclaration(listElementType, copyOfListElementName);
 
-      // insert the conditional test (also used below)
-      string dereferencedIteratorName = string("*") + iteratorName;
-      returnString += conditionalToCopyVariable(
-          listElementType, listElementName, copyOfListElementName,
-          dereferencedIteratorName,
-          toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
+      if (toBeDeleted == DELETE_IF_OWNED) {
+        ROSE_ASSERT(buildConstructorArgument);
+        returnString += "          " + copyOfListElementName + " = " +
+                        listElementName + ";\n";
+        returnString += "          if (" + listElementName + " != nullptr) {\n";
+        returnString += "            if (" + listElementName +
+                        "->get_parent() == this) {\n";
+        returnString += "              " + copyOfListElementName +
+                        " = static_cast<" + listElementType +
+                        ">(help.copyOrLookupOwnedAst(" + listElementName +
+                        "));\n";
+        returnString += "            } else {\n";
+        returnString +=
+            "              const auto entry = help.get_copiedNodeMap().find(" +
+            listElementName + ");\n";
+        returnString +=
+            "              if (entry != help.get_copiedNodeMap().end()) {\n";
+        returnString += "                " + copyOfListElementName +
+                        " = dynamic_cast<" + listElementType +
+                        ">(entry->second);\n";
+        returnString += "                ASSERT_not_null(" +
+                        copyOfListElementName +
+                        ");\n              }\n            }\n          }\n";
+      } else {
+        string dereferencedIteratorName = string("*") + iteratorName;
+        returnString += conditionalToCopyVariable(
+            listElementType, listElementName, copyOfListElementName,
+            dereferencedIteratorName,
+            toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
+      }
 
       returnString += "          " + variableName + "_copy" + accessOperator +
                       "push_back(" + copyOfListElementName + "); \n";
 
-      // close off the loop
       returnString += forLoopClosing();
     } else {
       ROSE_ASSERT(typeIsSgNode == true);
-
-      commentString +=
-          "  // case: not a listType for (using conditionalToCopyVariable)" +
-          variableName + "\n";
 
       string variableType = typeName;
       string copyOfVariableName = variableName + "_copy";
       string sourceVariableName;
       switch (getTraversalAccessor()) {
       case DIRECT_TRAVERSAL_ACCESS:
-        sourceVariableName = string("get_") + variableName + "()";
+        sourceVariableName = string("p_") + variableName;
         break;
       case COMPUTED_BASE_TYPE_DECLARATION_ACCESS:
         sourceVariableName = "compute_baseTypeDefiningDeclaration()";
@@ -733,94 +551,92 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
                 variableName.c_str());
         ROSE_ABORT();
       }
-      // insert the conditional test (also used above)
-      returnString +=
-          commentString +
-          conditionalToCopyVariable(variableType, sourceVariableName,
-                                    copyOfVariableName, sourceVariableName,
-                                    toBeDeleted == DEF_DELETE &&
-                                        toBeCopied == CLONE_TREE);
+      returnString += conditionalToCopyVariable(
+          variableType, sourceVariableName, copyOfVariableName,
+          sourceVariableName,
+          toBeDeleted == DEF_DELETE && toBeCopied == CLONE_TREE);
 
       if (buildConstructorArgument == false) {
-        // DQ (3/10/2007): SgFunctionDeclaration has a parameter list that is
-        // maintained internally so we want to avoid overwitting it.
+        if (p_copyConstructionOrder == COPY_AFTER_OWNER_CONSTRUCTION) {
+          returnString +=
+              "     ROSE_ASSERT(" + copyOfVariableName + " == nullptr ||\n" +
+              "                 " + copyOfVariableName +
+              "->get_parent() == nullptr ||\n" + "                 " +
+              copyOfVariableName + "->get_parent() == result);\n";
+        }
+        const string destination = "result->p_" + variableName;
+        returnString += "     if (" + destination + " != nullptr &&\n";
         returnString +=
-            "  /* check for a valid pointer and delete if present */ \n";
-        returnString += "     if (result->p_" + variableName +
-                        " != NULL) delete result->p_" + variableName + "; \n";
+            "         " + destination + " != " + copyOfVariableName + ") {\n";
+        returnString += "       ROSE_ASSERT(help.get_originalNodesForCopy(" +
+                        destination + ").empty());\n";
+        returnString += "       delete " + destination + ";\n     }\n";
       }
     }
     if (buildConstructorArgument == false) {
-      // DQ (10/22/2005): Copy the "variableName + _copy" back to the
-      // "result->p_ + variableName + _copy" returnString += "  /* copy " +
-      // variableName + "_copy" + " to the result */ \n";
       returnString += "     result->p_" + variableName + " = " + variableName +
                       "_copy;" + " \n";
     }
   } else {
-    commentString += "  // case: (toBeTraversed == false) && (toBeCopied != "
-                     "CLONE_TREE) for " +
-                     variableName + "\n";
-    returnString += commentString;
-
-    // Declare the copy of the variable
-    // returnString += "     " + typeName + " " + variableName + "_copy; \n";
-
-    // Declare the copy of the variable
-    // returnString       += "     " + typeName + " " + variableName + "_copy =
-    // p_" + variableName + "; // needs initialization? \n";
-    string variableType = typeName;
     string sourceVariableName = variableName + "_copy";
-    // returnString +=
-    // variableInitialization(copyOfVariableName,sourceVariableName);
 
-    if (toBeCopied == COPY_DATA) {
-      // Amongst all other data members, this case also handles all SgSymbol*
-      // objects.
-
-      commentString =
-          "  // case: toBeCopied == COPY_DATA for " + variableName + "\n";
-      returnString += commentString;
-      // Declare the copy of the variable (requires initialization)
+    if (toBeCopied == COPY_DATA || toBeCopied == COPY_CONSTRUCTOR_REFERENCE) {
       returnString += "     " + typeName + " " + variableName + "_copy = p_" +
                       variableName + "; \n";
+      const bool constructorReference =
+          buildConstructorArgument &&
+          (toBeCopied == COPY_CONSTRUCTOR_REFERENCE ||
+           (toBeTraversed == NO_TRAVERSAL && toBeDeleted == NO_DELETE &&
+            p_schemaStorage == SCALAR_SCHEMA_STORAGE &&
+            p_schemaElement == POINTER_SCHEMA_ELEMENT));
+      if (constructorReference) {
+        const string copy = variableName + "_copy";
+        const string entry = variableName + "_entry";
+        const string &nodeType = p_schemaElementTypeName;
+        const bool container =
+            p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE;
+        const string reference = container ? variableName + "_element" : copy;
+        if (container)
+          returnString +=
+              "     for (auto *&" + reference + " : " + copy + ") {\n";
+        returnString += "     if (" + reference + " != nullptr) {\n";
+        returnString +=
+            "       prepareConstructorReference(" + reference + ", help);\n";
+        returnString += "       const auto " + entry +
+                        " = help.get_copiedNodeMap().find(" + reference +
+                        ");\n";
+        returnString +=
+            "       if (" + entry + " != help.get_copiedNodeMap().end()) {\n";
+        returnString += "         " + reference + " = is" + nodeType + "(" +
+                        entry + "->second);\n";
+        returnString += "         ASSERT_not_null(" + reference + ");\n";
+        returnString += "       } else {\n";
+        returnString += "         ROSE_ASSERT(!help.isCopyingOriginal(" +
+                        reference + "));\n";
+        returnString += "       }\n     }\n";
+        if (container)
+          returnString += "     }\n";
+      }
       string copyOfVariableName = "result->p_" + variableName;
       if (buildConstructorArgument == false) {
-        // For constructor arguments we can't reference the "result" pointer in
-        // the generated code because it will be set with the call to the
-        // constructor.  So don't output this generated code when generating
-        // code to handle constructor arguments.
         returnString +=
             variableInitialization(copyOfVariableName, sourceVariableName);
       }
     } else {
       if (toBeCopied == CLONE_PTR) {
-        commentString =
-            "  // case: toBeCopied == CLONE_PTR for " + variableName + "\n";
-        returnString += commentString;
-
-        // Declare the copy of the variable (does not require initialization)
         returnString +=
             "     " + typeName + " " + variableName + "_copy = NULL; \n";
         string copyOfVariableName = "p_" + variableName;
         ROSE_ASSERT(typeIsSgNode == true);
-        unsigned long int positionOfStarSubstring = typeName.find("*");
-        ROSE_ASSERT(positionOfStarSubstring != string::npos);
-        string variableBaseType =
-            variableType.substr(0, positionOfStarSubstring);
         returnString += conditionalToBuildNewVariable(
-            variableBaseType, copyOfVariableName, sourceVariableName);
+            p_schemaElementTypeName, copyOfVariableName, sourceVariableName);
         if (buildConstructorArgument == false) {
-          // DQ (3/10/2007): SgFunctionDeclaration has a parameter list that is
-          // maintings internally so we want to avoid overwitting it.
+          const string destination = "result->p_" + variableName;
+          returnString += "     if (" + destination + " != nullptr &&\n";
           returnString +=
-              "  /* check for a valid pointer and delete if present */ \n";
-          returnString += "     if (result->p_" + variableName +
-                          " != NULL) delete result->p_" + variableName + "; \n";
+              "         " + destination + " != " + sourceVariableName + ")\n";
+          returnString += "       delete " + destination + ";\n";
 
-          returnString += "  /* add assignment to result here */ \n";
-          // DQ (10/22/2005): Copy the "variableName + _copy" back to the
-          // "result->p_ + variableName + _copy"
           returnString += "     result->p_" + variableName + " = " +
                           variableName + "_copy;" + " \n";
         }
@@ -828,27 +644,14 @@ GrammarString::buildCopyMemberFunctionSource(bool buildConstructorArgument) {
     }
   }
 
-  // ROSE_ABORT();
-
   return returnString;
 }
 
 string GrammarString::getDataPrototypeString() const {
-  // This function returns the data prototype (without the initializer, e.g. the
-  // " = 0" part) The string returned by this functions includes the ";" and the
-  // newline
-  string returnString =
-      typeNameString + " p_" + variableNameString + ";\n          ";
-  return returnString;
+  return typeNameString + " p_" + variableNameString + ";\n          ";
 }
 
-// DQ (3/22/2017): Added to support output of "override" keyword to reduce Clang
-// warnings.
 bool GrammarString::generate_override_keyword(string variableNameString) const {
-  // This function is required to control where "override" is inserted into the
-  // code generatiion. Note that control in Grammar.C will control how it is
-  // translated into either empty space or "overrride".
-
   bool returnResult = false;
   if ((variableNameString == "startOfConstruct") ||
       (variableNameString == "endOfConstruct") ||
@@ -884,8 +687,7 @@ string GrammarString::getDataAccessFunctionPrototypeString() const {
 
   case BUILD_ACCESS_FUNCTIONS:
   case BUILD_FLAG_ACCESS_FUNCTIONS:
-    // DQ (3/21/2017): Added support to eliminate override warnings for Clang
-    // C++11 mode.
+  case BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS:
     if (use_override_keyword == true) {
       returnString =
           "     public: \n         " + typeNameStringTmp + " get_" +
@@ -917,62 +719,7 @@ string GrammarString::getDataAccessFunctionPrototypeString() const {
   return returnString;
 }
 
-string GrammarString::getFunctionNameString(AstNodeClass &node) {
-
-  // printf ("Inside of GrammarString::getFunctionNameString(node) \n");
-
-  string memberFunctionString = functionNameString;
-
-  if (pureVirtualFunction == true) {
-    // Now we have to edit the string
-    // ROSE_ASSERT (pureVirtualFunction == false);
-
-    string className = node.getName();
-
-    string derivedClassString;
-
-    // printf ("EDIT className (%s) durring copy \n",className);
-    string parentClassName = "NO PARENT FOUND";
-    if (node.getBaseClass() == NULL) {
-      parentClassName = node.getBaseClass()->getName();
-
-      // Later this has to be automatically derived
-      derivedClassString = ": " + parentClassName + "(exp)";
-
-      // printf ("Exiting when node.parentTreeNode != NULL (parentClassName %s)
-      // ... \n",parentClassName); ROSE_ABORT();
-    }
-
-    string pureVirtualMarkerString = "";
-    if (!node.subclasses.empty()) {
-      pureVirtualMarkerString = " = 0";
-    }
-
-    // printf ("Exiting when node.parentTreeNode != NULL (parentClassName %s)
-    // ... \n",parentClassName); ROSE_ABORT();
-
-    // printf ("EDIT parentClassName (%s) durring copy \n",parentClassName);
-
-    memberFunctionString = copyEdit(
-        memberFunctionString, "$PURE_VIRTUAL_MARKER", pureVirtualMarkerString);
-    memberFunctionString =
-        copyEdit(memberFunctionString, "$CLASSNAME", className);
-    // memberFunctionString = copyEdit
-    // (memberFunctionString,"$BASECLASS_CONSTRUCTOR_CALL",derivedClassString);
-  }
-
-  return memberFunctionString;
-}
-
 string GrammarString::getConstructorPrototypeParameterString() {
-  // Not clear yet if we need to know the node!
-  // This function assembles the parameter in a form in which it can be used
-  // within the constructor prototype code declaration.
-
-  // Verify that this is a GrammarString object representing a
-  // data variable (with type, variable name, and an initializer)
-
-  // and also fixes a memory leak
   string startString = getConstructorSourceParameterString();
   string endString = getDefaultInitializerString();
   string returnString = startString + " " + endString;
@@ -981,10 +728,6 @@ string GrammarString::getConstructorPrototypeParameterString() {
 }
 
 string GrammarString::getConstructorSourceParameterString() {
-  // Not clear yet if we need to know the node!
-  // This function assembles the parameter in a form in which it can be used
-  // within the constructor source code definition.
-
   string returnString = getTypeNameString() + " " + getVariableNameString();
 
   return returnString;
@@ -1058,6 +801,9 @@ void GrammarString::initializeSchemaMetadata() {
               variableNameString.c_str());
       ROSE_ABORT();
     }
+  } else if (stripExactSuffix(elementType, "*")) {
+    p_schemaElement = POINTER_SCHEMA_ELEMENT;
+    p_schemaElementTypeName = trimTypeName(elementType);
   }
 }
 
@@ -1121,8 +867,7 @@ void GrammarString::initializeTraversalMetadata() {
       ROSE_ABORT();
     }
 
-    string elementType = typeName;
-    if (!stripExactSuffix(elementType, "*")) {
+    if (p_schemaElement != POINTER_SCHEMA_ELEMENT) {
       fprintf(stderr,
               "REX_ROSETTA_INVARIANT[traversal-scalar-storage]: traversed "
               "member %s must be an AST pointer or pointer container\n",
@@ -1130,7 +875,7 @@ void GrammarString::initializeTraversalMetadata() {
       ROSE_ABORT();
     }
     p_traversalStorage = NODE_POINTER_TRAVERSAL_MEMBER;
-    p_traversalElementTypeName = trimTypeName(elementType);
+    p_traversalElementTypeName = p_schemaElementTypeName;
     if (!p_traversalCardinality.has_value()) {
       fprintf(stderr,
               "REX_ROSETTA_INVARIANT[traversal-cardinality]: traversed "
@@ -1159,15 +904,15 @@ void GrammarString::initializeTraversalMetadata() {
 }
 
 GrammarString::GrammarString()
-    : pureVirtualFunction(0), functionNameString(""), typeNameString(""),
-      variableNameString(""), defaultInitializerString(""),
+    : functionNameString(""), typeNameString(""), variableNameString(""),
+      defaultInitializerString(""),
       p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
       p_traversalCardinality(std::nullopt),
       p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
       p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
       p_schemaStorage(SCALAR_SCHEMA_STORAGE),
       p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(COPY_DATA),
-      toBeTraversed(DEF_TRAVERSAL), key(0),
+      toBeTraversed(DEF_TRAVERSAL),
       automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
       toBeDeleted(NO_DELETE) {}
 
@@ -1191,26 +936,10 @@ GrammarString::GrammarString(
     const BuildAccessEnum &inputAutomaticGenerationOfDataAccessFunctions,
     const TraversalEnum &toBeTraversedDuringTreeTraversal,
     const DeleteEnum &delete_flag, const CopyConfigEnum &_toBeCopied,
-    const TraversalCardinalityEnum &traversalCardinality,
-    const TraversalAccessorEnum &traversalAccessor)
-    : GrammarString(
-          inputTypeNameString, inputVariableNameString,
-          inputDefaultInitializerString, isConstructorParameter,
-          inputAutomaticGenerationOfDataAccessFunctions,
-          toBeTraversedDuringTreeTraversal, delete_flag, _toBeCopied,
-          std::optional<TraversalCardinalityEnum>(traversalCardinality),
-          traversalAccessor) {}
-
-GrammarString::GrammarString(
-    const string &inputTypeNameString, const string &inputVariableNameString,
-    const string &inputDefaultInitializerString,
-    const ConstructParamEnum &isConstructorParameter,
-    const BuildAccessEnum &inputAutomaticGenerationOfDataAccessFunctions,
-    const TraversalEnum &toBeTraversedDuringTreeTraversal,
-    const DeleteEnum &delete_flag, const CopyConfigEnum &_toBeCopied,
     std::optional<TraversalCardinalityEnum> traversalCardinality,
-    const TraversalAccessorEnum &traversalAccessor)
-    : pureVirtualFunction(0), typeNameString(inputTypeNameString),
+    const TraversalAccessorEnum &traversalAccessor,
+    CopyConstructionOrderEnum copyConstructionOrder)
+    : typeNameString(inputTypeNameString),
       variableNameString(inputVariableNameString),
       defaultInitializerString(inputDefaultInitializerString),
       p_isInConstructorParameterList(isConstructorParameter),
@@ -1223,78 +952,101 @@ GrammarString::GrammarString(
       toBeDeleted(delete_flag) {
   initializeSchemaMetadata();
   initializeTraversalMetadata();
-  // string tempString = defaultInitializerString;
-  //  printf ("GrammarString constructor: tempString.length() = %d tempString =
-  //  %s \n",
-  //       tempString.length(),tempString.c_str());
-
-  // setup the main function string from the type and variable name (not
-  // indented properly)
+  if (toBeCopied == COPY_CONSTRUCTOR_REFERENCE)
+    ROSE_ASSERT(p_isInConstructorParameterList == CONSTRUCTOR_PARAMETER &&
+                toBeTraversed == NO_TRAVERSAL && toBeDeleted == NO_DELETE &&
+                (p_schemaStorage == SCALAR_SCHEMA_STORAGE ||
+                 p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE) &&
+                p_schemaElement == POINTER_SCHEMA_ELEMENT);
+  ROSE_ASSERT(copyConstructionOrder == DEFAULT_COPY_CONSTRUCTION_ORDER ||
+              copyConstructionOrder == COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES ||
+              copyConstructionOrder == COPY_AFTER_OWNER_CONSTRUCTION ||
+              copyConstructionOrder == COPY_BEFORE_OTHER_MEMBERS);
+  p_copyConstructionOrder = copyConstructionOrder;
+  if (copyConstructionOrder == COPY_BEFORE_OTHER_MEMBERS) {
+    ROSE_ASSERT(p_isInConstructorParameterList == NO_CONSTRUCTOR_PARAMETER &&
+                toBeTraversed == DEF_TRAVERSAL && toBeCopied == COPY_DATA &&
+                toBeDeleted == NO_DELETE &&
+                p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE &&
+                p_schemaElement == POINTER_SCHEMA_ELEMENT);
+  }
+  if (toBeDeleted == DELETE_IF_OWNED)
+    ROSE_ASSERT((p_schemaStorage == SCALAR_SCHEMA_STORAGE ||
+                 (p_schemaStorage == VALUE_CONTAINER_SCHEMA_STORAGE &&
+                  p_isInConstructorParameterList == CONSTRUCTOR_PARAMETER)) &&
+                p_schemaElement == POINTER_SCHEMA_ELEMENT &&
+                toBeCopied == CLONE_TREE);
+  if (copyConstructionOrder == COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES) {
+    const bool primaryOwner = toBeTraversed == DEF_TRAVERSAL &&
+                              toBeCopied == COPY_DATA &&
+                              toBeDeleted == NO_DELETE;
+    ROSE_ASSERT(p_isInConstructorParameterList == CONSTRUCTOR_PARAMETER &&
+                p_schemaStorage == SCALAR_SCHEMA_STORAGE &&
+                p_schemaElement == POINTER_SCHEMA_ELEMENT &&
+                ((toBeCopied == CLONE_TREE && toBeDeleted == DEF_DELETE) ||
+                 primaryOwner));
+  }
+  if (copyConstructionOrder == COPY_AFTER_OWNER_CONSTRUCTION) {
+    ROSE_ASSERT(
+        p_isInConstructorParameterList == CONSTRUCTOR_PARAMETER &&
+        toBeTraversed == DEF_TRAVERSAL &&
+        ((p_traversalStorage == NODE_POINTER_TRAVERSAL_MEMBER) ||
+         p_traversalStorage == NODE_POINTER_CONTAINER_TRAVERSAL_MEMBER) &&
+        toBeCopied != NO_COPY_DATA);
+  }
   functionNameString = inputTypeNameString + " " + inputVariableNameString +
                        " " + inputDefaultInitializerString + ";";
 
-  // Compute the key once as the object is constructed (this is used to test
-  // equality between strings)
-  key = computeKey();
+  ROSE_ASSERT(!functionNameString.empty());
 
   automaticGenerationOfDataAccessFunctions =
       inputAutomaticGenerationOfDataAccessFunctions;
 }
 
-GrammarString::GrammarString(const string &inputFunctionNameString)
-    // DQ (12/7/2003): Reordered parameters
-    : pureVirtualFunction(0), functionNameString(inputFunctionNameString),
-      typeNameString(""), variableNameString(""), defaultInitializerString(""),
-      p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
-      p_traversalCardinality(std::nullopt),
-      p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
-      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
-      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
-      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(COPY_DATA),
-      toBeTraversed(DEF_TRAVERSAL), key(0),
-      automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
-      toBeDeleted(NO_DELETE) {
-  // Compute the key once as the object is constructed (this is used to test
-  // equality between strings)
-  key = computeKey();
-}
-
-GrammarString::GrammarString(const GrammarString &X)
-    // DQ (12/7/2003): Reordered parameters
-    : pureVirtualFunction(0), functionNameString(""), typeNameString(""),
+GrammarString::GrammarString(const string &inputFunctionNameString,
+                             std::pair<std::string, std::string> fragment)
+    : functionNameString(inputFunctionNameString),
+      sourceFragment(std::move(fragment)), typeNameString(""),
       variableNameString(""), defaultInitializerString(""),
       p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
       p_traversalCardinality(std::nullopt),
       p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
       p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
       p_schemaStorage(SCALAR_SCHEMA_STORAGE),
-      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(X.toBeCopied),
-      toBeTraversed(DEF_TRAVERSAL), key(0),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(COPY_DATA),
+      toBeTraversed(DEF_TRAVERSAL),
       automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
       toBeDeleted(NO_DELETE) {
-  // printf ("Calling the GrammarString copy CONSTRUCTOR! \n");
+  ROSE_ASSERT(!functionNameString.empty());
+}
 
-  // It is a common technique to implement the copy constructor using the
-  // operator= so that we can consolidate detail on the implementation and
-  // provide a consistent semantics.
+GrammarString::GrammarString(const GrammarString &X)
+    : functionNameString(""), typeNameString(""), variableNameString(""),
+      defaultInitializerString(""),
+      p_isInConstructorParameterList(CONSTRUCTOR_PARAMETER),
+      p_traversalCardinality(std::nullopt),
+      p_traversalAccessor(DIRECT_TRAVERSAL_ACCESS),
+      p_traversalStorage(NOT_A_TRAVERSAL_MEMBER),
+      p_schemaStorage(SCALAR_SCHEMA_STORAGE),
+      p_schemaElement(VALUE_SCHEMA_ELEMENT), toBeCopied(X.toBeCopied),
+      toBeTraversed(DEF_TRAVERSAL),
+      automaticGenerationOfDataAccessFunctions(BUILD_ACCESS_FUNCTIONS),
+      toBeDeleted(NO_DELETE) {
   *this = X;
 }
 
 GrammarString &GrammarString::operator=(const GrammarString &X) {
   functionNameString = X.functionNameString;
+  sourceFragment = X.sourceFragment;
 
   typeNameString = X.typeNameString;
   variableNameString = X.variableNameString;
   defaultInitializerString = X.defaultInitializerString;
 
-  // printf ("Exiting in GrammarString::operator= \n");
-  // ROSE_ABORT();
-
-  key = X.key;
-  pureVirtualFunction = X.pureVirtualFunction;
   automaticGenerationOfDataAccessFunctions =
       X.automaticGenerationOfDataAccessFunctions;
   p_isInConstructorParameterList = X.p_isInConstructorParameterList;
+  p_copyConstructionOrder = X.p_copyConstructionOrder;
   p_traversalCardinality = X.p_traversalCardinality;
   p_traversalAccessor = X.p_traversalAccessor;
   p_traversalStorage = X.p_traversalStorage;
@@ -1302,6 +1054,7 @@ GrammarString &GrammarString::operator=(const GrammarString &X) {
   p_schemaStorage = X.p_schemaStorage;
   p_schemaElement = X.p_schemaElement;
   p_schemaElementTypeName = X.p_schemaElementTypeName;
+  p_includeInRTI = X.p_includeInRTI;
   toBeTraversed = X.toBeTraversed;
   toBeCopied = X.toBeCopied;
   toBeDeleted = X.toBeDeleted;
@@ -1309,94 +1062,26 @@ GrammarString &GrammarString::operator=(const GrammarString &X) {
   return *this;
 }
 
-void GrammarString::setVirtual(const bool &X) { pureVirtualFunction = X; }
-
 bool operator!=(const GrammarString &X, const GrammarString &Y) {
-  // The not equals logical operator is implemented using the equals logical
-  // operator
   return !(X == Y);
 }
 
 bool operator==(const GrammarString &X, const GrammarString &Y) {
-  // Implementation of operator== (checks only if the strings in X and Y are
-  // identical) It first tests to see if they are the same length This function
-  // does not test based upon the "automaticGenerationOfDataAccessFunctions"
-  // variable
-
-  bool returnValue = false;
-  int lengthX = X.getLength();
-  int lengthY = Y.getLength();
-  if (lengthX == lengthY) {
-    int keyX = X.getKey();
-    int keyY = Y.getKey();
-
-    if (keyX == keyY) {
-      bool tempResult = true;
-      int i = 0;
-
-      ROSE_ASSERT(lengthX > 0);
-      while ((tempResult == true) && (i < lengthX)) {
-        if (tempResult == true)
-          tempResult = X.functionNameString[i] == Y.functionNameString[i];
-        i++;
-      }
-
-      returnValue = tempResult;
-    }
-  }
-
-  // For now this should always evaluate to be false (later this will not be so)
-  // ROSE_ASSERT (returnValue == false);
-
-  return returnValue;
+  ROSE_ASSERT(!X.functionNameString.empty());
+  ROSE_ASSERT(!Y.functionNameString.empty());
+  return X.sourceFragment == Y.sourceFragment &&
+         X.functionNameString == Y.functionNameString;
 }
 
-// DQ & AJ (12/3/2004): Added support for deleation of data members
 DeleteEnum GrammarString::getToBeDeleted() const { return toBeDeleted; }
-
-int GrammarString::getKey() const {
-  // This function returns the key that should already be computed
-  ROSE_ASSERT(key > 0);
-  return key;
-}
-
-int GrammarString::getLength() const {
-  // This function sums the ascii values of the characters in the character
-  // string
-  int stringLength = (int)functionNameString.size();
-  return stringLength;
-}
-
-int GrammarString::computeKey() {
-  // This function sums the ascii values of the characters in the character
-  // string
-  int returnKey = 0;
-  int stringLength = getLength();
-  int i = 0;
-  for (i = 0; i < stringLength; i++)
-    returnKey += functionNameString[i];
-
-  ROSE_ASSERT(returnKey > 0);
-
-  return returnKey;
-}
 
 void GrammarString::setAutomaticGenerationOfDataAccessFunctions(
     const BuildAccessEnum &X) {
   automaticGenerationOfDataAccessFunctions = X;
 }
 
-void GrammarString::setIsInConstructorParameterList() {
-  p_isInConstructorParameterList = CONSTRUCTOR_PARAMETER;
-}
-
 void GrammarString::setIsInConstructorParameterList(ConstructParamEnum X) {
   p_isInConstructorParameterList = X;
-}
-
-void GrammarString::setToBeTraversed(const TraversalEnum &X) {
-  toBeTraversed = X;
-  initializeTraversalMetadata();
 }
 
 BuildAccessEnum GrammarString::generateDataAccessFunctions() const {
@@ -1404,169 +1089,10 @@ BuildAccessEnum GrammarString::generateDataAccessFunctions() const {
 }
 
 void GrammarString::consistencyCheck() const {
-  // Error checking (not sure what is a good test here!)
-  ROSE_ASSERT(key > 0);
-}
-
-void GrammarString::display(const string &label) const {
-  //     printf ("In GrammarString::display ( %s ) \n",label);
-  // BP : 10/10/2001, changed printf to cout
-  cout << "In GrammarString::display ( " << label << endl;
-  printf("functionNameString = %s \n", functionNameString.c_str());
-  printf("typeNameString = %s \n", typeNameString.c_str());
-  printf("variableNameString = %s \n", variableNameString.c_str());
-  printf("defaultInitializerString = %s \n", defaultInitializerString.c_str());
-  printf("key = %d \n", key);
-}
-
-// BP : 10/25/2001, a non recursive version that
-// allocs memory only once
-string GrammarString::copyEdit(const string &inputString,
-                               const string &oldToken, const string &newToken) {
-  return StringUtility::copyEdit(inputString, oldToken, newToken);
+  ROSE_ASSERT(!functionNameString.empty());
 }
 
 bool GrammarString::isContainedIn(const string &longString,
                                   const string &shortString) {
-  // This function checks to see if the shortString is contained within the
-  // longString
-
   return (longString.find(shortString) != string::npos);
-}
-
-string GrammarString::buildDestructorSource() {
-  // DQ (5/22/2006): This function builds code for the destructor data members
-  // (within the destructor)
-
-  // Return value for this function
-  string returnString;
-
-  // Support for adding commented to generated source code
-  string commentString;
-
-  string variableName = getVariableNameString();
-  string typeName = getTypeNameString();
-
-  string initializerString = getDefaultInitializerString();
-
-  ROSE_ASSERT(typeName.empty() == false);
-  ROSE_ASSERT(variableName.empty() == false);
-
-  // printf ("In GrammarString::buildDestructorSource(): type = %s variable = %s
-  // \n",typeName.c_str(),variableName.c_str());
-
-  // Check if the type name is "char*"
-  bool typeIsCharString = typeName.find("char*") != string::npos &&
-                          typeName.find("char**") == string::npos;
-
-  if (typeIsCharString) {
-    // Always copy C style strings
-    string sourceVariableName = "p_" + variableName;
-    commentString =
-        "  // case: typeName == char* or char** for " + variableName + "\n";
-    // returnString += "     delete [] " + sourceVariableName + "; \n";
-    returnString += "     " + sourceVariableName + " = NULL; \n";
-
-    // DQ (9/5/2006): Get the order right, so that comment appears before the
-    // code fragment returnString += commentString;
-    returnString = commentString + returnString;
-
-    return returnString;
-  }
-
-  if (typeName == "AttachedPreprocessingInfoType*" &&
-      variableName == "attachedPreprocessingInfoPtr") {
-    commentString =
-        "  // case: delete AttachedPreprocessingInfoType* contents for " +
-        variableName + "\n";
-    returnString += "     clearAttachedPreprocessingInfo(); \n";
-    returnString = commentString + returnString;
-    return returnString;
-  }
-
-  // The rule is that if it is not a char* or char** then if it is a pointer
-  // type it is a pointer to a Sage IR node bool typeIsSgNode =
-  // strstr(typeName.c_str(), "*");
-
-  // Set all all data members to default values
-  if (true) {
-    // Control variables for code generation
-    bool typeIsPointerToListOfPointers =
-        typeName.find("PtrListPtr") != string::npos;
-    bool typeIsPointerToListOfNonpointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("ListPtr") != string::npos;
-    bool typeIsPointerToList =
-        typeIsPointerToListOfPointers || typeIsPointerToListOfNonpointers;
-
-    // By "simple list" we mean NOT a pointer to a list (just a list, e.g. STL
-    // list)
-    bool typeIsSimpleListOfPointers =
-        (typeIsPointerToListOfPointers == false) &&
-        typeName.find("PtrList") != string::npos;
-
-    // DQ (5/22/2006): Make sure this is not triggered from "List" substring of
-    // ROSEAttributesListContainerPtr
-    int typeSize = typeName.size();
-    bool typeIsSimpleListOfNonpointers =
-        (typeIsSimpleListOfPointers == false) &&
-        (typeSize > 4 && typeName.substr(typeSize - 4) == "List");
-
-    // bool typeIsList                       = typeIsPointerToList ||
-    // typeIsSimpleListOfPointers;
-    bool typeIsList = typeIsPointerToList || typeIsSimpleListOfPointers ||
-                      typeIsSimpleListOfNonpointers;
-
-    // One of these should be true!
-    // ROSE_ASSERT(typeIsList == true  || typeIsSgNode == true);
-    // ROSE_ASSERT(typeIsList == false || typeIsSgNode == false);
-
-    string listElementType = "default-error-type";
-
-    if (typeIsList == true) {
-      // Comment to add to generated source code
-      commentString += "  // case: listType for " + variableName + "\n";
-
-      // name constant for all cases below (in this scope)
-      string listElementName = "source_list_element";
-      string copyOfListElementName = "copy_list_element";
-
-      // names that are set differently for different cases
-      string iteratorBaseType;
-      string needPointer;
-      string originalList;
-      string iteratorName;
-
-      // Access member functions using "->" or "." (set to some string
-      // that will cause an error if used, instead of empty string).
-      string accessOperator = "error string for access operator";
-
-      if (typeIsPointerToList == true) {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == true) for " +
-            variableName + "\n";
-
-        returnString += "     p_" + variableName + " = NULL;\n";
-        returnString = commentString + returnString;
-      } else {
-        commentString +=
-            "  // case: listType (typeIsPointerToList == false) for " +
-            variableName + "\n";
-        ROSE_ASSERT(typeIsSimpleListOfPointers == true ||
-                    typeIsSimpleListOfNonpointers == true);
-        returnString += "     p_" + variableName + ".erase(p_" + variableName +
-                        ".begin(),p_" + variableName + ".end()); \n";
-        returnString = commentString + returnString;
-      }
-    } else {
-      // ROSE_ASSERT(typeIsSgNode == true);
-      commentString += "  // case: not a listType for " + variableName + "\n";
-
-      returnString += "     p_" + variableName + " " + initializerString + ";" +
-                      " // non list case \n";
-      returnString = commentString + returnString;
-    }
-  }
-
-  return returnString;
 }

@@ -6,33 +6,27 @@
 using namespace SageBuilder;
 using namespace SageInterface;
 
-class SimpleInstrumentation:public SgSimpleProcessing
-{
+class SimpleInstrumentation : public SgSimpleProcessing {
 public:
-  void visit (SgNode * astNode);
+  void visit(SgNode *astNode);
 };
 
-void
-SimpleInstrumentation::visit (SgNode * astNode)
-{
-  SgBasicBlock *block = isSgBasicBlock (astNode);
-  if (block != NULL)
-    {
-      SgVariableDeclaration *variableDeclaration =
-        	buildVariableDeclaration ("newVariable", buildIntType ());
-      prependStatement (variableDeclaration, block);
-    }
+void SimpleInstrumentation::visit(SgNode *astNode) {
+  SgBasicBlock *block = isSgBasicBlock(astNode);
+  if (block != NULL) {
+    SgVariableDeclaration *variableDeclaration =
+        buildVariableDeclaration("newVariable", buildIntType(), nullptr, block);
+    prependStatement(variableDeclaration, block);
+  }
 }
 
-int
-main (int argc, char *argv[])
-{
-  SgProject *project = frontend (argc, argv);
-  ROSE_ASSERT (project != NULL);
+int main(int argc, char *argv[]) {
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
 
   SimpleInstrumentation treeTraversal;
-  treeTraversal.traverseInputFiles (project, preorder);
+  treeTraversal.traverseInputFiles(project, preorder);
 
-  AstTests::runAllTests (project);
-  return backend (project);
+  AstTests::runAllTests(project);
+  return backend(project);
 }

@@ -57,10 +57,6 @@ int main(int argc, char *argv[]) {
 
   // SgProject::set_verbose(0);
 
-  // DQ (4/15/2015): We should reset the isModified flags as part of the
-  // transformation because we have added statements explicitly marked as
-  // transformations. checkIsModifiedFlag(project);
-
   // Output an optional graph of the AST (just the tree, when active)
   printf("Generating a dot file... (ROSE Release Note: turn off output of dot "
          "files before committing code) \n");

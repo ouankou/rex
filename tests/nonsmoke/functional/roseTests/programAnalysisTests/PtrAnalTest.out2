@@ -139,11 +139,11 @@ ctrl: 29->30 always
 ctrl: 25->29 false
 
  Mapping 
-SgBasicBlock:{List *head, *end;buildList(head, end);for(int i = 0;i < 10;++i) {appendList(head, end,(2 * i));}List *p = lookupList(head, 6);}:23->30
+SgBasicBlock:{List *head, *end;buildList(head, end);for(int i = 0;i < 10;++i) {appendList(head, end, 2 * i);}List *p = lookupList(head, 6);}:23->30
 SgFunctionRefExp:buildList:23v:buildList
 SgVarRefExp:head:23v:main-9-head
 SgVarRefExp:end:23v:main-9-end
-SgForStatement:for(int i = 0;i < 10;++i) {appendList(head, end,(2 * i));}:24->28
+SgForStatement:for(int i = 0;i < 10;++i) {appendList(head, end, 2 * i);}:24->28
 SgForInitStatement:int i = 0;:24->24
 SgVariableDeclaration:int i = 0;:24->24
 SgInitializedName:i:24v:main-9-i
@@ -154,11 +154,11 @@ SgCastExp:i:25v:main-9-i
 SgIntVal:10:25c:10
 SgPlusPlusOp:++i:26v:main-9-11
 SgVarRefExp:i:26v:main-9-i
-SgBasicBlock:{appendList(head, end,(2 * i));}:27->28
+SgBasicBlock:{appendList(head, end, 2 * i);}:27->28
 SgFunctionRefExp:appendList:28v:appendList
 SgVarRefExp:head:28v:main-9-head
 SgVarRefExp:end:28v:main-9-end
-SgMultiplyOp:(2 * i):28v:main-9-12
+SgMultiplyOp:2 * i:28v:main-9-12
 SgIntVal:2:27c:2
 SgCastExp:i:27v:main-9-i
 SgVariableDeclaration:List *p = lookupList(head, 6);:29->30

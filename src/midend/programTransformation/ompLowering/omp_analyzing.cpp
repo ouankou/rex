@@ -76,20 +76,8 @@ SgVarRefExp *extractVarRefFromExpression(SgExpression *expr) {
 }
 
 bool shouldSkipImplicitDataSharingVar(const SgInitializedName *init_var) {
-  if (init_var == nullptr) {
-    return true;
-  }
-  if (const Sg_File_Info *fi = init_var->get_file_info()) {
-    if (fi->isCompilerGenerated() || fi->isTransformation()) {
-      return true;
-    }
-  }
-
-  // Clang may materialize predefined function-name expressions as internal
-  // declarations. They are not user data-sharing candidates.
-  const std::string name = init_var->get_name().getString();
-  return name == "__PRETTY_FUNCTION__" || name == "__func__" ||
-         name == "__FUNCTION__";
+  ASSERT_not_null(init_var);
+  return init_var->get_is_predefined_identifier();
 }
 
 bool isSharedByDefaultInOrphanedConstruct(const SgInitializedName *init_var) {
@@ -279,7 +267,6 @@ void analyzeOmpMetadirective(SgNode *node) {
                          save_buf2);
   pastePreprocessingInfo(root_if_statement, PreprocessingInfo::before,
                          save_buf1);
-  // std::cout << root_if_statement->unparseToString() << "\n";
 } // end analyze omp metadirective
 
 void normalizeOmpLoop(SgStatement *node) {
@@ -440,14 +427,6 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
   if (shouldSkipImplicitDataSharingVar(init_var))
     return true;
   SgScopeStatement *var_scope = init_var->get_scope();
-  //    SgScopeStatement* directive_scope = start_stmt->get_scope();
-  // locally declared variables are private to the start_stmt
-  // We should not do this here. It is irrelevant to this function.
-  // if (isAncestor(start_stmt, init_var))
-  //   return false;
-
-  //   cout<<"Debug omp_lowering.cpp isSharedInEnclosingConstructs()
-  //   SgInitializedName name = "<<init_var->get_name().getString()<<endl;
   SgOmpParallelStatement *enclosing_par_stmt =
       getEnclosingNode<SgOmpParallelStatement>(start_stmt, false);
   // Lexically nested within a parallel region
@@ -512,191 +491,6 @@ static bool isSharedInEnclosingConstructs(SgInitializedName *init_var,
   }
   return result;
 } // end isSharedInEnclosingConstructs()
-
-//! Patch up firstprivate variables for omp task. The reason is that the
-//! specification 3.0 defines rules for implicitly determined data-sharing
-//! attributes and this function will make the implicit firstprivate variable
-//! of omp task explicit.
-/*
-variables used in task block:
-
-2.9.1.1 Data-sharing Attribute Rules for Variables Referenced in a Construct
-Ref. OMP 3.0 page 79
-A variable is firstprivate to the task (default) , if
-** not explicitly specified by default(), shared(),private(), firstprivate()
-clauses
-** not shared in enclosing constructs
-
-It should also satisfy the restriction defined in specification 3.0 page 93
-TODO
-* cannot be a variable which is part of another variable (as an array or
-structure element)
-* cannot be private, reduction
-* must have an accessible, unambiguous copy constructor for the class type
-* must not have a const-qualified type unless it is of class type with a
-mutable member
-* must not have an incomplete C/C++ type or a reference type
-*
-I decided to exclude variables which are used by addresses when recognizing
-firstprivate variables The reason is that in real code, it is often to have
-private variables first then use their address later.   Skipping the
-replacement will result in wrong semantics. e.g. from Allan Porterfield void
-create_seq( double seed, double a )
-      {
-             double x, s;
-             int    i, k;
-
-      #pragma omp parallel private(x,s,i,k)
-         {
-              // .....
-             // here s is private
-             s = find_my_seed( myid, num_procs,
-                               (long)4*NUM_KEYS, seed, a );
-
-             for (i=k1; i<k2; i++)
-             {
-                 x = randlc(&s, &a); // here s is used by its address
-
-             }
-         }
-      }
-If not, wrong code will be generated later on. The reason follows:
-   * Considering nested omp tasks:
-         #pragma omp task untied
-            {
-              int j =100;
-              // i is firstprivate, item is shared
-              {
-                for (i = 0; i < LARGE_NUMBER; i++)
-                {
-      #pragma omp task if(1)
-                  process (item[i],&j);
-                }
-              }
-            }
-   * the variable j will be firstprivate by default
-   * however, it is used by its address within a nested task (&j)
-   * replacing it with its local copy will not get the right, original
-address.
-   *
-   * Even worse: the replacement will cause some later translation (outlining)
-to
-   * access the address of a parent task's local variable.
-   * It seems (not 100% certain!!!) that GOMP implements tasks as independent
-entities.
-   * As a result a parent task's local stack will not be always accessible to
-its nested tasks.
-   * A segmentation fault will occur when the lexically nested task tries to
-obtain the address of
-   * its parent task's local variable.
-   * An example mistaken translation is shown below
-       int main()
-      {
-        GOMP_parallel_start(OUT__3__1527__,0,0);
-        OUT__3__1527__();
-        GOMP_parallel_end();
-        return 0;
-      }
-
-      void OUT__3__1527__()
-      {
-        if (GOMP_single_start()) {
-          int i;
-          printf(("Using %d threads.\n"),omp_get_num_threads());
-          void *__out_argv2__1527__[1];
-          __out_argv2__1527__[0] = ((void *)(&i));
-          GOMP_task(OUT__2__1527__,&__out_argv2__1527__,0,4,4,1,1);
-          //GOMP_task(OUT__2__1527__,&__out_argv2__1527__,0,4,4,1,0); //untied
-or not, no difference
-        }
-      }
-
-      void OUT__2__1527__(void **__out_argv)
-{
-  int *i = (int *)(__out_argv[0]);
-  //  int _p_i;
-  //  _p_i =  *i;
-  //  for (_p_i = 0; _p_i < 1000; _p_i++) {
-  for (*i = 0; *i < 1000; (*i)++) {
-    void *__out_argv1__1527__[1];
-    // cannot access auto variable from the stack of another task instance!!
-    //__out_argv1__1527__[0] = ((void *)(&_p_i));
-    __out_argv1__1527__[0] = ((void *)(&(*i)));// this is the right
-translation GOMP_task(OUT__1__1527__,&__out_argv1__1527__,0,4,4,1,0);
-  }
-}
-void OUT__1__1527__(void **__out_argv)
-{
-  int *i = (int *)(__out_argv[0]);
-  int _p_i;
-  _p_i =  *i;
-  assert(_p_i>=0);
-  assert(_p_i<10000);
-
-  process((item[_p_i]));
-}
-*
-  */
-int patchUpFirstprivateVariables(SgFile *file) {
-  int result = 0;
-  ROSE_ASSERT(file != NULL);
-  Rose_STL_Container<SgNode *> nodeList =
-      NodeQuery::querySubTree(file, V_SgOmpTaskStatement);
-  Rose_STL_Container<SgNode *>::iterator iter = nodeList.begin();
-  for (; iter != nodeList.end(); iter++) {
-    if (isOmpContextSelectorMetadataDirective(*iter)) {
-      continue;
-    }
-    SgOmpTaskStatement *target = isSgOmpTaskStatement(*iter);
-    SgScopeStatement *directive_scope = target->get_scope();
-    SgStatement *body = target->get_body();
-    ROSE_ASSERT(body != NULL);
-
-    // Find all variable references from the task's body
-    Rose_STL_Container<SgNode *> refList =
-        NodeQuery::querySubTree(body, V_SgVarRefExp);
-    Rose_STL_Container<SgNode *>::iterator var_iter = refList.begin();
-    for (; var_iter != refList.end(); var_iter++) {
-      SgVarRefExp *var_ref = isSgVarRefExp(*var_iter);
-      ROSE_ASSERT(var_ref->get_symbol() != NULL);
-      SgInitializedName *init_var = var_ref->get_symbol()->get_declaration();
-      ROSE_ASSERT(init_var != NULL);
-      if (shouldSkipImplicitDataSharingVar(init_var))
-        continue;
-      SgScopeStatement *var_scope = init_var->get_scope();
-      ROSE_ASSERT(var_scope != NULL);
-
-      // Variables with automatic storage duration that are declared in
-      // a scope inside the construct are private. Skip them
-      if (isAncestor(directive_scope, var_scope))
-        continue;
-
-      if (SageInterface::isUseByAddressVariableRef(var_ref))
-        continue;
-      // Skip variables already with explicit data-sharing attributes
-      VariantVector vv;
-      vv.push_back(V_SgOmpPrivateClause);
-      vv.push_back(V_SgOmpSharedClause);
-      vv.push_back(V_SgOmpFirstprivateClause);
-      vv.push_back(V_SgOmpCopyinClause);
-      if (isInClauseVariableList(init_var, target, vv))
-        continue;
-      if (isThreadprivate(var_ref->get_symbol()))
-        continue;
-      // Skip variables which are class/structure members: part of another
-      // variable
-      if (isSgClassDefinition(init_var->get_scope()))
-        continue;
-      // Skip variables which are shared in enclosing constructs
-      if (isSharedInEnclosingConstructs(init_var, target))
-        continue;
-      // Now it should be a firstprivate variable
-      addClauseVariable(init_var, target, V_SgOmpFirstprivateClause);
-      result++;
-    } // end for each variable reference
-  } // end for each SgOmpTaskStatement
-  return result;
-} // end patchUpFirstprivateVariables()
 
 int patchUpImplicitMappingVariables(SgFile *file) {
   int result = 0;
@@ -1285,9 +1079,7 @@ void analyze_omp(SgSourceFile *file) {
     analyzeOmpMetadirective(node);
   }
 
-  patchUpPrivateVariables(file); // the order of these two functions matter! We
-                                 // want to patch up private variable first!
-  patchUpFirstprivateVariables(file);
+  patchUpPrivateVariables(file);
 
   patchUpImplicitSharedVariables(file);
 

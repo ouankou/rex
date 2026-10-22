@@ -1,6 +1,7 @@
 #include "rose.h"
 
 #include "OpenACCParser.h"
+#include "astJson/sageAstJson.h"
 
 #include <algorithm>
 #include <cctype>
@@ -183,11 +184,30 @@ int main(int argc, char **argv) {
     return 0;
   }
 
+  const bool roundTrip = argc > 1 && std::string(argv[1]) == "--roundtrip";
+  if (roundTrip) {
+    for (int index = 1; index < argc; ++index)
+      argv[index] = argv[index + 1];
+    --argc;
+  }
   const MalformedWaitMode malformedWaitMode =
       removeMalformedWaitMode(argc, argv);
   SgProject *project = frontend(argc, argv);
   requireSupportedConversionAndIsolation(project);
   requireWaitForms(project);
+  if (roundTrip) {
+    SgSourceFile *first = findSource(project, "rex_openacc_session_first.c");
+    ROSE_ASSERT(first != nullptr);
+    first->get_originalCommandLineArgumentList().push_back(
+        "-rex:ast-json-checkpoint=post-omp-construction");
+    Rose::AstJson::Options options;
+    options.outputDirectory = ".";
+    SgSourceFile *restored = Rose::AstJson::roundTripSourceFile(
+        first, Rose::AstJson::Checkpoint::PostOmpConstruction, options);
+    ROSE_ASSERT(restored != nullptr && restored != first);
+    requireSupportedConversionAndIsolation(project);
+    requireWaitForms(project);
+  }
   if (malformedWaitMode != MalformedWaitMode::None) {
     exerciseMalformedWait(project, malformedWaitMode);
   }

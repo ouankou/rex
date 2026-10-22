@@ -107,6 +107,10 @@ extern "C" {
 #endif
 
 typedef void (*kmpc_micro_t)(int *, int *, ...);
+/* Transfer capture ownership; destroy runs once after the task body. */
+void rex_omp_task_owned(void (*fn)(void *), void *capture,
+                        void (*destroy)(void *), bool if_clause,
+                        unsigned untied);
 void __kmpc_fork_call(ident_t *, int, kmpc_micro_t, ...);
 void __kmpc_atomic_start(void);
 void __kmpc_atomic_end(void);
@@ -117,6 +121,8 @@ void __kmpc_end_single(ident_t *, int);
 int __kmpc_master(ident_t *, int);
 void __kmpc_end_master(ident_t *, int);
 void __kmpc_barrier(ident_t *, int);
+void __kmpc_ordered(ident_t *, int);
+void __kmpc_end_ordered(ident_t *, int);
 void __kmpc_critical(ident_t *, int, void *);
 void __kmpc_end_critical(ident_t *, int, void *);
 void __kmpc_flush(ident_t *);
@@ -124,6 +130,8 @@ int __kmpc_serialized_parallel(ident_t *, int);
 void __kmpc_end_serialized_parallel(ident_t *, int);
 void *__kmpc_omp_task_alloc(ident_t *, int, int, size_t, size_t, void *);
 int __kmpc_omp_task(ident_t *, int, void *);
+void __kmpc_omp_task_begin_if0(ident_t *, int, void *);
+void __kmpc_omp_task_complete_if0(ident_t *, int, void *);
 int __kmpc_omp_taskwait(ident_t *, int);
 void __kmpc_taskgroup(ident_t *, int);
 void __kmpc_end_taskgroup(ident_t *, int);
@@ -133,6 +141,8 @@ void __kmpc_for_static_init_4(ident_t *, int, int, int *, int *, int *, int *,
 void __kmpc_for_static_init_8(ident_t *, int, int, int *, int64_t *, int64_t *,
                               int64_t *, int64_t, int64_t);
 void __kmpc_for_static_fini(ident_t *, int);
+void __kmpc_dispatch_fini_4(ident_t *, int);
+void __kmpc_dispatch_fini_8(ident_t *, int);
 void __kmpc_dispatch_init_4(ident_t *, int, int, int, int, int, int);
 void __kmpc_dispatch_init_8(ident_t *, int, int, int64_t, int64_t, int64_t,
                             int64_t);

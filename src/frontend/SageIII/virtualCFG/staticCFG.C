@@ -4,21 +4,6 @@
 
 namespace StaticCFG {
 
-namespace {
-template <typename NodeT> void clearAttributeMechanism(NodeT *node) {
-  if (node == nullptr) {
-    return;
-  }
-  AstAttributeMechanism *attributes = node->get_attributeMechanism();
-  if (attributes != nullptr) {
-    delete attributes;
-    node->set_attributeMechanism(nullptr);
-  }
-}
-} // namespace
-
-// DQ (1/8/2018): Moved here from header file.
-// CFG(SgNode* node, bool is_filtered = false)
 CFG::CFG(SgNode *node, bool is_filtered, bool build_now)
     : graph_(NULL), start_(node), entry_(NULL), exit_(NULL),
       is_filtered_(is_filtered) {
@@ -31,6 +16,9 @@ CFG::CFG(SgNode *node, bool is_filtered, bool build_now)
 CFG::CFG(SgNode *node, bool is_filtered) : CFG(node, is_filtered, true) {}
 
 void CFG::clearNodesAndEdges() {
+  all_nodes_.clear();
+  node_points_.clear();
+  edge_paths_.clear();
   if (graph_ != NULL) {
     std::set<SgGraphNode *> nodes = graph_->computeNodeSet();
     std::set<SgDirectedGraphEdge *> edges;
@@ -40,14 +28,11 @@ void CFG::clearNodesAndEdges() {
       edges.insert(out_edges.begin(), out_edges.end());
     }
     for (SgDirectedGraphEdge *edge : edges) {
-      clearAttributeMechanism(edge);
       delete edge;
     }
     for (SgGraphNode *node : nodes) {
-      clearAttributeMechanism(node);
       delete node;
     }
-    clearAttributeMechanism(graph_);
     delete graph_;
   }
   graph_ = NULL;
@@ -55,11 +40,33 @@ void CFG::clearNodesAndEdges() {
   exit_ = NULL;
 }
 
-int CFG::getIndex(SgGraphNode *node) {
-  CFGNodeAttribute *info =
-      dynamic_cast<CFGNodeAttribute *>(node->getAttribute("info"));
-  ROSE_ASSERT(info);
-  return info->getIndex();
+unsigned int CFG::getIndex(SgGraphNode *node) const {
+  return toCFGNode(node).getIndex();
+}
+
+SgGraphNode *CFG::getOrCreateGraphNode(CFGNode point) {
+  ASSERT_not_null(point.getNode());
+  ASSERT_not_null(graph_);
+  if (auto found = all_nodes_.find(point); found != all_nodes_.end()) {
+    ROSE_ASSERT(toCFGNode(found->second) == point);
+    return found->second;
+  }
+  auto *node = new SgGraphNode;
+  node->set_SgNode(point.getNode());
+  graph_->addNode(node);
+  const bool point_inserted = all_nodes_.emplace(point, node).second;
+  const bool index_inserted =
+      node_points_.emplace(node->get_index(), point).second;
+  ROSE_ASSERT(point_inserted && index_inserted);
+  return node;
+}
+
+void CFG::addEdge(const CFGPath &path) {
+  auto *edge = new SgDirectedGraphEdge(getOrCreateGraphNode(path.source()),
+                                       getOrCreateGraphNode(path.target()));
+  graph_->addDirectedEdge(edge);
+  const bool inserted = edge_paths_.emplace(edge->get_index(), path).second;
+  ROSE_ASSERT(inserted);
 }
 
 void CFG::cfgToDot(SgNode *node, const std::string &file_name) {
@@ -72,7 +79,6 @@ void CFG::cfgToDot(SgNode *node, const std::string &file_name) {
 
 void CFG::buildFullCFG() {
   // Before building a new CFG, make sure to clear all nodes built before.
-  all_nodes_.clear();
   clearNodesAndEdges();
 
   std::set<VirtualCFG::CFGNode> explored;
@@ -87,21 +93,18 @@ void CFG::buildFullCFG() {
       SgFunctionDefinition *proc = isSgFunctionDefinition(*i);
       if (proc) {
         buildCFG<VirtualCFG::CFGNode, VirtualCFG::CFGEdge>(
-            proc->cfgForBeginning(), all_nodes_, explored);
+            proc->cfgForBeginning(), explored);
       }
     }
   } else
     buildCFG<VirtualCFG::CFGNode, VirtualCFG::CFGEdge>(
-        start_->cfgForBeginning(), all_nodes_, explored);
+        start_->cfgForBeginning(), explored);
 }
 
 void CFG::buildFilteredCFG() {
-  all_nodes_.clear();
   clearNodesAndEdges();
 
   std::set<VirtualCFG::InterestingNode> explored;
-  std::map<VirtualCFG::InterestingNode, SgGraphNode *> all_nodes;
-
   graph_ = new SgIncidenceDirectedGraph;
 
   if (SgProject *project = isSgProject(start_)) {
@@ -112,91 +115,37 @@ void CFG::buildFilteredCFG() {
       SgFunctionDefinition *proc = isSgFunctionDefinition(*i);
       if (proc) {
         buildCFG<VirtualCFG::InterestingNode, VirtualCFG::InterestingEdge>(
-            VirtualCFG::makeInterestingCfg(proc), all_nodes, explored);
+            VirtualCFG::makeInterestingCfg(proc), explored);
       }
     }
   } else
     buildCFG<VirtualCFG::InterestingNode, VirtualCFG::InterestingEdge>(
-        VirtualCFG::makeInterestingCfg(start_), all_nodes, explored);
-
-  typedef std::pair<VirtualCFG::InterestingNode, SgGraphNode *> pair_t;
-  for (const pair_t &p : all_nodes)
-    all_nodes_[VirtualCFG::CFGNode(p.first.getNode(), 0)] = p.second;
+        VirtualCFG::makeInterestingCfg(start_), explored);
 }
 
-template <class NodeT, class EdgeT>
-void CFG::buildCFG(NodeT n, std::map<NodeT, SgGraphNode *> &all_nodes,
-                   std::set<NodeT> &explored) {
-
-  ROSE_ASSERT(n.getNode());
-
-  if (explored.count(n) > 0)
-    return;
-  explored.insert(n);
-
-  SgGraphNode *from = NULL;
-  if (all_nodes.count(n) > 0) {
-    from = all_nodes[n];
-  } else {
-    from = new SgGraphNode;
-    from->set_SgNode(n.getNode());
-    unsigned int index = n.getIndex();
-    from->addNewAttribute("info", new CFGNodeAttribute(index, graph_));
-    all_nodes[n] = from;
-    graph_->addNode(from);
-    // Here we check if the new node is the entry or exit.
-    if (isSgFunctionDefinition(n.getNode())) {
-      if (index == 0)
-        entry_ = from;
-      else if (index == 3)
-        exit_ = from;
-    }
-  }
-
-  std::vector<EdgeT> outEdges = n.outEdges();
-
-  for (const EdgeT &edge : outEdges) {
-    NodeT tar = edge.target();
-
-    SgGraphNode *to = NULL;
-    if (all_nodes.count(tar) > 0)
-      to = all_nodes[tar];
-    else {
-      to = new SgGraphNode;
-      to->set_SgNode(tar.getNode());
-      unsigned int index = tar.getIndex();
-      to->addNewAttribute("info", new CFGNodeAttribute(index, graph_));
-      all_nodes[tar] = to;
-      graph_->addNode(to);
-
-      // Here we check if the new node is the entry or exit.
-      if (isSgFunctionDefinition(tar.getNode())) {
-        if (index == 0)
-          entry_ = to;
-        else if (index == 3)
-          exit_ = to;
-      }
-    }
-
-    SgDirectedGraphEdge *new_edge = new SgDirectedGraphEdge(from, to);
-    new_edge->addNewAttribute("info", new CFGEdgeAttribute<EdgeT>(edge));
-    graph_->addDirectedEdge(new_edge);
-  }
-
-  for (const EdgeT &edge : outEdges) {
-    ROSE_ASSERT(edge.source() == n);
-    buildCFG<NodeT, EdgeT>(edge.target(), all_nodes, explored);
-  }
-
-  std::vector<EdgeT> inEdges = n.inEdges();
-  for (const EdgeT &edge : inEdges) {
-    ROSE_ASSERT(edge.target() == n);
-    buildCFG<NodeT, EdgeT>(edge.source(), all_nodes, explored);
-  }
+VirtualCFG::CFGNode CFG::toCFGNode(SgGraphNode *node) const {
+  ROSE_ASSERT(node != nullptr);
+  ROSE_ASSERT(graph_ != nullptr && node->get_parent() == graph_);
+  const auto &nodes = graph_->get_node_index_to_node_map();
+  const auto graph_node = nodes.find(node->get_index());
+  ROSE_ASSERT(graph_node != nodes.end() && graph_node->second == node);
+  const auto point = node_points_.find(node->get_index());
+  ROSE_ASSERT(point != node_points_.end());
+  ROSE_ASSERT(point->second.getNode() == node->get_SgNode());
+  return point->second;
 }
 
-VirtualCFG::CFGNode CFG::toCFGNode(SgGraphNode *node) {
-  return VirtualCFG::CFGNode(node->get_SgNode(), getIndex(node));
+const CFGPath &CFG::toCFGPath(SgDirectedGraphEdge *edge) const {
+  ASSERT_not_null(edge);
+  ROSE_ASSERT(graph_ != nullptr && edge->get_parent() == graph_);
+  const auto &edges = graph_->get_edge_index_to_edge_map();
+  const auto graph_edge = edges.find(edge->get_index());
+  ROSE_ASSERT(graph_edge != edges.end() && graph_edge->second == edge);
+  const auto path = edge_paths_.find(edge->get_index());
+  ROSE_ASSERT(path != edge_paths_.end());
+  ROSE_ASSERT(toCFGNode(edge->get_from()) == path->second.source());
+  ROSE_ASSERT(toCFGNode(edge->get_to()) == path->second.target());
+  return path->second;
 }
 
 SgGraphNode *CFG::cfgForBeginning(SgNode *node) {
@@ -209,12 +158,18 @@ SgGraphNode *CFG::cfgForEnd(SgNode *node) {
 }
 
 std::vector<SgDirectedGraphEdge *> CFG::getOutEdges(SgGraphNode *node) {
+  const auto point = toCFGNode(node);
   std::set<SgDirectedGraphEdge *> edges = graph_->computeEdgeSetOut(node);
+  for (auto *edge : edges)
+    ROSE_ASSERT(toCFGPath(edge).source() == point);
   return std::vector<SgDirectedGraphEdge *>(edges.begin(), edges.end());
 }
 
 std::vector<SgDirectedGraphEdge *> CFG::getInEdges(SgGraphNode *node) {
+  const auto point = toCFGNode(node);
   std::set<SgDirectedGraphEdge *> edges = graph_->computeEdgeSetIn(node);
+  for (auto *edge : edges)
+    ROSE_ASSERT(toCFGPath(edge).target() == point);
   return std::vector<SgDirectedGraphEdge *>(edges.begin(), edges.end());
 }
 
@@ -268,50 +223,10 @@ void CFG::printNode(std::ostream &o, SgGraphNode *node) {
 }
 
 void CFG::printEdge(std::ostream &o, SgDirectedGraphEdge *edge, bool isInEdge) {
-  // Note that CFGEdge will do some checks which forbids us to use it to
-  // represent an InterestingEdge.
-  AstAttribute *attr = edge->getAttribute("info");
-  if (CFGEdgeAttribute<CFGEdge> *edge_attr =
-          dynamic_cast<CFGEdgeAttribute<CFGEdge> *>(attr)) {
-    CFGEdge e = edge_attr->getEdge();
-    o << e.source().id() << " -> " << e.target().id() << " [label=\""
-      << escapeString(e.toString()) << "\", style=\""
-      << (isInEdge ? "dotted" : "solid") << "\"];\n";
-  } else if (CFGEdgeAttribute<InterestingEdge> *edge_attr =
-                 dynamic_cast<CFGEdgeAttribute<InterestingEdge> *>(attr)) {
-    InterestingEdge e = edge_attr->getEdge();
-    o << e.source().id() << " -> " << e.target().id() << " [label=\""
-      << escapeString(e.toString()) << "\", style=\""
-      << (isInEdge ? "dotted" : "solid") << "\"];\n";
-  } else
-    ROSE_ABORT();
-}
-
-std::vector<SgDirectedGraphEdge *> outEdges(SgGraphNode *node) {
-
-  CFGNodeAttribute *info =
-      dynamic_cast<CFGNodeAttribute *>(node->getAttribute("info"));
-  ROSE_ASSERT(info);
-  std::set<SgDirectedGraphEdge *> edges =
-      info->getGraph()->computeEdgeSetOut(node);
-
-  return std::vector<SgDirectedGraphEdge *>(edges.begin(), edges.end());
-}
-
-std::vector<SgDirectedGraphEdge *> inEdges(SgGraphNode *node) {
-  CFGNodeAttribute *info =
-      dynamic_cast<CFGNodeAttribute *>(node->getAttribute("info"));
-  ROSE_ASSERT(info);
-  std::set<SgDirectedGraphEdge *> edges =
-      info->getGraph()->computeEdgeSetIn(node);
-  return std::vector<SgDirectedGraphEdge *>(edges.begin(), edges.end());
-}
-
-int getIndex(SgGraphNode *node) {
-  CFGNodeAttribute *info =
-      dynamic_cast<CFGNodeAttribute *>(node->getAttribute("info"));
-  ROSE_ASSERT(info);
-  return info->getIndex();
+  const auto &path = toCFGPath(edge);
+  o << path.source().id() << " -> " << path.target().id() << " [label=\""
+    << escapeString(path.toString()) << "\", style=\""
+    << (isInEdge ? "dotted" : "solid") << "\"];\n";
 }
 
 } // end of namespace StaticCFG

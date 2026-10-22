@@ -4,10 +4,6 @@
 #include <string>
 #include <utility>
 
-// DQ (11/19/2018): Commented this out to fix thisi issue.
-// DQ (9/7/2018): We should not have a using namespace directive in a header
-// file. using namespace std;
-
 class IncludedFilesUnparser : public AstSimpleProcessing {
 private:
   SgProject *projectNode;
@@ -17,15 +13,11 @@ private:
 
   // Keeps track of including paths that include files to unparse into files
   // that would not be unparsed. This is needed to determine where to store the
-  // unparsed included files. std::map<std::string, std::set<std::string> >
-  // includingPathsMap;
+  // unparsed included files.
 
   // Keeps track of all #include directives that include a *not* unparsed file
   // into a *not* unparsed file.
   std::set<PreprocessingInfo *> notUnparsedPreprocessingInfos;
-
-  // maps each file that needs to be unparsed to the destination file
-  // std::map<std::string, std::string> unparseMap;
 
   // Keeps all paths to which files are unparsed. This is needed to avoid name
   // collisions.
@@ -35,8 +27,7 @@ private:
   // compiler. Note that the order of -I paths matters. We should avoid
   // situations when includes that have "up folder" jumps look outside the
   // created folder hierarchy. Therefore, the -I paths are sorted from the
-  // deepest "up folder" hierarchy to the least deep. std::list<std::pair<int,
-  // std::string> > includeCompilerPaths;
+  // deepest "up folder" hierarchy to the least deep.
 
   // Keeps scopes that have to be unparsed to produce the included file (i.e.
   // this scope contains the included file). But note that not all of the scopes
@@ -54,18 +45,6 @@ private:
       preprocessingUnparseScopeCandidateOriginsMap;
   std::map<std::string, unsigned int> unparseOccurrenceMap;
 
-  // DQ (9/7/2018): Adding map to connect filenames to there associated
-  // SgSourceFile IR nodes (built in the frontend). Note that the SgSourceFile
-  // IR nodes are now built in the frontend so that we can support the token
-  // based unparsing which requires that the mapping of the token stream be done
-  // on the AST before any modifications (transformations). This refactoring of
-  // work to support the unparsing of headers using the token based unparsing
-  // has the the cause of the recent work asociated with the header file
-  // unparsing. std::map<std::string, SgSourceFile*> unparseSourceFileMap;
-
-  // std::set<std::string> modifiedFiles;
-  // std::set<std::string> allFiles;
-  // std::set<std::string> filesToUnparse;
   std::set<std::string>
       newFilesToUnparse; // this is a temporary storage that needs to be
                          // accessible across several methods
@@ -73,7 +52,6 @@ private:
   // All planning state belongs to one project/unparse invocation.  This used
   // to be process-global, which made a second project observe filenames and
   // dangling SgSourceFile pointers from the first project.
-  std::set<std::string> modifiedFiles;
   std::set<std::string> filesWithMarkedTransformations;
   std::set<std::string> allFiles;
   std::set<std::string> filesToUnparse;
@@ -117,13 +95,6 @@ private:
                              bool preprocessingOnly);
   void validateUnparseScopeCandidates();
 
-  // DQ (11/19/2018): We need to copy some unmodified files to the new
-  // unparseHeadersDirectory, so that they will be picked up where we can't
-  // explicitly list the original header file location). This list must be
-  // constructed when we are using the token based unparsing, because we cannot
-  // modify the include paths. std::set<std::string> filesToCopy;
-
-  // DQ (11/19/2018): This function initializes the data member: filesToCopy.
   void collectAdditionalListOfHeaderFilesToCopy();
 
 protected:
@@ -134,7 +105,6 @@ public:
   IncludedFilesUnparser(SgProject *projectNode);
   bool isInputFile(const std::string &absoluteFileName);
 
-  // void unparse();
   void figureOutWhichFilesToUnparse();
 
   std::string getUnparseRootPath();
@@ -143,8 +113,6 @@ public:
   std::map<std::string, unsigned int> getUnparseOccurrenceMap();
   std::list<std::string> getIncludeCompilerOptions();
 
-  // DQ (9/7/2018): Added to support retrival of SgSourceFile built in the
-  // frontend.
   std::map<std::string, SgSourceFile *> getUnparseSourceFileMap();
 
   std::set<std::string> getFilesToCopy();
@@ -154,6 +122,4 @@ public:
   getIncludeRewrites() const;
   std::string
   getCopiedFileOutputPath(const std::string &absoluteFileName) const;
-
-  void printDiagnosticOutput();
 };

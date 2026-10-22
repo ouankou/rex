@@ -43,3 +43,31 @@ if grep -Fq 'external/parser' "$fixture/owned-failure.stdout"; then
   echo "policy crossed the source-snapshot submodule boundary" >&2
   exit 1
 fi
+
+if (
+  cd "$fixture"
+  "$policy" owned/missing.c
+) >"$fixture/missing.stdout" 2>"$fixture/missing.stderr"; then
+  echo "policy accepted a missing source file" >&2
+  exit 1
+fi
+grep -Fq 'owned/missing.c: cannot open:' "$fixture/missing.stderr"
+
+mkdir "$fixture/owned/source.c~"
+cp "$fixture/owned/source.c" "$fixture/original.txt"
+if (
+  cd "$fixture"
+  "$policy" --fix owned/source.c
+) >"$fixture/backup.stdout" 2>"$fixture/backup.stderr"; then
+  echo "policy accepted a failed source backup" >&2
+  exit 1
+fi
+grep -Fq 'cannot back up owned/source.c' "$fixture/backup.stderr"
+cmp "$fixture/original.txt" "$fixture/owned/source.c"
+rmdir "$fixture/owned/source.c~"
+(
+  cd "$fixture"
+  "$policy" --fix owned/source.c
+  "$policy" owned/source.c
+)
+cmp "$fixture/original.txt" "$fixture/owned/source.c~"

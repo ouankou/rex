@@ -5,20 +5,38 @@
 
 int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != nullptr);
+  AstTests::runAllTests(project);
   const std::vector<SgNode *> definitions =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
-  if (definitions.size() != 1) {
-    std::cerr << "expected one function definition, found "
+  if (definitions.size() != 2) {
+    std::cerr << "expected two function definitions, found "
               << definitions.size() << '\n';
     return 1;
   }
 
-  SgFunctionDefinition *definition =
-      isSgFunctionDefinition(definitions.front());
-  if (definition == nullptr) {
-    std::cerr << "function-definition query returned the wrong node kind\n";
-    return 1;
+  SgFunctionDefinition *definition = nullptr;
+  SgMemberFunctionDeclaration *defaulted_constructor = nullptr;
+  for (SgNode *node : definitions) {
+    auto *candidate = isSgFunctionDefinition(node);
+    ROSE_ASSERT(candidate != nullptr);
+    auto *declaration = candidate->get_declaration();
+    ROSE_ASSERT(declaration != nullptr);
+    if (auto *constructor = isSgMemberFunctionDeclaration(declaration)) {
+      ROSE_ASSERT(defaulted_constructor == nullptr &&
+                  constructor->get_name() == "value" &&
+                  constructor->get_specialFunctionModifier().isConstructor() &&
+                  constructor->get_functionModifier().isMarkedDefault());
+      defaulted_constructor = constructor;
+    } else {
+      ROSE_ASSERT(definition == nullptr &&
+                  declaration->variantT() == V_SgFunctionDeclaration &&
+                  declaration->get_name() == "build_value" &&
+                  !declaration->get_functionModifier().isMarkedDefault());
+      definition = candidate;
+    }
   }
+  ROSE_ASSERT(definition != nullptr && defaulted_constructor != nullptr);
   const std::string output = definition->unparseToString();
   if (output.find("new") == std::string::npos ||
       output.find("value") == std::string::npos) {

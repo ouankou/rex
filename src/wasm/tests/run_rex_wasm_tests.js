@@ -133,6 +133,43 @@ int main(void) {
   },
 ];
 
+cases.push({
+  name : "rex_wasm_repeated_runs",
+  sequence : [ cases[1], cases[2], cases[1] ],
+});
+
+cases.push({
+  name : "rex_wasm_filename_language",
+  sequence : [
+    ...["c++", "cp", "cc", "cxx", "CPP", "C"].map(
+        (extension) => ({
+          ...cases[2],
+          filename : `rex_wasm_filename_extension.${extension}`,
+          expectedFiles : [ `rose_rex_wasm_filename_extension.${extension}` ],
+        })),
+    {
+      ...cases[2],
+      filename : "rex wasm filename.c++",
+      expectedFiles : [ "rose_rex_wasm_filename.c++" ],
+    },
+    {
+      ...cases[2],
+      filename : "-rex_wasm_filename.cpp",
+      expectedFiles : [ "rose_-rex_wasm_filename.cpp" ],
+    },
+  ],
+  rejectedFilenames : [
+    "rex_wasm_filename.f90",
+    "rex_wasm_filename.F90",
+    "rex_wasm_filename.txt",
+    "rex_wasm_filename",
+    "",
+    ".",
+    "..",
+    "rex_wasm\0_filename.c",
+  ],
+});
+
 function usage() {
   console.error(
       "usage: run_rex_wasm_tests.js [--list] | /path/to/rex_wasm.js [--case NAME]",
@@ -161,12 +198,31 @@ function parseArgs(argv) {
 }
 
 async function runCase(createRexModule, wasmDir, testCase) {
-  console.log(`${testCase.name}: start ${testCase.mode} ${testCase.filename}`);
   const module = await createRexModule({
     locateFile : (file) => path.join(wasmDir, file),
     print : () => {},
     printErr : () => {},
   });
+  for (const input of testCase.sequence || [ testCase ]) {
+    console.log(`${testCase.name}: start ${input.mode} ${input.filename}`);
+    checkResult(module, input);
+  }
+  for (const filename of testCase.rejectedFilenames || []) {
+    const result = JSON.parse(
+        module.runRex("int main(void) { return 0; }", filename, "plain"));
+    if (result.ok !== false || result.exitCode !== 2 ||
+        result.files.length !== 0 ||
+        !result.log.includes("unsupported source filename")) {
+      throw new Error(`unsupported filename was not rejected: ${
+          JSON.stringify(filename)}: ${JSON.stringify(result)}`);
+    }
+  }
+  if (testCase.rejectedFilenames) {
+    checkResult(module, cases[2]);
+  }
+}
+
+function checkResult(module, testCase) {
   const rawResult = module.runRex(
       testCase.source,
       testCase.filename,

@@ -1,17 +1,33 @@
 #include "rose.h"
 
+#include "AstInterface_ROSE.h"
+#include "memory-pool-snapshot.h"
+
 #include <algorithm>
 #include <iterator>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <type_traits>
 
 static_assert(!std::is_default_constructible_v<SgInitializedName>);
 static_assert(!std::is_copy_constructible_v<SgInitializedName>);
 static_assert(!std::is_copy_assignable_v<SgInitializedName>);
-static_assert(!std::is_constructible_v<SgInitializedName, SgName, SgType *,
-                                       SgInitializer *>);
+static_assert(std::is_constructible_v<SgPlusPlusOp, SgExpression *, SgType *,
+                                      SgUnaryOp::Sgop_mode>);
+static_assert(std::is_constructible_v<SgMinusMinusOp, SgExpression *, SgType *,
+                                      SgUnaryOp::Sgop_mode>);
+static_assert(!std::is_constructible_v<SgPlusPlusOp, SgExpression *, SgType *>);
+static_assert(
+    !std::is_constructible_v<SgMinusMinusOp, SgExpression *, SgType *>);
+static_assert(std::is_constructible_v<
+              SgAddressOfOp, SgExpression *, SgType *, SgUnaryOp::Sgop_mode,
+              SgAddressOfOp::address_operand_form_enum>);
+static_assert(!std::is_constructible_v<SgAddressOfOp, SgExpression *, SgType *,
+                                       SgUnaryOp::Sgop_mode>);
+static_assert(std::is_constructible_v<SgInitializedName, SgName, SgType *,
+                                      SgInitializer *>);
 static_assert(
     !std::is_constructible_v<
         SgInitializedName, Sg_File_Info *, SgName, SgType *, SgInitializer *,
@@ -19,12 +35,183 @@ static_assert(
 
 namespace {
 
+void assertTraitHierarchyUpdates() {
+  auto *file = SageBuilder::buildGeneratedSourceFile("rex_type_trait.cpp");
+  auto *global = file->get_globalScope();
+  auto *base = SageBuilder::buildClassDeclaration(
+      SageBuilder::declaration_ownership::sourceLexical(), "RexTraitBase",
+      global);
+  auto *derived = SageBuilder::buildClassDeclaration(
+      SageBuilder::declaration_ownership::sourceLexical(), "RexTraitDerived",
+      global);
+  auto *baseType = base->get_type();
+  auto *derivedType = derived->get_type();
+  ROSE_ASSERT(!SageInterface::IsBaseOf(baseType, derivedType));
+  SageBuilder::buildBaseClass(base, baseType, derived->get_definition(), false,
+                              true);
+  ROSE_ASSERT(SageInterface::IsBaseOf(baseType, derivedType));
+  ROSE_ASSERT(!SageInterface::IsPolymorphic(derivedType));
+  auto *member = SageBuilder::buildNondefiningMemberFunctionDeclaration(
+      SageBuilder::function_declaration_ownership::sourceLexicalAtTop(
+          base->get_definition()),
+      "rex_trait_member", SageBuilder::buildVoidType(),
+      SageBuilder::buildFunctionParameterList(), base->get_definition());
+  member->get_functionModifier().setVirtual();
+  ROSE_ASSERT(SageInterface::IsPolymorphic(derivedType));
+  ROSE_ASSERT(
+      SageInterface::IsPolymorphic(SageBuilder::buildConstType(derivedType)));
+  ROSE_ASSERT(
+      !SageInterface::IsPolymorphic(SageBuilder::buildArrayType(derivedType)));
+  member->get_functionModifier().setPureVirtual();
+  ROSE_ASSERT(
+      SageInterface::IsAbstract(SageBuilder::buildConstType(derivedType)));
+  SageInterface::deleteAST(file->get_project());
+}
+
+void assertBitfieldOwnership() {
+  auto *width = SageBuilder::buildIntVal(3);
+  auto *raw =
+      new SgVariableDefinition(static_cast<Sg_File_Info *>(nullptr),
+                               static_cast<SgInitializedName *>(nullptr),
+                               static_cast<SgExpression *>(width));
+  ROSE_ASSERT(width->get_parent() == raw);
+  raw->set_bitfield(nullptr);
+  ROSE_ASSERT(width->get_parent() == nullptr);
+  delete raw;
+
+  auto *file = SageBuilder::buildGeneratedSourceFile("rex_bitfield.cpp");
+  auto *record = SageBuilder::buildClassDeclaration(
+      SageBuilder::declaration_ownership::sourceLexical(), "RexBitfield",
+      file->get_globalScope());
+  auto *scope = record->get_definition();
+  auto *variable = SageBuilder::buildVariableDeclaration(
+      "rex_bitfield", SageBuilder::buildUnsignedIntType(), nullptr, scope);
+  scope->append_statement(variable);
+  variable->get_variables().front()->set_cxx_field_index(0);
+  auto *definition = variable->get_definition();
+  definition->set_bitfield(width);
+  ROSE_ASSERT(width->get_parent() == definition);
+  auto *replacement = SageBuilder::buildIntVal(5);
+  definition->set_bitfield(replacement);
+  ROSE_ASSERT(width->get_parent() == nullptr &&
+              replacement->get_parent() == definition);
+  auto *copy = SageInterface::deepCopySemantic(variable);
+  ROSE_ASSERT(copy->get_bitfield() != replacement &&
+              copy->get_bitfield()->get_parent() == copy->get_definition());
+  definition->set_bitfield(nullptr);
+  ROSE_ASSERT(replacement->get_parent() == nullptr);
+  SageInterface::deleteAST(width);
+  SageInterface::deleteAST(replacement);
+  SageInterface::deleteAST(copy);
+  SageInterface::deleteAST(file->get_project());
+}
+
+void assertAddressResultConstruction() {
+  auto check =
+      [](SgType *operandType, SgType *pointeeType) {
+        auto *scope = SageBuilder::buildBasicBlock();
+        auto *declaration =
+            SageBuilder::buildSemanticAuxiliaryVariableDeclaration(
+                "rex_address_operand", operandType, nullptr, scope);
+        SgPointerType *first = nullptr;
+        for (int attempt = 0; attempt != 2; ++attempt) {
+          auto *operand = SageBuilder::buildVarRefExp(declaration);
+          AstInterfaceImpl implementation(operand);
+          AstInterface interface(&implementation);
+          auto *address = isSgAddressOfOp(
+          interface.CreateUnaryOP(AstInterface::UOP_ADDR, AstNodePtr(operand))
+              .get_ptr());
+          ROSE_ASSERT(address != nullptr && address->get_operand() == operand);
+          ROSE_ASSERT(operand->get_parent() == address);
+          ROSE_ASSERT(address->get_address_operand_form() ==
+                      SgAddressOfOp::e_address_operand_object);
+          auto *pointer = isSgPointerType(address->get_type());
+          ROSE_ASSERT(pointer != nullptr &&
+                      pointer->get_base_type() == pointeeType);
+          ROSE_ASSERT(attempt == 0 || pointer == first);
+          first = pointer;
+          auto *copy = isSgAddressOfOp(SageInterface::copyExpression(address));
+          ROSE_ASSERT(copy != nullptr && copy->get_type() == pointer);
+          ROSE_ASSERT(copy->get_operand() != operand &&
+                      copy->get_operand()->get_parent() == copy);
+          ROSE_ASSERT(copy->get_address_operand_form() ==
+                      SgAddressOfOp::e_address_operand_object);
+          SageInterface::deleteAST(copy);
+          SageInterface::deleteAST(address);
+        }
+        SageInterface::deleteAST(scope);
+      };
+
+  auto *plain = new SgTypeLong();
+  ROSE_ASSERT(plain->get_ptr_to() == nullptr);
+  check(plain, plain);
+  auto *qualified = new SgModifierType(plain);
+  qualified->get_typeModifier().get_constVolatileModifier().setConst();
+  ROSE_ASSERT(qualified->get_ptr_to() == nullptr);
+  check(qualified, qualified);
+  check(SageBuilder::buildReferenceType(qualified), qualified);
+  check(SageBuilder::buildRvalueReferenceType(qualified), qualified);
+}
+
+void assertUnaryConstructionCopies() {
+  using Op = AstInterface::OperatorEnum;
+  for (Op operation :
+       {AstInterface::UOP_MINUS, AstInterface::UOP_NOT,
+        AstInterface::UOP_BIT_COMPLEMENT, AstInterface::UOP_INCR1,
+        AstInterface::UOP_INCR1_POST, AstInterface::UOP_DECR1,
+        AstInterface::UOP_DECR1_POST, AstInterface::UOP_DEREF}) {
+    SgType *integer = SageBuilder::buildIntType();
+    SgType *operandType = operation == AstInterface::UOP_DEREF
+                              ? SageBuilder::buildPointerType(integer)
+                              : integer;
+    auto *scope = SageBuilder::buildBasicBlock();
+    auto *declaration = SageBuilder::buildSemanticAuxiliaryVariableDeclaration(
+        "rex_unary_operand", operandType, nullptr, scope);
+    auto *operand = SageBuilder::buildVarRefExp(declaration);
+    AstInterfaceImpl implementation(operand);
+    AstInterface interface(&implementation);
+    auto *expression = isSgUnaryOp(
+        interface.CreateUnaryOP(operation, AstNodePtr(operand)).get_ptr());
+    ROSE_ASSERT(expression != nullptr);
+    ROSE_ASSERT(expression->get_operand() == operand &&
+                operand->get_parent() == expression);
+    ROSE_ASSERT(expression->get_startOfConstruct() != nullptr &&
+                expression->get_endOfConstruct() != nullptr &&
+                expression->get_operatorPosition() != nullptr);
+    ROSE_ASSERT(expression->get_startOfConstruct()->get_parent() == expression);
+    ROSE_ASSERT(expression->get_endOfConstruct()->get_parent() == expression);
+    ROSE_ASSERT(expression->get_operatorPosition()->get_parent() == expression);
+    SgType *expected =
+        operation == AstInterface::UOP_NOT && !SageInterface::is_C_language()
+            ? SageBuilder::buildBoolType()
+            : integer;
+    ROSE_ASSERT(expression->get_type() == expected);
+    const bool postfix = operation == AstInterface::UOP_INCR1_POST ||
+                         operation == AstInterface::UOP_DECR1_POST;
+    ROSE_ASSERT(expression->get_mode() == (postfix
+                                               ? SgUnaryOp::Sgop_mode::postfix
+                                               : SgUnaryOp::Sgop_mode::prefix));
+    auto *copy = isSgUnaryOp(SageInterface::copyExpression(expression));
+    ROSE_ASSERT(copy != nullptr && copy->get_type() == expected &&
+                copy->get_mode() == expression->get_mode());
+    ROSE_ASSERT(copy->get_operand() != operand &&
+                copy->get_operand()->get_parent() == copy);
+    SageInterface::deleteAST(copy);
+    SageInterface::deleteAST(expression);
+    SageInterface::deleteAST(scope);
+  }
+}
+
 constexpr const char *kSourceFilename = "rex_namespace_builder_order.cpp";
 
 void assertCompleteInitializedNameDefaults() {
+  auto *initializer = SageBuilder::buildAssignInitializer(
+      SageBuilder::buildIntVal(1), SageBuilder::buildIntType());
   SgInitializedName *name = SageBuilder::buildInitializedName_nfi(
-      SgName("rex_schema_defaults"), SageBuilder::buildIntType(), nullptr);
+      SgName("rex_schema_defaults"), SageBuilder::buildIntType(), initializer);
   ROSE_ASSERT(name != nullptr);
+  ROSE_ASSERT(name->get_initializer() == initializer);
+  ROSE_ASSERT(initializer->get_parent() == name);
   ROSE_ASSERT(name->get_fortran_source_type() == nullptr);
   ROSE_ASSERT(name->get_cray_pointer_pointee() == nullptr);
   ROSE_ASSERT(!name->get_is_predefined_identifier());
@@ -34,7 +221,7 @@ void assertCompleteInitializedNameDefaults() {
               SgInitializedName::e_enum_constant_source_unclassified);
   ROSE_ASSERT(name->get_fortran_type_spec() ==
               SgInitializedName::e_fortran_type_spec_default);
-  ROSE_ASSERT(name->get_fortran_procedure_interface().is_null());
+  ROSE_ASSERT(name->get_fortran_procedure_interface() == nullptr);
   ROSE_ASSERT(name->get_fortran_separate_shape_declaration() == nullptr);
   ROSE_ASSERT(name->get_fortran_separate_pointer_declaration() == nullptr);
   ROSE_ASSERT(!name->get_source_type_qualification_present());
@@ -91,9 +278,13 @@ SgNamespaceDeclarationStatement *buildSourceNamespace(const SgName &name,
 SgTemplateParameterPtrList buildTemplateTypeParameters(const SgName &name) {
   SgTemplateType *parameterType = SageBuilder::buildTemplateType(name);
   ROSE_ASSERT(parameterType != nullptr);
-  return {SageBuilder::buildTemplateParameter(
+  auto *parameter = SageBuilder::buildTemplateParameter(
       SgTemplateParameter::type_parameter, parameterType,
-      SgTemplateParameter::keyword_class)};
+      SgTemplateParameter::keyword_class);
+  ROSE_ASSERT(parameterType->get_template_parameter() == parameter);
+  ROSE_ASSERT(parameterType->get_packed() ==
+              parameter->get_is_parameter_pack());
+  return {parameter};
 }
 
 void assertExactSemanticProvenance(SgLocatedNode *node) {
@@ -181,8 +372,158 @@ void assertExactPublishedProvenance(SgLocatedNode *node, SgLocatedNode *owner) {
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 2 && std::string(argv[1]) == "--check-memory-pool-snapshot") {
+    void *storage = SgInitializedName::operator new(sizeof(SgInitializedName));
+    std::ostringstream address;
+    address << ',' << storage << ',';
+    std::ostringstream allocated;
+    Rose::MemPool::snapshot(allocated);
+    ROSE_ASSERT(allocated.good());
+    ROSE_ASSERT(allocated.str().find(
+                    "kind,pool,offset,address,allocated,next_free\n") == 0);
+    ROSE_ASSERT(allocated.str().find(address.str() + "1,") !=
+                std::string::npos);
+    SgInitializedName::operator delete(storage, sizeof(SgInitializedName));
+    std::ostringstream released;
+    Rose::MemPool::snapshot(released);
+    ROSE_ASSERT(released.good());
+    ROSE_ASSERT(released.str().find(address.str() + "0,") != std::string::npos);
+    return 0;
+  }
   assertCompleteInitializedNameDefaults();
+  if (argc == 1) {
+    assertBitfieldOwnership();
+    assertTraitHierarchyUpdates();
+    assertTraitHierarchyUpdates();
+    assertAddressResultConstruction();
+    assertUnaryConstructionCopies();
+    auto *scope = SageBuilder::buildBasicBlock();
+    auto *declaration = SageBuilder::buildPragmaDeclaration("rex", scope);
+    scope->append_statement(declaration);
+    auto *copy = SageInterface::deepCopySemantic(declaration);
+    ROSE_ASSERT(copy != nullptr && copy != declaration &&
+                copy->get_pragma() != declaration->get_pragma());
+    ROSE_ASSERT(copy->get_pragma()->get_parent() == copy &&
+                declaration->get_pragma()->get_parent() == declaration);
+    ROSE_ASSERT(copy->get_pragma()->get_startOfConstruct() !=
+                    declaration->get_pragma()->get_startOfConstruct() &&
+                copy->get_pragma()->get_endOfConstruct() !=
+                    declaration->get_pragma()->get_endOfConstruct());
+    checkPhysicalSourcePosition(copy);
+    SageInterface::deleteAST(copy);
+    SageInterface::deleteAST(scope);
+  }
   const std::string mode = argc > 1 ? argv[1] : "";
+  if (mode == "--reject-owned-bitfield" ||
+      mode == "--reject-owned-bitfield-constructor") {
+    auto *width = SageBuilder::buildIntVal(3);
+    auto *owner = SageBuilder::buildExprListExp(width);
+    if (mode == "--reject-owned-bitfield") {
+      SgVariableDefinition definition(static_cast<Sg_File_Info *>(nullptr));
+      definition.set_bitfield(width);
+    } else {
+      new SgVariableDefinition(static_cast<Sg_File_Info *>(nullptr),
+                               static_cast<SgInitializedName *>(nullptr),
+                               static_cast<SgExpression *>(width));
+    }
+    SageInterface::deleteAST(owner);
+    return 1;
+  }
+  if (mode == "--reject-owned-pragma-payload") {
+    auto *scope = SageBuilder::buildBasicBlock();
+    auto *owner = SageBuilder::buildPragmaDeclaration("rex", scope);
+    new SgPragmaDeclaration(owner->get_pragma(),
+                            SgPragmaDeclaration::e_fortran_directive_none);
+    return 1;
+  }
+  if (mode == "--reject-partial-pragma-source") {
+    auto *pragma = new SgPragma("rex");
+    auto *start = new Sg_File_Info("rex_pragma_source.cpp", 1, 1);
+    pragma->set_startOfConstruct(start);
+    start->set_parent(pragma);
+    new SgPragmaDeclaration(pragma,
+                            SgPragmaDeclaration::e_fortran_directive_none);
+    return 1;
+  }
+  if (mode == "--reject-owned-simple-requirement" ||
+      mode == "--reject-owned-nested-requirement" ||
+      mode == "--reject-owned-compound-requirement") {
+    auto *operand = SageBuilder::buildBoolValExp_nfi(true);
+    auto *owner = SageBuilder::buildExprStatement(operand);
+    ROSE_ASSERT(operand->get_parent() == owner);
+    if (mode == "--reject-owned-simple-requirement")
+      SageBuilder::buildSimpleRequirement_nfi(operand);
+    else if (mode == "--reject-owned-nested-requirement")
+      SageBuilder::buildNestedRequirement_nfi(operand);
+    else
+      SageBuilder::buildCompoundRequirement_nfi(operand, false, nullptr);
+    return 1;
+  }
+  if (mode == "--reject-aliased-compound-requirement") {
+    auto *operand = SageBuilder::buildBoolValExp_nfi(true);
+    SageBuilder::buildCompoundRequirement_nfi(operand, false, operand);
+    return 1;
+  }
+  if (mode == "--reject-owned-compound-constraint") {
+    auto *constraint = SageBuilder::buildBoolValExp_nfi(true);
+    auto *owner = SageBuilder::buildExprStatement(constraint);
+    ROSE_ASSERT(constraint->get_parent() == owner);
+    SageBuilder::buildCompoundRequirement_nfi(SageBuilder::buildIntVal_nfi(1),
+                                              false, constraint);
+    return 1;
+  }
+  if (mode == "--reject-owned-requirements-list" ||
+      mode == "--reject-owned-requires-parameters") {
+    auto *requirements = SageBuilder::buildExprListExp_nfi();
+    requirements->append_expression(SageBuilder::buildSimpleRequirement_nfi(
+        SageBuilder::buildIntVal_nfi(1)));
+    auto *parameters = SageBuilder::buildFunctionParameterList();
+    auto *scope = new SgFunctionParameterScope();
+    auto *enclosing = new SgGlobal();
+    auto *position =
+        Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode();
+    position->setFrontendSpecific();
+    position->setOutputInCodeGeneration();
+    position->set_physical_file_id(Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+    position->set_parent(scope);
+    scope->set_startOfConstruct(position);
+    auto *end = new Sg_File_Info(*position);
+    end->set_parent(scope);
+    scope->set_endOfConstruct(end);
+    SageInterface::beginDetachedFunctionParameterScopeConstruction(
+        scope, enclosing, enclosing);
+    auto *owner =
+        SageBuilder::buildRequiresExpr_nfi(parameters, requirements, scope);
+    ROSE_ASSERT(requirements->get_parent() == owner);
+    ROSE_ASSERT(parameters->get_parent() == owner);
+    ROSE_ASSERT(scope->get_scope() == enclosing);
+    ROSE_ASSERT(scope->get_completed_semantic_scope() == enclosing);
+    ROSE_ASSERT(scope->get_construction_physical_output_owner() == nullptr);
+    ROSE_ASSERT(scope->get_construction_semantic_scope() == nullptr);
+    if (mode == "--reject-owned-requirements-list") {
+      SageBuilder::buildRequiresExpr_nfi(nullptr, requirements);
+    } else {
+      auto *fresh = SageBuilder::buildExprListExp_nfi();
+      fresh->append_expression(SageBuilder::buildSimpleRequirement_nfi(
+          SageBuilder::buildIntVal_nfi(2)));
+      SageBuilder::buildRequiresExpr(parameters, fresh, scope);
+    }
+    return 1;
+  }
+  if (mode == "--reject-owned-typeof-operand") {
+    SgIntVal *operand = SageBuilder::buildIntVal(7);
+    SgExprStatement *owner = SageBuilder::buildExprStatement(operand);
+    ROSE_ASSERT(operand->get_parent() == owner);
+    SageBuilder::buildTypeOfType(operand, nullptr);
+    return 1;
+  }
+  if (mode == "--reject-owned-decltype-operand") {
+    SgIntVal *operand = SageBuilder::buildIntVal(7);
+    SgExprStatement *owner = SageBuilder::buildExprStatement(operand);
+    ROSE_ASSERT(operand->get_parent() == owner);
+    SageBuilder::buildDeclType(operand, operand->get_type());
+    return 1;
+  }
   if (mode == "--check-binary-nfi-source-provenance") {
     SgMinusOp *negated = SageBuilder::buildMinusOp_nfi(
         SageBuilder::buildIntVal_nfi(3), SageBuilder::buildIntType());
@@ -232,6 +573,17 @@ int main(int argc, char **argv) {
         static_cast<SgFunctionParameterList *>(nullptr));
     return 1;
   }
+  if (mode == "--reject-owned-function-parameter-type-list") {
+    auto *arguments = new SgFunctionParameterTypeList();
+    auto *original =
+        SageBuilder::buildFunctionType(SageBuilder::buildIntType(), arguments);
+    ROSE_ASSERT(original->get_argument_list() == arguments);
+    ROSE_ASSERT(arguments->get_parent() == original);
+    ROSE_ASSERT(SageBuilder::buildFunctionType(SageBuilder::buildIntType(),
+                                               arguments) == original);
+    SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), arguments);
+    return 1;
+  }
   if (mode == "--reject-null-nfi-function-parameter-type-list") {
     SageBuilder::buildFunctionParameterList_nfi(
         static_cast<SgFunctionParameterTypeList *>(nullptr));
@@ -242,7 +594,7 @@ int main(int argc, char **argv) {
     const SgName instantiationName("rex_box<>");
     SageBuilder::buildNondefiningClassDeclaration_nfi(
         SageBuilder::declaration_ownership::sourceLexical(), "rex_box",
-        SgClassDeclaration::e_class, nullptr, nullptr, &arguments,
+        SgClassDeclaration::e_class, nullptr, nullptr, nullptr, &arguments,
         &instantiationName);
     return 1;
   }
@@ -253,8 +605,8 @@ int main(int argc, char **argv) {
     const SgName instantiationName("rex_box<>");
     SageBuilder::buildNondefiningClassDeclaration_nfi(
         SageBuilder::declaration_ownership::sourceLexical(), "rex_box",
-        SgClassDeclaration::e_class, nullptr, primary, &arguments,
-        &instantiationName);
+        SgClassDeclaration::e_class, nullptr, primary, primary, &arguments,
+        &instantiationName, false, &arguments, false, &arguments);
     return 1;
   }
   if (mode == "--reject-null-function-source-group") {
@@ -352,6 +704,42 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(copiedParameter->get_source_type_global_qualification());
     ROSE_ASSERT(copiedParameter->get_source_type_qualification_tokens() ==
                 sourceParameter->get_source_type_qualification_tokens());
+    auto *addedParameter = SageBuilder::buildInitializedName(
+        "rex_added_parameter", SageBuilder::buildIntType());
+    auto *addedSymbol =
+        SageInterface::prependArg(copiedParameters, addedParameter);
+    ROSE_ASSERT(addedSymbol != nullptr &&
+                addedSymbol->get_declaration() == addedParameter);
+    ROSE_ASSERT(addedParameter->get_declptr() == prototype);
+    ROSE_ASSERT(addedParameter->get_scope() ==
+                prototype->get_functionParameterScope());
+    ROSE_ASSERT(targetScope->find_symbol_from_declaration(addedParameter) ==
+                nullptr);
+    ROSE_ASSERT(copiedParameter->get_scope() ==
+                prototype->get_functionParameterScope());
+
+    auto *unnamedParameters = SageBuilder::buildFunctionParameterList();
+    auto *unnamedParameter =
+        SageBuilder::buildInitializedName("", SageBuilder::buildIntType());
+    SageInterface::appendArg(unnamedParameters, unnamedParameter);
+    auto *unnamedPrototype = SageBuilder::buildNondefiningFunctionDeclaration(
+        SageBuilder::function_declaration_ownership::sourceLexical(),
+        "rex_unnamed_prototype", SageBuilder::buildVoidType(),
+        unnamedParameters, targetScope);
+    ROSE_ASSERT(unnamedPrototype->get_functionParameterScope() == nullptr);
+    auto *namedParameter = SageBuilder::buildInitializedName(
+        "rex_named_parameter", SageBuilder::buildIntType());
+    auto *namedSymbol =
+        SageInterface::appendArg(unnamedParameters, namedParameter);
+    auto *newScope = unnamedPrototype->get_functionParameterScope();
+    ROSE_ASSERT(newScope != nullptr &&
+                newScope->get_parent() == unnamedPrototype);
+    ROSE_ASSERT(namedSymbol != nullptr &&
+                namedSymbol->get_declaration() == namedParameter);
+    ROSE_ASSERT(namedParameter->get_scope() == newScope);
+    ROSE_ASSERT(unnamedParameter->get_scope() == newScope);
+    ROSE_ASSERT(targetScope->find_symbol_from_declaration(namedParameter) ==
+                nullptr);
     for (SgLocatedNode *node :
          {static_cast<SgLocatedNode *>(prototype),
           static_cast<SgLocatedNode *>(copiedParameters),
@@ -536,13 +924,21 @@ int main(int argc, char **argv) {
     SgTemplateVariableDeclaration *variable =
         SageBuilder::buildTemplateVariableDeclaration_nfi(
             "rex_template_variable", SageBuilder::buildIntType(), nullptr,
-            global,
-            SageBuilder::template_variable_entity_kind::primary_template,
-            nullptr);
+            global, nullptr, {}, nullptr);
     assertNullSourceProvenance(variable);
     SgInitializedName *name = variable->get_variables().front();
+    ROSE_ASSERT(global->find_symbol_from_declaration(name) == nullptr);
     assertNullSourceProvenance(name);
     assertNullSourceProvenance(name->get_declptr());
+    auto *redeclaration = SageBuilder::buildTemplateVariableDeclaration_nfi(
+        name->get_name(), name->get_type(), nullptr, global, nullptr, {}, name);
+    ROSE_ASSERT(redeclaration->get_firstNondefiningDeclaration() == variable);
+    ROSE_ASSERT(redeclaration->get_variables().front()->get_prev_decl_item() ==
+                name);
+    ROSE_ASSERT(global->find_symbol_from_declaration(
+                    redeclaration->get_variables().front()) == nullptr);
+    SageInterface::deleteAST(redeclaration);
+    SageInterface::deleteAST(variable);
 
     SgExprListExp *arguments = SageBuilder::buildExprListExp_nfi(
         std::vector<SgExpression *>{SageBuilder::buildIntVal_nfi(11)});
@@ -910,6 +1306,64 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  {
+    ROSE_ASSERT(!global->isCaseInsensitive());
+    const bool savedCase = SageBuilder::symbol_table_case_insensitive_semantics;
+    SageBuilder::symbol_table_case_insensitive_semantics = true;
+    auto *parameters = SageBuilder::buildFunctionParameterList(
+        SageBuilder::buildInitializedName("Case_Value",
+                                          SageBuilder::buildIntType()));
+    auto *canonical = SageBuilder::buildNondefiningFunctionDeclaration(
+        SageBuilder::function_declaration_ownership::semanticAuxiliary(),
+        "rex_owner_case_function", SageBuilder::buildVoidType(),
+        SageBuilder::buildSemanticFunctionParameterList(parameters), global);
+    auto *function = SageBuilder::buildDefiningFunctionDeclaration(
+        SageBuilder::function_declaration_ownership::sourceLexicalIn(global),
+        "rex_owner_case_function", SageBuilder::buildVoidType(), parameters,
+        global, false, canonical, nullptr, false);
+    SageBuilder::symbol_table_case_insensitive_semantics = savedCase;
+    auto *definition = function->get_definition();
+    ROSE_ASSERT(definition->lookup_variable_symbol("Case_Value") != nullptr);
+    ROSE_ASSERT(definition->lookup_variable_symbol("case_value") == nullptr);
+  }
+
+  {
+    const SgName name("rex_owned_function");
+    const SgName instanceName("rex_owned_function<int>");
+    auto templateParameters = buildTemplateTypeParameters("FunctionParameter");
+    auto *primary = SageBuilder::buildNondefiningTemplateFunctionDeclaration(
+        SageBuilder::function_declaration_ownership::semanticAuxiliary(), name,
+        SageBuilder::buildVoidType(),
+        SageBuilder::buildFunctionParameterList_nfi(), global,
+        &templateParameters);
+    SgTemplateArgumentPtrList written;
+    SgTemplateArgumentPtrList semantic{
+        new SgTemplateArgument(SageBuilder::buildIntType(), false)};
+    auto *instance = isSgTemplateInstantiationFunctionDecl(
+        SageBuilder::buildNondefiningFunctionDeclaration(
+            SageBuilder::function_declaration_ownership::semanticAuxiliary(),
+            name, SageBuilder::buildVoidType(),
+            SageBuilder::buildFunctionParameterList_nfi(), global, true,
+            &written, SgStorageModifier::e_default, false, &instanceName,
+            primary, &semantic));
+    ROSE_ASSERT(instance != nullptr);
+    ROSE_ASSERT(instance->get_deducedTemplateArguments() == semantic);
+    ROSE_ASSERT(semantic.front()->get_parent() == instance);
+    auto *definition = isSgTemplateInstantiationFunctionDecl(
+        SageBuilder::buildDefiningFunctionDeclaration(
+            SageBuilder::function_declaration_ownership::semanticAuxiliary(),
+            name, SageBuilder::buildVoidType(),
+            SageBuilder::buildFunctionParameterList_nfi(), global, true,
+            instance, &written, false));
+    ROSE_ASSERT(definition != nullptr);
+    const auto &copied = definition->get_deducedTemplateArguments();
+    ROSE_ASSERT(copied.size() == 1 && copied.front() != semantic.front());
+    ROSE_ASSERT(copied.front()->get_parent() == definition);
+    ROSE_ASSERT(semantic.front()->get_parent() == instance);
+    ROSE_ASSERT(SageInterface::templateArgumentEquivalence(copied.front(),
+                                                           semantic.front()));
+  }
+
   SgDeclarationScope *detachedScope = SageBuilder::buildDeclarationScope();
   SageBuilder::attachSemanticDeclarationScope(global, detachedScope);
   ROSE_ASSERT(global->get_auxiliary_declaration_scopes() != nullptr);
@@ -1027,7 +1481,7 @@ int main(int argc, char **argv) {
           SageBuilder::declaration_ownership::sourceLexicalIn(
               host->get_definition()),
           "rex_distinct_semantic_friend", SgClassDeclaration::e_class, global,
-          nullptr, nullptr, nullptr);
+          nullptr, nullptr, nullptr, nullptr);
   ROSE_ASSERT(friendDeclaration->get_parent() == host->get_definition());
   ROSE_ASSERT(friendDeclaration->get_scope() == global);
   ROSE_ASSERT(
@@ -1067,6 +1521,45 @@ int main(int argc, char **argv) {
   assertExactPublishedProvenance(embeddedTypedef, global);
   assertExactPublishedProvenance(embeddedEnum, global);
 
+  SgEnumDeclaration *semanticEmbeddedEnum = SageBuilder::buildEnumDeclaration(
+      SageBuilder::declaration_ownership::semanticEmbeddedDeclaratorChild(),
+      "rex_semantic_embedded_enum", false, global);
+  ROSE_ASSERT(semanticEmbeddedEnum->get_parent() == nullptr);
+  ROSE_ASSERT(semanticEmbeddedEnum->get_scope() == global);
+  ROSE_ASSERT(!semanticEmbeddedEnum->get_isAutonomousDeclaration());
+  assertExactSemanticProvenance(semanticEmbeddedEnum);
+  SgTypedefDeclaration *semanticEmbeddedAlias =
+      SageBuilder::buildTypedefDeclarationWithEmbeddedTag_nfi(
+          SageBuilder::typedef_declaration_ownership::semanticAuxiliary(),
+          SgTypedefDeclaration::e_using, "rex_semantic_embedded_alias",
+          semanticEmbeddedEnum->get_type(), global, semanticEmbeddedEnum);
+  ROSE_ASSERT(semanticEmbeddedEnum->get_parent() == semanticEmbeddedAlias);
+  ROSE_ASSERT(semanticEmbeddedAlias->get_baseTypeDefiningDeclaration() ==
+              semanticEmbeddedEnum);
+  assertExactSemanticProvenance(semanticEmbeddedEnum);
+  ROSE_ASSERT(semanticEmbeddedAlias->get_parent() ==
+              global->get_auxiliary_declarations());
+  assertExactSemanticProvenance(semanticEmbeddedAlias);
+
+  SgClassDeclaration *semanticEmbeddedClass =
+      SageBuilder::buildStructDeclaration(
+          SageBuilder::declaration_ownership::semanticEmbeddedDeclaratorChild(),
+          "rex_semantic_embedded_class", global);
+  ROSE_ASSERT(semanticEmbeddedClass->get_parent() == nullptr);
+  ROSE_ASSERT(semanticEmbeddedClass->get_scope() == global);
+  assertExactSemanticProvenance(semanticEmbeddedClass);
+  assertExactSemanticProvenance(semanticEmbeddedClass->get_definition());
+  SgTypedefDeclaration *semanticEmbeddedClassAlias =
+      SageBuilder::buildTypedefDeclarationWithEmbeddedTag_nfi(
+          SageBuilder::typedef_declaration_ownership::semanticAuxiliary(),
+          SgTypedefDeclaration::e_using, "rex_semantic_embedded_class_alias",
+          semanticEmbeddedClass->get_type(), global, semanticEmbeddedClass);
+  ROSE_ASSERT(semanticEmbeddedClass->get_parent() ==
+              semanticEmbeddedClassAlias);
+  ROSE_ASSERT(semanticEmbeddedClass->get_definition()
+                  ->get_construction_physical_output_owner() == nullptr);
+  assertExactSemanticProvenance(semanticEmbeddedClass->get_definition());
+
   SgEnumDeclaration *lexicalEnum = SageBuilder::buildEnumDeclaration(
       SageBuilder::declaration_ownership::sourceLexical(),
       "rex_lexical_enum_owner", false, global);
@@ -1074,6 +1567,42 @@ int main(int argc, char **argv) {
   assertExactPublishedProvenance(lexicalEnum, global);
   assertExactSemanticProvenance(
       isSgLocatedNode(lexicalEnum->get_firstNondefiningDeclaration()));
+
+  SgClassDefinition *semanticLexicalScope =
+      semanticEmbeddedClass->get_definition();
+  SgEnumDeclaration *semanticLexicalForward =
+      SageBuilder::buildNondefiningEnumDeclaration_nfi(
+          "rex_semantic_lexical_enum", false, semanticLexicalScope,
+          SageBuilder::declaration_ownership::semanticLexical(), nullptr);
+  SgEnumDeclaration *semanticLexicalEnum =
+      SageBuilder::buildEnumDeclaration_nfi(
+          SageBuilder::declaration_ownership::semanticLexical(),
+          "rex_semantic_lexical_enum", false, semanticLexicalScope,
+          semanticLexicalForward);
+  for (SgEnumDeclaration *declaration :
+       {semanticLexicalForward, semanticLexicalEnum}) {
+    ROSE_ASSERT(declaration->get_parent() == semanticLexicalScope);
+    ROSE_ASSERT(declaration->get_scope() == semanticLexicalScope);
+    ROSE_ASSERT(!declaration->get_isAutonomousDeclaration());
+    ROSE_ASSERT(std::count(semanticLexicalScope->get_members().begin(),
+                           semanticLexicalScope->get_members().end(),
+                           declaration) == 1);
+    assertExactSemanticProvenance(declaration);
+  }
+  ROSE_ASSERT(semanticLexicalForward->get_definingDeclaration() ==
+              semanticLexicalEnum);
+  ROSE_ASSERT(semanticLexicalForward->get_type() ==
+              semanticLexicalEnum->get_type());
+
+  SgClassDeclaration *semanticLexicalClass =
+      SageBuilder::buildStructDeclaration(
+          SageBuilder::declaration_ownership::semanticLexical(),
+          "rex_semantic_lexical_class", semanticLexicalScope);
+  ROSE_ASSERT(semanticLexicalClass->get_parent() == semanticLexicalScope);
+  ROSE_ASSERT(semanticLexicalClass->get_scope() == semanticLexicalScope);
+  ROSE_ASSERT(!semanticLexicalClass->get_isAutonomousDeclaration());
+  assertExactSemanticProvenance(semanticLexicalClass);
+  assertExactSemanticProvenance(semanticLexicalClass->get_definition());
 
   SgEnumDeclaration *lexicalEnumForward =
       SageBuilder::buildNondefiningEnumDeclaration_nfi(
@@ -1255,6 +1784,10 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(firstName->get_scope() == global);
   ROSE_ASSERT(secondName->get_scope() == global);
   ROSE_ASSERT(secondName->get_prev_decl_item() == firstName);
+  ROSE_ASSERT(SageInterface::getFirstVarSym(firstVariable)->get_declaration() ==
+              firstName);
+  ROSE_ASSERT(SageInterface::getFirstVarSym(secondVariable) ==
+              SageInterface::getFirstVarSym(firstVariable));
   ROSE_ASSERT(global->lookup_variable_symbol("rex_explicit_redeclaration")
                   ->get_declaration() == firstName);
   ROSE_ASSERT(countDirectScopeEdges(global, firstVariable) == 0);
@@ -1408,12 +1941,74 @@ int main(int argc, char **argv) {
   const SgName instantiationName("rex_box<>");
   SgClassDeclaration *built = SageBuilder::buildNondefiningClassDeclaration_nfi(
       SageBuilder::declaration_ownership::sourceLexical(), "rex_box",
-      SgClassDeclaration::e_class, global, primary, &arguments,
-      &instantiationName);
+      SgClassDeclaration::e_class, global, primary, primary, &arguments,
+      &instantiationName, false, &arguments, false, &arguments);
   SgTemplateInstantiationDecl *instantiation =
       isSgTemplateInstantiationDecl(built);
   ROSE_ASSERT(instantiation != nullptr);
   ROSE_ASSERT(instantiation->get_templateDeclaration() == primary);
+  ROSE_ASSERT(instantiation->get_specializedTemplateDeclaration() == primary);
+
+  const SgName deductionName("rex_deduction_box");
+  auto deductionParameters = buildTemplateTypeParameters("DeductionParameter");
+  SgTemplateArgumentPtrList specializationArguments;
+  auto *deductionPrimary =
+      SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
+          SageBuilder::declaration_ownership::semanticAuxiliary(),
+          deductionName, SgClassDeclaration::e_class,
+          SageBuilder::template_class_declaration_scopes::
+              fromExactSemanticScope(global),
+          &deductionParameters, &specializationArguments, &deductionName);
+  for (bool supplied : {false, true}) {
+    auto *type = supplied
+                     ? SageBuilder::buildIntType()
+                     : static_cast<SgType *>(SageBuilder::buildFloatType());
+    SgTemplateArgumentPtrList written{new SgTemplateArgument(type, true)};
+    SgTemplateArgumentPtrList deduced;
+    if (!supplied)
+      deduced.push_back(new SgTemplateArgument(type, false));
+    const SgName instanceName(supplied ? "rex_deduction_box<int>"
+                                       : "rex_deduction_box<float>");
+    auto *instance = isSgTemplateInstantiationDecl(
+        SageBuilder::buildNondefiningClassDeclaration_nfi(
+            SageBuilder::declaration_ownership::semanticAuxiliary(),
+            deductionName, SgClassDeclaration::e_class, global,
+            deductionPrimary, deductionPrimary, &written, &instanceName, false,
+            &written, false, &deduced));
+    ROSE_ASSERT(instance != nullptr && deduced.empty());
+    ROSE_ASSERT(instance->get_templateArguments().front() == written.front());
+    ROSE_ASSERT(written.front()->get_parent() == instance);
+    ROSE_ASSERT(instance->get_semanticTemplateArguments().size() == 1);
+    ROSE_ASSERT(instance->get_semanticTemplateArguments().front() !=
+                written.front());
+    ROSE_ASSERT(instance->get_deducedTemplateArguments().size() ==
+                (supplied ? 0 : 1));
+    auto *definition =
+        isSgTemplateInstantiationDecl(SageBuilder::buildClassDeclaration_nfi(
+            SageBuilder::declaration_ownership::semanticAuxiliary(),
+            deductionName, SgClassDeclaration::e_class, global, instance, true,
+            &written, &instanceName));
+    ROSE_ASSERT(definition != nullptr &&
+                definition->get_type() == instance->get_type());
+    ROSE_ASSERT(definition->get_specializedTemplateDeclaration() ==
+                instance->get_specializedTemplateDeclaration());
+    auto checkArguments = [&](const SgTemplateArgumentPtrList &actual,
+                              const SgTemplateArgumentPtrList &canonical) {
+      ROSE_ASSERT(
+          SageInterface::templateArgumentListEquivalence(actual, canonical));
+      for (size_t index = 0; index < actual.size(); ++index) {
+        ROSE_ASSERT(actual[index] != canonical[index]);
+        ROSE_ASSERT(actual[index]->get_parent() == definition);
+        ROSE_ASSERT(canonical[index]->get_parent() == instance);
+      }
+    };
+    checkArguments(definition->get_templateArguments(),
+                   instance->get_templateArguments());
+    checkArguments(definition->get_semanticTemplateArguments(),
+                   instance->get_semanticTemplateArguments());
+    checkArguments(definition->get_deducedTemplateArguments(),
+                   instance->get_deducedTemplateArguments());
+  }
 
   SgNamespaceDeclarationStatement *first =
       buildSourceNamespace("rex_reordered", global, 10, 10);

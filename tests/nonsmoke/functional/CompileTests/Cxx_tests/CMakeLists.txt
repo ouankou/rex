@@ -1,4 +1,5 @@
 set(CXX_TESTCODES
+  rex_frontend_template_operator_selected_symbol.cpp
   rex_unparser_frontier_child_identity.cpp
   rex_frontend_static_assert_typed_message.cpp
   rex_frontend_scalar_value_init.cpp
@@ -25,6 +26,7 @@ set(CXX_TESTCODES
   rex_frontend_dependent_nested_friend_header.cpp
   rex_frontend_nested_friend_signature_parameter_identity.cpp
   rex_frontend_dependent_type_qualification.cpp
+  rex_frontend_dependent_alias_projection.cpp
   rex_frontend_operator_semantic_path.cpp
   rex_frontend_operator_surface_contract.cpp
   rex_frontend_udl_structural_ownership.cpp
@@ -71,6 +73,7 @@ set(CXX_TESTCODES
   rex_unparser_anonymous_template_parameters.cpp
   rex_unparser_instantiated_operator_identity.cpp
   rex_unparser_visibility_contract.cpp
+  rex_unparser_visibility_macro_conflict.cpp
   rex_unparser_builtin_prefix_identity.cpp
   rex_unparser_typed_owner_contracts.cpp
   Area-01.C
@@ -95,6 +98,7 @@ set(CXX_TESTCODES
   rex_test2026_axpy_system_headers.cpp
   rex_test2026_stl_incremental.cpp
   rex_test2026_stl_map.cpp
+  rex_frontend_dependent_decltype_base.cpp
   rex_test2026_stl_meta.cpp
   rex_frontend_partial_specialization_reused_parameter_owner.cpp
   rex_frontend_out_of_line_template_surface_lifetime.cpp
@@ -3129,9 +3133,6 @@ list(APPEND CXX_TESTCODES
   test2013_09.C)
 list(REMOVE_DUPLICATES CXX_TESTCODES)
 
-list(APPEND CXX_TESTCODES_GNUXX17
-  rex_frontend_structured_binding_template_body.cpp)
-
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" _rex_cxx_tests_processor)
 set(REX_CXX_TESTS_HOST_IS_X86 FALSE)
 if(_rex_cxx_tests_processor MATCHES "^(x86_64|amd64|i[3-6]86)$")
@@ -3198,7 +3199,7 @@ function(cxx_exact_negative_diagnostic input_file output_variable)
       "rex_frontend_macro_missing_separator.cpp:1:2: error: invalid preprocessing directive")
   elseif(input_file STREQUAL "rex_test2025_cfe_error_exit_code.cpp")
     set(_diagnostic
-      "rex_test2025_cfe_error_exit_code.cpp:3:5: error: non-void function 'main' should return a value")
+      "rex_test2025_cfe_error_exit_code.cpp:3:5: error: non-void function 'main' should return a value [-Wreturn-mismatch]")
   elseif(input_file STREQUAL "rex_test2025_issue99.cpp")
     set(_diagnostic
       "rex_test2025_issue99.cpp:11:3: error: use of undeclared identifier 'foo'")
@@ -3241,6 +3242,16 @@ list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_NEGATIVE})
 list(REMOVE_ITEM CXX_TESTCODES_GNUXX03 ${CXX_TESTCODES_NEGATIVE})
 list(REMOVE_ITEM CXX_TESTCODES_GNUXX17 ${CXX_TESTCODES_NEGATIVE})
 list(REMOVE_ITEM CXX_TESTCODES_GNUXX20 ${CXX_TESTCODES_NEGATIVE})
+set(CXX_TESTCODES
+  ${CXX_TESTCODES}
+  ${CXX_TESTCODES_GNUXX03}
+  ${CXX_TESTCODES_GNUXX17}
+  ${CXX_TESTCODES_GNUXX20}
+  PARENT_SCOPE)
+foreach(_cxx_standard_list IN ITEMS
+    CXX_TESTCODES_GNUXX03 CXX_TESTCODES_GNUXX17 CXX_TESTCODES_GNUXX20)
+  set(${_cxx_standard_list} "${${_cxx_standard_list}}" PARENT_SCOPE)
+endforeach()
 
 rex_register_compile_source_set(REX_CXX_TESTS_GNUXX03_SOURCES
   ${CXX_TESTCODES_GNUXX03})
@@ -3337,6 +3348,14 @@ foreach(file_to_test ${CXX_TESTCODES})
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
   rex_set_cxx_extended_instrumented_timeout(${_test_name} ${file_to_test})
 endforeach()
+
+set(ROSE_FLAGS ${_rose_flags_default} -isystem ${CMAKE_CURRENT_SOURCE_DIR})
+compile_test(rex_frontend_system_header_constructor_handoff.cpp "Cxx_tests" TRUE)
+rex_compile_test_name(_test_name "Cxx_tests"
+  rex_frontend_system_header_constructor_handoff.cpp)
+rex_lock_test_for_input(${_test_name}
+  rex_frontend_system_header_constructor_handoff.cpp)
+set(ROSE_FLAGS ${_rose_flags_default})
 
 foreach(file_to_test ${CXX_TESTCODES_NEGATIVE})
   cxx_exact_negative_diagnostic(${file_to_test} _exact_diagnostic)
@@ -3639,6 +3658,7 @@ add_test(
     roseTestProgram.C
 )
 set_tests_properties(Cxx_tests_testUsingBadCommandline PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_testUsingBadCommandline roseTestProgram.C)
 
 add_test(
   NAME Cxx_tests_testBuildUsingNoPath
@@ -3651,6 +3671,7 @@ add_test(
     roseTestProgram.C
 )
 set_tests_properties(Cxx_tests_testBuildUsingNoPath PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_testBuildUsingNoPath roseTestProgram.C)
 
 add_test(
   NAME Cxx_tests_testBuildUsingRelativePath
@@ -3663,6 +3684,7 @@ add_test(
     ../Cxx_tests/roseTestProgram.C
 )
 set_tests_properties(Cxx_tests_testBuildUsingRelativePath PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_testBuildUsingRelativePath roseTestProgram.C)
 
 add_test(
   NAME Cxx_tests_testBuildUsingAbsolutePath
@@ -3674,6 +3696,7 @@ add_test(
     -rose:verbose 0
 )
 set_tests_properties(Cxx_tests_testBuildUsingAbsolutePath PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_testBuildUsingAbsolutePath roseTestProgram.C)
 
 add_test(
   NAME Cxx_tests_test_ansi_and_nonansi_modes
@@ -3684,6 +3707,7 @@ add_test(
     $<TARGET_FILE:${translator}>
 )
 set_tests_properties(Cxx_tests_test_ansi_and_nonansi_modes PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test_ansi_and_nonansi_modes test_ansi.C test_nonansi.C)
 
 add_test(
   NAME Cxx_tests_multipleDeclarationsBug
@@ -3694,6 +3718,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/markus_1b.C
 )
 set_tests_properties(Cxx_tests_multipleDeclarationsBug PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_multipleDeclarationsBug markus_1a.C markus_1b.C)
 
 set(_mpi_lam_include_dir
   /home/dquinlan/ROSE/ROSE_TESTS/MPI_header_tests/MPI_header_tests_64bit/LAM_MPI/include)
@@ -3720,6 +3745,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246b.C
 )
 set_tests_properties(Cxx_tests_test_multiple_files PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test_multiple_files test2012_246a.C test2012_246b.C)
 
 add_test(
   NAME CXXTEST_test2012_246a
@@ -3730,6 +3756,7 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test2012_246a.C
 )
 set_tests_properties(CXXTEST_test2012_246a PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(CXXTEST_test2012_246a test2012_246a.C)
 
 add_test(
   NAME Cxx_tests_test_multiple_files_2
@@ -3740,6 +3767,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2018_02.C
 )
 set_tests_properties(Cxx_tests_test_multiple_files_2 PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test_multiple_files_2 test2018_01.C test2018_02.C)
 
 add_test(
   NAME Cxx_tests_test_multiple_files_3
@@ -3750,6 +3778,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_30b.C
 )
 set_tests_properties(Cxx_tests_test_multiple_files_3 PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test_multiple_files_3 test2019_30a.C test2019_30b.C)
 
 add_test(
   NAME Cxx_tests_test_multiple_files_4
@@ -3760,6 +3789,7 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2019_42b.C
 )
 set_tests_properties(Cxx_tests_test_multiple_files_4 PROPERTIES LABELS Cxx_tests )
+rex_lock_test_for_input(Cxx_tests_test_multiple_files_4 test2019_42a.C test2019_42b.C)
 
 # Issue 476: switch init-statements with case-local declarations must survive
 # compile, link, and execution in the normal Cxx test suite.
@@ -4274,6 +4304,10 @@ add_executable(
   rex_frontend_requires_local_parameter_owner_translator
   rex_frontend_requires_local_parameter_owner_translator.cpp
 )
+target_include_directories(
+  rex_frontend_requires_local_parameter_owner_translator PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson
+)
 target_link_libraries(
   rex_frontend_requires_local_parameter_owner_translator
   ROSE_DLL
@@ -4435,6 +4469,31 @@ set_tests_properties(
   PROPERTIES LABELS "Cxx_tests;rex;CFE"
 )
 
+add_test(
+  NAME Cxx_tests_rex_frontend_opaque_unique_source
+  COMMAND rex_frontend_function_source_location_contract opaque-unique
+)
+set_tests_properties(Cxx_tests_rex_frontend_opaque_unique_source
+  PROPERTIES LABELS "Cxx_tests;rex;CFE")
+add_test(
+  NAME Cxx_tests_rex_frontend_opaque_unbound_value_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    [=[
+      ulimit -c 0
+      set +e
+      "$1" opaque-nonunique >rex_frontend_opaque_binding.log 2>&1
+      status=$?
+      set -e
+      test "$status" -eq 134
+      diagnostic='REX_FRONTEND_INVARIANT[opaque-value-binding]: exact expression translation failed for Clang OpaqueValueExpr'
+      test "$(grep -Fxc "$diagnostic" rex_frontend_opaque_binding.log)" -eq 1
+    ]=]
+    dummy
+    $<TARGET_FILE:rex_frontend_function_source_location_contract>
+)
+set_tests_properties(Cxx_tests_rex_frontend_opaque_unbound_value_is_rejected
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
+
 add_executable(
   rex_frontend_source_group_ownership_contract
   rex_frontend_source_group_ownership_contract.cpp
@@ -4580,6 +4639,8 @@ target_link_libraries(
   ROSE_DLL
   ${link_with_libraries}
 )
+target_include_directories(rex_frontend_udl_structural_ownership_translator
+  PRIVATE ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astJson)
 
 add_executable(
   rex_frontend_using_terminal_provenance_translator
@@ -4714,6 +4775,30 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_frontend_udl_structural_ownership
   rex_frontend_udl_structural_ownership.cpp)
+
+add_executable(rex_frontend_udl_semantic_mutation_translator
+  rex_frontend_udl_semantic_mutation_translator.cpp)
+target_link_libraries(rex_frontend_udl_semantic_mutation_translator
+  ROSE_DLL ${link_with_libraries})
+target_include_directories(rex_frontend_udl_semantic_mutation_translator
+  PRIVATE ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astJson)
+add_test(NAME Cxx_tests_rex_udl_semantic_mutation_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_udl_semantic_mutation_runtime.py
+    $<TARGET_FILE:rex_frontend_udl_semantic_mutation_translator>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_udl_semantic_mutation.cpp)
+set_tests_properties(Cxx_tests_rex_udl_semantic_mutation_runtime
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER")
+
+add_test(NAME Cxx_tests_rex_udl_token_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_udl_token_runtime.py
+    $<TARGET_FILE:rex_frontend_udl_structural_ownership_translator>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_udl_structural_ownership.cpp)
+set_tests_properties(Cxx_tests_rex_udl_token_runtime
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER")
 
 add_test(
   NAME Cxx_tests_rex_frontend_using_terminal_provenance
@@ -4996,6 +5081,7 @@ rex_lock_test_for_input(
   Cxx_tests_rex_frontend_namespace_source_fragments_structure
   rex_frontend_namespace_source_fragments.cpp)
 
+# GNU mode supplies the implicit std namespace validated by this driver.
 add_test(
   NAME Cxx_tests_rex_frontend_support_namespace_semantic_root
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
@@ -5003,7 +5089,7 @@ add_test(
     $<TARGET_FILE:rex_frontend_support_namespace_semantic_root_translator>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep
     ${ROSE_INCLUDE_FLAGS}
-    -std=c++17
+    -std=gnu++17
     -target aarch64-unknown-linux-gnu
     -rose:output
     ${CMAKE_CURRENT_BINARY_DIR}/rose_rex_frontend_support_namespace_semantic_root.cpp
@@ -5105,7 +5191,10 @@ add_test(
   NAME Cxx_tests_rex_frontend_statement_attributes_roundtrip
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${BASH_EXECUTABLE} -c
-    "output=\"$1\"; shift; \"$@\" && grep -Fq '[[assume(' \"$output\" && grep -Fq '[[clang::nomerge]]' \"$output\" && grep -Fq '[[clang::always_inline]]' \"$output\" && grep -Fq '[[likely]]' \"$output\" && grep -Fq '[[unlikely]]' \"$output\" && grep -Fq '[[fallthrough]]' \"$output\" && grep -Fq '__attribute__((fallthrough))' \"$output\" && grep -Fq '[[clang::musttail]]' \"$output\" && awk 'index($0, \"#pragma clang loop vectorize_width\") { ++vectorize_count; vectorize=NR } index($0, \"#pragma clang loop interleave\") { ++interleave_count; interleave=NR } index($0, \"#pragma unroll 4\") { ++unroll_count } index($0, \"for (int index\") && !first_loop { first_loop=NR } END { exit !(vectorize_count == 1 && interleave_count == 1 && unroll_count == 1 && first_loop && vectorize < interleave && interleave < first_loop) }' \"$output\" && '${CMAKE_CXX_COMPILER}' -std=c++23 -Wno-attributes -fsyntax-only \"$output\""
+    "output=\"$1\"
+     shift
+     \"$@\" &&
+       '${CMAKE_CXX_COMPILER}' -std=c++23 -Wno-attributes -fsyntax-only \"$output\""
     dummy
     "${_rex_statement_attributes_output}"
     $<TARGET_FILE:rex_frontend_statement_attributes_translator>
@@ -5365,6 +5454,22 @@ rex_lock_test_for_input(
   rex_frontend_function_template_default_parameter_owner.cpp)
 
 add_test(
+  NAME Cxx_tests_rex_frontend_function_template_default_parameter_owner_ast_json
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:rex_frontend_function_template_default_parameter_owner_translator>
+    ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS} -std=gnu++17
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_function_template_default_parameter_owner_json
+    -rose:output rose_rex_function_template_default_parameter_owner_json.cpp
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_function_template_default_parameter_owner.cpp)
+set_tests_properties(
+  Cxx_tests_rex_frontend_function_template_default_parameter_owner_ast_json
+  PROPERTIES LABELS "Cxx_tests;ASTJSON;rex;CFE;UNPARSER")
+rex_lock_test_for_input(
+  Cxx_tests_rex_frontend_function_template_default_parameter_owner_ast_json
+  rex_frontend_function_template_default_parameter_owner.cpp)
+
+add_test(
   NAME Cxx_tests_rex_frontend_semantic_alias_template_parameter_owner
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND
@@ -5450,7 +5555,7 @@ add_test(
   NAME Cxx_tests_rex_frontend_dependent_typename_use_owner
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND ${BASH_EXECUTABLE} -c
-    "\"$@\" && test \"$(grep -Fo 'typename RexDependentTypenameOwner<T>::type' '${_rex_dependent_typename_output}' | wc -l)\" -eq 8 && test \"$(grep -Fo 'struct ::RexQualifiedElaboratedTag' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'class RexElaboratedTemplateTag<int>' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(struct RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo '__alignof__(RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo '__alignof__(struct RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'struct RexTypeOperandElaboration' '${_rex_dependent_typename_output}' | wc -l)\" -eq 4 && test \"$(grep -Fo 'sizeof(Nested)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(RexDependentSizeofOwner<T>::Nested)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Eo 'sizeof\\(struct ([^)]*::)?Nested\\)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 0 && '${CMAKE_CXX_COMPILER}' -std=gnu++17 -fsyntax-only '${_rex_dependent_typename_output}'"
+    "\"$@\" && test \"$(grep -Fo 'typename RexDependentTypenameOwner<T>::type' '${_rex_dependent_typename_output}' | wc -l)\" -eq 8 && test \"$(grep -Fo 'struct ::RexQualifiedElaboratedTag' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'class RexElaboratedTemplateTag<int>' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(struct RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'alignof(RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'alignof(struct RexTypeOperandElaboration)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'struct RexTypeOperandElaboration' '${_rex_dependent_typename_output}' | wc -l)\" -eq 4 && test \"$(grep -Fo 'sizeof(Nested)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Fo 'sizeof(RexDependentSizeofOwner<T>::Nested)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 1 && test \"$(grep -Eo 'sizeof\\(struct ([^)]*::)?Nested\\)' '${_rex_dependent_typename_output}' | wc -l)\" -eq 0 && '${CMAKE_CXX_COMPILER}' -std=gnu++17 -fsyntax-only '${_rex_dependent_typename_output}'"
     dummy
     $<TARGET_FILE:rex_frontend_dependent_typename_use_owner_translator>
     ${ROSE_FLAGS}
@@ -5555,25 +5660,6 @@ set_tests_properties(
 rex_lock_test_for_input(
   Cxx_tests_rex_unparser_visibility_contract
   rex_unparser_visibility_contract.cpp)
-
-add_test(
-  NAME Cxx_tests_rex_unparser_visibility_macro_conflict_is_rejected
-  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-  COMMAND ${BASH_EXECUTABLE} -c
-    "ulimit -c 0; set +e; \"$@\" >rex_unparser_visibility_macro_conflict.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc 'REX_FRONTEND_INVARIANT[gnu-visibility-source]: visibility attribute has conflicting exact expanded or spelled visibility token evidence' rex_unparser_visibility_macro_conflict.log)\" -eq 1"
-    dummy
-    $<TARGET_FILE:${translator}>
-    ${ROSE_FLAGS} -rose:skipfinalCompileStep -rose:skip_unparse
-    ${ROSE_INCLUDE_FLAGS}
-    -I${CMAKE_CURRENT_SOURCE_DIR}
-    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_visibility_macro_conflict.cpp
-)
-set_tests_properties(
-  Cxx_tests_rex_unparser_visibility_macro_conflict_is_rejected
-  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
-rex_lock_test_for_input(
-  Cxx_tests_rex_unparser_visibility_macro_conflict_is_rejected
-  rex_unparser_visibility_macro_conflict.cpp)
 
 add_test(
   NAME Cxx_tests_rex_frontend_declaration_scope_contract_structure
@@ -5893,6 +5979,8 @@ add_test(
   COMMAND
     $<TARGET_FILE:rex_frontend_variable_declarator_identity_translator>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_condition_declaration_json
     ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c
@@ -6472,7 +6560,10 @@ rex_add_cxx_unparse_check_test(
 
 rex_add_cxx_unparse_check_test(
   "rex_unparser_typed_type_context"
-  "grep -F 'decltype(nullptr)' rose_rex_unparser_typed_type_context.cpp && grep -E 'Owner[[:space:]]*::[[:space:]]*[*]' rose_rex_unparser_typed_type_context.cpp && grep -F '__vector_size__(sizeof(' rose_rex_unparser_typed_type_context.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_unparser_typed_type_context.cpp"
+  "grep -F 'decltype(nullptr)' rose_rex_unparser_typed_type_context.cpp &&
+   grep -E 'Owner[[:space:]]*::[[:space:]]*[*]' rose_rex_unparser_typed_type_context.cpp &&
+   grep -F '__vector_size__(sizeof(' rose_rex_unparser_typed_type_context.cpp &&
+   '${CMAKE_CXX_COMPILER}' -std=gnu++17 -I'${CMAKE_CURRENT_SOURCE_DIR}' -c rose_rex_unparser_typed_type_context.cpp"
 )
 
 add_test(
@@ -6539,16 +6630,42 @@ rex_add_cxx_unparse_check_test(
   "grep -E 'extern[[:space:]]+template[[:space:]]+int[[:space:]]+([[:alnum:]_]+::)*twice[[:space:]]*<[[:space:]]*int[[:space:]]*>[[:space:]]*\\([[:space:]]*int([[:space:]]+[[:alnum:]_]+)?[[:space:]]*\\)' rose_rex_frontend_function_explicit_instantiation_identity.cpp && grep -E 'template[[:space:]]+long[[:space:]]+([[:alnum:]_]+::)*twice[[:space:]]*<[[:space:]]*long[[:space:]]*>[[:space:]]*\\([[:space:]]*long([[:space:]]+[[:alnum:]_]+)?[[:space:]]*\\)' rose_rex_frontend_function_explicit_instantiation_identity.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_frontend_function_explicit_instantiation_identity.cpp"
 )
 
+# REX replays this valid instantiation after a later alias changes lookup.
+# Keep the exact rejection until typed declaration-time capture is implemented:
+# https://github.com/ouankou/rex/issues/863. Unexpected success requires restoring
+# the positive contract; unrelated assertions must not satisfy this negative.
 add_test(
   NAME Cxx_tests_rex_frontend_function_production_contract_structure
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND
+    ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      ulimit -c 0
+      compiler=$1
+      translator=$2
+      source=$3
+      "$compiler" -std=gnu++17 -fsyntax-only "$source"
+      log=rex_frontend_function_production_contract.negative.log
+      set +e
+      "$translator" -rose:skipfinalCompileStep "$source" >"$log" 2>&1
+      status=$?
+      set -e
+      cat "$log"
+      test "$status" -eq 134
+      expected='REX_FRONTEND_INVARIANT[function-instantiation-source-binding]: '
+      expected+='function=rex_function_production::rex_defaulted_instantiation '
+      expected+="source=$source:84:21 "
+      expected+='replayed source arguments do not select the original native specialization'
+      test "$(grep -Fxc -- "$expected" "$log")" -eq 1
+    ]=]
+    dummy
+    ${CMAKE_CXX_COMPILER}
     $<TARGET_FILE:rex_frontend_function_production_contract_translator>
-    -rose:skipfinalCompileStep
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_function_production_contract.cpp
 )
 set_tests_properties(
   Cxx_tests_rex_frontend_function_production_contract_structure
-  PROPERTIES LABELS "Cxx_tests;CFE;rex;frontend;contracts"
+  PROPERTIES LABELS "Cxx_tests;CFE;rex;frontend;contracts;negative"
 )
 
 set(_rex_initializer_destination_output
@@ -6582,7 +6699,7 @@ rex_add_cxx_unparse_check_test(
 
 rex_add_cxx_unparse_check_test(
   "rex_frontend_declaration_scope_contract"
-  "test \"$(grep -Ec 'friend[[:space:]]+void[[:space:]]+rex_friend_template' rose_rex_frontend_declaration_scope_contract.cpp)\" -eq 1 && grep -E 'friend[[:space:]]+void[[:space:]]+::rex_global_target' rose_rex_frontend_declaration_scope_contract.cpp && ! grep -E 'template[[:space:]]*<>[[:space:]]*void[[:space:]]+rex_member' rose_rex_frontend_declaration_scope_contract.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_frontend_declaration_scope_contract.cpp"
+  "test \"$(grep -Ec 'friend[[:space:]]+void[[:space:]]+rex_friend_template[[:space:]]*[(]' rose_rex_frontend_declaration_scope_contract.cpp)\" -eq 1 && grep -E 'friend[[:space:]]+void[[:space:]]+::rex_global_target' rose_rex_frontend_declaration_scope_contract.cpp && ! grep -E 'template[[:space:]]*<>[[:space:]]*void[[:space:]]+rex_member' rose_rex_frontend_declaration_scope_contract.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_frontend_declaration_scope_contract.cpp"
 )
 
 rex_add_cxx_unparse_check_test(
@@ -7230,6 +7347,18 @@ foreach(file_to_test ${rex_test2025_cfe_token_stream_mapping_tests})
 endforeach()
 
 add_test(
+  NAME Cxx_tests_rex_frontend_trigraph_continuation_token_mapping
+  COMMAND
+    $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
+    ${ROSE_FLAGS} -trigraphs -rose:skipfinalCompileStep -rose:unparse_tokens
+    ${ROSE_INCLUDE_FLAGS} -I${CMAKE_CURRENT_SOURCE_DIR}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_test2025_cfe_token_stream_mapping_preproc_order.cpp)
+set_tests_properties(Cxx_tests_rex_frontend_trigraph_continuation_token_mapping
+  PROPERTIES LABELS Cxx_tests)
+rex_lock_test_for_input(Cxx_tests_rex_frontend_trigraph_continuation_token_mapping
+  rex_test2025_cfe_token_stream_mapping_preproc_order.cpp)
+
+add_test(
   NAME Cxx_tests_rex_test2025_cfe_token_stream_mapping_macros_includes_token_mapping
   COMMAND
     $<TARGET_FILE:rex_test2025_cfe_token_stream_mapping_translator>
@@ -7704,7 +7833,7 @@ rex_add_clang_frontend_negative_test(
   Cxx_tests
   ${CMAKE_CURRENT_BINARY_DIR}
   rex_test2025_cfe_error_exit_code.log
-  "rex_test2025_cfe_error_exit_code.cpp:3:5: error: non-void function 'main' should return a value"
+  "rex_test2025_cfe_error_exit_code.cpp:3:5: error: non-void function 'main' should return a value [-Wreturn-mismatch]"
   $<TARGET_FILE:${translator}>
   ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
   -I${CMAKE_CURRENT_SOURCE_DIR}
@@ -8605,8 +8734,32 @@ function(rex_add_unsupported_clang_surface_death_test
 endfunction()
 
 rex_add_unsupported_clang_surface_death_test(
+  Cxx_tests_rex_frontend_dependent_ext_vector_rejected
+  rex_frontend_dependent_ext_vector_rejected.cpp
+  "REX_FRONTEND_INVARIANT[unsupported-dependent-vector-type]: exact type translation failed for Clang DependentSizedExtVector"
+  -std=c++17)
+
+rex_add_unsupported_clang_surface_death_test(
+  Cxx_tests_rex_frontend_dependent_vector_rejected
+  rex_frontend_dependent_vector_rejected.cpp
+  "REX_FRONTEND_INVARIANT[unsupported-dependent-vector-type]: exact type translation failed for Clang DependentVector"
+  -std=c++17)
+
+rex_add_unsupported_clang_surface_death_test(
+  Cxx_tests_rex_frontend_block_pointer_rejected
+  rex_frontend_block_pointer_rejected.cpp
+  "REX_FRONTEND_INVARIANT[unsupported-block-pointer-type]: exact type translation failed for Clang BlockPointer"
+  -std=c++17 -fblocks)
+
+rex_add_unsupported_clang_surface_death_test(
   Cxx_tests_rex_frontend_block_expression_rejected
   rex_frontend_block_expression_rejected.cpp
+  "REX_FRONTEND_INVARIANT[unsupported-block-pointer-type]: exact type translation failed for Clang BlockPointer"
+  -std=c++17 -fblocks)
+
+rex_add_unsupported_clang_surface_death_test(
+  Cxx_tests_rex_frontend_block_expression_statement_rejected
+  rex_frontend_block_expression_statement_rejected.cpp
   "REX_FRONTEND_INVARIANT[unsupported-source-expression]: Clang BlockExpr has no lossless typed Sage representation"
   -std=c++17 -fblocks)
 
@@ -8621,3 +8774,125 @@ rex_add_unsupported_clang_surface_death_test(
   rex_frontend_pragma_detect_mismatch_rejected.cpp
   "REX_FRONTEND_INVARIANT[unsupported-source-declaration]: Clang PragmaDetectMismatch has no lossless typed Sage representation"
   -std=c++17 -fms-extensions)
+
+add_test(NAME Cxx_tests_rex_template_operator_reference_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_operator_reference_runtime.py
+    $<TARGET_FILE:identityTranslator>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_template_operator_selected_symbol.cpp)
+set_tests_properties(Cxx_tests_rex_template_operator_reference_runtime
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER")
+
+add_executable(rex_frontend_float128_target_translator
+  rex_frontend_float128_target_translator.cpp)
+target_link_libraries(rex_frontend_float128_target_translator
+  PRIVATE ROSE_DLL ${link_with_libraries})
+
+# Share the typed-AST driver and specimens across both frontend preincludes.
+foreach(_rex_float_target_language IN ITEMS c c++)
+  if(_rex_float_target_language STREQUAL "c")
+    set(_rex_float_target_suite C_tests)
+    set(_rex_float_target_standard c11)
+  else()
+    set(_rex_float_target_suite Cxx_tests)
+    set(_rex_float_target_standard c++17)
+  endif()
+  add_test(NAME ${_rex_float_target_suite}_rex_frontend_float128_target_typed
+    COMMAND rex_frontend_float128_target_translator float128
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      --target=x86_64-unknown-linux-gnu -x ${_rex_float_target_language} -std=${_rex_float_target_standard} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_float128_target.cpp)
+  add_test(NAME ${_rex_float_target_suite}_rex_frontend_long_double_target_typed
+    COMMAND rex_frontend_float128_target_translator long_double
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      --target=aarch64-unknown-linux-gnu -x ${_rex_float_target_language} -std=${_rex_float_target_standard} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_long_double_target.cpp)
+  set_tests_properties(${_rex_float_target_suite}_rex_frontend_float128_target_typed
+    ${_rex_float_target_suite}_rex_frontend_long_double_target_typed
+    PROPERTIES LABELS "${_rex_float_target_suite};rex;CFE;AST")
+  rex_lock_test_for_input(${_rex_float_target_suite}_rex_frontend_float128_target_typed
+    rex_frontend_float128_target.cpp)
+  rex_lock_test_for_input(${_rex_float_target_suite}_rex_frontend_long_double_target_typed
+    rex_frontend_long_double_target.cpp)
+
+  add_test(NAME ${_rex_float_target_suite}_rex_frontend_float128_unsupported_target_rejected
+    COMMAND ${BASH_EXECUTABLE} -c
+      [=[ulimit -c 0 || exit
+  log="$0.log"
+  "$@" >"$log" 2>&1
+  status=$?
+  test "$status" -eq 134 &&
+    test "$(grep -Fc -- "error: __float128 is not supported on this target" "$log")" -eq 1 &&
+    test "$(grep -Fc -- "REX_FRONTEND_INVARIANT[clang-diagnostics]" "$log")" -eq 1]=]
+      ${_rex_float_target_suite}_rex_frontend_float128_unsupported_target_rejected
+      $<TARGET_FILE:rex_frontend_float128_target_translator> float128
+      ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      --target=aarch64-unknown-linux-gnu -x ${_rex_float_target_language} -std=${_rex_float_target_standard} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_float128_target.cpp)
+  set_tests_properties(${_rex_float_target_suite}_rex_frontend_float128_unsupported_target_rejected
+    PROPERTIES LABELS "${_rex_float_target_suite};rex;CFE;death")
+  rex_lock_test_for_input(${_rex_float_target_suite}_rex_frontend_float128_unsupported_target_rejected
+    rex_frontend_float128_target.cpp)
+endforeach()
+unset(_rex_float_target_language)
+unset(_rex_float_target_suite)
+unset(_rex_float_target_standard)
+
+add_executable(rex_frontend_pseudo_object_semantics_translator
+  rex_frontend_pseudo_object_semantics_translator.cpp)
+target_link_libraries(rex_frontend_pseudo_object_semantics_translator
+  ROSE_DLL ${link_with_libraries})
+foreach(_rex_pseudo_object_mode IN ITEMS native ast_json)
+  set(_rex_pseudo_object_flags)
+  if(_rex_pseudo_object_mode STREQUAL ast_json)
+    list(APPEND _rex_pseudo_object_flags
+      -rex:ast-json-checkpoint=pre-omp-construction
+      -rex:ast-json-dir=${CMAKE_CURRENT_BINARY_DIR}/rex_pseudo_object_ast_json)
+  endif()
+  set(_rex_pseudo_object_output
+    ${CMAKE_CURRENT_BINARY_DIR}/rose_rex_frontend_pseudo_object_${_rex_pseudo_object_mode}.cpp)
+  set(_rex_pseudo_object_runtime
+    ${CMAKE_CURRENT_BINARY_DIR}/rex_frontend_pseudo_object_${_rex_pseudo_object_mode}_runtime)
+  set(_rex_pseudo_object_test
+    Cxx_tests_rex_frontend_pseudo_object_semantics_${_rex_pseudo_object_mode})
+  add_test(NAME ${_rex_pseudo_object_test}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      compiler=$1
+      output=$2
+      runtime=$3
+      shift 3
+      "$@" &&
+        "$compiler" -std=gnu++17 "$output" -o "$runtime" &&
+        "$runtime"
+    ]=]
+      dummy ${CMAKE_CXX_COMPILER}
+      ${_rex_pseudo_object_output} ${_rex_pseudo_object_runtime}
+      $<TARGET_FILE:rex_frontend_pseudo_object_semantics_translator>
+      ${ROSE_FLAGS} ${_rex_pseudo_object_flags}
+      -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+      -std=gnu++17 -rose:output ${_rex_pseudo_object_output}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_pseudo_object_semantics.cpp)
+  set_tests_properties(${_rex_pseudo_object_test}
+    PROPERTIES LABELS "Cxx_tests;rex;CFE;UNPARSER")
+  rex_lock_test_for_input(${_rex_pseudo_object_test}
+    rex_frontend_pseudo_object_semantics.cpp)
+endforeach()
+
+add_test(NAME Cxx_tests_rex_frontend_undeclared_std_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    [=[ulimit -c 0 || exit
+log="$0.log"
+"$@" >"$log" 2>&1
+status=$?
+test "$status" -eq 134 &&
+  test "$(grep -Fc -- "error: expected namespace name" "$log")" -eq 1 &&
+  test "$(grep -Fc -- "REX_FRONTEND_INVARIANT[clang-diagnostics]" "$log")" -eq 1]=]
+    Cxx_tests_rex_frontend_undeclared_std_rejected
+    $<TARGET_FILE:testTranslator>
+    ${ROSE_FLAGS} -rose:skipfinalCompileStep ${ROSE_INCLUDE_FLAGS}
+    -std=c++17 -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_undeclared_std.cpp)
+set_tests_properties(Cxx_tests_rex_frontend_undeclared_std_rejected
+  PROPERTIES LABELS "Cxx_tests;rex;CFE;death")
+rex_lock_test_for_input(Cxx_tests_rex_frontend_undeclared_std_rejected
+  rex_frontend_undeclared_std.cpp)

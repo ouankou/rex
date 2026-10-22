@@ -1,21 +1,19 @@
-#include <list>
+#ifndef ROSE_INCLUDING_PREPROCESSING_INFOS_COLLECTOR_H
+#define ROSE_INCLUDING_PREPROCESSING_INFOS_COLLECTOR_H
 
 #include <map>
-
 #include <set>
-
 #include <string>
-
-using namespace std;
 
 class IncludingPreprocessingInfosCollector : public AstSimpleProcessing {
 private:
   SgProject *projectNode;
-  map<string, set<string>> normalizedIncludedFilesMap;
+  std::map<std::string, std::set<std::string>> normalizedIncludedFilesMap;
 
-  map<string, set<PreprocessingInfo *>> includingPreprocessingInfosMap;
-  set<PreprocessingInfo *> observedIncludePreprocessingInfos;
-  set<SgSourceFile *> processedSourceFiles;
+  std::map<std::string, std::set<PreprocessingInfo *>>
+      includingPreprocessingInfosMap;
+  std::set<PreprocessingInfo *> observedIncludePreprocessingInfos;
+  std::set<SgSourceFile *> processedSourceFiles;
 
   void observeIncludePreprocessingInfo(PreprocessingInfo *preprocessingInfo);
   void collectFromSourceFile(SgSourceFile *sourceFile);
@@ -26,6 +24,9 @@ protected:
 public:
   ~IncludingPreprocessingInfosCollector();
   explicit IncludingPreprocessingInfosCollector(SgProject *projectNode);
-  map<string, set<PreprocessingInfo *>> collect();
-  const map<string, set<string>> &getIncludedFilesMap() const;
+  std::map<std::string, std::set<PreprocessingInfo *>> collect();
+  const std::map<std::string, std::set<std::string>> &
+  getIncludedFilesMap() const;
 };
+
+#endif

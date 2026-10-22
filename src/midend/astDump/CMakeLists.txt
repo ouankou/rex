@@ -4,10 +4,8 @@ set(astDumpSources
   wholeAST.C
   copyGraph.C
   walrus.C
-  intermediateRepresentationNodeGraphs.C
   includeGraph.C
   AstDOTGeneration.C
-  DOTGraphInterface.C
   AstTerm.C)
 
 if(ROSE_WITH_LIBHARU)
@@ -18,19 +16,18 @@ endif()
 
 add_library(astDump OBJECT ${astDumpSources})
 add_dependencies(astDump rosetta_generated)
-
-
-########### install files ###############
+if(TARGET REX::HPDF)
+  target_link_libraries(astDump PRIVATE REX::HPDF)
+endif()
 
 set(astDumpHeaders
   AstAttributeDOT.h astGraph.h astGraphTemplateImpl.h wholeAST.h
   wholeAST_API.h copyGraph.h walrus.h
-  intermediateRepresentationNodeGraphs.h
   includeGraph.h
   AstDOTGeneration.h
-  DOTGeneration.h DOTGenerationImpl.h DOTGraphInterface.h
-  DOTRepresentation.h DOTRepresentationImpl.h DOTSubgraphRepresentation.h
-  DOTSubgraphRepresentationImpl.h
+  AstDOTGenerationImpl.C
+  DOTGeneration.h DOTGenerationImpl.h
+  DOTRepresentation.h DOTRepresentationImpl.h
   AstTerm.h)
 
 if(ROSE_WITH_LIBHARU)

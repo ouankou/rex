@@ -1,8 +1,8 @@
 #include <algorithm>
 
-#include <iostream>
-
 #include <string>
+
+#include <unordered_map>
 
 #include <vector>
 
@@ -20,23 +20,6 @@ using namespace SageBuilder;
 
 ////////////////////////////////////////////////////////////////////////////////////
 // The final conversion step- Convert to Arm SVE intrinsics
-
-// Global variables to for naming control
-int pg_pos = 0;
-int vi_pos = 0;
-int arm_buf_pos = 0;
-
-// For maintaining declarations
-std::vector<std::string> arm_partial_broadcasts;
-
-std::string arm_gen_buf() {
-  char str[5];
-  sprintf(str, "%d", arm_buf_pos);
-
-  std::string name = "__buf" + std::string(str);
-  ++arm_buf_pos;
-  return name;
-}
 
 // Returns the corresponding function based on a given type
 std::string arm_get_func(SgType *input, OpType type) {
@@ -179,14 +162,8 @@ void arm_normalize_offset(SgPntrArrRefExp *array, SgExpression *inc_fc) {
     }
   }
 
-  // SgIntVal *inc = isSgIntVal(mul->get_lhs_operand());
-  // if (!inc) return;
-
-  // SgExpression *inc_fc = buildFunctionCallExp(pred_count_name,
-  // buildIntType(), NULL, for_loop);
   SgExpression *old_increment = mul->get_lhs_operand();
-  if (inc_fc == nullptr || inc_fc->get_parent() != nullptr ||
-      old_increment == nullptr || old_increment->get_parent() != mul) {
+  if (old_increment == nullptr || old_increment->get_parent() != mul) {
     fprintf(stderr,
             "REX_OMP_LOWERING_INVARIANT[arm-simd-offset]: offset increment "
             "does not identify one exact replacement edge\n");
@@ -204,6 +181,70 @@ void arm_normalize_offset(SgPntrArrRefExp *array, SgExpression *inc_fc) {
 }
 
 namespace {
+
+using ArmOutputSymbols =
+    std::unordered_map<SgVariableSymbol *, SgVariableSymbol *>;
+
+[[noreturn]] void failArmSimdEmission(const char *contract, SgNode *node) {
+  fprintf(stderr,
+          "REX_OMP_LOWERING_INVARIANT[%s]: node=%p/%s has no exact "
+          "ARM SIMD output identity or ownership\n",
+          contract, static_cast<void *>(node),
+          node != nullptr ? node->class_name().c_str() : "<null>");
+  ROSE_ABORT();
+}
+
+unsigned int armLaneWidth(SgType *type) {
+  if (type == nullptr)
+    failArmSimdEmission("arm-simd-lane-type", type);
+  switch (type->variantT()) {
+  case V_SgTypeInt:
+  case V_SgTypeFloat:
+    return 32;
+  case V_SgTypeDouble:
+    return 64;
+  default:
+    failArmSimdEmission("arm-simd-lane-type", type);
+  }
+}
+
+SgVariableSymbol *armOutputSymbol(SgVariableDeclaration *declaration,
+                                  SgScopeStatement *scope) {
+  if (declaration == nullptr || declaration->get_variables().size() != 1 ||
+      declaration->get_variables().front() == nullptr)
+    failArmSimdEmission("arm-simd-output-symbol", declaration);
+  SgInitializedName *name = declaration->get_variables().front();
+  SgVariableSymbol *symbol =
+      isSgVariableSymbol(name->get_symbol_from_symbol_table());
+  if (symbol == nullptr || symbol->get_declaration() != name ||
+      name->get_scope() != scope || declaration->get_parent() != scope ||
+      scope->lookup_variable_symbol(name->get_name()) != symbol)
+    failArmSimdEmission("arm-simd-output-symbol", declaration);
+  return symbol;
+}
+
+SgExpression *copyArmIrOperand(const OmpSimdCompiler &compiler,
+                               const ArmOutputSymbols &outputs,
+                               SgExpression *operand) {
+  if (operand == nullptr)
+    failArmSimdEmission("arm-simd-ir-copy", operand);
+  SgExpression *copy = copyExpression(operand);
+  if (copy == nullptr || copy == operand || copy->get_parent() != nullptr)
+    failArmSimdEmission("arm-simd-ir-copy", operand);
+  for (SgVarRefExp *reference :
+       SageInterface::querySubTree<SgVarRefExp>(copy, V_SgVarRefExp)) {
+    SgVariableSymbol *source = reference->get_symbol();
+    if (!compiler.isGeneratedTemporary(source))
+      continue;
+    const auto output = outputs.find(source);
+    if (output == outputs.end() || output->second == nullptr)
+      failArmSimdEmission("arm-simd-output-reference", reference);
+    reference->set_symbol(output->second);
+    if (reference->get_symbol() != output->second)
+      failArmSimdEmission("arm-simd-output-reference", reference);
+  }
+  return copy;
+}
 
 SgScopeStatement *requireExactArmSimdRegion(SgOmpSimdStatement *target,
                                             SgForStatement *for_loop) {
@@ -266,21 +307,17 @@ SgScopeStatement *requireExactArmSimdRegion(SgOmpSimdStatement *target,
   return scope;
 }
 
-void validatePublishedArmPredicate(SgVariableDeclaration *declaration,
-                                   SgAssignInitializer *initializer,
-                                   SgExpression *predicate,
-                                   SgOmpSimdStatement *target,
-                                   SgScopeStatement *scope) {
+SgVariableSymbol *
+validatePublishedArmPredicate(SgVariableDeclaration *declaration,
+                              SgOmpSimdStatement *target,
+                              SgScopeStatement *scope) {
   if (declaration == nullptr || declaration->get_parent() != scope ||
       declaration->get_scope() != scope ||
       declaration->get_variables().size() != 1 ||
       declaration->get_variables().front() == nullptr ||
       declaration->get_variables().front()->get_parent() != declaration ||
-      declaration->get_variables().front()->get_initializer() != initializer ||
-      initializer == nullptr ||
-      initializer->get_parent() != declaration->get_variables().front() ||
-      initializer->get_operand() != predicate || predicate == nullptr ||
-      predicate->get_parent() != initializer || target->get_parent() != scope) {
+      declaration->get_variables().front()->get_initializer() != nullptr ||
+      target->get_parent() != scope) {
     fprintf(stderr, "REX_OMP_LOWERING_INVARIANT[arm-simd-predicate]: predicate "
                     "declaration failed exact ownership publication\n");
     ROSE_ABORT();
@@ -300,13 +337,26 @@ void validatePublishedArmPredicate(SgVariableDeclaration *declaration,
             "not the one exact declaration immediately before its target\n");
     ROSE_ABORT();
   }
+  SgInitializedName *binding = declaration->get_variables().front();
+  SgVariableSymbol *symbol =
+      isSgVariableSymbol(binding->get_symbol_from_symbol_table());
+  if (symbol == nullptr || symbol->get_declaration() != binding ||
+      binding->get_scope() != scope ||
+      scope->lookup_variable_symbol(binding->get_name()) != symbol) {
+    fprintf(stderr,
+            "REX_OMP_LOWERING_INVARIANT[arm-simd-predicate]: predicate has "
+            "no exact symbol in its insertion scope\n");
+    ROSE_ABORT();
+  }
+  return symbol;
 }
 
 } // namespace
 
 // Write the Arm intrinsics
 void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
-                        Rose_STL_Container<SgNode *> *ir_block) {
+                        Rose_STL_Container<SgNode *> *ir_block,
+                        const OmpSimdCompiler &compiler) {
   SgScopeStatement *predicate_scope =
       requireExactArmSimdRegion(target, for_loop);
   if (ir_block == nullptr || ir_block->empty()) {
@@ -315,23 +365,82 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
             "exact nonempty IR block\n");
     ROSE_ABORT();
   }
+  SgBinaryOp *first = isSgBinaryOp(ir_block->front());
+  if (first == nullptr)
+    failArmSimdEmission("arm-simd-ir", ir_block->front());
+  const unsigned int lane_width = armLaneWidth(first->get_type());
   for (SgNode *node : *ir_block) {
-    if (node == nullptr || isSgBinaryOp(node) == nullptr) {
+    SgBinaryOp *operation = isSgBinaryOp(node);
+    if (operation == nullptr || operation->get_lhs_operand() == nullptr ||
+        operation->get_rhs_operand() == nullptr ||
+        operation->get_lhs_operand()->get_parent() != operation ||
+        operation->get_rhs_operand()->get_parent() != operation) {
       fprintf(stderr,
               "REX_OMP_LOWERING_INVARIANT[arm-simd-ir]: IR node=%p is not "
-              "one exact binary SIMD operation\n",
+              "one exact binary SIMD operation with owned operands\n",
               static_cast<void *>(node));
       ROSE_ABORT();
     }
+    if (armLaneWidth(operation->get_type()) != lane_width)
+      failArmSimdEmission("arm-simd-mixed-lanes", node);
+    SgExpression *lhs = operation->get_lhs_operand();
+    SgExpression *rhs = operation->get_rhs_operand();
+    switch (node->variantT()) {
+    case V_SgSIMDLoad:
+      if (isSgVarRefExp(lhs) == nullptr || isSgPntrArrRefExp(rhs) == nullptr)
+        failArmSimdEmission("arm-simd-load-shape", node);
+      break;
+    case V_SgSIMDBroadcast:
+      if (isSgVarRefExp(lhs) == nullptr ||
+          (isSgVarRefExp(rhs) == nullptr && isSgIntVal(rhs) == nullptr &&
+           isSgFloatVal(rhs) == nullptr && isSgDoubleVal(rhs) == nullptr))
+        failArmSimdEmission("arm-simd-broadcast-shape", node);
+      break;
+    case V_SgSIMDGather: {
+      SgPntrArrRefExp *element = isSgPntrArrRefExp(rhs);
+      if (isSgVarRefExp(lhs) == nullptr || element == nullptr ||
+          isSgVarRefExp(element->get_lhs_operand()) == nullptr ||
+          isSgPntrArrRefExp(element->get_rhs_operand()) == nullptr)
+        failArmSimdEmission("arm-simd-gather-shape", node);
+      break;
+    }
+    case V_SgSIMDStore:
+      if (isSgPntrArrRefExp(lhs) == nullptr || isSgVarRefExp(rhs) == nullptr)
+        failArmSimdEmission("arm-simd-store-shape", node);
+      break;
+    case V_SgSIMDPartialStore: {
+      SgVarRefExp *partial = isSgVarRefExp(lhs);
+      SgVarRefExp *value = isSgVarRefExp(rhs);
+      if (partial == nullptr || value == nullptr ||
+          !compiler.isPartialTemporary(partial->get_symbol()) ||
+          !compiler.isGeneratedTemporary(value->get_symbol()))
+        failArmSimdEmission("arm-simd-partial-shape", node);
+      break;
+    }
+    case V_SgSIMDScalarStore: {
+      SgVarRefExp *partial = isSgVarRefExp(rhs);
+      if (isSgVarRefExp(lhs) == nullptr || partial == nullptr ||
+          !compiler.isPartialTemporary(partial->get_symbol()))
+        failArmSimdEmission("arm-simd-scalar-shape", node);
+      break;
+    }
+    case V_SgSIMDAddOp:
+    case V_SgSIMDSubOp:
+    case V_SgSIMDMulOp:
+    case V_SgSIMDDivOp: {
+      SgExprListExp *values = isSgExprListExp(rhs);
+      if (isSgVarRefExp(lhs) == nullptr || values == nullptr ||
+          values->get_expressions().size() != 2 ||
+          isSgVarRefExp(values->get_expressions()[0]) == nullptr ||
+          isSgVarRefExp(values->get_expressions()[1]) == nullptr)
+        failArmSimdEmission("arm-simd-math-shape", node);
+      break;
+    }
+    default:
+      failArmSimdEmission("arm-simd-ir-kind", node);
+    }
   }
 
-  SgBinaryOp *first = isSgBinaryOp(ir_block->front());
-  if (first == nullptr || first->get_type() == nullptr) {
-    fprintf(stderr,
-            "REX_OMP_LOWERING_INVARIANT[arm-simd-ir]: first operation has "
-            "no exact result type\n");
-    ROSE_ABORT();
-  }
   SgExprStatement *test_stmt = isSgExprStatement(for_loop->get_test());
   SgBinaryOp *test_op = test_stmt != nullptr
                             ? isSgBinaryOp(test_stmt->get_expression())
@@ -364,54 +473,60 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
     ROSE_ABORT();
   }
 
-  // Create the predicate variable
-  // Determine the name of the predicate variable
-  char str[5];
-  sprintf(str, "%d", pg_pos);
+  const std::string pg_name = generateUniqueVariableName(predicate_scope, "pg");
 
-  std::string prefix = "__pg";
-  std::string pg_name = prefix + std::string(str);
-  ++pg_pos;
-
-  // Determine the proper function
-  std::string pred_func_name = "svwhilelt_b32";
-  std::string pred_count_name = "svcntw";
-  if (first->get_type()->variantT() == V_SgTypeDouble) {
-    pred_func_name = "svwhilelt_b64";
-    pred_count_name = "svcntd";
-  } else if (first->get_type()->variantT() == V_SgPointerType) {
-    SgPointerType *pt = static_cast<SgPointerType *>(first->get_type());
-    if (pt->get_base_type() == nullptr) {
-      fprintf(stderr,
-              "REX_OMP_LOWERING_INVARIANT[arm-simd-ir]: pointer operation "
-              "has no exact base type\n");
-      ROSE_ABORT();
-    }
-    if (pt->get_base_type()->variantT() == V_SgTypeDouble) {
-      pred_func_name = "svwhilelt_b64";
-      pred_count_name = "svcntd";
-    }
-  }
-
-  SgExpression *loop_upper_bound = test_op->get_rhs_operand();
-  SgExpression *start = buildCastExp(buildIntVal(0), buildUnsignedLongType());
-  SgExpression *max_val =
-      buildCastExp(copyExpression(loop_upper_bound), buildUnsignedLongType());
-  SgExprListExp *parameters = buildExprListExp(start, max_val);
+  const std::string pred_func_name =
+      lane_width == 64 ? "svwhilelt_b64" : "svwhilelt_b32";
+  const std::string pred_count_name = lane_width == 64 ? "svcntd" : "svcntw";
 
   SgType *pred_type = requireNamedTypeInParentScopes("svbool_t", new_block);
-  SgExpression *predicate = buildFunctionCallExp(pred_func_name, pred_type,
-                                                 parameters, predicate_scope);
-  SgAssignInitializer *init = buildAssignInitializer(predicate, pred_type);
   SgVariableDeclaration *vd =
-      buildVariableDeclaration(pg_name, pred_type, init, predicate_scope);
+      buildVariableDeclaration(pg_name, pred_type, nullptr, predicate_scope);
   insertStatementBefore(target, vd);
-  validatePublishedArmPredicate(vd, init, predicate, target, predicate_scope);
+  SgVariableSymbol *pg_symbol =
+      validatePublishedArmPredicate(vd, target, predicate_scope);
 
   const auto build_predicate_count_call = [pred_count_name, predicate_scope]() {
     return buildFunctionCallExp(pred_count_name, buildIntType(), NULL,
                                 predicate_scope);
   };
+
+  ArmOutputSymbols outputs;
+  for (SgNode *node : *ir_block) {
+    if (node->variantT() != V_SgSIMDPartialStore)
+      continue;
+    SgVarRefExp *partial = isSgVarRefExp(isSgBinaryOp(node)->get_lhs_operand());
+    if (partial == nullptr || partial->get_symbol() == nullptr ||
+        !compiler.isPartialTemporary(partial->get_symbol()))
+      failArmSimdEmission("arm-simd-partial", node);
+    SgVariableSymbol *source = partial->get_symbol();
+    if (outputs.count(source) != 0)
+      continue;
+    const bool product = compiler.isProductReduction(source);
+    SgType *scalar_type = partial->get_type();
+    SgExpression *identity = nullptr;
+    if (isSgTypeInt(scalar_type))
+      identity = buildIntVal(product ? 1 : 0);
+    else if (isSgTypeFloat(scalar_type))
+      identity = buildFloatVal(product ? 1.0f : 0.0f);
+    else if (isSgTypeDouble(scalar_type))
+      identity = buildDoubleVal(product ? 1.0 : 0.0);
+    else
+      failArmSimdEmission("arm-simd-partial-type", partial);
+    SgType *vector_type = arm_get_type(scalar_type, new_block);
+    SgExprListExp *arguments = buildExprListExp(identity);
+    SgExpression *broadcast =
+        buildFunctionCallExp(arm_get_func(scalar_type, Broadcast), vector_type,
+                             arguments, predicate_scope);
+    SgVariableDeclaration *declaration = buildVariableDeclaration(
+        generateUniqueVariableName(predicate_scope, "rex_arm_simd_partial_"),
+        vector_type, buildAssignInitializer(broadcast, vector_type),
+        predicate_scope);
+    insertStatementBefore(target, declaration);
+    SgVariableSymbol *output = armOutputSymbol(declaration, predicate_scope);
+    if (!outputs.emplace(source, output).second)
+      failArmSimdEmission("arm-simd-partial", partial);
+  }
 
   // Translate the IR
   for (Rose_STL_Container<SgNode *>::iterator i = ir_block->begin();
@@ -421,7 +536,7 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
     SgExpression *lval = op->get_lhs_operand();
     SgExpression *rval = op->get_rhs_operand();
 
-    SgVarRefExp *pred_ref = buildVarRefExp(pg_name, new_block);
+    SgVarRefExp *pred_ref = buildVarRefExp(pg_symbol);
     SgAssignInitializer *init = NULL;
 
     switch ((*i)->variantT()) {
@@ -433,9 +548,11 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
 
       arm_normalize_offset(array, build_predicate_count_call());
 
-      SgExpression *addressed_array = copyExpression(array);
+      SgExpression *addressed_array =
+          copyArmIrOperand(compiler, outputs, array);
       SgAddressOfOp *addr = buildAddressOfOp(
-          addressed_array, buildPointerType(addressed_array->get_type()));
+          addressed_array, buildPointerType(addressed_array->get_type()),
+          SgAddressOfOp::e_address_operand_object);
       SgExprListExp *parameters = buildExprListExp(pred_ref, addr);
 
       SgExpression *ld = buildFunctionCallExp("svld1", vector_type, parameters,
@@ -446,10 +563,10 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
     // Build the broadcast
     case V_SgSIMDBroadcast: {
       SgVarRefExp *dest = static_cast<SgVarRefExp *>(lval);
-      SgVarRefExp *src = static_cast<SgVarRefExp *>(rval);
       SgType *vector_type = arm_get_type(dest->get_type(), new_block);
 
-      SgExprListExp *parameters = buildExprListExp(src);
+      SgExprListExp *parameters =
+          buildExprListExp(copyArmIrOperand(compiler, outputs, rval));
       std::string func_name = arm_get_func(dest->get_type(), Broadcast);
 
       SgExpression *ld = buildFunctionCallExp(func_name, vector_type,
@@ -464,15 +581,17 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
       SgPntrArrRefExp *mask_pntr =
           static_cast<SgPntrArrRefExp *>(element->get_rhs_operand());
 
-      std::string vindex_name = "__vindex" + std::to_string(vi_pos);
-      ++vi_pos;
+      const std::string vindex_name =
+          generateUniqueVariableName(new_block, "vindex");
       SgType *mask_type = arm_get_type(mask_pntr->get_type(), new_block);
       SgType *vector_type = arm_get_type(dest->get_type(), new_block);
 
       // Load the array indicies
-      SgExpression *addressed_mask = copyExpression(mask_pntr);
+      SgExpression *addressed_mask =
+          copyArmIrOperand(compiler, outputs, mask_pntr);
       SgAddressOfOp *addr = buildAddressOfOp(
-          addressed_mask, buildPointerType(addressed_mask->get_type()));
+          addressed_mask, buildPointerType(addressed_mask->get_type()),
+          SgAddressOfOp::e_address_operand_object);
       SgExprListExp *parameters = buildExprListExp(pred_ref, addr);
 
       SgExpression *ld =
@@ -482,12 +601,19 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
       SgVariableDeclaration *mask_vd = buildVariableDeclaration(
           vindex_name, mask_type, local_init, new_block);
       appendStatement(mask_vd, new_block);
+      ROSE_ASSERT(mask_vd->get_variables().size() == 1);
+      SgInitializedName *mask_binding = mask_vd->get_variables().front();
+      ROSE_ASSERT(mask_binding != nullptr);
+      SgVariableSymbol *mask_symbol =
+          isSgVariableSymbol(mask_binding->get_symbol_from_symbol_table());
+      ROSE_ASSERT(mask_symbol != nullptr &&
+                  mask_symbol->get_declaration() == mask_binding &&
+                  mask_binding->get_scope() == new_block);
 
       // The actual gather instruction
-      SgVarRefExp *mask_ref = buildVarRefExp(vindex_name, new_block);
-      SgVarRefExp *base_ref =
-          static_cast<SgVarRefExp *>(element->get_lhs_operand());
-
+      SgVarRefExp *mask_ref = buildVarRefExp(mask_symbol);
+      SgExpression *base_ref =
+          copyArmIrOperand(compiler, outputs, element->get_lhs_operand());
       parameters = buildExprListExp(pred_ref, base_ref, mask_ref);
       ld = buildFunctionCallExp("svld1_gather_index", vector_type, parameters,
                                 predicate_scope);
@@ -501,77 +627,32 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
 
       arm_normalize_offset(array, build_predicate_count_call());
 
-      SgExpression *addressed_array = copyExpression(array);
+      SgExpression *addressed_array =
+          copyArmIrOperand(compiler, outputs, array);
       SgAddressOfOp *addr = buildAddressOfOp(
-          addressed_array, buildPointerType(addressed_array->get_type()));
-      SgExprListExp *parameters = buildExprListExp(pred_ref, addr, src);
+          addressed_array, buildPointerType(addressed_array->get_type()),
+          SgAddressOfOp::e_address_operand_object);
+      SgExprListExp *parameters = buildExprListExp(
+          pred_ref, addr, copyArmIrOperand(compiler, outputs, src));
 
       SgExprStatement *str = buildFunctionCallStmt("svst1", buildVoidType(),
                                                    parameters, predicate_scope);
       appendStatement(str, new_block);
     } break;
 
-    // Partial store (save partial sums to a register)
-    // Basically, all we do is create a zero'ed register outside the for-loop
     case V_SgSIMDPartialStore: {
-      SgVarRefExp *dest = static_cast<SgVarRefExp *>(lval);
-      SgVarRefExp *srcVar = static_cast<SgVarRefExp *>(rval);
+      appendStatement(
+          buildAssignStatement(copyArmIrOperand(compiler, outputs, lval),
+                               copyArmIrOperand(compiler, outputs, rval)),
+          new_block);
+      continue;
+    }
 
-      SgType *vector_type = arm_get_type(dest->get_type(), new_block);
-      std::string dest_name = dest->get_symbol()->get_name();
-
-      if (std::find(arm_partial_broadcasts.begin(),
-                    arm_partial_broadcasts.end(),
-                    dest_name) != arm_partial_broadcasts.end()) {
-        // Found
-      } else {
-        SgExpression *val;
-        switch (dest->get_type()->variantT()) {
-        case V_SgTypeFloat:
-          val = buildFloatVal(0);
-          break;
-        case V_SgTypeDouble:
-          val = buildDoubleVal(0);
-          break;
-        default:
-          fprintf(stderr,
-                  "REX_OMP_LOWERING_INVARIANT[arm-simd-ir]: partial store "
-                  "has unsupported scalar type=%s\n",
-                  dest->get_type()->sage_class_name());
-          ROSE_ABORT();
-        }
-
-        SgExprListExp *parameters = buildExprListExp(val);
-        std::string func_name = arm_get_func(dest->get_type(), Broadcast);
-
-        SgExpression *ld = buildFunctionCallExp(func_name, vector_type,
-                                                parameters, predicate_scope);
-        SgAssignInitializer *local_init =
-            buildAssignInitializer(ld, vector_type);
-
-        SgVariableDeclaration *vd = buildVariableDeclaration(
-            dest_name, vector_type, local_init, new_block);
-        // insertStatementBefore(target, vd);
-        prependStatement(vd, getEnclosingScope(target));
-
-        arm_partial_broadcasts.push_back(dest_name);
-      }
-
-      init = buildAssignInitializer(srcVar, vector_type);
-    } break;
-
-    // Scalar store:
-    //
-    // __pg0 = svptrue_b64();
-    // result = svaddv_f64(__pg0, __part0);
-    //
     case V_SgSIMDScalarStore: {
       SgVarRefExp *scalar = static_cast<SgVarRefExp *>(lval);
       SgVarRefExp *vec = static_cast<SgVarRefExp *>(rval);
+      SgExpression *predicate = nullptr;
 
-      // Reset the predicate
-      // predicate = buildFunctionCallExp("svptrue_b32", pred_type, NULL,
-      // new_block);
       switch (scalar->get_type()->variantT()) {
       case V_SgTypeInt:
       case V_SgTypeFloat: {
@@ -592,20 +673,83 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
         ROSE_ABORT();
       }
 
-      SgVarRefExp *pred_var = buildVarRefExp(pg_name, new_block);
+      SgVarRefExp *pred_var = buildVarRefExp(pg_symbol);
       SgExprStatement *pred_update = buildAssignStatement(pred_var, predicate);
       insertStatementAfter(target, pred_update);
 
-      // result = svaddv(__pg0, __part0);
-      SgExprListExp *parameters =
-          buildExprListExp(buildVarRefExp(pg_name, new_block), vec);
-      SgFunctionCallExp *reductionCall = buildFunctionCallExp(
-          "svaddv", scalar->get_type(), parameters, predicate_scope);
-      SgExpression *scalar_reference = copyExpression(scalar);
-      SgPlusAssignOp *scalar_add = buildPlusAssignOp(
-          scalar_reference, reductionCall, scalar_reference->get_type());
-      SgExprStatement *empty = buildExprStatement(scalar_add);
-      insertStatementAfter(pred_update, empty);
+      SgType *scalar_type = scalar->get_type();
+      if (compiler.isProductReduction(vec->get_symbol())) {
+        // SVE has at most 2048 bits: 64 32-bit or 32 double lanes.
+        const bool is_double = isSgTypeDouble(scalar_type) != nullptr;
+        SgType *buffer_type =
+            buildArrayType(scalar_type, buildIntVal(is_double ? 32 : 64));
+        SgVariableDeclaration *buffer = buildVariableDeclaration(
+            generateUniqueVariableName(predicate_scope, "rex_arm_simd_lanes_"),
+            buffer_type, nullptr, predicate_scope);
+        ROSE_ASSERT(buffer->get_variables().size() == 1);
+        SgVariableSymbol *buffer_symbol = isSgVariableSymbol(
+            buffer->get_variables().front()->get_symbol_from_symbol_table());
+        ROSE_ASSERT(buffer_symbol != nullptr &&
+                    buffer_symbol->get_declaration() ==
+                        buffer->get_variables().front() &&
+                    buffer->get_variables().front()->get_scope() ==
+                        predicate_scope);
+        insertStatementAfter(pred_update, buffer);
+
+        SgExpression *first_lane = buildPntrArrRefExp(
+            buildVarRefExp(buffer_symbol), buildIntVal(0), scalar_type);
+        SgExpression *address =
+            buildAddressOfOp(first_lane, buildPointerType(scalar_type),
+                             SgAddressOfOp::e_address_operand_object);
+        SgExprListExp *store_parameters =
+            buildExprListExp(buildVarRefExp(pg_symbol), address,
+                             copyArmIrOperand(compiler, outputs, vec));
+        SgExprStatement *store = buildFunctionCallStmt(
+            "svst1", buildVoidType(), store_parameters, predicate_scope);
+        insertStatementAfter(buffer, store);
+
+        SgType *index_type = buildUnsignedLongType();
+        SgVariableDeclaration *index = buildVariableDeclaration(
+            generateUniqueVariableName(predicate_scope, "rex_arm_simd_lane_"),
+            index_type, buildAssignInitializer(buildIntVal(0), index_type),
+            predicate_scope);
+        ROSE_ASSERT(index->get_variables().size() == 1);
+        SgVariableSymbol *index_symbol = isSgVariableSymbol(
+            index->get_variables().front()->get_symbol_from_symbol_table());
+        ROSE_ASSERT(
+            index_symbol != nullptr &&
+            index_symbol->get_declaration() == index->get_variables().front() &&
+            index->get_variables().front()->get_scope() == predicate_scope);
+        insertStatementAfter(store, index);
+        SgExpression *lane_count =
+            buildFunctionCallExp(is_double ? "svcntd" : "svcntw", index_type,
+                                 nullptr, predicate_scope);
+        SgExprStatement *condition = buildExprStatement(buildLessThanOp(
+            buildVarRefExp(index_symbol), lane_count, buildBoolType()));
+        SgExpression *increment = buildPlusAssignOp(
+            buildVarRefExp(index_symbol), buildIntVal(1), index_type);
+        SgBasicBlock *fold_body = buildBasicBlock();
+        SgExpression *value =
+            buildPntrArrRefExp(buildVarRefExp(buffer_symbol),
+                               buildVarRefExp(index_symbol), scalar_type);
+        appendStatement(buildExprStatement(buildMultAssignOp(
+                            copyArmIrOperand(compiler, outputs, scalar), value,
+                            scalar_type)),
+                        fold_body);
+        insertStatementAfter(
+            index, buildForStatement(nullptr, condition, increment, fold_body));
+      } else {
+        SgExprListExp *parameters =
+            buildExprListExp(buildVarRefExp(pg_symbol),
+                             copyArmIrOperand(compiler, outputs, vec));
+        SgFunctionCallExp *reduction_call = buildFunctionCallExp(
+            "svaddv", scalar_type, parameters, predicate_scope);
+        SgExpression *scalar_reference =
+            copyArmIrOperand(compiler, outputs, scalar);
+        SgPlusAssignOp *scalar_add =
+            buildPlusAssignOp(scalar_reference, reduction_call, scalar_type);
+        insertStatementAfter(pred_update, buildExprStatement(scalar_add));
+      }
     } break;
 
     case V_SgSIMDAddOp:
@@ -613,10 +757,12 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
     case V_SgSIMDMulOp:
     case V_SgSIMDDivOp: {
       SgVarRefExp *dest = static_cast<SgVarRefExp *>(lval);
-      std::string name = dest->get_symbol()->get_name().getString();
       SgType *vector_type = arm_get_type(dest->get_type(), new_block);
 
-      SgExprListExp *parameters = static_cast<SgExprListExp *>(rval);
+      SgExprListExp *parameters =
+          isSgExprListExp(copyArmIrOperand(compiler, outputs, rval));
+      if (parameters == nullptr)
+        failArmSimdEmission("arm-simd-math", rval);
       parameters->prepend_expression(pred_ref);
 
       std::string func_name = "";
@@ -644,12 +790,7 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
       SgExpression *fc = buildFunctionCallExp(func_name, vector_type,
                                               parameters, predicate_scope);
 
-      if (name.rfind("__part", 0) == 0) {
-        SgExprStatement *assign = buildAssignStatement(dest, fc);
-        appendStatement(assign, new_block);
-      } else {
-        init = buildAssignInitializer(fc, vector_type);
-      }
+      init = buildAssignInitializer(fc, vector_type);
     } break;
 
     default:
@@ -660,52 +801,36 @@ void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
       ROSE_ABORT();
     }
 
-    // Add the statement
-    if ((*i)->variantT() != V_SgSIMDScalarStore) {
-      if (isSgVarRefExp(lval)) {
-        SgVarRefExp *var = static_cast<SgVarRefExp *>(lval);
-
-        SgType *vector_type = arm_get_type(var->get_type(), new_block);
-        SgName name = var->get_symbol()->get_name();
-
-        if (name.getString().rfind("__part", 0) != 0) {
-          SgVariableDeclaration *vd =
-              buildVariableDeclaration(name, vector_type, init, new_block);
-
-          if ((*i)->variantT() == V_SgSIMDBroadcast) {
-            // insertStatementBefore(target, vd);
-            prependStatement(vd, getEnclosingScope(target));
-          } else {
-            appendStatement(vd, new_block);
-          }
-        } else {
-          SgExprStatement *expr = buildAssignStatement(var, init);
-          appendStatement(expr, new_block);
-        }
-      }
+    if (SgVarRefExp *var = isSgVarRefExp(lval)) {
+      SgVariableSymbol *source = var->get_symbol();
+      if (!compiler.isGeneratedTemporary(source) ||
+          outputs.count(source) != 0 || init == nullptr)
+        failArmSimdEmission("arm-simd-value", var);
+      SgType *vector_type = arm_get_type(var->get_type(), new_block);
+      SgVariableDeclaration *declaration = buildVariableDeclaration(
+          generateUniqueVariableName(new_block, "rex_arm_simd_value_"),
+          vector_type, init, new_block);
+      appendStatement(declaration, new_block);
+      if (!outputs.emplace(source, armOutputSymbol(declaration, new_block))
+               .second)
+        failArmSimdEmission("arm-simd-value", var);
     }
   }
 
-  // At the end of each loop, we need to update the predicate
-  SgExpression *loop_var = copyExpression(test_op->get_lhs_operand());
-  SgVarRefExp *pred_var = buildVarRefExp(pg_name, new_block);
-
-  if (isSgCastExp(max_val)) {
-    loop_var = buildCastExp(loop_var, buildUnsignedLongType());
-  }
-
-  max_val =
-      buildCastExp(copyExpression(loop_upper_bound), buildUnsignedLongType());
-  parameters = buildExprListExp(loop_var, max_val);
-  predicate = buildFunctionCallExp(pred_func_name, pred_type, parameters,
-                                   predicate_scope);
+  // The predicate must describe the current iteration before any vector op.
+  SgExpression *loop_var = buildCastExp(
+      copyExpression(test_op->get_lhs_operand()), buildUnsignedLongType());
+  SgVarRefExp *pred_var = buildVarRefExp(pg_symbol);
+  SgExpression *max_val = buildCastExp(
+      copyExpression(test_op->get_rhs_operand()), buildUnsignedLongType());
+  SgExprListExp *parameters = buildExprListExp(loop_var, max_val);
+  SgExpression *predicate = buildFunctionCallExp(pred_func_name, pred_type,
+                                                 parameters, predicate_scope);
 
   SgExprStatement *pred_update = buildAssignStatement(pred_var, predicate);
-  appendStatement(pred_update, new_block);
+  prependStatement(pred_update, new_block);
 
   // Update the loop increment
-  // SgExpression *inc_fc = buildFunctionCallExp(pred_count_name,
-  // buildIntType(), NULL, for_loop);
   SgBinaryOp *inc = isSgBinaryOp(for_loop->get_increment());
   if (inc == nullptr || inc->get_rhs_operand() == nullptr) {
     fprintf(stderr,

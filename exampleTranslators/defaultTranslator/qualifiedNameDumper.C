@@ -72,22 +72,6 @@ visitorTraversal::visit (SgNode * n)
         GET_QUALIFIED_NAME(TypedefDeclaration)
         break;
       }
-      // special case here 
-    case V_SgVariableDeclaration:
-      {
-        SgVariableDeclaration * target = isSgVariableDeclaration(n);
-        SgQualifiedNamePtrList & n_list = target-> get_qualifiedNameList ();
-        SgQualifiedNamePtrList::const_iterator iter = n_list.begin();
-        for (; iter!=n_list.end(); iter++)
-        {
-          SgQualifiedName * q_name = *iter;
-          ROSE_ASSERT (q_name != NULL);
-          cout<< target->class_name()<<endl;
-          cout<<"\tunparsed string is "<< target->unparseToString()<<endl;
-        }
-        break;
-      }
-      //Others   
     case V_SgInitializedName:
       {
         GET_QUALIFIED_NAME(InitializedName)
@@ -116,8 +100,6 @@ int main ( int argc, char** argv )
 
   return backend (project);
 }
-
-
 
 
 

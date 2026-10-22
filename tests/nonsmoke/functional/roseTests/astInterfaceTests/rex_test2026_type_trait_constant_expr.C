@@ -3,22 +3,6 @@
 #include "rose.h"
 
 namespace {
-SgSourceFile *findMainFile(SgProject *project) {
-  SgSourceFile *first_source_file = NULL;
-  for (SgFile *file : project->get_fileList()) {
-    if (SgSourceFile *source = isSgSourceFile(file)) {
-      if (!source->get_isHeaderFile()) {
-        return source;
-      }
-      if (first_source_file == NULL) {
-        first_source_file = source;
-      }
-    }
-  }
-
-  return first_source_file;
-}
-
 bool isFromFile(SgLocatedNode *node, SgSourceFile *source_file) {
   Sg_File_Info *info = node != NULL ? node->get_file_info() : NULL;
   return info != NULL && info->isSameFile(source_file);
@@ -42,20 +26,32 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(project != NULL);
   ROSE_ASSERT(frontendExitStatus(project) == 0);
 
-  SgSourceFile *source_file = findMainFile(project);
+  ROSE_ASSERT(project->get_fileList().size() == 1);
+  SgSourceFile *source_file = isSgSourceFile(project->get_fileList().front());
   ROSE_ASSERT(source_file != NULL);
+  ROSE_ASSERT(!source_file->get_isHeaderFile());
 
   SgStaticAssertionDeclaration *static_assert_decl =
       findStaticAssert(source_file);
   ROSE_ASSERT(static_assert_decl != NULL);
 
-  SgBoolValExp *condition = isSgBoolValExp(static_assert_decl->get_condition());
+  SgTypeTraitBuiltinOperator *condition =
+      isSgTypeTraitBuiltinOperator(static_assert_decl->get_condition());
   ROSE_ASSERT(condition != NULL);
-  ROSE_ASSERT(condition->get_value());
+  ROSE_ASSERT(condition->get_parent() == static_assert_decl);
+  ROSE_ASSERT(condition->get_builtin_operator_kind() ==
+              SgTypeTraitBuiltinOperator::e_type_trait_builtin);
+  ROSE_ASSERT(condition->get_name() == "__is_integral");
+  ROSE_ASSERT(isSgTypeBool(condition->get_type()) != nullptr);
+  ROSE_ASSERT(condition->get_args().size() == 1);
+  SgTypeExpression *operand = isSgTypeExpression(condition->get_args().front());
+  ROSE_ASSERT(operand != nullptr && operand->get_parent() == condition);
+  ROSE_ASSERT(isSgTypeInt(operand->get_represented_type()) != nullptr);
 
   Rose_STL_Container<SgNode *> static_assert_traits = NodeQuery::querySubTree(
       static_assert_decl->get_condition(), V_SgTypeTraitBuiltinOperator);
-  ROSE_ASSERT(static_assert_traits.empty());
+  ROSE_ASSERT(static_assert_traits.size() == 1);
+  ROSE_ASSERT(static_assert_traits.front() == condition);
 
-  return 0;
+  return backend(project);
 }

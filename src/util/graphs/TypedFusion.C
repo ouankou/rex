@@ -4,8 +4,6 @@
 
 #include "TypedFusion.h"
 
-#define BADFUSE NEG_INFTY + 1
-
 class FusionAnalInfo {
 public:
   GraphAccessInterface::Node *node;

@@ -13,6 +13,7 @@ public:
     return user_reduction_identifier_count_;
   }
   size_t mapperIdentifierCount() const { return mapper_identifier_count_; }
+  size_t mapItemCount() const { return map_item_count_; }
   size_t declareTargetExtendedListCount() const {
     return declare_target_extended_list_count_;
   }
@@ -26,6 +27,7 @@ private:
   size_t iterator_count_ = 0;
   size_t user_reduction_identifier_count_ = 0;
   size_t mapper_identifier_count_ = 0;
+  size_t map_item_count_ = 0;
   size_t declare_target_extended_list_count_ = 0;
   size_t sink_vector_count_ = 0;
   size_t colliding_iterator_role_count_ = 0;
@@ -99,6 +101,13 @@ private:
   }
 
   void visit(SgNode *node) override {
+    if (SgOmpMapItem *item = isSgOmpMapItem(node)) {
+      if (item->get_expression() == nullptr ||
+          item->get_expression()->get_parent() != item) {
+        fail(item, "map locator lost its exact item owner");
+      }
+      ++map_item_count_;
+    }
     if (SgOmpIteratorDefinition *definition = isSgOmpIteratorDefinition(node)) {
       checkIterator(definition);
     }
@@ -176,7 +185,7 @@ int main(int argc, char **argv) {
   validator.traverse(project, preorder);
   if (!validator.valid() || validator.iteratorCount() != 5 ||
       validator.userReductionIdentifierCount() != 3 ||
-      validator.mapperIdentifierCount() != 3 ||
+      validator.mapperIdentifierCount() != 3 || validator.mapItemCount() == 0 ||
       validator.declareTargetExtendedListCount() != 1 ||
       validator.sinkVectorCount() != 1 ||
       validator.collidingIteratorRoleCount() != 1) {

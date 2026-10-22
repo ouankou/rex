@@ -5,14 +5,15 @@ SgExpression *SgAssignInitializer::get_operand() const {
 }
 
 void SgAssignInitializer::post_construction_initialization() {
-  if (get_operand() == nullptr || p_expression_type == nullptr ||
-      isSgTypeUnknown(p_expression_type) != nullptr ||
-      isSgTypeDefault(p_expression_type) != nullptr) {
-    fprintf(stderr, "REX_AST_INVARIANT[assign-initializer-construction]: exact "
-                    "operand and destination type are required\n");
+  SgExpression *operand = get_operand();
+  if (operand == nullptr || operand->get_parent() != nullptr ||
+      SageInterface::containsUnknownType(p_expression_type)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-construction]: requires "
+            "one detached operand and an exact destination type\n");
     ROSE_ABORT();
   }
-  get_operand()->set_parent(this);
+  operand->set_parent(this);
 }
 
 SgType *SgAssignInitializer::get_type() const {
@@ -43,7 +44,29 @@ void SgAssignInitializer::set_operand(SgExpression *exp) {
             static_cast<void *>(this));
     ROSE_ABORT();
   }
+  SgExpression *previous = get_operand_i();
+  if (previous == exp) {
+    if (exp->get_parent() != this) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[assign-initializer-operand]: initializer=%p "
+              "has an operand with the wrong owner\n",
+              static_cast<void *>(this));
+      ROSE_ABORT();
+    }
+    return;
+  }
+  if (exp->get_parent() != nullptr ||
+      (previous != nullptr && previous->get_parent() != this)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[assign-initializer-operand]: initializer=%p "
+            "requires a detached replacement and an exactly owned old "
+            "operand\n",
+            static_cast<void *>(this));
+    ROSE_ABORT();
+  }
   set_operand_i(exp);
+  if (previous != nullptr)
+    previous->set_parent(nullptr);
   exp->set_parent(this);
 }
 
@@ -75,22 +98,20 @@ SgExpression *SgAssignInitializer::get_next(int &n) const {
   if (n == 0) {
     n++;
     return get_operand();
-  } else
-    return 0;
+  }
+  return nullptr;
 }
 
 int SgAssignInitializer::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
-
-  if (get_operand() == o) {
-    set_operand(n);
-    n->set_parent(this);
-    return 1;
-  } else
+  if (get_operand() != o)
     return 0;
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+
+  ROSE_ASSERT(n->get_parent() == nullptr);
+  set_operand(n);
+  return 1;
 }

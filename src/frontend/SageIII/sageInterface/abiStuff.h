@@ -7,53 +7,25 @@
 
 #include <iosfwd>
 
-#include <string>
-
 #include <vector>
 
 class SgNode;
 class SgType;
 
-//! Support for cross compilation or customized primitive type layouts.
-struct StructCustomizedSizes {
-  // optional values like x86, x86-64, ia64, sparcv9, sparcv8 etc.
-  std::string str_abi;
-  // Primitive types: redundant if ABI is specified.
-  size_t sz_bool;
-  size_t sz_alignof_bool;
-  size_t sz_char;
-  size_t sz_alignof_char;
-  size_t sz_int;
-  size_t sz_alignof_int;
-  size_t sz_short;
-  size_t sz_alignof_short;
-  size_t sz_long;
-  size_t sz_alignof_long;
-  size_t sz_longlong;
-  size_t sz_alignof_longlong;
-  size_t sz_float;
-  size_t sz_alignof_float;
-  size_t sz_float16;
-  size_t sz_alignof_float16;
-  size_t sz_double;
-  size_t sz_alignof_double;
-  size_t sz_longdouble;
-  size_t sz_alignof_longdouble;
-  size_t sz_pointer; // memory handle
-  size_t sz_alignof_pointer;
-  size_t sz_reference;
-  size_t sz_alignof_reference;
-
-  // Extended types beyond ABI's scope
-  size_t sz_void_ptr;
-  size_t sz_alignof_void_ptr;
-  size_t sz_ptrdiff_t;
-  size_t sz_alignof_ptrdiff_t;
-  size_t sz_size_t;
-  size_t sz_alignof_size_t;
-  size_t sz_wchar;
-  size_t sz_alignof_wchar;
-};
+namespace SageInterface {
+ROSE_DLL_API unsigned requireTargetScalarSizeBits(SgType *type,
+                                                  const SgNode *context);
+ROSE_DLL_API unsigned
+requireTargetDefaultPointerSizeBits(const SgNode *context);
+ROSE_DLL_API void requireTargetIntegerDomain(SgType *type,
+                                             const SgNode *context,
+                                             bool &is_unsigned,
+                                             unsigned &width);
+ROSE_DLL_API void requireTargetFloatingDomain(SgType *type,
+                                              const SgNode *context,
+                                              unsigned &precision,
+                                              int &max_exponent);
+} // namespace SageInterface
 
 struct StructLayoutEntry {
   //! If a SgInitializedName, the field represented by this entry
@@ -99,11 +71,8 @@ public:
   virtual ~ChainableTypeLayoutGenerator() {}
   ChainableTypeLayoutGenerator *next;
   ChainableTypeLayoutGenerator *beginning;
-  StructCustomizedSizes *custom_sizes;
-
-  ChainableTypeLayoutGenerator(ChainableTypeLayoutGenerator *nx,
-                               StructCustomizedSizes *sizes = NULL)
-      : next(NULL), beginning(this), custom_sizes(sizes) {
+  ChainableTypeLayoutGenerator(ChainableTypeLayoutGenerator *nx)
+      : next(NULL), beginning(this) {
     this->setNext(nx);
   }
 
@@ -152,24 +121,6 @@ class X86_64PrimitiveTypeLayoutGenerator : public ChainableTypeLayoutGenerator {
 public:
   X86_64PrimitiveTypeLayoutGenerator(ChainableTypeLayoutGenerator *next)
       : ChainableTypeLayoutGenerator(next) {}
-  virtual StructLayoutInfo layoutType(SgType *t) const;
-};
-
-//! Layout generator for the native system (uses sizeof)
-class SystemPrimitiveTypeLayoutGenerator : public ChainableTypeLayoutGenerator {
-public:
-  SystemPrimitiveTypeLayoutGenerator(ChainableTypeLayoutGenerator *next)
-      : ChainableTypeLayoutGenerator(next) {}
-  virtual StructLayoutInfo layoutType(SgType *t) const;
-};
-
-//! Layout generator for customized primitive types.
-class ROSE_DLL_API CustomizedPrimitiveTypeLayoutGenerator
-    : public ChainableTypeLayoutGenerator {
-public:
-  CustomizedPrimitiveTypeLayoutGenerator(ChainableTypeLayoutGenerator *next,
-                                         StructCustomizedSizes *custom_sizes)
-      : ChainableTypeLayoutGenerator(next, custom_sizes) {}
   virtual StructLayoutInfo layoutType(SgType *t) const;
 };
 

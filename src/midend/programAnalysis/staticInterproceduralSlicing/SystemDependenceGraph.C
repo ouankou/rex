@@ -1,10 +1,9 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 20,9 MB to
-// 10,7MB
 #include "sage3basic.h"
 
 #include "CallGraph.h"
 
 #include "DependenceGraph.h"
+#include "sageInterface.h"
 
 #include <list>
 
@@ -12,8 +11,6 @@
 
 #include <memory>
 using namespace std;
-
-#include <assert.h>
 
 SystemDependenceGraph::~SystemDependenceGraph() {
   std::set<InterproceduralInfo *> owned(interproceduralInformationList.begin(),
@@ -31,16 +28,11 @@ SystemDependenceGraph::~SystemDependenceGraph() {
 
 bool SystemDependenceGraph::isKnownLibraryFunction(
     SgFunctionDeclaration *fDec) {
-  if (debug)
-    cout << libraryExtenders.size() << " stored" << endl;
   for (unsigned int i = 0; i < libraryExtenders.size(); i++) {
-    if (debug)
-      cout << "calling library entender #" << i << endl;
     if (libraryExtenders[i]->isKnownLibraryFunction(fDec))
       return true;
   }
-  SgName fName = fDec->get_mangled_name(); // fDec->get_qualified_name();
-  //  cout <<"mangled name is "<<fName.getString()<<endl;
+  SgName fName = fDec->get_mangled_name();
   if (fName.getString() ==
       string("printf___Fb_i_Gb_RST__Pb__Cc__Pe____sep__e_Fe_"))
     return true;
@@ -62,9 +54,6 @@ void SystemDependenceGraph::createConnectionsForLibaryFunction(
   SgName fName = fDec->get_mangled_name();
   InterproceduralInfo *ii = getInterproceduralInformation(fDec);
 
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable. DependenceNode *
-  // formalIn,*formalOut,*entry,*formalReturn;
   DependenceNode *formalIn, *entry, *formalReturn;
 
   ROSE_ASSERT(ii != NULL);
@@ -74,15 +63,10 @@ void SystemDependenceGraph::createConnectionsForLibaryFunction(
           string("printf___Fb_i_Gb_RST__Pb__Cc__Pe____sep__e_Fe_") ||
       fName.getString() ==
           string("fflush___Fb_i_Gb___Pb__FILE_IO_FILE__Pe___Fe_")) {
-    if (debug)
-      cout << "creating library-function-sdg-sub-graph" << endl;
-    // returnvalue is dependant of input but input is not changed!
+    // The return value depends on inputs; their formal-out nodes remain.
     for (int i = 0; i < ii->getFormalCount(); i++) {
       formalIn = getNode(DependenceNode::FORMALIN, ii->getFormal(i));
 
-      // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-      // -Werror=unused-but-set-variable.
-      // formalOut=getNode(DependenceNode::FORMALOUT,ii->getFormal(i));
       getNode(DependenceNode::FORMALOUT, ii->getFormal(i));
 
       establishEdge(formalIn, entry, DATA);
@@ -95,7 +79,7 @@ void SystemDependenceGraph::createSafeConfiguration(
     SgFunctionDeclaration *fDec) {
   InterproceduralInfo *ii = getInterproceduralInformation(fDec);
   DependenceNode *formalIn, *formalOut, *entry, *formalReturn;
-  assert(ii != NULL);
+  ROSE_ASSERT(ii != NULL);
   entry = getNode(DependenceNode::ENTRY, ii->getFunctionEntry());
   formalReturn = getNode(DependenceNode::FORMALRETURN, ii->getFormalReturn());
   for (int i = 0; i < ii->getFormalCount(); i++) {
@@ -122,20 +106,9 @@ void SystemDependenceGraph::createSafeConfiguration(
 }
 
 void SystemDependenceGraph::parseProject(SgProject *project) {
-#ifdef NEWDU
   // Create the global def-use analysis
   std::unique_ptr<EDefUse> defUseAnalysis(new EDefUse(project));
   defUseAnalysis->run(false);
-#endif
-  // restrict to only aclually called functions an the main function,
-  // find all function calls ->get the function defintion and add it to the set
-  {
-    Rose_STL_Container<SgNode *> functionCalls =
-        NodeQuery::querySubTree(project, V_SgFunctionCallExp);
-    for (Rose_STL_Container<SgNode *>::iterator callIt = functionCalls.begin();
-         callIt != functionCalls.end(); callIt++) {
-    }
-  }
   Rose_STL_Container<SgNode *> functionDeclarations =
       NodeQuery::querySubTree(project, V_SgFunctionDeclaration);
   for (Rose_STL_Container<SgNode *>::iterator i = functionDeclarations.begin();
@@ -146,10 +119,7 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
     if (fDec->get_definition() == NULL) {
       std::unique_ptr<InterproceduralInfo> ipi(new InterproceduralInfo(fDec));
       // create "Safe"-Configurations
-      ipi->addExitNode(fDec);
       addInterproceduralInformation(ipi.get());
-      ipi->addExitNode(fDec);
-      //>addInterproceduralInformation(ipi);
       if (isKnownLibraryFunction(fDec)) {
         createConnectionsForLibaryFunction(fDec);
       } else {
@@ -166,26 +136,18 @@ void SystemDependenceGraph::parseProject(SgProject *project) {
 
       // get control dependence for this function defintion
       std::unique_ptr<ControlDependenceGraph> cdg(
-          new ControlDependenceGraph(fDec->get_definition(), ipi.get()));
+          new ControlDependenceGraph(fDec->get_definition()));
       cdg->computeAdditionalFunctioncallDepencencies();
       cdg->computeInterproceduralInformation(ipi.get());
 
-// get the data dependence for this function
-#ifdef NEWDU
+      // get the data dependence for this function
       std::unique_ptr<DataDependenceGraph> ddg(new DataDependenceGraph(
-          fDec->get_definition(), defUseAnalysis.get(), ipi.get()));
-#else
-      std::unique_ptr<DataDependenceGraph> ddg(
-          new DataDependenceGraph(fDec->get_definition(), ipi.get()));
-#endif
-      cdg->computeAdditionalFunctioncallDepencencies();
-      ddg->computeInterproceduralInformation(ipi.get());
+          fDec->get_definition(), defUseAnalysis.get()));
 
       addFunction(cdg.get(), ddg.get());
       addInterproceduralInformation(ipi.get());
       ipi.release();
     }
-    // else if (fD->get_definition() == NULL)
   }
   performInterproceduralAnalysis();
   std::set<SgNode *> preserveSet;
@@ -203,23 +165,15 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
     InterproceduralInfo *ii = *i;
     if (getExistingNode(DependenceNode::ENTRY, ii->getFunctionEntry()) == NULL)
       continue;
-    // if either the declaration or the definition is in the from set, this
-    // function is a source for the reachabilitity
-    if (!preserve.count(ii->getFunctionDefinition()) ||
-        preserve.count(ii->getFunctionDeclaration())) {
-      // ok, now switch erase to true, if this function is not called
-
-      // get all incmoing edges for the entry
+    if (!preserve.count(ii->getFunctionDefinition()) &&
+        !preserve.count(ii->getFunctionDeclaration())) {
       DependenceNode *entry =
           getExistingNode(DependenceNode::ENTRY, ii->getFunctionEntry());
-      // get the prececessor set
       std::set<SimpleDirectedGraphNode *> pred = entry->getPredecessors();
       for (std::set<SimpleDirectedGraphNode *>::iterator k = pred.begin();
            k != pred.end(); k++) {
         DependenceNode *source = dynamic_cast<DependenceNode *>(*k);
-        // get edgetpye for this ...?
         if (edgeExists(source, entry, CALL)) {
-          // we are finished
           erase = false;
           break;
         }
@@ -228,19 +182,12 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
       erase = false;
     }
     if (erase) {
-      // if (
-
       // check the number of incoming edges..
       for (int j = 0; j < ii->getFormalCount(); j++) {
         DependenceNode *currentFormal =
             getNode(DependenceNode::FORMALOUT, ii->getFormal(j));
         if (currentFormal->numPredecessors() < 2) // only control edge....
         {
-#ifdef VERBOSE_DEBUG
-          cout << "pruning FORMALOUT ";
-          currentFormal->writeOut(cout);
-          cout << endl;
-#endif
           std::set<SimpleDirectedGraphNode *> succs =
               currentFormal->getSuccessors();
           deleteNode(currentFormal);
@@ -248,7 +195,6 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
                k != succs.end(); k++) {
             // get rid of the children...
             deleteNode(dynamic_cast<DependenceNode *>(*k));
-            //          free(*k);
           }
         }
         // check if the formal in has any edges coming in, if not, get rid of
@@ -263,11 +209,6 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
             getNode(DependenceNode::FORMALIN, ii->getEllipse());
         if (currentFormal->numPredecessors() < 2) // only control edge....
         {
-#ifdef VERBOSE_DEBUG
-          cout << "pruning FORMALOUT ";
-          currentFormal->writeOut(cout);
-          cout << endl;
-#endif
           std::set<SimpleDirectedGraphNode *> succs =
               currentFormal->getSuccessors();
           deleteNode(currentFormal);
@@ -275,7 +216,6 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
                k != succs.end(); k++) {
             // get rid of the children...
             deleteNode(dynamic_cast<DependenceNode *>(*k));
-            //          free(*k);
           }
         }
         // check if the formal in has any edges coming in, if not, get rid of
@@ -291,16 +231,14 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
           getExistingNode(DependenceNode::FORMALRETURN, ii->getFormalReturn());
       if (returnNode != NULL && returnNode->numPredecessors() == 0 &&
           returnNode->numSuccessors() == 0) {
-        // TODO: reimplet this so that there is no Segfault
         deleteNode(returnNode);
         ii->setFormalReturn(NULL);
       }
       // and at last, remove the functioncallNode
       DependenceNode *entry =
           getExistingNode(DependenceNode::ENTRY, ii->getFunctionEntry());
-      if (returnNode != NULL && returnNode->numPredecessors() == 0 &&
-          returnNode->numSuccessors() == 0 && entry != NULL) {
-        // TODO: reimplet this so that there is no Segfault
+      if (entry != NULL && entry->numPredecessors() == 0 &&
+          entry->numSuccessors() == 0) {
         deleteNode(entry);
       }
     }
@@ -308,27 +246,20 @@ void SystemDependenceGraph::cleanUp(std::set<SgNode *> preserve) {
 }
 
 void SystemDependenceGraph::computeSummaryEdges() {
-  std::set<Edge> pathEdge, summaryEdgel;
+  std::set<Edge> pathEdge;
   std::vector<Edge> workList;
   // for all formaloutvertices...
-  int count = 0;
   for (Rose_STL_Container<InterproceduralInfo *>::iterator i =
            interproceduralInformationList.begin();
        i != interproceduralInformationList.end(); i++) {
     DependenceNode *w;
-#ifdef VERBOSE_DEBUG
-    cout << "processing iterprocedural #" << count << endl;
-#endif
-    count++;
     InterproceduralInfo *ii = *i;
     for (int j = 0; j < ii->getFormalCount(); j++) {
-      //      cout <<"adding formalout to worklist"<<endl;
       w = getNode(DependenceNode::FORMALOUT, ii->getFormal(j));
       pathEdge.insert(Edge(w, w));
       workList.push_back(Edge(w, w));
     }
     if (ii->getEllipse()) {
-      //      cout <<"adding formalout to worklist"<<endl;
       w = getNode(DependenceNode::FORMALOUT, ii->getEllipse());
       pathEdge.insert(Edge(w, w));
       workList.push_back(Edge(w, w));
@@ -340,31 +271,13 @@ void SystemDependenceGraph::computeSummaryEdges() {
   }
 
   while (workList.size()) {
-#ifdef VERBOSE_DEBUG
-    cout << "------------------------------------------------------------------"
-         << endl;
-#endif
     DependenceNode *v, *w, *x, *y, *a;
     v = workList.back().first;
     w = workList.back().second;
     workList.pop_back();
-#ifdef VERBOSE_DEBUG
-    cout << "v = ";
-    v->writeOut(cout);
-    cout << " of type" << v->getType() << endl;
-    cout << "w = ";
-    w->writeOut(cout);
-    cout << " of type" << w->getType() << endl;
-#endif
     switch (v->getType()) {
     case DependenceNode::ACTUALOUT: {
-#ifdef VERBOSE_DEBUG
-      cout << "actualout found :" << v->getSgNode()->unparseToString() << endl;
-#endif
       std::set<SimpleDirectedGraphNode *> preds = v->getPredecessors();
-#ifdef VERBOSE_DEBUG
-      cout << "\t" << preds.size() << " predecessors found" << endl;
-#endif
       for (std::set<SimpleDirectedGraphNode *>::iterator sdgnx = preds.begin();
            sdgnx != preds.end(); sdgnx++) {
         x = dynamic_cast<DependenceNode *>(*sdgnx);
@@ -378,9 +291,6 @@ void SystemDependenceGraph::computeSummaryEdges() {
     } break;
     case DependenceNode::FORMALIN: {
       // v is the formal in and w is the formal out
-#ifdef VERBOSE_DEBUG
-      cout << "formalin found" << endl;
-#endif
       // insert the summary edge at all call sites, best done by fololowing the
       // parameter_in edge and connect that node with the out node
       std::set<SimpleDirectedGraphNode *> preds = v->getPredecessors();
@@ -389,16 +299,12 @@ void SystemDependenceGraph::computeSummaryEdges() {
         // x is the actual in dep node
         x = dynamic_cast<DependenceNode *>(*sdgnx);
         if (edgeType(x, v).count(PARAMETER_IN)) {
-#ifdef VERBOSE_DEBUG
-          cout << "adding summary edge" << endl;
-#endif
           // if the formal out is the return find the return of the call-site
           // and connect
           if (w->isFormalReturn()) {
             // absuing hte actual in to get teh calling sg-node
             SgNode *var = x->getSgNode();
             SgNode *parent = var->get_parent();
-            //                while(!IsImportantForSliceSgFilter(parent))
             while (!isSgFunctionCallExp(parent))
               parent = parent->get_parent();
             // parent is now the calling node
@@ -418,54 +324,31 @@ void SystemDependenceGraph::computeSummaryEdges() {
           }
         }
       }
-      // store the summary edge, for all callers...
-
-      //        std::vector<InterproceduralInfo*> callers=getPossibleFuncs(
     } break;
     default: {
-#ifdef VERBOSE_DEBUG
-      cout << "default case: " << v->getType() << endl;
-#endif
       std::set<SimpleDirectedGraphNode *> preds = v->getPredecessors();
-#ifdef VERBOSE_DEBUG
-      cout << "\t" << preds.size() << " predecessors found" << endl;
-#endif
       for (std::set<SimpleDirectedGraphNode *>::iterator sdgnx = preds.begin();
            sdgnx != preds.end(); sdgnx++) {
 
         x = dynamic_cast<DependenceNode *>(*sdgnx);
-        //      cout <<"x = ";x->writeOut(cout);cout<<" of type
-        //      "<<x->getType()<<endl;
-        if (edgeType(x, v).count(CONTROL) ||
-            edgeType(x, v).count(
-                DATA) /* ||edgeType(x,v).count(PARAMETER_OUT)*/) {
+        if (edgeType(x, v).count(CONTROL) || edgeType(x, v).count(DATA)) {
           if (!pathEdge.count(Edge(x, w))) {
-            VERBOSE_DEBUG_BLOCK(cout << "\tadding x to workList" << endl;)
             pathEdge.insert(Edge(x, w));
             workList.push_back(Edge(x, w));
           }
-          VERBOSE_DEBUG_STMT(else cout << "\talready visited that edge..."
-                                       << endl;)
         }
-        VERBOSE_DEBUG_STMT(
-            else cout << "\tedge not of type (control,data or return)" << endl;)
       }
     } break;
     }
   }
 }
 
-// DQ (10/5/2007): Change suggested by Jeremiah.
 void SystemDependenceGraph::performInterproceduralAnalysis() {
   // Note that the size of interproceduralInformationList is increased
   // during this loop, so size() needs to be called every time
   for (unsigned int i = 0; i != interproceduralInformationList.size(); i++) {
     // for every interprocedural-information-set
     InterproceduralInfo *ii = interproceduralInformationList[i];
-    // first: if it is a libary-call
-    // if (ii->isUndefined())
-    //      createFunctionStub(ii);
-
     // create InterproceduralConnections
     doInterproceduralConnections(ii);
   }
@@ -538,10 +421,6 @@ std::vector<InterproceduralInfo *>
 SystemDependenceGraph::getPossibleFuncs(SgFunctionCallExp *funcCall) {
   std::vector<InterproceduralInfo *> retVal;
   SgFunctionDeclaration *fD = requireExactDirectCallTarget(funcCall);
-#ifdef VERBOSE_DEBUG
-  cout << "Adding function call " << funcCall->unparseToString()
-       << " with function " << fD->get_name().getString() << endl;
-#endif
   // check if that function exists, if not use either known function stubs or
   // create a safe function stub
   if (interproceduralInformation.count(fD)) {
@@ -551,7 +430,6 @@ SystemDependenceGraph::getPossibleFuncs(SgFunctionCallExp *funcCall) {
   } else {
     // on the fly construct the correct stub
     InterproceduralInfo *ipi = new InterproceduralInfo(fD);
-    ipi->addExitNode(fD);
     addInterproceduralInformation(ipi);
     // if there is a predefined interface description, with flow information...
     if (isKnownLibraryFunction(fD)) {
@@ -608,20 +486,12 @@ void SystemDependenceGraph::doInterproceduralConnections(
     // get the SgFunctionCallExp node
     callSite = isSgFunctionCallExp(ii->getFunctionCallExpNode(i));
 
-    // cout << "Found funcall: " << callSite->unparseToString() << endl;
-
     // do analysis of the function call and determine the possible call-targets
     functionTargetList = getPossibleFuncs(callSite);
     // for every possible callable function
     for (unsigned int j = 0; j < functionTargetList.size(); j++) {
       InterproceduralInfo *calledFunction = functionTargetList[j];
       ROSE_ASSERT(calledFunction != NULL);
-      // cout << "Callee: " <<
-      // calledFunction->getFunctionDeclaration()->get_name().getString() <<
-      // endl; insert the function_formal_in and formal_out nodes, just to be
-      // safe
-      // CMI modified 19082007
-      // establishEdge(getNode(DependenceNode::ENTRY,calledFunction->getFunctionEntry()),getNode(DependenceNode::FORMALRETURN,calledFunction->getFormalReturn()),CONTROL);
       //  and the formal out for every parameter
       for (int k = 0; k < calledFunction->getFormalCount(); k++) {
         establishEdge(
@@ -668,10 +538,7 @@ void SystemDependenceGraph::doInterproceduralConnections(
              << " has more parameters than it exprects arguments: ... used?"
              << endl;
       }
-      // for each paramters
-      for (int k = 0; k < calledFunction->getFormalCount(); k++)
-      //      for (int k=0;k<ii->getActualInCount(i);k++)
-      {
+      for (int k = 0; k < calledFunction->getFormalCount(); k++) {
         establishEdge(
             getNode(DependenceNode::ACTUALIN, ii->getActualIn(i, k)),
             getNode(DependenceNode::FORMALIN, calledFunction->getFormal(k)),
@@ -684,7 +551,6 @@ void SystemDependenceGraph::doInterproceduralConnections(
       }
       // connect all surplus arguments to the ellipse
       if (calledFunction->getEllipse() != NULL) {
-        VERBOSE_DEBUG_BLOCK(cout << "\t\tcalled function has ellipse!" << endl;)
         SgNode *ellipse = calledFunction->getEllipse();
         for (int k = calledFunction->getFormalCount();
              k < ii->getActualInCount(i); k++) {
@@ -704,37 +570,6 @@ void SystemDependenceGraph::doInterproceduralConnections(
     }
   }
 }
-
-void SystemDependenceGraph::addFunction(FunctionDependenceGraph *pdg) {
-
-  ROSE_ASSERT(pdg->getInterprocedural() != NULL);
-  SgFunctionDeclaration *func =
-      pdg->getInterprocedural()->getFunctionDeclaration();
-
-  ROSE_ASSERT(func != NULL);
-  _funcs_map[func] = pdg;
-  // CI (01/12/2007)
-  functionToInterfunctionalMap[func] = NULL; // pdg->getInterprocedural();
-
-  _mergeGraph(pdg);
-}
-
-void SystemDependenceGraph::process() {
-  map<SgFunctionDeclaration *, FunctionDependenceGraph *>::iterator
-      func_iterator;
-  for (func_iterator = _funcs_map.begin(); func_iterator != _funcs_map.end();
-       func_iterator++) {
-    // CI (01112007): inserted check for declared only functions
-    if (func_iterator->second != NULL) {
-      FunctionDependenceGraph *pdg = func_iterator->second;
-
-      _processFunction(pdg);
-    }
-  }
-}
-
-void SystemDependenceGraph::_processFunction(
-    FunctionDependenceGraph * /*pdg*/) {}
 
 Rose_STL_Container<SgFunctionDeclaration *>
 SystemDependenceGraph::_getPossibleFuncs(SgFunctionCallExp *funcCall) {
@@ -763,23 +598,13 @@ set<DependenceNode *> SystemDependenceGraph::getSlice(DependenceNode *node) {
   return phase2nodes;
 }
 
-set<FunctionDependenceGraph *> SystemDependenceGraph::getPDGs() {
-  set<FunctionDependenceGraph *> retval;
-  map<SgFunctionDeclaration *, FunctionDependenceGraph *>::iterator i;
-  for (i = _funcs_map.begin(); i != _funcs_map.end(); i++) {
-    retval.insert(i->second);
-  }
-  return retval;
-}
-
 SgNode *SystemDependenceGraph::getMainFunction() {
-  SgNode *main = NULL;
   for (Rose_STL_Container<InterproceduralInfo *>::iterator i =
            interproceduralInformationList.begin();
        i != interproceduralInformationList.end(); i++) {
-    if ((*i)->getFunctionDeclaration()->get_name().getString().compare(
-            std::string("main")))
+    if (SageInterface::isMain((*i)->getFunctionDeclaration()) &&
+        (*i)->getFunctionDefinition() != nullptr)
       return (*i)->getFunctionDeclaration();
   }
-  return main;
+  return nullptr;
 }

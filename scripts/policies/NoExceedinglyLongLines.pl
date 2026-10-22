@@ -39,10 +39,13 @@ my $files = FileLister->new(@ARGV);
 while (my $filename = $files->next_file) {
   next unless $filename =~ /\.(h|hh|hpp|c|C|cpp)$/;  # look only at C/C++ source code for now (we can add more later)
 
-
-  if (-T $filename && !is_disabled($filename) && open FILE, "<", $filename) {
+  my $is_text = -T $filename;
+  die "$filename: cannot classify: $!\n" unless defined $is_text;
+  if ($is_text && !is_disabled($filename)) {
+    open my $source, "<", $filename or die "$filename: cannot open: $!\n";
     my($nlong,$nlines);
-    while (<FILE>) {
+    local $! = 0;
+    while (<$source>) {
       if (0==$nlines++) {
 	last if /^<\?xml /;	# skip XML files since nobody looks at these anyway
       }
@@ -51,7 +54,8 @@ while (my $filename = $files->next_file) {
 	print "$filename:$nlines: line length exceeds $max_line_length columns\n" if $verbose;
       }
     }
-    close FILE;
+    die "$filename: cannot read: $!\n" if $!;
+    close $source or die "$filename: cannot close: $!\n";
     if ($nlong) {
       $nfail++;
       if (!$verbose) {

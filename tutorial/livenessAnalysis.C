@@ -27,13 +27,14 @@ int main(int argc, char *argv[]) {
   // Find all function definitions
   Rose_STL_Container<SgNode *> nodeList =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
-  std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions;
+  std::vector<VirtualCFG::FilteredCFGNode<IsDFAFilter>> dfaFunctions;
   Rose_STL_Container<SgNode *>::const_iterator i = nodeList.begin();
   bool abortme = false;
   for (; i != nodeList.end(); ++i) {
     SgFunctionDefinition *func = isSgFunctionDefinition(*i);
     // run liveness analysis
-    FilteredCFGNode<IsDFAFilter> rem_source = liv->run(func, abortme);
+    VirtualCFG::FilteredCFGNode<IsDFAFilter> rem_source =
+        liv->run(func, abortme);
     if (abortme) {
       cerr << "Error: Liveness analysis is ABORTING ." << endl;
       ROSE_ASSERT(false);

@@ -1,8 +1,8 @@
 #include "SymbolicVal.h"
 
 #include "sage3basic.h"
-
-#include "mlog.h"
+#include "sageBuilder.h"
+#include "sageInterface.h"
 
 #include "BooleanOperators.h"
 
@@ -16,6 +16,9 @@
 
 #include "UnaryOperators.h"
 
+#include <charconv>
+
+#include <limits>
 #include <list>
 
 #include <sstream>
@@ -35,6 +38,7 @@ SymbolicVal ::SymbolicVal(int val)
 
 SymbolicConst::SymbolicConst(int _val, int _d)
     : val(""), type(_d == 1 ? "int" : "fraction"), intval(_val), dval(_d) {
+  ROSE_ASSERT(dval != 0);
   char buf[40];
   if (_d == 1)
     snprintf(buf, sizeof(buf), "%d", _val);
@@ -44,10 +48,31 @@ SymbolicConst::SymbolicConst(int _val, int _d)
 }
 
 SymbolicConst::SymbolicConst(std::string _val, std::string t)
-    : val(_val), type(t) {
+    : val(_val), type(t), intval(0), dval(0) {
+  auto parseInteger = [](const char *begin, const char *end, int &value) {
+    if (begin != end && *begin == '+')
+      ++begin;
+    const auto parsed = std::from_chars(begin, end, value);
+    return parsed.ec == std::errc{} && parsed.ptr == end;
+  };
+  const char *begin = val.data();
+  const char *end = begin + val.size();
   if (type == "int") {
-    intval = atoi(_val.c_str());
+    if (!parseInteger(begin, end, intval)) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[integer-constant]: invalid value '"
+                << val << "'\n";
+      ROSE_ABORT();
+    }
     dval = 1;
+  } else if (type == "fraction") {
+    const size_t slash = val.find('/');
+    if (slash == std::string::npos ||
+        !parseInteger(begin, begin + slash, intval) ||
+        !parseInteger(begin + slash + 1, end, dval) || dval == 0) {
+      std::cerr << "REX_SYMBOLIC_INVARIANT[fraction-constant]: invalid value '"
+                << val << "'\n";
+      ROSE_ABORT();
+    }
   }
 }
 
@@ -61,6 +86,32 @@ AstNodePtr SymbolicConst ::CodeGen(AstInterface &fa) const {
 }
 
 std::string SymbolicVar ::toString() const { return varname; }
+
+AstNodePtr SymbolicVar::ReferenceDeclaration(const AstNodePtr &reference) {
+  SgNode *node = reference.get_ptr();
+  if (SgVarRefExp *variable = isSgVarRefExp(node)) {
+    SgVariableSymbol *symbol = variable->get_symbol();
+    ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+    return symbol->get_declaration();
+  }
+  if (SgNonrealRefExp *variable = isSgNonrealRefExp(node)) {
+    if (variable->get_resolved_variable_declaration() != nullptr)
+      return SageInterface::requireResolvedVariableTemplateReference(
+          variable, "SymbolicVar::ReferenceDeclaration");
+  }
+  return AST_NULL;
+}
+
+AstNodePtr SymbolicVar::GetVarDeclaration() const {
+  SgNode *node = AstInterface::SkipCasting(exp_.get_ptr());
+  if (SgVariableSymbol *symbol = isSgVariableSymbol(node)) {
+    ROSE_ASSERT(symbol->get_declaration() != nullptr);
+    return symbol->get_declaration();
+  }
+  if (SgInitializedName *name = isSgInitializedName(node))
+    return name;
+  return ReferenceDeclaration(node);
+}
 
 AstNodePtr SymbolicVar ::CodeGen(AstInterface &fa) const {
   if (exp_ != 0) {
@@ -87,6 +138,10 @@ void SymbolicAstWrap::Dump() const {
 }
 
 bool SymbolicVar ::operator==(const SymbolicVar &that) const {
+  AstNodePtr declaration = GetVarDeclaration();
+  AstNodePtr otherDeclaration = that.GetVarDeclaration();
+  if (declaration != AST_NULL || otherDeclaration != AST_NULL)
+    return declaration != AST_NULL && declaration == otherDeclaration;
   return varname == that.varname &&
          (scope == that.scope || scope == AST_NULL || that.scope == AST_NULL);
 }
@@ -428,9 +483,15 @@ SymbolicVal SymbolicValGenerator::GetSymbolicVal(
   case AstInterface::BOP_ARROW_ACCESS:
     requireSymbolicOperatorArity(operation, arguments, 2);
     return new SymbolicFunction(operation, "->", arguments);
-  case AstInterface::BOP_DIVIDE:
+  case AstInterface::BOP_DIVIDE: {
     requireSymbolicOperatorArity(operation, arguments, 2);
+    int numerator, denominator;
+    if (arguments[0].isConstInt(numerator) &&
+        arguments[1].isConstInt(denominator) && denominator != 0 &&
+        !(numerator == std::numeric_limits<int>::min() && denominator == -1))
+      return SymbolicVal(numerator / denominator);
     return new SymbolicFunction(operation, "/", arguments);
+  }
   case AstInterface::BOP_EQ:
     requireSymbolicOperatorArity(operation, arguments, 2);
     return new SymbolicFunction(operation, "==", arguments);
@@ -580,7 +641,7 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
   } else if (fa.IsFunctionCall(exp, &s1, &l)) {
     bool ismin = fa.IsMin(s1), ismax = fa.IsMax(s1);
     AstInterface::AstNodeList::const_iterator p = l.begin();
-    if (ismin || ismax) {
+    if ((ismin || ismax) && l.size() >= 2) {
       AstNodePtr s = *p;
       SymbolicVal v = GetSymbolicVal(fa, s);
       for (++p; p != l.end(); ++p) {
@@ -599,7 +660,9 @@ SymbolicVal SymbolicValGenerator ::GetSymbolicVal(AstInterface &fa,
       return new SymbolicFunction(AstInterface::OP_NONE,
                                   new SymbolicAstWrap(s1), args);
     }
-  } else if (fa.IsVarRef(exp, 0, &name, &scope)) {
+  } else if (isSgInitializedName(exp.get_ptr()) != nullptr ||
+             SymbolicVar::ReferenceDeclaration(exp) != AST_NULL) {
+    ROSE_ASSERT(fa.IsVarRef(exp, 0, &name, &scope));
     return new SymbolicVar(name, scope, exp);
   }
   return new SymbolicAstWrap(exp);

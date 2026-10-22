@@ -1,5 +1,7 @@
 #include "ExtractFunctionArguments.h"
 
+#include "sage3basic.h"
+
 #include "SingleStatementToBlockNormalization.h"
 
 #include "functionEvaluationOrderTraversal.h"
@@ -7,6 +9,24 @@
 using namespace std;
 
 namespace {
+
+SgExpression *argumentValueExpression(SgExpression *expression) {
+  ROSE_ASSERT(expression != nullptr);
+  while (true) {
+    if (auto *macro = isSgMacroExpansionExp(expression)) {
+      expression = macro->get_expanded_expression_checked();
+    } else if (auto *defaultUse = isSgCxxDefaultInitExp(expression)) {
+      expression = defaultUse->get_expression();
+      ROSE_ASSERT(expression != nullptr);
+    } else if (isSgPointerDerefExp(expression) || isSgCastExp(expression) ||
+               isSgAddressOfOp(expression)) {
+      expression = isSgUnaryOp(expression)->get_operand();
+      ROSE_ASSERT(expression != nullptr);
+    } else {
+      return expression;
+    }
+  }
+}
 
 bool invokesOverloadedOperator(SgFunctionCallExp *functionCall) {
   if (functionCall == NULL) {
@@ -87,15 +107,9 @@ SgVariableDeclaration *createTempVariableDeclaration(SgExpression *expression,
     ROSE_ABORT();
   }
 
-  // A converted argument can carry an implementation-owned typedef spelling
-  // (for example vector<T>::size_type), and a dependent call can have Clang's
-  // explicit __dependent_type semantic placeholder.  Neither is a lexical
-  // type-id at the insertion scope.  In C++11 and later, retain the exact
-  // semantic type on the initialized name while recording a corresponding
-  // deduced source type (`auto`, `auto&`, or `auto&&`) as its independent
-  // source surface. The initializer then performs language deduction at the
-  // new declaration site without manufacturing a name that was never visible
-  // there or discarding the expression's reference category.
+  // Deduce the source type at the insertion scope while retaining the exact
+  // semantic type and reference category. Dependent builtins and private
+  // typedef names need not have a usable spelling at this scope.
   if (sourceSupportsDeducedTemporaryType(expression)) {
     SgType *sourceType = SageBuilder::buildAutoType();
     if (isSgReferenceType(variableType) != nullptr) {
@@ -171,7 +185,9 @@ ExtractFunctionArguments::GetTemporariesIntroduced() {
  * op counts as a variable references if all its members are variable references
  * (not just the last expression in the list). */
 bool isVariableReference(SgExpression *expression) {
-  if (isSgVarRefExp(expression)) {
+  if (auto *macro = isSgMacroExpansionExp(expression)) {
+    return isVariableReference(macro->get_expanded_expression_checked());
+  } else if (isSgVarRefExp(expression)) {
     return true;
   } else if (isSgThisExp(expression)) {
     return true;
@@ -205,10 +221,10 @@ bool isVariableReference(SgExpression *expression) {
 
 bool ExtractFunctionArguments::IsFunctionArgumentTrivial(
     SgExpression *argument) {
-  while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) ||
-          isSgAddressOfOp(argument))) {
-    argument = isSgUnaryOp(argument)->get_operand();
-  }
+  // Source macro ownership does not change a constant into a computed value.
+  // In particular, lifting an integer null pointer constant into a temporary
+  // destroys its permitted implicit conversion at a dependent call site.
+  argument = argumentValueExpression(argument);
 
   SgArrowExp *arrowExp = isSgArrowExp(argument);
   if (arrowExp && isSgThisExp(arrowExp->get_lhs_operand()))
@@ -383,9 +399,6 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
       ROSE_ABORT();
     }
 
-    // DQ (3/1/2015): Added initialization to these local variables.
-    // SgVariableDeclaration* tempVarDeclaration;
-    // SgExpression* tempVarReference;
     SgVariableDeclaration *tempVarDeclaration = NULL;
     SgExpression *tempVarReference = NULL;
 
@@ -395,25 +408,18 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
     SgFunctionType *functionType = isSgFunctionType(arg->get_type());
     if (functionType == NULL) {
       tempVarDeclaration = createTempVariableDeclaration(arg, scope);
-
-      // DQ (3/1/2015): This is not always true (see inputBug317.C).
-      ROSE_ASSERT(tempVarDeclaration->get_definition(0) != NULL);
-      ROSE_ASSERT(
-          isSgVariableDefinition(tempVarDeclaration->get_definition()) != NULL);
+      SgInitializedName *temporaryName =
+          SageInterface::getFirstInitializedName(tempVarDeclaration);
+      ROSE_ASSERT(temporaryName != nullptr);
+      ROSE_ASSERT(tempVarDeclaration->get_definition(temporaryName) != nullptr);
 
       // Insert the temporary variable declaration
       InsertStatement(tempVarDeclaration, insertionLocation, functionCallInfo);
-      SgInitializedName *publishedName =
-          SageInterface::getFirstInitializedName(tempVarDeclaration);
-      SgVariableSymbol *publishedSymbol =
-          publishedName != nullptr
-              ? isSgVariableSymbol(
-                    scope->find_symbol_from_declaration(publishedName))
-              : nullptr;
+      SgVariableSymbol *publishedSymbol = isSgVariableSymbol(
+          scope->find_symbol_from_declaration(temporaryName));
       if (tempVarDeclaration->get_parent() != scope ||
-          publishedName == nullptr || publishedName->get_scope() != scope ||
-          publishedSymbol == nullptr ||
-          publishedSymbol->get_declaration() != publishedName) {
+          temporaryName->get_scope() != scope || publishedSymbol == nullptr ||
+          publishedSymbol->get_declaration() != temporaryName) {
         fprintf(stderr,
                 "REX_NORMALIZATION_INVARIANT[temporary-publication]: "
                 "declaration=%p scope=%p lacks one exact lexical and symbol "
@@ -448,7 +454,6 @@ void ExtractFunctionArguments::RewriteFunctionCallArguments(
       SgAssignInitializer *initializer =
           SageBuilder::buildAssignInitializer(arg, temp_name->get_type());
       temp_name->set_initializer(initializer);
-      initializer->set_parent(temp_name);
 
       tempVarReference->markAsModified();
       if (SgStatement *enclosing_statement =
@@ -470,10 +475,7 @@ bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(
     return false;
   }
 
-  while ((isSgPointerDerefExp(argument) || isSgCastExp(argument) ||
-          isSgAddressOfOp(argument))) {
-    argument = isSgUnaryOp(argument)->get_operand();
-  }
+  argument = argumentValueExpression(argument);
   // Don't include SgConstructorInitializer since it will be called even on the
   // temporary, so avoid double copy.
   // A direct callable name is already one side-effect-free argument.  This
@@ -491,7 +493,6 @@ bool ExtractFunctionArguments::FunctionArgumentCanBeNormalized(
   // Unknow Template type expressions can't be normalized.
   if (isSgTypeUnknown(argument->get_type()) ||
       isSgMemberFunctionType(argument->get_type())) {
-    // printf("\n Skipping over SgTypeUnknown/SgMemberFunctionType  expr");
     return false;
   }
 

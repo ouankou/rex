@@ -37,7 +37,13 @@ private:
 
       // found a valid type trait that we can call
       bool val = it->second(typeOperand(func, 0));
-      cout << val;
+      ++checkedTraits;
+      cout << val << endl;
+      if (val != expectedValue) {
+        cerr << "Trait mismatch at line " << func->get_file_info()->get_line()
+             << ": operand=" << typeOperand(func, 0)->class_name()
+             << " expected=" << expectedValue << " actual=" << val << endl;
+      }
       ROSE_ASSERT(val == expectedValue);
 
       // check that the analysis returned what the test expected.
@@ -49,7 +55,8 @@ private:
     if (str == "__is_base_of") {
       // __is_base_of is special since it has a different signature.
       bool val = IsBaseOf(typeOperand(func, 0), typeOperand(func, 1));
-      cout << val;
+      ++checkedTraits;
+      cout << val << endl;
       ROSE_ASSERT(val == expectedValue);
       if (val != expectedValue)
         exit(-1);
@@ -57,6 +64,8 @@ private:
   }
 
 public:
+  size_t checkedTraits = 0;
+
   TypeTraitChecker() {
     // Populate function pointers.
     nameToFpMap["__has_nothrow_assign"] = HasNoThrowAssign;
@@ -78,7 +87,6 @@ public:
     nameToFpMap["__is_trivial"] = IsTrivial;
     nameToFpMap["__is_union"] = IsUnion;
     //        nameToFpMap["__is_base_of"] = IsBaseOf;
-    //      SgType *  UnderlyingType(SgType *type);
   }
 
   void visit(SgNode *node) {
@@ -114,6 +122,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   TypeTraitChecker typeTraitChecker;
   typeTraitChecker.traverse(project, preorder);
+  ROSE_ASSERT(typeTraitChecker.checkedTraits > 0);
   // don't do backend compile since this is only an analysis test
   return 0;
 }

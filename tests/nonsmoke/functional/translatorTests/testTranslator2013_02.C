@@ -41,18 +41,11 @@ void SimpleInstrumentation::visit(SgNode *astNode) {
            "%s \n",
            classdef->get_declaration()->get_name().str());
 
-    // SgScopeStatement *scope = getGlobalScope(classdef);
     SgScopeStatement *scope = classdef;
-    // SgClassDeclaration* buildClassDeclaration_nfi(const SgName& name,
-    // SgClassDeclaration::class_types kind, SgScopeStatement* scope,
-    // SgClassDeclaration* nonDefiningDecl, bool
-    // buildTemplateInstantiation, SgTemplateArgumentPtrList*
-    // templateArgumentsList); SgClassDeclaration *class_defn =
-    // buildDefiningClassDeclaration(SgName("testClass"),scope);
     SgName new_class_name = "rebind";
     SgClassDeclaration *canonical = buildNondefiningClassDeclaration_nfi(
         declaration_ownership::semanticAuxiliary(), new_class_name,
-        SgClassDeclaration::e_class, scope, nullptr, nullptr, nullptr);
+        SgClassDeclaration::e_class, scope, nullptr, nullptr, nullptr, nullptr);
     SgClassDeclaration *class_decl = buildClassDeclaration_nfi(
         declaration_ownership::sourceLexical(), new_class_name,
         SgClassDeclaration::e_class, scope, canonical, false, nullptr, nullptr);

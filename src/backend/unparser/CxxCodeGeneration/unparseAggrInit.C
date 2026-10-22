@@ -152,22 +152,10 @@ static size_t validateAggregateInitializerIncludeBoundaries(
   return claimedIncludes.size();
 }
 
-#define DEBUG__unparseAggrInit 0
-
 void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
                                        SgUnparse_Info &info) {
   SgAggregateInitializer *aggr_init = isSgAggregateInitializer(expr);
   ASSERT_not_null(aggr_init);
-
-#if DEBUG__unparseAggrInit
-  bool compiler_generated =
-      aggr_init->get_startOfConstruct()->isCompilerGenerated();
-  printf("Enter Unparse_ExprStmt::unparseAggrInit():\n");
-  printf("  aggr_init = %p = %s\n", aggr_init, aggr_init->class_name().c_str());
-  printf("    ->get_source_form() = %d\n",
-         static_cast<int>(aggr_init->get_source_form()));
-  printf("  compiler_generated = %s\n", compiler_generated ? "true" : "false");
-#endif
 
   const SgAggregateInitializer::aggregate_initializer_source_form_enum
       source_form = aggr_init->get_source_form();
@@ -204,24 +192,15 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
 
   if (is_compound_literal) {
     // This aggregate initializer is using a compound literal and so we need to
-    // output the type. This looks like an explict cast, but is not a cast
+    // output the type. This looks like an explicit cast, but is not a cast
     // internally in the language, just that this is how compound literals are
     // supposed to be handled.
     ASSERT_not_null(aggr_init->get_type());
-
-#if DEBUG__unparseAggrInit
-    printf("  aggr_init->get_type() = %p = %s \n", aggr_init->get_type(),
-           aggr_init->get_type()->class_name().c_str());
-#endif
 
     SgVariableDeclaration *compound_literal_var_decl = NULL;
     const bool contains_base_type_definition =
         compoundLiteralContainsBaseTypeDefinition(aggr_init,
                                                   compound_literal_var_decl);
-#if DEBUG__unparseAggrInit
-    printf("  contains_base_type_definition = %s \n",
-           contains_base_type_definition ? "true" : "false");
-#endif
     if (contains_base_type_definition) {
       newinfo2.unset_SkipClassDefinition();
       newinfo2.unset_SkipEnumDefinition();
@@ -243,29 +222,17 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
       newinfo2.set_SkipEnumDefinition();
     }
 
-#if DEBUG__unparseAggrInit
-    printf("  SkipClassDefinition() = %s \n",
-           newinfo2.SkipClassDefinition() ? "true" : "false");
-    printf("  SkipEnumDefinition()  = %s \n",
-           newinfo2.SkipEnumDefinition() ? "true" : "false");
-#endif
-
+    ASSERT_not_null(compound_literal_var_decl);
+    const auto &objects = compound_literal_var_decl->get_variables();
+    ROSE_ASSERT(objects.size() == 1 &&
+                objects.front()->get_initializer() == aggr_init);
+    SgType *source_type = objects.front()->get_cxx_source_type();
+    ROSE_ASSERT(!SageInterface::containsUnknownType(source_type));
     curprint("(");
-    unp->u_type->outputType<SgAggregateInitializer>(
-        aggr_init, aggr_init->get_type(), newinfo2);
+    unp->u_type->outputType<SgAggregateInitializer>(aggr_init, source_type,
+                                                    newinfo2);
     curprint(")");
   }
-
-#if DEBUG__unparseAggrInit
-  printf("  need_explicit_braces     = %s \n",
-         need_explicit_braces ? "true" : "false");
-  printf("  SkipEnumDefinition()     = %s \n",
-         newinfo2.SkipEnumDefinition() ? "true" : "false");
-  printf("  SkipClassDefinition()    = %s \n",
-         newinfo2.SkipClassDefinition() ? "true" : "false");
-  printf("  inAggregateInitializer() = %s \n",
-         newinfo2.inAggregateInitializer() ? "true" : "false");
-#endif
 
   SgExprListExp *initializers = aggr_init->get_initializers();
   if (initializers == nullptr) {
@@ -323,10 +290,6 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
             list.size(), sourceElementRoles.size());
     ROSE_ABORT();
   }
-
-#if DEBUG__unparseAggrInit
-  printf("  list.size() = %zu \n", list.size());
-#endif
 
   bool priorAstElementWithoutIncludeBoundary = false;
   for (size_t index = 0; index < list.size(); index++) {
@@ -411,33 +374,25 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
       curprint(", ");
     }
     SgExpression *element = list[index];
-    if (element == nullptr) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[aggregate-initializer-element]: "
-              "initializer element %zu is null\n",
-              index);
-      ROSE_ABORT();
-    }
-    SgType *etype = element->get_type();
-    if (etype == nullptr || isSgTypeUnknown(etype) != nullptr ||
-        isSgTypeDefault(etype) != nullptr) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[aggregate-initializer-element-type]: "
-              "initializer element %zu has no exact semantic type\n",
-              index);
-      ROSE_ABORT();
+    auto *syntax_list = isSgExprListExp(element);
+    if (syntax_list != nullptr) {
+      ROSE_ASSERT(syntax_list->get_source_form() ==
+                  SgExprListExp::e_expression_list_braced);
+    } else {
+      SgType *etype = element->get_type();
+      if (etype == nullptr || isSgTypeUnknown(etype) != nullptr ||
+          isSgTypeDefault(etype) != nullptr) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[aggregate-initializer-element-type]: "
+                "initializer element %zu has no exact semantic type\n",
+                index);
+        ROSE_ABORT();
+      }
     }
 
     SgConstructorInitializer *ctor_init = isSgConstructorInitializer(element);
 
-    bool element_compiler_generated = element->isCompilerGenerated();
-#if DEBUG__unparseAggrInit
-    printf("  - list index = %zu \n", index);
-    printf("    element = %p = %s\n", element, element->class_name().c_str());
-    printf("      type = %p = %s\n", etype, etype->class_name().c_str());
-    printf("      compiler_generated = %s\n",
-           element_compiler_generated ? "true" : "false");
-#endif
+    const bool element_compiler_generated = element->isCompilerGenerated();
     if (ctor_init != nullptr && element_compiler_generated) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[aggregate-initializer-source-element]: "
@@ -450,12 +405,6 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
     SgUnparse_Info newinfo(info);
     newinfo.set_inAggregateInitializer();
 
-#if DEBUG__unparseAggrInit
-    printf("    SkipEnumDefinition()  = %s \n",
-           newinfo.SkipEnumDefinition() ? "true" : "false");
-    printf("    SkipClassDefinition() = %s \n",
-           newinfo.SkipClassDefinition() ? "true" : "false");
-#endif
     unparseExpression(element, newinfo);
     priorAstElementWithoutIncludeBoundary = true;
   }
@@ -465,8 +414,4 @@ void Unparse_ExprStmt::unparseAggrInit(SgExpression *expr,
   if (need_explicit_braces) {
     curprint("}");
   }
-
-#if DEBUG__unparseAggrInit
-  printf("Leaving Unparse_ExprStmt::unparseAggrInit() \n");
-#endif
 }

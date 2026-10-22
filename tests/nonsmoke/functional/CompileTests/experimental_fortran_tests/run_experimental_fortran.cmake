@@ -16,7 +16,7 @@ macro(escape_for_message_verbatim var)
   string(REPLACE "$" "$$" ${var} "${${var}}")
 endmacro()
 
-set(_translator_args -rose:experimental_flang_frontend)
+set(_translator_args)
 if(DEFINED EXTRA_FLAGS_LIST AND NOT "${EXTRA_FLAGS_LIST}" STREQUAL "")
   list(APPEND _translator_args ${EXTRA_FLAGS_LIST})
 endif()

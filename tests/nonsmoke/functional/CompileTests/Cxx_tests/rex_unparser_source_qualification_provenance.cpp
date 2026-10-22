@@ -8,6 +8,7 @@ typedef Payload QualifiedPayloadAlias;
 enum Mode : int;
 
 int global_value = 11;
+int spliced_value = 11;
 void function();
 } // namespace rex_source_qualification_provenance_target
 
@@ -32,9 +33,20 @@ struct RexSourceMacroBaseName : public REX_SOURCE_BASE_NAME<T> {};
 template <typename T>
 struct RexSourceMacroBaseType : public REX_SOURCE_BASE_TYPE(T) {};
 
+struct RexSourceConcreteMacroBaseName : public REX_SOURCE_BASE_NAME<int> {};
+struct RexSourceConcreteMacroBaseType : public REX_SOURCE_BASE_TYPE(int) {};
+
+#define REX_SOURCE_GLOBAL_BASE_TYPE                                            \
+  ::rex_source_qualification_base_target::Base<int>
+struct RexSourceConcreteGlobalMacroBase : public REX_SOURCE_GLOBAL_BASE_TYPE {};
+
 using RexMacroPayload = REX_SOURCE_QUALIFIER_ALIAS::Payload;
 using RexMacroDelimiterPayload = REX_SOURCE_DELIMITER_QUALIFIER Payload;
 using RexGlobalPayload = ::rex_source_qualification_provenance_target::Payload;
+// clang-format off
+using RexSplicedPayload = rex_source_qualification_provenance_alias:\
+:Payload;
+// clang-format on
 REX_SOURCE_QUALIFIER_ALIAS::Payload rex_source_qualified_value{};
 rex_source_qualification_provenance_target::QualifiedPayloadAlias
     rex_namespace_qualified_typedef_value{};
@@ -66,7 +78,15 @@ T RexSourceQualificationOuter<T>::Inner<U>::convert(U value) {
   return static_cast<T>(value);
 }
 
+// clang-format off
+template <typename T> int rex_source_spliced_reference(T) {
+  return rex_source_qualification_provenance_alias:\
+:spliced_value;
+}
+// clang-format on
+
 int main() {
+  (void)rex_source_spliced_reference(0);
   RexSourceMacroBaseName<int> macro_base_name;
   RexSourceMacroBaseType<int> macro_base_type;
   RexMacroPayload macro_payload{

@@ -1,8 +1,37 @@
 #include "sage3basic.h"
 
 void SgNewExp::post_construction_initialization() {
+  ROSE_ASSERT(p_allocation_implicit_argument_count >= 1 &&
+              p_allocation_implicit_argument_count <= 3);
+  ROSE_ASSERT(p_placement_args == nullptr ||
+              SgCxxDefaultInitExp::is_valid_binding(
+                  p_newOperatorDeclaration, p_placement_args->get_expressions(),
+                  p_allocation_implicit_argument_count));
+  ROSE_ASSERT(p_constructor_args == nullptr || p_builtin_args == nullptr);
+  ROSE_ASSERT(specifiedTypeMatchesResult(p_specified_type, p_expression_type,
+                                         p_array_bound_source_form));
+  ROSE_ASSERT((p_array_bound == nullptr) ==
+              (p_array_bound_source_form == e_no_array_bound));
+  if (p_array_bound_source_form == e_inferred_array_bound ||
+      p_array_bound_source_form == e_type_array_bound) {
+    auto *value = isSgValueExp(p_array_bound);
+    ROSE_ASSERT(value != nullptr && value->get_type()->isIntegerType() &&
+                value->get_literal_spelling_form() ==
+                    SgValueExp::e_literal_canonical_generated &&
+                value->get_file_info() != nullptr &&
+                value->get_file_info()->isCompilerGenerated());
+  }
+  SgExpression *operands[] = {p_array_bound, p_constructor_args, p_builtin_args,
+                              p_placement_args};
+  for (unsigned i = 0; i < 4; ++i) {
+    SgExpression *operand = operands[i];
+    ROSE_ASSERT(operand == nullptr || operand->get_parent() == nullptr ||
+                operand->get_parent() == this);
+    for (unsigned j = 0; j < i; ++j)
+      ROSE_ASSERT(operand == nullptr || operand != operands[j]);
+  }
+
   if (p_constructor_args) {
-    p_constructor_args->set_parent(this);
     // The constructor initializer owns the exact new-initializer delimiters
     // through need_parenthesis_after_name/is_braced_initialized.  Generic
     // expression grouping belongs on the enclosing SgNewExp (for example,
@@ -16,177 +45,190 @@ void SgNewExp::post_construction_initialization() {
     }
   }
 
-  if (p_builtin_args) {
-    p_builtin_args->set_parent(this);
-  }
-
-  if (p_placement_args)
-    p_placement_args->set_parent(this);
+  for (SgExpression *operand : operands)
+    if (operand != nullptr)
+      operand->set_parent(this);
 }
 
 SgExpression *SgNewExp::get_next(int &n) const {
-  // SgExpression *tmp = NULL;
   if (n == 0) {
     n++;
     if (get_placement_args())
       return get_placement_args();
-    else {
-      n++;
-      if (get_constructor_args())
-        return get_constructor_args();
-      else
-        return get_builtin_args();
-    }
-  } else if (n == 1) {
+  }
+  if (n == 1) {
+    n++;
+    if (get_array_bound())
+      return get_array_bound();
+  }
+  if (n == 2) {
     n++;
     if (get_constructor_args())
       return get_constructor_args();
-    else
-      return get_builtin_args();
+    return get_builtin_args();
   }
 
   return NULL;
 }
 
 int SgNewExp::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
+  const int edges = (get_placement_args() == o) + (get_array_bound() == o) +
+                    (get_constructor_args() == o) + (get_builtin_args() == o);
+  if (edges == 0)
+    return 0;
+  ROSE_ASSERT(edges == 1);
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+  ROSE_ASSERT(n->get_parent() == nullptr);
 
   if (get_placement_args() == o) {
-    set_placement_args(isSgExprListExp(n));
-    n->set_parent(this);
-    return 1;
-  } else {
-    if (get_constructor_args() == o) {
-      set_constructor_args(isSgConstructorInitializer(n));
-      n->set_parent(this);
-      return 1;
-    } else {
-      if (get_builtin_args() == o) {
-        set_builtin_args(n);
-        n->set_parent(this);
-        return 1;
-      } else {
-        return 0;
-      }
+    auto *placement = isSgExprListExp(n);
+    ROSE_ASSERT(placement != nullptr);
+    set_placement_args(placement);
+  } else if (get_array_bound() == o) {
+    if (get_array_bound_source_form() == e_inferred_array_bound ||
+        get_array_bound_source_form() == e_type_array_bound) {
+      auto *value = isSgValueExp(n);
+      ROSE_ASSERT(value != nullptr && value->get_type()->isIntegerType() &&
+                  value->get_literal_spelling_form() ==
+                      SgValueExp::e_literal_canonical_generated &&
+                  value->get_file_info() != nullptr &&
+                  value->get_file_info()->isCompilerGenerated());
     }
+    set_array_bound(n);
+  } else if (get_constructor_args() == o) {
+    auto *constructor = isSgConstructorInitializer(n);
+    ROSE_ASSERT(constructor != nullptr);
+    ROSE_ASSERT(!constructor->get_need_paren());
+    set_constructor_args(constructor);
+  } else if (get_builtin_args() == o) {
+    set_builtin_args(n);
   }
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 SgType *SgNewExp::get_type() const {
-  // The p_constructor_args really just identifies the constructor being called,
-  // from which we can get the type to be returned from the new operator!
-  // If there is no constructor then this might be a primative type or perhaps
-  // a class or struct without an explicit constructor.
-
-  // Since where the p_constructor_args->get_declaration() == NULL (often for
-  // primative types) we need the explicitly stored p_expression_type pointer
-  // anyway so we can just make it the return type for all cases.
-  ROSE_ASSERT(p_specified_type != NULL);
-  SgType *returnType = SgPointerType::createType(p_specified_type);
-
-  ROSE_ASSERT(returnType != NULL);
-
-  return returnType;
+  ROSE_ASSERT(p_expression_type != nullptr);
+  return p_expression_type;
 }
 
-// DQ (6/11/2015): Moved these six access functions, they should not be
-// generated by ROSETTA so that we could avoid them setting the isModified flag
-// which is a problem in the name qualification support for C++ (interfering
-// with the token-based unparsing).
+bool SgNewExp::specifiedTypeMatchesResult(
+    SgType *specified, SgPointerType *result,
+    array_bound_source_form_enum source_form) {
+  if (SageInterface::containsUnknownType(specified) || result == nullptr ||
+      result->get_base_type() == nullptr ||
+      result->get_base_type()->get_ptr_to() != result ||
+      source_form < e_no_array_bound || source_form > e_type_array_bound)
+    return false;
+  SgType *semantic = result->get_base_type();
+  SgType *source = specified;
+  if (source_form == e_no_array_bound || source_form == e_type_array_bound) {
+    std::set<SgType *> visited;
+    while (visited.insert(specified).second) {
+      specified = specified->stripType(SgType::STRIP_TYPEDEF_TYPE |
+                                       SgType::STRIP_DECLTYPE_TYPE);
+      if (auto *modifier = isSgModifierType(specified)) {
+        if (source_form == e_type_array_bound) {
+          semantic = semantic->stripType(SgType::STRIP_TYPEDEF_TYPE |
+                                         SgType::STRIP_DECLTYPE_TYPE);
+          auto *semantic_modifier = isSgModifierType(semantic);
+          if (semantic_modifier == nullptr ||
+              !(modifier->get_typeModifier() ==
+                semantic_modifier->get_typeModifier()))
+            return false;
+          semantic = semantic_modifier->get_base_type();
+        }
+        specified = modifier->get_base_type();
+        continue;
+      }
+      auto *nonreal = isSgNonrealType(specified);
+      auto *declaration = nonreal != nullptr
+                              ? isSgNonrealDecl(nonreal->get_declaration())
+                              : nullptr;
+      auto *alias =
+          declaration != nullptr
+              ? isSgTypedefDeclaration(declaration->get_templateDeclaration())
+              : nullptr;
+      if (alias == nullptr || isSgTemplateTypedefDeclaration(alias) != nullptr)
+        break;
+      if (!SageInterface::cxxSourceTypeMatchesSemanticType(
+              specified, alias->get_base_type()))
+        return false;
+      specified = alias->get_base_type();
+    }
+    auto *array = isSgArrayType(specified);
+    if (source_form == e_no_array_bound)
+      return array == nullptr &&
+             SageInterface::cxxSourceTypeMatchesSemanticType(
+                 source, result->get_base_type());
+    if (array == nullptr)
+      return false;
+    specified = array->get_base_type();
+  }
+  return SageInterface::cxxSourceTypeMatchesSemanticType(specified, semantic);
+}
+
+// Qualification setters preserve modification state for token unparsing.
 int SgNewExp::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length;
 }
 
 void SgNewExp::set_name_qualification_length(int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_length = name_qualification_length;
 }
 
 bool SgNewExp::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_required;
 }
 
 void SgNewExp::set_type_elaboration_required(bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgNewExp::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required;
 }
 
 void SgNewExp::set_global_qualification_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_required = global_qualification_required;
 }
 
-// DQ (4/15/2019): These six access functions should not be generated by ROSETTA
-// so that we could avoid them setting the isModified flag which is a problem in
-// the name qualification support for C++ (interfering with the token-based
-// unparsing).
 int SgNewExp::get_name_qualification_for_pointer_to_member_class_length()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_for_pointer_to_member_class_length;
 }
 
 void SgNewExp::set_name_qualification_for_pointer_to_member_class_length(
     int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_for_pointer_to_member_class_length =
       name_qualification_length;
 }
 
 bool SgNewExp::get_type_elaboration_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_for_pointer_to_member_class_required;
 }
 
 void SgNewExp::set_type_elaboration_for_pointer_to_member_class_required(
     bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_for_pointer_to_member_class_required =
       type_elaboration_required;
 }
 
 bool SgNewExp::get_global_qualification_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_for_pointer_to_member_class_required;
 }
 
 void SgNewExp::set_global_qualification_for_pointer_to_member_class_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_for_pointer_to_member_class_required =
       global_qualification_required;

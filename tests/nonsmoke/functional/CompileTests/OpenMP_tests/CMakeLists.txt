@@ -97,6 +97,109 @@ if(NOT ENABLE-C)
   return()
 endif()
 
+foreach(mode IN ITEMS native json opaque)
+  set(workdir "${CMAKE_CURRENT_BINARY_DIR}/attribute-${mode}")
+  file(MAKE_DIRECTORY "${workdir}")
+  set(construct_args)
+  if(NOT mode STREQUAL "opaque")
+    list(APPEND construct_args -rose:openmp:ast_only)
+  endif()
+  set(checkpoint_args)
+  if(mode STREQUAL "json")
+    list(APPEND checkpoint_args
+      -rex:ast-json-checkpoint=post-omp-construction
+      "-rex:ast-json-dir=${workdir}/json")
+  endif()
+  set(source "${workdir}/rose_rex_openmp_attribute_constructs.cpp")
+  set(executable "${workdir}/rex_openmp_attribute_constructs")
+  add_test(NAME rex_openmp_attribute_${mode}_unparse
+    COMMAND parseOmp ${construct_args} -rose:skipfinalCompileStep
+      -std=c++17 -Werror=unknown-attributes ${checkpoint_args}
+      -rose:output "${source}" -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_attribute_constructs.cpp)
+  add_test(NAME rex_openmp_attribute_${mode}_compile
+    COMMAND ${ROSE_LLVM_CLANG_CXX_DRIVER} -std=c++17 -fopenmp
+      -Werror=unknown-attributes
+      "${source}" -o "${executable}")
+  add_test(NAME rex_openmp_attribute_${mode}_run
+    COMMAND "${executable}")
+  set_tests_properties(rex_openmp_attribute_${mode}_unparse PROPERTIES
+    FIXTURES_SETUP rex_openmp_attribute_source_${mode})
+  set_tests_properties(rex_openmp_attribute_${mode}_compile PROPERTIES
+    FIXTURES_REQUIRED rex_openmp_attribute_source_${mode}
+    FIXTURES_SETUP rex_openmp_attribute_executable_${mode})
+  set_tests_properties(rex_openmp_attribute_${mode}_run PROPERTIES
+    FIXTURES_REQUIRED rex_openmp_attribute_executable_${mode})
+  set_tests_properties(rex_openmp_attribute_${mode}_unparse
+    rex_openmp_attribute_${mode}_compile rex_openmp_attribute_${mode}_run
+    PROPERTIES WORKING_DIRECTORY "${workdir}" TIMEOUT 180
+      LABELS "rex;OpenMP;OMPLOWERING_CONTRACT"
+      ENVIRONMENT "OMP_NUM_THREADS=2;OMP_DYNAMIC=FALSE")
+endforeach()
+
+add_executable(rex_openmp_vla_capture rex_openmp_vla_capture.cpp)
+target_link_libraries(rex_openmp_vla_capture ROSE_DLL)
+target_include_directories(rex_openmp_vla_capture PRIVATE
+  "${PROJECT_SOURCE_DIR}/src/midend/programTransformation/astOutlining")
+foreach(mode IN ITEMS query lowering)
+  set(workdir "${CMAKE_CURRENT_BINARY_DIR}/vla-capture-${mode}")
+  file(MAKE_DIRECTORY "${workdir}")
+  if(mode STREQUAL "query")
+    add_test(NAME rex_openmp_vla_capture_${mode}
+      COMMAND rex_openmp_vla_capture -c
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_vla_capture.c)
+  else()
+    add_test(NAME rex_openmp_vla_capture_${mode}
+      COMMAND parseOmp --rex-omp-lowering -c
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_vla_capture.c)
+  endif()
+  set_tests_properties(rex_openmp_vla_capture_${mode} PROPERTIES
+    WORKING_DIRECTORY "${workdir}" LABELS "OpenMP;AST;rex;sanitizer")
+endforeach()
+
+add_executable(rex_openmp_literal_capture_identity
+  rex_openmp_literal_capture_identity.cpp)
+target_link_libraries(rex_openmp_literal_capture_identity ROSE_DLL)
+foreach(mode IN ITEMS native json pointer msp430)
+  set(specimen rex_openmp_literal_capture_identity.c)
+  if(mode STREQUAL "pointer")
+    set(specimen rex_openmp_literal_capture_pointer_identity.c)
+  endif()
+  set(workdir "${CMAKE_CURRENT_BINARY_DIR}/literal-capture-${mode}")
+  file(MAKE_DIRECTORY "${workdir}")
+  set(checkpoint_args)
+  if(mode STREQUAL "json")
+    list(APPEND checkpoint_args -rex:ast-json-checkpoint=post-omp-lowering
+      "-rex:ast-json-dir=${workdir}/json")
+  elseif(mode STREQUAL "msp430")
+    list(APPEND checkpoint_args --target=msp430 -rose:skipfinalCompileStep)
+  endif()
+  add_test(NAME rex_openmp_literal_capture_identity_${mode}
+    COMMAND rex_openmp_literal_capture_identity --rex-omp-lowering
+      ${checkpoint_args} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/${specimen})
+  set_tests_properties(rex_openmp_literal_capture_identity_${mode} PROPERTIES
+    WORKING_DIRECTORY "${workdir}" LABELS "OpenMP;AST;rex;sanitizer")
+endforeach()
+
+add_executable(rex_openmp_reduction_identity rex_openmp_reduction_identity.cpp)
+target_link_libraries(rex_openmp_reduction_identity ROSE_DLL)
+foreach(mode IN ITEMS native json)
+  set(workdir "${CMAKE_CURRENT_BINARY_DIR}/reduction-identity-${mode}")
+  file(MAKE_DIRECTORY "${workdir}")
+  set(checkpoint_args)
+  if(mode STREQUAL "json")
+    list(APPEND checkpoint_args -rex:ast-json-checkpoint=post-omp-lowering
+      "-rex:ast-json-dir=${workdir}/json")
+  endif()
+  add_test(NAME rex_openmp_reduction_identity_${mode}
+    COMMAND rex_openmp_reduction_identity --rex-omp-lowering
+      ${checkpoint_args} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_reduction_identity.c)
+  set_tests_properties(rex_openmp_reduction_identity_${mode} PROPERTIES
+    WORKING_DIRECTORY "${workdir}" LABELS "OpenMP;AST;rex;sanitizer")
+endforeach()
+
 # C test codes
 set(C_TESTCODES
 	3loops.c affinity.c allocate.c jacobi.c jacobi-collapse.c alignment.c
@@ -210,12 +313,20 @@ function(add_rex_openmp_semantic_negative
       "${diagnostic}"
       $<TARGET_FILE:parseOmp>
       ${_flags}
+      ${ARGN}
       -rose:skipfinalCompileStep
       -c
       ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
   set_tests_properties(${test_name}
     PROPERTIES LABELS "OMPTEST;rex;death")
 endfunction()
+
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_unrelated_attribute_is_rejected
+  rex_openmp_attribute_constructs.cpp
+  CXX
+  "REX_FRONTEND_INVARIANT[clang-diagnostics]: Clang reported 3 diagnostic error(s); frontend AST translation is forbidden"
+  -Domp=rex_unknown -Werror=unknown-attributes)
 
 add_rex_openmp_semantic_negative(
   OMPTEST_rex_openmp_imported_mapper_missing_map_is_rejected
@@ -528,6 +639,16 @@ set_tests_properties(OMPTEST_rex_openmp_array_section_device_mode
   PROPERTIES LABELS "OMPTEST;rex;AST")
 rex_lock_test_for_input(OMPTEST_rex_openmp_array_section_device_mode
   rex_openmp_array_section_device_mode.c)
+
+add_test(
+  NAME OMPTEST_rex_openmp_mixed_source_role_is_rejected
+  COMMAND ${BASH_EXECUTABLE} -c
+    "ulimit -c 0; set +e; \"$@\" >rex_openmp_mixed_source_role.log 2>&1; status=$?; set -e; test $status -eq 134; test \"$(grep -Fxc 'REX_OMP_AST_INVARIANT[source-end-role]: cannot attach a lexical end to a transformation start' rex_openmp_mixed_source_role.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_openmp_array_section_device_mode_translator>
+    --reject-mixed-source-role)
+set_tests_properties(OMPTEST_rex_openmp_mixed_source_role_is_rejected
+  PROPERTIES LABELS "OMPTEST;rex;AST;death")
 
 add_test(
   NAME OMPTEST_rex_openmp_array_section_invalid_is_rejected
@@ -943,7 +1064,7 @@ foreach(_mode item-type bad-first-separator bad-later-separator
               wrong-sizes-type empty-sizes null-sizes-element
               missing-init-modifier-list replacement-null replacement-owned
               replacement-wrong-apply-payload replacement-wrong-init-payload
-              replacement-list-wrong-type)
+              replacement-wrong-prefer-type replacement-list-wrong-type)
   string(REPLACE "-" "_" _mode_name "${_mode}")
   if(_mode STREQUAL "item-type")
     set(_expected_diagnostic
@@ -981,6 +1102,9 @@ foreach(_mode item-type bad-first-separator bad-later-separator
   elseif(_mode STREQUAL "replacement-list-wrong-type")
     set(_expected_diagnostic
         "REX_AST_INVARIANT[openmp-init-modifier-list-replacement]: replacement is not a valid SgOmpInitModifier payload")
+  elseif(_mode STREQUAL "replacement-wrong-prefer-type")
+    set(_expected_diagnostic
+        "REX_AST_INVARIANT[openmp-init-modifier-replacement]: replacement expression has an invalid typed payload")
   else()
     message(FATAL_ERROR "unmapped OpenMP corruption mode: ${_mode}")
   endif()
@@ -1140,6 +1264,65 @@ add_ast_json_checkpoint_test(
   OMPTEST
   ${ROSE_C_FLAGS}
   -rose:skipfinalCompileStep)
+
+add_ast_json_checkpoint_test(
+  all_omp_construction_rex_openmp_variant_lookup_c
+  all
+  rex_openmp_variant_lookup.c
+  OMPTEST
+  ${ROSE_C_FLAGS}
+  -Werror=undefined-internal
+  -rose:skipfinalCompileStep)
+set_tests_properties(
+  ASTJSON_all_omp_construction_rex_openmp_variant_lookup_c
+  PROPERTIES FIXTURES_SETUP rex_openmp_variant_lookup_source)
+set(_variant_lookup_workdir "${CMAKE_CURRENT_BINARY_DIR}/variant-lookup")
+file(MAKE_DIRECTORY "${_variant_lookup_workdir}")
+foreach(mode IN ITEMS original emitted)
+  if(mode STREQUAL "original")
+    set(source "${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_variant_lookup.c")
+  else()
+    set(source
+      "${_omp_test_output_dir}/ast-json/all_omp_construction_rex_openmp_variant_lookup_c/checkpoint/rose_rex_openmp_variant_lookup.c")
+  endif()
+  set(executable "${_variant_lookup_workdir}/${mode}")
+  add_test(NAME rex_openmp_variant_lookup_${mode}_compile
+    COMMAND ${ROSE_LLVM_CLANG_C_DRIVER} -fopenmp -Werror=undefined-internal
+      "${source}" -o "${executable}")
+  add_test(NAME rex_openmp_variant_lookup_${mode}_run
+    COMMAND "${executable}")
+  set_tests_properties(rex_openmp_variant_lookup_${mode}_compile PROPERTIES
+    FIXTURES_SETUP rex_openmp_variant_lookup_${mode}_executable)
+  if(mode STREQUAL "emitted")
+    set_tests_properties(rex_openmp_variant_lookup_${mode}_compile PROPERTIES
+      FIXTURES_REQUIRED rex_openmp_variant_lookup_source)
+  endif()
+  set_tests_properties(rex_openmp_variant_lookup_${mode}_run PROPERTIES
+    FIXTURES_REQUIRED rex_openmp_variant_lookup_${mode}_executable)
+  set_tests_properties(rex_openmp_variant_lookup_${mode}_compile
+    rex_openmp_variant_lookup_${mode}_run PROPERTIES
+    WORKING_DIRECTORY "${_variant_lookup_workdir}"
+    LABELS "OMPTEST;rex;runtime"
+    ENVIRONMENT "OMP_NUM_THREADS=2;OMP_DYNAMIC=FALSE")
+endforeach()
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_variant_function_scope_is_rejected
+  rex_openmp_variant_lookup.c C
+  "REX_CFE_OMP_INVARIANT[variant-declaration-scope]: begin/end declare variant must separate declarations, not occur inside a function"
+  -DREX_VARIANT_INSIDE_FUNCTION)
+add_rex_openmp_semantic_negative(
+  OMPTEST_rex_openmp_variant_undefined_helper_is_rejected
+  rex_openmp_variant_lookup.c C
+  "REX_FRONTEND_INVARIANT[clang-diagnostics]: Clang reported 1 diagnostic error(s); frontend AST translation is forbidden"
+  -DREX_VARIANT_UNDEFINED_HELPER -Werror=undefined-internal)
+add_test(NAME OMPTEST_rex_openmp_variant_explicit_warning_policy
+  WORKING_DIRECTORY ${_variant_lookup_workdir}
+  COMMAND parseOmp ${ROSE_C_FLAGS} -rose:skipfinalCompileStep
+    -DREX_VARIANT_UNDEFINED_HELPER -Werror=undefined-internal
+    -Wno-error=undefined-internal -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_openmp_variant_lookup.c)
+set_tests_properties(OMPTEST_rex_openmp_variant_explicit_warning_policy
+  PROPERTIES LABELS "OMPTEST;rex;frontend")
 
 add_ast_json_checkpoint_test(
   all_omp_construction_task_link2_cpp

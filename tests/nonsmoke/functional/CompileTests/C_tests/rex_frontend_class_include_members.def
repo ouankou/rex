@@ -1,2 +1,3 @@
 int included_first;
 int included_second;
+#pragma rex_class_included_marker

@@ -26,6 +26,20 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  size_t bitfields = 0;
+  for (auto *node : NodeQuery::querySubTree(project, V_SgVariableDefinition)) {
+    auto *definition = isSgVariableDefinition(node);
+    auto *width = definition->get_bitfield();
+    if (width == nullptr)
+      continue;
+    ++bitfields;
+    const auto value = SageInterface::evaluateConstIntegerExpression(width);
+    ROSE_ASSERT(width->get_parent() == definition && value.hasValue_ &&
+                value.value_ == 8 && definition->get_vardefn() != nullptr &&
+                definition->get_vardefn()->get_definition() == definition);
+  }
+  ROSE_ASSERT(bitfields == 1);
+
   Rose_STL_Container<SgNode *> strings =
       NodeQuery::querySubTree(project, V_SgStringVal);
   SgStringVal *raw = nullptr;

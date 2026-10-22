@@ -7,52 +7,35 @@ int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
 
-  // Only run the tests for lvalue
-  TestLValues test;
-  test.traverseInputFiles(project, preorder);
-  //	AstTests::runLValueTests(project);
-
   bool success = true;
+  bool checkedLValues = false, checkedRValues = false;
   std::vector<SgFunctionDeclaration *> funs =
       SageInterface::querySubTree<SgFunctionDeclaration>(
           project, V_SgFunctionDeclaration);
   for (SgFunctionDeclaration *fun : funs) {
-    std::string funName = fun->get_qualified_name().getString();
-    // every expr statement should be an lvalue
-    if (funName == "HasLValues") {
-      Rose_STL_Container<SgStatement *> bodystmts =
-          fun->get_definition()->get_body()->get_statements();
-      for (SgStatement *stmt : bodystmts) {
-        if (SgExprStatement *exprstmt = isSgExprStatement(stmt)) {
-          SgExpression *expr = exprstmt->get_expression();
-          if (!expr->isLValue()) {
-            std::cerr << "Error, expression `" << expr->unparseToString()
-                      << "` is not an LValue." << std::endl;
-            success = false;
-          }
-        }
+    if (!isSgGlobal(fun->get_scope()) || fun->get_definition() == nullptr)
+      continue;
+    const std::string name = fun->get_name().getString();
+    if (name != "HasLValues" && name != "NoLValues")
+      continue;
+    const bool expected = name == "HasLValues";
+    unsigned checked = 0;
+    for (auto *statement : SageInterface::querySubTree<SgExprStatement>(
+             fun->get_definition()->get_body(), V_SgExprStatement)) {
+      auto *expression = statement->get_expression();
+      ROSE_ASSERT(expression != nullptr);
+      if (expression->isLValue() != expected) {
+        std::cerr << "Unexpected value category for `"
+                  << expression->unparseToString() << "` in " << name
+                  << std::endl;
+        success = false;
       }
+      ++checked;
     }
-    // no expr statement should be an lvalue
-    else if (funName == "NoLValues") {
-      Rose_STL_Container<SgStatement *> bodystmts =
-          fun->get_definition()->get_body()->get_statements();
-      for (SgStatement *stmt : bodystmts) {
-        if (SgExprStatement *exprstmt = isSgExprStatement(stmt)) {
-          SgExpression *expr = exprstmt->get_expression();
-          if (expr->isLValue()) {
-            std::cerr << "Error, expression `" << expr->unparseToString()
-                      << "` is an LValue." << std::endl;
-            success = false;
-          }
-        }
-      }
-    }
+    ROSE_ASSERT(checked != 0);
+    checkedLValues |= expected;
+    checkedRValues |= !expected;
   }
-  if (!success)
-    return 1;
-
-  // TV (05/2011): remove backend call who's failing, the test purpose is still
-  // ensure.
-  return 0;
+  ROSE_ASSERT(checkedLValues && checkedRValues);
+  return success ? 0 : 1;
 }

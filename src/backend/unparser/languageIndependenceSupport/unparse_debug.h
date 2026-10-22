@@ -4,7 +4,7 @@
 #ifndef UNPARSER_DEBUG
 #define UNPARSER_DEBUG
 
-#include "unparser.h"
+#include <string>
 
 class Unparser;
 

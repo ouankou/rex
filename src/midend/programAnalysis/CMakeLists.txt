@@ -1,5 +1,4 @@
 add_subdirectory(CallGraphAnalysis)
-add_subdirectory(OAWrap)
 add_subdirectory(CFG)
 
 add_subdirectory(bitvectorDataflow)
@@ -11,98 +10,68 @@ add_subdirectory(staticInterproceduralSlicing)
 add_subdirectory(pointerAnal)
 add_subdirectory(variableRenaming)
 add_subdirectory(genericDataflow)
-add_subdirectory(dataflowAnalysis)
 
+add_library(midend_pa OBJECT
+  defUseAnalysis/DefUseAnalysisAbstract.cpp
+  defUseAnalysis/DefUseAnalysis.cpp
+  defUseAnalysis/GlobalVarAnalysis.cpp
+  defUseAnalysis/LivenessAnalysis.cpp
+  defUseAnalysis/dfaToDot.cpp
+  defUseAnalysis/DefUseAnalysis_perFunction.cpp
+  valuePropagation/ValueAnnot.C
+  valuePropagation/ArrayAnnot.C
+  valuePropagation/ValuePropagate.C
+  variableRenaming/VariableRenaming.C
+  CallGraphAnalysis/CallGraph.C
+  CallGraphAnalysis/ClassHierarchyGraph.C
+  CallGraphAnalysis/newCallGraph.C
+  staticInterproceduralSlicing/MergedDependenceGraph.C
+  staticInterproceduralSlicing/ControlDependenceGraph.C
+  staticInterproceduralSlicing/DependenceGraph.C
+  staticInterproceduralSlicing/EDefUse.C
+  staticInterproceduralSlicing/DataDependenceGraph.C
+  staticInterproceduralSlicing/SlicingInfo.C
+  staticInterproceduralSlicing/CreateSlice.C
+  staticInterproceduralSlicing/CreateSliceSet.C
+  staticInterproceduralSlicing/SystemDependenceGraph.C
+  staticInterproceduralSlicing/DefUseExtension.C
+  CFG/CFG_ROSE.C
+  pointerAnal/PtrAnalCFG.C
+  pointerAnal/PtrAnal.C
+  bitvectorDataflow/DataFlowAnalysis.C
+  bitvectorDataflow/ReachingDefinition.C
+  bitvectorDataflow/DefUseChain.C
+  bitvectorDataflow/ReachingDefinitionFacade.C
+  VirtualFunctionAnalysis/VirtualFunctionAnalysis.C
+  VirtualFunctionAnalysis/PtrAliasAnalysis.C
+  VirtualFunctionAnalysis/IntraProcAliasAnalysis.C
+  VirtualFunctionAnalysis/IntraProcDataFlowAnalysis.C
+  VirtualFunctionAnalysis/InterProcDataFlowAnalysis.C
+  genericDataflow/AnalysisDebuggingUtils.C
+  genericDataflow/analysis/analysis.C
+  genericDataflow/analysis/analysisCommon.C
+  genericDataflow/analysis/dataflow.C
+  genericDataflow/cfgUtils/CallGraphTraverse.C
+  genericDataflow/cfgUtils/cfgUtils.C
+  genericDataflow/cfgUtils/DataflowCFG.C
+  genericDataflow/cfgUtils/VirtualCFGIterator.C
+  genericDataflow/lattice/lattice.C
+  genericDataflow/rwAccessLabeler/rwAccessLabeler.C
+  genericDataflow/simpleAnalyses/divAnalysis.C
+  genericDataflow/simpleAnalyses/liveDeadVarAnalysis.C
+  genericDataflow/simpleAnalyses/printAnalysisStates.C
+  genericDataflow/simpleAnalyses/taintAnalysis.C
+  genericDataflow/state/functionState.C
+  genericDataflow/state/nodeState.C
+  genericDataflow/variables/variables.C)
 
-if (NOT enable-internalFrontendDevelopment)
- set(_generic_dataflow_sources
-   genericDataflow/AnalysisDebuggingUtils.C
-   genericDataflow/genUID.C
-   genericDataflow/analysis/analysis.C
-   genericDataflow/analysis/analysisCommon.C
-   genericDataflow/analysis/dataflow.C
-   genericDataflow/analysis/partitionedAnalysis.C
-   genericDataflow/arrIndexLabeler/arrIndexLabeler.C
-   genericDataflow/cfgUtils/CallGraphTraverse.C
-   genericDataflow/cfgUtils/CFGRewrite.C
-   genericDataflow/cfgUtils/cfgUtils.C
-   genericDataflow/cfgUtils/DataflowCFG.C
-   genericDataflow/cfgUtils/VirtualCFGIterator.C
-   genericDataflow/lattice/affineInequality.C
-   genericDataflow/lattice/ConstrGraph.C
-   genericDataflow/lattice/lattice.C
-   genericDataflow/rwAccessLabeler/rwAccessLabeler.C
-   genericDataflow/simpleAnalyses/ConstrGraphAnalysis.C
-   genericDataflow/simpleAnalyses/divAnalysis.C
-   genericDataflow/simpleAnalyses/dominatorAnalysis.C
-   genericDataflow/simpleAnalyses/liveDeadVarAnalysis.C
-   genericDataflow/simpleAnalyses/nodeConstAnalysis.C
-   genericDataflow/simpleAnalyses/placeUIDs.C
-   genericDataflow/simpleAnalyses/printAnalysisStates.C
-   genericDataflow/simpleAnalyses/saveDotAnalysis.C
-   genericDataflow/simpleAnalyses/sequenceStructAnalysis.C
-   genericDataflow/simpleAnalyses/sgnAnalysis.C
-   genericDataflow/simpleAnalyses/taintAnalysis.C
-   genericDataflow/state/functionState.C
-   genericDataflow/state/nodeState.C
-   genericDataflow/variables/variables.C
-   genericDataflow/variables/varSets.C)
-
-  set(_generic_dataflow_include_dirs
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/analysis
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/arrIndexLabeler
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/cfgUtils
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/lattice
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/rwAccessLabeler
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/simpleAnalyses
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/state
-    ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/variables)
-
-  add_library(midend_pa OBJECT
-   defUseAnalysis/DefUseAnalysisAbstract.cpp
-   defUseAnalysis/DefUseAnalysis.cpp
-   defUseAnalysis/GlobalVarAnalysis.cpp
-   defUseAnalysis/LivenessAnalysis.cpp
-   defUseAnalysis/dfaToDot.cpp
-   defUseAnalysis/DefUseAnalysis_perFunction.cpp
-   valuePropagation/ValueAnnot.C
-   valuePropagation/ArrayAnnot.C
-   valuePropagation/ValuePropagate.C
-   variableRenaming/VariableRenaming.C
-   OAWrap/OAWrap.C
-   OAWrap/SAGE2OA.C
-   CallGraphAnalysis/CallGraph.C
-   CallGraphAnalysis/ClassHierarchyGraph.C
-   CallGraphAnalysis/newCallGraph.C
-   staticInterproceduralSlicing/MergedDependenceGraph.C
-   staticInterproceduralSlicing/ControlFlowGraph.C
-   staticInterproceduralSlicing/FunctionDependenceGraph.C
-   staticInterproceduralSlicing/ControlDependenceGraph.C
-   staticInterproceduralSlicing/DependenceGraph.C
-   staticInterproceduralSlicing/EDefUse.C
-   staticInterproceduralSlicing/DataDependenceGraph.C
-   staticInterproceduralSlicing/SlicingInfo.C
-   staticInterproceduralSlicing/CreateSlice.C
-   staticInterproceduralSlicing/CreateSliceSet.C
-   staticInterproceduralSlicing/SystemDependenceGraph.C
-   staticInterproceduralSlicing/DefUseExtension.C
-   CFG/CFG_ROSE.C
-   pointerAnal/PtrAnalCFG.C
-   pointerAnal/PtrAnal.C
-   bitvectorDataflow/DataFlowAnalysis.C
-   bitvectorDataflow/ReachingDefinition.C
-   bitvectorDataflow/DefUseChain.C
-   bitvectorDataflow/ReachingDefinitionFacade.C
-   VirtualFunctionAnalysis/VirtualFunctionAnalysis.C
-   VirtualFunctionAnalysis/PtrAliasAnalysis.C
-   VirtualFunctionAnalysis/IntraProcAliasAnalysis.C
-   VirtualFunctionAnalysis/IntraProcDataFlowAnalysis.C
-   VirtualFunctionAnalysis/InterProcDataFlowAnalysis.C
-   ${_generic_dataflow_sources})
-
-  add_dependencies(midend_pa rosetta_generated)
-  target_include_directories(midend_pa PRIVATE ${_generic_dataflow_include_dirs})
-  unset(_generic_dataflow_sources)
-  unset(_generic_dataflow_include_dirs)
-endif()
+add_dependencies(midend_pa rosetta_generated)
+target_include_directories(midend_pa PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/analysis
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/cfgUtils
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/lattice
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/rwAccessLabeler
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/simpleAnalyses
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/state
+  ${CMAKE_CURRENT_SOURCE_DIR}/genericDataflow/variables)

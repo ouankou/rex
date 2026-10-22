@@ -1,12 +1,4 @@
-DO NOT DISABLE POLICY CHECKERS
-
-Do not disable policy checkers without first consulting with a member of the ROSE core development
-team. These checkers exist because of actual code quality issues we've encountered in the past.
-
-====================================================================================================
-
-
-This directory contains policy checkers to enforce policies that ROSE places on its developers.
+This directory contains policy checkers used during REX development.
 Each checker is an executable script (usually Perl) that can be executed from any source
 directory and which will check that the policy is adhered to in that directory and below.
 
@@ -27,5 +19,5 @@ Policy checkers should not enter the following directories:
 
 Although each policy checker can be run individually, the scripts/policies-checker.sh is a
 harness that runs all the policy checkers and then exits with non-zero status if any of them
-failed.  Policy checkers should exit with zero status for success, 1-127 for errors, and 128-255
-for warnings.
+failed. Policy checkers should exit with zero status for success and 128 for warnings.
+All other nonzero statuses are failures, including interpreter errors and signals.

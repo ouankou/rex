@@ -2,7 +2,7 @@
 #
 # REX Build Script with Clang Frontend
 # This script automates the build process for REX compiler
-# with the experimental Clang frontend enabled.
+# with the LLVM 22 Clang and Flang frontends enabled.
 #
 # Usage:
 #   ./build-rex.sh [install-prefix] [build-type]
@@ -51,13 +51,7 @@ if [ "$LLVM_REQUIRED_MAJOR" != "22" ]; then
     echo -e "${RED}Error: REX is pinned to LLVM/Clang major 22; LLVM_REQUIRED_MAJOR='$LLVM_REQUIRED_MAJOR' is unsupported.${NC}" >&2
     exit 1
 fi
-if [ -z "${NUM_JOBS:-}" ]; then
-    if ! command -v nproc >/dev/null 2>&1; then
-        echo -e "${RED}Error: nproc is required when NUM_JOBS is not set.${NC}" >&2
-        exit 1
-    fi
-    NUM_JOBS="$(nproc)"
-fi
+NUM_JOBS="${NUM_JOBS:-1}"
 if ! [[ "$NUM_JOBS" =~ ^[0-9]+$ ]] || [ "$NUM_JOBS" -lt 1 ]; then
     echo -e "${RED}Error: NUM_JOBS must be a positive integer, got '$NUM_JOBS'.${NC}" >&2
     exit 1
@@ -79,7 +73,7 @@ find_first_executable() {
     shift
     local candidate
     for candidate in "$@"; do
-        if [ -x "$search_dir/$candidate" ]; then
+        if [ -f "$search_dir/$candidate" ] && [ -x "$search_dir/$candidate" ]; then
             printf '%s\n' "$search_dir/$candidate"
             return 0
         fi
@@ -92,114 +86,66 @@ validate_llvm_compiler() {
     local expected_kind="$2"
     local role="$3"
     local resolved
+    local resolved_dir
     local resolved_real
     local bindir_real
     local version_output
+    local version_line
     local major
 
     resolved="$(command -v "$compiler" 2>/dev/null || true)"
-    if [ -z "$resolved" ] || [ ! -x "$resolved" ]; then
+    if [ -z "$resolved" ] || [ ! -f "$resolved" ] || [ ! -x "$resolved" ]; then
         echo -e "${RED}Error: $role compiler is not executable: $compiler${NC}" >&2
         return 1
     fi
-    resolved_real="$(readlink -f "$resolved" 2>/dev/null || true)"
-    bindir_real="$(readlink -f "$LLVM_BINDIR" 2>/dev/null || true)"
-    case "$resolved_real" in
-        "$bindir_real"/*) ;;
-        *)
-            echo -e "${RED}Error: $role compiler '$resolved' is outside the selected LLVM bindir '$LLVM_BINDIR'.${NC}" >&2
-            return 1
-            ;;
-    esac
+    if ! resolved_real="$(readlink -f "$resolved")" ||
+       ! bindir_real="$(readlink -f "$LLVM_BINDIR")"; then
+        echo "Error: cannot resolve $role compiler or LLVM bindir identity." >&2
+        return 1
+    fi
+    if [ "${resolved_real%/*}" != "$bindir_real" ]; then
+        echo -e "${RED}Error: $role compiler '$resolved' is outside the selected LLVM bindir '$LLVM_BINDIR'.${NC}" >&2
+        return 1
+    fi
 
     version_output="$("$resolved" --version 2>&1)" || {
         echo -e "${RED}Error: cannot execute $role compiler '$resolved': $version_output${NC}" >&2
         return 1
     }
-    if ! printf '%s\n' "$version_output" | head -n 1 | grep -qi "$expected_kind"; then
-        echo -e "${RED}Error: $role compiler '$resolved' is not LLVM $expected_kind.${NC}" >&2
+    version_line="${version_output%%$'\n'*}"
+    case "$expected_kind:$version_line" in
+        clang:*[cC][lL][aA][nN][gG]*|flang:*[fF][lL][aA][nN][gG]*) ;;
+        *)
+            echo -e "${RED}Error: $role compiler '$resolved' is not LLVM $expected_kind.${NC}" >&2
+            return 1
+            ;;
+    esac
+    if [[ ! "$version_line" =~ version[[:space:]]+([0-9]+)([.]|[[:space:]]|$) ]]; then
+        echo -e "${RED}Error: $role compiler '$resolved' reports no valid version: $version_line${NC}" >&2
         return 1
     fi
-    major="$(printf '%s\n' "$version_output" | sed -nE 's/.*version[[:space:]]+([0-9]+)([.].*)?/\1/p' | head -n 1)"
+    major="${BASH_REMATCH[1]}"
     if [ "$major" != "$LLVM_REQUIRED_MAJOR" ]; then
         echo -e "${RED}Error: $role compiler '$resolved' has major '${major:-unknown}'; exactly $LLVM_REQUIRED_MAJOR is required.${NC}" >&2
         return 1
     fi
+    resolved_dir="$(cd "$(dirname "$resolved")" && pwd -P)" || return 1
+    printf '%s/%s\n' "$resolved_dir" "${resolved##*/}"
 }
 
 validate_flang_installation() {
-    local flang_root="$1"
-    local manifest_file="cmake/rex_flang_frontend_manifest.txt"
-    local libdir
-    local kind
-    local name
-    local trailing
-    local found
-    local library_count=0
-    local header_count=0
+    cmake "-DREX_FLANG_ROOT=$1" -P cmake/rex_check_flang_installation.cmake
+}
 
-    case "$flang_root" in
-        /*) ;;
-        *)
-            echo -e "${RED}Error: Flang root must be an absolute path: $flang_root${NC}" >&2
-            return 1
-            ;;
-    esac
-    if [ ! -f "$manifest_file" ]; then
-        echo -e "${RED}Error: REX Flang frontend manifest is missing: $manifest_file${NC}" >&2
-        return 1
-    fi
-
-    while read -r kind name trailing; do
-        [ -n "$kind" ] || continue
-        case "$kind" in
-            \#*) continue ;;
-        esac
-        if [ -z "$name" ] || [ -n "$trailing" ]; then
-            echo -e "${RED}Error: malformed REX Flang frontend manifest entry: $kind ${name:-}${trailing:+ $trailing}${NC}" >&2
-            return 1
-        fi
-        case "$kind" in
-            library)
-                library_count=$((library_count + 1))
-                found=0
-                for libdir in "$flang_root/lib" "$flang_root/lib64"; do
-                    if [ -d "$libdir" ] &&
-                       compgen -G "$libdir/lib${name}.*" > /dev/null; then
-                        found=1
-                        break
-                    fi
-                done
-                if [ "$found" -ne 1 ]; then
-                    echo -e "${RED}Error: Flang root $flang_root is missing required frontend library lib${name}.${NC}" >&2
-                    return 1
-                fi
-                ;;
-            header)
-                header_count=$((header_count + 1))
-                if [ ! -f "$flang_root/include/$name" ]; then
-                    echo -e "${RED}Error: Flang root $flang_root is missing required frontend header include/$name.${NC}" >&2
-                    return 1
-                fi
-                ;;
-            *)
-                echo -e "${RED}Error: unknown REX Flang frontend manifest kind '$kind'.${NC}" >&2
-                return 1
-                ;;
-        esac
-    done < "$manifest_file"
-
-    if [ "$library_count" -eq 0 ] || [ "$header_count" -eq 0 ]; then
-        echo -e "${RED}Error: REX Flang frontend manifest must declare libraries and headers.${NC}" >&2
-        return 1
-    fi
+is_required_llvm_version() {
+    [[ "$1" =~ ^([0-9]+)\.[0-9]+\.[0-9]+[A-Za-z0-9.+-]*$ ]] &&
+        [[ "${BASH_REMATCH[1]}" == "$LLVM_REQUIRED_MAJOR" ]]
 }
 
 find_llvm_config() {
     local candidates=()
     local candidate
     local version
-    local major
     local prefix
     local libdir
     local bindir
@@ -208,12 +154,6 @@ find_llvm_config() {
     local selected_root=""
     local derived_root=""
     local explicit_selection=0
-
-    append_candidate() {
-        local entry="$1"
-        [ -n "$entry" ] || return 0
-        candidates+=("$entry")
-    }
 
     if [ -n "${LLVM_ROOT:-}" ]; then
         explicit_selection=1
@@ -268,40 +208,47 @@ find_llvm_config() {
                 return 1
                 ;;
         esac
-        if [ ! -x "$LLVM_CONFIG" ]; then
+        if [ ! -f "$LLVM_CONFIG" ] || [ ! -x "$LLVM_CONFIG" ]; then
             echo "Error: LLVM_CONFIG is not executable: $LLVM_CONFIG" >&2
             return 1
         fi
-        append_candidate "$(readlink -f "$LLVM_CONFIG")"
+        candidates+=("$(readlink -f "$LLVM_CONFIG")")
     elif [ -n "$selected_root" ]; then
-        append_candidate "$selected_root/bin/llvm-config"
-        append_candidate "$selected_root/bin/llvm-config-$LLVM_REQUIRED_MAJOR"
-        if [ ! -x "$selected_root/bin/llvm-config" ] &&
-           [ ! -x "$selected_root/bin/llvm-config-$LLVM_REQUIRED_MAJOR" ]; then
+        candidates+=("$selected_root/bin/llvm-config"
+                     "$selected_root/bin/llvm-config-$LLVM_REQUIRED_MAJOR")
+        if ! find_first_executable "$selected_root/bin" llvm-config \
+                "llvm-config-$LLVM_REQUIRED_MAJOR" >/dev/null; then
             echo "Error: selected LLVM root has no executable llvm-config: $selected_root" >&2
             return 1
         fi
     else
         if command -v llvm-config >/dev/null 2>&1; then
-            append_candidate "$(command -v llvm-config)"
+            candidates+=("$(command -v llvm-config)")
         fi
         if command -v "llvm-config-$LLVM_REQUIRED_MAJOR" >/dev/null 2>&1; then
-            append_candidate "$(command -v "llvm-config-$LLVM_REQUIRED_MAJOR")"
+            candidates+=("$(command -v "llvm-config-$LLVM_REQUIRED_MAJOR")")
         fi
     fi
 
-    local seen=""
     for candidate in "${candidates[@]}"; do
-        [ -x "$candidate" ] || continue
-        case " $seen " in
-            *" $candidate "*) continue ;;
-        esac
-        seen="$seen $candidate"
-        version=$("$candidate" --version 2>/dev/null || true)
-        major=$(echo "$version" | sed -nE 's/^([0-9]+).*/\1/p')
-        bindir=$("$candidate" --bindir 2>/dev/null || true)
-        prefix=$("$candidate" --prefix 2>/dev/null || true)
-        libdir=$("$candidate" --libdir 2>/dev/null || true)
+        [ -f "$candidate" ] && [ -x "$candidate" ] || continue
+        if ! version=$("$candidate" --version) ||
+           ! bindir=$("$candidate" --bindir) ||
+           ! prefix=$("$candidate" --prefix) ||
+           ! libdir=$("$candidate" --libdir); then
+            if [ "$explicit_selection" -eq 1 ]; then
+                echo "Error: selected llvm-config query failed: $candidate" >&2
+                return 1
+            fi
+            continue
+        fi
+        if ! is_required_llvm_version "$version"; then
+            if [ "$explicit_selection" -eq 1 ]; then
+                echo "Error: selected llvm-config reports invalid or unsupported version '$version': $candidate" >&2
+                return 1
+            fi
+            continue
+        fi
         if [ -n "$selected_root" ] && [ -n "$prefix" ]; then
             derived_root="$(cd "$prefix" 2>/dev/null && pwd -P || true)"
             if [ "$derived_root" != "$selected_root" ]; then
@@ -311,16 +258,22 @@ find_llvm_config() {
                 continue
             fi
         fi
-        if [ -n "$major" ] && [ "$major" -eq "$LLVM_REQUIRED_MAJOR" ] &&
-           [ -n "$prefix" ] &&
+        if [ -n "$prefix" ] &&
            [ "$bindir" = "$prefix/bin" ] &&
            { [ "$libdir" = "$prefix/lib" ] || [ "$libdir" = "$prefix/lib64" ]; } &&
            [ -n "$bindir" ] &&
-           [ -x "$bindir/llvm-ar" ] &&
-           [ -x "$(find_first_executable "$bindir" "clang-$LLVM_REQUIRED_MAJOR" clang || true)" ] &&
-           [ -x "$(find_first_executable "$bindir" "clang++-$LLVM_REQUIRED_MAJOR" clang++ || true)" ] &&
-           [ -x "$(find_first_executable "$bindir" "flang-$LLVM_REQUIRED_MAJOR" flang || true)" ]; then
-            printf '%s\n' "$candidate"
+           find_first_executable "$bindir" llvm-ar >/dev/null &&
+           find_first_executable "$bindir" \
+               "clang-$LLVM_REQUIRED_MAJOR" clang >/dev/null &&
+           find_first_executable "$bindir" \
+               "clang++-$LLVM_REQUIRED_MAJOR" clang++ >/dev/null &&
+           find_first_executable "$bindir" \
+               "flang-$LLVM_REQUIRED_MAJOR" flang >/dev/null; then
+            LLVM_CONFIG_CMD="$candidate"
+            LLVM_VERSION="$version"
+            LLVM_BINDIR="$bindir"
+            LLVM_PREFIX="$prefix"
+            LLVM_LIBDIR="$libdir"
             return 0
         fi
     done
@@ -344,12 +297,17 @@ fi
 # Initialize git submodules if not already done
 echo -e "${YELLOW}[1/5] Initializing git submodules...${NC}"
 if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    if git submodule status | grep -q '^-'; then
+    if ! submodule_status=$(git submodule status --recursive); then
+        echo -e "${RED}Error: unable to inspect git submodules.${NC}" >&2
+        exit 1
+    fi
+    if [[ "$submodule_status" == -* || "$submodule_status" == *$'\n-'* ]]; then
         git submodule update --init --recursive
         echo -e "${GREEN}Submodules initialized.${NC}"
     else
         echo -e "${GREEN}Submodules already initialized.${NC}"
     fi
+    unset submodule_status
 else
     echo -e "${YELLOW}Git metadata not found; assuming submodules are already present.${NC}"
 fi
@@ -357,27 +315,12 @@ echo ""
 
 # Check for LLVM/Clang
 echo -e "${YELLOW}[2/5] Checking for LLVM/Clang installation...${NC}"
-LLVM_CONFIG_CMD="$(find_llvm_config || true)"
-if [ -z "$LLVM_CONFIG_CMD" ]; then
+if ! find_llvm_config; then
     echo -e "${RED}Error: llvm-config not found. Please install exactly LLVM/Clang $LLVM_REQUIRED_MAJOR.${NC}"
     echo "On Ubuntu/Debian: sudo apt-get install llvm-$LLVM_REQUIRED_MAJOR llvm-$LLVM_REQUIRED_MAJOR-dev clang-$LLVM_REQUIRED_MAJOR libclang-$LLVM_REQUIRED_MAJOR-dev flang-$LLVM_REQUIRED_MAJOR libflang-$LLVM_REQUIRED_MAJOR-dev lld-$LLVM_REQUIRED_MAJOR mold"
     exit 1
 fi
 
-LLVM_VERSION=$($LLVM_CONFIG_CMD --version)
-LLVM_MAJOR=$(echo "$LLVM_VERSION" | sed -nE 's/^([0-9]+).*/\1/p')
-if [ "$LLVM_MAJOR" != "$LLVM_REQUIRED_MAJOR" ]; then
-    echo -e "${RED}Error: detected LLVM version $LLVM_VERSION using '$LLVM_CONFIG_CMD'. REX requires exactly LLVM/Clang $LLVM_REQUIRED_MAJOR.${NC}"
-    exit 1
-fi
-LLVM_BINDIR=$($LLVM_CONFIG_CMD --bindir)
-LLVM_PREFIX=$($LLVM_CONFIG_CMD --prefix)
-LLVM_LIBDIR=$($LLVM_CONFIG_CMD --libdir)
-if [ "$LLVM_BINDIR" != "$LLVM_PREFIX/bin" ] ||
-   [ "$LLVM_LIBDIR" != "$LLVM_PREFIX/lib" -a "$LLVM_LIBDIR" != "$LLVM_PREFIX/lib64" ]; then
-    echo -e "${RED}Error: selected llvm-config reports a split installation: prefix=$LLVM_PREFIX bindir=$LLVM_BINDIR libdir=$LLVM_LIBDIR.${NC}" >&2
-    exit 1
-fi
 AUTO_C_COMPILER="$(find_first_executable "$LLVM_BINDIR" "clang-$LLVM_REQUIRED_MAJOR" clang || true)"
 AUTO_CXX_COMPILER="$(find_first_executable "$LLVM_BINDIR" "clang++-$LLVM_REQUIRED_MAJOR" clang++ || true)"
 AUTO_FORTRAN_COMPILER="$(find_first_executable "$LLVM_BINDIR" "flang-$LLVM_REQUIRED_MAJOR" flang || true)"
@@ -408,9 +351,9 @@ export CMAKE_PREFIX_PATH="$LLVM_PREFIX${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
 EFFECTIVE_C_COMPILER="${CC:-$AUTO_C_COMPILER}"
 EFFECTIVE_CXX_COMPILER="${CXX:-$AUTO_CXX_COMPILER}"
 EFFECTIVE_FORTRAN_COMPILER="${FC:-$AUTO_FORTRAN_COMPILER}"
-validate_llvm_compiler "$EFFECTIVE_C_COMPILER" clang C
-validate_llvm_compiler "$EFFECTIVE_CXX_COMPILER" clang C++
-validate_llvm_compiler "$EFFECTIVE_FORTRAN_COMPILER" flang Fortran
+EFFECTIVE_C_COMPILER="$(validate_llvm_compiler "$EFFECTIVE_C_COMPILER" clang C)"
+EFFECTIVE_CXX_COMPILER="$(validate_llvm_compiler "$EFFECTIVE_CXX_COMPILER" clang C++)"
+EFFECTIVE_FORTRAN_COMPILER="$(validate_llvm_compiler "$EFFECTIVE_FORTRAN_COMPILER" flang Fortran)"
 
 echo -e "${GREEN}Found LLVM version: $LLVM_VERSION (${LLVM_CONFIG_CMD})${NC}"
 echo "LLVM prefix:    $LLVM_PREFIX"
@@ -448,8 +391,6 @@ else
     echo "CMake generator: CMake default"
 fi
 
-ENABLE_FORTRAN_CMAKE=ON
-ENABLE_FORTRAN_FLANG_CMAKE=ON
 RESOLVED_FLANG_ROOT="${FLANG_ROOT:-$LLVM_PREFIX}"
 
 if [ "$(readlink -f "$RESOLVED_FLANG_ROOT" 2>/dev/null || true)" != \
@@ -464,31 +405,24 @@ if ! validate_flang_installation "$RESOLVED_FLANG_ROOT"; then
     exit 1
 fi
 
-echo "Fortran support: ${ENABLE_FORTRAN_CMAKE}"
-if [ -n "$RESOLVED_FLANG_ROOT" ]; then
-    echo "Flang root:     $RESOLVED_FLANG_ROOT"
-fi
+echo "Fortran support: ON"
+echo "Flang root:     $RESOLVED_FLANG_ROOT"
 echo ""
 
 # Create and enter build directory
 echo -e "${YELLOW}[3/5] Configuring with CMake...${NC}"
-if [ -d "$BUILD_DIR" ]; then
-    echo "Removing existing build directory..."
-    rm -rf "$BUILD_DIR" || { echo -e "${RED}Failed to remove build directory${NC}"; exit 1; }
-fi
 mkdir -p "$BUILD_DIR" || { echo -e "${RED}Failed to create build directory${NC}"; exit 1; }
 cd "$BUILD_DIR" || { echo -e "${RED}Failed to enter build directory${NC}"; exit 1; }
 
-# Configure with CMake (will auto-detect compilers, preferring clang/flang)
 CMAKE_ARGS=(
     -DCMAKE_BUILD_TYPE="$BUILD_TYPE"
     -DCMAKE_INSTALL_PREFIX="$INSTALL_PREFIX"
     -DENABLE-C=ON
-    -DENABLE-FORTRAN="$ENABLE_FORTRAN_CMAKE"
-    -DENABLE-FORTRAN-FLANG="$ENABLE_FORTRAN_FLANG_CMAKE"
+    -DENABLE-FORTRAN=ON
     -DCMAKE_CXX_STANDARD=17
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
     -DLLVM_ROOT="$LLVM_PREFIX"
+    -DFLANG_ROOT="$RESOLVED_FLANG_ROOT"
     -DClang_ROOT="$LLVM_PREFIX"
     -DLLVM_REQUIRED_MAJOR="$LLVM_REQUIRED_MAJOR"
     -DREX_LINKER="$REX_LINKER"
@@ -523,27 +457,15 @@ if [ -n "$AUTO_LLVM_STRIP" ]; then
     CMAKE_ARGS+=(-DCMAKE_STRIP="$AUTO_LLVM_STRIP")
 fi
 
-if [ -n "$RESOLVED_FLANG_ROOT" ]; then
-    CMAKE_ARGS+=(-DFLANG_ROOT="$RESOLVED_FLANG_ROOT")
-fi
-
 cmake "${CMAKE_GENERATOR_ARGS[@]}" .. "${CMAKE_ARGS[@]}"
 
-if [ $? -ne 0 ]; then
-    echo -e "${RED}CMake configuration failed!${NC}"
-    exit 1
-fi
 echo -e "${GREEN}CMake configuration successful.${NC}"
 echo ""
 
 # Build
 echo -e "${YELLOW}[4/5] Building REX (this may take a while)...${NC}"
-cmake --build . -j $NUM_JOBS
+cmake --build . -j "$NUM_JOBS"
 
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Build failed!${NC}"
-    exit 1
-fi
 echo -e "${GREEN}Build successful.${NC}"
 echo ""
 
@@ -551,10 +473,6 @@ echo ""
 echo -e "${YELLOW}[5/5] Installing to $INSTALL_PREFIX...${NC}"
 cmake --install .
 
-if [ $? -ne 0 ]; then
-    echo -e "${RED}Installation failed!${NC}"
-    exit 1
-fi
 echo -e "${GREEN}Installation successful.${NC}"
 echo ""
 

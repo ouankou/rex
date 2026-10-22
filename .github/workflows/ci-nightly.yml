@@ -1,9 +1,8 @@
 name: Nightly CI
 
 on:
-  schedule:
-    - cron: "18 15 * * *"
   workflow_dispatch:
+  workflow_call:
 
 concurrency:
   group: nightly-ci-${{ github.ref }}
@@ -34,7 +33,7 @@ jobs:
       - name: Run tests
         env:
           ARCH: ${{ matrix.arch }}
-          IMAGE: ${{ env.ACT && format('{0}:dev-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:dev', env.IMAGE_REPO) }}
+          IMAGE: ${{ env.ACT && format('{0}:dev-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:dev-{1}', env.IMAGE_REPO, github.sha) }}
         run: |
           main_tests='rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$'
           run_tests() {

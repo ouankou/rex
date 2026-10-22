@@ -14,15 +14,8 @@ DataMemberPointersToIR<Functional1, Functional2>::DataMemberPointersToIR(
 
   if (tT == memory_pool_traversal)
     traverseMemoryPool();
-};
+}
 
-/*************************************************************************************************************
- * The function
- *      AST_Graph::DataMemberPointersToIR<Functional1, Functional2>::visit(
- *SgNode* node) is an implementation of the virtual visit member function in the
- *AST memory pool traversal. This implementation does not affect the tailored
- *whole AST traversal.
- **************************************************************************************************************/
 template <typename Functional1, typename Functional2>
 void DataMemberPointersToIR<Functional1, Functional2>::visit(SgNode *node) {
   std::pair<SgNode *, std::string> nodePair(node, node->class_name());
@@ -31,7 +24,6 @@ void DataMemberPointersToIR<Functional1, Functional2>::visit(SgNode *node) {
     generateGraph(node, -10);
 }
 
-// See header file for comment
 template <typename Functional1>
 void writeGraphOfMemoryPoolToFile(std::string filename,
                                   AST_Graph::pointerHandling graphNullPointers,
@@ -42,7 +34,6 @@ void writeGraphOfMemoryPoolToFile(std::string filename,
   graph.writeToFileAsGraph(filename);
 }
 
-// See header file for comment
 template <typename Functional1, typename Functional2>
 void writeGraphOfMemoryPoolToFile(std::string filename,
                                   AST_Graph::pointerHandling graphNullPointers,
@@ -54,7 +45,6 @@ void writeGraphOfMemoryPoolToFile(std::string filename,
   graph.writeToFileAsGraph(filename);
 }
 
-// See header file for comment
 template <typename Functional1, typename Functional2>
 void writeGraphOfAstSubGraphToFile(std::string filename, SgNode *node,
                                    AST_Graph::pointerHandling graphNullPointers,
@@ -66,12 +56,10 @@ void writeGraphOfAstSubGraphToFile(std::string filename, SgNode *node,
   graph.writeToFileAsGraph(filename);
 }
 
-// See header file for comment
 template <typename Functional1>
 void writeGraphOfAstSubGraphToFile(std::string filename, SgNode *node,
                                    AST_Graph::pointerHandling graphNullPointers,
                                    Functional1 func1, int depth) {
-  //     AST_Graph::writeGraphOfAstSubGraphToFile(filename,node,func1,func1,depth,graphNullPointers);
   DataMemberPointersToIR<Functional1, defaultFilterBinary> graph(
       func1, defaultFilterBinary(), AST_Graph::whole_graph_AST,
       graphNullPointers);
@@ -86,18 +74,13 @@ void DataMemberPointersToIR<Functional1, Functional2>::generateGraph(
               NodeExists.end());
   ROSE_ASSERT(graphNode != NULL);
 
-  // The functional edgeFunctional implements the criteria for if a node is to
-  // be graphed. If this is NULL
-  std::pair<SgNode *, std::string> pairGraphNode(
-      graphNode,
-      std::string("WARNING: this is just a name to have a name DO NOT USE"));
+  std::pair<SgNode *, std::string> pairGraphNode(graphNode,
+                                                 graphNode->class_name());
 
   FunctionalReturnType nodeReturnValue = nodeFunctional(pairGraphNode);
 
   if (nodeReturnValue.addToGraph == true) {
 
-    // std::cout << "The node currently graphed is " << graphNode.second << ": "
-    // << graphNode.first << std::endl;
     std::vector<std::pair<SgNode *, std::string>> vectorOfPointers =
         graphNode->returnDataMemberPointers();
 
@@ -116,39 +99,21 @@ void DataMemberPointersToIR<Functional1, Functional2>::generateGraph(
       std::pair<SgNode *, std::string> edgeEndPoint = vectorOfPointers[i];
 
       if (edgeEndPoint.first == NULL) {
-        // Hangle NULL pointers
         edgeReturnValue.addToGraph = false;
 
         if (graphNull == graph_NULL)
           addNullValue(graphNode, "", edgeEndPoint.second, "");
       } else {
         edgeReturnValue = edgeFunctional(graphNode, edgeEndPoint);
-
-        // DQ (3/25/2017): warning: equality comparison with extraneous
-        // parentheses [-Wparentheses-equality] if(
-        // (whichTraversal==memory_pool_traversal) )
-        if (whichTraversal == memory_pool_traversal) {
-          // If the node the edge points to should not be graphed and the edge
-          // is to be graphed, do not graph the edge if the memory pool
-          // traversal is used.
-          if (nodeFunctional(edgeEndPoint).addToGraph == false)
-            edgeReturnValue.addToGraph = false;
-
-        } // END IF MemoryPoolTraversal
-
-      } // END IF-ELSE
+      }
 
       // If the edge functional says that the edge should be added and the edge
       // end point is a node which should be graphed then graph it if depth is
       // not 0. Depth is a control stucture for the whole graph traversal which
       // gives the user an option to set the number of levels to be followed
       // from a node.
-      if ((depth != 0) & (edgeReturnValue.addToGraph == true) &
-          (nodeFunctional(edgeEndPoint).addToGraph == true)) {
-        // If the functional says that this node is to be added, do so
-
-        // This recursive function call is specific to the whole AST traversal
-        // and is how it operates
+      if (depth != 0 && edgeReturnValue.addToGraph &&
+          nodeFunctional(edgeEndPoint).addToGraph) {
         if (whichTraversal == whole_graph_AST) {
           // See if the node has already been graphed
           if (std::find(NodeExists.begin(), NodeExists.end(),
@@ -162,12 +127,9 @@ void DataMemberPointersToIR<Functional1, Functional2>::generateGraph(
         else
           addEdge(graphNode, edgeReturnValue.DOTLabel, edgeEndPoint.first,
                   edgeReturnValue.DOTOptions);
-
-      } // END IF
-
-    } // END FOR
-
-  } // END IF addToGraph == true
-};
+      }
+    }
+  }
+}
 
 }; // END NAMESPACE AST_Graph

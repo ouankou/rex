@@ -1,42 +1,9 @@
 // Author: Gergo Barany
-// $Id: StackFrameVector.h,v 1.1 2008/01/08 02:56:39 dquinlan Exp $
-
-/*
-   StackFrameVector is a template container class meant to be used for the
-   stack of SythesizedAttributes in the SgTreeTraversal class; to the concrete
-   traversal classes (Ast*Processing) it is hidden behind the
-   SynthesizedAttributesList typedef, which used to be a std::vector.
-   Therefore StackFrameVector implements much of the interface of std::vector
-   in the hope that this will cause minimal breakage of existing user code.
-
-   As it was never a useful operation to alter the size of the
-   SynthesizedAttributesList, or to change its contents, and this would be
-   impossible to support efficiently with StackFrameVector, member functions
-   such as push_back(), erase(), resize() etc. are not implemented. Code using
-   these, for whatever strange reason, should make a copy of the container (a
-   conversion to std::vector is provided) to continue working.
-
-   At the moment we don't provide comparison operators either.
-
-   StackFrameVector is basically implemented as a pointer to a vector, which
-   contains the stack elements, and a pair of iterators into this vector
-   denoting the start and end of a stack frame. Some special stack operations
-   are provided: push(const T &) to push an element to the top of the stack,
-   and setFrameSize(BufferType::size_type) to define how many elements will
-   comprise the stack's top frame (i.e., how many elements there will be
-   between begin() and end()). A push() always pops off the current frame
-   before the new element is added.
-
-   The function debugSize() tells you the total size of the stack, and pop()
-   pops and returns the topmost element, which is mainly useful if the stack
-   contains exactly that one element. All these special functions should only
-   be used by code that knows what it's doing.
-*/
+// The traversal owns the underlying stack. A copied frame borrows its iterators
+// while an attribute callback reads the current child results.
 
 #ifndef STACKFRAMEVECTOR_H
 #define STACKFRAMEVECTOR_H
-
-#include <ostream>
 
 #include <vector>
 
@@ -129,9 +96,6 @@ public:
   // the stack (not just the current frame!) contains exactly one element.
   value_type pop();
 
-  // do some debug output; this should not be called
-  void debugDump(std::ostream &s);
-
 protected:
   // the buffer to hold all stack elements
   BufferType *buffer;
@@ -147,9 +111,6 @@ private:
   explicit StackFrameVector(const BufferType &otherBuffer,
                             difference_type framePtrOffset);
 };
-
-// Author: Gergo Barany
-// $Id: StackFrameVector.C,v 1.1 2008/01/08 02:56:39 dquinlan Exp $
 
 template <class T>
 StackFrameVector<T>::StackFrameVector()
@@ -363,19 +324,6 @@ typename StackFrameVector<T>::value_type StackFrameVector<T>::pop() {
   // pointers will be messed up
   --framePtr;
   return *--stackPtr;
-}
-
-template <class T> void StackFrameVector<T>::debugDump(std::ostream &s) {
-  // this function should only be called for debugging
-  s << "\n"
-    << "framePtr offset: " << framePtr - buffer->begin()
-    << " stackPtr offset: " << stackPtr - buffer->begin() << " size: " << size()
-    << " buffer size: " << buffer->size() << "\n";
-  s << "buffer:" << "\n";
-  const_iterator i;
-  for (i = buffer->begin(); i != buffer->end(); ++i)
-    s << (void *)*i << ' ';
-  s << "\n" << "\n";
 }
 
 #endif

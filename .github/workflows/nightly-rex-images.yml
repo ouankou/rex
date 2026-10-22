@@ -113,6 +113,7 @@ jobs:
             "${IMAGE_REPO}:runtime-${GITHUB_SHA}-arm64" \
             "${IMAGE_REPO}:runtime-${GITHUB_SHA}-riscv64" \
             "${IMAGE_REPO}:runtime-${GITHUB_SHA}-loong64"
+
           docker buildx imagetools create \
             -t "${IMAGE_REPO}:dev" \
             -t "${IMAGE_REPO}:dev-${GITHUB_SHA}" \
@@ -120,3 +121,10 @@ jobs:
             "${IMAGE_REPO}:dev-${GITHUB_SHA}-arm64" \
             "${IMAGE_REPO}:dev-${GITHUB_SHA}-riscv64" \
             "${IMAGE_REPO}:dev-${GITHUB_SHA}-loong64"
+
+  test:
+    name: Test published images
+    needs: publish
+    uses: ./.github/workflows/ci-nightly.yml
+    permissions:
+      packages: read

@@ -94,8 +94,7 @@ int main(int argc, char **argv) {
     const std::vector<std::string> &ownedCommand =
         source->get_originalCommandLineArgumentList();
     const Rose_STL_Container<std::string> ownedSources =
-        CommandlineProcessing::generateSourceFilenames(
-            ownedCommand, project->get_binary_only());
+        CommandlineProcessing::generateSourceFilenames(ownedCommand);
     if (ownedSources.size() != 1 ||
         ownedSources.front() != canonicalOutputs[index]) {
       return fail("generated translation unit does not own its canonical "
@@ -108,9 +107,21 @@ int main(int argc, char **argv) {
 
     const std::string declarationName =
         "generated_contract_" + std::to_string(index);
+    SgType *semanticType = SageBuilder::buildIntType();
+    SgDeclType *writtenType =
+        SageBuilder::buildDeclType(SageBuilder::buildIntVal(0), semanticType);
     SgVariableDeclaration *declaration = SageBuilder::buildVariableDeclaration(
-        declarationName, SageBuilder::buildIntType(), nullptr,
-        source->get_globalScope());
+        declarationName, semanticType, nullptr, source->get_globalScope(),
+        writtenType);
+    SgInitializedName *initializedName = declaration->get_variables().front();
+    SgVariableSymbol *symbol =
+        source->get_globalScope()->lookup_variable_symbol(declarationName);
+    if (initializedName->get_type() != semanticType ||
+        initializedName->get_cxx_source_type() != writtenType ||
+        symbol == nullptr || symbol->get_declaration() != initializedName) {
+      return fail("generated variable lost its distinct semantic/written types "
+                  "or exact published symbol");
+    }
     SageInterface::appendStatement(declaration, source->get_globalScope());
     sources.push_back(source);
   }
@@ -141,6 +152,9 @@ int main(int argc, char **argv) {
     contents << input.rdbuf();
     if (input.bad()) {
       return fail("generated output cannot be read");
+    }
+    if (contents.str().find("decltype") == std::string::npos) {
+      return fail("generated output lost the typed written declarator");
     }
     for (size_t declarationIndex = 0; declarationIndex < outputs.size();
          ++declarationIndex) {

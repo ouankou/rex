@@ -9,7 +9,6 @@ add_library(rose_StringUtility OBJECT
   SplitJoin.C
   StringToNumber.C)
 
-add_dependencies(rose_StringUtility generate_rosePublicConfig)
 target_compile_definitions(rose_StringUtility PRIVATE ROSE_UTIL_EXPORTS)
 
 install(

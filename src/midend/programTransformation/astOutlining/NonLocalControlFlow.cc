@@ -364,7 +364,7 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
   SageInterface::prependStatement(var_exit, b_orig);
 
   // Retrieve a symbol for 'EXIT_TAKEN__' for future use.
-  SgVariableSymbol *jump_var = b_orig->lookup_var_symbol(var_exit_name);
+  SgVariableSymbol *jump_var = b_orig->lookup_variable_symbol(var_exit_name);
   ROSE_ASSERT(jump_var);
 
   // Create a non-local exit label.
@@ -390,13 +390,14 @@ Outliner::Preprocess::transformNonLocalControlFlow(SgBasicBlock *b_orig) {
     ROSE_ABORT();
   }
 
-  // Convert all non-local jumps to local gotos to 'label_exit'
-  convertJumpsToGotos(jump_var, jumps, label_exit);
-
-  // Assemble the non-local "jump table (conditionals)"
+  // Copy and publish the non-local exits while the original jumps still own
+  // their normalized return expressions. Converting them to local gotos
+  // retires those original nodes.
   SgIfStmt *jump_table = createJumpTable(jump_var, jumps.begin(), jumps.end());
   ROSE_ASSERT(jump_table);
   SageInterface::appendStatement(jump_table, b_orig);
+
+  convertJumpsToGotos(jump_var, jumps, label_exit);
 
   return b_gotos;
 }

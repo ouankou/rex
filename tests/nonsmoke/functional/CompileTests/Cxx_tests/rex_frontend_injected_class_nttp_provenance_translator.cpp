@@ -28,11 +28,22 @@ bool hasExactSemanticProvenance(SgExpression *expression) {
 
 class ContractTraversal : public AstSimpleProcessing {
 public:
-  std::size_t matches = 0;
   std::set<SgTemplateParameterVal *> values;
   std::set<SgNonrealDecl *> syntaxDeclarations;
+  std::set<SgTemplateMemberFunctionDeclaration *> methods;
 
   void visit(SgNode *node) override {
+    if (auto *method = isSgTemplateMemberFunctionDeclaration(node)) {
+      auto *owner = isSgTemplateClassDefinition(method->get_scope());
+      auto *record =
+          owner != nullptr
+              ? isSgTemplateClassDeclaration(owner->get_declaration())
+              : nullptr;
+      if (record != nullptr && record->get_name() == "RexInjectedClass" &&
+          method->get_name() == "rex_clone") {
+        ROSE_ASSERT(methods.insert(method).second);
+      }
+    }
     SgTemplateParameterVal *value = isSgTemplateParameterVal(node);
     if (value == nullptr ||
         value->get_template_parameter_name().getString() != "RexNttpValue") {
@@ -49,21 +60,15 @@ public:
       return;
     }
 
-    SgDeclarationScopeList *scopeList =
-        isSgDeclarationScopeList(declarationScope->get_parent());
-    SgNamespaceDefinitionStatement *namespaceOwner =
-        scopeList != nullptr
-            ? isSgNamespaceDefinitionStatement(scopeList->get_parent())
-            : nullptr;
+    auto *method =
+        isSgTemplateMemberFunctionDeclaration(declarationScope->get_parent());
     SgTemplateClassDeclaration *templateDeclaration =
         isSgTemplateClassDeclaration(syntax->get_templateDeclaration());
-    ROSE_ASSERT(scopeList != nullptr);
-    ROSE_ASSERT(namespaceOwner != nullptr);
-    ROSE_ASSERT(namespaceOwner->get_auxiliary_declaration_scopes() ==
-                scopeList);
-    ROSE_ASSERT(std::count(scopeList->get_scopes().begin(),
-                           scopeList->get_scopes().end(),
-                           declarationScope) == 1);
+    ROSE_ASSERT(method != nullptr);
+    ROSE_ASSERT(methods.count(method) == 1);
+    ROSE_ASSERT(method->get_function_declarator_scope() == declarationScope);
+    ROSE_ASSERT(declarationScope->get_semantic_outer_scope() == nullptr);
+    ROSE_ASSERT(declarationScope->get_scope() == method->get_scope());
     ROSE_ASSERT(std::count(declarationScope->getDeclarationList().begin(),
                            declarationScope->getDeclarationList().end(),
                            syntax) == 1);
@@ -76,7 +81,6 @@ public:
     ROSE_ASSERT(hasExactSemanticProvenance(value));
     ROSE_ASSERT(values.insert(value).second);
     ROSE_ASSERT(syntaxDeclarations.insert(syntax).second);
-    ++matches;
   }
 };
 } // namespace
@@ -88,12 +92,62 @@ int main(int argc, char **argv) {
 
   ContractTraversal contract;
   contract.traverse(project, preorder);
-  // The inline member definition owns five distinct current-instantiation
-  // type-use roles: the source return and parameter spellings plus the
-  // declaration family's semantic function-type surfaces.  They name one
-  // template parameter but must never share structural argument nodes.
-  ROSE_ASSERT(contract.matches == 5);
-  ROSE_ASSERT(contract.values.size() == 5);
-  ROSE_ASSERT(contract.syntaxDeclarations.size() == 5);
+  ROSE_ASSERT(contract.methods.size() == 2);
+  auto *first = isSgTemplateMemberFunctionDeclaration(
+      (*contract.methods.begin())->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(first != nullptr);
+  auto *defining =
+      isSgTemplateMemberFunctionDeclaration(first->get_definingDeclaration());
+  ROSE_ASSERT(defining != nullptr && defining != first);
+  ROSE_ASSERT(contract.methods.count(first) == 1);
+  ROSE_ASSERT(contract.methods.count(defining) == 1);
+  ROSE_ASSERT(defining->get_firstNondefiningDeclaration() == first);
+  auto *signature = isSgMemberFunctionType(first->get_type());
+  ROSE_ASSERT(signature != nullptr && defining->get_type() == signature);
+  ROSE_ASSERT(signature->get_arguments().size() == 1);
+  auto *classType = isSgClassType(signature->get_class_type());
+  ROSE_ASSERT(classType != nullptr);
+  auto *record = isSgTemplateClassDeclaration(classType->get_declaration());
+  ROSE_ASSERT(record != nullptr);
+  ROSE_ASSERT(record->get_firstNondefiningDeclaration() == record);
+  ROSE_ASSERT(first->get_parameterList() != defining->get_parameterList());
+  for (auto *method : contract.methods) {
+    ROSE_ASSERT(method->get_type_syntax() == nullptr);
+    ROSE_ASSERT(!method->get_type_syntax_is_available());
+    ROSE_ASSERT(method->get_parameterList_syntax() == nullptr);
+    auto *parameters = method->get_parameterList();
+    ROSE_ASSERT(parameters != nullptr && parameters->get_parent() == method);
+    ROSE_ASSERT(parameters->get_args().size() == 1);
+    ROSE_ASSERT(parameters->get_args()[0]->get_parent() == parameters);
+    ROSE_ASSERT(parameters->get_args()[0]->get_type() ==
+                signature->get_arguments()[0]);
+  }
+
+  ROSE_ASSERT(signature->get_return_type() == signature->get_arguments()[0]);
+  auto *pointer = isSgPointerType(signature->get_return_type());
+  ROSE_ASSERT(pointer != nullptr);
+  auto *nonreal = isSgNonrealType(pointer->get_base_type());
+  ROSE_ASSERT(nonreal != nullptr);
+  auto *declaration = isSgNonrealDecl(nonreal->get_declaration());
+  ROSE_ASSERT(declaration != nullptr);
+  ROSE_ASSERT(declaration->get_type() == nonreal);
+  ROSE_ASSERT(declaration->get_templateDeclaration() == record);
+  ROSE_ASSERT(declaration->get_tpl_args().size() == 1);
+  auto *argument = declaration->get_tpl_args()[0];
+  ROSE_ASSERT(argument != nullptr && argument->get_parent() == declaration);
+  auto *value = isSgTemplateParameterVal(argument->get_expression());
+  ROSE_ASSERT(value != nullptr);
+  auto *parameter = value->get_template_parameter();
+  ROSE_ASSERT(parameter != nullptr);
+  auto *owner = isSgTemplateClassDeclaration(parameter->get_parent());
+  ROSE_ASSERT(owner != nullptr);
+  ROSE_ASSERT(owner->get_firstNondefiningDeclaration() == record);
+  ROSE_ASSERT(owner->get_templateParameters().size() == 1);
+  ROSE_ASSERT(owner->get_templateParameters()[0] == parameter);
+  // Every retained argument must belong to an adopted signature type use.
+  ROSE_ASSERT(contract.values.size() == 1);
+  ROSE_ASSERT(contract.values.count(value) == 1);
+  ROSE_ASSERT(contract.syntaxDeclarations.size() == 1);
+  ROSE_ASSERT(contract.syntaxDeclarations.count(declaration) == 1);
   return 0;
 }

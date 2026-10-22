@@ -4,6 +4,10 @@ template <typename T> struct Holder {
   template <typename U = int> static constexpr U templ_default = U{4};
 };
 
+template <typename T = int> struct DefaultHolder {
+  T value;
+};
+
 template <typename T, typename U> struct Pair {
   static constexpr int tag = 0;
 };
@@ -28,6 +32,10 @@ int use_converted_field(DerivedHolder *derived) { return derived->templ_field; }
 
 int main() {
   Holder<int> h{42};
+  Holder<long> other{1};
+  (void)other;
+  DefaultHolder<> default_holder{2};
+  (void)default_holder;
   Holder<int> *hp = &h;
   return use_field(h) + Pair<char, int>::tag + value_of<int> + default_value<> +
          h.templ_value<short> + hp->templ_value<long> + h.templ_default<> +

@@ -45,6 +45,7 @@ void testOneFunction(
   NodeQuerySynthesizedAttributeType vars =
       NodeQuery::querySubTree(project, V_SgFunctionDefinition);
   NodeQuerySynthesizedAttributeType::const_iterator i = vars.begin();
+  bool foundFunction = false;
   for (; i != vars.end(); ++i) {
     SgFunctionDefinition *func = isSgFunctionDefinition(*i);
     std::string name = func->class_name();
@@ -56,6 +57,7 @@ void testOneFunction(
     // cout << " checking function : " << funcName << endl;
     if (funcName != funcParamName)
       continue;
+    foundFunction = true;
 
     if (debug)
       cout << "\n------------------------\nchecking for " << name << " -- "
@@ -170,6 +172,11 @@ void testOneFunction(
         abort();
       }
     } // if
+  }
+  if (!foundFunction) {
+    cerr << "Expected analyzed function " << funcParamName << " was not found"
+         << endl;
+    abort();
   }
   if (debug)
     std::cout << "Analysis test is success." << std::endl;
@@ -320,7 +327,8 @@ int main(int argc, char *argv[]) {
       results.insert(pair<string, int>("a", 8));
       results.insert(pair<string, int>("a", 15));
       results.insert(pair<string, int>("c", 19));
-      testOneFunction("::foo", argvList, debug, 21, results, useresults);
+      testOneFunction("::user_operator", argvList, debug, 21, results,
+                      useresults);
     }
 
     if (startNr <= 2 && 2 <= stopNr) {

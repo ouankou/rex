@@ -1,10 +1,9 @@
 /*!
- *  \file ASTtools/VarSym.hh
+ *  \file ASTtools/VarSym.cc
  *
  *  \brief Implements routines to assist in variable symbol analysis
  *  and manipulation.
  */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include <algorithm>
@@ -23,15 +22,6 @@ namespace {
 
 static std::string normalizedSymbolName(const SgName &name) {
   return Rose::StringUtility::convertToLowerCase(name.getString());
-}
-
-static std::string normalizedSymbolName(const SgVariableSymbol *sym,
-                                        const SgInitializedName *decl) {
-  if (sym != NULL && !sym->get_name().getString().empty())
-    return normalizedSymbolName(sym->get_name());
-  if (decl != NULL)
-    return normalizedSymbolName(decl->get_name());
-  return std::string();
 }
 
 static const SgFunctionDeclaration *
@@ -71,8 +61,7 @@ getEnclosingFunctionForSymbolOrder(const SgInitializedName *name) {
 }
 
 static int getFunctionParameterIndex(const SgFunctionDeclaration *function,
-                                     const SgInitializedName *name,
-                                     const std::string &normalized_name) {
+                                     const SgInitializedName *name) {
   if (function == NULL || name == NULL)
     return -1;
 
@@ -87,14 +76,6 @@ static int getFunctionParameterIndex(const SgFunctionDeclaration *function,
     if (arg == NULL)
       continue;
     if (arg == name)
-      return static_cast<int>(i);
-  }
-
-  for (SgInitializedNamePtrList::size_type i = 0; i < args.size(); ++i) {
-    SgInitializedName *arg = args[i];
-    if (arg == NULL)
-      continue;
-    if (normalizedSymbolName(arg->get_name()) == normalized_name)
       return static_cast<int>(i);
   }
 
@@ -155,18 +136,18 @@ struct VarSymOrderKey {
   int column = -1;
   int declaration_list_index = -1;
   std::string normalized_name;
-  std::string declaration_kind;
+  VariantT declaration_kind = V_SgNode;
 };
 
 static VarSymOrderKey makeVarSymOrderKey(const SgVariableSymbol *sym) {
   VarSymOrderKey key;
-  const SgInitializedName *decl = sym != NULL ? sym->get_declaration() : NULL;
-  key.normalized_name = normalizedSymbolName(sym, decl);
+  ROSE_ASSERT(sym != nullptr && sym->get_declaration() != nullptr);
+  const SgInitializedName *decl = sym->get_declaration();
+  key.normalized_name = normalizedSymbolName(sym->get_name());
 
   const SgFunctionDeclaration *function =
       getEnclosingFunctionForSymbolOrder(decl);
-  const int parameter_index =
-      getFunctionParameterIndex(function, decl, key.normalized_name);
+  const int parameter_index = getFunctionParameterIndex(function, decl);
   if (parameter_index >= 0) {
     key.has_parameter_index = true;
     key.parameter_index = parameter_index;
@@ -183,7 +164,7 @@ static VarSymOrderKey makeVarSymOrderKey(const SgVariableSymbol *sym) {
 
   key.declaration_list_index = getInitializedNameListIndex(decl);
   if (decl != NULL && decl->get_declaration() != NULL)
-    key.declaration_kind = decl->get_declaration()->class_name();
+    key.declaration_kind = decl->get_declaration()->variantT();
   return key;
 }
 
@@ -248,204 +229,49 @@ bool ASTtools::VarSymLess::operator()(const SgVariableSymbol *lhs,
 
 // ========================================================================
 
-static bool isCompilerGeneratedOnly(const SgLocatedNode *node) {
-  if (node == NULL)
-    return false;
-  const Sg_File_Info *fi = node->get_file_info();
-  return fi != NULL && fi->isCompilerGenerated() && !fi->isTransformation();
+static bool isPredefinedIdentifier(const SgVariableSymbol *symbol) {
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+  return symbol->get_declaration()->get_is_predefined_identifier();
 }
 
-static bool isCompilerGeneratedPlaceholder(const SgInitializedName *name) {
-  if (name == NULL)
-    return false;
-  if (name->get_symbol_from_symbol_table() != NULL)
-    return false;
-
-  const SgDeclarationStatement *decl = name->get_declaration();
-  return isCompilerGeneratedOnly(name) || isCompilerGeneratedOnly(decl);
-}
-
-static SgVariableSymbol *
-findVariableSymbolByDeclaration(SgScopeStatement *scope,
-                                const SgInitializedName *name) {
-  if (scope == NULL || name == NULL)
-    return NULL;
-
-  SgSymbolTable *table = scope->get_symbol_table();
-  if (table == NULL)
-    return NULL;
-
-  std::set<SgNode *> symbols = table->get_symbolSet();
-  for (std::set<SgNode *>::iterator i = symbols.begin(); i != symbols.end();
-       ++i) {
-    if (SgVariableSymbol *sym = isSgVariableSymbol(*i)) {
-      if (sym->get_declaration() == name)
-        return sym;
-    } else if (SgAliasSymbol *alias = isSgAliasSymbol(*i)) {
-      if (SgVariableSymbol *base = isSgVariableSymbol(alias->get_alias())) {
-        if (base->get_declaration() == name)
-          return base;
-      }
-    }
-  }
-
-  return NULL;
-}
-
-static bool canSynthesizeVariableSymbol(const SgInitializedName *name) {
-  if (name == NULL)
-    return false;
-  if (name->get_scope() == NULL)
-    return false;
-  if (isCompilerGeneratedPlaceholder(name))
-    return false;
-  return isSgVariableDeclaration(name->get_declaration()) != NULL;
-}
-
-static bool isBuiltinFunctionMacroName(const std::string &name) {
-  return name == "__PRETTY_FUNCTION__" || name == "__FUNCTION__" ||
-         name == "__func__";
-}
-
-static const SgFunctionDeclaration *
-getParameterOwnerFunctionDeclaration(const SgInitializedName *name) {
-  if (name == NULL)
-    return NULL;
-
-  const SgFunctionParameterList *param_list =
-      isSgFunctionParameterList(name->get_parent());
-  if (param_list == NULL)
-    return NULL;
-
-  return isSgFunctionDeclaration(param_list->get_parent());
-}
-
-//! Converts a set of variable symbols into a string for debugging.
-string ASTtools::toString(const VarSymSet_t &syms) {
-  stringstream s;
-  ASTtools::VarSymSet_t::const_iterator v = syms.begin();
-  bool is_first = true;
-  while (v != syms.end()) {
-    if (is_first)
-      is_first = false;
-    else
-      s << ", ";
-    const SgVariableSymbol *sym = *v;
-    if (sym) {
-      const SgInitializedName *n = sym->get_declaration();
-      ROSE_ASSERT(n);
-      s << n->get_name().str();
-    } else // !sym
-      s << "(nil?)";
-    ++v;
-  }
-  return s.str();
-}
-
-// ========================================================================
-
-/*!
- *  \brief Return an existing variable symbol for the given
- *  initialized name.
- *
- *  This routine checks various scopes in trying to find a suitable
- *  variable symbol for the given initialized name.
- */
+// Follow the explicit redeclaration and alias identities established by the
+// frontend or builder. Variable analysis must never manufacture missing
+// symbols.
 static const SgVariableSymbol *
 getVarSymFromName_const(const SgInitializedName *name) {
-  SgVariableSymbol *v_sym = 0;
-  if (name) {
-    // Keep the initialized-name symbol as a fallback only. We prefer symbols
-    // recovered from scope tables so ref/visible-set intersections use one
-    // canonical symbol object.
-    SgVariableSymbol *direct_sym =
-        isSgVariableSymbol(name->get_symbol_from_symbol_table());
-
-    SgScopeStatement *s = name->get_scope();
-    ROSE_ASSERT(s);
-    v_sym = s->lookup_var_symbol(name->get_name());
-    if (v_sym != NULL && v_sym->get_declaration() != name) {
-      if (SgVariableSymbol *by_decl = findVariableSymbolByDeclaration(s, name))
-        v_sym = by_decl;
-    }
-    if (v_sym == NULL) {
-      SgVariableSymbol *parent_scope_sym =
-          SageInterface::lookupVariableSymbolInParentScopes(name->get_name(),
-                                                            s);
-      if (parent_scope_sym != NULL &&
-          parent_scope_sym->get_declaration() == name) {
-        v_sym = parent_scope_sym;
-      }
-    }
-
-    if (!v_sym) // E.g., might be part of an 'extern' declaration.
-    {
-      // Try the declaration's scope.
-      SgDeclarationStatement *decl = name->get_declaration();
-      ROSE_ASSERT(decl);
-
-      SgScopeStatement *decl_scope = decl->get_scope();
-      if (decl_scope)
-        v_sym = decl_scope->lookup_var_symbol(name->get_name());
-      if (v_sym != NULL && v_sym->get_declaration() != name) {
-        if (SgVariableSymbol *by_decl =
-                findVariableSymbolByDeclaration(decl_scope, name))
-          v_sym = by_decl;
-      }
-
-      if (!v_sym && decl_scope) {
-        SgVariableSymbol *decl_scope_sym =
-            SageInterface::lookupVariableSymbolInParentScopes(name->get_name(),
-                                                              decl_scope);
-        if (decl_scope_sym != NULL &&
-            decl_scope_sym->get_declaration() == name) {
-          v_sym = decl_scope_sym;
-        }
-      }
-
-      if (!v_sym && decl_scope)
-        v_sym = findVariableSymbolByDeclaration(decl_scope, name);
-      if (!v_sym)
-        v_sym = findVariableSymbolByDeclaration(s, name);
-
-      if (!v_sym && direct_sym)
-        v_sym = direct_sym->get_declaration() == name ? direct_sym : NULL;
-
-      // Transformation-introduced declarations can exist in the AST before
-      // their scope tables are fully populated. Recover by inserting the
-      // declaration's variable symbol into the owning scope.
-      if (!v_sym && canSynthesizeVariableSymbol(name)) {
-        SgScopeStatement *owner_scope = name->get_scope();
-        ROSE_ASSERT(owner_scope);
-        SgVariableSymbol *new_sym =
-            new SgVariableSymbol(const_cast<SgInitializedName *>(name));
-        owner_scope->insert_symbol(name->get_name(), new_sym);
-        v_sym = new_sym;
-      }
-
-      if (!v_sym)
-        MLOG_WARN_CXX("Outliner")
-            << "getVarSymFromName_const(): cannot find symbol for '"
-            << name->get_name().str() << "'";
-    }
+  ROSE_ASSERT(name != nullptr);
+  const SgFunctionDeclaration *parameterOwner =
+      getDirectParameterOwnerFunctionDeclaration(name);
+  SgSymbol *symbol = nullptr;
+  if (parameterOwner != nullptr) {
+    // A definition's dummy is a local binding. Its predecessor can be the
+    // corresponding canonical signature parameter, which has no body-local
+    // symbol. Resolve the exact defining parameter instead of treating that
+    // signature relationship as a variable's canonical storage declaration.
+    ROSE_ASSERT(parameterOwner->get_definition() != nullptr);
+    ROSE_ASSERT(name->get_scope() == parameterOwner->get_definition());
+    symbol = name->get_symbol_from_symbol_table();
+  } else {
+    symbol = name->search_for_symbol_from_symbol_table();
   }
-  return v_sym;
+  if (auto *alias = isSgAliasSymbol(symbol))
+    symbol = alias->get_base();
+  if (isSgEnumFieldSymbol(symbol) != nullptr)
+    return nullptr;
+  auto *variable = isSgVariableSymbol(symbol);
+  if (variable == nullptr || variable->get_declaration() == nullptr) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[outliner-variable-symbol]: declaration=%p "
+            "name=%s scope=%p has no canonical variable symbol\n",
+            static_cast<const void *>(name), name->get_name().str(),
+            static_cast<void *>(name->get_scope()));
+    ROSE_ABORT();
+  }
+  return variable;
 }
 
-/*!
- *  \brief Return an existing variable symbol for the given
- *  initialized name.
- *
- *  This routine checks various scopes in trying to find a suitable
- *  variable symbol for the given initialized name.
- */
 static SgVariableSymbol *getVarSymFromName(SgInitializedName *name) {
-  const SgVariableSymbol *v_sym = getVarSymFromName_const(name);
-  if (v_sym == NULL) {
-    // cerr<<"Warning: VarSym.cc getVarSymFromName() fails to find a symbol
-    // for:"<<name->get_name().getString()<<endl; ROSE_ASSERT (v_sym != NULL);
-  }
-  return const_cast<SgVariableSymbol *>(v_sym);
+  return const_cast<SgVariableSymbol *>(getVarSymFromName_const(name));
 }
 
 /*!
@@ -456,42 +282,16 @@ static const SgVariableSymbol *getVarSym_const(const SgNode *n) {
   const SgVariableSymbol *v_sym = 0;
   switch (n->variantT()) {
   case V_SgVarRefExp: {
-    // We want to handle a->b  case and return a instead of b
-    // Converge to SgInitializedName
-    //  v_sym = isSgVarRefExp(n)->get_symbol ();
     SgInitializedName *iname = SageInterface::convertRefToInitializedName(
         isSgVarRefExp(const_cast<SgNode *>(n)));
     return getVarSym_const(iname);
-    break;
   }
   case V_SgInitializedName: {
     const SgInitializedName *iname = isSgInitializedName(n);
     ROSE_ASSERT(iname != NULL);
     v_sym = getVarSymFromName_const(iname);
-    // TODO: support references to enumerate types in a code block
-    SgSymbol *symbol = iname->get_symbol_from_symbol_table();
-    SgEnumFieldSymbol *efs = isSgEnumFieldSymbol(symbol);
-    if (efs != NULL) {
-      MLOG_WARN_CXX("Outliner")
-          << "getVarSym_const(): unsupported SgEnumFieldSymbol";
-      return NULL;
-    }
-
-    if (v_sym == NULL) {
-      MLOG_WARN_CXX("Outliner") << "getVarSym_const(): did not find symbol for "
-                                << n->unparseToString();
-      // Cannot find symbol for omp runtime functions in Fortran code right now
-      bool placeholder = isCompilerGeneratedPlaceholder(iname);
-      if (!SageInterface::is_Fortran_language() && !placeholder)
-        ROSE_ASSERT(v_sym != NULL);
-      // GCC macros __FUNCTION__ and __PRETTY_FUNCTION__ have no symbols in ROSE
-      // for some reason
-    } else { // Liao, 12/18/2012. We should ignore built in variables since they
-             // should not be passed (by value/ref) into the outlined functions
-      string name = v_sym->get_name().getString();
-      if (isBuiltinFunctionMacroName(name))
-        v_sym = NULL;
-    }
+    if (v_sym != nullptr && isPredefinedIdentifier(v_sym))
+      v_sym = nullptr;
     break;
   }
   default:
@@ -523,40 +323,17 @@ static void getVarSyms(SgNode *n, ASTtools::VarSymSet_t *p_syms) {
   case V_SgVariableSymbol: {
     SgVariableSymbol *v_sym = isSgVariableSymbol(n);
     ROSE_ASSERT(v_sym);
-    string name = v_sym->get_name().getString();
-    if (!isBuiltinFunctionMacroName(name)) {
-      // cout<<"debug: L181 inserting "<<v_sym->get_name() <<endl;
+    if (!isPredefinedIdentifier(v_sym))
       syms.insert(v_sym);
-    }
   } break;
   case V_SgVariableDeclaration: {
     SgVariableDeclaration *v_decl = isSgVariableDeclaration(n);
     ROSE_ASSERT(v_decl);
     SgInitializedNamePtrList &names = v_decl->get_variables();
-    //        transform (names.begin (), names.end (),
-    //                   inserter (syms, syms.begin ()),
-    //                   getVarSymFromName);
-    for (SgInitializedNamePtrList::iterator iter = names.begin();
-         iter != names.end(); iter++) {
-      SgVariableSymbol *v_sym = getVarSymFromName(*iter);
-      // We relax for Fortran since the external function_name is not well
-      // implemented right now Liao 1/21/2010
-      // TODO
-      if (v_sym == NULL) {
-        // if (SageInterface::is_Fortran_language() )
-        MLOG_WARN_CXX("Outliner") << "getVarSyms(): cannot find symbol for "
-                                  << (*iter)->get_name().getString();
-        // else
-        // ROSE_ASSERT (v_sym != NULL);
-      }
-
-      if (v_sym) {
-        string name = v_sym->get_name().getString();
-        if (!isBuiltinFunctionMacroName(name)) {
-          // cout<<"debug: L209 inserting "<<v_sym->get_name() <<endl;
-          syms.insert(v_sym);
-        }
-      }
+    for (SgInitializedName *name : names) {
+      SgVariableSymbol *symbol = getVarSymFromName(name);
+      if (symbol != nullptr && !isPredefinedIdentifier(symbol))
+        syms.insert(symbol);
     }
   } break;
   case V_SgInitializedName: {
@@ -571,69 +348,44 @@ static void getVarSyms(SgNode *n, ASTtools::VarSymSet_t *p_syms) {
 
 // ========================================================================
 
-void ASTtools::collectRefdVarSyms(const SgStatement *s, VarSymSet_t &syms) {
+bool ASTtools::requiresVariableCapture(const SgVarRefExp *reference) {
+  ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+  const SgInitializedName *name = reference->get_symbol()->get_declaration();
+  ROSE_ASSERT(name != nullptr);
+  if (!reference->get_is_non_odr_use() ||
+      isSgClassDefinition(name->get_scope()) == nullptr)
+    return true;
+  auto *declaration = isSgVariableDeclaration(name->get_declptr());
+  ROSE_ASSERT(declaration != nullptr);
+  // A non-ODR member reference needs its declaration, not a captured address.
+  return !SageInterface::isStatic(declaration);
+}
+
+void ASTtools::collectRefdVarSyms(const SgNode *s, VarSymSet_t &syms) {
   // First, collect all variable reference expressions, {e}
   typedef Rose_STL_Container<SgNode *> NodeList_t;
   NodeList_t var_refs =
-      NodeQuery::querySubTree(const_cast<SgStatement *>(s), V_SgVarRefExp);
-  //  NodeList_t type_list = NodeQuery::querySubTree (const_cast<SgStatement *>
-  //  (s), V_SgType,AstQueryNamespace::ExtractTypes);
-
-  SageInterface::addVarRefExpFromArrayDimInfo(const_cast<SgStatement *>(s),
+      NodeQuery::querySubTree(const_cast<SgNode *>(s), V_SgVarRefExp);
+  SageInterface::addVarRefExpFromArrayDimInfo(const_cast<SgNode *>(s),
                                               var_refs);
-  // Next, insert the variable symbol for each e into syms.
-  for (NodeList_t::iterator iter = var_refs.begin(); iter != var_refs.end();
-       iter++) {
-    SgVarRefExp *vref = isSgVarRefExp(*iter);
-    ROSE_ASSERT(vref != NULL);
-    SgInitializedName *iname = NULL;
-    SgVariableSymbol *symbol = NULL;
-
-    if (vref->get_symbol() != NULL) {
-      // SageInterface::convertRefToInitializedName() will ignore builtin
-      // functions, getVarSym() calls it internally.
-      // so we do builtin function ref check first, later we can safely assert
-      // symbol != NULL
-      string vname = vref->get_symbol()->get_name().getString();
-      if (isBuiltinFunctionMacroName(vname))
-        continue;
-
-      symbol = getVarSym(*iter);
-      iname = SageInterface::convertRefToInitializedName(vref);
-    } else {
-      // Some transformed references can temporarily lose direct symbols.
-      // Recover via initialized-name mapping so outlining still captures them.
-      iname = SageInterface::convertRefToInitializedName(vref);
-      if (iname != NULL) {
-        string iname_name = iname->get_name().getString();
-        if (isBuiltinFunctionMacroName(iname_name))
-          continue;
-
-        symbol = getVarSym(iname);
-      }
-    }
-
-    if (symbol) {
-      syms.insert(symbol);
+  for (SgNode *node : var_refs) {
+    auto *reference = isSgVarRefExp(node);
+    ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+    if (isPredefinedIdentifier(reference->get_symbol()) ||
+        !requiresVariableCapture(reference))
       continue;
-    }
-
-    if (iname != NULL && isCompilerGeneratedPlaceholder(iname))
-      continue;
-    MLOG_ERROR_CXX("Outliner")
-        << "ASTtools::collectRefdVarSyms() found NULL symbol for SgVarRefExp: "
-        << *iter;
-    if (!SageInterface::is_Fortran_language())
-      ROSE_ASSERT(symbol != NULL);
+    SgVariableSymbol *symbol = getVarSym(reference);
+    ROSE_ASSERT(symbol != nullptr);
+    syms.insert(symbol);
   }
 }
 
 // ========================================================================
 
-void ASTtools::collectDefdVarSyms(const SgStatement *s, VarSymSet_t &syms) {
+void ASTtools::collectDefdVarSyms(const SgNode *s, VarSymSet_t &syms) {
   typedef Rose_STL_Container<SgNode *> NodeList_t;
-  NodeList_t vars_local = NodeQuery::querySubTree(const_cast<SgStatement *>(s),
-                                                  V_SgVariableDeclaration);
+  NodeList_t vars_local =
+      NodeQuery::querySubTree(const_cast<SgNode *>(s), V_SgVariableDeclaration);
   for_each(vars_local.begin(), vars_local.end(),
            [&syms](SgNode *n) { getVarSyms(n, &syms); });
 
@@ -684,7 +436,7 @@ void ASTtools::collectLocalVisibleVarSyms(const SgStatement *root,
         return false;
 
       const SgFunctionDeclaration *owner =
-          getParameterOwnerFunctionDeclaration(name);
+          getDirectParameterOwnerFunctionDeclaration(name);
       return owner != NULL && owner != root_function_decl_;
     }
 
@@ -712,8 +464,6 @@ void ASTtools::collectVarRefsUsingAddress(const SgStatement *s,
 
 //! Collect variable references with a type which does not support =operator or
 //! copy construction
-// TODO this function can be merged with the one above for better performance,
-// but separated out for clarity
 void ASTtools::collectVarRefsOfTypeWithoutAssignmentSupport(
     const SgStatement *s, std::set<SgVarRefExp *> &varSetB) {
   Rose_STL_Container<SgNode *> var_refs =
@@ -764,8 +514,6 @@ void ASTtools::collectPointerDereferencingVarSyms(const SgStatement *s,
     SgVarRefExp *ref = isSgVarRefExp(*iter2);
     SgType *vtype =
         isSgVariableSymbol(ref->get_symbol())->get_declaration()->get_type();
-    // cout<<"Debug: ASTtools::collectPointerDereferencingVarSyms() vtype is
-    // :"<< vtype->class_name() <<endl;
     if (isSgClassType(vtype)) {
       if (Outliner::enable_debug)
         MLOG_DEBUG_CXX("Outliner")

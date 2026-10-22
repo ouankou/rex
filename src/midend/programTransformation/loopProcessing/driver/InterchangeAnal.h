@@ -4,9 +4,6 @@
 
 #include "LoopTransformOptions.h"
 
-// typedef enum {ORIG_ORDER, SPATIAL_REUSE_ORDER, TMP_REUSE_ORDER,
-//               MIX_REUSE_ORDER, COARSE_PAR_ORDER} LoopNestOrder;
-
 class CompSliceNest;
 class CompSliceLocalityRegistry;
 class ArrangeNestingOrder {
@@ -39,7 +36,7 @@ protected:
 
 public:
   virtual LoopTransformOptions::OptType GetOptimizationType() {
-    return LoopTransformOptions::PAR_LOOP_OPT;
+    return LoopTransformOptions::MULTI_LEVEL_OPT;
   }
 };
 

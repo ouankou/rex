@@ -1,129 +1,130 @@
 
 void dgemm(int *a, int *b, int *c, int n) {
-  // Finite differencing: cache_fd__1 is an exact generated expression cache
-  int cache_fd__1;
-  // Finite differencing: cache_fd__2 is an exact generated expression cache
-  int cache_fd__2;
   {
-    int i;
-    for ((cache_fd__2 = 0 , i = 0); i < n; (cache_fd__2 += n , ++i)) {
-      int j2;
-      (cache_fd__1 = 0 , j2 = 0);
+    int i = 0;
+    // Finite differencing: cache_fd__2 is an exact generated expression cache
+    unsigned int cache_fd__2 = (unsigned int)0;
+    unsigned int cache_fd__2_lhs = (unsigned int)0;
+    for (; i < n; ++i) {
+      int j2 = 0;
+      // Finite differencing: cache_fd__1 is an exact generated expression cache
+      unsigned int cache_fd__1 = (unsigned int)0;
+      unsigned int cache_fd__1_lhs = (unsigned int)0;
       {
-        int j;
-        for (j = 0; j < n; j += 16) {
+        int j = 0;
+        for (; j < n; j += 16) {
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = 1 + j2);
+          j2 = 1 + j2;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = 1 + j2);
+          j2 = 1 + j2;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
           {
-            int k;
-            for (k = 0; k < n; ++k) {
-              c[cache_fd__2 + k] = c[cache_fd__2 + k] + a[cache_fd__2 + j2] * b[cache_fd__1 + k];
+            int k = 0;
+            for (; k < n; ++k) {
+              ((cache_fd__2 += ((unsigned int)i - cache_fd__2_lhs) * (unsigned int)n , cache_fd__2_lhs = (unsigned int)i) , (((cache_fd__1 += ((unsigned int)j2 - cache_fd__1_lhs) * (unsigned int)n , cache_fd__1_lhs = (unsigned int)j2) , c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] = c[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + k] + a[(cache_fd__2 > ~((unsigned int)0) >> 1?-((int)~cache_fd__2) - (int)1 : (int)cache_fd__2) + j2] * b[(cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1) + k])));
             }
           }
-          (cache_fd__1 += n , j2 = j2 + 1);
+          j2 = j2 + 1;
         }
       }
     }

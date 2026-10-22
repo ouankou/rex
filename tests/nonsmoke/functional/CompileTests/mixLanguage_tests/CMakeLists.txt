@@ -1,4 +1,4 @@
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   set(_mix_tests
     test1
     test2
@@ -15,4 +15,3 @@ if(enable-fortran)
     )
   endforeach()
 endif()
-

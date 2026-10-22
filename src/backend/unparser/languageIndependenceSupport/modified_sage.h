@@ -13,12 +13,9 @@
 #include "unparser.h"
 class SgExpression;
 class SgFunctionCallExp;
-class SgType;
-class SgExprListExp;
 class SgConstructorInitializer;
 class SgDeclarationStatement;
 class SgInitializedName;
-class SgLocatedNode;
 class SgMemberFunctionRefExp;
 class SgNode;
 class SgUnparse_Info;
@@ -55,9 +52,6 @@ public:
   bool isUnaryDereferenceOperator(SgExpression *expr);
   bool isUnaryComplementOperator(SgExpression *expr);
 
-  // DQ (2/12/2019): Adding support for C++11 literal operators.
-  bool isUnaryLiteralOperator(SgExpression *expr);
-
   // DQ (2/1/2018): I don't think this operator can exist.
   // bool isUnaryOrOperator(SgExpression* expr);
 
@@ -73,9 +67,6 @@ public:
 
   bool isUnaryOperator(SgExpression *expr);
   bool isUnaryPostfixOperator(SgExpression *expr);
-  bool isOverloadedArrowOperator(SgExpression *expr);
-  bool isIOStreamOperator(SgExpression *expr);
-
   //! Subtree query operators (pattern recognition on subtree, more complex
   //! than the test for a function name on the SgMemberFunctionRefExp node).
   //! This function is used to get for the combination of
@@ -83,18 +74,14 @@ public:
   //! be rediced to "->[i]".
   bool isOverloadedArrowOperatorChain(SgExpression *expr);
 
-  //! auxiliary functions (some code from original modified_sage.C)
-  bool isCast_ConstCharStar(SgType *type);
-  bool PrintStartParen(SgExpression *expr, SgUnparse_Info &info);
-  bool RemovePareninExprList(SgExprListExp *expr_list);
-  bool noQualifiedName(SgExpression *expr);
-
-  void printSpecifier1(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
   void printSpecifier2(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
   void printSpecifier(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
 
   // DQ (2/26/2013): Added support for missing attributes in unparsed code.
   void printAttributes(SgDeclarationStatement *decl_stmt, SgUnparse_Info &info);
+  enum class AlignmentPosition { Prefix, Suffix, TagHead };
+  void printAlignmentSpecifiers(SgNode *owner, SgUnparse_Info &info,
+                                AlignmentPosition position);
   void printGnuVisibilityAttributes(SgDeclarationStatement *decl_stmt,
                                     bool leading_space);
 
@@ -111,8 +98,6 @@ public:
   // types in variable declarations).
   void printAttributesForType(SgDeclarationStatement *decl_stmt,
                               SgUnparse_Info &info);
-
-  void directives(SgLocatedNode *lnode);
 
   // DQ (8/15/2020): Add state to the SgUnparse_Info class to record when we are
   // using extern "C". DQ (8/29/2005): Added to support differences in the order
@@ -136,11 +121,6 @@ public:
                        std::vector<std::pair<bool, std::string>> &stateVector);
 
   void setupColorCodes(std::vector<std::pair<bool, std::string>> &stateVector);
-
-  // DQ (2/4/2006): Removed since this is not used
-  // DQ (4/3/2004): Added to output modifiers (e.g. register) in formal function
-  // arguments void printFunctionFormalArgumentSpecifier ( SgType* type,
-  // SgUnparse_Info& info );
 };
 
 #endif

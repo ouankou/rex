@@ -14,18 +14,15 @@
 #include "Outliner.hh"
 
 class SgVariableSymbol;
-class SgVariableDeclaration;
 class SgStatement;
 
 namespace ASTtools {
-//! Get the variable symbol for the first initialized name.
-//  SgVariableSymbol* getFirstVarSym (SgVariableDeclaration* decl);
-
+ROSE_DLL_API bool requiresVariableCapture(const SgVarRefExp *reference);
 //! Collect var syms for all local variable declarations at 's'.
-ROSE_DLL_API void collectDefdVarSyms(const SgStatement *s, VarSymSet_t &syms);
+ROSE_DLL_API void collectDefdVarSyms(const SgNode *s, VarSymSet_t &syms);
 
 //! Collect var syms for all variable references at 's'.
-ROSE_DLL_API void collectRefdVarSyms(const SgStatement *s, VarSymSet_t &syms);
+ROSE_DLL_API void collectRefdVarSyms(const SgNode *s, VarSymSet_t &syms);
 
 /*!
  *  Collect var syms declared at 'root' or below that are visible to
@@ -34,9 +31,6 @@ ROSE_DLL_API void collectRefdVarSyms(const SgStatement *s, VarSymSet_t &syms);
 ROSE_DLL_API
 void collectLocalVisibleVarSyms(const SgStatement *root,
                                 const SgStatement *target, VarSymSet_t &syms);
-
-//! Convert a variable symbol set to a string-friendly form for debugging.
-ROSE_DLL_API std::string toString(const VarSymSet_t &syms);
 
 //! Collect variable references using addresses for s
 ROSE_DLL_API void collectVarRefsUsingAddress(const SgStatement *s,

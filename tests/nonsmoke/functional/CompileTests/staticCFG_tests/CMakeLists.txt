@@ -26,6 +26,8 @@ list(REMOVE_ITEM CXX_TESTCODES_FOR_CFG test2005_42.C)
 
 foreach(file_to_test ${CXX_TESTCODES_FOR_CFG})
   rex_get_cxx_specimen_extra_flags(extra_frontend_flags ${file_to_test})
+  rex_get_cxx_specimen_standard_flag(_standard_flag ${file_to_test})
+  list(APPEND extra_frontend_flags ${_standard_flag})
 
   add_test(
     NAME testStaticCFG_Cxx_${file_to_test}
@@ -161,6 +163,7 @@ set_tests_properties(test2008_01.C99-INT PROPERTIES LABELS STATICCFGTEST)
 
 if(ENABLE-FORTRAN)
   set(STATICCFG_F90_TESTCODES
+    rex_fortran_where_elsewhere_chain.f90
     test2007_01.f90 test2007_02.f90 test2007_03.f90 test2007_04.f90
     test2007_05.f90 test2007_06.f90 test2007_07.f90 test2007_08.f90
     test2007_09.f90 test2007_10.f90 test2007_11.f90 test2007_12.f90

@@ -480,7 +480,7 @@ int main(int argc, char **argv) {
   requirePhysicalRange(introducer,
                        "rex_frontend_namespace_split_introducer.hpp", 1, 1, 1);
   requirePhysicalRange(split_introducer->get_opening_source_fragment(),
-                       "rex_frontend_namespace_source_fragments.cpp", 73, 1,
+                       "rex_frontend_namespace_source_fragments.cpp", 79, 1,
                        22);
   ROSE_ASSERT(
       split_introducer->get_translation_unit_source_order() ==
@@ -626,6 +626,25 @@ int main(int argc, char **argv) {
               canonical_function_scope->get_symbol_table());
   ROSE_ASSERT(fragment_symbols.front()->get_scope() ==
               canonical_function_scope);
+  const auto shared_namespaces = findNamespaces(project, "rex_function_shared");
+  const auto shared_functions =
+      findFunctions(project, "rex_same_namespace_function");
+  ROSE_ASSERT(shared_namespaces.size() == 2 && shared_functions.size() == 4);
+  ROSE_ASSERT(shared_namespaces[0]->get_scope() !=
+              shared_namespaces[1]->get_scope());
+  ROSE_ASSERT(shared_functions[0]->get_firstNondefiningDeclaration() !=
+              shared_functions[2]->get_firstNondefiningDeclaration());
+  for (size_t index = 0; index < shared_functions.size(); ++index) {
+    auto *lexical_scope = shared_namespaces[index / 2]->get_definition();
+    auto *semantic_scope = lexical_scope->get_global_definition();
+    ROSE_ASSERT(shared_functions[index]->get_parent() == lexical_scope);
+    ROSE_ASSERT(shared_functions[index]->get_scope() == semantic_scope);
+    const auto symbols = findDirectFunctionSymbols(
+        semantic_scope, "rex_same_namespace_function");
+    ROSE_ASSERT(symbols.size() == 1);
+    ROSE_ASSERT(symbols.front()->get_declaration() ==
+                shared_functions[index]->get_firstNondefiningDeclaration());
+  }
 
   const std::vector<SgNamespaceDeclarationStatement *> macro_reopened =
       findNamespaces(project, "rex_macro_reopened_fragment");
@@ -641,6 +660,24 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(macro_first_owner == macro_reopened[0]->get_definition());
   ROSE_ASSERT(macro_second_owner == macro_reopened[1]->get_definition());
   ROSE_ASSERT(macro_first_owner != macro_second_owner);
+
+  for (size_t index = 0; index < macro_reopened.size(); ++index) {
+    const SgName expected_name(index == 0 ? "RexMacroFirstRecord"
+                                          : "RexMacroSecondRecord");
+    SgClassDeclaration *record = nullptr;
+    SgNamespaceDefinitionStatement *owner =
+        macro_reopened[index]->get_definition();
+    for (SgDeclarationStatement *member : owner->get_declarations()) {
+      SgClassDeclaration *candidate = isSgClassDeclaration(member);
+      if (candidate != nullptr && candidate->get_name() == expected_name) {
+        ROSE_ASSERT(record == nullptr);
+        record = candidate;
+      }
+    }
+    ROSE_ASSERT(record != nullptr && record->get_definition() != nullptr);
+    ROSE_ASSERT(record->get_parent() == owner);
+    ROSE_ASSERT(record->get_scope() == macro_first_owner);
+  }
 
   const Sg_File_Info *macro_first_opening =
       macro_reopened[0]->get_opening_source_fragment()->get_startOfConstruct();

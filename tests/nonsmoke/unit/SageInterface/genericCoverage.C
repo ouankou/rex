@@ -11,6 +11,14 @@
 
 static size_t count = 0;
 
+struct ExactNodeKind {
+  bool exact = false;
+
+  template <class Node> void handle(Node &node) {
+    exact = node.variantT() == Node::static_variant;
+  }
+};
+
 struct AstExplorer {
   void handle(SgNode &) { ++count; }
 
@@ -31,6 +39,17 @@ void VisitorTraversal::visit(SgNode *n) { sg::dispatch(AstExplorer(), n); }
 int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
+
+  auto *literal = SageBuilder::buildIntVal(1);
+  auto *macro = new SgMacroExpansionExp("REX_DISPATCH", literal);
+  literal->set_parent(macro);
+  ROSE_ASSERT(
+      sg::dispatch(ExactNodeKind{}, static_cast<SgNode *>(macro)).exact);
+  ROSE_Statistics::AstNodeMemoryPoolStatistics statistics;
+  statistics.traverseRepresentativeIRnodes();
+  ROSE_ASSERT(statistics.node_nodes == numberOfNodes());
+  ROSE_ASSERT(statistics.node_memoryFootprint == memoryUsage());
+  SageInterface::deleteAST(macro);
 
   // Build the traversal object
   VisitorTraversal exampleTraversal;

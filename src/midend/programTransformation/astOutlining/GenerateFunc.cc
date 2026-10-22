@@ -9,24 +9,23 @@
  *  can be isolated into their own, dynamically shareable modules.
  */
 
-// tps (01/14/2010) : Switching from rose.h to sage3.
+#include "FortranProcedureBinding.h"
 #include "sage3basic.h"
 
-// DQ (8/28/2012): Added this so that we can see where the macros
-// are used to control the use of new vs. old template support.
 #include "rose_config.h"
 
+#include "fixupCopy.h"
 #include "sageBuilder.h"
 
 #include <iostream>
+
+#include <functional>
 
 #include <map>
 
 #include <memory>
 
 #include <set>
-
-#include <sstream>
 
 #include <string>
 
@@ -42,8 +41,6 @@
 
 #include "RoseAst.h"
 
-#include "StmtRewrite.hh"
-
 #include "VarSym.hh"
 
 //! Stores a variable symbol remapping.
@@ -52,47 +49,14 @@ typedef std::map<const SgVariableSymbol *, SgVariableSymbol *> VarSymRemap_t;
 extern std::map<SgOmpExecStatement *,
                 std::map<SgInitializedName *, SgExpression *> *>
     clause_variable_renaming_record;
-// =====================================================================
 
 using namespace std;
 using namespace SageInterface;
 using namespace SageBuilder;
 
-/* ===========================================================
- */
-
 namespace {
 
-bool isExactFortranSemanticProcedurePublication(SgFunctionSymbol *symbol) {
-  SgProcedureHeaderStatement *declaration =
-      symbol != NULL ? isSgProcedureHeaderStatement(symbol->get_declaration())
-                     : NULL;
-  SgScopeStatement *scope = symbol != NULL ? symbol->get_scope() : NULL;
-  SgSymbolTable *table = scope != NULL ? scope->get_symbol_table() : NULL;
-  SgAuxiliaryDeclarationList *owner =
-      declaration != NULL
-          ? isSgAuxiliaryDeclarationList(declaration->get_parent())
-          : NULL;
-  Sg_File_Info *source =
-      declaration != NULL ? declaration->get_file_info() : NULL;
-  const SgDeclarationStatementPtrList *declarations =
-      owner != NULL ? &owner->get_declarations() : NULL;
-  return declaration != NULL && scope != NULL && table != NULL &&
-         owner != NULL && owner->get_parent() == scope &&
-         scope->get_auxiliary_declarations() == owner &&
-         declaration->get_scope() == scope &&
-         declaration->get_firstNondefiningDeclaration() == declaration &&
-         declaration->get_fortran_procedure_source_form() ==
-             SgProcedureHeaderStatement::
-                 e_fortran_procedure_source_form_semantic_only &&
-         source != NULL && source->isCompilerGenerated() &&
-         source->isOutputInCodeGeneration() && declarations != NULL &&
-         std::count(declarations->begin(), declarations->end(), declaration) ==
-             1 &&
-         symbol->get_declaration() == declaration &&
-         symbol->get_parent() == table && table->exists(symbol) &&
-         scope->find_symbol_from_declaration(declaration) == symbol;
-}
+using SageInterface::Detail::isExactFortranSemanticProcedurePublication;
 
 struct OutlinedFunctionParameterPlan {
   SgFunctionParameterList *definition_parameters = NULL;
@@ -113,18 +77,6 @@ cloneCanonicalParameterList(SgFunctionParameterList *definition_parameters) {
     ROSE_ABORT();
   }
 
-  SgFunctionParameterList *canonical_parameters =
-      buildFunctionParameterList_nfi();
-  if (canonical_parameters == NULL ||
-      canonical_parameters == definition_parameters ||
-      canonical_parameters->get_parent() != NULL ||
-      !canonical_parameters->get_args().empty()) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[function-signature-construction]: "
-            "canonical parameter list is not one detached semantic surface\n");
-    ROSE_ABORT();
-  }
-
   for (SgInitializedName *definition_parameter :
        definition_parameters->get_args()) {
     if (definition_parameter == NULL ||
@@ -137,32 +89,8 @@ cloneCanonicalParameterList(SgFunctionParameterList *definition_parameters) {
               "structurally detached\n");
       ROSE_ABORT();
     }
-    SgInitializedName *canonical_parameter = buildInitializedName_nfi(
-        definition_parameter->get_name(), definition_parameter->get_type(),
-        /*initializer=*/NULL);
-    canonical_parameters->append_arg(canonical_parameter);
   }
-
-  for (size_t index = 0; index < definition_parameters->get_args().size();
-       ++index) {
-    SgInitializedName *definition_parameter =
-        definition_parameters->get_args()[index];
-    SgInitializedName *canonical_parameter =
-        canonical_parameters->get_args()[index];
-    if (definition_parameter == NULL || canonical_parameter == NULL ||
-        definition_parameter == canonical_parameter ||
-        definition_parameter->get_parent() != definition_parameters ||
-        canonical_parameter->get_parent() != canonical_parameters ||
-        definition_parameter->get_name() != canonical_parameter->get_name() ||
-        definition_parameter->get_type() != canonical_parameter->get_type()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[function-signature-construction]: "
-              "parameter index=%zu has no distinct exact canonical copy\n",
-              index);
-      ROSE_ABORT();
-    }
-  }
-  return canonical_parameters;
+  return SageBuilder::buildSemanticFunctionParameterList(definition_parameters);
 }
 
 void validateOutlinedFunctionSignature(
@@ -200,6 +128,20 @@ void validateOutlinedFunctionSignature(
     ROSE_ABORT();
   }
 
+  SgScopeStatement *scope = canonical->get_scope();
+  ROSE_ASSERT(scope != nullptr && definition->get_scope() == scope);
+  SgSymbolTable *table = scope->get_symbol_table();
+  ROSE_ASSERT(table != nullptr && table->get_parent() == scope);
+  SgSymbol *symbol = scope->find_symbol_from_declaration(canonical);
+  ROSE_ASSERT(symbol != nullptr);
+  ROSE_ASSERT(symbol->variantT() ==
+              (isSgTemplateFunctionDeclaration(canonical) != nullptr
+                   ? V_SgTemplateFunctionSymbol
+                   : V_SgFunctionSymbol));
+  ROSE_ASSERT(symbol->get_symbol_basis() == canonical &&
+              symbol->get_type() == canonical_type &&
+              symbol->get_parent() == table && table->exists(symbol));
+
   const SgInitializedNamePtrList &definition_arguments =
       definition_parameters->get_args();
   const SgInitializedNamePtrList &canonical_arguments =
@@ -223,7 +165,9 @@ void validateOutlinedFunctionSignature(
         canonical_argument->get_parent() != canonical_parameters ||
         definition_argument->get_name() != canonical_argument->get_name() ||
         definition_argument->get_type() != canonical_argument->get_type() ||
-        definition_argument->get_type() != function_argument_types[index]) {
+        SageBuilder::functionParameterTypeFromDeclaredType(
+            definition_argument->get_type()) !=
+            function_argument_types[index]) {
       fprintf(stderr,
               "REX_OUTLINER_INVARIANT[function-signature-family]: parameter "
               "index=%zu differs across the exact declaration family\n",
@@ -238,18 +182,25 @@ void validateOutlinedFunctionSignature(
 //! Creates a non-member function.
 static SgFunctionDeclaration *
 createFuncSkeleton(const string &name, SgType *ret_type,
-                   SgFunctionParameterList *params, SgScopeStatement *scope) {
+                   const OutlinedFunctionParameterPlan &plan,
+                   SgScopeStatement *scope) {
   ROSE_ASSERT(scope != NULL);
   ROSE_ASSERT(Outliner::isValidOutliningScope(scope));
+  SgFunctionParameterList *params = plan.definition_parameters;
+  ROSE_ASSERT(plan.syntax_parameters != nullptr);
+  auto ownership =
+      SageBuilder::function_declaration_ownership::sourceLexicalIn(scope);
+  if (plan.has_distinct_source_parameters)
+    ownership = ownership.withSourceParameterList(plan.syntax_parameters);
+  else
+    ROSE_ASSERT(plan.syntax_parameters == params);
   SgFunctionDeclaration *func;
   SgProcedureHeaderStatement *fortranRoutine;
-  // Liao 12/13/2007, generate SgProcedureHeaderStatement for Fortran code
   if (SageInterface::is_Fortran_language()) {
     SgFunctionParameterList *canonical_params =
         cloneCanonicalParameterList(params);
     fortranRoutine = SageBuilder::buildProcedureHeaderStatement(
-        SageBuilder::function_declaration_ownership::sourceLexicalIn(scope),
-        SgName(name), ret_type, params, canonical_params,
+        ownership, SgName(name), ret_type, params, canonical_params,
         SgProcedureHeaderStatement::e_subroutine_subprogram_kind,
         SgProcedureHeaderStatement::e_fortran_procedure_source_form_header,
         scope);
@@ -269,8 +220,7 @@ createFuncSkeleton(const string &name, SgType *ret_type,
       ROSE_ABORT();
     }
     func = SageBuilder::buildDefiningFunctionDeclaration(
-        SageBuilder::function_declaration_ownership::sourceLexicalIn(scope),
-        name, ret_type, params, scope,
+        ownership, name, ret_type, params, scope,
         /*buildTemplateInstantiation=*/false, canonical,
         /*templateArgumentsList=*/NULL,
         /*forceFreeFunctionScope=*/false);
@@ -278,22 +228,6 @@ createFuncSkeleton(const string &name, SgType *ret_type,
 
   validateOutlinedFunctionSignature(func, params);
 
-  // Preserve scope language semantics for generated outlined routines.
-  if (SageInterface::is_Fortran_language() || scope->isCaseInsensitive()) {
-    if (SgFunctionDefinition *func_def = func->get_definition()) {
-      func_def->setCaseInsensitive(true);
-      if (SgBasicBlock *func_body = func_def->get_body())
-        func_body->setCaseInsensitive(true);
-    }
-  }
-
-  SgFunctionSymbol *func_symbol =
-      scope->lookup_function_symbol(func->get_name());
-  ROSE_ASSERT(func_symbol != NULL);
-  if (Outliner::enable_debug) {
-    printf("Found function symbol in %p for function:%s\n", scope,
-           func->get_name().getString().c_str());
-  }
   return func;
 }
 
@@ -375,25 +309,95 @@ static void preserveMovedNamespaceFunctionBindings(SgBasicBlock *func_body) {
   }
 }
 
-static void publishMovedFortranProcedureDependencies(SgBasicBlock *func_body) {
+static void publishFortranProcedureDependencies(SgBasicBlock *source_body,
+                                                SgBasicBlock *func_body) {
+  ROSE_ASSERT(source_body != NULL);
   ROSE_ASSERT(func_body != NULL);
 
   const Rose_STL_Container<SgNode *> reference_nodes =
-      NodeQuery::querySubTree(func_body, V_SgFunctionRefExp);
+      NodeQuery::querySubTree(source_body, V_SgFunctionRefExp);
   std::map<SgFunctionSymbol *, SgRenameSymbol *> generic_bindings;
+  std::map<SgUseStatement *, SgUseStatement *> use_dependencies;
+  std::map<SgFunctionDeclaration *, SgFunctionSymbol *> interface_dependencies;
+  std::map<SgVariableSymbol *, SgVariableSymbol *> constant_dependencies;
+  std::map<SgVariableSymbol *, SgExpression *> parameter_values;
+  std::set<SgScopeStatement *> parameter_scopes;
+  std::set<SgVariableSymbol *> active_constants;
+  std::function<SgVariableSymbol *(SgVariableSymbol *)> copy_constant =
+      [&](SgVariableSymbol *source) -> SgVariableSymbol * {
+    ASSERT_not_null(source);
+    auto existing = constant_dependencies.find(source);
+    if (existing != constant_dependencies.end())
+      return existing->second;
+    ROSE_ASSERT(active_constants.insert(source).second);
+    ROSE_ASSERT(SageInterface::isConstType(source->get_type()));
+    SgInitializedName *name = source->get_declaration();
+    ASSERT_not_null(name);
+    ASSERT_not_null(name->get_scope());
+    SgInitializer *initializer;
+    if (name->get_initializer() != nullptr) {
+      initializer = SageInterface::deepCopy(name->get_initializer());
+    } else {
+      if (parameter_scopes.insert(name->get_scope()).second) {
+        for (SgNode *node : NodeQuery::querySubTree(
+                 name->get_scope(), V_SgAttributeSpecificationStatement)) {
+          auto *statement = isSgAttributeSpecificationStatement(node);
+          if (statement->get_attribute_kind() !=
+              SgAttributeSpecificationStatement::e_parameterStatement)
+            continue;
+          ASSERT_not_null(statement->get_parameter_list());
+          for (SgExpression *expression :
+               statement->get_parameter_list()->get_expressions()) {
+            auto *assignment = isSgAssignOp(expression);
+            ASSERT_not_null(assignment);
+            auto *target = isSgVarRefExp(assignment->get_lhs_operand());
+            ASSERT_not_null(target);
+            ASSERT_not_null(target->get_symbol());
+            ROSE_ASSERT(parameter_values
+                            .emplace(target->get_symbol(),
+                                     assignment->get_rhs_operand())
+                            .second);
+          }
+        }
+      }
+      auto value = parameter_values.find(source);
+      ROSE_ASSERT(value != parameter_values.end());
+      initializer = SageBuilder::buildAssignInitializer(
+          SageInterface::deepCopy(value->second), source->get_type());
+    }
+    ASSERT_not_null(initializer);
+    for (SgNode *node : NodeQuery::querySubTree(initializer, V_SgVarRefExp)) {
+      auto *reference = isSgVarRefExp(node);
+      reference->set_symbol(copy_constant(reference->get_symbol()));
+    }
+    auto *variable = SageBuilder::buildVariableDeclaration(
+        name->get_name(), source->get_type(), initializer, func_body);
+    variable->get_declarationModifier()
+        .get_typeModifier()
+        .get_constVolatileModifier()
+        .setConst();
+    appendStatement(variable, func_body);
+    auto *symbol = isSgVariableSymbol(
+        variable->get_variables().front()->get_symbol_from_symbol_table());
+    ASSERT_not_null(symbol);
+    ROSE_ASSERT(constant_dependencies.emplace(source, symbol).second);
+    active_constants.erase(source);
+    return symbol;
+  };
   for (SgNode *node : reference_nodes) {
     SgFunctionRefExp *reference = isSgFunctionRefExp(node);
     SgFunctionSymbol *source_semantic =
         reference != NULL ? reference->get_symbol() : NULL;
     SgFunctionDeclaration *source_declaration =
         source_semantic != NULL ? source_semantic->get_declaration() : NULL;
-    SgInterfaceBody *source_body =
+    SgInterfaceBody *interface_body =
         source_declaration != NULL
             ? isSgInterfaceBody(source_declaration->get_parent())
             : NULL;
     SgInterfaceStatement *source_interface =
-        source_body != NULL ? isSgInterfaceStatement(source_body->get_parent())
-                            : NULL;
+        interface_body != NULL
+            ? isSgInterfaceStatement(interface_body->get_parent())
+            : NULL;
     SgFunctionType *type = source_semantic != NULL
                                ? isSgFunctionType(source_semantic->get_type())
                                : NULL;
@@ -405,93 +409,145 @@ static void publishMovedFortranProcedureDependencies(SgBasicBlock *func_body) {
       ROSE_ABORT();
     }
 
-    SgFunctionSymbol *visible =
-        SageInterface::lookupFunctionSymbolInParentScopes(
-            source_semantic->get_name(), type, func_body);
-    if (visible == source_semantic) {
+    SgFunctionSymbol *source_visible =
+        reference->get_fortran_source_visible_symbol();
+    ASSERT_not_null(source_visible);
+    ASSERT_not_null(source_visible->get_scope());
+    if (SageInterface::isAncestor(source_visible->get_scope(), func_body)) {
       continue;
+    }
+    SgRenameSymbol *source_rename =
+        isSgRenameSymbol(reference->get_fortran_source_visible_symbol());
+    if (source_rename != nullptr) {
+      ROSE_ASSERT(source_rename->get_original_symbol() == source_semantic);
+      SgNodePtrList causes;
+      for (SgNode *cause : source_rename->get_causal_nodes()) {
+        if (SgUseStatement *source_use = isSgUseStatement(cause)) {
+          auto inserted = use_dependencies.emplace(source_use, nullptr);
+          if (inserted.second) {
+            ASSERT_not_null(source_use->get_module());
+            SgUseStatement *use = new SgUseStatement(
+                source_use->get_name(), source_use->get_only_option(),
+                source_use->get_module_nature(), source_use->get_module());
+            setOneSourcePositionForTransformation(use);
+            use->set_firstNondefiningDeclaration(use);
+            use->set_definingDeclaration(use);
+            for (SgRenamePair *pair : source_use->get_rename_list()) {
+              ASSERT_not_null(pair);
+              SgRenamePair *copy = new SgRenamePair(pair->get_local_name(),
+                                                    pair->get_use_name());
+              setOneSourcePositionForTransformation(copy);
+              copy->set_parent(use);
+              use->get_rename_list().push_back(copy);
+            }
+            prependStatement(use, func_body);
+            inserted.first->second = use;
+          }
+          causes.push_back(inserted.first->second);
+        }
+      }
+      if (!causes.empty()) {
+        auto inserted = generic_bindings.emplace(source_rename, nullptr);
+        if (inserted.second) {
+          auto *binding = new SgRenameSymbol(
+              source_declaration, source_semantic, source_rename->get_name());
+          binding->get_causal_nodes().swap(causes);
+          func_body->insert_symbol(binding->get_name(), binding);
+          inserted.first->second = binding;
+        }
+        auto *replacement = SageBuilder::buildFortranFunctionRefExp(
+            source_semantic, inserted.first->second,
+            reference->get_fortran_source_visible_binding_kind());
+        SageInterface::replaceExpression(reference, replacement);
+        continue;
+      }
     }
     if (source_interface == NULL || source_interface->get_scope() == NULL ||
         source_declaration->get_scope() != source_interface->get_scope() ||
-        source_body->get_functionDeclaration() != source_declaration ||
-        source_body->get_use_function_name()) {
+        interface_body->get_functionDeclaration() != source_declaration ||
+        interface_body->get_use_function_name()) {
       continue;
     }
-
-    SgFunctionRefExp *replacement = SageBuilder::buildFunctionRefExp(
-        source_semantic->get_name(), type, func_body);
-    SgFunctionSymbol *destination_semantic =
-        replacement != NULL ? replacement->get_symbol() : NULL;
-    SgFunctionSymbol *destination_source =
-        replacement != NULL ? replacement->get_fortran_source_visible_symbol()
-                            : NULL;
-    auto destination_kind =
-        replacement != NULL
-            ? replacement->get_fortran_source_visible_binding_kind()
-            : SgFunctionRefExp::e_fortran_source_visible_binding_not_applicable;
-
-    const auto source_binding_kind =
-        reference->get_fortran_source_visible_binding_kind();
-    const bool source_rename_binding =
-        source_binding_kind ==
-            SgFunctionRefExp::e_fortran_source_visible_binding_use_rename ||
-        source_binding_kind ==
-            SgFunctionRefExp::e_fortran_source_visible_binding_generic_overload;
-    SgRenameSymbol *source_rename =
-        isSgRenameSymbol(reference->get_fortran_source_visible_symbol());
-    if (source_rename_binding) {
-      if (source_rename == NULL ||
-          source_rename->get_original_symbol() != source_semantic) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[fortran-interface-dependency]: "
-                "renamed source binding=%p kind=%d does not name semantic "
-                "symbol=%p\n",
-                static_cast<void *>(source_rename),
-                static_cast<int>(source_binding_kind),
-                static_cast<void *>(source_semantic));
-        ROSE_ABORT();
+    auto dependency =
+        interface_dependencies.emplace(source_declaration, nullptr);
+    if (dependency.second) {
+      SgCopyHelp::copiedNodeMapType identities;
+      auto *declaration = isSgProcedureHeaderStatement(
+          SageInterface::deepCopyNodeWithIdentityMap(source_declaration,
+                                                     identities));
+      ASSERT_not_null(declaration);
+      ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() ==
+                  declaration);
+      std::set<SgNode *> copied_nodes;
+      std::set<SgVarRefExp *> copied_references;
+      for (const auto &identity : identities) {
+        if (identity.first == identity.second)
+          continue;
+        copied_nodes.insert(identity.second);
+        if (auto *reference = isSgVarRefExp(identity.second))
+          copied_references.insert(reference);
+        auto *syntax = isSgType(identity.second);
+        if (syntax != nullptr && syntax->get_fortran_source_syntax()) {
+          for (SgNode *node : NodeQuery::querySubTree(syntax, V_SgVarRefExp))
+            copied_references.insert(isSgVarRefExp(node));
+        }
       }
-      auto inserted = generic_bindings.emplace(source_rename, nullptr);
-      if (inserted.second) {
-        inserted.first->second =
-            new SgRenameSymbol(destination_semantic->get_declaration(),
-                               destination_semantic, source_rename->get_name());
-        ASSERT_not_null(inserted.first->second);
-        func_body->insert_symbol(inserted.first->second->get_name(),
-                                 inserted.first->second);
+      for (SgVarRefExp *copy_ref : copied_references) {
+        auto *source_symbol = copy_ref->get_symbol();
+        ASSERT_not_null(source_symbol);
+        if (copied_nodes.count(source_symbol->get_declaration()) != 0)
+          continue;
+        auto local = identities.find(source_symbol->get_declaration());
+        if (local != identities.end()) {
+          auto *name = isSgInitializedName(local->second);
+          ASSERT_not_null(name);
+          auto *symbol =
+              isSgVariableSymbol(name->get_symbol_from_symbol_table());
+          ASSERT_not_null(symbol);
+          copy_ref->set_symbol(symbol);
+          continue;
+        }
+        copy_ref->set_symbol(copy_constant(source_symbol));
       }
-      destination_source = inserted.first->second;
-      destination_kind = source_binding_kind;
-      replacement->set_fortran_source_visible_symbol(destination_source);
-      replacement->set_fortran_source_visible_binding_kind(destination_kind);
+      auto *interface = new SgInterfaceStatement(
+          source_interface->get_name(), source_interface->get_generic_spec());
+      setOneSourcePositionForTransformation(interface);
+      interface->set_firstNondefiningDeclaration(interface);
+      interface->set_definingDeclaration(interface);
+      auto *body =
+          new SgInterfaceBody(declaration->get_name(), declaration, false);
+      setOneSourcePositionForTransformation(body);
+      body->set_parent(interface);
+      interface->get_interface_body_list().push_back(body);
+      declaration->set_scope(func_body);
+      declaration->set_parent(body);
+      appendStatement(interface, func_body);
+      auto *symbol = new SgFunctionSymbol(declaration);
+      func_body->insert_symbol(symbol->get_name(), symbol);
+      dependency.first->second = symbol;
     }
-
-    SgScopeStatement *destination_scope =
-        destination_semantic != NULL ? destination_semantic->get_scope() : NULL;
-    SgSymbolTable *destination_table =
-        destination_scope != NULL ? destination_scope->get_symbol_table()
-                                  : NULL;
-    if (replacement == NULL || destination_semantic == NULL ||
-        destination_semantic == source_semantic ||
-        destination_semantic->get_declaration() == NULL ||
-        destination_semantic->get_type() != type || destination_table == NULL ||
-        destination_semantic->get_parent() != destination_table ||
-        !destination_table->exists(destination_semantic) ||
-        destination_source == NULL ||
-        destination_kind ==
-            SgFunctionRefExp::e_fortran_source_visible_binding_not_applicable) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[fortran-interface-dependency]: "
-              "reference=%p source=%p replacement=%p destination=%p "
-              "source-visible=%p kind=%d has no exact semantic publication\n",
-              static_cast<void *>(reference),
-              static_cast<void *>(source_semantic),
-              static_cast<void *>(replacement),
-              static_cast<void *>(destination_semantic),
-              static_cast<void *>(destination_source),
-              static_cast<int>(destination_kind));
-      ROSE_ABORT();
+    SgFunctionSymbol *destination = dependency.first->second;
+    source_visible = destination;
+    auto kind = SgFunctionRefExp::e_fortran_source_visible_binding_exact_typed;
+    if (source_rename != nullptr) {
+      ROSE_ASSERT(
+          reference->get_fortran_source_visible_binding_kind() ==
+          SgFunctionRefExp::e_fortran_source_visible_binding_generic_overload);
+      auto binding = generic_bindings.emplace(source_rename, nullptr);
+      if (binding.second) {
+        auto *rename =
+            new SgRenameSymbol(destination->get_declaration(), destination,
+                               source_rename->get_name());
+        rename->get_causal_nodes().push_back(destination->get_declaration());
+        func_body->insert_symbol(rename->get_name(), rename);
+        binding.first->second = rename;
+      }
+      source_visible = binding.first->second;
+      kind =
+          SgFunctionRefExp::e_fortran_source_visible_binding_generic_overload;
     }
+    auto *replacement = SageBuilder::buildFortranFunctionRefExp(
+        destination, source_visible, kind);
     SageInterface::replaceExpression(reference, replacement);
   }
 }
@@ -502,26 +558,13 @@ copyTemplateParameterList(const SgTemplateParameterPtrList &params) {
   for (SgTemplateParameterPtrList::const_iterator it = params.begin();
        it != params.end(); ++it) {
     SgTemplateParameter *param = *it;
-    if (param == NULL)
-      continue;
+    ROSE_ASSERT(param != NULL);
     SgTemplateParameter *param_copy =
         SageInterface::cloneDetachedGeneratedTemplateParameter(
             param, "outlined-function-template-parameter");
     copy->push_back(param_copy);
   }
   return copy;
-}
-
-static void setTemplateParameterParents(SgTemplateDeclaration *decl) {
-  if (decl == NULL)
-    return;
-
-  SgTemplateParameterPtrList &params = decl->get_templateParameters();
-  for (SgTemplateParameterPtrList::iterator it = params.begin();
-       it != params.end(); ++it) {
-    if (*it != NULL)
-      (*it)->set_parent(decl);
-  }
 }
 
 static std::string getTemplateParameterName(const SgTemplateParameter *param) {
@@ -546,20 +589,6 @@ static std::string getTemplateParameterName(const SgTemplateParameter *param) {
     return template_decl->get_name().getString();
 
   return "";
-}
-
-static bool hasTemplateParameterName(const SgTemplateParameterPtrList &params,
-                                     const SgTemplateParameter *candidate) {
-  std::string candidate_name = getTemplateParameterName(candidate);
-  if (candidate_name.empty())
-    return false;
-
-  for (SgTemplateParameter *param : params) {
-    if (getTemplateParameterName(param) == candidate_name)
-      return true;
-  }
-
-  return false;
 }
 
 static const SgTemplateParameterPtrList *
@@ -691,7 +720,9 @@ static void appendTemplateParameters(const SgTemplateParameterPtrList *source,
     return;
 
   for (SgTemplateParameter *param : *source) {
-    if (param != NULL && !hasTemplateParameterName(destination, param))
+    ROSE_ASSERT(param != NULL);
+    if (std::find(destination.begin(), destination.end(), param) ==
+        destination.end())
       destination.push_back(param);
   }
 }
@@ -788,7 +819,6 @@ static void collectLocalTypeTemplateParameters(
     SgTemplateParameter *parameter = SageBuilder::buildTemplateParameter(
         SgTemplateParameter::type_parameter, parameter_type,
         SgName(parameter_name), NULL, SgTemplateParameter::keyword_typename);
-    parameter_type->set_template_parameter(parameter);
     if (parameter == NULL || parameter->get_type() != parameter_type) {
       fprintf(stderr,
               "REX_OUTLINER_INVARIANT[local-type-plan]: local source type=%p "
@@ -853,11 +883,19 @@ static void bindLocalTypeTemplatePlanToDefinition(
 
 static SgFunctionDeclaration *
 createTemplateFuncSkeleton(const string &name, SgType *ret_type,
-                           SgFunctionParameterList *params,
+                           const OutlinedFunctionParameterPlan &plan,
                            SgScopeStatement *scope,
                            const SgTemplateParameterPtrList &template_params) {
   ROSE_ASSERT(scope != NULL);
   ROSE_ASSERT(isSgGlobal(scope) != NULL);
+  SgFunctionParameterList *params = plan.definition_parameters;
+  ROSE_ASSERT(plan.syntax_parameters != nullptr);
+  auto ownership =
+      SageBuilder::function_declaration_ownership::sourceLexicalIn(scope);
+  if (plan.has_distinct_source_parameters)
+    ownership = ownership.withSourceParameterList(plan.syntax_parameters);
+  else
+    ROSE_ASSERT(plan.syntax_parameters == params);
 
   SgFunctionParameterList *nondef_params = cloneCanonicalParameterList(params);
   SgTemplateParameterPtrList *template_params_copy =
@@ -871,43 +909,16 @@ createTemplateFuncSkeleton(const string &name, SgType *ret_type,
           name, ret_type, nondef_params, scope, template_params_copy);
   delete template_params_copy;
   ROSE_ASSERT(nondef != NULL);
-  setTemplateParameterParents(nondef);
 
   SgTemplateFunctionDeclaration *def =
       SageBuilder::buildDefiningTemplateFunctionDeclaration(
-          SageBuilder::function_declaration_ownership::sourceLexicalIn(scope),
-          name, ret_type, params, scope, nondef, defining_template_params_copy);
+          ownership, name, ret_type, params, scope, nondef,
+          defining_template_params_copy);
   delete defining_template_params_copy;
   ROSE_ASSERT(def != NULL);
-  setTemplateParameterParents(def);
   validateOutlinedFunctionSignature(def, params);
 
   return def;
-}
-
-static void assertFunctionSymbolPresent(SgScopeStatement *scope,
-                                        const SgFunctionDeclaration *func) {
-  ROSE_ASSERT(scope != NULL);
-  ROSE_ASSERT(func != NULL);
-
-  if (scope->lookup_function_symbol(func->get_name()) != NULL)
-    return;
-
-  const SgTemplateFunctionDeclaration *template_func =
-      isSgTemplateFunctionDeclaration(func);
-  if (template_func != NULL) {
-    SgTemplateParameterPtrList *template_params =
-        const_cast<SgTemplateParameterPtrList *>(
-            &(template_func->get_templateParameters()));
-    SgTemplateFunctionSymbol *template_sym =
-        scope->lookup_template_function_symbol(template_func->get_name(),
-                                               template_func->get_type(),
-                                               template_params);
-    ROSE_ASSERT(template_sym != NULL);
-    return;
-  }
-
-  ROSE_ASSERT(!"Missing function symbol for outlined function");
 }
 
 static SgTypedefDeclaration *
@@ -1151,13 +1162,16 @@ static bool isExactCArrayParameterDecay(SgType *source_type,
          source_array->get_base_type() == parameter_pointer->get_base_type();
 }
 
-static std::vector<SgTypedefDeclaration *>
-addMissingLocalTypedefAliases(SgFunctionDeclaration *func) {
+static void prepareLocalTypedefAliases(SgFunctionDeclaration *func,
+                                       SgBasicBlock *source_body,
+                                       const ASTtools::VarSymSet_t &symbols,
+                                       SgCopyHelp &type_bindings) {
   ROSE_ASSERT(func != NULL);
   ROSE_ASSERT(func->get_type() != NULL);
   ROSE_ASSERT(func->get_definition() != NULL);
   SgBasicBlock *func_body = func->get_definition()->get_body();
   ROSE_ASSERT(func_body != NULL);
+  ROSE_ASSERT(source_body != nullptr && func_body->get_statements().empty());
 
   std::vector<SgTypedefDeclaration *> typedefs;
   std::set<SgTypedefDeclaration *> seen;
@@ -1174,16 +1188,22 @@ addMissingLocalTypedefAliases(SgFunctionDeclaration *func) {
     }
     collectTypedefsFromType(parameter->get_type(), typedefs, seen);
   }
-  // Run this only after variable handling has built every captured local and
-  // wrapper access.  Earlier scans see only the moved expression body and miss
-  // typedefs that become source-visible during parameter reconstruction.
-  collectExplicitTypeReferences(func_body, typedefs, seen);
+  collectExplicitTypeReferences(source_body, typedefs, seen);
+  for (const SgVariableSymbol *symbol : symbols) {
+    ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+    collectTypedefsFromType(symbol->get_declaration()->get_type(), typedefs,
+                            seen);
+  }
 
-  std::vector<SgTypedefDeclaration *> aliases;
-  std::set<std::string> alias_names;
   for (SgTypedefDeclaration *typedef_decl : typedefs) {
-    if (typedef_decl == NULL || typedef_decl->get_base_type() == NULL)
+    ROSE_ASSERT(typedef_decl != nullptr &&
+                typedef_decl->get_base_type() != nullptr);
+    if (SageInterface::isAncestor(source_body, typedef_decl)) {
+      type_bindings.insertCopiedNodePair(typedef_decl, typedef_decl);
+      type_bindings.insertCopiedNodePair(typedef_decl->get_type(),
+                                         typedef_decl->get_type());
       continue;
+    }
     if (isTypedefVisibleFromScope(typedef_decl, func_body))
       continue;
 
@@ -1192,31 +1212,25 @@ addMissingLocalTypedefAliases(SgFunctionDeclaration *func) {
     const bool class_owned =
         isSgClassDefinition(typedef_decl->get_scope()) != NULL;
 
-    // Function-local aliases cease to exist when the selected statement moves
-    // to the generated global function, so reproduce their declaration chain
-    // locally.  An unqualified class-member alias used as an expression (for
-    // example `Xstar(0)`) needs the same treatment only when its underlying
-    // named type is itself visible at the destination.  Never detach a class
-    // alias whose base still names a private class scope: libstdc++ iterators,
-    // for example, can have a base such as `_Node_traits::_Iterator`; copying
-    // only the outer alias would manufacture invalid source.  Namespace-owned
-    // aliases retain their exact qualified source type at the moved use site.
+    // Local dependencies need declarations in the destination. Class aliases
+    // can be reproduced only when their base is visible there.
     if (!function_owned &&
         (!class_owned ||
          !isCopiedClassTypedefBaseVisibleFromScope(typedef_decl, func_body)))
       continue;
 
-    std::string name = typedef_decl->get_name().getString();
-    if (name.empty() || !alias_names.insert(name).second)
-      continue;
-
-    // This alias is generated source, not a semantic no-file-info carrier.
-    // Give it source-visible transformation ownership at construction; the
-    // complete outlined function receives its exact output-file identity at
-    // the publication boundary below.
+    const std::string original_name = typedef_decl->get_name().getString();
+    ROSE_ASSERT(!original_name.empty());
+    std::string name = original_name;
+    for (size_t suffix = 0; func_body->lookup_symbol(name) != nullptr ||
+                            source_body->lookup_symbol(name) != nullptr;
+         ++suffix)
+      name = original_name + "_rex_" + std::to_string(suffix);
     SgTypedefDeclaration *alias = SageBuilder::buildTypedefDeclaration(
         SageBuilder::typedef_declaration_ownership::sourceLexical(),
-        typedef_decl->get_typedef_type(), name, typedef_decl->get_base_type(),
+        typedef_decl->get_typedef_type(), name,
+        SageInterface::materializeTypeWithCopyMap(typedef_decl->get_base_type(),
+                                                  type_bindings),
         func_body);
     if (alias == NULL || alias->get_file_info() == NULL ||
         !alias->get_file_info()->isOutputInCodeGeneration()) {
@@ -1226,28 +1240,11 @@ addMissingLocalTypedefAliases(SgFunctionDeclaration *func) {
               static_cast<void *>(alias), name.c_str());
       ROSE_ABORT();
     }
-    aliases.push_back(alias);
+    ROSE_ASSERT(alias->get_parent() == func_body);
+    type_bindings.insertCopiedNodePair(typedef_decl, alias);
+    type_bindings.insertCopiedNodePair(typedef_decl->get_type(),
+                                       alias->get_type());
   }
-
-  for (std::vector<SgTypedefDeclaration *>::reverse_iterator i =
-           aliases.rbegin();
-       i != aliases.rend(); ++i) {
-    SageInterface::removeStatement(*i, false);
-    ROSE_ASSERT((*i)->get_parent() == NULL);
-    SageInterface::prependStatement(*i, func_body);
-    if ((*i)->get_parent() != func_body ||
-        std::find(func_body->get_statements().begin(),
-                  func_body->get_statements().end(),
-                  *i) == func_body->get_statements().end()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[local-typedef-owner]: alias=%p name=%s "
-              "lost structural ownership during insertion\n",
-              static_cast<void *>(*i), (*i)->get_name().str());
-      ROSE_ABORT();
-    }
-  }
-
-  return aliases;
 }
 
 //! Returns 'true' if the base type is a primitive type.
@@ -1290,41 +1287,6 @@ struct OutlinedFuncParam_t {
   SgType *source_type = NULL;
 };
 
-/*!
- *  \brief Creates a new outlined-function parameter for a given
- *  variable. The requirement is to preserve data read/write semantics.
- *
- *  This function is only used when wrapper parameter is not used
- *  so individual parameter needs to be created for each variable passed to the
- * outlined function.
- *
- *  For C/C++: we use pointer dereferencing to implement pass-by-reference
- *    So the parameter needs to be &a, which is a pointer type of a's base type
- *
- *    In a recent implementation, side effect analysis is used to find out
- *    variables which are not modified so pointer types are not used.
- *
- *  For Fortran, all parameters are passed by reference by default.
- *
- *  Given a variable (i.e., its type and name) whose references are to
- *  be outlined, create a suitable outlined-function parameter.
- *  For C/C++, the  parameter is created as a pointer, to support parameter
- * passing of aggregate types in C programs. Moreover, the type is made 'void'
- * if the base type is not a primitive type.
- *
- *  An original type may need adjustments before we can make a pointer type from
- * it. For example: a)Array types from a function parameter: its first dimension
- * is auto converted to a pointer type
- *
- *    b) Pointer to a C++ reference type is illegal, we create a pointer to its
- *    base type in this case. It also match the semantics for addressof(refType)
- *
- *
- *  The implementation follows two steps:
- *     step 1: adjust a variable's base type
- *     step 2: decide on its function parameter type
- *  Liao, 8/14/2009
- */
 static bool isExactAdjustedParameterTypePair(SgType *semanticType,
                                              SgType *sourceType) {
   if (semanticType == NULL || sourceType == NULL)
@@ -1454,7 +1416,6 @@ createParam(const SgInitializedName
   // Store the adjusted original types into param_base_type
   // primitive types: --> original type
   // complex types: void
-  // array types from function parameters:  pointer type for 1st dimension
   // C++ reference type: use base type since we want to have uniform way to
   // generate a pointer to the original type
   SgType *param_base_type = 0;
@@ -1466,26 +1427,12 @@ createParam(const SgInitializedName
   // convert void* type to non-primitive type of the parameter
   // So we don't convert the type to void* here
   {
-    // Duplicate the initial type.
-    param_base_type = init_type; //!< \todo Is shallow copy here OK?
-    // param_base_type = const_cast<SgType *> (init_type); //!< \todo Is shallow
-    // copy here OK?
-
-    // Adjust the original types for array or function types (TODO function
-    // types) which are passed as function parameters convert the first
-    // dimension of an array type function parameter to a pointer type, This is
-    // called the auto type conversion for function or array typed variables
-    // that are passed as function parameters
-    // Liao 4/24/2009
-    if (isSgArrayType(param_base_type))
-      if (isSgFunctionDefinition(i_name->get_scope()))
-        param_base_type = SageBuilder::buildPointerType(
-            isSgArrayType(param_base_type)->get_base_type());
+    param_base_type = init_type;
 
     // For C++ reference type, we use its base type since pointer to a reference
     // type is not allowed Liao, 8/14/2009
     param_base_type =
-        ASTtools::buildAddressOfResultType(param_base_type)->get_base_type();
+        SageBuilder::buildAddressOfResultType(param_base_type)->get_base_type();
 
     if (source_init_type != NULL) {
       source_param_base_type = source_init_type;
@@ -1501,7 +1448,7 @@ createParam(const SgInitializedName
         }
       }
       source_param_base_type =
-          ASTtools::buildAddressOfResultType(source_param_base_type)
+          SageBuilder::buildAddressOfResultType(source_param_base_type)
               ->get_base_type();
     }
 
@@ -1517,18 +1464,12 @@ createParam(const SgInitializedName
     }
   }
 
-  // Stores the real parameter type to be used in new_param_type
   string init_name = i_name->get_name().str();
-  // The parameter name reflects the type: the same name means the same type,
-  // p__ means a pointer type
   string new_param_name = init_name;
   SgType *new_param_type = NULL;
   SgType *new_source_param_type = NULL;
 
-  // For classic behavior, read only variables are passed by values for C/C++
-  // They share the same name and type
   if (Outliner::enable_classic) {
-    // read only parameter: pass-by-value, the same type and name
     if (classic_original_type) {
       new_param_type = param_base_type;
       new_source_param_type = source_param_base_type;
@@ -1539,11 +1480,7 @@ createParam(const SgInitializedName
         new_source_param_type =
             SgPointerType::createType(source_param_base_type);
     }
-  } else // The big assumption of this function is within the context of no
-         // wrapper parameter is used very conservative one, assume the worst
-         // side effects (all are written)
-         // TODO, why not use  classic_original_type to control this!!??
-  {
+  } else {
     ROSE_ASSERT(Outliner::useParameterWrapper == false &&
                 Outliner::useStructureWrapper == false);
     if (!SageInterface::is_Fortran_language()) {
@@ -1564,10 +1501,6 @@ createParam(const SgInitializedName
   if (new_source_param_type == new_param_type)
     new_source_param_type = NULL;
 
-  // Fortran parameters are passed by reference by default,
-  // So use base type directly
-  // C/C++ parameters will use their new param type to implement
-  // pass-by-reference
   OutlinedFuncParam_t result;
   result.name = new_param_name;
   result.semantic_type =
@@ -1591,7 +1524,17 @@ createParam(const SgInitializedName
 
 static OutlinedFunctionParameterPlan buildOutlinedFunctionParameterPlan(
     const ASTtools::VarSymSet_t &syms,
-    const ASTtools::VarSymSet_t &pointer_dereference_symbols) {
+    const ASTtools::VarSymSet_t &pointer_dereference_symbols,
+    SgFunctionParameterList *leading_parameters) {
+  if (leading_parameters != nullptr) {
+    ROSE_ASSERT(leading_parameters->get_parent() == nullptr);
+    for (auto *parameter : leading_parameters->get_args()) {
+      ROSE_ASSERT(parameter != nullptr &&
+                  parameter->get_parent() == leading_parameters &&
+                  parameter->get_declptr() == nullptr &&
+                  parameter->get_type() != nullptr);
+    }
+  }
   OutlinedFunctionParameterPlan plan;
   plan.definition_parameters = buildFunctionParameterList();
   if (plan.definition_parameters == NULL ||
@@ -1696,8 +1639,26 @@ static OutlinedFunctionParameterPlan buildOutlinedFunctionParameterPlan(
     }
   }
 
+  const size_t leading_arity =
+      leading_parameters != nullptr ? leading_parameters->get_args().size() : 0;
+  if (leading_parameters != nullptr) {
+    const auto arguments = leading_parameters->get_args();
+    leading_parameters->get_args().clear();
+    for (auto i = arguments.rbegin(); i != arguments.rend(); ++i) {
+      auto *parameter = *i;
+      parameter->set_parent(nullptr);
+      prependArg(plan.definition_parameters, parameter);
+      if (plan.syntax_parameters != plan.definition_parameters) {
+        prependArg(
+            plan.syntax_parameters,
+            buildInitializedName(parameter->get_name(), parameter->get_type()));
+      }
+    }
+    delete leading_parameters;
+  }
   const size_t expected_arity =
-      plan.wrapper_parameter != NULL ? 1 : plan.direct_parameters.size();
+      leading_arity +
+      (plan.wrapper_parameter != NULL ? 1 : plan.direct_parameters.size());
   if (plan.syntax_parameters == NULL ||
       plan.definition_parameters->get_args().size() != expected_arity ||
       plan.syntax_parameters->get_args().size() != expected_arity) {
@@ -1708,35 +1669,8 @@ static OutlinedFunctionParameterPlan buildOutlinedFunctionParameterPlan(
   return plan;
 }
 
-/*!
- *  \brief Initializes unpacking statements for array types
- *  The function takes into account that array types must be initialized element
- * by element The function also skips typedef types to get the real type
- *
- *  \param lhs Left-hand side of the assignment
- *  \param rhs Right-hand side of the assignment
- *  \param type Current type being initialized
- *  \param scope Scope where the assignments will be placed
- *  \param loop_indexes Indexes of all loops, to be declared after calling this
- * function So they are initialized before the most outer loop
- *
- *  Example:
- *    Outlined parameters struct:
- *        struct OUT__1__7768___data {
- *            void *a_p;
- *            int (*b_p)[10UL];
- *            int c[10UL];
- *            void *d_p;
- *        };
- *    Unpacking statements:
- *        int *a = (int *)(((struct OUT__1__7768___data *)__out_argv) -> a_p);
- * -> shared scalar int (*b)[10UL] = (int (*)[10UL])(((struct
- * OUT__1__7768___data *)__out_argv) -> b_p);      -> shared static array int
- * __i0__; for (__i0__ = 0; __i0__ < 10UL; __i0__++) -> firstprivate array
- *            c[__i0__] = ((struct OUT__1__7768___data *)__out_argv) ->
- * c[__i0__]; int **d = (int **)(((struct OUT__1__7768___data *)__out_argv) ->
- * d_p);                    -> shared dynamic array
- */
+// Generate element-wise copies; loop_indexes are declared before the outer
+// loop.
 static SgStatement *
 build_array_unpacking_statement(SgExpression *lhs, SgExpression *rhs,
                                 SgType *type, SgScopeStatement *scope,
@@ -1744,32 +1678,35 @@ build_array_unpacking_statement(SgExpression *lhs, SgExpression *rhs,
   ROSE_ASSERT(isSgArrayType(type));
   ROSE_ASSERT(scope);
 
-  // Loop initializer
   std::string loop_index_name =
       SageInterface::generateUniqueVariableName(scope, "i");
   SgVariableDeclaration *loop_index = buildVariableDeclaration(
       loop_index_name, buildIntType(), NULL /* initializer */, scope);
+  ROSE_ASSERT(loop_index->get_variables().size() == 1);
+  SgInitializedName *index_name = loop_index->get_variables().front();
+  SgVariableSymbol *index_symbol =
+      isSgVariableSymbol(index_name->get_symbol_from_symbol_table());
+  ROSE_ASSERT(index_symbol);
+  ROSE_ASSERT(index_symbol->get_declaration() == index_name);
+  ROSE_ASSERT(index_symbol->get_scope() == scope);
   loop_indexes.push_back(loop_index);
-  SgStatement *loop_init = buildAssignStatement(
-      buildVarRefExp(loop_index_name, scope), buildIntVal(0));
+  SgStatement *loop_init =
+      buildAssignStatement(buildVarRefExp(index_symbol), buildIntVal(0));
 
-  // Loop test
   SgStatement *loop_test = buildExprStatement(buildLessThanOp(
-      buildVarRefExp(loop_index_name, scope), isSgArrayType(type)->get_index(),
+      buildVarRefExp(index_symbol),
+      copyExpression(isSgArrayType(type)->get_index()),
       SageInterface::is_C_language() ? static_cast<SgType *>(buildIntType())
                                      : static_cast<SgType *>(buildBoolType())));
 
-  // Loop increment
-  SgExpression *loop_increment =
-      buildPlusPlusOp(buildVarRefExp(loop_index_name, scope), buildIntType(),
-                      SgUnaryOp::postfix);
+  SgExpression *loop_increment = buildPlusPlusOp(
+      buildVarRefExp(index_symbol), buildIntType(), SgUnaryOp::postfix);
 
-  // Loop body
   SgExpression *assign_lhs =
-      buildPntrArrRefExp(lhs, buildVarRefExp(loop_index_name, scope),
+      buildPntrArrRefExp(lhs, buildVarRefExp(index_symbol),
                          SageInterface::getElementType(lhs->get_type()));
   SgExpression *assign_rhs =
-      buildPntrArrRefExp(rhs, buildVarRefExp(loop_index_name, scope),
+      buildPntrArrRefExp(rhs, buildVarRefExp(index_symbol),
                          SageInterface::getElementType(rhs->get_type()));
   SgStatement *loop_body = NULL;
   SgType *base_type = isSgArrayType(type)->get_base_type()->stripType(
@@ -1781,73 +1718,9 @@ build_array_unpacking_statement(SgExpression *lhs, SgExpression *rhs,
     loop_body = buildAssignStatement(assign_lhs, assign_rhs);
   }
 
-  // Loop satement
   return buildForStatement(loop_init, loop_test, loop_increment, loop_body);
 }
 
-/*!
- *  \brief Creates a local variable declaration to "unpack" an
- * outlined-function's parameter int index is optionally used as an offset
- * inside a wrapper parameter for multiple variables
- *
- *  The key is to set local_name, local_type, and local_val for all cases
- *
- *  There are three choices:
- *  Case 1: unpack one variable from one parameter
- *  -----------------------------------------------
- *  OUT_XXX(int *ip__)
- *  {
- *    // This is called unpacking declaration for a read-only variable, Liao,
- * 9/11/2008 int i = * (int *) ip__;
- *  }
- *
- *  Case 2: unpack one variable from an array of pointers
- *  -----------------------------------------------
- *  OUT_XXX (void * __out_argv[n]) // for written variables, we have to use
- * pointers
- *  {
- *    int * _p_i =  (int*)__out_argv[0];
- *    int * _p_j =  (int*)__out_argv[1];
- *    ....
- *  }
- *
- *  Case 3: unpack one variable from a structure
- *  -----------------------------------------------
- *  OUT__xxx (struct OUT__xxx__data *__out_argv)
- *  {
- *    int i = __out_argv->i;
- *    int j = __out_argv->j;
- *    int (*sum)[100UL] = __out_argv->sum_p;*
- *  }
- *
- * case 1 and case 2 have two variants:
- *   using conventional pointer dereferencing or
- *   using cloned variables(temp_variable)
- *
- *
- * Notes for handling reference type in OpenMP outlining
- * ------------------------------------------------
- * Reference type handling when a wrapper data structure is requested:
- *   It is not allowed to create a pointer type to a reference type.
- *   We create a pointer type to the base type of the reference type instead.
- *   Anything else is handled the same since &var means to get the address of
- * the original variable even var is a reference type.
- *
- *   struct OUT__1__8577___data
- *   {
- *     void *dthydro_p;
- *   }
- *
- *  some_function( Real_t& dthydro )
- * dthydro is a reference type, & dthydro is equal to & of its original object
- *  __out_argv1__8577__ . OUT__1__8577___data::dthydro_p = ((void *)(&dthydro));
- *
- *  Real_t *dthydro = (Real_t *)(((struct OUT__1__8577___data *)__out_argv) ->
- * OUT__1__8577___data::dthydro_p);
- *
- *  the original use is replaced as pointer dereferences
- *   Real_t dthydro_tmp =  *dthydro;
- */
 static SgName allocateExactUnpackLocalName(const SgName &requestedName,
                                            SgScopeStatement *scope) {
   if (requestedName.getString().empty() || scope == NULL ||
@@ -1904,7 +1777,7 @@ static SgVariableDeclaration *createUnpackDecl(
         *struct_decl, // the struct declaration type used to wrap parameters
     SgScopeStatement
         *scope, // the scope into which the statement will be inserted
-    SgType *local_type_template_parameter) {
+    SgType *local_type_template_parameter, SgCopyHelp &type_bindings) {
   ROSE_ASSERT(param && scope && i_name);
 
   // keep the original name
@@ -1913,10 +1786,14 @@ static SgVariableDeclaration *createUnpackDecl(
   //---------------step 1 -----------------------------------------------
   // decide on the type : local_type
   // the original data type of the variable passed via parameter
-  SgType *orig_var_type = i_name->get_type();
+  SgType *orig_var_type = SageInterface::materializeTypeWithCopyMap(
+      i_name->get_type(), type_bindings);
   SgType *orig_var_source_type = SageInterface::is_Fortran_language()
                                      ? NULL
                                      : exactCapturedVariableSourceType(i_name);
+  if (orig_var_source_type != nullptr)
+    orig_var_source_type = SageInterface::materializeTypeWithCopyMap(
+        orig_var_source_type, type_bindings);
   if (local_type_template_parameter != NULL) {
     if (!SageInterface::is_Cxx_language() ||
         isSgTemplateType(local_type_template_parameter) == NULL ||
@@ -1947,44 +1824,28 @@ static SgVariableDeclaration *createUnpackDecl(
   SgArrayType *global_array_type = getNonFortranGlobalArrayType(i_name);
   bool is_array_parameter = false;
   if (!SageInterface::is_Fortran_language()) {
-    // Convert an array type parameter's first dimension to a pointer type
-    // This conversion is implicit for C/C++ language.
-    // We have to make it explicit to get the right type
-    // Liao, 4/24/2009  TODO we should only adjust this for the case 1
     if (isSgFunctionDefinition(i_name->get_scope())) {
-      SgArrayType *semantic_array = isSgArrayType(orig_var_type);
+      ROSE_ASSERT(isSgArrayType(orig_var_type) == NULL);
       SgType *source_base =
           orig_var_source_type != NULL
               ? orig_var_source_type->stripType(SgType::STRIP_TYPEDEF_TYPE |
                                                 SgType::STRIP_MODIFIER_TYPE)
               : NULL;
       SgArrayType *source_array = isSgArrayType(source_base);
-      if (semantic_array != NULL || source_array != NULL) {
-        if (semantic_array != NULL) {
-          orig_var_type =
-              SageBuilder::buildPointerType(semantic_array->get_base_type());
-        }
-        if (source_array != NULL) {
-          SgType *adjusted_source =
-              SageBuilder::buildPointerType(source_array->get_base_type());
-          if (!SageInterface::cxxSourceTypeMatchesSemanticType(adjusted_source,
-                                                               orig_var_type)) {
-            fprintf(stderr,
-                    "REX_OUTLINER_INVARIANT[unpack-source-type]: captured "
-                    "array parameter=%s has contradictory adjusted semantic "
-                    "and source types\n",
-                    i_name->get_name().getString().c_str());
-            ROSE_ABORT();
-          }
-          orig_var_source_type =
-              adjusted_source != orig_var_type ? adjusted_source : NULL;
-        } else if (orig_var_source_type != NULL) {
-          std::cerr << "REX_OUTLINER_INVARIANT[unpack-source-type]: captured "
-                       "array parameter="
-                    << i_name->get_name()
-                    << " has no exact source array type\n";
+      if (source_array != NULL) {
+        SgType *adjusted_source =
+            SageBuilder::buildPointerType(source_array->get_base_type());
+        if (!SageInterface::cxxSourceTypeMatchesSemanticType(adjusted_source,
+                                                             orig_var_type)) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[unpack-source-type]: captured "
+                  "array parameter=%s has contradictory adjusted semantic "
+                  "and source types\n",
+                  i_name->get_name().getString().c_str());
           ROSE_ABORT();
         }
+        orig_var_source_type =
+            adjusted_source != orig_var_type ? adjusted_source : NULL;
         if (orig_var_type == NULL || isSgPointerType(orig_var_type) == NULL) {
           std::cerr << "REX_OUTLINER_INVARIANT[unpack-source-type]: captured "
                        "array parameter="
@@ -2001,23 +1862,34 @@ static SgVariableDeclaration *createUnpackDecl(
       SageInterface::is_Cxx_language() && Outliner::temp_variable &&
       !Outliner::useStructureWrapper && isPointerDeref &&
       global_array_type == NULL;
+  const bool use_cxx_capture_reference = SageInterface::is_Cxx_language() &&
+                                         Outliner::useStructureWrapper &&
+                                         !isPointerDeref;
 
   SgType *local_type = NULL;
   SgType *local_source_type = NULL;
+  auto captureReferenceType = [](SgType *type) {
+    auto *reference = isSgReferenceType(type);
+    if (reference != nullptr && reference->has_source_prototype())
+      return reference;
+    return SgReferenceType::createType(
+        reference != nullptr ? reference->get_base_type() : type);
+  };
   if (SageInterface::is_Fortran_language())
     local_type = orig_var_type;
   else if (Outliner::temp_variable || Outliner::useStructureWrapper)
   // unique processing for C/C++ if temp variables are used
   {
-    if (use_cxx_reference_for_pointer_deref) {
-      local_type = isSgReferenceType(orig_var_type)
-                       ? orig_var_type
-                       : SgReferenceType::createType(orig_var_type);
+    if (use_cxx_capture_reference) {
+      local_type =
+          buildReferenceType(Outliner::captureValueType(orig_var_type));
+      if (orig_var_source_type != NULL)
+        local_source_type = buildReferenceType(
+            Outliner::captureValueType(orig_var_source_type));
+    } else if (use_cxx_reference_for_pointer_deref) {
+      local_type = captureReferenceType(orig_var_type);
       if (orig_var_source_type != NULL) {
-        local_source_type =
-            isSgReferenceType(orig_var_source_type)
-                ? orig_var_source_type
-                : SgReferenceType::createType(orig_var_source_type);
+        local_source_type = captureReferenceType(orig_var_source_type);
       }
     } else if (isPointerDeref || (!isPointerDeref && is_array_parameter)) {
       // Liao 3/11/2015. For a parameter of a reference type, we have to
@@ -2105,14 +1977,9 @@ static SgVariableDeclaration *createUnpackDecl(
            //   access the address of the by default, not variable substitution
            //   is needed
     {
-      local_type = isSgReferenceType(orig_var_type)
-                       ? orig_var_type
-                       : SgReferenceType::createType(orig_var_type);
+      local_type = captureReferenceType(orig_var_type);
       if (orig_var_source_type != NULL) {
-        local_source_type =
-            isSgReferenceType(orig_var_source_type)
-                ? orig_var_source_type
-                : SgReferenceType::createType(orig_var_source_type);
+        local_source_type = captureReferenceType(orig_var_source_type);
       }
     }
   }
@@ -2199,7 +2066,7 @@ static SgVariableDeclaration *createUnpackDecl(
           i_name->get_fortran_source_derived_type_symbol() != NULL ||
           i_name->get_fortran_type_spec() !=
               SgInitializedName::e_fortran_type_spec_default ||
-          !i_name->get_fortran_procedure_interface().is_null()) {
+          i_name->get_fortran_procedure_interface() != nullptr) {
         fprintf(stderr,
                 "REX_OUTLINER_INVARIANT[fortran-source-type]: captured "
                 "variable=%p/%s has no source type outside the exact typed "
@@ -2263,12 +2130,13 @@ static SgVariableDeclaration *createUnpackDecl(
             buildCastExp(buildVarRefExp(param, scope),
                          buildPointerType(struct_decl->get_type())),
             field_ref, field_ref->get_type());
-        if (!isSgArrayType(local_type)) {
+        if (!use_cxx_capture_reference && !isSgArrayType(local_type)) {
           // When necessary, we must catch the address before we do the casting
           if (!isPointerDeref && is_array_parameter) {
             param_ref = buildAddressOfOp(
                 param_ref,
-                ASTtools::buildAddressOfResultType(param_ref->get_type()));
+                SageBuilder::buildAddressOfResultType(param_ref->get_type()),
+                SgAddressOfOp::e_address_operand_object);
           }
 
           param_ref = buildCastExp(param_ref, local_type);
@@ -2295,12 +2163,15 @@ static SgVariableDeclaration *createUnpackDecl(
 
   ROSE_ASSERT(param_ref != NULL);
 
+  const bool unpack_array =
+      isSgArrayType(local_type->stripType(SgType::STRIP_TYPEDEF_TYPE)) != NULL;
   if (Outliner::useStructureWrapper) {
     // Or for structure type paramter
     // int (*sum)[100UL] = __out_argv->sum_p; // is PointerDeref type
     // int i = __out_argv->i;
-    local_val = buildAssignInitializer(param_ref, local_type);
-  } else {
+    if (!unpack_array)
+      local_val = buildAssignInitializer(param_ref, local_type);
+  } else if (!unpack_array) {
     // TODO: This is only needed for case 2 or C++ case 1,
     //  not for case 1 and case 3 since the source right hand already has the
     //  right type since the array has generic void* elements. We need to cast
@@ -2314,27 +2185,28 @@ static SgVariableDeclaration *createUnpackDecl(
             : SgPointerType::createType(ref ? ref->get_base_type()
                                             : orig_var_type);
     ROSE_ASSERT(local_var_type_ptr);
-    SgCastExp *cast_expr =
-        buildCastExp(param_ref, local_var_type_ptr, SgCastExp::e_C_style_cast);
+    SgType *source_cast_type = local_var_type_ptr;
     if (orig_var_source_type != NULL) {
       SgReferenceType *source_ref = isSgReferenceType(orig_var_source_type);
-      SgType *source_cast_type =
-          global_array_type != NULL
-              ? local_source_type
-              : SgPointerType::createType(source_ref
-                                              ? source_ref->get_base_type()
+      source_cast_type = global_array_type != NULL
+                             ? local_source_type
+                             : SgPointerType::createType(
+                                   source_ref ? source_ref->get_base_type()
                                               : orig_var_source_type);
       if (source_cast_type == NULL ||
           !SageInterface::cxxSourceTypeMatchesSemanticType(
-              source_cast_type, local_var_type_ptr) ||
-          cast_expr->get_source_type() != local_var_type_ptr) {
+              source_cast_type, local_var_type_ptr)) {
         fprintf(stderr,
                 "REX_OUTLINER_INVARIANT[unpack-cast-source-type]: captured "
                 "variable=%s has no exact source cast type\n",
                 i_name->get_name().getString().c_str());
         ROSE_ABORT();
       }
-      cast_expr->set_source_type(source_cast_type);
+    }
+    SgCastExp *cast_expr =
+        buildTransformationCastExp(param_ref, local_var_type_ptr,
+                                   SgCastExp::e_C_style_cast, source_cast_type);
+    if (orig_var_source_type != NULL) {
       if (cast_expr->get_type() != local_var_type_ptr ||
           cast_expr->get_source_type() != source_cast_type) {
         fprintf(stderr,
@@ -2388,15 +2260,10 @@ static SgVariableDeclaration *createUnpackDecl(
   }
 
   SgVariableDeclaration *decl;
-  if (isSgArrayType(local_type->stripType(
-          SgType::STRIP_TYPEDEF_TYPE))) { // The original variable was no
-                                          // statically allocated and passed as
-                                          // private or firstprivate
+  if (unpack_array) {
     // We need to copy every element of the array
-    decl = buildVariableDeclaration(local_name, local_type, NULL, scope);
-
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(decl,"testing
-    // Outliner createUnpackDecl(): 1") == false);
+    decl = buildVariableDeclaration(local_name, local_type, NULL, scope,
+                                    local_source_type);
 
     SgStatementPtrList loop_indexes;
     SgStatement *array_init = build_array_unpacking_statement(
@@ -2404,80 +2271,16 @@ static SgVariableDeclaration *createUnpackDecl(
         local_type->stripType(SgType::STRIP_TYPEDEF_TYPE), scope, loop_indexes);
     SageInterface::prependStatement(array_init, scope);
     SageInterface::prependStatementList(loop_indexes, scope);
-
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(decl,"testing
-    // Outliner createUnpackDecl(): 2") == false);
   } else {
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing
-    // Outliner createUnpackDecl(): 3-scope") == false);
-
-    decl = buildVariableDeclaration(local_name, local_type, local_val, scope);
-
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(scope,"testing
-    // Outliner createUnpackDecl(): 4-scope") == false);
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(decl,"testing
-    // Outliner createUnpackDecl(): 4") == false);
+    decl = buildVariableDeclaration(local_name, local_type, local_val, scope,
+                                    local_source_type);
   }
-
-  if (local_source_type != NULL) {
-    SgInitializedName *local_name_node =
-        SageInterface::getFirstInitializedName(decl);
-    if (local_name_node == NULL ||
-        local_name_node->get_cxx_source_type() != NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[unpack-source-type]: generated "
-              "declaration=%p for variable=%s has no empty exact source-type "
-              "slot\n",
-              static_cast<void *>(decl),
-              i_name->get_name().getString().c_str());
-      ROSE_ABORT();
-    }
-    local_name_node->set_cxx_source_type(local_source_type);
-    if (local_name_node->get_cxx_source_type() != local_source_type) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[unpack-source-type]: generated "
-              "declaration=%p for variable=%s did not publish its exact "
-              "source type\n",
-              static_cast<void *>(decl),
-              i_name->get_name().getString().c_str());
-      ROSE_ABORT();
-    }
-  }
-
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(decl,"testing Outliner
-  // createUnpackDecl(): 5") == false);
 
   return decl;
 }
 
-/*!
- *  \brief Creates an assignment to "pack" a local variable back into
- *  an outlined-function parameter that has been passed as a pointer
- *  value.
- *  Only applicable when variable cloning is turned on.
- *
- *  The concept of pack/unpack is associated with parameter wrapping
- *  In the outlined function, we first
- *    unpack the wrapper parameter to get individual parameters
- *  then
- *    pack individual parameter into the wrapper.
- *
- *  It is also write-back or transfer-back the values of clones to their
- * original pointer variables
- *
- *  This routine takes the original "unpack" definition, of the form
- *
- *    TYPE local_unpack_var = *outlined_func_arg; // no parameter wrapping
- *    int i = *(int *)(__out_argv[1]); // parameter wrapping case
- *
- *  and creates the "re-pack" assignment expression,
- *
- *    *outlined_func_arg = local_unpack_var // no-parameter wrapping case
- *    *(int *)(__out_argv[1]) =i; // parameter wrapping case
- *
- *  C++ variables of reference types do not need this step.
- */
 static SgAssignOp *createPackExpr(SgInitializedName *local_unpack_def) {
+  ROSE_ASSERT(local_unpack_def);
   if (!Outliner::temp_variable) {
     if (is_C_language()) // skip for pointer dereferencing used in C language
     {
@@ -2515,73 +2318,45 @@ static SgAssignOp *createPackExpr(SgInitializedName *local_unpack_def) {
     }
   }
 
-  if (local_unpack_def)
-  //      && !isConstType(local_unpack_def->get_type ()))
-  {
-    SgName local_var_name(local_unpack_def->get_name());
+  SgAssignInitializer *local_var_init =
+      isSgAssignInitializer(local_unpack_def->get_initializer());
+  ROSE_ASSERT(local_var_init);
 
-    SgAssignInitializer *local_var_init =
-        isSgAssignInitializer(local_unpack_def->get_initializer());
-    ROSE_ASSERT(local_var_init);
-
-    // Create the LHS, which derefs the function argument, by
-    // copying the original dereference expression.
-    //
-    SgPointerDerefExp *param_deref_unpack =
-        isSgPointerDerefExp(local_var_init->get_operand_i());
-    if (param_deref_unpack == NULL) {
-      cout << "packing statement is:"
-           << local_unpack_def->get_declaration()->unparseToString() << endl;
-      cout << "local unpacking stmt's initializer's operand has non-pointer "
-              "dereferencing type:"
-           << local_var_init->get_operand_i()->class_name() << endl;
-      ROSE_ASSERT(param_deref_unpack);
-    }
-
-    SgPointerDerefExp *param_deref_pack =
-        isSgPointerDerefExp(ASTtools::deepCopy(param_deref_unpack));
-    ROSE_ASSERT(param_deref_pack);
-
-    // Create the RHS, which references the local variable.
-    SgScopeStatement *scope = local_unpack_def->get_scope();
-    ROSE_ASSERT(scope);
-    SgVariableSymbol *local_var_sym = scope->lookup_var_symbol(local_var_name);
-    ROSE_ASSERT(local_var_sym);
-    SgVarRefExp *local_var_ref = SageBuilder::buildVarRefExp(local_var_sym);
-    ROSE_ASSERT(local_var_ref);
-
-    // Assemble the final assignment expression.
-    return SageBuilder::buildAssignOp(param_deref_pack, local_var_ref,
-                                      param_deref_pack->get_type());
+  // Create the LHS, which derefs the function argument, by
+  // copying the original dereference expression.
+  //
+  SgPointerDerefExp *param_deref_unpack =
+      isSgPointerDerefExp(local_var_init->get_operand_i());
+  if (param_deref_unpack == NULL) {
+    cout << "packing statement is:"
+         << local_unpack_def->get_declaration()->unparseToString() << endl;
+    cout << "local unpacking stmt's initializer's operand has non-pointer "
+            "dereferencing type:"
+         << local_var_init->get_operand_i()->class_name() << endl;
+    ROSE_ASSERT(param_deref_unpack);
   }
-  return 0;
+
+  // Create the RHS, which references the local variable.
+  SgScopeStatement *scope = local_unpack_def->get_scope();
+  ROSE_ASSERT(scope);
+  SgVariableSymbol *local_var_sym =
+      isSgVariableSymbol(local_unpack_def->get_symbol_from_symbol_table());
+  ROSE_ASSERT(local_var_sym);
+  ROSE_ASSERT(local_var_sym->get_declaration() == local_unpack_def);
+  ROSE_ASSERT(local_var_sym->get_scope() == scope);
+
+  SgPointerDerefExp *param_deref_pack =
+      isSgPointerDerefExp(ASTtools::deepCopy(param_deref_unpack));
+  ROSE_ASSERT(param_deref_pack);
+
+  SgVarRefExp *local_var_ref = SageBuilder::buildVarRefExp(local_var_sym);
+  ROSE_ASSERT(local_var_ref);
+
+  // Assemble the final assignment expression.
+  return SageBuilder::buildAssignOp(param_deref_pack, local_var_ref,
+                                    param_deref_pack->get_type());
 }
 
-/*!
- *  \brief Creates a pack (write-back) statement , used to support variable
-cloning in outlining.
- *
- *
- *  This routine creates an SgExprStatement wrapper around the return
- *  of createPackExpr.
- *
- *  void OUT__1__4305__(int *ip__,int *sump__)
- * {
- *   // variable clones for pointer types
- *   int i =  *((int *)ip__);
- *   int sum =  *((int *)sump__);
- *
- *  // clones participate computation
- *   for (i = 0; i < 100; i++) {
- *     sum += i;
- *   }
- *  // write back the values from clones to their original pointers
- *  //The following are called (re)pack statements
- *    *((int *)sump__) = sum;
- *    *((int *)ip__) = i;
-}
-
- */
 static SgExprStatement *createPackStmt(SgInitializedName *local_unpack_def) {
   // No repacking for Fortran for now
   if (local_unpack_def == NULL || SageInterface::is_Fortran_language())
@@ -2595,73 +2370,34 @@ static SgExprStatement *createPackStmt(SgInitializedName *local_unpack_def) {
     return 0;
 }
 
-/*!
- *  \brief Records a mapping between two variable symbols, and record
- *  the new symbol.
- *
- *  This routine creates the target variable symbol from the specified
- *  SgInitializedName object. If the optional scope is specified
- *  (i.e., is non-NULL), then this routine also inserts the new
- *  variable symbol into the scope's symbol table.
- */
+// Record a binding that the declaration builder has already published. Capture
+// analysis must not create a second symbol or move the declaration's scope.
 static void recordSymRemap(const SgVariableSymbol *orig_sym,
                            SgInitializedName *name_new, SgScopeStatement *scope,
                            VarSymRemap_t &sym_remap) {
-  if (orig_sym && name_new) {
-    ROSE_ASSERT(name_new->get_name().is_null() == false);
-
-    // Name lookup can legally find an older same-spelled declaration in a
-    // parent scope.  Publication is keyed by the generated declaration's exact
-    // identity in the destination table, never by spelling visibility.
-    SgVariableSymbol *sym_new =
-        scope != NULL
-            ? isSgVariableSymbol(scope->find_symbol_from_declaration(name_new))
-            : NULL;
-    if (sym_new == NULL) {
-      sym_new = new SgVariableSymbol(name_new);
-
-      if (scope) {
-        scope->insert_symbol(name_new->get_name(), sym_new);
-        name_new->set_scope(scope);
-      }
-    }
-    SgSymbolTable *table = scope != NULL ? scope->get_symbol_table() : NULL;
-    if (sym_new == NULL || scope == NULL || table == NULL ||
-        sym_new == orig_sym || sym_new->get_declaration() != name_new ||
-        name_new->get_scope() != scope || sym_new->get_parent() != table ||
-        !table->exists(sym_new) ||
-        !sym_remap.emplace(orig_sym, sym_new).second) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[symbol-remap-publication]: "
-              "source=%p generated-name=%p scope=%p symbol=%p table=%p has "
-              "no unique exact generated identity\n",
-              static_cast<const void *>(orig_sym),
-              static_cast<void *>(name_new), static_cast<void *>(scope),
-              static_cast<void *>(sym_new), static_cast<void *>(table));
-      ROSE_ABORT();
-    }
+  ROSE_ASSERT(orig_sym != nullptr && name_new != nullptr && scope != nullptr);
+  auto *symbol =
+      isSgVariableSymbol(scope->find_symbol_from_declaration(name_new));
+  SgSymbolTable *table = scope->get_symbol_table();
+  if (symbol == nullptr || table == nullptr || symbol == orig_sym ||
+      symbol->get_declaration() != name_new || name_new->get_scope() != scope ||
+      symbol->get_parent() != table || !table->exists(symbol) ||
+      !sym_remap.emplace(orig_sym, symbol).second) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[symbol-remap-publication]: "
+            "source=%p generated-name=%p scope=%p symbol=%p table=%p has "
+            "no unique exact generated identity\n",
+            static_cast<const void *>(orig_sym), static_cast<void *>(name_new),
+            static_cast<void *>(scope), static_cast<void *>(symbol),
+            static_cast<void *>(table));
+    ROSE_ABORT();
   }
 }
 
-/*!
- *  \brief Records a mapping between variable symbols.
- *    Used when generating unpacking statements from parameters.
- *    A mapping is a mapping between
- *       1. original variable in the program, to be passed as a parameter
- *       2. locally declared variable in the outlined function, accepting the
- * value of the parameter
- *  \pre The variable declaration must contain only 1 initialized
- *  name.
- *  orig_sym: the original variable to be passed into the outlined function
- *  new_decl: locally declared variable in the outlined function
- *  scope: the function body scope of the outlined function, also the scope of
- * new_decl
- */
 static void recordSymRemap(const SgVariableSymbol *orig_sym,
                            SgVariableDeclaration *new_decl,
                            SgScopeStatement *scope, VarSymRemap_t &sym_remap) {
   if (orig_sym && new_decl) {
-    //     ROSE_ASSERT (new_decl->get_scope == scope);
     SgInitializedNamePtrList &vars = new_decl->get_variables();
     ROSE_ASSERT(vars.size() == 1);
     for (SgInitializedNamePtrList::iterator i = vars.begin(); i != vars.end();
@@ -2755,7 +2491,8 @@ static void validateEnclosingCheckedCasts(
 
 static void requireExactVarRefRetargetTypes(
     SgVarRefExp *reference, SgVariableSymbol *replacement,
-    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_plan) {
+    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_plan,
+    SgCopyHelp &type_bindings) {
   SgVariableSymbol *original =
       reference != NULL ? reference->get_symbol() : NULL;
   SgInitializedName *original_declaration =
@@ -2795,6 +2532,9 @@ static void requireExactVarRefRetargetTypes(
       (!exact_fortran_associated_target_retarget &&
        !exact_c_array_parameter_decay && !exact_local_type_template_retarget &&
        removeExactReferenceLayer(original_reference_type) !=
+           removeExactReferenceLayer(replacement_declared_type) &&
+       removeExactReferenceLayer(SageInterface::materializeTypeWithCopyMap(
+           original_reference_type, type_bindings)) !=
            removeExactReferenceLayer(replacement_declared_type))) {
     fprintf(stderr,
             "REX_OUTLINER_INVARIANT[var-ref-remap-type]: reference=%p "
@@ -2815,29 +2555,24 @@ static void remapVarSyms(
     const VarSymRemap_t &vsym_remap,    // regular shared variables
     const VarSymRemap_t &private_remap, // variables using private copies
     SgBasicBlock *b,
-    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_plan) {
+    const Outliner::OutlinedLocalTypeTemplatePlan &local_type_plan,
+    SgCopyHelp &type_bindings) {
   validateCheckedCasts(b, "before variable remapping");
 
   // Check if variable remapping is even needed.
   if (vsym_remap.empty() && private_remap.empty())
     return;
 
-  // A spelling is not declaration identity: a captured local and a class data
-  // member can legally have the same name.  Keep every ordinary remap keyed by
-  // the exact symbol or declaration.  The separately checked global-name map
-  // exists only for declarations reparsed into a distinct output file.
   std::map<const SgInitializedName *, SgVariableSymbol *> remap_by_decl;
-  std::map<std::string, SgVariableSymbol *> remap_by_global_name;
   for (VarSymRemap_t::const_iterator i = vsym_remap.begin();
        i != vsym_remap.end(); ++i) {
     const SgVariableSymbol *orig_sym = i->first;
     SgVariableSymbol *new_sym = i->second;
-    if (orig_sym == NULL || new_sym == NULL)
-      continue;
+    ASSERT_not_null(orig_sym);
+    ASSERT_not_null(new_sym);
 
     const SgInitializedName *orig_decl = orig_sym->get_declaration();
-    if (orig_decl == NULL)
-      continue;
+    ASSERT_not_null(orig_decl);
 
     const std::pair<
         std::map<const SgInitializedName *, SgVariableSymbol *>::iterator, bool>
@@ -2850,46 +2585,24 @@ static void remapVarSyms(
               static_cast<const void *>(orig_decl));
       ROSE_ABORT();
     }
-
-    if (isSgGlobal(orig_decl->get_scope()) != NULL) {
-      const std::pair<std::map<std::string, SgVariableSymbol *>::iterator, bool>
-          global_remap = remap_by_global_name.emplace(
-              orig_decl->get_name().getString(), new_sym);
-      if (!global_remap.second && global_remap.first->second != new_sym) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[var-ref-remap-identity]: global "
-                "name=%s maps to more than one replacement symbol\n",
-                orig_decl->get_name().str());
-        ROSE_ABORT();
-      }
-    }
   }
 
   auto findRegularRemap = [&](SgVarRefExp *ref_orig) -> SgVariableSymbol * {
     ROSE_ASSERT(ref_orig != NULL);
     SgVariableSymbol *ref_sym = ref_orig->get_symbol();
-    if (ref_sym == NULL)
-      return NULL;
+    ASSERT_not_null(ref_sym);
 
     VarSymRemap_t::const_iterator ref_new = vsym_remap.find(ref_sym);
     if (ref_new != vsym_remap.end())
       return ref_new->second;
 
     SgInitializedName *ref_decl = ref_sym->get_declaration();
-    if (ref_decl == NULL)
-      return NULL;
+    ASSERT_not_null(ref_decl);
 
     std::map<const SgInitializedName *, SgVariableSymbol *>::const_iterator
         decl_match = remap_by_decl.find(ref_decl);
     if (decl_match != remap_by_decl.end())
       return decl_match->second;
-
-    if (Outliner::useNewFile && isSgGlobal(ref_decl->get_scope()) != NULL) {
-      std::map<std::string, SgVariableSymbol *>::const_iterator name_match =
-          remap_by_global_name.find(ref_decl->get_name().getString());
-      if (name_match != remap_by_global_name.end())
-        return name_match->second;
-    }
 
     return NULL;
   };
@@ -3047,7 +2760,6 @@ static void remapVarSyms(
       }
 
       macro->set_expanded_expression(NULL);
-      expanded->set_parent(NULL);
       SageInterface::replaceExpression(macro, expanded, true);
       if (macro->get_parent() != NULL || expanded->get_parent() != owner) {
         fprintf(stderr,
@@ -3111,7 +2823,21 @@ static void remapVarSyms(
                                     SgVariableSymbol *symbol) {
     ROSE_ASSERT(ref != NULL);
     ROSE_ASSERT(symbol != NULL);
-    requireExactVarRefRetargetTypes(ref, symbol, local_type_plan);
+    requireExactVarRefRetargetTypes(ref, symbol, local_type_plan, type_bindings);
+    SgInitializedName *original = ref->get_symbol()->get_declaration();
+    for (SgNode *owner = ref->get_parent(); owner != NULL;
+         owner = owner->get_parent()) {
+      if (auto *task = isSgOmpTaskStatement(owner)) {
+        task->validate_semantic_data_environment();
+        for (auto *variables : {&task->get_semantic_firstprivate_variables(),
+                                &task->get_semantic_private_variables()})
+          std::replace(variables->begin(), variables->end(), original,
+                       symbol->get_declaration());
+        task->validate_semantic_data_environment();
+      }
+      if (owner == b)
+        break;
+    }
     const std::vector<CheckedCastSnapshot> enclosing_casts =
         captureEnclosingCheckedCasts(ref);
 
@@ -3503,6 +3229,8 @@ static void remapVarSyms(
               static_cast<void *>(ref_orig));
       ROSE_ABORT();
     }
+    if (!ASTtools::requiresVariableCapture(ref_orig))
+      continue;
     clearLocalVarRefQualification(ref_orig);
 
     // Search for a symbol which need to be replaced.
@@ -3627,47 +3355,19 @@ static void remapVarSyms(
   validateCheckedCasts(b, "after variable remapping");
 }
 
-/*!
- *  \brief Creates new function parameters for a set of variable symbols.
- *
- *  We have several options for the organization of function parameters:
- *
- *  1. default: each variable to be passed has a function parameter
- *           To support both C and C++ programs, this routine assumes parameters
- * passed using pointers (rather than the C++ -specific reference types). 2,
- * useParameterWrapper: use an array as the function parameter, each pointer
- * stores the address of the variable to be passed
- *  3. useStructureWrapper: use a structure, each field stores a variable's
- *              value or address according to use-by-address or not semantics
- *
- *  It inserts "unpacking/unwrapping" and "repacking" statements at the
- *  beginning and end of the function body, respectively, when necessary.
- *
- *  This routine records the mapping between the given variable symbols and the
- * new symbols corresponding to the new parameters.
- *
- *  Finally, it performs variable replacement in the end.
- *
- */
 static void variableHandling(
     const ASTtools::VarSymSet_t
         &syms, // all variables passed to the outlined function: //regular
                // (shared) parameters?
     const ASTtools::VarSymSet_t
         &pdSyms, // those must use pointer dereference: use pass-by-reference
-    //              const std::set<SgInitializedName*> & readOnlyVars, //
-    //              optional analysis: those which can use pass-by-value, used
-    //              for classic outlining without parameter wrapping, and also
-    //              for variable clone to decide on if write-back is needed
-    //              const std::set<SgInitializedName*> & liveOutVars, //
-    //              optional analysis: used to control if a write-back is needed
-    //              when variable cloning is used.
     const std::set<SgInitializedName *>
         &restoreVars, // variables to be restored after variable cloning
     SgClassDeclaration
         *struct_decl, // an optional struct wrapper for all variables
     const OutlinedFunctionParameterPlan &parameter_plan,
     const Outliner::OutlinedLocalTypeTemplatePlan &local_type_template_plan,
+    SgCopyHelp &type_bindings, SgStatement *type_dependency_tail,
     SgFunctionDeclaration *func) // the outlined function
 {
   VarSymRemap_t sym_remap; // variable remapping for regular(shared) variables:
@@ -3690,96 +3390,31 @@ static void variableHandling(
   SgScopeStatement *args_scope = isSgScopeStatement(body);
   ROSE_ASSERT(args_scope);
 
-  // For each variable symbol, create an equivalent function parameter.
-  // Also create unpacking and repacking statements.
   int counter = 0;
   SgInitializedName *parameter1 = NULL; // the wrapper parameter
   SgVariableDeclaration *local_var_decl = NULL;
 
-  // handle OpenMP private variables/ or those which are neither live-in or
-  // live-out
-  //  handlePrivateVariables(pSyms, body, private_remap);
-  //  This is done before calling the outliner now, by transOmpVariables()
-
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing Outliner
-  // variableHandling(): 1") == false);
-
-  // Liao, 2020/9/21
-  // We now decide for a function with 0 variables to pass, we still has a dummy
-  // void** parameter This is necessary to have compatible runtime library 's
-  // function prototype for the outlined function The runtime expects (void*)
-  // (void**) function pointers. enable_classic overrules useParameterWrapper
-  SgBasicBlock *func_body = func->get_definition()->get_body();
   if (!Outliner::enable_classic && Outliner::useParameterWrapper) {
-    SgName var1_name = "__out_argv";
-    // This is needed to support the pass-by-value semantics across different
-    // thread local stacks In this situation, pointer dereferencing cannot be
-    // used to get the value of an inactive parent thread's local variables
-    SgType *ptype = NULL;
-
-    // A dummy integer parameter for Fortran outlined function
-    if (SageInterface::is_Fortran_language()) {
-      var1_name = "out_argv";
-      ptype = buildIntType();
-      SgVariableDeclaration *var_decl =
-          buildVariableDeclaration(var1_name, ptype, NULL, func_body);
-      prependStatement(var_decl, func_body);
-
-    } else {
-      if (Outliner::useStructureWrapper) // OpenMP code triggers this branch
-      {
-        // To have strict type matching in C++ model
-        // between the outlined function and the function pointer passed to the
-        // gomp runtime lib we use void* for the parameter type
-        ptype = buildPointerType(buildVoidType());
-      } else // use array of pointers, regardless of the pass-by-value vs.
-             // pass-by-reference difference
-      { // this is to be compatible with dlopen() runtime's function pointer
-        // type
-        ptype = buildPointerType(buildPointerType(buildVoidType()));
-      }
-    }
     parameter1 = parameter_plan.wrapper_parameter;
-    if (parameter1 == NULL || parameter1->get_name() != var1_name ||
-        parameter1->get_type() != ptype || parameter1->get_parent() != params) {
-      fprintf(stderr, "REX_OUTLINER_INVARIANT[function-signature-use]: wrapper "
-                      "parameter does not match the published plan\n");
-      ROSE_ABORT();
+    ROSE_ASSERT(parameter1 != nullptr && parameter1->get_parent() == params);
+    if (SageInterface::is_Fortran_language()) {
+      SgVariableDeclaration *var_decl = buildVariableDeclaration(
+          parameter1->get_name(), parameter1->get_type(), NULL, body);
+      prependStatement(var_decl, body);
     }
   }
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing Outliner
-  // variableHandling(): 2") == false);
-
-  // --------------------------------------------------
-  // for each parameters passed to the outlined function
-  // They include parameters for
-  // *  regular shared variables and also
-  // *  shared copies for firstprivate and reduction variables
   for (ASTtools::VarSymSet_t::const_reverse_iterator i = syms.rbegin();
        i != syms.rend(); ++i) {
-    // Basic information about the variable to be passed into the outlined
-    // function Variable symbol name
     const SgInitializedName *i_name = (*i)->get_declaration();
     ROSE_ASSERT(i_name);
     const SgVariableSymbol *sym = isSgVariableSymbol(*i);
 
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-    // Outliner variableHandling(): 2.1") == false);
-
-    // SgType* i_type = i_name->get_type ();
-    //    bool readOnly = false;
     bool use_orig_type = false;
-    //    if (readOnlyVars.find(const_cast<SgInitializedName*> (i_name)) !=
-    //    readOnlyVars.end())
-    //      readOnly = true;
     if (pdSyms.find(sym) ==
         pdSyms.end()) // not a variable to use AddressOf, then it should be a
                       // variable using its original type
       use_orig_type = true;
-    // step 1. Create parameters and insert it into the parameter list of the
-    // outlined function.
-    // ----------------------------------------
     SgInitializedName *p_init_name = NULL;
     // Case 1: using a wrapper for all variables
     //   two choices: array of pointers (default)  vs. structure
@@ -3824,9 +3459,6 @@ static void variableHandling(
       }
     }
 
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-    // Outliner variableHandling(): 2.2") == false);
-
     // step 2. Create unpacking/unwrapping statements, also record variables to
     // be replaced
     // ----------------------------------------
@@ -3846,9 +3478,6 @@ static void variableHandling(
     }
     const bool isPointerDeref = pdSyms.find(i_sym) != pdSyms.end();
 
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-    // Outliner variableHandling(): 2.2.5") == false);
-
     if (Outliner::enable_classic)
     // classic methods use parameters directly, no unpacking is needed
     {
@@ -3857,61 +3486,27 @@ static void variableHandling(
       // symbol; relying on later name lookup leaves references bound to a
       // detached source declaration. Pointer parameters use the same exact map
       // and are rewritten through the typed dereference path below.
-      recordSymRemap(*i, p_init_name, args_scope, sym_remap);
-
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-      // Outliner variableHandling(): 2.2.6.0") == false);
-
+      recordSymRemap(*i, p_init_name, func->get_definition(), sym_remap);
     } else { // create unwrapping statements from parameters/ or the array
              // parameter for pointers
-      // if (SageInterface::is_Fortran_language())
-      //   args_scope = NULL; // not sure about Fortran scope
-
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-      // Outliner variableHandling(): 2.2.6.1.1") == false); DQ (7/14/2021):
-      // Adding test before initialization (from any previous iteration where
-      // applicable). if (local_var_decl != NULL)
-      //    {
-      //      ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(local_var_decl,"testing
-      //      Outliner variableHandling(): 2.2.6.1.1a") == false);
-      //    }
-
-      // Not true: even without parameter wrapping, we still need to transfer
-      // the function parameter to a local declaration, which is also called
-      // unpacking must be a case of using parameter wrapping ROSE_ASSERT
-      // (Outliner::useStructureWrapper || Outliner::useParameterWrapper);
       const Outliner::OutlinedLocalTypeTemplateEntry *local_type_entry =
           findLocalTypeTemplateEntry(local_type_template_plan,
                                      i_name->get_type());
       local_var_decl = createUnpackDecl(
           p_init_name, counter, isPointerDeref, i_name, struct_decl, body,
           local_type_entry != NULL ? local_type_entry->defining_parameter_type
-                                   : NULL);
+                                   : NULL,
+          type_bindings);
       ROSE_ASSERT(local_var_decl);
 
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-      // Outliner variableHandling(): 2.2.6.1.2") == false);
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(local_var_decl,"testing
-      // Outliner variableHandling(): 2.2.6.1.2a") == false);
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(body,"testing
-      // Outliner variableHandling(): 2.2.6.1.2b") == false);
-
-      prependStatement(local_var_decl, body);
-
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-      // Outliner variableHandling(): 2.2.6.1.3") == false);
+      if (type_dependency_tail != nullptr)
+        insertStatementAfter(type_dependency_tail, local_var_decl);
+      else
+        prependStatement(local_var_decl, body);
 
       // regular and shared variables used the first local declaration
       recordSymRemap(*i, local_var_decl, args_scope, sym_remap);
-      // transfer the value for firstprivate variables.
-      // TODO
-
-      // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-      // Outliner variableHandling(): 2.2.6.1.9") == false);
     }
-
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-    // Outliner variableHandling(): 2.3") == false);
 
     // step 3. Create and insert companion re-pack statement in the end of the
     // function body
@@ -3963,382 +3558,17 @@ static void variableHandling(
       }
     }
     counter++;
-
-    // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-    // Outliner variableHandling(): 2.9") == false);
   } // end for
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing Outliner
-  // variableHandling(): 3") == false);
-
   // variable substitution
-  remapVarSyms(sym_remap, private_remap, func_body, local_type_template_plan);
-
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing Outliner
-  // variableHandling(): 4") == false);
+  remapVarSyms(sym_remap, private_remap, body, local_type_template_plan,
+               type_bindings);
 }
 
 // same input file: two SgSourceFile nodes are created from it.
 // we build symbol mapping from first to second.
 // This is used to support reset symbols of AST subtree moved from first to
 // second file.
-class SymbolMapOfTwoFiles {
-public:
-  static SgSymbol *requireMappedSymbol(SgScopeStatement *sf1,
-                                       SgScopeStatement *sf2,
-                                       SgSymbol *source_symbol) {
-    return get_inst(sf1, sf2)->mapSymbol(source_symbol);
-  }
-
-private:
-  static std::string
-  requireStableDeclarationKey(SgLocatedNode *declaration,
-                              const std::string &declaration_name,
-                              const SgName &mangled_name, const char *kind) {
-    if (declaration == NULL || kind == NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-key]: declaration=%p "
-              "kind=%s is incomplete\n",
-              static_cast<void *>(declaration), kind != NULL ? kind : "<null>");
-      ROSE_ABORT();
-    }
-
-    Sg_File_Info *start = declaration->get_startOfConstruct();
-    Sg_File_Info *end = declaration->get_endOfConstruct();
-    const bool exactSourceOccurrence =
-        start != NULL && end != NULL && start->get_parent() == declaration &&
-        end->get_parent() == declaration && !start->isShared() &&
-        !end->isShared() && !start->isCompilerGenerated() &&
-        !end->isCompilerGenerated() && !start->isTransformation() &&
-        !end->isTransformation() &&
-        !start->isSourcePositionUnavailableInFrontend() &&
-        !end->isSourcePositionUnavailableInFrontend() &&
-        !start->get_filenameString().empty() &&
-        start->get_filenameString() == end->get_filenameString() &&
-        start->get_line() > 0 && start->get_col() > 0 && end->get_line() > 0 &&
-        end->get_col() > 0;
-    if (exactSourceOccurrence) {
-      std::string sourceIdentity = start->get_filenameString();
-      SgSourceFile *sourceFile =
-          SageInterface::getEnclosingSourceFile(declaration);
-      if (sourceFile != NULL) {
-        std::string primaryInput = sourceFile->get_sourceFileNameWithPath();
-        if (primaryInput.empty())
-          primaryInput = sourceFile->getFileName();
-        const std::string primaryOutput =
-            sourceFile->get_unparse_output_filename();
-        if (!primaryInput.empty() &&
-            (sourceIdentity == primaryInput ||
-             sourceIdentity == sourceFile->getFileName() ||
-             (!primaryOutput.empty() && sourceIdentity == primaryOutput))) {
-          sourceIdentity = primaryInput;
-        }
-      }
-      std::ostringstream key;
-      key << kind << ":source:" << declaration->variantT() << ':'
-          << declaration_name << ':' << sourceIdentity << ':'
-          << start->get_line() << ':' << start->get_col() << ':'
-          << end->get_line() << ':' << end->get_col();
-      return key.str();
-    }
-
-    if (mangled_name.is_null() || mangled_name.getString().empty()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-key]: %s "
-              "declaration=%p has neither an exact source occurrence nor a "
-              "stable semantic mangled identity\n",
-              kind, static_cast<void *>(declaration));
-      ROSE_ABORT();
-    }
-    return std::string(kind) + ":semantic:" + mangled_name.getString();
-  }
-
-  static std::string requireStableSymbolKey(SgSymbol *symbol,
-                                            SgScopeStatement *scope) {
-    SgFunctionSymbol *function_symbol = isSgFunctionSymbol(symbol);
-    SgVariableSymbol *variable_symbol = isSgVariableSymbol(symbol);
-    SgClassSymbol *class_symbol = isSgClassSymbol(symbol);
-    SgLocatedNode *declaration = NULL;
-    std::string declaration_name;
-    SgName mangled_name;
-    const char *kind = NULL;
-    if (function_symbol != NULL && function_symbol->get_declaration() != NULL) {
-      SgFunctionDeclaration *function = function_symbol->get_declaration();
-      declaration = function;
-      declaration_name = function->get_name().getString();
-      mangled_name = function->get_mangled_name();
-      kind = "function";
-    } else if (variable_symbol != NULL &&
-               variable_symbol->get_declaration() != NULL) {
-      SgInitializedName *variable = variable_symbol->get_declaration();
-      declaration = variable;
-      declaration_name = variable->get_name().getString();
-      mangled_name = variable->get_mangled_name();
-      kind = "variable";
-    } else if (class_symbol != NULL &&
-               class_symbol->get_declaration() != NULL) {
-      SgClassDeclaration *canonical = isSgClassDeclaration(
-          class_symbol->get_declaration()->get_firstNondefiningDeclaration());
-      if (canonical == NULL || canonical != class_symbol->get_declaration() ||
-          canonical->get_symbol_from_symbol_table() != class_symbol) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[copied-symbol-key]: class symbol=%p "
-                "declaration=%p scope=%p has no exact canonical basis\n",
-                static_cast<void *>(class_symbol),
-                static_cast<void *>(class_symbol->get_declaration()),
-                static_cast<void *>(scope));
-        ROSE_ABORT();
-      }
-      declaration = canonical;
-      declaration_name = canonical->get_name().getString();
-      mangled_name = canonical->get_mangled_name();
-      kind = "class";
-    } else {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-key]: symbol=%p "
-              "scope=%p is not an exactly declared function, variable, or "
-              "class\n",
-              static_cast<void *>(symbol), static_cast<void *>(scope));
-      ROSE_ABORT();
-    }
-
-    return requireStableDeclarationKey(declaration, declaration_name,
-                                       mangled_name, kind);
-  }
-
-  static SymbolMapOfTwoFiles *get_inst(SgScopeStatement *sf1,
-                                       SgScopeStatement *sf2) {
-    if (sf1 == NULL || sf2 == NULL) {
-      fprintf(stderr, "REX_OUTLINER_INVARIANT[copied-symbol-map]: source or "
-                      "destination scope is null\n");
-      ROSE_ABORT();
-    }
-    const std::pair<SgScopeStatement *, SgScopeStatement *> key(sf1, sf2);
-    std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-             std::unique_ptr<SymbolMapOfTwoFiles>>::const_iterator found =
-        instances.find(key);
-    if (found != instances.end())
-      return found->second.get();
-
-    std::unique_ptr<SymbolMapOfTwoFiles> created(
-        new SymbolMapOfTwoFiles(sf1, sf2));
-    SymbolMapOfTwoFiles *result = created.get();
-    if (!instances.emplace(key, std::move(created)).second) {
-      fprintf(stderr, "REX_OUTLINER_INVARIANT[copied-symbol-map]: source and "
-                      "destination scope pair was published more than once\n");
-      ROSE_ABORT();
-    }
-    return result;
-  }
-
-  std::map<SgSymbol *, SgSymbol *> dict; // symbol from file1 to file 2
-  SgScopeStatement *destination_root;
-
-  static std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-                  std::unique_ptr<SymbolMapOfTwoFiles>>
-      instances;
-  static SgSymbol *requireUniqueDestinationSymbol(SgScopeStatement *root,
-                                                  const std::string &key) {
-    if (isSgGlobal(root) == NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-map]: root=%p/%s is "
-              "not one exact source-file global scope\n",
-              static_cast<void *>(root),
-              root != NULL ? root->class_name().c_str() : "<null>");
-      ROSE_ABORT();
-    }
-    SgSymbol *match = NULL;
-    size_t match_count = 0;
-    const size_t sourceMarker = key.find(":source:");
-    if (sourceMarker != std::string::npos) {
-      SgSymbol *surface_symbol = NULL;
-      size_t surface_count = 0;
-      RoseAst surface_ast(root);
-      for (RoseAst::iterator node = surface_ast.begin();
-           node != surface_ast.end(); ++node) {
-        SgLocatedNode *candidate = NULL;
-        std::string candidate_name;
-        SgName candidate_mangled;
-        const char *candidate_kind = NULL;
-        if (SgFunctionDeclaration *function = isSgFunctionDeclaration(*node)) {
-          candidate = function;
-          candidate_name = function->get_name().getString();
-          candidate_mangled = function->get_mangled_name();
-          candidate_kind = "function";
-        } else if (SgInitializedName *variable = isSgInitializedName(*node)) {
-          candidate = variable;
-          candidate_name = variable->get_name().getString();
-          candidate_mangled = variable->get_mangled_name();
-          candidate_kind = "variable";
-        } else if (SgClassDeclaration *class_declaration =
-                       isSgClassDeclaration(*node)) {
-          candidate = class_declaration;
-          candidate_name = class_declaration->get_name().getString();
-          candidate_mangled = class_declaration->get_mangled_name();
-          candidate_kind = "class";
-        }
-        if (candidate == NULL ||
-            requireStableDeclarationKey(candidate, candidate_name,
-                                        candidate_mangled,
-                                        candidate_kind) != key) {
-          continue;
-        }
-
-        SgSymbol *candidate_symbol = NULL;
-        if (SgFunctionDeclaration *function =
-                isSgFunctionDeclaration(candidate)) {
-          candidate_symbol = function->get_symbol_from_symbol_table();
-        } else if (SgInitializedName *variable =
-                       isSgInitializedName(candidate)) {
-          candidate_symbol = variable->get_symbol_from_symbol_table();
-        } else if (SgClassDeclaration *class_declaration =
-                       isSgClassDeclaration(candidate)) {
-          candidate_symbol = class_declaration->get_symbol_from_symbol_table();
-        }
-        if (candidate_symbol == NULL) {
-          fprintf(stderr,
-                  "REX_OUTLINER_INVARIANT[copied-symbol-identity]: "
-                  "destination source declaration=%p key='%s' has no exact "
-                  "published semantic symbol\n",
-                  static_cast<void *>(candidate), key.c_str());
-          ROSE_ABORT();
-        }
-        ++surface_count;
-        if (surface_symbol == NULL)
-          surface_symbol = candidate_symbol;
-        else if (surface_symbol != candidate_symbol) {
-          fprintf(stderr,
-                  "REX_OUTLINER_INVARIANT[copied-symbol-identity]: "
-                  "destination key='%s' is published by competing symbols=%p "
-                  "and %p\n",
-                  key.c_str(), static_cast<void *>(surface_symbol),
-                  static_cast<void *>(candidate_symbol));
-          ROSE_ABORT();
-        }
-      }
-      if (surface_count != 1 || surface_symbol == NULL) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[copied-symbol-identity]: root=%p "
-                "key='%s' has %zu exact destination source surfaces and "
-                "symbol=%p\n",
-                static_cast<void *>(root), key.c_str(), surface_count,
-                static_cast<void *>(surface_symbol));
-        ROSE_ABORT();
-      }
-      return surface_symbol;
-    }
-
-    RoseAst ast(root);
-    for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
-      SgScopeStatement *scope = isSgScopeStatement(*node);
-      if (scope == NULL)
-        continue;
-      SgSymbolTable *symbol_table = scope->get_symbol_table();
-      if (symbol_table == NULL || symbol_table->get_parent() != scope) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[symbol-table-owner]: scope=%p "
-                "type=%s table=%p table-parent=%p\n",
-                static_cast<void *>(scope), scope->class_name().c_str(),
-                static_cast<void *>(symbol_table),
-                static_cast<void *>(
-                    symbol_table != NULL ? symbol_table->get_parent() : NULL));
-        ROSE_ABORT();
-      }
-
-      rose_hash_multimap *entries = symbol_table->get_table();
-      if (entries == NULL) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[symbol-table-owner]: scope=%p "
-                "type=%s has no symbol entries\n",
-                static_cast<void *>(scope), scope->class_name().c_str());
-        ROSE_ABORT();
-      }
-      for (rose_hash_multimap::iterator entry = entries->begin();
-           entry != entries->end(); ++entry) {
-        SgSymbol *symbol = entry->second;
-        if (isSgFunctionSymbol(symbol) == NULL &&
-            isSgVariableSymbol(symbol) == NULL &&
-            isSgClassSymbol(symbol) == NULL) {
-          continue;
-        }
-        const std::string candidateKey = requireStableSymbolKey(symbol, scope);
-        if (candidateKey != key)
-          continue;
-        ++match_count;
-        if (match == NULL)
-          match = symbol;
-      }
-    }
-    // Parameters and other declaration-family surfaces can legitimately
-    // repeat a mangled name in an independently parsed file. They must already
-    // have been remapped by variable handling and are never looked up here.
-    // For a symbol that remains tied to the source translation unit, however,
-    // the complete kind+mangled identity must select exactly one destination
-    // declaration. Resolve only that requested identity so unrelated repeated
-    // symbols cannot either mask or reject a valid cross-file mapping.
-    if (match_count != 1) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-identity]: root=%p "
-              "key='%s' matches=%zu first=%p\n",
-              static_cast<void *>(root), key.c_str(), match_count,
-              static_cast<void *>(match));
-      ROSE_ABORT();
-    }
-    return match;
-  }
-
-  SymbolMapOfTwoFiles(SgScopeStatement *sf1, SgScopeStatement *sf2)
-      : destination_root(sf2) {
-    if (sf1 == sf2) {
-      fprintf(stderr, "REX_OUTLINER_INVARIANT[copied-symbol-map]: source and "
-                      "destination scopes are identical\n");
-      ROSE_ABORT();
-    }
-  }
-
-  SgSymbol *mapSymbol(SgSymbol *source_symbol) {
-    if (source_symbol == NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-map]: source symbol is "
-              "null\n");
-      ROSE_ABORT();
-    }
-    const std::map<SgSymbol *, SgSymbol *>::const_iterator cached =
-        dict.find(source_symbol);
-    if (cached != dict.end())
-      return cached->second;
-
-    const std::string key =
-        requireStableSymbolKey(source_symbol, source_symbol->get_scope());
-    SgSymbol *destination_symbol =
-        requireUniqueDestinationSymbol(destination_root, key);
-    if ((isSgFunctionSymbol(source_symbol) != NULL) !=
-            (isSgFunctionSymbol(destination_symbol) != NULL) ||
-        (isSgVariableSymbol(source_symbol) != NULL) !=
-            (isSgVariableSymbol(destination_symbol) != NULL) ||
-        (isSgClassSymbol(source_symbol) != NULL) !=
-            (isSgClassSymbol(destination_symbol) != NULL)) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-kind]: source-symbol=%p "
-              "destination-symbol=%p key='%s'\n",
-              static_cast<void *>(source_symbol),
-              static_cast<void *>(destination_symbol), key.c_str());
-      ROSE_ABORT();
-    }
-    if (!dict.emplace(source_symbol, destination_symbol).second) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-symbol-map]: source-symbol=%p "
-              "key='%s' was mapped more than once\n",
-              static_cast<void *>(source_symbol), key.c_str());
-      ROSE_ABORT();
-    }
-    return destination_symbol;
-  }
-}; // end SymbolMapOfTwoFiles
-
-std::map<std::pair<SgScopeStatement *, SgScopeStatement *>,
-         std::unique_ptr<SymbolMapOfTwoFiles>>
-    SymbolMapOfTwoFiles::instances;
 
 class MovedBodyClassTypeEdgeCollector : public SimpleReferenceToPointerHandler {
 public:
@@ -4350,116 +3580,18 @@ public:
   std::set<SgClassType *> class_types;
 };
 
-class MovedBodyTypeEdgeRewriter : public SimpleReferenceToPointerHandler {
+class OutliningTypeEdgeProjector : public SimpleReferenceToPointerHandler {
 public:
-  explicit MovedBodyTypeEdgeRewriter(
-      const std::map<SgNode *, SgNode *> &replacement_map,
-      SgScopeStatement *target_scope)
-      : replacements(replacement_map), target_scope(target_scope) {}
+  explicit OutliningTypeEdgeProjector(SgCopyHelp &type_bindings)
+      : bindings(type_bindings) {}
 
   void operator()(SgNode *&node, const SgName &, bool) override {
-    const std::map<SgNode *, SgNode *>::const_iterator replacement =
-        replacements.find(node);
-    if (replacement != replacements.end()) {
-      node = replacement->second;
-      return;
-    }
-
-    SgType *source_type = isSgType(node);
-    SgType *named_core = source_type;
-    while (named_core != NULL) {
-      SgType *base = NULL;
-      if (SgPointerType *pointer = isSgPointerType(named_core))
-        base = pointer->get_base_type();
-      else if (SgReferenceType *reference = isSgReferenceType(named_core))
-        base = reference->get_base_type();
-      else if (SgRvalueReferenceType *reference =
-                   isSgRvalueReferenceType(named_core))
-        base = reference->get_base_type();
-      else if (SgModifierType *modifier = isSgModifierType(named_core))
-        base = modifier->get_base_type();
-      else if (SgArrayType *array = isSgArrayType(named_core))
-        base = array->get_base_type();
-      if (base == NULL)
-        break;
-      named_core = base;
-    }
-    if (source_type == NULL || named_core == NULL ||
-        replacements.find(named_core) == replacements.end())
-      return;
-
-    SgClassType *target_named_core =
-        isSgClassType(replacements.find(named_core)->second);
-    SgClassDeclaration *target_declaration =
-        target_named_core != NULL
-            ? isSgClassDeclaration(target_named_core->get_declaration())
-            : NULL;
-    SgScopeStatement *exact_target_scope =
-        target_declaration != NULL ? target_declaration->get_scope() : NULL;
-    if (target_named_core == NULL || target_declaration == NULL ||
-        exact_target_scope == NULL ||
-        SageInterface::getGlobalScope(target_declaration) != target_scope) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[moved-class-wrapper-owner]: "
-              "source=%p/%s core=%p target-core=%p declaration=%p scope=%p "
-              "global=%p expected=%p has no exact target declaration owner\n",
-              static_cast<void *>(source_type),
-              source_type->class_name().c_str(),
-              static_cast<void *>(named_core),
-              static_cast<void *>(target_named_core),
-              static_cast<void *>(target_declaration),
-              static_cast<void *>(exact_target_scope),
-              static_cast<void *>(
-                  target_declaration != NULL
-                      ? SageInterface::getGlobalScope(target_declaration)
-                      : NULL),
-              static_cast<void *>(target_scope));
-      ROSE_ABORT();
-    }
-
-    SgType *target_type =
-        SageBuilder::getTargetFileType(source_type, exact_target_scope);
-    SgType *rebuilt_target_core = target_type;
-    while (rebuilt_target_core != NULL) {
-      SgType *base = NULL;
-      if (SgPointerType *pointer = isSgPointerType(rebuilt_target_core))
-        base = pointer->get_base_type();
-      else if (SgReferenceType *reference =
-                   isSgReferenceType(rebuilt_target_core))
-        base = reference->get_base_type();
-      else if (SgRvalueReferenceType *reference =
-                   isSgRvalueReferenceType(rebuilt_target_core))
-        base = reference->get_base_type();
-      else if (SgModifierType *modifier = isSgModifierType(rebuilt_target_core))
-        base = modifier->get_base_type();
-      else if (SgArrayType *array = isSgArrayType(rebuilt_target_core))
-        base = array->get_base_type();
-      if (base == NULL)
-        break;
-      rebuilt_target_core = base;
-    }
-    if (target_type == NULL || target_type == source_type ||
-        target_type->variantT() != source_type->variantT() ||
-        rebuilt_target_core != target_named_core) {
-      fprintf(
-          stderr,
-          "REX_OUTLINER_INVARIANT[moved-class-wrapper-type]: "
-          "source=%p/%s core=%p target=%p/%s target-core=%p expected-core=%p "
-          "scope=%p has no exact target-file identity\n",
-          static_cast<void *>(source_type), source_type->class_name().c_str(),
-          static_cast<void *>(named_core), static_cast<void *>(target_type),
-          target_type != NULL ? target_type->class_name().c_str() : "<null>",
-          static_cast<void *>(rebuilt_target_core),
-          static_cast<void *>(target_named_core),
-          static_cast<void *>(exact_target_scope));
-      ROSE_ABORT();
-    }
-    node = target_type;
+    if (SgType *type = isSgType(node))
+      node = SageInterface::materializeTypeWithCopyMap(type, bindings, false);
   }
 
 private:
-  const std::map<SgNode *, SgNode *> &replacements;
-  SgScopeStatement *target_scope;
+  SgCopyHelp &bindings;
 };
 
 class StaleMovedBodyTypeEdgeDetector : public SimpleReferenceToPointerHandler {
@@ -4517,9 +3649,9 @@ void remapMovedBodyClassTypeIdentities(SgGlobal *source_global,
 
     SgClassSymbol *source_symbol =
         isSgClassSymbol(source_canonical->get_symbol_from_symbol_table());
-    SgClassSymbol *destination_symbol =
-        isSgClassSymbol(SymbolMapOfTwoFiles::requireMappedSymbol(
-            source_global, destination_global, source_symbol));
+    SgClassSymbol *destination_symbol = isSgClassSymbol(
+        SageBuilder::findAssociatedSymbolInTargetAST(source_canonical,
+                                                    destination_global));
     SgClassDeclaration *destination_canonical =
         destination_symbol != NULL ? destination_symbol->get_declaration()
                                    : NULL;
@@ -4628,11 +3760,20 @@ void remapMovedBodyClassTypeIdentities(SgGlobal *source_global,
     }
   }
 
-  MovedBodyTypeEdgeRewriter rewriter(replacements, destination_global);
+  SgTreeCopy bindings;
+  for (const auto &mapping : replacements) {
+    auto *source = isSgType(mapping.first);
+    auto *target = isSgType(mapping.second);
+    ROSE_ASSERT(source != nullptr && target != nullptr && source != target &&
+                source->variantT() == target->variantT());
+    bindings.insertCopiedNodePair(source, target);
+  }
+  OutliningTypeEdgeProjector rewriter(bindings);
   RoseAst rewritten_body_ast(moved_body);
   for (RoseAst::iterator node = rewritten_body_ast.begin();
        node != rewritten_body_ast.end(); ++node)
-    (*node)->processDataMemberReferenceToPointers(&rewriter);
+    if (isSgType(*node) == nullptr)
+      (*node)->processDataMemberReferenceToPointers(&rewriter);
 
   StaleMovedBodyTypeEdgeDetector stale_detector(replacements);
   RoseAst validated_body_ast(moved_body);
@@ -4650,8 +3791,6 @@ void remapMovedBodyClassTypeIdentities(SgGlobal *source_global,
 
 // =====================================================================
 
-// DQ (2/25/2009): Modified function interface to pass "SgBasicBlock*" as not
-// const parameter.
 //! Create a function named 'func_name_str', with a parameter list from 'syms'
 SgFunctionDeclaration *Outliner::generateFunction(
     SgBasicBlock *s,             // block to be outlined
@@ -4662,29 +3801,54 @@ SgFunctionDeclaration *Outliner::generateFunction(
         &pdSyms, // variables to be passed using its address. using pointer
                  // dereferencing (AddressOf() for pass-by-reference), most use
                  // for struct wrapper
-                 //                          const std::set<SgInitializedName*>&
-    //                          readOnlyVars, // optional readOnly variables to
-    //                          guide classic outlining's parameter handling and
-    //                          variable cloning's write-back generation const
-    //                          std::set< SgInitializedName *>& liveOuts, //
-    //                          optional live out variables, used to optimize
-    //                          variable cloning
     const std::set<SgInitializedName *>
         &restoreVars, // optional information about variables to be restored
                       // after variable clones finish computation
     SgClassDeclaration
         *struct_decl, // an optional wrapper structure for parameters
     SgScopeStatement *scope,
-    OutlinedLocalTypeTemplatePlan &local_type_template_plan) {
+    OutlinedLocalTypeTemplatePlan &local_type_template_plan,
+    OutlinedFunctionParameterBindings &parameter_bindings,
+    SgFunctionParameterList *leading_parameters) {
+  ROSE_ASSERT(parameter_bindings.empty());
   ROSE_ASSERT(s && scope);
   ROSE_ASSERT(isValidOutliningScope(scope));
 
-  // step 2. Create function skeleton, 'func'.
-  //  -----------------------------------------
+
+  std::vector<SgFunctionSymbol *> fortran_result_functions;
+  if (SageInterface::is_Fortran_language()) {
+    std::set<SgFunctionDeclaration *> seen;
+    for (SgNode *node : NodeQuery::querySubTree(s, V_SgFunctionRefExp)) {
+      auto *reference = isSgFunctionRefExp(node);
+      ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+      auto *declaration = reference->get_symbol()->get_declaration();
+      ROSE_ASSERT(declaration != nullptr);
+      auto *canonical = isSgFunctionDeclaration(
+          declaration->get_firstNondefiningDeclaration());
+      ROSE_ASSERT(canonical != nullptr);
+      if (isSgRenameSymbol(reference->get_fortran_source_visible_symbol()))
+        continue;
+      auto *definition =
+          isSgFunctionDeclaration(canonical->get_definingDeclaration());
+      if (definition == nullptr || definition->get_definition() == nullptr)
+        continue;
+      auto *symbol =
+          isSgFunctionSymbol(canonical->get_symbol_from_symbol_table());
+      ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == canonical);
+      auto *type = isSgFunctionType(symbol->get_type());
+      ROSE_ASSERT(type != nullptr && type->get_return_type() != nullptr);
+      if (!isSgTypeVoid(type->get_return_type()) &&
+          seen.insert(canonical).second)
+        fortran_result_functions.push_back(symbol);
+    }
+  }
 
   SgName func_name(func_name_str);
+  const SgInitializedNamePtrList leading_arguments =
+      leading_parameters != nullptr ? leading_parameters->get_args()
+                                    : SgInitializedNamePtrList{};
   OutlinedFunctionParameterPlan parameter_plan =
-      buildOutlinedFunctionParameterPlan(syms, pdSyms);
+      buildOutlinedFunctionParameterPlan(syms, pdSyms, leading_parameters);
   SgFunctionParameterList *parameterList = parameter_plan.definition_parameters;
 
   SgFunctionDeclaration *enclosing_func = getEnclosingFunctionDeclaration(s);
@@ -4709,93 +3873,16 @@ SgFunctionDeclaration *Outliner::generateFunction(
   SgFunctionDeclaration *func = NULL;
   if (!template_params.empty() && !is_template_instantiation) {
     func = createTemplateFuncSkeleton(func_name, SgTypeVoid::createType(),
-                                      parameterList, scope, template_params);
+                                      parameter_plan, scope, template_params);
   } else {
     func = createFuncSkeleton(func_name, SgTypeVoid::createType(),
-                              parameterList, scope);
+                              parameter_plan, scope);
   }
   ROSE_ASSERT(func);
   bindLocalTypeTemplatePlanToDefinition(func, local_type_template_plan);
-  if (parameter_plan.syntax_parameters == NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[function-signature-syntax]: outlined "
-            "function has no exact source parameter surface\n");
-    ROSE_ABORT();
-  }
   if (parameter_plan.has_distinct_source_parameters) {
-    if (parameter_plan.syntax_parameters == parameterList ||
-        parameter_plan.syntax_parameters->get_parent() != NULL ||
-        parameter_plan.syntax_parameters->get_args().size() !=
-            parameterList->get_args().size() ||
-        (func->get_parameterList_syntax() != NULL &&
-         func->get_parameterList_syntax() != parameterList)) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[function-signature-syntax]: outlined "
-              "function has no exact detached source parameter surface\n");
-      ROSE_ABORT();
-    }
-    func->set_parameterList_syntax(parameter_plan.syntax_parameters);
-    parameter_plan.syntax_parameters->set_parent(func);
-    parameter_plan.syntax_parameters->set_scope(func->get_scope());
-
-    SgFunctionType *semantic_type = func->get_type();
-    SgPartialFunctionType *partial =
-        semantic_type != NULL
-            ? new SgPartialFunctionType(semantic_type->get_return_type(),
-                                        semantic_type->get_has_ellipses())
-            : NULL;
-    SgFunctionParameterTypeList *partial_arguments =
-        partial != NULL ? partial->get_argument_list() : NULL;
-    if (semantic_type == NULL || partial == NULL || partial_arguments == NULL ||
-        partial_arguments->get_parent() != partial) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[function-signature-syntax]: outlined "
-              "function cannot construct one declaration-local syntax type\n");
-      ROSE_ABORT();
-    }
-    for (SgInitializedName *syntax_parameter :
-         parameter_plan.syntax_parameters->get_args()) {
-      if (syntax_parameter == NULL || syntax_parameter->get_type() == NULL ||
-          syntax_parameter->get_parent() != parameter_plan.syntax_parameters) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[function-signature-syntax]: source "
-                "parameter is null, untyped, or structurally detached\n");
-        ROSE_ABORT();
-      }
-      partial_arguments->append_argument(syntax_parameter->get_type());
-    }
-    SgFunctionType *syntax_type = SgFunctionType::createType(partial);
-    partial->set_argument_list(NULL);
-    partial_arguments->set_parent(NULL);
-    SageInterface::deleteAST(
-        partial_arguments,
-        SageInterface::DeleteAstMode::kSkipExternalReferences);
-    delete partial;
-    if (syntax_type == NULL || syntax_type == semantic_type ||
-        syntax_type->get_argument_list() == NULL ||
-        syntax_type->get_argument_list()->get_arguments().size() !=
-            parameter_plan.syntax_parameters->get_args().size()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[function-signature-syntax]: source "
-              "parameter surface did not produce one distinct syntax type\n");
-      ROSE_ABORT();
-    }
-    syntax_type->set_parent(func);
-    func->set_type_syntax(syntax_type);
-    func->set_type_syntax_is_available(true);
-    if (func->get_parameterList_syntax() != parameter_plan.syntax_parameters ||
-        parameter_plan.syntax_parameters->get_parent() != func ||
-        parameter_plan.syntax_parameters->get_scope() != func->get_scope() ||
-        func->get_type_syntax() != syntax_type ||
-        !func->get_type_syntax_is_available() ||
-        syntax_type->get_parent() != func) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[function-signature-syntax]: outlined "
-              "function rejected its exact source signature surface\n");
-      ROSE_ABORT();
-    }
-  } else if (parameter_plan.syntax_parameters != parameterList) {
-    ROSE_ABORT();
+    ROSE_ASSERT(func->get_parameterList_syntax() ==
+                parameter_plan.syntax_parameters);
   }
   validateOutlinedFunctionSignature(func, parameterList);
 
@@ -4805,35 +3892,50 @@ SgFunctionDeclaration *Outliner::generateFunction(
     func->get_functionModifier().setInline();
   }
 
-  // Liao, 4/15/2009 , enforce C-bindings  for C++ outlined code
-  // enable C code to call this outlined function
-  // Only apply to C++ , pure C has trouble in recognizing extern "C"
-  // Another way is to attach the function with preprocessing info:
-  // #if __cplusplus
-  // extern "C"
-  // #endif
-  // We don't choose it since the language linkage information is not explicit
-  // in AST if (!SageInterface::is_Fortran_language())
   bool is_template_func = (isSgTemplateFunctionDeclaration(func) != NULL ||
                            isSgTemplateMemberFunctionDeclaration(func) != NULL);
   if (!is_template_func &&
       (SageInterface::is_Cxx_language() || is_mixed_C_and_Cxx_language() ||
        is_mixed_Fortran_and_Cxx_language() ||
        is_mixed_Fortran_and_C_and_Cxx_language())) {
-    // Make function 'extern "C"'
     func->get_declarationModifier().get_storageModifier().setExtern();
     func->set_linkage("C");
   }
 
-  // step 3. Create the function body
-  //  -----------------------------------------
-  //  Generate the function body by deep-copying 's'.
   SgBasicBlock *func_body = func->get_definition()->get_body();
   ROSE_ASSERT(func_body != NULL);
 
-  // This does a copy of the statements in "s" to the function body of the
-  // outlined function.
   ROSE_ASSERT(func_body->get_statements().empty() == true);
+  SgTreeCopy type_bindings;
+  prepareLocalTypedefAliases(func, s, syms, type_bindings);
+  if (SageInterface::is_Fortran_language()) {
+    publishFortranProcedureDependencies(s, func_body);
+    for (auto *parameter : leading_arguments) {
+      auto *declaration = buildVariableDeclaration(
+          parameter->get_name(), parameter->get_type(), nullptr, func_body);
+      appendStatement(declaration, func_body);
+    }
+  }
+  for (SgFunctionSymbol *symbol : fortran_result_functions) {
+    const SgName &name = symbol->get_name();
+    ROSE_ASSERT(s->lookup_variable_symbol(name) == nullptr);
+    ROSE_ASSERT(func->get_definition()->lookup_variable_symbol(name) ==
+                nullptr);
+    auto *declaration = buildVariableDeclaration(
+        name, isSgFunctionType(symbol->get_type())->get_return_type(), nullptr,
+        func_body);
+    ROSE_ASSERT(declaration != nullptr);
+    declaration->get_declarationModifier().get_storageModifier().setExtern();
+    appendStatement(declaration, func_body);
+  }
+  SgStatement *type_dependency_tail = func_body->get_statements().empty()
+                                          ? nullptr
+                                          : func_body->get_statements().back();
+  OutliningTypeEdgeProjector bind_body_types(type_bindings);
+  RoseAst source_body(s);
+  for (SgNode *node : source_body)
+    if (isSgType(node) == nullptr)
+      node->processDataMemberReferenceToPointers(&bind_body_types);
   const SgStatementPtrList moved_statements = s->get_statements();
   AttachedPreprocessingInfoType moved_inside_preprocessing;
   SageInterface::cutPreprocessingInfo(s, PreprocessingInfo::inside,
@@ -4930,27 +4032,18 @@ SgFunctionDeclaration *Outliner::generateFunction(
                                         moved_inside_preprocessing);
   preserveMovedNamespaceFunctionBindings(func_body);
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 2") == false);
-
   SgGlobal *copied_source_global = NULL;
   SgGlobal *copied_destination_global = NULL;
-  if (Outliner::useNewFile) {
-    SgSourceFile *target_source_file = saved_source_file_for_dynamic_library;
-    if (target_source_file == NULL) {
-      target_source_file = SageInterface::getEnclosingSourceFile(scope, true);
-    }
-    if (target_source_file == NULL) {
-      target_source_file =
-          SageInterface::getEnclosingSourceFile(func_body, true);
-    }
+  if (SageInterface::getEnclosingSourceFile(scope) !=
+      SageInterface::getEnclosingSourceFile(s)) {
+    SgSourceFile *target_source_file =
+        SageInterface::getEnclosingSourceFile(scope);
     ROSE_ASSERT(target_source_file != NULL);
-    string output_filename = target_source_file->get_unparse_output_filename();
-
-    Sg_File_Info::addFilenameToMap(output_filename);
-    int source_file_physical_file_id =
-        Sg_File_Info::getIDFromFilename(output_filename);
-    ROSE_ASSERT(source_file_physical_file_id >= 0);
+    ROSE_ASSERT(SageInterface::getEnclosingSourceFile(func_body) ==
+                target_source_file);
+    ASSERT_not_null(target_source_file->get_file_info());
+    ROSE_ASSERT(target_source_file->get_file_info()->get_physical_file_id() >=
+                0);
     if (Outliner::copy_origFile) {
       copied_destination_global = isSgGlobal(scope);
       copied_source_global =
@@ -4965,238 +4058,48 @@ SgFunctionDeclaration *Outliner::generateFunction(
     }
   }
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 5") == false);
-
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 6") == false);
-
-  // step 4: variable handling, including:
-  //  -----------------------------------------
-  //    consume the parameters finalized before declaration construction
-  //    add statements to unwrap the parameters if necessary
-  //    add repacking statements if necessary
-  //    replace variables to access to parameters, directly or indirectly
-  // variableHandling(syms, pdSyms, readOnlyVars, liveOuts, struct_decl, func);
   variableHandling(syms, pdSyms, restoreVars, struct_decl, parameter_plan,
-                   local_type_template_plan, func);
+                   local_type_template_plan, type_bindings,
+                   type_dependency_tail, func);
   ROSE_ASSERT(func != NULL);
   validateOutlinedFunctionSignature(func, parameterList);
 
   if (SageInterface::is_Fortran_language()) {
-    publishMovedFortranProcedureDependencies(func_body);
     for (SgNode *node :
          NodeQuery::querySubTree(func_body, V_SgFunctionRefExp)) {
       SgFunctionRefExp *reference = isSgFunctionRefExp(node);
-      SgFunctionSymbol *semantic =
-          reference != NULL ? reference->get_symbol() : NULL;
-      SgFunctionSymbol *moved_semantic = semantic;
-      SgFunctionDeclaration *moved_declaration =
-          semantic != NULL ? semantic->get_declaration() : NULL;
-      SgFunctionDeclaration *canonical_declaration =
-          moved_declaration != NULL
-              ? isSgFunctionDeclaration(
-                    moved_declaration->get_firstNondefiningDeclaration())
-              : NULL;
-      SgScopeStatement *canonical_scope =
-          canonical_declaration != NULL ? canonical_declaration->get_scope()
-                                        : NULL;
-      SgSymbolTable *canonical_table =
-          canonical_scope != NULL ? canonical_scope->get_symbol_table() : NULL;
-      SgFunctionSymbol *canonical_symbol =
-          canonical_scope != NULL && canonical_declaration != NULL
-              ? isSgFunctionSymbol(
-                    canonical_scope->find_symbol_from_declaration(
-                        canonical_declaration))
-              : NULL;
-      if (reference == NULL || moved_semantic == NULL ||
-          moved_declaration == NULL || canonical_declaration == NULL ||
-          canonical_scope == NULL || canonical_table == NULL ||
-          canonical_symbol == NULL ||
-          canonical_symbol->get_declaration() != canonical_declaration ||
-          canonical_declaration->get_scope() != canonical_scope ||
-          canonical_symbol->get_parent() != canonical_table ||
-          !canonical_table->exists(canonical_symbol)) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[moved-function-semantic-binding]: "
-                "reference=%p moved-symbol=%p declaration=%p canonical=%p "
-                "canonical-scope=%p table=%p canonical-symbol=%p has no "
-                "exact declaration-owned target after the move\n",
-                static_cast<void *>(reference),
-                static_cast<void *>(moved_semantic),
-                static_cast<void *>(moved_declaration),
-                static_cast<void *>(canonical_declaration),
-                static_cast<void *>(canonical_scope),
-                static_cast<void *>(canonical_table),
-                static_cast<void *>(canonical_symbol));
-        ROSE_ABORT();
-      }
-      if (moved_semantic != canonical_symbol) {
-        reference->set_symbol(canonical_symbol);
-        semantic = canonical_symbol;
-      }
-      SgFunctionType *type =
-          semantic != NULL ? isSgFunctionType(semantic->get_type()) : NULL;
-      SgScopeStatement *use_scope =
-          reference != NULL ? SageInterface::getEnclosingScope(reference)
-                            : NULL;
-      SgFunctionSymbol *exact_type_visible =
-          type != NULL && use_scope != NULL
-              ? SageInterface::lookupFunctionSymbolInParentScopes(
-                    semantic->get_name(), type, use_scope)
-              : NULL;
+      ASSERT_not_null(reference);
+      SgFunctionSymbol *semantic = reference->get_symbol();
       SgFunctionSymbol *source_visible =
-          reference != NULL ? reference->get_fortran_source_visible_symbol()
-                            : NULL;
-      if (source_visible == moved_semantic) {
-        source_visible = canonical_symbol;
-      }
-      const auto old_binding_kind =
-          reference != NULL
-              ? reference->get_fortran_source_visible_binding_kind()
-              : SgFunctionRefExp::
-                    e_fortran_source_visible_binding_not_applicable;
+          reference->get_fortran_source_visible_symbol();
+      const auto kind = reference->get_fortran_source_visible_binding_kind();
       SgScopeStatement *source_scope =
-          source_visible != NULL ? source_visible->get_scope() : NULL;
+          source_visible != nullptr ? source_visible->get_scope() : nullptr;
       SgSymbolTable *source_table =
-          source_scope != NULL ? source_scope->get_symbol_table() : NULL;
-      SgStatement *use_statement =
-          reference != NULL ? SageInterface::getEnclosingStatement(reference)
-                            : NULL;
-      const bool exact_intrinsic_shadow =
-          old_binding_kind ==
-              SgFunctionRefExp::
-                  e_fortran_source_visible_binding_intrinsic_shadow &&
-          semantic != NULL && source_visible != NULL &&
-          source_visible != semantic &&
-          source_visible->get_name() == semantic->get_name() &&
-          source_scope != NULL && source_table != NULL &&
-          source_visible->get_parent() == source_table &&
-          source_table->exists(source_visible) && use_statement != NULL &&
-          (source_scope == use_scope ||
-           SageInterface::isAncestor(source_scope, use_statement));
+          source_scope != nullptr ? source_scope->get_symbol_table() : nullptr;
       const bool semantic_publication =
-          isExactFortranSemanticProcedurePublication(semantic);
-
-      auto new_binding_kind =
-          SgFunctionRefExp::e_fortran_source_visible_binding_not_applicable;
-      if (exact_intrinsic_shadow) {
-        new_binding_kind =
-            SgFunctionRefExp::e_fortran_source_visible_binding_intrinsic_shadow;
-      } else if (exact_type_visible != NULL) {
-        source_visible = exact_type_visible;
-        new_binding_kind =
-            SgFunctionRefExp::e_fortran_source_visible_binding_exact_typed;
-      } else if (semantic_publication) {
-        source_visible = semantic;
-        new_binding_kind = SgFunctionRefExp::
-            e_fortran_source_visible_binding_semantic_publication;
-      }
-      SgFunctionDeclaration *source_declaration =
-          source_visible != NULL ? source_visible->get_declaration() : NULL;
-      source_scope =
-          source_visible != NULL ? source_visible->get_scope() : NULL;
-      source_table =
-          source_scope != NULL ? source_scope->get_symbol_table() : NULL;
-      if (reference == NULL || semantic == NULL || type == NULL ||
-          use_scope == NULL || source_visible == NULL ||
-          source_declaration == NULL ||
-          new_binding_kind ==
-              SgFunctionRefExp::
-                  e_fortran_source_visible_binding_not_applicable ||
-          source_visible->get_name() != semantic->get_name() ||
-          source_table == NULL ||
-          source_visible->get_parent() != source_table ||
-          !source_table->exists(source_visible)) {
-        SgProcedureHeaderStatement *source_procedure =
-            isSgProcedureHeaderStatement(source_declaration);
-        SgAuxiliaryDeclarationList *source_owner =
-            source_declaration != NULL
-                ? isSgAuxiliaryDeclarationList(source_declaration->get_parent())
-                : NULL;
-        Sg_File_Info *source_info = source_declaration != NULL
-                                        ? source_declaration->get_file_info()
-                                        : NULL;
-        const SgDeclarationStatementPtrList *source_declarations =
-            source_owner != NULL ? &source_owner->get_declarations() : NULL;
-        fprintf(
-            stderr,
-            "REX_OUTLINER_INVARIANT[moved-function-source-binding]: "
-            "reference=%p semantic=%p type=%p use-scope=%p "
-            "source-visible=%p declaration=%p source-scope=%p "
-            "source-table=%p old-kind=%d exact-type-visible=%p "
-            "semantic-publication=%d declaration-kind=%s "
-            "declaration-parent=%p/%s source-form=%d has no exact "
-            "post-move Fortran source binding; owner-parent=%p "
-            "scope-auxiliary=%p declaration-scope=%p canonical=%p "
-            "compiler-generated=%d output=%d owner-count=%zu "
-            "symbol-parent=%p table-exists=%d declaration-symbol=%p\n",
-            static_cast<void *>(reference), static_cast<void *>(semantic),
-            static_cast<void *>(type), static_cast<void *>(use_scope),
-            static_cast<void *>(source_visible),
-            static_cast<void *>(source_declaration),
-            static_cast<void *>(source_scope),
-            static_cast<void *>(source_table),
-            static_cast<int>(old_binding_kind),
-            static_cast<void *>(exact_type_visible),
-            semantic_publication ? 1 : 0,
-            source_declaration != NULL
-                ? source_declaration->class_name().c_str()
-                : "<null>",
-            static_cast<void *>(source_declaration != NULL
-                                    ? source_declaration->get_parent()
-                                    : NULL),
-            source_declaration != NULL &&
-                    source_declaration->get_parent() != NULL
-                ? source_declaration->get_parent()->class_name().c_str()
-                : "<null>",
-            source_declaration != NULL &&
-                    isSgProcedureHeaderStatement(source_declaration) != NULL
-                ? static_cast<int>(
-                      isSgProcedureHeaderStatement(source_declaration)
-                          ->get_fortran_procedure_source_form())
-                : -1,
-            static_cast<void *>(
-                source_owner != NULL ? source_owner->get_parent() : NULL),
-            static_cast<void *>(source_scope != NULL
-                                    ? source_scope->get_auxiliary_declarations()
-                                    : NULL),
-            static_cast<void *>(source_declaration != NULL
-                                    ? source_declaration->get_scope()
-                                    : NULL),
-            static_cast<void *>(
-                source_declaration != NULL
-                    ? source_declaration->get_firstNondefiningDeclaration()
-                    : NULL),
-            source_info != NULL && source_info->isCompilerGenerated() ? 1 : 0,
-            source_info != NULL && source_info->isOutputInCodeGeneration() ? 1
-                                                                           : 0,
-            source_declarations != NULL && source_declaration != NULL
-                ? static_cast<size_t>(std::count(source_declarations->begin(),
-                                                 source_declarations->end(),
-                                                 source_declaration))
-                : 0,
-            static_cast<void *>(semantic != NULL ? semantic->get_parent()
-                                                 : NULL),
-            source_table != NULL && semantic != NULL &&
-                    source_table->exists(semantic)
-                ? 1
-                : 0,
-            static_cast<void *>(
-                source_scope != NULL && source_declaration != NULL
-                    ? source_scope->find_symbol_from_declaration(
-                          source_declaration)
-                    : NULL));
+          kind == SgFunctionRefExp::
+                      e_fortran_source_visible_binding_semantic_publication;
+      if (!SageInterface::Detail::hasExactFortranFunctionReferenceBindings(
+              semantic, source_visible, kind) ||
+          (!semantic_publication &&
+           !SageInterface::isAncestor(source_scope, reference))) {
+        fprintf(stderr,
+                "REX_OUTLINER_INVARIANT[moved-function-source-binding]: "
+                "reference=%p semantic=%p source-visible=%p "
+                "source-scope=%p source-table=%p kind=%d "
+                "has no exact post-move Fortran source binding\n",
+                static_cast<void *>(reference), static_cast<void *>(semantic),
+                static_cast<void *>(source_visible),
+                static_cast<void *>(source_scope),
+                static_cast<void *>(source_table), static_cast<int>(kind));
         ROSE_ABORT();
       }
-      reference->set_fortran_source_visible_symbol(source_visible);
-      reference->set_fortran_source_visible_binding_kind(new_binding_kind);
     }
   }
 
   if (copied_source_global != NULL) {
-    remapMovedBodyClassTypeIdentities(copied_source_global,
-                                      copied_destination_global, func_body);
+    std::map<SgSymbol *, SgSymbol *> copied_symbols;
 
     // Captured locals and parameters must first be rewritten to the outlined
     // function's own declarations.  Only then can references that still point
@@ -5226,8 +4129,13 @@ SgFunctionDeclaration *Outliner::generateFunction(
       if (getGlobalScope(source_symbol) != copied_source_global)
         continue;
 
-      SgSymbol *destination_symbol = SymbolMapOfTwoFiles::requireMappedSymbol(
-          copied_source_global, copied_destination_global, source_symbol);
+      auto mapping = copied_symbols.find(source_symbol);
+      if (mapping == copied_symbols.end()) {
+        SgSymbol *target_symbol = findAssociatedSymbolInTargetAST(
+            source_symbol->get_symbol_basis(), copied_destination_global);
+        mapping = copied_symbols.emplace(source_symbol, target_symbol).first;
+      }
+      SgSymbol *destination_symbol = mapping->second;
       SgFunctionSymbol *destination_function =
           isSgFunctionSymbol(destination_symbol);
       SgVariableSymbol *destination_variable =
@@ -5326,39 +4234,14 @@ SgFunctionDeclaration *Outliner::generateFunction(
       } else
         variable_reference->set_symbol(destination_variable);
     }
+    remapMovedBodyClassTypeIdentities(copied_source_global,
+                                      copied_destination_global, func_body);
   }
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 7") == false);
-
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
-  // printf ("After resetting the parent: func->get_definition() = %p
-  // func->get_definition()->get_body()->get_parent() = %p
-  // \n",func->get_definition(),func->get_definition()->get_body()->get_parent());
-  //
-  assertFunctionSymbolPresent(scope, func);
+  validateOutlinedFunctionSignature(func, parameterList);
 
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 8") == false);
-
-  addMissingLocalTypedefAliases(func);
-
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(func,"testing
-  // Outliner::generateFunction(): 10") == false);
-
-  // Outlined Fortran procedures must keep case-insensitive scope semantics.
-  if (SageInterface::is_Fortran_language()) {
-    SgFunctionDefinition *func_def = func->get_definition();
-    ROSE_ASSERT(func_def != NULL);
-    func_def->setCaseInsensitive(true);
-    SgBasicBlock *func_body = func_def->get_body();
-    ROSE_ASSERT(func_body != NULL);
-    func_body->setCaseInsensitive(true);
-  }
-
+  parameter_bindings = parameter_plan.direct_parameters;
   return func;
 }
-
-// eof

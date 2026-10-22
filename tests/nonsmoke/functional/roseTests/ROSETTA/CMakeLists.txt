@@ -70,6 +70,17 @@ function(add_rosetta_hard_error_regex_test test_name mode diagnostic)
   set_tests_properties(${test_name} PROPERTIES LABELS "rex;ROSETTA;death")
 endfunction()
 
+foreach(mode IN ITEMS empty-replace-search empty-copy-search
+                      empty-copy-lines-search empty-insert-lines-search)
+  if(mode STREQUAL "empty-replace-search" OR mode STREQUAL "empty-copy-search")
+    set(diagnostic "!search[.]empty[(][)]")
+  else()
+    set(diagnostic "!oldToken[.]empty[(][)]")
+  endif()
+  add_rosetta_hard_error_regex_test(
+    rosetta_rex_${mode}_is_rejected ${mode} "ASSERTION:require:.*${diagnostic}")
+endforeach()
+
 add_rosetta_hard_error_contract_test(
   rosetta_rex_function_argument_index_is_rejected
   function-argument-index
@@ -121,15 +132,15 @@ add_rosetta_hard_error_regex_test(
 add_rosetta_hard_error_regex_test(
   rosetta_rex_declaration_foreign_start_info_owner_is_rejected
   declaration-start-foreign-owner
-  "^REX_AST_INVARIANT\\[declaration-start-info-owner\\]: node=0x[[:xdigit:]]+ type=Sg_File_Info expected-parent=0x[[:xdigit:]]+ type=SgAccessLabelStatement actual-parent=0x[[:xdigit:]]+ type=SgBasicBlock direct-edges=1$")
+  "^REX_AST_INVARIANT\\[file-info-owner\\]: node=0x[[:xdigit:]]+ type=Sg_File_Info expected-parent=0x[[:xdigit:]]+ type=SgAccessLabelStatement actual-parent=0x[[:xdigit:]]+ type=SgBasicBlock direct-edges=1$")
 add_rosetta_hard_error_regex_test(
   rosetta_rex_declaration_foreign_end_info_owner_is_rejected
   declaration-end-foreign-owner
-  "^REX_AST_INVARIANT\\[declaration-end-info-owner\\]: node=0x[[:xdigit:]]+ type=Sg_File_Info expected-parent=0x[[:xdigit:]]+ type=SgAccessLabelStatement actual-parent=0x[[:xdigit:]]+ type=SgBasicBlock direct-edges=1$")
+  "^REX_AST_INVARIANT\\[end-file-info-owner\\]: node=0x[[:xdigit:]]+ type=Sg_File_Info expected-parent=0x[[:xdigit:]]+ type=SgAccessLabelStatement actual-parent=0x[[:xdigit:]]+ type=SgBasicBlock direct-edges=1$")
 add_rosetta_hard_error_contract_test(
   rosetta_rex_named_type_null_declaration_is_rejected
   named-type-null-declaration
-  "REX_AST_INVARIANT[named-type-declaration-owner]: node=(nil) type=<null> expected-parent=(nil) type=<null> actual-parent=(nil) type=<null> direct-edges=0")
+  "REX_AST_INVARIANT[initialized-name-type-owner]: node=(nil) type=<null> expected-parent=(nil) type=<null> actual-parent=(nil) type=<null> direct-edges=0")
 add_rosetta_hard_error_contract_test(
   rosetta_rex_variable_inline_null_owner_is_rejected
   variable-inline-null-owner
@@ -386,4 +397,12 @@ add_test(
     access-label-construction)
 set_tests_properties(
   rosetta_rex_access_label_canonical_construction
+  PROPERTIES LABELS "rex;ROSETTA;AST")
+
+add_test(
+  NAME rosetta_rex_statement_expression_replacement_ownership
+  COMMAND $<TARGET_FILE:rex_rosetta_hard_error_contract>
+    statement-expression-replacement)
+set_tests_properties(
+  rosetta_rex_statement_expression_replacement_ownership
   PROPERTIES LABELS "rex;ROSETTA;AST")

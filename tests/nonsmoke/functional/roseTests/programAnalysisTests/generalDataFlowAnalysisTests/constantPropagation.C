@@ -4,6 +4,7 @@
 #include <limits>
 
 using namespace std::placeholders;
+using VirtualCFG::DataflowNode;
 
 int constantPropagationAnalysisDebugLevel = 2;
 
@@ -216,10 +217,11 @@ void ConstantPropagationAnalysisTransfer::transferArith(SgBinaryOp *sgn,
 }
 
 void ConstantPropagationAnalysisTransfer::transferIncrement(SgUnaryOp *sgn) {
-  ConstantPropagationLattice *arg1Lat, *arg2Lat = NULL, *resLat;
-  if (getLattices(sgn, arg1Lat, arg2Lat, resLat))
-    transferAdditive(arg1Lat, arg2Lat, resLat, isSgPlusPlusOp(sgn));
-  delete arg2Lat; // Allocated by getLattices
+  ConstantPropagationLattice *arg1Lat = getLattice(sgn->get_operand());
+  ConstantPropagationLattice *resLat = getLattice(sgn);
+  ConstantPropagationLattice increment(1);
+  if (arg1Lat != nullptr && resLat != nullptr)
+    transferAdditive(arg1Lat, &increment, resLat, isSgPlusPlusOp(sgn));
 }
 
 //! transfer addition or subtraction operations: isAddition: true for addition,
@@ -571,8 +573,7 @@ void ConstantPropagationAnalysis::genInitState(
 bool ConstantPropagationAnalysis::transfer(
     const Function &func, const DataflowNode &n, NodeState &state,
     const std::vector<Lattice *> &dfInfo) {
-  assert(0);
-  return false;
+  ROSE_ABORT();
 }
 
 std::shared_ptr<IntraDFTransferVisitor>

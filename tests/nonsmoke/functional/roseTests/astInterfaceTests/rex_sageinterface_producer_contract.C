@@ -229,7 +229,7 @@ SgCastExp *makeSynthesizedImplicitConversion() {
   SgCastExp *cast = SageBuilder::buildCastExp(
       SageBuilder::buildIntVal(1), SageBuilder::buildIntType(),
       SgCastExp::e_implicit_cast, SgCastExp::e_semantic_conversion_NoOp,
-      SgCastExp::e_value_category_prvalue, {});
+      SgCastExp::e_value_category_prvalue, {}, nullptr);
   ROSE_ASSERT(cast != nullptr && cast->get_operand() != nullptr);
   for (Sg_File_Info *position :
        {cast->get_file_info(), cast->get_startOfConstruct(),
@@ -351,7 +351,8 @@ void exerciseHeaderAnchors(bool nonempty, bool tokenMode) {
 int exercisePositiveContracts() {
   GeneratedUnit unit = makeGeneratedUnit("rex_sageinterface_producer_positive");
 
-  Sg_File_Info *detachedTransformation = new Sg_File_Info("NULL_FILE", 0, 0);
+  Sg_File_Info *detachedTransformation =
+      new Sg_File_Info(Sg_File_Info::NULL_FILE_ID, 0, 0);
   ROSE_ASSERT(detachedTransformation != nullptr);
   detachedTransformation->setTransformation();
   ROSE_ASSERT(detachedTransformation->get_raw_physical_file_id() ==
@@ -359,7 +360,8 @@ int exercisePositiveContracts() {
   ROSE_ASSERT(detachedTransformation->get_physical_file_id() ==
               Sg_File_Info::NULL_FILE_ID);
   ROSE_ASSERT(detachedTransformation->get_physical_filename() == "NULL_FILE");
-  Sg_File_Info *detachedCompilerGenerated = new Sg_File_Info("NULL_FILE", 0, 0);
+  Sg_File_Info *detachedCompilerGenerated =
+      new Sg_File_Info(Sg_File_Info::NULL_FILE_ID, 0, 0);
   ROSE_ASSERT(detachedCompilerGenerated != nullptr);
   detachedCompilerGenerated->setCompilerGenerated();
   ROSE_ASSERT(detachedCompilerGenerated->get_raw_physical_file_id() ==
@@ -401,7 +403,7 @@ int exercisePositiveContracts() {
   ROSE_ASSERT(*std::next(temporaryPosition) == temporaryAnchor);
 
   SgNonrealType *dependentType = SageBuilder::buildSemanticNonrealType(
-      SgName("rex_explicit_nonreal_scope"), unit.global, nullptr, nullptr);
+      SgName("rex_explicit_nonreal_scope"), unit.global, nullptr);
   SgNonrealDecl *dependentDeclaration =
       dependentType != nullptr
           ? isSgNonrealDecl(dependentType->get_declaration())
@@ -871,13 +873,18 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(semanticType != nullptr);
     SgVariableDeclaration *declaration = SageBuilder::buildVariableDeclaration(
         "rex_fortran_generated_owner", semanticType, nullptr, unit.global);
+    ROSE_ASSERT(declaration->get_parent() == nullptr);
     const std::vector<FileInfoSnapshot> before =
         captureFileInfoState(declaration);
+    for (const FileInfoSnapshot &snapshot : before) {
+      ROSE_ASSERT(snapshot.physicalFileId == Sg_File_Info::NULL_FILE_ID);
+    }
     for (Sg_File_Info *position :
          {declaration->get_file_info(), declaration->get_startOfConstruct(),
           declaration->get_endOfConstruct()}) {
       ROSE_ASSERT(position != nullptr && position->isTransformation());
-      ROSE_ASSERT(position->get_physical_file_id() < 0);
+      ROSE_ASSERT(position->get_physical_file_id() ==
+                  Sg_File_Info::NULL_FILE_ID);
     }
     SageInterface::appendStatement(declaration, unit.global);
     requireExactLocatedOwnership(declaration, unit.source);
@@ -1050,7 +1057,7 @@ int main(int argc, char **argv) {
   if (mode == "--reject-null-nonreal-type-scope") {
     SageBuilder::buildSemanticNonrealType(
         SgName("rex_missing_nonreal_type_scope"),
-        static_cast<SgScopeStatement *>(nullptr), nullptr, nullptr);
+        static_cast<SgScopeStatement *>(nullptr), nullptr);
   }
   if (mode == "--reject-template-declaration-publication") {
     GeneratedUnit unit = makeGeneratedUnit("rex_reject_generic_template");

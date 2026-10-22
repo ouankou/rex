@@ -5,13 +5,7 @@
 
 #include "ObserveObject.h"
 
-#include <iostream>
-
 #include <list>
-
-#include <map>
-
-#include <stdexcept>
 
 #include <string>
 
@@ -31,7 +25,6 @@ public:
     AstNodeType::operator=(that);
     return *this;
   }
-  ~AstNodeTypeImpl() {}
   SgType *get_ptr() const {
     return static_cast<SgType *>(AstNodeType::get_ptr());
   }
@@ -40,29 +33,20 @@ public:
   }
 };
 
-#define AstNodePtr2Sage(a) AstNodePtrImpl(a).get_ptr()
-
 class SgScopeStatement;
 class SgBasicBlock;
 class SgGlobal;
-class SgSymbol;
-class SgMemberFunctionRefExp;
 class SgFunctionSymbol;
 class SgVariableSymbol;
 class SgStatement;
-class SgClassSymbol;
 class SgMemberFunctionSymbol;
 class SgClassDeclaration;
 class SgVariableDeclaration;
-class SgMemberFunctionDeclaration;
 class SgInitializedName;
 class SgFunctionDeclaration;
-class SgClassDefinition;
 class AstInterfaceImpl : public ObserveObject<AstObserver> {
 public:
   AstInterfaceImpl(SgNode *_top) : newVarIndex(0) { set_top(_top); }
-
-  ~AstInterfaceImpl() {}
 
   typedef AstInterface::AstNodeList AstNodeList;
   typedef AstInterface::AstTypeList AstTypeList;
@@ -75,24 +59,17 @@ public:
   void set_top(SgNode *_top);
 
   static void GetTypeInfo(SgType *t, std::string *name = 0,
-                          std::string *stripname = 0, int *size = 0,
+                          std::string *stripname = 0,
                           bool use_global_unique_name = false);
   static SgType *GetTypeInt();
 
   SgVarRefExp *CreateFieldRef(SgNode *decl, std::string fieldname);
-  SgMemberFunctionRefExp *CreateMethodRef(std::string classname,
-                                          std::string fieldname,
-                                          bool createIfNotFound);
 
   SgFunctionSymbol *LookupFunction(const char *start, SgScopeStatement *loc);
-  SgSymbol *CreateDeclarationStmts(const std::string &_decl);
-  SgClassSymbol *NewClass(const std::string &name);
-  SgClassSymbol *AddClass(SgClassDeclaration *d);
 
   SgFunctionSymbol *GetFunc(const std::string &name);
   SgFunctionSymbol *NewFunc(const std::string &name, SgType *rtype,
                             const std::list<SgInitializedName *> &args);
-  SgFunctionSymbol *AddFunc(SgFunctionDeclaration *d);
 
   SgNode *CreateFunction(std::string name, int numOfPars);
   SgNode *CreateFunctionCall(SgNode *func, AstNodeList::const_iterator,
@@ -117,32 +94,20 @@ public:
   SgMemberFunctionSymbol *
   NewMemberFunc(SgClassDeclaration *decl, const std::string &name,
                 SgType *rtype, const std::list<SgInitializedName *> &args);
-  SgMemberFunctionSymbol *AddMemberFunc(SgClassDefinition *def,
-                                        SgMemberFunctionDeclaration *d);
   /* Create a new member function if not found */
   SgMemberFunctionSymbol *GetMemberFunc(SgClassDeclaration *c,
                                         const std::string &funcname,
                                         std::vector<SgExpression *> *args = 0);
 
-  /*QY: if declDecl=true,variable declarations are saved for insertion later*/
   SgVariableSymbol *NewVar(SgType *type, const std::string &_name,
                            bool makeunique, bool delayDecl,
                            SgExpression *initexp = 0,
                            SgScopeStatement *loc = 0);
-  /*Insert and clear all the new variable declarations created so far*/
-  void AddNewVarDecls();
-  /* copy new var declarations to a new given basic block; by default, the new
-   * var declarations are removed from their original block*/
-  void CopyNewVarDecls(SgBasicBlock *blk, bool clearNewVars = true);
-
-  /* save d for future insertion */
-  void SaveVarDecl(SgVariableDeclaration *d, SgScopeStatement *curscope);
+  void CopyNewVarDecls(SgBasicBlock *blk);
 
   static SgNode *LookupNestedDeclaration(const std::string &name, SgNode *loc);
-  static SgVariableSymbol *LookupVar(const std::string &name, SgNode *loc);
+  SgVariableSymbol *LookupVar(const std::string &name, SgNode *loc);
   SgVariableSymbol *LookupVar(const std::string &name);
-  SgVariableSymbol *InsertVar(SgInitializedName *d,
-                              SgScopeStatement *curscope = 0);
 
   SgExpression *CreateVarRef(std::string varname, SgNode *loc = 0);
 
@@ -156,8 +121,12 @@ private:
   SgGlobal *global;
   SgScopeStatement *scope;
   int newVarIndex;
-  std::vector<std::pair<SgScopeStatement *, SgVariableDeclaration *>>
-      newVarList;
+  struct PendingVariable {
+    SgScopeStatement *scope;
+    SgVariableDeclaration *declaration;
+    SgVariableSymbol *symbol;
+  };
+  std::vector<PendingVariable> newVarList;
   friend class AstInterface;
 };
 

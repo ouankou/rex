@@ -3,10 +3,6 @@
 
 #ifndef ROSE_ASTPROCESSING_H
 #define ROSE_ASTPROCESSING_H
-#define ROSE_INHERITED 0
-#define ROSE_SYNTHESIZED 1
-#define ROSE_BOTH 2
-
 #include "featureTests.h"
 
 #include "mlog.h"
@@ -25,50 +21,11 @@
 
 #include <vector>
 
-// bool end = false;
-
-// using namespace std;
-
-// tps (01/08/2010) Added sage3basic since this doesnt compile under gcc4.1.2
-// #include "sage3basic.h"
-// #include "sage3.h"
 // Non-templated helper function in AstProcessing.C
 
 ROSE_DLL_API bool SgTreeTraversal_inFileToTraverse(SgNode *node,
                                                    bool traversalConstraint,
                                                    SgFile *fileToVisit);
-
-/*
-   GB (06/01/2007):
-   Changes to the original code were roughly:
-   - removed unneeded includes and other code
-   - removed everything related to visit flags
-   - changed support for SynthesizedAttributesList; synthesized attributes are
-     now handled in a smarter way, by keeping them on a stack and (in
-     principle) only passing iterators instead of copying a container;
-     traverse() is now only a thin wrapper around performTraversal() that
-     takes care of visiting nodes and pushing/popping synthesized attributes
-   - rewrote inFileToTraverse() to use new AST features instead of lots of
-     string comparisons; it is now explicitly stated (at least in this
-     comment) that we *do* visit subtrees from other files unless their root
-     is in global or namespace scope, which is how we hope to avoid headers
-     but still handle all included "code"
-   - renamed class _DummyAttribute because that identifier is reserved for the
-     implementation
-   - everything that was not changed in some other way was totally
-     reformatted, so diffing the old and new files won't do anything
-     meaningful
-   - appended "" suffix to pretty much any global identifier that would
-     clash with the existing ones; if this code is ever moved into ROSE to
-     replace the old version, it should not be exceedingly hard to remove the
-     suffix everywhere
-   - added some new virtual functions the user may choose to implement:
-        atTraversalStart(), atTraversalEnd(), destroyInheritedValue()
-   - other stuff I have probably forgotten
-   GB (7/6/2007):
-   - added new class AstPrePostProcessing and changed the traverseOrder
-     flag so that it can now be pre and post order at the same time
- */
 
 #include "AstSuccessorsSelectors.h"
 
@@ -88,23 +45,7 @@ typedef DummyAttribute _DummyAttribute;
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class SgCombinedTreeTraversal;
 
-// Base class for all traversals.
-/** @brief Temporary traversal base class (do not use).
- *
- * This class is internal and should not be used directly. Use the
- * Ast*Processing classes instead.
- *
- * Internal: This class is temporary. Currently it is a base class for the
- * AstProcessing classes providing the implementation of the traversal and
- * attribute evaluation.
- *
- * Metadata:
- * - Authors: Markus Schordan
- * - Version: 0.5
- * - Date: Dec 14th 2002
- * - Bug: No known bugs.
- * - TODO: eliminate class
- */
+// Attribute-bearing traversal base; use the Ast*Processing classes directly.
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class SgTreeTraversal {
 public:
@@ -459,7 +400,6 @@ SgTreeTraversal<InheritedAttributeType,
       fileToVisit(nullptr),
       synthesizedAttributes(new SynthesizedAttributesList()) {}
 
-#ifndef SWIG
 // The destructor of the internal tree traversal class
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 SgTreeTraversal<InheritedAttributeType,
@@ -469,10 +409,6 @@ SgTreeTraversal<InheritedAttributeType,
   synthesizedAttributes = nullptr;
 }
 
-#endif
-
-// DQ (3/30/2017): This is not called, but can not be removed (required for
-// compiling ROSE).
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
     SgTreeTraversal(const SgTreeTraversal &other)
@@ -481,19 +417,19 @@ SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
       fileToVisit(other.fileToVisit),
       synthesizedAttributes(other.synthesizedAttributes->deepCopy()) {}
 
-// DQ (3/30/2017): This is not called and is not required by most Linux
-// toolchains, but is retained for completeness.
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 const SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType> &
 SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::operator=(
     const SgTreeTraversal &other) {
+  ASSERT_not_null(synthesizedAttributes);
+  SynthesizedAttributesList *copiedAttributes =
+      other.synthesizedAttributes->deepCopy();
   useDefaultIndexBasedTraversal = other.useDefaultIndexBasedTraversal;
   traversalConstraint = other.traversalConstraint;
   fileToVisit = other.fileToVisit;
 
-  ASSERT_not_null(synthesizedAttributes);
   delete synthesizedAttributes;
-  synthesizedAttributes = other.synthesizedAttributes->deepCopy();
+  synthesizedAttributes = copiedAttributes;
 
   return *this;
 }
@@ -562,28 +498,21 @@ AstTopDownBottomUpProcessing<InheritedAttributeType, SynthesizedAttributeType>::
 //// TOP DOWN PROCESSING IMPLEMENTATION ////
 ////////////////////////////////////////////
 
-// MS: 04/25/02
 template <class InheritedAttributeType>
 DummyAttribute
 AstTopDownProcessing<InheritedAttributeType>::evaluateSynthesizedAttribute(
     SgNode *astNode, InheritedAttributeType inheritedValue,
     typename AstTopDownProcessing<
         InheritedAttributeType>::SynthesizedAttributesList) {
-  // call the cleanup function
   destroyInheritedValue(astNode, inheritedValue);
-  // return value is not used
-  DummyAttribute a = defaultDummyAttribute;
-  return a;
+  return defaultDummyAttribute;
 }
 
-// MS: 07/30/04
 template <class InheritedAttributeType>
 DummyAttribute
 AstTopDownProcessing<InheritedAttributeType>::defaultSynthesizedAttribute(
     InheritedAttributeType) {
-  // called but not used
-  DummyAttribute a = defaultDummyAttribute;
-  return a;
+  return defaultDummyAttribute;
 }
 
 // MS: 04/25/02
@@ -610,23 +539,17 @@ void AstTopDownProcessing<InheritedAttributeType>::traverseWithinFile(
 //// BOTTOM UP PROCESSING IMPLEMENTATION ////
 /////////////////////////////////////////////
 
-// MS: 04/25/02
 template <class SynthesizedAttributeType>
 DummyAttribute
 AstBottomUpProcessing<SynthesizedAttributeType>::evaluateInheritedAttribute(
     SgNode *, DummyAttribute /*inheritedValue*/) {
-  /* called but not used */
-  DummyAttribute a = defaultDummyAttribute;
-  return a;
+  return defaultDummyAttribute;
 }
 
 // MS: 30/07/04
 template <class SynthesizedAttributeType>
 SynthesizedAttributeType
 AstBottomUpProcessing<SynthesizedAttributeType>::defaultSynthesizedAttribute() {
-  // GB (8/6/2007): This can give "may not be initialized" warnings when
-  // compiling with optimization (because -O flags cause gcc to perform
-  // data-flow analysis). I wonder how this might be fixed.
   SynthesizedAttributeType s = SynthesizedAttributeType();
   return s;
 }
@@ -639,7 +562,6 @@ AstBottomUpProcessing<SynthesizedAttributeType>::defaultSynthesizedAttribute(
   return defaultSynthesizedAttribute();
 }
 
-// MS: 04/25/02//ENDEDIT
 template <class SynthesizedAttributeType>
 SynthesizedAttributeType
 AstBottomUpProcessing<SynthesizedAttributeType>::evaluateSynthesizedAttribute(
@@ -648,37 +570,26 @@ AstBottomUpProcessing<SynthesizedAttributeType>::evaluateSynthesizedAttribute(
   return evaluateSynthesizedAttribute(astNode, l);
 }
 
-// MS: 04/25/02
 template <class SynthesizedAttributeType>
 SynthesizedAttributeType
 AstBottomUpProcessing<SynthesizedAttributeType>::traverse(SgNode *node) {
-
-  static DummyAttribute da;
   return SgTreeTraversal<DummyAttribute, SynthesizedAttributeType>::traverse(
-      node, da, postorder);
+      node, defaultDummyAttribute, postorder);
 }
 
-// MS: 04/25/02
 template <class SynthesizedAttributeType>
 SynthesizedAttributeType
 AstBottomUpProcessing<SynthesizedAttributeType>::traverseWithinFile(
     SgNode *node) {
-  static DummyAttribute da;
-  return SgTreeTraversal<
-      DummyAttribute, SynthesizedAttributeType>::traverseWithinFile(node, da,
-                                                                    postorder);
+  return SgTreeTraversal<DummyAttribute, SynthesizedAttributeType>::
+      traverseWithinFile(node, defaultDummyAttribute, postorder);
 }
 
-// MS: 04/25/02
 template <class SynthesizedAttributeType>
 void AstBottomUpProcessing<SynthesizedAttributeType>::traverseInputFiles(
     SgProject *projectNode) {
-  static DummyAttribute da;
-  // GB (8/6/2007): This is now a postorder traversal; this did not really
-  // matter until now, but now evaluateSynthesizedAttribute is only called
-  // for traversals that have the postorder bit set.
   SgTreeTraversal<DummyAttribute, SynthesizedAttributeType>::traverseInputFiles(
-      projectNode, da, postorder);
+      projectNode, defaultDummyAttribute, postorder);
 }
 // MS: 07/29/04
 template <class InheritedAttributeType, class SynthesizedAttributeType>
@@ -697,8 +608,6 @@ SynthesizedAttributeType
 SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
     traverseWithinFile(SgNode *node, InheritedAttributeType inheritedValue,
                        t_traverseOrder treeTraversalOrder) {
-  // DQ (1/18/2006): debugging
-  ASSERT_this();
   traversalConstraint = true;
 
   SgFile *filenode = isSgFile(node);
@@ -733,23 +642,6 @@ SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
   return synth;
 }
 
-// GB (06/31/2007): Wrapper function around the performT
-// raversal()
-// function that does the real work; when that function is done, we call
-// traversalResult() to get the final result off the stack of synthesized
-// attributes.
-/*
-template <class InheritedAttributeType>
-DummyAttribute
-AstTopDownProcessing<InheritedAttributeType>::
-defaultSynthesizedAttribute(InheritedAttributeType inh)
-{arentset.begin(); i != parentset.end(); i++) {
-     map<SgGraphNode*, InheritedAttribute
-    // called but not used
-    DummyAttribute a = defaultDummyAttribute;
-    return a;
-}
-*/
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 SynthesizedAttributeType
 SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::traverse(
@@ -776,15 +668,6 @@ template <class InheritedAttributeType, class SynthesizedAttributeType>
 void SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
     performTraversal(SgNode *node, InheritedAttributeType inheritedValue,
                      t_traverseOrder treeTraversalOrder) {
-  // cout << "In SgNode version" << endl;
-  // 1. node can be a null pointer, only traverse it if !
-
-  //    (since the SuccessorContainer is order preserving we require 0 values as
-  //    well!)
-  // 2. inFileToTraverse is false if we are trying to go to a different file
-  // (than the input file)
-  //    and only if traverseInputFiles was invoked, otherwise it's always true
-
   if (node && SgTreeTraversal_inFileToTraverse(node, traversalConstraint,
                                                fileToVisit)) {
     // In case of a preorder traversal call the function to be applied to each
@@ -813,14 +696,8 @@ void SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
     const size_t numberOfSuccessors = succContainer.size();
 
     for (SgNode *child : succContainer) {
-      // DQ (4/21/2014): Valgrind test to isolate uninitialised read reported
-      // where child is read below.
-      ASSERT_require(child == nullptr || child != nullptr);
-
       if (child != nullptr) {
         performTraversal(child, inheritedValue, treeTraversalOrder);
-
-        // ENDEDIT
       } else {
         // null pointer (not traversed): we put the default value(s) of
         // SynthesizedAttribute onto the stack
@@ -850,8 +727,7 @@ void SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
       synthesizedAttributes->push(evaluateSynthesizedAttribute(
           node, inheritedValue, *synthesizedAttributes));
     }
-  } else // if (node && inFileToTraverse(node))
-  {
+  } else {
     if (treeTraversalOrder & postorder)
       synthesizedAttributes->push(defaultSynthesizedAttribute(inheritedValue));
   }
@@ -885,23 +761,6 @@ template <class InheritedAttributeType, class SynthesizedAttributeType>
 void SgTreeTraversal<InheritedAttributeType,
                      SynthesizedAttributeType>::atTraversalEnd() {}
 
-/*
-template <class InheritedAttributeType, class SynthesizedAttributeType>
-void
-SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
-afterSingleTraversal()
-{
-}
-
-template <class InheritedAttributeType, class SynthesizedAttributeType>
-void
-SgTreeTraversal<InheritedAttributeType, SynthesizedAttributeType>::
-
-beforeSingleTraversal()
-{
-}
-*/
-
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 void AstTopDownBottomUpProcessing<
     InheritedAttributeType, SynthesizedAttributeType>::atTraversalStart() {}
@@ -925,7 +784,6 @@ void AstBottomUpProcessing<SynthesizedAttributeType>::atTraversalStart() {}
 
 template <class SynthesizedAttributeType>
 void AstBottomUpProcessing<SynthesizedAttributeType>::atTraversalEnd() {}
-// #endif
 
 #include "AstSimpleProcessing.h" // that's a non-templated class which is put in a different file (for gcc to compile&link properly)
 

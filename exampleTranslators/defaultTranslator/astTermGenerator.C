@@ -1,72 +1,39 @@
-// A translator to dump AST terms within an input source file
-// Liao
+// Dump source declarations from the first input translation unit.
 #include "rose.h"
 
 #include "AstTerm.h"
 #include "rose_test_output_path.h"
 
-#include <iostream>
-
 #include <fstream>
-
-#include <stdlib.h>
-using namespace std;
-
-class visitorTraversal : public AstSimpleProcessing {
-public:
-  virtual void visit(SgNode *n);
-};
-
-void
-// visitorTraversal::visit (SgNode * n)
-visit(SgNode *n, ofstream &out) {
-  if (SgDeclarationStatement *decl = isSgDeclarationStatement(n)) {
-
-    string filename = decl->get_file_info()->get_filename();
-    string suffix = Rose::StringUtility ::fileNameSuffix(filename);
-
-    // vector.tcc: This is an internal header file, included by other library
-    // headers
-    if (suffix == "h" || suffix == "hpp" || suffix == "hh" || suffix == "H" ||
-        suffix == "hxx" || suffix == "h++" || suffix == "tcc")
-      return;
-
-    // also check if it is compiler generated. Not from user code
-    // skip compiler generated codes, mostly from template headers
-    if (decl->get_file_info()->isCompilerGenerated())
-      return;
-
-    out << AstTerm::astTermWithNullValuesToString(decl) << endl;
-  }
-}
+#include <iostream>
 
 int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
-  //  visitorTraversal exampleTraversal;
-  //  exampleTraversal.traverse (project, preorder);
-  if (project->get_fileList().size() >= 1) {
-    SgFilePtrList file_list = project->get_fileList();
-    std::string firstFileName =
-        Rose::StringUtility::stripPathFromFileName(file_list[0]->getFileName());
-
-    ofstream out;
-    out.open(Rose::TestOutput::resolvePath(firstFileName + ".astTerm.txt"));
-    // out<< AstTerm::astTermWithNullValuesToString(project)<<endl; // too much
-    // from headers
-    SgGlobal *global = isSgSourceFile(file_list[0])->get_globalScope();
-    SgDeclarationStatementPtrList &decl_list = global->get_declarations();
-
-    for (int i = 0; i < decl_list.size(); i++) {
-      visit(decl_list[i], out);
-    }
-
-    out.close();
+  ROSE_ASSERT(project != nullptr && project->numberOfFiles() > 0);
+  SgSourceFile *file = isSgSourceFile(&project->get_file(0));
+  ROSE_ASSERT(file != nullptr && file->get_globalScope() != nullptr);
+  const std::string output = Rose::TestOutput::resolvePath(
+      Rose::StringUtility::stripPathFromFileName(file->getFileName()) +
+      ".astTerm.txt");
+  std::ofstream out(output);
+  if (!out) {
+    std::cerr << "Cannot open AST term output: " << output << '\n';
+    return 1;
   }
-
-  //  visitorTraversal exampleTraversal;
-  //  exampleTraversal.traverse (project, preorder);
-
-  // skip unparsing, avoiding unparsing errors
-  //  return backend (project);
+  const int sourceId = file->get_file_info()->get_physical_file_id();
+  ROSE_ASSERT(sourceId >= 0);
+  for (SgDeclarationStatement *decl :
+       file->get_globalScope()->get_declarations()) {
+    ROSE_ASSERT(decl != nullptr && decl->get_file_info() != nullptr);
+    const Sg_File_Info *position = decl->get_file_info();
+    if (!position->isCompilerGenerated() &&
+        position->get_physical_file_id() == sourceId)
+      out << AstTerm::astTermWithNullValuesToString(decl) << '\n';
+  }
+  out.close();
+  if (!out) {
+    std::cerr << "Cannot write AST term output: " << output << '\n';
+    return 1;
+  }
   return 0;
 }

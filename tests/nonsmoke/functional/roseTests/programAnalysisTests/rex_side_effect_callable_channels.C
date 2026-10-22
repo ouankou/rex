@@ -144,6 +144,29 @@ int main(int argc, char *argv[]) {
         "indirect callable memory was absent from the object-read channel");
   }
 
+  auto *argumentFunction = findTestFunction(project, "rex_test_argument_forms");
+  ROSE_ASSERT(argumentFunction != nullptr);
+  const auto &argumentParameters =
+      argumentFunction->get_declaration()->get_args();
+  ROSE_ASSERT(argumentParameters.size() == 2);
+  auto *localArgument = argumentParameters.front();
+  AstInterfaceImpl argumentImplementation(argumentFunction->get_body());
+  AstInterface argumentInterface(&argumentImplementation);
+  StmtSideEffectCollect argumentEffects(argumentInterface);
+  std::vector<SgVarRefExp *> argumentReads;
+  SideEffectAnalysisInterface::CollectObject collectArgumentRead =
+      [&](AstNodePtr read, AstNodePtr) {
+        auto *reference = isSgVarRefExp(read.get_ptr());
+        ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+        ROSE_ASSERT(reference->get_symbol()->get_declaration() ==
+                    localArgument);
+        argumentReads.push_back(reference);
+        return true;
+      };
+  argumentEffects.set_read_collect(collectArgumentRead);
+  ROSE_ASSERT(!argumentEffects(argumentFunction->get_body()));
+  ROSE_ASSERT(argumentReads.size() == 1);
+
   SgFunctionDefinition *pointerFunction =
       findTestFunction(project, "rex_test_pointer_alias_channel");
   if (pointerFunction == nullptr) {

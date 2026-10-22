@@ -1,10 +1,534 @@
 include_directories(${ROSE_INCLUDES} ${CMAKE_CURRENT_BINARY_DIR})
 
+add_executable(rex_defuse_multiple_predecessors
+  rex_defuse_multiple_predecessors.cpp)
+target_link_libraries(rex_defuse_multiple_predecessors PRIVATE ROSE_DLL)
+add_test(NAME rex_defuse_multiple_predecessors
+  COMMAND rex_defuse_multiple_predecessors
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_defuse_multiple_predecessors_input.cpp)
+set_tests_properties(rex_defuse_multiple_predecessors
+  PROPERTIES LABELS "rex;analysis;sanitizer")
+
+add_executable(rex_liveness_loop_fixed_point rex_liveness_loop_fixed_point.cpp)
+target_link_libraries(rex_liveness_loop_fixed_point PRIVATE ROSE_DLL)
+add_test(NAME rex_liveness_loop_fixed_point
+  COMMAND rex_liveness_loop_fixed_point
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_liveness_loop_fixed_point_input.cpp)
+set_tests_properties(rex_liveness_loop_fixed_point
+  PROPERTIES LABELS "rex;analysis;sanitizer")
+
+add_executable(rex_graph_directed_edge_removal
+  rex_graph_directed_edge_removal.cpp)
+target_link_libraries(rex_graph_directed_edge_removal PRIVATE ROSE_DLL)
+add_test(NAME rex_graph_directed_edge_removal
+  COMMAND rex_graph_directed_edge_removal)
+set_tests_properties(rex_graph_directed_edge_removal
+  PROPERTIES LABELS "rex;graph;sanitizer")
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; SageInterface death tests require bash")
 endif()
 find_program(REX_TEST_PYTHON_EXECUTABLE NAMES python3 REQUIRED)
+
+add_executable(rex_literal_typed_mutation rex_literal_typed_mutation.cpp)
+target_link_libraries(rex_literal_typed_mutation PRIVATE ROSE_DLL)
+add_test(NAME rex_literal_typed_mutation COMMAND rex_literal_typed_mutation)
+set_tests_properties(rex_literal_typed_mutation
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_complex_literal_semantics rex_complex_literal_semantics.cpp)
+target_link_libraries(rex_complex_literal_semantics PRIVATE ROSE_DLL)
+add_test(NAME rex_complex_literal_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_complex_literal_runtime.py
+    --translator $<TARGET_FILE:rex_complex_literal_semantics>
+    --cc ${CMAKE_C_COMPILER} --cxx ${CMAKE_CXX_COMPILER})
+set_tests_properties(rex_complex_literal_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_extended_floating_semantics rex_extended_floating_semantics.cpp)
+target_link_libraries(rex_extended_floating_semantics PRIVATE ROSE_DLL)
+add_test(NAME rex_extended_floating_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_extended_floating_runtime.py
+    --translator $<TARGET_FILE:rex_extended_floating_semantics>
+    --cc ${CMAKE_C_COMPILER} --cxx ${CMAKE_CXX_COMPILER})
+set_tests_properties(rex_extended_floating_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_integer_wide_semantics rex_integer_wide_semantics.cpp)
+target_link_libraries(rex_integer_wide_semantics PRIVATE ROSE_DLL)
+add_test(NAME rex_integer_wide_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_integer_wide_runtime.py
+    $<TARGET_FILE:rex_integer_wide_semantics> ${CMAKE_CXX_COMPILER})
+set_tests_properties(rex_integer_wide_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_atomic_type_semantics rex_atomic_type_semantics.cpp)
+target_link_libraries(rex_atomic_type_semantics PRIVATE ROSE_DLL)
+add_test(NAME rex_atomic_type_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_atomic_type_runtime.py
+    $<TARGET_FILE:rex_atomic_type_semantics>
+    ${ROSE_LLVM_CLANG_C_DRIVER} ${ROSE_LLVM_CLANG_CXX_DRIVER})
+set_tests_properties(rex_atomic_type_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_vector_type_semantics rex_vector_type_semantics.cpp)
+target_link_libraries(rex_vector_type_semantics PRIVATE ROSE_DLL)
+add_executable(rex_type_modifier_identity rex_type_modifier_identity.cpp)
+target_link_libraries(rex_type_modifier_identity PRIVATE ROSE_DLL gtest_main)
+add_test(NAME rex_type_modifier_identity COMMAND rex_type_modifier_identity)
+set_tests_properties(rex_type_modifier_identity PROPERTIES LABELS "rex;typed")
+add_test(NAME rex_vector_type_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_vector_type_runtime.py
+    $<TARGET_FILE:rex_vector_type_semantics>
+    ${ROSE_LLVM_CLANG_C_DRIVER} ${ROSE_LLVM_CLANG_CXX_DRIVER})
+set_tests_properties(rex_vector_type_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+add_executable(rex_array_extent_semantics rex_array_extent_semantics.cpp)
+target_link_libraries(rex_array_extent_semantics PRIVATE ROSE_DLL)
+add_test(NAME rex_array_extent_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_array_extent_runtime.py
+    $<TARGET_FILE:rex_array_extent_semantics>
+    ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER})
+set_tests_properties(rex_array_extent_runtime
+  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+  set(_rex_linker_fortran)
+  if(ENABLE-FORTRAN)
+    list(APPEND _rex_linker_fortran --fc ${CMAKE_Fortran_COMPILER})
+  endif()
+  add_test(NAME rex_cmake_linker_policy
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_linker_policy.py
+      --cmake ${CMAKE_COMMAND}
+      --module ${ROSE_TOP_SRC_DIR}/cmake/rex_linker.cmake
+      --cc ${CMAKE_C_COMPILER} --cxx ${CMAKE_CXX_COMPILER}
+      ${_rex_linker_fortran})
+  set_tests_properties(rex_cmake_linker_policy
+    PROPERTIES LABELS "rex;build-system;CI")
+  unset(_rex_linker_fortran)
+endif()
+
+add_test(NAME rex_cmake_pch_languages
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_pch_languages.py
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_pch.cmake
+    ${CMAKE_COMMAND} ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER})
+set_tests_properties(rex_cmake_pch_languages
+  PROPERTIES LABELS "rex;build-system")
+
+list(LENGTH BACKEND_C_COMPILER_COMMAND _rex_c_compiler_argc)
+add_test(
+  NAME rex_cmake_backend_metadata_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_backend_metadata_contract.py
+    ${ROSE_TOP_SRC_DIR}/cmake/modules/roseChooseBackendCompiler.cmake
+    ${CMAKE_COMMAND} ${_rex_c_compiler_argc}
+    ${BACKEND_C_COMPILER_COMMAND} ${BACKEND_CXX_COMPILER_COMMAND})
+unset(_rex_c_compiler_argc)
+set_tests_properties(rex_cmake_backend_metadata_contract
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_cmake_bison_prefix_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_bison_prefix_contract.py
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_bison.cmake
+    ${CMAKE_COMMAND} ${BISON_EXECUTABLE})
+set_tests_properties(rex_cmake_bison_prefix_contract
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_cmake_zlib_prefix_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_zlib_prefix_contract.py
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_zlib.cmake
+    ${CMAKE_COMMAND} ${CMAKE_C_COMPILER} ${ZLIB_INCLUDE_DIR}
+    $<TARGET_FILE:ZLIB::ZLIB>
+    ${CMAKE_SHARED_LIBRARY_PREFIX}z${CMAKE_SHARED_LIBRARY_SUFFIX})
+set_tests_properties(rex_cmake_zlib_prefix_contract
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_cmake_llvm_package_version_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_llvm_package_version_contract.py
+    ${ROSE_TOP_SRC_DIR}/cmake/modules/roseReadLlvmPackageVersion.cmake
+    ${CMAKE_COMMAND})
+set_tests_properties(rex_cmake_llvm_package_version_contract
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_cmake_llvm_driver_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_llvm_driver_contract.py
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_llvm_driver.cmake
+    ${CMAKE_COMMAND})
+set_tests_properties(rex_cmake_llvm_driver_contract
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_cmake_imported_shared_library
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_imported_shared_library.py
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_imported_shared_library.cmake
+    ${CMAKE_COMMAND} ${CMAKE_CXX_COMPILER}
+    $<TARGET_FILE:rose-config> $<TARGET_FILE:ROSE_DLL>
+    $<TARGET_SONAME_FILE_NAME:ROSE_DLL>)
+set_tests_properties(rex_cmake_imported_shared_library
+  PROPERTIES LABELS "rex;build-system")
+
+add_test(NAME rex_clang_graph_headers
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_clang_graph_headers.py
+    $<TARGET_FILE:identityTranslator> ${CMAKE_CURRENT_SOURCE_DIR})
+set_tests_properties(rex_clang_graph_headers
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+if(ENABLE-C)
+  set(_rex_backend_runtime_flags)
+  if(ENABLE-SANITIZER)
+    list(JOIN ROSE_SANITIZERS "," _rex_backend_runtime_sanitizers)
+    list(APPEND _rex_backend_runtime_flags
+      -fsanitize=${_rex_backend_runtime_sanitizers} -fno-omit-frame-pointer)
+  endif()
+  add_test(NAME rex_backend_output_directory
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_backend_output_directory.py
+      $<TARGET_FILE:identityTranslator> ${_rex_backend_runtime_flags})
+  set_tests_properties(rex_backend_output_directory
+    PROPERTIES LABELS "rex;backend;runtime;sanitizer")
+  add_test(NAME rex_backend_literal_arguments
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_backend_literal_arguments.py
+      $<TARGET_FILE:identityTranslator>
+      ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER})
+  set_tests_properties(rex_backend_literal_arguments
+    PROPERTIES LABELS "rex;backend;sanitizer")
+endif()
+
+add_test(NAME rex_fortran_rejection_status
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_rejection_status.py
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/experimental_frontend_tests/rex_fortran_rejection_contract.py
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/experimental_frontend_tests/R1164-F2018.f90
+    ${CMAKE_C_COMPILER})
+set_tests_properties(rex_fortran_rejection_status
+  PROPERTIES LABELS "rex;Fortran;CI")
+
+if(ENABLE-FORTRAN)
+  add_test(NAME rex_fortran_interface_checker
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_interface_checker.py
+      $<TARGET_FILE:tools_checkFortranInterfaces_exe>)
+  set_tests_properties(rex_fortran_interface_checker
+    PROPERTIES LABELS "rex;Fortran;AST;tools")
+endif()
+
+if(ENABLE-TUTORIAL-DIRECTORY)
+  add_test(NAME rex_tutorial_change_function
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_tutorial_change_function.py
+      $<TARGET_FILE:changeFunctionTutorial> ${_rex_backend_runtime_flags})
+  set_tests_properties(rex_tutorial_change_function
+    PROPERTIES LABELS "rex;AST;tutorial;runtime;sanitizer")
+  add_test(NAME rex_tutorial_inline_runtime
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_tutorial_inline_runtime.py
+      $<TARGET_FILE:inlineTransformationsTutorial> ${CMAKE_CXX_COMPILER})
+  set_tests_properties(rex_tutorial_inline_runtime
+    PROPERTIES LABELS "rex;AST;tutorial;runtime")
+  add_test(NAME rex_tutorial_access_runtime
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_tutorial_access_runtime.py
+      $<TARGET_FILE:interveneAtVariablesTutorial>
+      ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER})
+  set_tests_properties(rex_tutorial_access_runtime
+    PROPERTIES LABELS "rex;AST;tutorial;runtime")
+  add_test(NAME rex_tutorial_function_construction
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_tutorial_function_construction.py
+      ${CMAKE_CXX_COMPILER}
+      $<TARGET_FILE:addFunctionDeclarationTutorial>
+      $<TARGET_FILE:addFunctionDeclaration2Tutorial>
+      $<TARGET_FILE:addFunctionDeclaration3Tutorial>)
+  set_tests_properties(rex_tutorial_function_construction
+    PROPERTIES LABELS "rex;AST;tutorial;runtime")
+endif()
+
+add_executable(rex_type_interning_lifetime rex_type_interning_lifetime.cpp)
+target_link_libraries(rex_type_interning_lifetime ROSE_DLL)
+add_test(NAME rex_type_interning_lifetime
+  COMMAND rex_type_interning_lifetime
+    ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests/rex_frontend_dependent_alias_projection.cpp)
+set_tests_properties(rex_type_interning_lifetime
+  PROPERTIES LABELS "rex;AST;lifetime;sanitizer")
+
+add_executable(rex_function_type_identity_contract rex_function_type_identity_contract.cpp)
+add_executable(rex_ast_deletion_ownership rex_ast_deletion_ownership.cpp)
+target_link_libraries(rex_ast_deletion_ownership ROSE_DLL)
+add_test(NAME rex_ast_deletion_ownership
+  COMMAND rex_ast_deletion_ownership
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_deletion_ownership_input.c)
+set_tests_properties(rex_ast_deletion_ownership
+  PROPERTIES LABELS "rex;AST;lifetime;sanitizer")
+add_test(NAME rex_ast_deletion_orphan
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_deletion_orphan.py
+    $<TARGET_FILE:rex_ast_deletion_ownership>
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_deletion_ownership_input.c)
+set_tests_properties(rex_ast_deletion_orphan
+  PROPERTIES LABELS "rex;AST;lifetime;death")
+add_executable(rex_preprocessing_destruction rex_preprocessing_destruction.cpp)
+target_link_libraries(rex_preprocessing_destruction ROSE_DLL)
+add_test(NAME rex_preprocessing_destruction COMMAND rex_preprocessing_destruction)
+set_tests_properties(rex_preprocessing_destruction
+  PROPERTIES LABELS "rex;AST;copy;lifetime;sanitizer")
+target_link_libraries(rex_function_type_identity_contract ROSE_DLL)
+add_test(NAME rex_function_type_identity_contract COMMAND rex_function_type_identity_contract)
+set_tests_properties(rex_function_type_identity_contract
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_outliner_symbol_identity rex_outliner_symbol_identity.cpp)
+target_link_libraries(rex_outliner_symbol_identity ROSE_DLL)
+add_test(NAME rex_outliner_symbol_identity
+  COMMAND rex_outliner_symbol_identity -std=c++17 -fms-extensions
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_symbol_identity_input.cpp)
+set_tests_properties(rex_outliner_symbol_identity
+  PROPERTIES LABELS "rex;AST;outliner;sanitizer")
+add_test(NAME rex_outliner_missing_symbol
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_outliner_missing_symbol.py
+    $<TARGET_FILE:rex_outliner_symbol_identity>)
+set_tests_properties(rex_outliner_missing_symbol
+  PROPERTIES LABELS "rex;AST;outliner;death")
+
+add_executable(rex_filesystem_contract rex_filesystem_contract.cpp)
+target_link_libraries(rex_filesystem_contract ROSE_DLL)
+add_test(NAME rex_filesystem_contract COMMAND rex_filesystem_contract)
+set_tests_properties(rex_filesystem_contract
+  PROPERTIES LABELS "rex;filesystem;sanitizer")
+
+add_executable(rex_process_exit_status rex_process_exit_status.cpp)
+target_link_libraries(rex_process_exit_status ROSE_DLL)
+add_test(NAME rex_process_exit_status COMMAND rex_process_exit_status)
+set_tests_properties(rex_process_exit_status
+  PROPERTIES LABELS "rex;process;sanitizer")
+
+add_executable(rex_backend_frontend_failure rex_backend_frontend_failure.cpp)
+target_link_libraries(rex_backend_frontend_failure ROSE_DLL)
+add_test(NAME rex_backend_frontend_failure COMMAND rex_backend_frontend_failure)
+set_tests_properties(rex_backend_frontend_failure
+  PROPERTIES LABELS "rex;backend;sanitizer")
+
+add_test(NAME rex_rosetta_incremental_output
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_rosetta_incremental_output.py
+    $<TARGET_FILE:CxxGrammarMetaProgram> ${ROSE_TOP_SRC_DIR}/src/ROSETTA/Grammar)
+set_tests_properties(rex_rosetta_incremental_output
+  PROPERTIES LABELS "rex;ROSETTA;build-system;sanitizer")
+add_test(NAME rex_rosetta_fragment_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_rosetta_fragment_contract.py
+    $<TARGET_FILE:CxxGrammarMetaProgram> ${ROSE_TOP_SRC_DIR}/src/ROSETTA/Grammar)
+set_tests_properties(rex_rosetta_fragment_contract
+  PROPERTIES LABELS "rex;ROSETTA;build-system;sanitizer")
+
+set(_rex_pool_contract_flags)
+if(ENABLE-SANITIZER)
+  list(JOIN ROSE_SANITIZERS "," _rex_pool_contract_sanitizers)
+  list(APPEND _rex_pool_contract_flags
+    "-fsanitize=${_rex_pool_contract_sanitizers}" -fno-omit-frame-pointer)
+endif()
+add_test(NAME rex_rosetta_pool_fill
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_rosetta_pool_fill.py
+    ${CMAKE_CXX_COMPILER}
+    ${ROSE_TOP_SRC_DIR}/src/ROSETTA/Grammar/grammarNewDeleteOperatorMacros.macro
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_rosetta_pool_fill.cpp.in
+    ${_rex_pool_contract_flags})
+set_tests_properties(rex_rosetta_pool_fill
+  PROPERTIES LABELS "rex;ROSETTA;sanitizer")
+unset(_rex_pool_contract_flags)
+unset(_rex_pool_contract_sanitizers)
+
+if(ENABLE-FORTRAN)
+  add_executable(rex_flang_imported_components rex_flang_imported_components.cpp)
+  target_link_libraries(rex_flang_imported_components ROSE_DLL)
+  add_test(NAME rex_flang_include_paths
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_include_paths.py
+      $<TARGET_FILE:rex_flang_imported_components> ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(rex_flang_include_paths
+    PROPERTIES LABELS "rex;AST;Fortran;sanitizer")
+  add_test(NAME rex_ast_json_shared_modules
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_shared_modules.py
+      $<TARGET_FILE:identityTranslator> ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(rex_ast_json_shared_modules
+    PROPERTIES LABELS "rex;AST;ASTJSON;Fortran;sanitizer")
+  add_test(NAME rex_backend_mixed_languages
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_backend_mixed_languages.py
+      $<TARGET_FILE:identityTranslator> ${CMAKE_COMMAND}
+      ${CMAKE_C_COMPILER} ${CMAKE_CXX_COMPILER} ${CMAKE_Fortran_COMPILER})
+  set_tests_properties(rex_backend_mixed_languages
+    PROPERTIES LABELS "rex;ASTJSON;backend;Fortran;sanitizer")
+  add_test(NAME rex_flang_prescan_source
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_prescan_source.py
+      $<TARGET_FILE:identityTranslator> ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR})
+  set_tests_properties(rex_flang_prescan_source
+    PROPERTIES LABELS "rex;AST;Fortran;sanitizer")
+endif()
+
+add_executable(rex_ast_statement_numbering rex_ast_statement_numbering.cpp)
+target_link_libraries(rex_ast_statement_numbering ROSE_DLL)
+add_test(
+  NAME rex_ast_statement_numbering
+  COMMAND rex_ast_statement_numbering
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_statement_numbering_input.cpp)
+set_tests_properties(rex_ast_statement_numbering
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_template_parameter_spelling
+  rex_template_parameter_spelling.cpp)
+target_link_libraries(rex_template_parameter_spelling ROSE_DLL)
+add_test(
+  NAME rex_template_parameter_spelling
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_template_parameter_spelling>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_input.cpp)
+set_tests_properties(rex_template_parameter_spelling
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_member_address_type rex_member_address_type.cpp)
+target_link_libraries(rex_member_address_type ROSE_DLL)
+add_test(NAME rex_member_address_type
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_member_address_type> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_member_address_type_input.cpp c++17)
+set_tests_properties(rex_member_address_type
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_constructor_semantic_name rex_constructor_semantic_name.cpp)
+target_link_libraries(rex_constructor_semantic_name ROSE_DLL)
+add_test(NAME rex_constructor_semantic_name
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_constructor_semantic_name> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp c++17)
+set_tests_properties(rex_constructor_semantic_name
+  PROPERTIES LABELS "rex;AST;sanitizer")
+add_test(NAME rex_constructor_semantic_name_cxx14
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_constructor_semantic_name> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp c++14)
+set_tests_properties(rex_constructor_semantic_name_cxx14
+  PROPERTIES LABELS "rex;AST;sanitizer")
+add_test(NAME rex_constructor_semantic_name_cxx20
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_constructor_semantic_name> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp c++20)
+set_tests_properties(rex_constructor_semantic_name_cxx20
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+foreach(_array_rejection IN ITEMS anonymous_array_source unnamed_array_reference
+    unnamed_array_source unnamed_array_loop)
+  if(_array_rejection STREQUAL "anonymous_array_source")
+    set(_array_standard c++14)
+    set(_array_diagnostic
+      "REX_UNPARSE_INVARIANT[anonymous-class-type]: source-anonymous class type has no standalone source spelling")
+  else()
+    set(_array_standard c++17)
+    set(_array_diagnostic
+      "REX_UNPARSE_INVARIANT[unnamed-variable-reference]: variable reference has no source identifier")
+  endif()
+  set(_array_test rex_constructor_${_array_rejection}_is_rejected)
+  string(REPLACE "_" "-" _array_mode ${_array_rejection})
+  add_test(NAME ${_array_test}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+ulimit -c 0 || exit
+log=$1
+diagnostic=$2
+shift 2
+"$@" >"$log" 2>&1
+status=$?
+test "$status" -eq 134 &&
+  test "$(grep -Fxc -- "$diagnostic" "$log")" -eq 1
+]=]
+      dummy ${_array_test}.log "${_array_diagnostic}"
+      $<TARGET_FILE:rex_constructor_semantic_name>
+      --reject-${_array_mode} -std=${_array_standard} -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp)
+  set_tests_properties(${_array_test}
+    PROPERTIES LABELS "rex;AST;UNPARSER;sanitizer;death")
+endforeach()
+unset(_array_rejection)
+unset(_array_standard)
+unset(_array_diagnostic)
+unset(_array_test)
+unset(_array_mode)
+
+add_executable(rex_template_enum_identity rex_template_enum_identity.cpp)
+target_include_directories(rex_template_enum_identity PRIVATE
+  ${ROSE_TOP_SRC_DIR}/src/midend/astUtil)
+target_link_libraries(rex_template_enum_identity ROSE_DLL)
+add_test(NAME rex_template_enum_identity
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_template_enum_identity> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_enum_identity_input.cpp c++17)
+set_tests_properties(rex_template_enum_identity
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_template_abbreviated_constraints
+  rex_template_abbreviated_constraints.cpp)
+target_link_libraries(rex_template_abbreviated_constraints ROSE_DLL)
+add_test(NAME rex_template_abbreviated_constraints
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_template_abbreviated_constraints> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_abbreviated_constraints_input.cpp
+    c++20)
+set_tests_properties(rex_template_abbreviated_constraints
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_ast_file_unparse rex_ast_file_unparse.cpp)
+target_link_libraries(rex_ast_file_unparse ROSE_DLL)
+add_test(NAME rex_ast_file_unparse
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_runtime.py
+    $<TARGET_FILE:rex_ast_file_unparse> ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_template_parameter_spelling_input.cpp)
+set_tests_properties(rex_ast_file_unparse
+  PROPERTIES LABELS "rex;AST;sanitizer")
+
+add_executable(rex_slicing_cleanup rex_slicing_cleanup.cpp)
+target_link_libraries(rex_slicing_cleanup ROSE_DLL)
+add_test(NAME rex_slicing_cleanup COMMAND rex_slicing_cleanup
+  -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_slicing_cleanup_input.cpp)
+set_tests_properties(rex_slicing_cleanup
+  PROPERTIES LABELS "rex;analysis;sanitizer")
+
+add_executable(rex_macro_expansion_lifetime rex_macro_expansion_lifetime.cpp)
+target_link_libraries(rex_macro_expansion_lifetime ROSE_DLL)
+add_test(NAME rex_macro_expansion_lifetime COMMAND rex_macro_expansion_lifetime
+  -rose:unparse_tokens -c
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_macro_expansion_lifetime_input.cpp)
+set_tests_properties(rex_macro_expansion_lifetime
+  PROPERTIES LABELS "rex;AST;sanitizer")
 
 file(GENERATE OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/test_output_path.h CONTENT [=[
 #pragma once
@@ -95,6 +619,22 @@ add_test(
 set_tests_properties(rex_build_script_preserves_search_paths
   PROPERTIES LABELS "rex;build-system")
 
+add_test(NAME rex_build_script_submodules
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_build_script_submodules.py
+    ${ROSE_TOP_SRC_DIR}/build-rex.sh)
+set_tests_properties(rex_build_script_submodules
+  PROPERTIES LABELS "rex;build-system" TIMEOUT 60)
+
+add_test(NAME rex_build_script_toolchain_prefix
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_build_script_toolchain_prefix.py
+    ${ROSE_TOP_SRC_DIR}/build-rex.sh
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_flang_frontend_manifest.cmake
+    ${ROSE_TOP_SRC_DIR}/cmake/rex_check_flang_installation.cmake)
+set_tests_properties(rex_build_script_toolchain_prefix
+  PROPERTIES LABELS "rex;build-system")
+
 add_test(
   NAME rex_ci_llvm_env_preserves_search_paths
   COMMAND ${BASH_EXECUTABLE}
@@ -147,6 +687,20 @@ add_test(
 set_tests_properties(rex_policy_submodule_snapshot_contract
   PROPERTIES LABELS "rex;build-system;CI;policy")
 
+add_test(NAME rex_policy_current_source_inventory
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_policy_current_source_inventory.py
+    ${ROSE_TOP_SRC_DIR}/scripts/policies/NoTabCharacters.pl)
+set_tests_properties(rex_policy_current_source_inventory
+  PROPERTIES LABELS "rex;build-system;CI;policy")
+
+add_test(NAME rex_policy_filename_inventory
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_policy_filename_inventory.py
+    ${ROSE_TOP_SRC_DIR}/scripts/policies/CaseInsensitiveFileNames.pl)
+set_tests_properties(rex_policy_filename_inventory
+  PROPERTIES LABELS "rex;build-system;CI;policy")
+
 add_test(
   NAME rex_ctest_name_set_fixture_contract
   COMMAND ${BASH_EXECUTABLE}
@@ -170,6 +724,24 @@ add_test(
 set_tests_properties(rex_docs_cpp_compilation_db_contract
   PROPERTIES LABELS "rex;build-system;CI;docs")
 
+if(UNIX)
+  # Deliberately terminate CTest while a child is running. Memory runs exclude
+  # intentional process-termination controls through the existing death policy.
+  add_test(
+    NAME rex_ctest_interruption
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ctest_interruption.py
+      ${ROSE_TOP_SRC_DIR}/scripts/run_ctest_name_set.py
+      ${CMAKE_COMMAND} ${CMAKE_CTEST_COMMAND}
+      ${CMAKE_CURRENT_BINARY_DIR}/ctest_interruption)
+  set_tests_properties(rex_ctest_interruption
+    PROPERTIES LABELS "rex;build-system;CI;death" TIMEOUT 60)
+endif()
+
+if(ROSE_CTEST_MEMCHECK_WRAPPER)
+  separate_arguments(_rex_memcheck_contract_options UNIX_COMMAND
+    "${ROSE_CTEST_MEMCHECK_OPTIONS}")
+endif()
 if(ROSE_CTEST_MEMCHECK_WRAPPER AND CMAKE_Fortran_COMPILER)
   add_test(
     NAME rex_ctest_valgrind_wrapper_contract
@@ -180,9 +752,49 @@ if(ROSE_CTEST_MEMCHECK_WRAPPER AND CMAKE_Fortran_COMPILER)
       ${CMAKE_C_COMPILER}
       ${CMAKE_CXX_COMPILER}
       ${CMAKE_Fortran_COMPILER}
-      ${CMAKE_CURRENT_BINARY_DIR}/ctest_valgrind_wrapper_contract)
+      ${CMAKE_CURRENT_BINARY_DIR}/ctest_valgrind_wrapper_contract
+      ${_rex_memcheck_contract_options}
+      --suppressions=${ROSE_CTEST_MEMCHECK_SUPPRESSIONS})
   set_tests_properties(rex_ctest_valgrind_wrapper_contract
     PROPERTIES LABELS "rex;build-system;CI;memcheck")
+endif()
+
+if(ROSE_CTEST_MEMCHECK_WRAPPER)
+  add_test(
+    NAME rex_ctest_memcheck_result_contract
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ctest_memcheck_result_contract.py
+      ${CMAKE_COMMAND} ${CMAKE_CTEST_COMMAND} ${CMAKE_C_COMPILER}
+      ${ROSE_CTEST_MEMCHECK_WRAPPER} ${ROSE_TOP_SRC_DIR}
+      ${CMAKE_CURRENT_BINARY_DIR}/ctest_memcheck_result_contract)
+  set_tests_properties(rex_ctest_memcheck_result_contract
+    PROPERTIES LABELS "rex;build-system;CI;memcheck")
+
+  if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    add_test(
+      NAME rex_memcheck_external_boundary
+      COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_memcheck_external_boundary.py
+        ${CMAKE_C_COMPILER} ${ROSE_CTEST_MEMCHECK_WRAPPER}
+        ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}
+        ${CMAKE_CURRENT_BINARY_DIR}/memcheck_external_boundary
+        ${_rex_memcheck_contract_options})
+    set_tests_properties(rex_memcheck_external_boundary
+      PROPERTIES LABELS "rex;build-system;CI;memcheck")
+    if(ROSE_LLVM_CLANG_C_DRIVER AND ROSE_LLVM_CLANG_CXX_DRIVER)
+      add_test(
+        NAME rex_memcheck_compiler_boundaries
+        COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_memcheck_compiler_boundaries.py
+          ${ROSE_CTEST_MEMCHECK_WRAPPER}
+          ${ROSE_LLVM_CLANG_C_DRIVER} ${ROSE_LLVM_CLANG_CXX_DRIVER}
+          ${ROSE_CTEST_MEMCHECK_SUPPRESSIONS}
+          ${CMAKE_CURRENT_BINARY_DIR}/memcheck_compiler_boundaries
+          ${_rex_memcheck_contract_options})
+      set_tests_properties(rex_memcheck_compiler_boundaries
+        PROPERTIES LABELS "rex;build-system;CI;memcheck")
+    endif()
+  endif()
 endif()
 
 set(_openmp_specimens_path
@@ -644,3 +1256,201 @@ foreach(specimen IN LISTS SAGE_ALIAS_ANALYSIS)
   _sage_set_output_env(${_test_name})
   _sage_add_diff_test(${_test_name} ${_output})
 endforeach()
+
+if(TARGET astCopyReplTest)
+  set(_rex_copy_example_options)
+  if(ENABLE-FORTRAN)
+    list(APPEND _rex_copy_example_options --fortran)
+  endif()
+  add_test(NAME rex_copy_replacement_example
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_replacement_example.py
+      --translator $<TARGET_FILE:astCopyReplTest> ${_rex_copy_example_options})
+  set_tests_properties(rex_copy_replacement_example
+    PROPERTIES LABELS "examples;frontend;ownership")
+  add_test(NAME rex_copy_replacement_lambda
+    COMMAND astCopyReplTest -std=c++17 -c
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/copyAST_tests/rex_copy_structural_ownership_contract_input.cpp)
+  set_tests_properties(rex_copy_replacement_lambda
+    PROPERTIES LABELS "examples;frontend;ownership")
+  unset(_rex_copy_example_options)
+endif()
+
+if(TARGET astTermGenerator AND TARGET pdfGenerator)
+  add_test(NAME rex_example_output_contract
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_example_output_contract.py
+      --term-generator $<TARGET_FILE:astTermGenerator>
+      --pdf-generator $<TARGET_FILE:pdfGenerator>
+      --work "${CMAKE_CURRENT_BINARY_DIR}/example output contract")
+  set_tests_properties(rex_example_output_contract PROPERTIES LABELS "examples;frontend")
+endif()
+
+
+add_executable(rex_ast_enclosing_node_contract rex_ast_enclosing_node_contract.cpp)
+target_link_libraries(rex_ast_enclosing_node_contract PRIVATE ROSE_DLL)
+foreach(mode IN ITEMS deep declarations)
+  add_test(NAME rex_ast_enclosing_node_${mode}
+    COMMAND rex_ast_enclosing_node_contract ${mode})
+  set_tests_properties(rex_ast_enclosing_node_${mode}
+    PROPERTIES LABELS "rex;AST;SageInterface")
+endforeach()
+add_test(NAME rex_ast_statement_scope_deep
+  COMMAND rex_ast_enclosing_node_contract scope_deep)
+set_tests_properties(rex_ast_statement_scope_deep
+  PROPERTIES LABELS "rex;AST;SageInterface")
+
+add_executable(rex_ast_traversal_attributes rex_ast_traversal_attributes.cpp)
+target_link_libraries(rex_ast_traversal_attributes PRIVATE ROSE_DLL)
+add_test(NAME rex_ast_traversal_attributes COMMAND rex_ast_traversal_attributes)
+set_tests_properties(rex_ast_traversal_attributes
+  PROPERTIES LABELS "rex;AST;SageInterface")
+
+add_executable(rex_ast_traversal_diagnostics rex_ast_traversal_diagnostics.cpp)
+target_link_libraries(rex_ast_traversal_diagnostics PRIVATE ROSE_DLL)
+add_test(NAME rex_ast_traversal_diagnostics_valid
+  COMMAND rex_ast_traversal_diagnostics valid)
+set_tests_properties(rex_ast_traversal_diagnostics_valid
+  PROPERTIES LABELS "rex;AST;SageInterface")
+
+function(_rex_add_ast_diagnostic_death_test name target mode diagnostic)
+  add_test(NAME ${name}
+    COMMAND ${BASH_EXECUTABLE} -c
+      [=[ulimit -c 0 || exit
+log="$0.log"
+"$1" "$2" >"$log" 2>&1
+status=$?
+test "$status" -eq 134 && test "$(grep -Fc -- "$3" "$log")" -eq 1]=]
+      ${name} $<TARGET_FILE:${target}> ${mode} "${diagnostic}")
+  set_tests_properties(${name} PROPERTIES LABELS "rex;AST;SageInterface;death")
+endfunction()
+
+if(ENABLE-C)
+  _rex_add_ast_diagnostic_death_test(rex_callgraph_missing_member_symbol_is_rejected
+    rex_callgraph_implicit_conversion missing_member_symbol
+    "memberFunctionSymbol != nullptr")
+  _rex_add_ast_diagnostic_death_test(rex_callgraph_missing_member_declaration_is_rejected
+    rex_callgraph_implicit_conversion missing_member_declaration
+    "declaration != nullptr")
+endif()
+
+foreach(mode IN ITEMS cycle semantic_cycle)
+  _rex_add_ast_diagnostic_death_test(rex_ast_enclosing_node_${mode}_is_rejected
+    rex_ast_enclosing_node_contract ${mode}
+    "next == nullptr || next != checkpoint")
+endforeach()
+_rex_add_ast_diagnostic_death_test(rex_ast_statement_scope_cycle_is_rejected
+  rex_ast_enclosing_node_contract scope_cycle
+  "REX_AST_INVARIANT[statement-scope-cycle]")
+_rex_add_ast_diagnostic_death_test(rex_ast_ancestor_cycle_is_rejected
+  rex_ast_enclosing_node_contract ancestor_cycle
+  "REX_AST_INVARIANT[ancestor-parent-cycle]")
+foreach(mode IN ITEMS count names)
+  _rex_add_ast_diagnostic_death_test(rex_ast_traversal_${mode}_is_rejected
+    rex_ast_traversal_diagnostics ${mode}
+    "REX_AST_INVARIANT[traversal-cardinality]")
+endforeach()
+foreach(mode IN ITEMS null duplicate)
+  _rex_add_ast_diagnostic_death_test(rex_ast_traversal_${mode}_is_rejected
+    rex_ast_traversal_diagnostics ${mode}
+    "REX_AST_INVARIANT[traversal-identity]")
+endforeach()
+
+add_executable(rex_ast_parent_ownership rex_ast_parent_ownership.cpp)
+target_link_libraries(rex_ast_parent_ownership PRIVATE ROSE_DLL)
+add_test(NAME rex_ast_parent_ownership_valid
+  COMMAND rex_ast_parent_ownership valid)
+set_tests_properties(rex_ast_parent_ownership_valid
+  PROPERTIES LABELS "rex;AST;SageInterface")
+foreach(mode IN ITEMS wrong missing)
+  _rex_add_ast_diagnostic_death_test(rex_ast_parent_${mode}_is_rejected
+    rex_ast_parent_ownership ${mode}
+    "REX_AST_INVARIANT[parent-ownership]")
+endforeach()
+
+add_test(NAME rex_ast_parent_ownership_reuse
+  COMMAND rex_ast_parent_ownership reuse)
+set_tests_properties(rex_ast_parent_ownership_reuse
+  PROPERTIES LABELS "rex;AST;SageInterface")
+_rex_add_ast_diagnostic_death_test(rex_ast_parent_duplicate_structural_node_is_rejected
+  rex_ast_parent_ownership duplicate
+  "REX_AST_INVARIANT[unique-structural-node]")
+
+add_executable(rex_ast_nonreal_scope rex_ast_nonreal_scope.cpp)
+target_link_libraries(rex_ast_nonreal_scope PRIVATE ROSE_DLL)
+add_test(NAME rex_ast_nonreal_scope_valid COMMAND rex_ast_nonreal_scope valid)
+set_tests_properties(rex_ast_nonreal_scope_valid
+  PROPERTIES LABELS "rex;AST;SageInterface")
+_rex_add_ast_diagnostic_death_test(rex_ast_nonreal_missing_scope_is_rejected
+  rex_ast_nonreal_scope missing "REX_AST_INVARIANT[nonreal-declaration-scope]")
+_rex_add_ast_diagnostic_death_test(rex_ast_nonreal_owner_cycle_is_rejected
+  rex_ast_nonreal_scope cycle "nonreal declaration ownership contains a cycle")
+_rex_add_ast_diagnostic_death_test(rex_ast_nonreal_duplicate_argument_is_rejected
+  rex_ast_nonreal_scope duplicate_argument "duplicate nonreal template argument")
+_rex_add_ast_diagnostic_death_test(rex_ast_nonreal_pack_marker_is_rejected
+  rex_ast_nonreal_scope pack_marker "nonreal-pack-marker")
+_rex_add_ast_diagnostic_death_test(rex_ast_template_expression_cycle_is_rejected
+  rex_ast_nonreal_scope template_expression_cycle
+  "REX_AST_INVARIANT[template-identity]: template expression contains a cycle")
+
+add_executable(rex_ast_nonreal_symbol_scope rex_ast_nonreal_symbol_scope.cpp)
+target_link_libraries(rex_ast_nonreal_symbol_scope PRIVATE ROSE_DLL)
+add_test(NAME rex_ast_nonreal_symbol_scope_valid COMMAND rex_ast_nonreal_symbol_scope valid)
+set_tests_properties(rex_ast_nonreal_symbol_scope_valid
+  PROPERTIES LABELS "rex;AST;SageInterface")
+_rex_add_ast_diagnostic_death_test(rex_ast_nonreal_wrong_symbol_scope_is_rejected
+  rex_ast_nonreal_symbol_scope wrong "REX_AST_INVARIANT[nonreal-symbol-scope]")
+
+add_executable(rex_sagebuilder_frontend_failure rex_sagebuilder_frontend_failure.cpp)
+target_link_libraries(rex_sagebuilder_frontend_failure PRIVATE ROSE_DLL)
+add_test(NAME rex_sagebuilder_missing_input_is_rejected
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_sagebuilder_missing_input.py
+    $<TARGET_FILE:rex_sagebuilder_frontend_failure>)
+set_tests_properties(rex_sagebuilder_missing_input_is_rejected
+  PROPERTIES LABELS "rex;AST;SageInterface;death")
+if(ENABLE-FORTRAN)
+  _rex_add_ast_diagnostic_death_test(rex_sagebuilder_failed_frontend_is_rejected
+    rex_sagebuilder_frontend_failure
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_sagebuilder_frontend_failure.f90
+    "REX_SAGEBUILDER_INVARIANT[file-frontend-failure]")
+endif()
+
+add_executable(rex_sagebuilder_copied_preprocessing rex_sagebuilder_copied_preprocessing.cpp)
+target_link_libraries(rex_sagebuilder_copied_preprocessing PRIVATE ROSE_DLL)
+set(_rex_copied_preprocessing_languages c cpp)
+if(ENABLE-FORTRAN)
+  list(APPEND _rex_copied_preprocessing_languages f90)
+endif()
+foreach(language IN LISTS _rex_copied_preprocessing_languages)
+  add_test(NAME rex_sagebuilder_copied_preprocessing_${language}
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_sagebuilder_copied_preprocessing.py
+      $<TARGET_FILE:rex_sagebuilder_copied_preprocessing> ${language})
+  set_tests_properties(rex_sagebuilder_copied_preprocessing_${language}
+    PROPERTIES LABELS "rex;AST;SageInterface;preprocessing")
+endforeach()
+unset(_rex_copied_preprocessing_languages)
+
+add_test(NAME rex_cmake_valgrind_selection
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_valgrind_selection.py
+    ${ROSE_TOP_SRC_DIR}/CMakeLists.txt ${CMAKE_COMMAND})
+set_tests_properties(rex_cmake_valgrind_selection
+  PROPERTIES LABELS "rex;build-system;CI")
+
+add_test(NAME rex_cmake_flang_header_selection
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_flang_header_selection.py
+    ${ROSE_TOP_SRC_DIR}/CMakeLists.txt ${CMAKE_COMMAND})
+set_tests_properties(rex_cmake_flang_header_selection
+  PROPERTIES LABELS "rex;build-system")
+
+add_executable(rex_walrus_graph_output rex_walrus_graph_output.cpp)
+target_link_libraries(rex_walrus_graph_output PRIVATE ROSE_DLL)
+add_test(NAME rex_walrus_graph_output
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_walrus_graph_output.py
+    $<TARGET_FILE:rex_walrus_graph_output>)
+set_tests_properties(rex_walrus_graph_output
+  PROPERTIES LABELS "rex;AST;SageInterface;graph")

@@ -9,7 +9,6 @@
 #include "roseInternal.h"
 
 #include <set>
-// #include "sage3.h"
 
 class ROSE_DLL_API AstDOTGeneration : public DOTGeneration<SgNode *> {
 public:
@@ -47,13 +46,6 @@ protected:
 
   // DQ (11/1/2003) added mechanism to add node options (to add color, etc.)
   std::string additionalNodeOptions(SgNode *node);
-
-  // DQ (3/5/2007) added mechanism to add edge options (to add color, etc.)
-  std::string additionalEdgeInfo(SgNode *from, SgNode *to, std::string label);
-
-  // DQ (3/5/2007) added mechanism to add edge options (to add color, etc.)
-  std::string additionalEdgeOptions(SgNode *from, SgNode *to,
-                                    std::string label);
 
   // DQ (7/27/2008): Added support to eliminate IR nodes in DOT graphs
   // (to tailor the presentation of information about ASTs).
@@ -131,10 +123,6 @@ struct DefaultExtraEdgeOptions {
 };
 } // namespace AstDOTGenerationExtended_Defaults
 
-// King84 (14/7/2010) added mechanism to customize node options on demand
-// Note: aditionalEdgeInfo andadditionalEdgeOptions are inherited.
-// Note: EdgeInfo and EdgeOptions are not used because they come into play
-//       for functions in the base class which are not virtual.
 template <typename ExtraNodeInfo_t =
               AstDOTGenerationExtended_Defaults::DefaultExtraNodeInfo,
           typename ExtraNodeOptions_t =
@@ -156,8 +144,6 @@ public:
                            ExtraEdgeInfo_t eei_ = ExtraEdgeInfo_t(),
                            ExtraEdgeOptions_t eeo_ = ExtraEdgeOptions_t())
       : eni(eni_), eno(eno_), eei(eei_), eeo(eeo_) {}
-  // virtual DOTInheritedAttribute evaluateInheritedAttribute(SgNode* node,
-  // DOTInheritedAttribute ia);
   virtual DOTSynthesizedAttribute
   evaluateSynthesizedAttribute(SgNode *node, DOTInheritedAttribute ia,
                                SubTreeSynthesizedAttributes l);

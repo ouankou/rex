@@ -1,3 +1,5 @@
+#include "rex_unparser_inline_definition_type.hpp"
+
 namespace rex_typed_type_context_types {
 using Lane = unsigned int;
 
@@ -28,5 +30,8 @@ int main() {
   rex_typed_type_context_owner::Owner::Callback callback =
       &rex_typed_type_context_owner::Owner::invoke;
   RexQualifiedVector lanes = {};
-  return (owner.*callback)({17}, nullptr, lanes).value == 17 ? 0 : 1;
+  return (owner.*callback)({17}, nullptr, lanes).value == 17 &&
+                 rex_inline_definition_type(0) == 0
+             ? 0
+             : 1;
 }

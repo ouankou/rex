@@ -3,6 +3,8 @@
 
 #include "printAnalysisStates.h"
 
+using namespace VirtualCFG;
+
 printAnalysisStates::printAnalysisStates(Analysis *creator,
                                          vector<int> &factNames,
                                          vector<int> &latticeNames, ab latSide,
@@ -23,11 +25,6 @@ void printAnalysisStates::visit(const Function &func, const DataflowNode &n,
            << n.getIndex() << "] state=" << (&state) << " n=" << (&n)
            << " sgn=" << n.getNode() << " creator=" << creator;
   Dbg::enterFunc(funcName.str());
-  // const vector<Lattice*>* masterLat;
-  // if(latSide==above) masterLat = &(state.getLatticeAbove(creator));
-  // else               masterLat = &(state.getLatticeBelow(creator));
-  // printf("    creator=%p, state=%p, masterLat.size()=%lu\n", creator, &state,
-  // (unsigned long)(masterLat->size()));
   for (vector<int>::iterator it = factNames.begin(); it != factNames.end();
        it++) {
     NodeFact *fact = state.getFact(creator, *it);
@@ -51,8 +48,6 @@ void printAnalysisStates::visit(const Function &func, const DataflowNode &n,
     else
       Dbg::dbg << indent << "    lattice" << *it << " = None\n";
   }
-  // printf("    creator=%p, masterLat.size()=%lu\n", creator, (unsigned
-  // long)(masterLat->size()));
   Dbg::exitFunc(funcName.str());
 }
 

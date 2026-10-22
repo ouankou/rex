@@ -25,16 +25,30 @@ int main(int argc, char *argv[]) {
   Rose_STL_Container<SgNode *> instantiations =
       NodeQuery::querySubTree(project, V_SgTemplateInstantiationDecl);
   ROSE_ASSERT(!instantiations.empty());
+  bool saw_defaulted_instantiation = false;
   for (SgNode *node : instantiations) {
     SgTemplateInstantiationDecl *decl = isSgTemplateInstantiationDecl(node);
     ROSE_ASSERT(decl != nullptr);
     ROSE_ASSERT(decl->get_symbol_from_symbol_table() != nullptr);
     SgScopeStatement *scope = decl->get_scope();
     ROSE_ASSERT(scope != nullptr);
+    SgClassSymbol *typed_symbol =
+        scope->get_symbol_table()->find_class_instantiation(
+            decl->get_templateDeclaration(),
+            decl->get_semanticTemplateArguments());
+    ROSE_ASSERT(typed_symbol != nullptr);
+    ROSE_ASSERT(typed_symbol->get_declaration() ==
+                decl->get_firstNondefiningDeclaration());
     Sg_File_Info *info = decl->get_file_info();
     const bool sourceWritten = info != nullptr && info->get_line() > 0 &&
                                !info->isCompilerGenerated() &&
                                !info->isSourcePositionUnavailableInFrontend();
+    if (decl->get_templateName() == "DefaultHolder") {
+      saw_defaulted_instantiation = true;
+      ROSE_ASSERT(!sourceWritten);
+      ROSE_ASSERT(decl->get_templateArguments().empty());
+      ROSE_ASSERT(decl->get_semanticTemplateArguments().size() == 1);
+    }
     if (sourceWritten) {
       ROSE_ASSERT(decl->get_parent() == scope);
       ROSE_ASSERT(scope->statementExistsInScope(decl));
@@ -53,6 +67,7 @@ int main(int argc, char *argv[]) {
     }
     ROSE_ASSERT(decl->isOutputInCodeGeneration());
   }
+  ROSE_ASSERT(saw_defaulted_instantiation);
 
   Rose_STL_Container<SgNode *> tmpl_vars =
       NodeQuery::querySubTree(project, V_SgTemplateVariableDeclaration);

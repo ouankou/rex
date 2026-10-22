@@ -83,7 +83,7 @@ set(_omp_intel_simd_identity_contract_input
 set(_omp_clause_copy_identity_input
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_omp_clause_copy_identity_input.c)
 
-foreach(_abi IN ITEMS lp64 ilp32)
+foreach(_abi IN ITEMS lp64 ilp32 llp64)
   add_test(
     NAME omp_lowering_rex_runtime_int64_${_abi}_contract
     WORKING_DIRECTORY ${_omp_lowering_test_output_dir}
@@ -465,11 +465,12 @@ function(add_omp_semantic_test test_name translator compiler input_file mode lan
             ${_omp_lowering_test_output_dir}/${work_subdir}
             ${mode}
             ${ROSE_LLVM_OPENMP_INCLUDE_DIR}
-            ${ROSE_LLVM_OPENMP_RUNTIME_DIR}
+            ${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}
             ${_omp_lowering_inc}
             ${input_file}
             ${language}
-            ${ROSE_OPENMP_VERSION})
+            ${ROSE_OPENMP_VERSION}
+            $<TARGET_FILE:xomp>)
   _omp_set_test_timeout(${test_name} 900)
   _set_omp_test_sanitizer_environment(${test_name})
   _label_omp_semantic(${test_name})
@@ -510,6 +511,7 @@ set(OMP_C_COMPILE_BASE_CASES
   twoRegions.c)
 
 set(OMP_C_RUNTIME_BASE_CASES
+  rex_omp_induction_type.c
   3loops.c
   array_init.c
   array_init_2.c
@@ -591,9 +593,13 @@ set(OMP_C_RUNTIME_BASE_CASES
 set(OMP_CXX_COMPILE_BASE_CASES
   memberFunction.cpp
   memberFunction2.cpp
+  rex_test2026_mapper_template_reachable_scope.cpp
   referenceType.cpp)
 
 set(OMP_CXX_RUNTIME_BASE_CASES
+  rex_openmp_task_object_lifetime.cpp
+  rex_openmp_attribute_constructs.cpp
+  rex_omp_induction_type.cpp
   hello1.cpp
   helloNested.cpp
   objectPrivate.cpp
@@ -612,6 +618,7 @@ set(OMP_ACC_CXX_CASES)
 # Keep semantic-compare cases deterministic. Exclude tests such as private.c
 # that intentionally read uninitialized private variables (undefined behavior).
 set(OMP_C_SEMANTIC_CASES
+  rex_omp_induction_type.c
   barrier.c
   flush.c
   hello.c
@@ -637,6 +644,9 @@ set(OMP_C_SEMANTIC_CASES
   single.c)
 
 set(OMP_CXX_SEMANTIC_CASES
+  rex_openmp_task_object_lifetime.cpp
+  rex_openmp_attribute_constructs.cpp
+  rex_omp_induction_type.cpp
   hello1.cpp
   objectFirstPrivate.cpp
   objectLastprivate.cpp
@@ -646,6 +656,7 @@ set(OMP_CXX_SEMANTIC_CASES
   rex_omp_lowering_typed_transform_constants.cpp)
 
 set(OMP_C_INVARIANT_CASES
+  rex_omp_induction_type.c
   barrier.c
   flush.c
   hello.c
@@ -676,6 +687,7 @@ set(OMP_C_INVARIANT_CASES
   twoRegions.c)
 
 set(OMP_CXX_INVARIANT_CASES
+  rex_omp_induction_type.cpp
   hello1.cpp
   objectFirstPrivate.cpp
   objectLastprivate.cpp
@@ -737,7 +749,6 @@ foreach(testcode IN LISTS OMP_CXX_ALL_CASES)
   _append_omp_legacy_case(${testcode} cxx ${_profile} sort ${_invariant})
 endforeach()
 
-set(_omp_c_semantic_enabled ON)
 if(NOT ROSE_LLVM_CLANG_C_DRIVER OR
    NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_C_DRIVER}" OR
    NOT EXISTS "${ROSE_LLVM_CLANG_C_DRIVER}")
@@ -750,13 +761,30 @@ if(NOT ROSE_LLVM_OPENMP_INCLUDE_DIR OR NOT EXISTS "${ROSE_LLVM_OPENMP_INCLUDE_DI
     "Legacy lowering semantic tests require the exact frontend OpenMP header: "
     "'${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h'")
 endif()
-if(NOT ROSE_LLVM_OPENMP_RUNTIME_DIR)
+if(NOT ROSE_LLVM_OPENMP_RUNTIME_LIBRARY OR
+   NOT EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
   message(FATAL_ERROR
     "Legacy lowering semantic tests require the exact frontend OpenMP "
-    "runtime directory")
+    "runtime library")
 endif()
 
-set(_omp_cxx_semantic_enabled ON)
+add_omp_semantic_test(
+  omp_lowering_c_semantic_rex_openmp_task_capture_lifetime
+  $<TARGET_FILE:roseomp>
+  ${ROSE_LLVM_CLANG_C_DRIVER}
+  rex_openmp_task_capture_lifetime.c
+  exact
+  c
+  task_capture_lifetime)
+add_omp_semantic_test(
+  omp_lowering_c_semantic_ordered_exact
+  $<TARGET_FILE:roseomp>
+  ${ROSE_LLVM_CLANG_C_DRIVER}
+  ordered.c
+  exact
+  c
+  ordered_exact)
+
 if(NOT ROSE_LLVM_CLANG_CXX_DRIVER OR
    NOT IS_ABSOLUTE "${ROSE_LLVM_CLANG_CXX_DRIVER}" OR
    NOT EXISTS "${ROSE_LLVM_CLANG_CXX_DRIVER}")
@@ -770,16 +798,22 @@ if(ENABLE-C AND
    CMAKE_HOST_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
   set(_omp_simd_x86_target_args
     -target x86_64-unknown-linux-gnu)
-  if(_omp_c_semantic_enabled)
-    add_omp_semantic_test(
-      omp_lowering_c_semantic_rex_omp_simd_ordered_runtime_c
-      $<TARGET_FILE:rex_omp_simd_addr3_translator>
-      ${ROSE_LLVM_CLANG_C_DRIVER}
-      rex_omp_simd_ordered_runtime.c
-      exact
-      c
-      simd_addr3/rex_omp_simd_ordered_runtime_c)
-  endif()
+  add_omp_semantic_test(
+    omp_lowering_cxx_semantic_rex_omp_simd_reduction_identity_cpp
+    $<TARGET_FILE:rex_omp_simd_addr3_translator>
+    ${ROSE_LLVM_CLANG_CXX_DRIVER}
+    rex_omp_simd_reduction_identity.cpp
+    exact
+    cxx
+    simd_addr3/rex_omp_simd_reduction_identity_cpp)
+  add_omp_semantic_test(
+    omp_lowering_c_semantic_rex_omp_simd_ordered_runtime_c
+    $<TARGET_FILE:rex_omp_simd_addr3_translator>
+    ${ROSE_LLVM_CLANG_C_DRIVER}
+    rex_omp_simd_ordered_runtime.c
+    exact
+    c
+    simd_addr3/rex_omp_simd_ordered_runtime_c)
 
   set(_omp_simd_length_cases
     "absent|rex_omp_simd_length_absent.c|_mm512_loadu_ps"
@@ -852,16 +886,8 @@ if(ENABLE-C AND
       PROPERTIES LABELS "rex;death;OMPLOWERING;OMPLOWERING_SIMD")
   endforeach()
 
-  execute_process(
-    COMMAND ${ROSE_LLVM_CLANG_CXX_DRIVER} -print-resource-dir
-    RESULT_VARIABLE _clang_resource_dir_status
-    OUTPUT_VARIABLE _clang_resource_dir
-    ERROR_VARIABLE _clang_resource_dir_error
-    OUTPUT_STRIP_TRAILING_WHITESPACE)
-  if(NOT _clang_resource_dir_status EQUAL 0 OR _clang_resource_dir STREQUAL "")
-    message(FATAL_ERROR
-      "Clang resource directory query failed: ${_clang_resource_dir_error}")
-  endif()
+  rex_require_clang_resource_directory("${ROSE_LLVM_CLANG_CXX_DRIVER}"
+    _clang_resource_dir)
   set(_clang_immintrin_header
     "${_clang_resource_dir}/include/immintrin.h")
   if(NOT EXISTS "${_clang_immintrin_header}")
@@ -885,8 +911,7 @@ endif()
 
 if(ENABLE-C)
   set(_omp_integral_constant_death_cases
-    "plain_char|rex_omp_unroll_plain_char_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeChar has no persisted target signedness contract$"
-    "wchar|rex_omp_unroll_wchar_invalid.cpp|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-abi\\]: type=0x[[:xdigit:]]+ kind=SgTypeWchar has no persisted target signedness contract$"
+    "plain_char|rex_omp_unroll_plain_char_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[unroll-factor\\]: expression=0x[[:xdigit:]]+ kind=SgVarRefExp is not one exact positive target-ABI integral constant in \\[1,18446744073709551615\\]$"
     "negative_shift|rex_omp_unroll_negative_shift_invalid.c|^REX_OMP_LOWERING_INVARIANT\\[integral-constant-shift\\]: negative signed right shift has no persisted target policy$")
   foreach(_case IN LISTS _omp_integral_constant_death_cases)
     string(REPLACE "|" ";" _fields "${_case}")
@@ -914,20 +939,15 @@ if(ENABLE-C)
     list(GET _case_fields 4 _invariant)
 
     _omp_sanitize_name(_omp_name ${testcode})
-    set(_semantic_enabled ON)
-    set(_compiler "")
     if(_language STREQUAL "c")
-      set(_semantic_enabled ${_omp_c_semantic_enabled})
       set(_compiler ${ROSE_LLVM_CLANG_C_DRIVER})
     elseif(_language STREQUAL "cxx")
-      set(_semantic_enabled ${_omp_cxx_semantic_enabled})
       set(_compiler ${ROSE_LLVM_CLANG_CXX_DRIVER})
     else()
       message(FATAL_ERROR "Unexpected language '${_language}' in OMP_LEGACY_CASE_MATRIX")
     endif()
 
-    set(_semantic_selected OFF)
-    if(_profile STREQUAL "semantic" AND _semantic_enabled)
+    if(_profile STREQUAL "semantic")
       add_omp_semantic_test(
         omp_lowering_${_language}_semantic_${_omp_name}
         $<TARGET_FILE:roseomp>
@@ -936,7 +956,6 @@ if(ENABLE-C)
         ${_mode}
         ${_language}
         legacy_semantic/${_language}/${_omp_name})
-      set(_semantic_selected ON)
     else()
       add_omp_translate_only_test(
         omp_lowering_${_language}_compile_only_${_omp_name}
@@ -948,7 +967,7 @@ if(ENABLE-C)
     if(_invariant STREQUAL "on")
       set(_invariant_dep
           omp_lowering_${_language}_compile_only_${_omp_name})
-      if(_semantic_selected)
+      if(_profile STREQUAL "semantic")
         set(_invariant_dep
             omp_lowering_${_language}_semantic_${_omp_name})
       endif()
@@ -970,19 +989,32 @@ if(ENABLE-C)
     endif()
   endforeach()
 
+  set(_full_verify_dir
+      ${_omp_lowering_test_output_dir}/legacy_compile_only/c/full_verify_c)
+  set_tests_properties(omp_lowering_c_compile_only_full_verify_c
+    PROPERTIES FIXTURES_SETUP rex_omp_full_verify_sources)
+  add_test(NAME rex_omp_full_verify_host_compile
+    COMMAND ${ROSE_LLVM_CLANG_C_DRIVER} -std=c11 -fopenmp
+      -I${_omp_lowering_inc}
+      -c ${_full_verify_dir}/rose_full_verify.c
+      -o ${_full_verify_dir}/native_host.o)
+  add_test(NAME rex_omp_full_verify_outlined_compile
+    COMMAND ${ROSE_LLVM_CLANG_C_DRIVER} -std=c11 -fopenmp
+      -I${_omp_lowering_inc}
+      -c ${_full_verify_dir}/rex_lib_full_verify.c
+      -o ${_full_verify_dir}/native_outlined.o)
+  set_tests_properties(rex_omp_full_verify_host_compile
+    rex_omp_full_verify_outlined_compile
+    PROPERTIES FIXTURES_REQUIRED rex_omp_full_verify_sources
+      TIMEOUT 120 LABELS "rex;OMPLOWERING;OMPLOWERING_GENERATED_COMPILE")
+  unset(_full_verify_dir)
+
   set(_loop_transform_ownership_name
       rex_omp_lowering_loop_transform_ownership_c)
-  if(_omp_c_semantic_enabled)
-    set(_loop_transform_ownership_translate_test
-        omp_lowering_c_semantic_${_loop_transform_ownership_name})
-    set(_loop_transform_ownership_generated_source
-        ${_omp_lowering_test_output_dir}/legacy_semantic/c/${_loop_transform_ownership_name}/rose_rex_omp_lowering_loop_transform_ownership.c)
-  else()
-    set(_loop_transform_ownership_translate_test
-        omp_lowering_c_compile_only_${_loop_transform_ownership_name})
-    set(_loop_transform_ownership_generated_source
-        ${_omp_lowering_test_output_dir}/legacy_compile_only/c/${_loop_transform_ownership_name}/rose_rex_omp_lowering_loop_transform_ownership.c)
-  endif()
+  set(_loop_transform_ownership_translate_test
+      omp_lowering_c_semantic_${_loop_transform_ownership_name})
+  set(_loop_transform_ownership_generated_source
+      ${_omp_lowering_test_output_dir}/legacy_semantic/c/${_loop_transform_ownership_name}/rose_rex_omp_lowering_loop_transform_ownership.c)
   add_test(
     NAME omp_lowering_c_generated_compile_${_loop_transform_ownership_name}
     COMMAND ${ROSE_LLVM_CLANG_C_DRIVER}

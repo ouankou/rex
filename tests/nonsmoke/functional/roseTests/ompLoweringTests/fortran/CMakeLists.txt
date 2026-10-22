@@ -48,7 +48,7 @@ set(_omp_fortran_compiler "")
 set(_omp_fortran_omp_include "")
 set(_omp_fortran_missing_reqs)
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   if(CMAKE_Fortran_COMPILER)
     set(_omp_fortran_compiler ${CMAKE_Fortran_COMPILER})
   else()
@@ -208,7 +208,7 @@ function(add_omp_fortran_ast_json_checkpoint_test specimen checkpoint)
                "ASTJSON;${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_SEMANTIC;OMPLOWERING_FORTRAN")
 endfunction()
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   foreach(specimen IN LISTS OMP_FORTRAN_ALL_CASES)
     _omp_sanitize_name(_omp_name ${specimen})
     add_omp_fortran_semantic_test(${specimen})
@@ -220,6 +220,7 @@ if(enable-fortran)
 
   add_omp_fortran_ast_json_checkpoint_test(schedule.f all)
   add_omp_fortran_ast_json_checkpoint_test(exampleA41f.f90 all)
+  add_omp_fortran_ast_json_checkpoint_test(task_scalar.f all)
 
   add_test(
     NAME omp_lowering_fortran_negative_unsupported_declarative

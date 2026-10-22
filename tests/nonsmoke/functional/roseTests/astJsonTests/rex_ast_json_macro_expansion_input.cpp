@@ -8,7 +8,7 @@ gamma)json_tag";
 static_assert(true, u8"ast json unevaluated");
 
 struct RexAstJsonMacroResult {
-  int value;
+  int value : 8;
 };
 
 RexAstJsonMacroResult rex_ast_json_make_result() {

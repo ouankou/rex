@@ -1,120 +1,30 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 19,9 MB to
-// 9,5MB
 #include "sage3basic.h"
 
 #include "DependenceGraph.h"
 
 #include <set>
+#include <stack>
 using namespace std;
 
-DependenceNode *MergedDependenceGraph::_importNode(
-    DependenceNode
-        * /*node*/) { /*
-                         if (node->isInterproc())
-                         {
-                             // if it's interprocedural, we want to use the
-                         pointer from
-                             // _interproc, not the imported pointer
-                             return createNode(node->getCopiedFrom());
-                         }
-                         else if (node->getType() == DependenceNode::SGNODE)
-                         {
-                             return createNode(node->getNode());
-                         }
-                         else
-                         {
-                             return createNode(node);
-                         }*/
-  return NULL;
-}
-
 void MergedDependenceGraph::mergeGraph(DependenceGraph *graph) {
-  set<SimpleDirectedGraphNode *> nodes = graph->getNodes();
-  // for all nodes in this graph...
-  set<SimpleDirectedGraphNode *>::iterator i;
-  DependenceNode *srcDepParent;
-  SgNode *parentSgNode, *childSgNode;
-  DependenceNode::NodeType parentType, childType;
-  for (i = nodes.begin(); i != nodes.end(); i++) {
-    // get the parent in the source graph
-    srcDepParent = dynamic_cast<DependenceNode *>(*i);
-    parentSgNode = srcDepParent->getSgNode();
-    parentType = srcDepParent->getType();
-    //              cout <<"Merging ParentNode:
-    //              "<<parentSgNode->unparseToString()<<endl;
+  ROSE_ASSERT(graph != nullptr);
+  for (SimpleDirectedGraphNode *node : graph->getNodes()) {
+    auto *source = dynamic_cast<DependenceNode *>(node);
+    ROSE_ASSERT(source != nullptr);
+    DependenceNode *mergedSource =
+        getNode(source->getType(), source->getSgNode());
 
-    set<SimpleDirectedGraphNode *>::iterator j;
-    set<SimpleDirectedGraphNode *> srcDepChildren =
-        srcDepParent->getSuccessors();
-    for (j = srcDepChildren.begin(); j != srcDepChildren.end(); j++) {
-      // get the child node in the src-graph
-      DependenceNode *srcDepChild = dynamic_cast<DependenceNode *>(*j);
-      childSgNode = srcDepChild->getSgNode();
-      childType = srcDepChild->getType();
-      //                      cout <<"Merging ChildNode:
-      //                      "<<childSgNode->unparseToString()<<endl;
-      // get all edges between parent and child
-      set<EdgeType> edgeTypes = graph->edgeType(srcDepParent, srcDepChild);
-      for (set<EdgeType>::iterator k = edgeTypes.begin(); k != edgeTypes.end();
-           k++) {
-        // for each edge-type establish an edge
-        // if the nodes for parent and child are not yet created, getNode will
-        // automatically create that node
-        establishEdge(getNode(parentType, parentSgNode),
-                      getNode(childType, childSgNode), *k);
-      }
+    for (SimpleDirectedGraphNode *successor : source->getSuccessors()) {
+      auto *target = dynamic_cast<DependenceNode *>(successor);
+      ROSE_ASSERT(target != nullptr);
+      DependenceNode *mergedTarget =
+          getNode(target->getType(), target->getSgNode());
+      const set<EdgeType> edgeTypes = graph->edgeType(source, target);
+      ROSE_ASSERT(!edgeTypes.empty());
+      for (EdgeType edgeType : edgeTypes)
+        establishEdge(mergedSource, mergedTarget, edgeType);
     }
   }
-}
-
-void MergedDependenceGraph::_mergeGraph(DependenceGraph *graph) {
-  set<SimpleDirectedGraphNode *> nodes = graph->getNodes();
-
-  // now go through and set up the edges
-  set<SimpleDirectedGraphNode *>::iterator i;
-  for (i = nodes.begin(); i != nodes.end(); i++) {
-    DependenceNode *orig = dynamic_cast<DependenceNode *>(*i);
-    DependenceNode *node = _importNode(orig);
-
-    set<SimpleDirectedGraphNode *>::iterator j;
-    // go through all of orig's successors and link orig to them
-    set<SimpleDirectedGraphNode *> succs = orig->getSuccessors();
-    for (j = succs.begin(); j != succs.end(); j++) {
-      DependenceNode *orig_succ = dynamic_cast<DependenceNode *>(*j);
-      DependenceNode *new_succ = _importNode(orig_succ);
-
-      // get the types of edges from orig to orig_succ
-      set<EdgeType> edgeTypes = graph->edgeType(orig, orig_succ);
-      // go through the various edge types and "establish" that edge in
-      // the current graph
-      for (set<EdgeType>::iterator k = edgeTypes.begin(); k != edgeTypes.end();
-           k++) {
-        establishEdge(node, new_succ, *k);
-      }
-      // _establishEdge(node, new_succ, CONTROL);
-      // addLink(node, new_succ); //this also sets the predecessors
-      // correctly
-    }
-  }
-}
-
-set<SgNode *> MergedDependenceGraph::slice(
-    SgNode * /*node*/) { /*TODO
-                            set < DependenceNode * >reached =
-                            getSlice(getNode(node));
-
-                            set < SgNode * >retval;
-                            for (set < DependenceNode * >::iterator i =
-                            reached.begin(); i != reached.end(); i++)
-                            {
-                                DependenceNode *dnode = *i;
-
-                                if (dnode->getType() == DependenceNode::SGNODE)
-                                    retval.insert(dnode->getNode());
-                            }
-
-                            return retval;*/
-  return set<SgNode *>();
 }
 
 set<DependenceNode *>
@@ -166,8 +76,6 @@ MergedDependenceGraph::_getReachable(set<DependenceNode *> start,
           remaining.push(pred);
         }
       }
-    } else {
-      // do nothing - we've already seen this node
     }
   }
 

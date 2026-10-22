@@ -1,4 +1,18 @@
 #-------------------------------------------------------------------------------
+foreach(mode IN ITEMS allocation_failure ownership)
+  add_executable(rex_symbol_table_${mode}
+    rex_symbol_table_allocation_failure.cpp)
+  target_link_libraries(rex_symbol_table_${mode}
+    ROSE_DLL ${link_with_libraries})
+  target_include_directories(rex_symbol_table_${mode} PRIVATE
+    ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/astJson)
+  add_test(NAME rex_symbol_table_${mode}
+    COMMAND $<TARGET_FILE:rex_symbol_table_${mode}>)
+  set_tests_properties(rex_symbol_table_${mode} PROPERTIES LABELS "rex;astSymbolTable")
+endforeach()
+target_compile_definitions(rex_symbol_table_allocation_failure
+  PRIVATE REX_INJECT_ALLOCATION_FAILURE)
+
 add_executable(testSymbolTable testSymbolTable.C)
 target_link_libraries(testSymbolTable
   ROSE_DLL ${link_with_libraries})
@@ -70,7 +84,7 @@ add_test(
   NAME rex_test2026_astSymbolTable_rebuild_declaration_scope
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:rex_test2026_rebuild_symbol_table_coverage>
-    --rex-rebuild-check=declaration-scope
+    --rex-copy-check=declaration-scope
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../astInterfaceTests/inputrex_test2026_declaration_scope.C
 )
 
@@ -78,7 +92,7 @@ add_test(
   NAME rex_test2026_astSymbolTable_rebuild_openmp
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:rex_test2026_rebuild_symbol_table_coverage>
-    --rex-rebuild-check=openmp
+    --rex-copy-check=openmp
     -rose:openmp:ast_only
     -w
     -rose:verbose
@@ -91,7 +105,7 @@ if(ENABLE-FORTRAN)
     NAME rex_test2026_astSymbolTable_rebuild_fortran_openmp
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     COMMAND $<TARGET_FILE:rex_test2026_rebuild_symbol_table_coverage>
-      --rex-rebuild-check=fortran-openmp
+      --rex-copy-check=fortran-openmp
       -rose:openmp:ast_only
       -rose:skipfinalCompileStep
       -w

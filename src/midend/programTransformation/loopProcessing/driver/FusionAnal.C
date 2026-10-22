@@ -7,8 +7,6 @@
 
 #include "FusionAnal.h"
 
-// #define DEBUG 1
-
 bool DebugFusion() {
   static int r = 0;
   if (r == 0)
@@ -17,9 +15,6 @@ bool DebugFusion() {
 }
 
 void FuseSliceNests(CompSliceNest &g1, CompSliceNest &g2, const DepInfo &info) {
-#ifdef DEBUG
-  std::cerr << "FuseSliceNests\n";
-#endif
   int num1 = g1.NumberOfEntries(), num2 = g2.NumberOfEntries();
 
   int j;
@@ -40,9 +35,6 @@ void FuseSliceNests(CompSliceNest &g1, CompSliceNest &g2, const DepInfo &info) {
 }
 
 FusionInfo GetFusionInfo(const DepInfo &e, int index1, int index2) {
-#ifdef DEBUG
-  std::cerr << "GetFusionInfo\n";
-#endif
   if (e.IsTop())
     return true;
   DepRel r = e.Entry(index1, index2);
@@ -62,9 +54,6 @@ FusionInfo GetFusionInfo(const DepInfo &e, int index1, int index2) {
 FusionInfo LoopFusionAnal::operator()(CompSliceLocalityRegistry *reg,
                                       CompSliceNest &n1, CompSliceNest &n2,
                                       int j, int k, const DepInfo &e) {
-#ifdef DEBUG
-  std::cerr << "LoopFusionAnal\n";
-#endif
   FusionInfo result = GetFusionInfo(e, j, k);
   if (result) {
     LoopStepInfo step1 = SliceLoopStep(n1[j]), step2 = SliceLoopStep(n2[k]);
@@ -80,9 +69,6 @@ FusionInfo LoopFusionAnal::operator()(CompSliceLocalityRegistry *reg,
 FusionInfo AnyReuseFusionAnal ::operator()(CompSliceLocalityRegistry *reg,
                                            CompSliceNest &n1, CompSliceNest &n2,
                                            int j, int k, const DepInfo &e) {
-#ifdef DEBUG
-  std::cerr << "AnyReuseFusionAnal\n";
-#endif
   if (reg->TemporaryReuses(n1[j], n2[k]) || reg->SpatialReuses(n1[j], n2[k])) {
     return LoopFusionAnal::operator()(reg, n1, n2, j, k, e);
   }
@@ -93,9 +79,6 @@ FusionInfo BetterReuseFusionAnal ::operator()(CompSliceLocalityRegistry *reg,
                                               CompSliceNest &n1,
                                               CompSliceNest &n2, int j, int k,
                                               const DepInfo &e) {
-#ifdef DEBUG
-  std::cerr << "BetterReuseFusionAnal\n";
-#endif
   if (index > j || index > k)
     index = 0;
   float diff1 = 0, diff2 = 0;
@@ -115,9 +98,6 @@ FusionInfo BetterReuseFusionAnal ::operator()(CompSliceLocalityRegistry *reg,
 FusionInfo OrigLoopFusionAnal::operator()(CompSliceLocalityRegistry *reg,
                                           CompSliceNest &n1, CompSliceNest &n2,
                                           int j, int k, const DepInfo &e) {
-#ifdef DEBUG
-  std::cerr << "OrigLoopFusionAnal\n";
-#endif
   CompSlice::ConstLoopIterator iter1 = n1[j]->GetConstLoopIterator(),
                                iter2 = n2[k]->GetConstLoopIterator();
   if (iter1.ReachEnd() || iter2.ReachEnd())
@@ -138,9 +118,6 @@ FusionInfo InnermostLoopFission::operator()(CompSliceLocalityRegistry *anal,
                                             CompSliceNest &n1,
                                             CompSliceNest &n2, int j, int k,
                                             const DepInfo &e) {
-#ifdef DEBUG
-  std::cerr << "InnermostLoopFission\n";
-#endif
   FusionInfo result = OrigLoopFusionAnal::operator()(anal, n1, n2, j, k, e);
   if (result) {
     CompSlice::ConstLoopIterator iter1 = n1[j]->GetConstLoopIterator();
@@ -158,9 +135,6 @@ FusionInfo InnermostLoopFission::operator()(CompSliceLocalityRegistry *anal,
 bool MultiLevelFusion ::Fusible(CompSliceLocalityRegistry *reg,
                                 CompSliceNest &n1, CompSliceNest &n2,
                                 const DepInfo &e) const {
-#ifdef DEBUG
-  std::cerr << "MultiLevelFusion:Fusible\n";
-#endif
   for (int j = 0; j < n1.NumberOfEntries(); j++) {
     for (int k = 0; k < n2.NumberOfEntries(); k++) {
       if ((*anal)(reg, n1, n2, j, k, e))
@@ -172,9 +146,6 @@ bool MultiLevelFusion ::Fusible(CompSliceLocalityRegistry *reg,
 
 void MultiLevelFusion ::Fuse(CompSliceLocalityRegistry *reg, CompSliceNest &n1,
                              CompSliceNest &n2, DepInfo &e) const {
-#ifdef DEBUG
-  std::cerr << "MultiLevelFusion:Fuse\n";
-#endif
   int num1 = n1.NumberOfEntries(), num2 = n2.NumberOfEntries();
   int num = (num1 > num2) ? num2 : num1;
   DepInfo fuse = DepInfoGenerator::GetBottomDepInfo(num, num);
@@ -204,18 +175,12 @@ void MultiLevelFusion ::Fuse(CompSliceLocalityRegistry *reg, CompSliceNest &n1,
 bool SameLevelFusion ::Fusible(CompSliceLocalityRegistry *reg,
                                CompSliceNest &n1, CompSliceNest &n2,
                                const DepInfo &e) const {
-#ifdef DEBUG
-  std::cerr << "SameLevelFusion:Fusible\n";
-#endif
   return n1.NumberOfEntries() && n2.NumberOfEntries() &&
          (*anal)(reg, n1, n2, 0, 0, e);
 }
 
 void SameLevelFusion ::Fuse(CompSliceLocalityRegistry *reg, CompSliceNest &n1,
                             CompSliceNest &n2, DepInfo &e) const {
-#ifdef DEBUG
-  std::cerr << "SameLevelFusion:Fuse\n";
-#endif
   int num = n1.NumberOfEntries();
   if (num > n2.NumberOfEntries())
     num = n2.NumberOfEntries();

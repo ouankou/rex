@@ -1,29 +1,12 @@
-/* unparse_type.C
-1;95;0c * This C file contains the general function to unparse types as well as
- * functions to unparse every kind of type.
- */
-
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include "unparser.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
 #include "rose_config.h"
 
 #include <cctype>
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
-
-// If this is turned on then we get the message to the
-// generted code showing up in the mangled names!
-#define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
-#define OUTPUT_DEBUGGING_FUNCTION_INTERNALS 0
-#define OUTPUT_DEBUGGING_UNPARSE_INFO 0
 
 Unparse_Type::Unparse_Type(Unparser *unp) : unp(unp) {
   // Nothing to do here!
@@ -42,7 +25,7 @@ bool Unparse_Type::generateElaboratedType(
   // use-site payload, or an inline definition.  Declaration-global
   // skipElaborateType flags cannot represent differently spelled uses of one
   // shared type and must never repair an occurrence during unparsing.
-  return SageInterface::is_C_language() || SageInterface::is_C99_language() ||
+  return info.get_language() == SgFile::e_C_language ||
          info.get_type_elaboration_required() || !info.SkipClassDefinition();
 }
 
@@ -155,11 +138,44 @@ bool inlineDefinitionIsAutonomous(SgDeclarationStatement *declaration,
          enum_declaration->get_isAutonomousDeclaration();
 }
 
-SgDeclarationStatement *inlineDefinitionOwnedBy(SgDeclarationStatement *owner,
+SgDeclarationStatement *inlineDefinitionOwnedBy(const SgUnparse_Info &info,
                                                 SgNamedType *type,
                                                 InlineDefinitionKind kind,
                                                 bool definitionRequired) {
   ASSERT_not_null(type);
+  SgDeclarationStatement *owner = info.get_declstatement_ptr();
+  if (owner == nullptr) {
+    SgNode *reference = info.get_reference_node_for_qualification();
+    if (SgInitializedName *declarator = isSgInitializedName(reference)) {
+      if (SgVariableDeclaration *variable =
+              isSgVariableDeclaration(declarator->get_parent())) {
+        if (declarator->get_declptr() != variable ||
+            std::count(variable->get_variables().begin(),
+                       variable->get_variables().end(), declarator) != 1) {
+          failInlineDefinitionContext(
+              kind, "reference declarator ownership is inconsistent", variable,
+              nullptr, type);
+        }
+        owner = variable;
+      } else if (SgFunctionParameterList *parameters =
+                     isSgFunctionParameterList(declarator->get_parent())) {
+        SgFunctionDeclaration *function =
+            isSgFunctionDeclaration(parameters->get_parent());
+        if (function == nullptr ||
+            (function->get_parameterList() != parameters &&
+             function->get_parameterList_syntax() != parameters) ||
+            std::count(parameters->get_args().begin(),
+                       parameters->get_args().end(), declarator) != 1) {
+          failInlineDefinitionContext(
+              kind, "reference parameter ownership is inconsistent", function,
+              nullptr, type);
+        }
+        owner = function;
+      }
+    } else {
+      owner = isSgDeclarationStatement(reference);
+    }
+  }
   if (owner == nullptr) {
     return nullptr;
   }
@@ -658,13 +674,12 @@ void unparseNonrealDeclChainByName(Unparse_Type *unparse_type,
     return;
   }
 
-  SgTemplateArgumentPtrList explicit_args = tpl_args;
   SgUnparse_Info ninfo(info);
   ninfo.set_SkipClassDefinition();
   ninfo.set_SkipEnumDefinition();
   ninfo.set_SkipClassSpecifier();
   unparser->u_exprStmt->unparseTemplateArgumentList(
-      explicit_args, ninfo, TemplateArgumentEmission::explicit_source_prefix);
+      tpl_args, ninfo, TemplateArgumentEmission::explicit_source_prefix);
 }
 
 bool typeUsesDeclaratorPunctuation(const SgType *type) {
@@ -683,7 +698,6 @@ bool typeUsesDeclaratorPunctuation(const SgType *type) {
          isSgReferenceType(type) != nullptr ||
          isSgRvalueReferenceType(type) != nullptr ||
          isSgArrayType(type) != nullptr || isSgFunctionType(type) != nullptr ||
-         isSgPartialFunctionType(type) != nullptr ||
          isSgMemberFunctionType(type) != nullptr;
 }
 
@@ -696,6 +710,11 @@ bool suppressTrailingTypeSeparator(const SgUnparse_Info &info) {
   const SgNode *reference_node = info.get_reference_node_for_qualification();
   if (isSgTemplateArgument(reference_node) != nullptr) {
     return true;
+  }
+  if (const auto *function = isSgFunctionDeclaration(reference_node)) {
+    if (function->get_specialFunctionModifier().isConversion()) {
+      return !typeUsesDeclaratorPunctuation(function->get_orig_return_type());
+    }
   }
 
   SgNode *mutable_reference_node = const_cast<SgNode *>(reference_node);
@@ -851,51 +870,6 @@ void printTypeToken(Unparse_Type *unp_type, const std::string &token,
   printTrailingTypeSeparator(unp_type, info);
 }
 
-bool exactCxxOutputLanguageIsC(Unparser *unparser, const SgUnparse_Info &info,
-                               const char *context) {
-  ASSERT_not_null(unparser);
-
-  SgSourceFile *info_file = info.get_current_source_file();
-  SgFile *unparser_file = unparser->currentFile;
-  if (info_file != nullptr && unparser_file != nullptr &&
-      info_file != unparser_file) {
-    fprintf(stderr,
-            "REX_UNPARSE_INVARIANT[builtin-type-language]: context=%s has "
-            "different info and unparser source files\n",
-            context);
-    ROSE_ABORT();
-  }
-
-  SgFile *file = info_file != nullptr ? info_file : unparser_file;
-  SgFile::languageOption_enum language = info.get_language();
-  if (language == SgFile::e_default_language && file != nullptr) {
-    language = file->get_outputLanguage();
-  }
-  if (language == SgFile::e_C_language) {
-    return true;
-  }
-  if (language == SgFile::e_Cxx_language) {
-    return false;
-  }
-
-  if (language == SgFile::e_default_language && file != nullptr) {
-    if (file->get_C_only() || file->get_C89_only() || file->get_C90_only() ||
-        file->get_C99_only() || file->get_C11_only() || file->get_C17_only() ||
-        file->get_C23_only() || file->get_C2y_only()) {
-      return true;
-    }
-    if (file->get_Cxx_only()) {
-      return false;
-    }
-  }
-
-  fprintf(stderr,
-          "REX_UNPARSE_INVARIANT[builtin-type-language]: context=%s requires "
-          "an exact C or C++ output language\n",
-          context);
-  ROSE_ABORT();
-}
-
 std::string cxxBuiltinTypeToken(const SgType *type) {
   ASSERT_not_null(type);
   switch (type->variant()) {
@@ -987,6 +961,60 @@ std::string cxxBuiltinTypeToken(const SgType *type) {
 
 } // namespace
 
+SgDeclarationStatement *
+Unparse_Type::inlineDefinitionForType(SgType *type,
+                                      const SgUnparse_Info &info) {
+  ASSERT_not_null(type);
+  ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
+  if (info.SkipClassDefinition())
+    return nullptr;
+  auto *base = type->stripType(
+      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_POINTER_TYPE |
+      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE |
+      SgType::STRIP_ARRAY_TYPE);
+  auto *named = isSgNamedType(base);
+  if (isSgClassType(base) == nullptr && isSgEnumType(base) == nullptr)
+    return nullptr;
+  const auto kind = isSgClassType(base) != nullptr
+                        ? InlineDefinitionKind::class_type
+                        : InlineDefinitionKind::enum_type;
+  if (auto *definition = inlineDefinitionOwnedByExpression(
+          info.get_reference_node_for_qualification(), named, kind))
+    return definition;
+  return inlineDefinitionOwnedBy(info, named, kind, true);
+}
+
+bool Unparse_Type::outputLanguageIsC(const SgUnparse_Info &info,
+                                     const char *context) const {
+  Unparser *unparser = unp;
+  ASSERT_not_null(unparser);
+
+  SgSourceFile *info_file = info.get_current_source_file();
+  SgFile *unparser_file = unparser->currentFile;
+  if (info_file != nullptr && unparser_file != nullptr &&
+      info_file != unparser_file) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[builtin-type-language]: context=%s has "
+            "different info and unparser source files\n",
+            context);
+    ROSE_ABORT();
+  }
+
+  const SgFile::languageOption_enum language = info.get_language();
+  if (language == SgFile::e_C_language) {
+    return true;
+  }
+  if (language == SgFile::e_Cxx_language) {
+    return false;
+  }
+
+  fprintf(stderr,
+          "REX_UNPARSE_INVARIANT[builtin-type-language]: context=%s requires "
+          "an exact C or C++ output language\n",
+          context);
+  ROSE_ABORT();
+}
+
 //-----------------------------------------------------------------------------------
 //  void Unparse_Type::unparseType
 //
@@ -996,28 +1024,13 @@ std::string cxxBuiltinTypeToken(const SgType *type) {
 void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
   ASSERT_not_null(type);
 
-#if OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES || 0
-  string firstPartString = (info.isTypeFirstPart() == true) ? "true" : "false";
-  string secondPartString =
-      (info.isTypeSecondPart() == true) ? "true" : "false";
-  printf("In Unparse_Type::unparseType(): type = %p type->class_name() = %s "
-         "firstPart = %s secondPart = %s \n",
-         type, type->class_name().c_str(), firstPartString.c_str(),
-         secondPartString.c_str());
-#endif
-#if OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES || 0
-  curprint(string("\n/* Top of unparseType name ") +
-           type->class_name().c_str() + " firstPart " + firstPartString +
-           " secondPart " + secondPartString + " */ \n");
-#endif
-
-  // DQ (10/31/2018): Adding assertion.
-  // ASSERT_not_null(info.get_current_source_file());
-
-  // DQ (1/13/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
   switch (type->variant()) {
+  case T_DEPENDENT:
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[dependent-type]: a dependent "
+                    "builtin has no source type spelling\n");
+    ROSE_ABORT();
   case T_UNKNOWN: {
     fprintf(stderr, "REX_UNPARSE_INVARIANT[unknown-type]: cannot emit "
                     "SgTypeUnknown\n");
@@ -1058,7 +1071,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
   case T_UNSIGNED_LONG_LONG:
   case T_SIGNED_LONG_LONG:
 
-    // DQ (3/24/2014): Added support for 128-bit integers.
   case T_SIGNED_128BIT_INTEGER:
   case T_UNSIGNED_128BIT_INTEGER:
 
@@ -1077,9 +1089,7 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     if (!((info.isWithType() && info.SkipBaseType()) ||
           info.isTypeSecondPart())) {
       printTypeToken(
-          this,
-          exactCxxOutputLanguageIsC(unp, info, "SgTypeBool") ? "_Bool" : "bool",
-          info);
+          this, outputLanguageIsC(info, "SgTypeBool") ? "_Bool" : "bool", info);
     }
     break;
   }
@@ -1123,7 +1133,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     ROSE_ABORT();
   }
 
-    // case T_POINTER:            unparsePointerType(type, info); break;
   case T_POINTER: {
     unparsePointerType(type, info);
     break;
@@ -1140,10 +1149,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     unparseRvalueReferenceType(type, info);
     break;
 
-    // case T_NAME:               unparseNameType(type, info); break;
-
-    // DQ (6/18/2013): Test to see if this is the correct handling of
-    // test2013_214.C. DQ (6/18/2013): Original version of code.
   case T_CLASS:
     unparseClassType(type, info);
     break;
@@ -1151,8 +1156,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     unparseEnumType(type, info);
     break;
 
-    // DQ (6/18/2013): Test to see if this is the correct handling of
-    // test2013_214.C. DQ (6/18/2013): Original version of code.
   case T_TYPEDEF:
     unparseTypedefType(type, info);
     break;
@@ -1160,10 +1163,6 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     unparseModifierType(type, info);
     break;
 
-    // DQ (5/3/2013): This approach is no longer supported, as I recall.
-    // case T_QUALIFIED_NAME:     unparseQualifiedNameType(type, info); break;
-
-  case T_PARTIAL_FUNCTION:
   case T_FUNCTION:
     unparseFunctionType(type, info);
     break;
@@ -1175,23 +1174,16 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     unparseArrayType(type, info);
     break;
 
-    // DQ (11/20/2011): Adding support for template declarations within the
-    // AST.
   case T_TEMPLATE: {
     unparseTemplateType(type, info);
     break;
   }
 
-    // TV (09/06/2018): Adding support for auto typed variable declaration.
   case T_AUTO: {
     unparseAutoType(type, info);
     break;
   }
 
-    // DQ (7/30/2014): Fixed spelling of T_LABEL tag.
-    // DQ (4/27/2014): After some fixes to ROSE to permit the new shared
-    // memory DSL, we now get this IR node appearing in test2007_168.f90 (I
-    // don't yet understand why). case T_LABLE:
   case T_LABEL: {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[label-type]: SgTypeLabel has no C/C++ "
@@ -1199,24 +1191,37 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     ROSE_ABORT();
   }
 
-    // DQ (7/31/2014): Adding support for nullptr constant expression and its
-    // associated type.
   case T_NULLPTR: {
     unparseNullptrType(type, info);
-    // printf ("ERROR: Unparse_Type::unparseType(): SgTypeNullptr: we should
-    // not have to be unparsing this type (C++11 specific) \n");
     break;
   }
 
-    // DQ (8/2/2014): Adding support for C++11 decltype.
   case T_DECLTYPE: {
     unparseDeclType(type, info);
     break;
   }
 
-    // DQ (3/28/2015): Adding support for GNU C typeof language extension.
   case T_TYPEOF_TYPE: {
     unparseTypeOfType(type, info);
+    break;
+  }
+
+  case T_UNARY_TRANSFORM: {
+    auto *transform = isSgUnaryTransformType(type);
+    ROSE_ASSERT(transform != nullptr &&
+                transform->get_operand_type() != nullptr);
+    if (!info.isTypeSecondPart()) {
+      curprint(transform->get_operator_name());
+      curprint("(");
+      SgUnparse_Info operand_info(info);
+      operand_info.unset_isTypeFirstPart();
+      operand_info.unset_isTypeSecondPart();
+      operand_info.set_SkipClassDefinition();
+      operand_info.set_SkipEnumDefinition();
+      unparseType(transform->get_operand_type(), operand_info);
+      curprint(")");
+      printTrailingTypeSeparator(this, info);
+    }
     break;
   }
 
@@ -1232,23 +1237,13 @@ void Unparse_Type::unparseType(SgType *type, SgUnparse_Info &info) {
     ROSE_ABORT();
   }
   }
-
-#if OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES || 0
-  printf("Leaving Unparse_Type::unparseType(): type->class_name() = %s "
-         "firstPart = %s secondPart = %s \n",
-         type->class_name().c_str(), firstPartString.c_str(),
-         secondPartString.c_str());
-  curprint(string("\n/* Bottom of unparseType name ") +
-           type->class_name().c_str() + " firstPart  " + firstPartString +
-           " secondPart " + secondPartString + " */ \n");
-#endif
 }
 
 void Unparse_Type::unparseNullptrType(SgType *, SgUnparse_Info &info) {
   if (info.isTypeSecondPart()) {
     return;
   }
-  if (exactCxxOutputLanguageIsC(unp, info, "SgTypeNullptr")) {
+  if (outputLanguageIsC(info, "SgTypeNullptr")) {
     fprintf(
         stderr,
         "REX_UNPARSE_INVARIANT[nullptr-type-language]: SgTypeNullptr has no "
@@ -1266,72 +1261,21 @@ void Unparse_Type::unparseDeclType(SgType *type, SgUnparse_Info &info) {
 
   if (!info.isTypeSecondPart()) {
     SgExpression *base_expression = decltype_node->get_base_expression();
-    const bool use_underlying_type =
-        isSgFunctionParameterRefExp(base_expression) != NULL &&
-        decltype_node->get_base_type() != NULL &&
-        isSgAutoType(decltype_node->get_base_type()) == NULL;
-    if (use_underlying_type) {
-      // In this case just use the type directly.
-      ASSERT_not_null(decltype_node->get_base_type());
-      unparseType(decltype_node->get_base_type(), info);
-    } else {
-      curprint(decltype_node->get_is_gnu_decltype() ? "__decltype("
-                                                    : "decltype(");
-      unp->u_exprStmt->unparseExpression(base_expression, info);
-      curprint(")");
-      printTrailingTypeSeparator(this, info);
-    }
+    curprint(decltype_node->get_is_gnu_decltype() ? "__decltype("
+                                                  : "decltype(");
+    unp->u_exprStmt->unparseExpression(base_expression, info);
+    curprint(")");
+    printTrailingTypeSeparator(this, info);
   }
 }
 
 void Unparse_Type::unparseTypeOfType(SgType *type, SgUnparse_Info &info) {
-  // DQ (3/28/2015): Adding support for GNU C typeof language extension.
-
   SgTypeOfType *typeof_node = isSgTypeOfType(type);
   ASSERT_not_null(typeof_node);
-
-#define DEBUG_TYPEOF_TYPE 0
-
-#if DEBUG_TYPEOF_TYPE || 0
-  printf("In unparseTypeOfType(): typeof_node       = %p \n", typeof_node);
-  printf("   --- typeof_node->get_base_expression() = %p \n",
-         typeof_node->get_base_expression());
-  if (typeof_node->get_base_expression() != NULL) {
-    printf("   --- typeof_node->get_base_expression() = %p = %s \n",
-           typeof_node->get_base_expression(),
-           typeof_node->get_base_expression()->class_name().c_str());
-  }
-  printf("   --- typeof_node->get_base_type()            = %p \n",
-         typeof_node->get_base_type());
-  if (typeof_node->get_base_type() != NULL) {
-    printf("   --- typeof_node->get_base_type() = %p = %s \n",
-           typeof_node->get_base_type(),
-           typeof_node->get_base_type()->class_name().c_str());
-  }
-  printf("   --- info.isTypeFirstPart()             = %s \n",
-         info.isTypeFirstPart() ? "true" : "false");
-  printf("   --- info.isTypeSecondPart()            = %s \n",
-         info.isTypeSecondPart() ? "true" : "false");
-#endif
-
-  // ASSERT_not_null(typeof_node->get_base_expression());
-
-  // DQ (3/31/2015): I think we can assert this.
-  // ROSE_ASSERT (info.isTypeFirstPart() == true  || info.isTypeSecondPart() ==
-  // true);
   ROSE_ASSERT(info.isTypeFirstPart() == false ||
               info.isTypeSecondPart() == false);
 
-  // DQ (3/31/2015): We can't use the perenthesis in this case (see
-  // test2015_49.c).
-
-  // DQ (3/31/2015): Note that (info.isTypeFirstPart() == false &&
-  // info.isTypeSecondPart() == false) is required because we have implemented
-  // some special case handling for SgTypeOfType in SgArrayType, SgPointerType,
-  // etc.  With this implementation below, we might not need this special case
-  // handling. if (info.isTypeFirstPart() == true)
-  if (info.isTypeFirstPart() == true ||
-      (info.isTypeFirstPart() == false && info.isTypeSecondPart() == false)) {
+  if (info.isTypeFirstPart() || !info.isTypeSecondPart()) {
     curprint("__typeof(");
     if (typeof_node->get_base_expression() != NULL) {
       unp->u_exprStmt->unparseExpression(typeof_node->get_base_expression(),
@@ -1340,18 +1284,13 @@ void Unparse_Type::unparseTypeOfType(SgType *type, SgUnparse_Info &info) {
       SgUnparse_Info ninfo1(info);
 
       ninfo1.set_SkipClassDefinition();
-      // ninfo1.set_SkipClassSpecifier();
       ninfo1.set_SkipEnumDefinition();
 
       ninfo1.unset_isTypeSecondPart();
       ninfo1.unset_isTypeFirstPart();
 
-      // DQ (5/10/2015): Changing this back to calling
-      // "unparseType(typeof_node->get_base_type(), ninfo1);" once.
-
       unparseType(typeof_node->get_base_type(), ninfo1);
     }
-    // curprint("/* end of typeof */ )");
     curprint(")");
     printTrailingTypeSeparator(this, info);
   }
@@ -1359,62 +1298,9 @@ void Unparse_Type::unparseTypeOfType(SgType *type, SgUnparse_Info &info) {
 
 void Unparse_Type::unparsePointerType(SgType *type, SgUnparse_Info &info) {
 
-#define DEBUG_UNPARSE_POINTER_TYPE 0
-
-#if DEBUG_UNPARSE_POINTER_TYPE
-  printf("Inside of Unparse_Type::unparsePointerType \n");
-  curprint("\n/* Inside of Unparse_Type::unparsePointerType */ \n");
-#endif
-
-#if DEBUG_UNPARSE_POINTER_TYPE
-  printf("In unparsePointerType(): info.isWithType()       = %s \n",
-         (info.isWithType() == true) ? "true" : "false");
-  printf("In unparsePointerType(): info.SkipBaseType()     = %s \n",
-         (info.SkipBaseType() == true) ? "true" : "false");
-  printf("In unparsePointerType(): info.isTypeFirstPart()  = %s \n",
-         (info.isTypeFirstPart() == true) ? "true" : "false");
-  printf("In unparsePointerType(): info.isTypeSecondPart() = %s \n",
-         (info.isTypeSecondPart() == true) ? "true" : "false");
-#endif
-
   SgPointerType *pointer_type = isSgPointerType(type);
   ASSERT_not_null(pointer_type);
 
-#if DEBUG_UNPARSE_POINTER_TYPE
-  printf("In unparsePointerType(): "
-         "isSgReferenceType(pointer_type->get_base_type())      = %s \n",
-         (isSgReferenceType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                    : "false");
-  printf("In unparsePointerType(): "
-         "isSgPointerType(pointer_type->get_base_type())        = %s \n",
-         (isSgPointerType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                  : "false");
-  printf("In unparsePointerType(): "
-         "isSgArrayType(pointer_type->get_base_type())          = %s \n",
-         (isSgArrayType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                : "false");
-  printf("In unparsePointerType(): "
-         "isSgFunctionType(pointer_type->get_base_type())       = %s \n",
-         (isSgFunctionType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                   : "false");
-  printf("In unparsePointerType(): "
-         "isSgMemberFunctionType(pointer_type->get_base_type()) = %s \n",
-         (isSgMemberFunctionType(pointer_type->get_base_type()) != NULL)
-             ? "true"
-             : "false");
-  printf("In unparsePointerType(): "
-         "isSgModifierType(pointer_type->get_base_type())       = %s \n",
-         (isSgModifierType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                   : "false");
-  printf("In unparsePointerType(): "
-         "isSgTypeOfType(pointer_type->get_base_type())         = %s \n",
-         (isSgTypeOfType(pointer_type->get_base_type()) != NULL) ? "true"
-                                                                 : "false");
-#endif
-
-  // DQ (3/31/2015): I think this TypeOf GNU extension needs to be supported as
-  // a special case. if (isSgTypeOfType(pointer_type->get_base_type()) != NULL
-  // && (info.isTypeFirstPart() == true) )
   if (isSgTypeOfType(pointer_type->get_base_type()) != NULL) {
     if (info.isTypeFirstPart() == true) {
       if (!info.SkipBaseType()) {
@@ -1423,44 +1309,17 @@ void Unparse_Type::unparsePointerType(SgType *type, SgUnparse_Info &info) {
         ninfo1.unset_isTypeFirstPart();
 
         ninfo1.set_isTypeFirstPart();
-#if DEBUG_UNPARSE_POINTER_TYPE
-        printf("In Unparse_Type::unparsePointerType(): TypeOf GNU extension "
-               "needs to be supported as a special case: (call on base type: "
-               "part 1) \n");
-        curprint("\n/* In Unparse_Type::unparsePointerType(): TypeOf GNU "
-                 "extension needs to be supported as a special case: (call "
-                 "on base type: part 1) */ \n");
-#endif
         unparseType(pointer_type->get_base_type(), ninfo1);
         ninfo1.set_isTypeSecondPart();
-#if DEBUG_UNPARSE_POINTER_TYPE
-        printf("In Unparse_Type::unparsePointerType(): TypeOf GNU extension "
-               "needs to be supported as a special case: (call on base type: "
-               "part 2) \n");
-        curprint("\n/* In Unparse_Type::unparsePointerType(): TypeOf GNU "
-                 "extension needs to be supported as a special case: (call "
-                 "on base type: part 2) */ \n");
-#endif
         unparseType(pointer_type->get_base_type(), ninfo1);
       }
 
       curprint("*");
-#if DEBUG_UNPARSE_POINTER_TYPE
-      curprint(" /* unparsePointerType(): typeof: first part */ ");
-#endif
     } else {
-#if DEBUG_UNPARSE_POINTER_TYPE
-      printf(
-          "TypeofType not output because info.isTypeFirstPart() == false \n");
-#endif
       // DQ (4/19/2015): We need to output the typeof operator when it appears
       // as a parameter in function type arguments. See test2015_110.c for an
       // example.
       if (info.isTypeFirstPart() == false && info.isTypeSecondPart() == false) {
-#if DEBUG_UNPARSE_POINTER_TYPE
-        printf("info.isTypeFirstPart() == false && info.isTypeSecondPart() == "
-               "false (need to output typeof type) \n");
-#endif
         SgUnparse_Info ninfo1(info);
         ninfo1.unset_isTypeSecondPart();
         ninfo1.unset_isTypeFirstPart();
@@ -1468,10 +1327,6 @@ void Unparse_Type::unparsePointerType(SgType *type, SgUnparse_Info &info) {
         unparseType(pointer_type->get_base_type(), ninfo1);
 
         curprint("*");
-#if DEBUG_UNPARSE_POINTER_TYPE
-        curprint(" /* unparsePointerType(): typeof: first and second part "
-                 "false */ ");
-#endif
       }
     }
 
@@ -1486,108 +1341,36 @@ void Unparse_Type::unparsePointerType(SgType *type, SgUnparse_Info &info) {
       isSgPointerType(pointer_type->get_base_type()) ||
       isSgArrayType(pointer_type->get_base_type()) ||
       isSgFunctionType(pointer_type->get_base_type()) ||
-      isSgMemberFunctionType(pointer_type->get_base_type()) ||
-
-      // DQ (1/8/2014): debugging test2014_25.c.
-      // isSgModifierType(pointer_type->get_base_type()) ||
-
-      false) {
-#if DEBUG_UNPARSE_POINTER_TYPE
-    printf(
-        "In unparsePointerType(): calling info.set_isPointerToSomething() \n");
-#endif
+      isSgMemberFunctionType(pointer_type->get_base_type())) {
     info.set_isPointerToSomething();
   }
 
   // If not isTypeFirstPart nor isTypeSecondPart this unparse call
   // is not controlled from the statement level but from the type level
 
-#if OUTPUT_DEBUGGING_UNPARSE_INFO
-  // curprint ( "\n/* " + info.displayString("unparsePointerType") + " */ \n";
-#endif
-
   if (info.isTypeFirstPart() == true) {
-#if DEBUG_UNPARSE_POINTER_TYPE
-    curprint(
-        "\n /* Calling unparseType from unparsePointerType (1st part) */ \n");
-#endif
-    // DQ (5/3/2013): The base type can not be unparsed if this is part of a
-    // list of types in a SgForInitStmt. Here the SkipBaseType() flag is set and
-    // it must be respected in the unparsing.
-    // unparseType(pointer_type->get_base_type(), info);
+    // Respect SkipBaseType() in a SgForInitStmt type list.
     if (shouldUnparseDeclaratorBase(pointer_type->get_base_type(), info)) {
-      // DQ (1/13/2014): These should have been setup to be the same.
       ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
       unparseType(pointer_type->get_base_type(), info);
     }
-    // DQ (9/21/2004): Moved this conditional into this branch (to fix
-    // test2004_93.C) DQ (9/21/2004): I think we can assert this, and if so we
-    // can simplify the logic below
     ROSE_ASSERT(info.isTypeSecondPart() == false);
-    // if ( ( info.isWithType() && info.SkipBaseType() ) ||
-    // info.isTypeSecondPart() )
-
-#if DEBUG_UNPARSE_POINTER_TYPE
-    printf("info.isWithType()   = %s \n", info.isWithType() ? "true" : "false");
-    printf("info.SkipBaseType() = %s \n",
-           info.SkipBaseType() ? "true" : "false");
-    curprint(string("\n/* info.isWithType()           = ") +
-             (info.isWithType() ? "true" : "false") + " */ \n");
-    curprint(string("\n/* info.SkipBaseType()         = ") +
-             (info.SkipBaseType() ? "true" : "false") + " */ \n");
-    curprint(string("\n/* info.isPointerToSomething() = ") +
-             (info.isPointerToSomething() ? "true" : "false") + " */ \n");
-#endif
-
-    // if (info.SkipDefinition() == true)
     curprint("*");
-    // curprint(" /* unparsePointerType(): first part */ ");
   } else {
     if (info.isTypeSecondPart() == true) {
-#if DEBUG_UNPARSE_POINTER_TYPE
-      printf(
-          "In Unparse_Type::unparsePointerType(): unparse 2nd part of type \n");
-      curprint("\n/* In Unparse_Type::unparsePointerType(): unparse 2nd part "
-               "of type */ \n");
-#endif
       unparseType(pointer_type->get_base_type(), info);
 
-#if DEBUG_UNPARSE_POINTER_TYPE
-      printf("DONE: Unparse_Type::unparsePointerType(): unparse 2nd part of "
-             "type \n");
-      curprint("\n/* DONE: Unparse_Type::unparsePointerType(): unparse 2nd "
-               "part of type */ \n");
-#endif
     } else {
-      // DQ (11/27/2004): I think that this is important for unparing functions
-      // or function pointers
       SgUnparse_Info ninfo(info);
       ninfo.set_isTypeFirstPart();
 
-#if DEBUG_UNPARSE_POINTER_TYPE
-      printf("In Unparse_Type::unparsePointerType(): (call on base type: part "
-             "1) \n");
-      curprint("\n/* In Unparse_Type::unparsePointerType(): (call on base "
-               "type: part 1) */ \n");
-#endif
       unparseType(pointer_type, ninfo);
       ninfo.set_isTypeSecondPart();
 
-#if DEBUG_UNPARSE_POINTER_TYPE
-      printf("In Unparse_Type::unparsePointerType(): (call on base type: part "
-             "2) \n");
-      curprint("\n/* In Unparse_Type::unparsePointerType(): (call on base "
-               "type: part 2) */ \n");
-#endif
       unparseType(pointer_type, ninfo);
     }
   }
-
-#if DEBUG_UNPARSE_POINTER_TYPE
-  printf("Leaving of Unparse_Type::unparsePointerType \n");
-  curprint("\n /* Leaving of Unparse_Type::unparsePointerType */ \n");
-#endif
 }
 
 void Unparse_Type::unparseMemberPointerType(SgType *type,
@@ -1675,61 +1458,17 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
     unparseType(class_type, owner_info);
   };
 
-#define DEBUG_MEMBER_POINTER_TYPE 0
-#define CURPRINT_MEMBER_POINTER_TYPE 0
-
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-  printf("In unparseMemberPointerType: mpointer_type = %p \n", mpointer_type);
-#endif
-
   // plain type :  int (P::*)
   // type with name:  int P::* pmi = &X::a;
   // use: obj.*pmi=7;
   SgType *btype = mpointer_type->get_base_type();
   SgArrayType *member_pointer_array_base = isSgArrayType(btype);
-  SgMemberFunctionType *mfnType = nullptr;
-
-#if DEBUG_MEMBER_POINTER_TYPE
-  printf("In unparseMemberPointerType(): btype = %p = %s \n", btype,
-         (btype != NULL) ? btype->class_name().c_str() : "NULL");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-  curprint("\n/* In unparseMemberPointerType() */ \n");
-#endif
-
-  // if ( (mfnType = isSgMemberFunctionType(btype)) != NULL)
-  mfnType = isSgMemberFunctionType(btype);
+  SgMemberFunctionType *mfnType = isSgMemberFunctionType(btype);
   if (mfnType != NULL) {
     // pointer to member function data
-#if DEBUG_MEMBER_POINTER_TYPE
-    printf("In unparseMemberPointerType(): pointer to member function \n");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-    curprint(
-        "\n/* In unparseMemberPointerType(): pointer to member function */ \n");
-#endif
     if (info.isTypeFirstPart()) {
-#if DEBUG_MEMBER_POINTER_TYPE
-      printf("In unparseMemberPointerType(): pointer to member function:  "
-             "first part of type \n");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE
-      printf("In unparseMemberPointerType(): pointer to member function: "
-             "unparse return type \n");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-      curprint("\n/* In unparseMemberPointerType(): pointer to member "
-               "function: first part of type */ \n");
-#endif
 
-      // DQ (4/28/2019): Adding name qualification to the base type unparsing
-      // for the SgPointerMemberType when it is a member function pointer.
       SgName nameQualifierForBaseType = lookup_base_qualification();
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-      printf("In unparseMemberPointerType(): pointer to member data: "
-             "nameQualifierForBaseType = %s \n",
-             nameQualifierForBaseType.str());
-#endif
 
       // AST-preserved written qualified types already carry their own prefix.
       const bool emit_explicit_base_qualification =
@@ -1739,8 +1478,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         curprint(nameQualifierForBaseType);
       }
 
-      // DQ (1/20/2019): Suppress the definition (for enum, function, and class
-      // types). unparseType(mfnType->get_return_type(), info); // first part
       SgUnparse_Info ninfo(info);
       ninfo.set_SkipDefinition();
       if (emit_explicit_base_qualification) {
@@ -1749,8 +1486,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
 
       // DQ (5/19/2019): If there was name qualification, then we didn't need
       // the class specifier (and it would be put in the wrong place anyway).
-      // SgUnparse_Info ninfo(info);
-      // I don't like that we are checking the name qualificaiton string here.
       if (nameQualifierForBaseType.is_null() == false) {
         // DQ (5/18/2019): when in the SgAggregateInitializer, don't output the
         // class specifier.
@@ -1761,49 +1496,14 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         unparseType(mfnType->get_return_type(), ninfo); // first part
       }
 
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-      curprint("\n/* In unparseMemberPointerType(): pointer to member "
-               "function: DONE unparse return type */ \n");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE
-      printf("In unparseMemberPointerType(): pointer to member function: DONE "
-             "unparse return type \n");
-#endif
-
-      // DQ (4/27/2019): Fixing up the function pointer handling to match the
-      // data member pointer handling. curprint ("("); DQ (2/3/2019): Suppress
-      // parenthesis (see Cxx11_tests/test2019_76.C) Not clear yet where this
-      // was required in the first place. DQ (4/27/2019): I think we always need
-      // this syntax for pointer to member functions.
       curprint("(");
 
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-      printf("In unparseMemberPointerType(): pointer to member function: "
-             "info.get_reference_node_for_qualification() = %p \n",
-             info.get_reference_node_for_qualification());
-#endif
-
-      // curprint ( "\n/* mpointer_type->get_class_of() = " +
-      // mpointer_type->get_class_of()->sage_class_name() + " */ \n";
       curprint(" ");
       unparse_member_pointer_owner_type_from_ast(
           mpointer_type->get_class_type());
-#if DEBUG_MEMBER_POINTER_TYPE
-      printf("In unparseMemberPointerType(): pointer to member function: "
-             "mpointer_type->get_class_type() = %s \n",
-             mpointer_type->get_class_type()->class_name().c_str());
-#endif
       curprint("::*");
     } else {
       if (info.isTypeSecondPart()) {
-#if DEBUG_MEMBER_POINTER_TYPE
-        printf("In unparseMemberPointerType(): pointer to member function "
-               "data: second part of type \n");
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-        curprint("\n/* In unparseMemberPointerType(): pointer to member "
-                 "function data: second part of type */ \n");
-#endif
         curprint(")");
 
         // argument list
@@ -1812,10 +1512,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         ninfo.unset_isTypeSecondPart();
         ninfo.unset_isTypeFirstPart();
 
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-        curprint(
-            "\n/* In unparseMemberPointerType(): start of argument list */ \n");
-#endif
         curprint("(");
 
         const SgTypePtrList &argument_types = mfnType->get_arguments();
@@ -1823,18 +1519,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
             requireFunctionArgumentQualificationUseSites(
                 mfnType, ninfo, "pointer-member-function-arguments");
         for (size_t index = 0; index < argument_types.size(); ++index) {
-#if DEBUG_MEMBER_POINTER_TYPE
-          printf("In unparseMemberPointerType: output the arguments *p = %p = "
-                 "%s \n",
-                 argument_types[index],
-                 argument_types[index]->class_name().c_str());
-#endif
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-          curprint("\n/* In unparseMemberPointerType(): output function "
-                   "argument type */ \n");
-#endif
-          // DQ (1/20/2019): Supress the definition (for enum, function, and
-          // class types. unparseType(*p, ninfo);
           SgUnparse_Info ninfo2(ninfo);
           ninfo2.set_SkipDefinition();
           applyFunctionArgumentQualification(
@@ -1844,32 +1528,18 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
           if (qualification_use_sites[index]->get_is_pack_expansion()) {
             curprint("...");
           }
-#if DEBUG_MEMBER_POINTER_TYPE && CURPRINT_MEMBER_POINTER_TYPE
-          curprint("\n/* In unparseMemberPointerType(): DONE: output function "
-                   "argument type */ \n");
-#endif
           if (index + 1 < argument_types.size()) {
             curprint(", ");
           }
         }
         curprint(")");
-        // curprint("\n/* In unparseMemberPointerType(): end of argument list */
-        // \n";
-
-        unparseType(mfnType->get_return_type(), info); // second part
-        // add member function type qualifiers (&, &&, const, volatile)
         for (auto qual : memberFunctionQualifiers(
                  mfnType, true /* trailing space after keyword */))
           curprint(qual);
+        unp->u_exprStmt->unparseExceptionSpecification(mfnType, info);
+        unparseType(mfnType->get_return_type(), info);
 
       } else {
-        // not called from statement level (not sure where this is used, but it
-        // does show up in Kull) printf ("What is this 3rd case of neither 1st
-        // part nor 2nd part \n");
-#if DEBUG_MEMBER_POINTER_TYPE
-        printf("In unparseMemberPointerType(): pointer to member function "
-               "data: neither first not second part of type??? \n");
-#endif
         SgUnparse_Info ninfo(info);
         ninfo.set_isTypeFirstPart();
         unparseType(mpointer_type, ninfo);
@@ -1879,17 +1549,7 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
     }
   } else {
     /* pointer to member data */
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-    printf("In unparseMemberPointerType(): pointer to member data \n");
-#endif
     if (info.isTypeFirstPart()) {
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-      printf("In unparseMemberPointerType(): pointer to member data: first "
-             "part of type \n");
-#endif
-      // DQ (9/16/2004): This appears to be an error, btype should not be
-      // unparsed here (of maybe btype is not set properly)! printf ("Handling
-      // the first part \n");
       SgName nameQualifierForBaseType = lookup_base_qualification();
 
       // AST-preserved written qualified types already carry their own prefix.
@@ -1916,14 +1576,11 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
         ninfo.set_SkipClassSpecifier();
       }
 
-      // unparseType(btype, info);
       if (shouldUnparseDeclaratorBase(btype, ninfo)) {
         unparseType(btype, ninfo);
       }
       // DQ (2/3/2019): Suppress parenthesis (see Cxx11_tests/test2019_76.C)
       // Not clear yet where this was required in the first place.
-      // curprint ( "(");
-      // if ( info.inTypedefDecl() == true)
       if (info.inTypedefDecl() == true && member_pointer_array_base == NULL) {
         curprint("(");
       }
@@ -1931,34 +1588,20 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       // DQ (3/31/2019): Need to unparse the name qualification for the class
       // used in the pointer member type.
 
-#define DEBUG_UNPARSE_POINTER_MEMBER_TYPE 0
-
       curprint(" ");
       unparse_member_pointer_owner_type_from_ast(
           mpointer_type->get_class_type());
       curprint("::*");
     } else {
       if (info.isTypeSecondPart()) {
-#if DEBUG_MEMBER_POINTER_TYPE || 0
-        //  printf ("In unparseMemberPointerType(): Handling the second part
-        //  \n");
-        printf("In unparseMemberPointerType(): pointer to member data: second "
-               "part of type \n");
-#endif
         if (member_pointer_array_base != NULL) {
           SgUnparse_Info ninfo(info);
           ninfo.set_isPointerToSomething();
           unparseType(member_pointer_array_base, ninfo);
-        }
-        // DQ (2/3/2019): Suppress parenthesis (see Cxx11_tests/test2019_76.C)
-        // curprint(")");
-        // if ( info.inTypedefDecl() == true)
-        // if ( info.inTypedefDecl() == true || info.inArgList() == true)
-        else if (info.inTypedefDecl() == true) {
+        } else if (info.inTypedefDecl() == true) {
           curprint(")");
         }
       } else {
-        // printf ("What is this 3rd case of neither 1st part nor 2nd part \n");
         SgUnparse_Info ninfo(info);
         ninfo.set_isTypeFirstPart();
         unparseType(mpointer_type, ninfo);
@@ -1967,11 +1610,6 @@ void Unparse_Type::unparseMemberPointerType(SgType *type,
       }
     }
   }
-
-#if DEBUG_MEMBER_POINTER_TYPE || CURPRINT_MEMBER_POINTER_TYPE || 0
-  printf("Leaving unparseMemberPointerType() \n");
-  curprint("\n/* Leaving unparseMemberPointerType() */ \n");
-#endif
 }
 
 void Unparse_Type::unparseReferenceType(SgType *type, SgUnparse_Info &info) {
@@ -1995,7 +1633,6 @@ void Unparse_Type::unparseReferenceType(SgType *type, SgUnparse_Info &info) {
     if (shouldUnparseDeclaratorBase(ref_type->get_base_type(), ninfo)) {
       unparseType(ref_type->get_base_type(), ninfo);
     }
-    // curprint ( "& /* reference */ ";
     curprint("&");
   } else {
     if (ninfo.isTypeSecondPart()) {
@@ -2049,31 +1686,11 @@ void Unparse_Type::unparseRvalueReferenceType(SgType *type,
 
 void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 
-#define DEBUG_UNPARSE_CLASS_TYPE 0
-
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("\nInside of Unparse_Type::unparseClassType type = %p \n", type);
-#endif
-
-  // DQ (10/31/2018): Adding assertion.
-  // ASSERT_not_null(info.get_current_source_file());
-
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("In unparseClassType(): TOP: ninfo.SkipClassDefinition() = %s \n",
-         (info.SkipClassDefinition() == true) ? "true" : "false");
-  printf("In unparseClassType(): TOP: ninfo.SkipEnumDefinition()  = %s \n",
-         (info.SkipEnumDefinition() == true) ? "true" : "false");
-#endif
-
-  // DQ (1/9/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
   SgClassType *class_type = isSgClassType(type);
   ASSERT_not_null(class_type);
 
-  // DQ (6/22/2006): test2006_76.C demonstrates a problem with this code
-  // SgClassDeclaration *cdecl =
-  // isSgClassDeclaration(class_type->get_declaration());
   SgClassDeclaration *type_decl =
       isSgClassDeclaration(class_type->get_declaration());
   SgClassDeclaration *decl = type_decl;
@@ -2081,7 +1698,6 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
 
   SgTemplateClassDeclaration *tpldecl = isSgTemplateClassDeclaration(decl);
 
-  // DQ (7/28/2013): Added assertion.
   ROSE_ASSERT(decl == decl->get_firstNondefiningDeclaration());
 
   // Inline definitions are selected through the exact typedef/variable AST
@@ -2093,42 +1709,12 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
           InlineDefinitionKind::class_type));
   if (definition_context == nullptr) {
     definition_context = isSgClassDeclaration(inlineDefinitionOwnedBy(
-        info.get_declstatement_ptr(), class_type,
-        InlineDefinitionKind::class_type, !info.SkipClassDefinition()));
+        info, class_type, InlineDefinitionKind::class_type,
+        !info.SkipClassDefinition()));
   }
   if (definition_context != nullptr) {
     decl = definition_context;
   }
-
-#if DEBUG_UNPARSE_CLASS_TYPE
-  // printf ("In Unparse_Type::unparseClassType(): decl = %p = %s
-  // \n",decl,decl->class_name().c_str());
-  printf("In Unparse_Type::unparseClassType(): "
-         "class_type->get_autonomous_declaration() = %s \n",
-         class_type->get_autonomous_declaration() ? "true" : "false");
-  printf("In Unparse_Type::unparseClassType(): "
-         "decl->get_isAutonomousDeclaration()      = %s \n",
-         decl->get_isAutonomousDeclaration() ? "true" : "false");
-  printf("In Unparse_Type::unparseClassType(): decl->get_isUnNamed()           "
-         "         = %s \n",
-         decl->get_isUnNamed() ? "true" : "false");
-
-  SgClassDeclaration *defining_decl = isSgClassDeclaration(
-      class_type->get_declaration()->get_definingDeclaration());
-  printf("decl = %p defining_decl = %p \n", decl, defining_decl);
-  if (defining_decl != NULL) {
-    printf("In Unparse_Type::unparseClassType(): "
-           "defining_decl->get_isAutonomousDeclaration() = %s \n",
-           defining_decl->get_isAutonomousDeclaration() ? "true" : "false");
-    printf("In Unparse_Type::unparseClassType(): "
-           "defining_decl->get_isUnNamed()               = %s \n",
-           defining_decl->get_isUnNamed() ? "true" : "false");
-  }
-
-  printf("In Unparse_Type::unparseClassType(): decl = %p = %s "
-         "decl->get_definition() = %p \n",
-         decl, decl->class_name().c_str(), decl->get_definition());
-#endif
 
   if (!info.SkipClassDefinition() && decl->get_definition() == NULL) {
     // The shared type often points at the first nondefining declaration. When
@@ -2137,18 +1723,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     ASSERT_not_null(class_type->get_declaration());
     if (decl->get_definingDeclaration() != NULL) {
       ASSERT_not_null(decl->get_definingDeclaration());
-#if DEBUG_UNPARSE_CLASS_TYPE
-      printf("In Unparse_Type::unparseClassType(): Resetting decl to be the "
-             "defining declaration from decl = %p to decl = %p \n",
-             decl, decl->get_definingDeclaration());
-#endif
       decl = isSgClassDeclaration(decl->get_definingDeclaration());
       ASSERT_not_null(decl);
       ASSERT_not_null(decl->get_definition());
-    } else {
-#if DEBUG_UNPARSE_CLASS_TYPE
-      printf("Can't find a class declaration with an attached definition! \n");
-#endif
     }
   }
 
@@ -2159,37 +1736,9 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
   SgClassDeclaration *cDefiningDecl =
       isSgClassDeclaration(decl->get_definingDeclaration());
 
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("In unparseClassType(): info.isWithType()       = %s \n",
-         (info.isWithType() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.SkipBaseType()     = %s \n",
-         (info.SkipBaseType() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.isTypeFirstPart()  = %s \n",
-         (info.isTypeFirstPart() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.isTypeSecondPart() = %s \n",
-         (info.isTypeSecondPart() == true) ? "true" : "false");
-#endif
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-  curprint(string("\n/* In unparseClassType: info.isTypeFirstPart()  = ") +
-           ((info.isTypeFirstPart() == true) ? "true" : "false") + " */ \n ");
-  curprint(string("\n/* In unparseClassType: info.isTypeSecondPart() = ") +
-           ((info.isTypeSecondPart() == true) ? "true" : "false") + " */ \n ");
-#endif
-
-  // DQ (10/7/2006): In C (and I think C99), we need the "struct" keyword
-  // in places where it is not required for C++.  See test2006_147.C.
-  // if (info.isTypeFirstPart() == true)
-  // if (info.isTypeFirstPart() == true || (SageInterface::is_C_language() ||
-  // SageInterface::is_C99_language()) )
   bool emitted_elaborated_keyword = false;
   if ((info.isTypeFirstPart() == true) || (info.isTypeSecondPart() == false)) {
     /* print the class specifiers */
-    // printf ("I think that for C++ we can skip the class specifier, where for
-    // C it is required: print the class specifiers \n"); curprint ( "/* I think
-    // that for C++ we can skip the class specifier, where for C it is required:
-    // info.SkipClassSpecifier() = " + (info.SkipClassSpecifier() ? "true" :
-    // "false") + " */ ";
-
     bool suppressClassSpecifier = info.SkipClassSpecifier();
 
     if (!suppressClassSpecifier) {
@@ -2242,22 +1791,10 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
   // arrayPtr2 = new doubleArray();"
   //                                                         ^^^^^^^^^^^
   if (info.isTypeSecondPart() == false) {
-    // DQ (11/22/2004): New code using refactored code using explicitly stored
-    // scope to compute the qualified name this version should be more robust in
-    // generating correct qualified names when the parent is inconsistant with
-    // the explicitly stored scope (which happens in rare cases, but
-    // particularly in KULL and for va_list bases typedefed types).
-#if DEBUG_UNPARSE_CLASS_TYPE
-    printf("In unparseClassType(): info.PrintName() = %s decl->get_isUnNamed() "
-           "= %s \n",
-           (info.PrintName() == true) ? "true" : "false",
-           decl->get_isUnNamed() ? "true" : "false");
-#endif
-    // DQ (7/28/2012): Added support for un-named types in typedefs.
-    // SgName nm = decl->get_name();
     SgName nm;
 
-    if (decl->get_isUnNamed() && info.usedInUparseToStringFunction()) {
+    if (decl->get_isUnNamed() && info.usedInUparseToStringFunction() &&
+        definition_context == nullptr) {
       std::cerr
           << "REX_UNPARSE_INVARIANT[anonymous-class-type]: source-anonymous "
              "class type has no standalone source spelling"
@@ -2269,76 +1806,13 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
     // struct, and union declarations never expose it through type emission.
     if (decl->get_isUnNamed() == false) {
       nm = decl->get_name();
-
-#if DEBUG_UNPARSE_CLASS_TYPE
-      printf("In unparseClassType(): nm = %s \n", nm.str());
-#endif
     }
 
-#if DEBUG_UNPARSE_CLASS_TYPE
-    printf("In unparseClassType: nm = %s \n", nm.str());
-#endif
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-    curprint(string("\n/* In unparseClassType: nm = ") + nm.str() + " */ \n ");
-#endif
-    // DQ (6/27/2006): nm.is_null() is a better test for an empty name, don't
-    // output the qualifier for un-named structs.  This is part of the fix for
-    // the Red Hat 7.3 gconv problem (see ChangeLog for details). if (nm.str()
-    // != NULL)
     if (nm.is_null() == false) {
-      // if (SageInterface::is_C_language() == true)
-      if (SageInterface::is_C_language() == true ||
-          SageInterface::is_C99_language() == true) {
+      if (info.get_language() == SgFile::e_C_language) {
         printTypeToken(this, nm.str(), info);
       } else {
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-        curprint(
-            string("\n/* In unparseClassType: info.forceQualifiedNames() = ") +
-            ((info.forceQualifiedNames() == true) ? "true" : "false") +
-            " */ \n");
-        // curprint ( "\n/* cdecl->get_need_name_qualifier() = " +
-        // (cdecl->get_need_name_qualifier() == true ? "true" : "false") + " */
-        // \n";
-        curprint(string("\n/* decl->get_scope() = ") +
-                 decl->get_scope()->class_name() + " */\n ");
-        curprint(string("\n/* info.get_current_namespace() = ") +
-                 ((info.get_current_namespace() != NULL)
-                      ? info.get_current_namespace()->class_name()
-                      : "no namespace in use") +
-                 " */\n ");
-        curprint(string("\n/* info.get_declstatement_ptr() = ") +
-                 ((info.get_declstatement_ptr() != NULL)
-                      ? info.get_declstatement_ptr()->class_name()
-                      : "no declaration statement being generated") +
-                 " */\n ");
-        // curprint ( "\n/*
-        // SageInterface::get_name(info.get_declstatement_ptr()) = " +
-        // ((info.get_declstatement_ptr() != NULL) ?
-        // SageInterface::get_name(info.get_declstatement_ptr()) : "no
-        // declaration statement available") + " */\n ");
-#endif
 
-        // info.display("In unparseClassType: The C++ support is more complex
-        // and can require qualified names");
-
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-        curprint(string("\n/* In unparseClassType: "
-                        "info.get_reference_node_for_qualification() = ") +
-                 ((info.get_reference_node_for_qualification() != NULL)
-                      ? Rose::StringUtility::numberToString(
-                            info.get_reference_node_for_qualification())
-                      : "null") +
-                 " */ \n");
-        curprint(
-            string("\n/* In unparseClassType: "
-                   "info.get_reference_node_for_qualification() = ") +
-            ((info.get_reference_node_for_qualification() != NULL)
-                 ? info.get_reference_node_for_qualification()->class_name()
-                 : "null") +
-            " */ \n");
-        // curprint("\n/* In unparseFunctionType: needParen = " +
-        // StringUtility::numberToString(needParen) + " */ \n");
-#endif
         // DQ (6/25/2011): Fixing name qualifiction to work with
         // unparseToString().  In this case we don't have an associated node to
         // reference as a way to lookup the strored name qualification.  In this
@@ -2354,14 +1828,6 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
                 nameQualifierAndType.str(), info));
           }
         } else {
-          // DQ (6/2/2011): Newest support for name qualification...
-#if DEBUG_UNPARSE_CLASS_TYPE
-          printf("info.get_reference_node_for_qualification() = %p = %s \n",
-                 info.get_reference_node_for_qualification(),
-                 info.get_reference_node_for_qualification()
-                     ->class_name()
-                     .c_str());
-#endif
           SgName nameQualifier;
           if (!info.SkipQualifiedNames()) {
             nameQualifier = lookupContextualTypeQualifier(
@@ -2369,144 +1835,56 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
           }
           requireExactElaboratedTypeQualifier(
               type_decl, decl, info, emitted_elaborated_keyword, nameQualifier);
-#if DEBUG_UNPARSE_CLASS_TYPE
-          printf("nameQualifier (from "
-                 "initializedName->get_qualified_name_prefix_for_type() "
-                 "function) = %s \n",
-                 nameQualifier.str());
-#endif
 
-          // SgName nameQualifier = unp->u_name->generateNameQualifierForType(
-          // type , info );
-#if DEBUG_UNPARSE_CLASS_TYPE
-          printf("In unparseClassType: nameQualifier (from "
-                 "initializedName->get_qualified_name_prefix_for_type() "
-                 "function) = %s \n",
-                 nameQualifier.str());
-#endif
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-          curprint(string("\n/* In unparseClassType: nameQualifier (from "
-                          "unp->u_name->generateNameQualifier function) = ") +
-                   nameQualifier + " */ \n ");
-#endif
           curprint(formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
 
           SgTemplateInstantiationDecl *templateInstantiationDeclaration =
               isSgTemplateInstantiationDecl(decl);
-          if (isSgTemplateInstantiationDecl(decl) != NULL) {
-            // Handle case of class template instantiation (code located in
-            // unparse_stmt.C)
+          const auto *base =
+              isSgBaseClass(info.get_reference_node_for_qualification());
+          const bool sourceOwnsName =
+              base != nullptr &&
+              base->get_source_type_qualification_owns_terminal_name();
+          ROSE_ASSERT(!sourceOwnsName ||
+                      (base->get_source_type_qualification_present() &&
+                       !base->get_source_type_qualification_tokens().empty()));
+          if (templateInstantiationDeclaration != nullptr) {
             SgUnparse_Info ninfo(info);
-
-            // DQ (5/7/2013): This fixes the test2013_153.C test code.
-            if (ninfo.isTypeFirstPart() == true) {
-              ninfo.unset_isTypeFirstPart();
-            }
-
-            if (ninfo.isTypeSecondPart() == true) {
-              ninfo.unset_isTypeSecondPart();
-            }
-
-            // DQ (5/7/2013): I think these should be false so that the full
-            // type will be output.
-            ROSE_ASSERT(ninfo.isTypeFirstPart() == false);
-            ROSE_ASSERT(ninfo.isTypeSecondPart() == false);
-
-            // unp->u_exprStmt->unparseTemplateName(templateInstantiationDeclaration,info);
-            unp->u_exprStmt->unparseTemplateName(
-                templateInstantiationDeclaration, ninfo);
+            ninfo.unset_isTypeFirstPart();
+            ninfo.unset_isTypeSecondPart();
+            if (!sourceOwnsName)
+              unp->u_exprStmt->unparseTemplateName(
+                  templateInstantiationDeclaration, ninfo);
+            else if (
+                !base->get_source_type_qualification_owns_template_arguments())
+              unp->u_exprStmt->unparseTemplateArgumentList(
+                  templateInstantiationDeclaration->get_templateArguments(),
+                  ninfo, TemplateArgumentEmission::explicit_source_prefix);
             printTrailingTypeSeparator(this, info);
-          } else {
-#if DEBUG_UNPARSE_CLASS_TYPE && 0
-            curprint(string("\n/* In unparseClassType: output tag name = ") +
-                     nm.str() + " */ \n ");
-#endif
+          } else if (!sourceOwnsName) {
             printTypeToken(this, nm.str(), info);
           }
         }
       }
     } else {
-      // DQ (12/3/2017): This is a problem for Cxx11_tests/test2017_31,C, need
-      // to debug this case.
-#if DEBUG_UNPARSE_CLASS_TYPE
-      printf("info.get_use_generated_name_for_template_arguments() = %s \n",
-             info.get_use_generated_name_for_template_arguments() ? "true"
-                                                                  : "false");
-#endif
-      // DQ (4/28/2017): Where this is un-named type but we are wanting to
-      // output a name for a template argument, then we want the generated name,
-      // otherwise we want the class definition to be output directly.  So I
-      // think we need to trigger this use case via the SgUnparseInfo object.
       if (info.get_use_generated_name_for_template_arguments() == true) {
-        // In this case we need to output the generated name.
         SgName nm = class_type->get_name();
         printTypeToken(this, nm.str(), info);
       } else {
-        // DQ (10/23/2012): Added support for types of references to un-named
-        // class/struct/unions to always include their definitions.
-
-        // DQ (12/3/2017): This is a problem for Cxx11_tests/test2017_31.C (but
-        // with it uncommented, C_tests/test2015_67.c does pass). DQ (4/4/2015):
-        // Comment out this to support test2015_67.c.
-        // info.unset_SkipClassDefinition();
-        // DQ (1/9/2014): Mark Enum and Class declaration handling consistantly
-        // (enforced within the unparser now). info.unset_SkipEnumDefinition();
-
-        // DQ (12/6/2017): Check if this is a part of a lambda capture.
         SgClassDeclaration *parentClassDeclaration =
             isSgClassDeclaration(class_type->get_declaration());
         ASSERT_not_null(parentClassDeclaration);
-        SgLambdaExp *lambdaExpresssion =
-            isSgLambdaExp(parentClassDeclaration->get_parent());
-        if (lambdaExpresssion != NULL) {
-          // In the case where this is a class representing the capture
-          // variables, we don't output the class.
-        } else {
-          // DQ (12/6/2017): test2005_114.C demonstrates where we need to output
-          // the class declaration even when the name is generated (the
-          // generated name will not be output).
+        if (parentClassDeclaration->get_class_type() !=
+            SgClassDeclaration::e_lambda_closure) {
           info.unset_SkipClassDefinition();
           info.unset_SkipEnumDefinition();
         }
 
-        // DQ (1/9/2014): These should have been setup to be the same.
         ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
       }
     }
   }
 
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("In unparseClassType: info.SkipClassDefinition(): test 5: = %s \n",
-         (info.SkipClassDefinition() == true) ? "true" : "false");
-#endif
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("In unparseClassType: decl->isForward()                   = %s \n",
-         (decl->isForward() == true) ? "true" : "false");
-  printf("In unparseClassType: decl->get_isUnNamed()               = %s \n",
-         (decl->get_isUnNamed() == true) ? "true" : "false");
-  printf("In unparseClassType: decl->get_isAutonomousDeclaration() = %s \n",
-         (decl->get_isAutonomousDeclaration() == true) ? "true" : "false");
-#endif
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("In unparseClassType(): info.isTypeFirstPart()     = %s \n",
-         (info.isTypeFirstPart() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.isTypeSecondPart()    = %s \n",
-         (info.isTypeSecondPart() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.SkipClassDefinition() = %s \n",
-         (info.SkipClassDefinition() == true) ? "true" : "false");
-  printf("In unparseClassType(): info.SkipEnumDefinition()  = %s \n",
-         (info.SkipEnumDefinition() == true) ? "true" : "false");
-#endif
-
-  // DQ (7/28/2013): If this is an un-named class/struct/union then we have to
-  // put out the full definition each time (I think). Note that
-  // YardenPragmaPackExample.c requires that (info.isTypeSecondPart() == false)
-  // be added. if (info.isTypeFirstPart() == true) if (info.isTypeFirstPart() ==
-  // true || decl->get_isUnNamed() == true) if (info.isTypeFirstPart() == true)
-  // if ( (info.isTypeFirstPart() == true) || (info.isTypeSecondPart() == false
-  // && decl->get_isUnNamed() == true) ) if ( (info.isTypeFirstPart() == true)
-  // || (info.isTypeSecondPart() == false && decl->get_isAutonomousDeclaration()
-  // == false) )
   const bool expression_owns_named_class_definition = [&]() -> bool {
     SgNode *reference = info.get_reference_node_for_qualification();
     if (SgSizeOfOp *sizeof_op = isSgSizeOfOp(reference)) {
@@ -2538,39 +1916,13 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
       // (there may still be a pointer to the type).
       SgClassDefinition *classdefn_stmt = decl->get_definition();
 
-#if DEBUG_UNPARSE_CLASS_TYPE
-      printf("In unparseClassType: for decl = %p = %s we want to output the "
-             "class definition = %p \n",
-             declForDefinition, declForDefinition->class_name().c_str(),
-             classdefn_stmt);
-#endif
       if (classdefn_stmt != NULL) {
         SgUnparse_Info ninfo(info);
         ninfo.unset_SkipSemiColon();
 
-        // DQ (11/29/2004): Added support for saving context so that qualified
-        // names would be computed properly (using unqualified names instead of
-        // qualified names where appropriate (declarations in a class, for
-        // example)).
-        SgNamedType *saved_context = ninfo.get_current_context();
-
-        // DQ (6/13/2007): Set to null before resetting to non-null value
-        ninfo.set_current_context(NULL);
-        ninfo.set_current_context(class_type);
-
-        // DQ (6/9/2007): Set the current scope
-        ninfo.set_current_scope(NULL);
         ninfo.set_current_scope(classdefn_stmt);
 
-        // curprint ( "\n/* Unparsing class definition within unparseClassType
-        // */ \n";
-
         ASSERT_not_null(classdefn_stmt);
-#if DEBUG_UNPARSE_CLASS_TYPE
-        printf("In unparseClassType: classdefn_stmt = %p "
-               "classdefn_stmt->get_members().size() = %" PRIuPTR " \n",
-               classdefn_stmt, classdefn_stmt->get_members().size());
-#endif
         // DQ (1/8/2020): Support for defining declarations with base classes
         // (called from unparseClassDefnStmt() and unparseClassType()
         // functions). This supports Cxx_tests/test2020_24.C.
@@ -2582,12 +1934,6 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
         if (!empty_definition) {
           unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
         }
-#if DEBUG_UNPARSE_CLASS_TYPE
-        printf("In unparseClassType: classdefn_stmt = %p "
-               "classdefn_stmt->get_members().size() = %" PRIuPTR " \n",
-               classdefn_stmt, classdefn_stmt->get_members().size());
-#endif
-        // DQ (1/9/2014): These should have been setup to be the same.
         ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
         unp->u_exprStmt->unparseClassMembersWithSourceRoles(classdefn_stmt,
                                                             ninfo, true);
@@ -2616,26 +1962,14 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
           unp->u_exprStmt->unparseAttachedPreprocessingInfo(
               cDefiningDecl->get_definition(), info, PreprocessingInfo::inside);
         }
-#if DEBUG_UNPARSE_CLASS_TYPE
-        curprint(" /* in unparseClassType: output data members */ ");
-#endif
         if (!empty_definition) {
           unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
         }
         curprint("}");
+        unp->u_exprStmt->unparseTypeAttributes(cDefiningDecl);
         if (decl != NULL && decl->get_isAutonomousDeclaration() == false) {
           printTrailingTypeSeparator(this, info);
         }
-
-        // DQ (6/13/2007): Set to null before resetting to non-null value
-        // DQ (11/29/2004): Restore context saved above before unparsing
-        // declaration.
-        ninfo.set_current_context(NULL);
-        ninfo.set_current_context(saved_context);
-      } else {
-#if DEBUG_UNPARSE_CLASS_TYPE
-        printf("classdefn_stmt not found for decl = %p \n", decl);
-#endif
       }
 
       // GB (09/18/2007): If the class definition is unparsed, also unparse its
@@ -2644,41 +1978,13 @@ void Unparse_Type::unparseClassType(SgType *type, SgUnparse_Info &info) {
         unp->u_exprStmt->unparseAttachedPreprocessingInfo(
             cDefiningDecl, info, PreprocessingInfo::after);
       }
-    } else {
     }
-  } else {
   }
-
-  // #endif
-
-#if DEBUG_UNPARSE_CLASS_TYPE
-  printf("Leaving Unparse_Type::unparseClassType \n");
-  curprint("/* Leaving Unparse_Type::unparseClassType */ \n");
-#endif
 }
 
 void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
   SgEnumType *enum_type = isSgEnumType(type);
   ROSE_ASSERT(enum_type);
-
-#define DEBUG_ENUM_TYPE 0
-
-#if DEBUG_ENUM_TYPE
-  printf("Inside of unparseEnumType(): info.isTypeFirstPart() = %s "
-         "info.isTypeSecondPart() = %s \n",
-         (info.isTypeFirstPart() == true) ? "true" : "false",
-         (info.isTypeSecondPart() == true) ? "true" : "false");
-#endif
-#if DEBUG_ENUM_TYPE
-  printf("Inside of unparseEnumType(): info.SkipClassDefinition() = %s \n",
-         (info.SkipClassDefinition() == true) ? "true" : "false");
-  printf("Inside of unparseEnumType(): info.SkipEnumDefinition()  = %s \n",
-         (info.SkipEnumDefinition() == true) ? "true" : "false");
-  printf("Inside of unparseEnumType(): info.SkipClassSpecifier()  = %s \n",
-         (info.SkipClassSpecifier() == true) ? "true" : "false");
-  // printf ("Inside of unparseEnumType(): info.SkipEnumSpecifier()   = %s
-  // \n",(info.SkipEnumSpecifier() == true)  ? "true" : "false");
-#endif
 
   SgEnumDeclaration *edecl = isSgEnumDeclaration(enum_type->get_declaration());
   ASSERT_not_null(edecl);
@@ -2692,17 +1998,12 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
           InlineDefinitionKind::enum_type));
   if (definition_context == nullptr) {
     definition_context = isSgEnumDeclaration(inlineDefinitionOwnedBy(
-        info.get_declstatement_ptr(), enum_type,
-        InlineDefinitionKind::enum_type, !info.SkipEnumDefinition()));
+        info, enum_type, InlineDefinitionKind::enum_type,
+        !info.SkipEnumDefinition()));
   }
   if (definition_context != nullptr) {
     edecl = definition_context;
   }
-
-#if DEBUG_ENUM_TYPE
-  printf("Inside of unparseEnumType(): edecl = %p = %s \n", edecl,
-         edecl ? edecl->class_name().c_str() : "");
-#endif
 
   // DQ (10/7/2004): We need to output just the name when isTypeFirstPart ==
   // false and isTypeSecondPart == false this allows us to handle: "doubleArray*
@@ -2712,18 +2013,11 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
     SgClassDefinition *cdefn = NULL;
     SgNamespaceDefinitionStatement *namespaceDefn = NULL;
 
-    // printf ("edecl->isForward()         = %s \n",(edecl->isForward() == true)
-    // ? "true" : "false");
-
     // Build reference to any possible enclosing scope represented by a
     // SgClassDefinition or SgNamespaceDefinition to be used check if name
     // qualification is required.
     unp->u_exprStmt->initializeDeclarationsFromParent(edecl, cdefn,
                                                       namespaceDefn);
-
-    // printf ("After initializeDeclarationsFromParent: cdefn = %p namespaceDefn
-    // = %p \n",cdefn,namespaceDefn); printf ("In unparseEnumType: cdefn = %p
-    // \n",cdefn);
 
     // GB (09/19/2007): If the enum definition is unparsed, also unparse its
     // attached preprocessing info.
@@ -2746,50 +2040,26 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
     if (emitElaboratedEnumKeyword) {
       // DQ (5/22/2003) Added output of "enum" string
       curprint("enum ");
-#if DEBUG_ENUM_TYPE
-      printf("Inside of unparseEnumType(): output enum keyword \n");
-      curprint("/* enum from unparseEnumType() */ ");
-#endif
       // `enum class` is only valid on the definition itself. Elaborated enum
       // references still use the `enum` keyword, never `enum class`.
       if (edecl->get_isScopedEnum() == true && !info.SkipEnumDefinition()) {
         curprint("class ");
       }
-    } else {
-#if DEBUG_ENUM_TYPE
-      printf("Inside of unparseEnumType(): DO NOT output enum keyword \n");
-#endif
     }
-
-#if DEBUG_ENUM_TYPE
-    printf("In unparseEnumType: info.inTypedefDecl() = %s \n",
-           info.inTypedefDecl() ? "true" : "false");
-    printf("In unparseEnumType: info.inArgList()     = %s \n",
-           info.inArgList() ? "true" : "false");
-#endif
 
     // DQ (9/14/2013): For C language we need to output the "enum" keyword (see
     // test2013_71.c).
     if ((info.isTypeFirstPart() == false) &&
         (info.SkipClassSpecifier() == false) && !emitElaboratedEnumKeyword &&
-        (SageInterface::is_C_language() == true ||
-         SageInterface::is_C99_language() == true)) {
-      // DQ (1/6/2020): When this is used as a argument we only want to unparse
-      // the name (e.g. sizeof opterator). Note: we need this for the C language
-      // support. if (info.inArgList() == false)
-      //    {
+        info.get_language() == SgFile::e_C_language) {
       curprint("enum ");
 
       if (edecl->get_isScopedEnum() == true && !info.SkipEnumDefinition()) {
         curprint("class ");
       }
-      //    }
     }
 
-    if (SageInterface::is_C_language() == true ||
-        SageInterface::is_C99_language() == true) {
-      // DQ (10/11/2006): I think that now that we fill in all empty name as a
-      // post-processing step, we can assert this now!
+    if (info.get_language() == SgFile::e_C_language) {
       printTypeToken(this, enum_type->get_name().getString(), info);
     } else {
       // DQ (6/25/2011): Fixing name qualifiction to work with
@@ -2803,43 +2073,16 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
           requireCanonicalContextFreeTypeMode(enum_type, info,
                                               "unparseEnumType");
           SgName nameQualifierAndType = enum_type->get_qualified_name();
-#if DEBUG_ENUM_TYPE
-          printf(
-              "NOTE: In unparseEnumType(): "
-              "info.get_reference_node_for_qualification() == NULL (assuming "
-              "this is for unparseToString() nameQualifierAndType = %s \n",
-              nameQualifierAndType.str());
-#endif
-          // DQ (3/29/2019): In reviewing where we are using the
-          // get_qualified_name() function, this might be OK since it is likely
-          // only associated with the unparseToString() function.
           curprint(nameQualifierAndType.str());
         }
       } else {
-#if DEBUG_ENUM_TYPE
-        printf("In unparseEnumType(): "
-               "info.get_reference_node_for_qualification() = %p \n",
-               info.get_reference_node_for_qualification());
-        if (info.get_reference_node_for_qualification() != NULL) {
-          printf(" --- info.get_reference_node_for_qualification() = %s \n",
-                 info.get_reference_node_for_qualification()
-                     ->class_name()
-                     .c_str());
-        }
-#endif
-        // DQ (6/2/2011): Newest support for name qualification...
         SgName nameQualifier;
         if (!info.SkipQualifiedNames()) {
           nameQualifier = lookupContextualTypeQualifier(
               unp, info.get_reference_node_for_qualification(), info);
         }
-#if DEBUG_ENUM_TYPE
-        printf("In unparseEnumType(): nameQualifier = %s \n",
-               nameQualifier.str());
-#endif
         curprint(nameQualifier.str());
 
-        // DQ (7/28/2012): Added support for un-named types in typedefs.
         SgName nm;
         if (edecl->get_isUnNamed() == false) {
           nm = edecl->get_name();
@@ -2862,11 +2105,6 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
         }
 
         if (nm.getString() != "") {
-#if DEBUG_ENUM_TYPE
-          printf("In unparseEnumType(): Output qualifier of current types to "
-                 "the name = %s \n",
-                 nm.str());
-#endif
           printTypeToken(this, nm.getString(), info);
         }
       }
@@ -2898,18 +2136,9 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
     }
   }
 
-#if DEBUG_ENUM_TYPE
-  printf("In unparseEnumType(): info.SkipClassDefinition() = %s \n",
-         (info.SkipClassDefinition() == true) ? "true" : "false");
-  printf("In unparseEnumType(): info.SkipEnumDefinition()  = %s \n",
-         (info.SkipEnumDefinition() == true) ? "true" : "false");
-#endif
-
-  // DQ (1/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
   if (info.isTypeFirstPart() == true) {
-    // info.display("info before constructing ninfo");
     SgUnparse_Info ninfo(info);
 
     // don't skip the semicolon in the output of the statement in the class
@@ -2917,17 +2146,12 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
     ninfo.unset_SkipSemiColon();
 
     ninfo.set_isUnsetAccess();
-#if DEBUG_ENUM_TYPE
-    printf("info.SkipEnumDefinition() = %s \n",
-           (info.SkipEnumDefinition() == true) ? "true" : "false");
-#endif
     if (info.SkipEnumDefinition() == false) {
       SgUnparse_Info ninfo(info);
       ninfo.set_inEnumDecl();
       SgInitializer *tmp_init = NULL;
       SgName tmp_name;
 
-      // DQ (5/8/2013): Make sure this is a valid pointer.
       if (edecl->get_definingDeclaration() == NULL) {
         printf("edecl = %p = %s \n", edecl, edecl->class_name().c_str());
       }
@@ -2935,7 +2159,6 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
 
       edecl = isSgEnumDeclaration(edecl->get_definingDeclaration());
 
-      // This fails for test2007_140.C.
       ASSERT_not_null(edecl);
       edecl->validate_enumerator_source_ownership();
 
@@ -2977,14 +2200,6 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
       // no enumerators! This permits support of the empty enum case! "enum
       // x{};"
       curprint("{");
-#if DEBUG_ENUM_TYPE
-      printf("In unparseEnumType(): Output enumerators from edecl = %p \n",
-             edecl);
-      printf("     --- edecl->get_firstNondefiningDeclaration() = %p \n",
-             edecl->get_firstNondefiningDeclaration());
-      printf("     --- edecl->get_definingDeclaration() = %p \n",
-             edecl->get_definingDeclaration());
-#endif
       if (!source_enumerators.empty()) {
         for (size_t index = 0; index < source_enumerators.size(); ++index) {
           SgInitializedName *field = source_enumerators[index].field;
@@ -3004,14 +2219,12 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
             curprint(",");
           }
         }
-        // curprint ( "}";
       }
 
       // SgEnumDeclaration is both the declaration and the enum-body owner.
       unp->u_exprStmt->unparseAttachedPreprocessingInfo(
           edecl, info, PreprocessingInfo::inside);
 
-      // DQ (6/26/2005): Support for empty enum case!
       curprint("}");
 
       // GB (09/18/2007): If the enum definition is unparsed, also unparse its
@@ -3020,92 +2233,28 @@ void Unparse_Type::unparseEnumType(SgType *type, SgUnparse_Info &info) {
           edecl, info, PreprocessingInfo::after);
     }
   }
-
-#if DEBUG_ENUM_TYPE
-  printf("Leaving unparseEnumType(): edecl = %p \n", edecl);
-#endif
 }
 
 void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
   SgTypedefType *typedef_type = isSgTypedefType(type);
   ASSERT_not_null(typedef_type);
 
-#define DEBUG_TYPEDEF_TYPE 0
-
-#if DEBUG_TYPEDEF_TYPE
-  printf("Inside of Unparse_Type::unparseTypedefType name = %p = %s \n",
-         typedef_type, typedef_type->get_name().str());
-  // curprint ( "\n/* Inside of Unparse_Type::unparseTypedefType */ \n";
-#endif
-#if DEBUG_TYPEDEF_TYPE
-  curprint(string("\n /* info.isWithType()       = ") +
-           ((info.isWithType() == true) ? "true" : "false") + " */ \n");
-  curprint(string("\n /* info.SkipBaseType()     = ") +
-           ((info.SkipBaseType() == true) ? "true" : "false") + " */ \n");
-  curprint(string("\n /* info.isTypeSecondPart() = ") +
-           ((info.isTypeSecondPart() == true) ? "true" : "false") + " */ \n");
-#endif
-#if DEBUG_TYPEDEF_TYPE
-  printf("In unparseTypedefType(): info.isWithType()       = %s \n",
-         (info.isWithType() == true) ? "true" : "false");
-  printf("In unparseTypedefType(): info.SkipBaseType()     = %s \n",
-         (info.SkipBaseType() == true) ? "true" : "false");
-  printf("In unparseTypedefType(): info.isTypeFirstPart()  = %s \n",
-         (info.isTypeFirstPart() == true) ? "true" : "false");
-  printf("In unparseTypedefType(): info.isTypeSecondPart() = %s \n",
-         (info.isTypeSecondPart() == true) ? "true" : "false");
-#endif
-
   if ((info.isWithType() && info.SkipBaseType()) || info.isTypeSecondPart()) {
     /* do nothing */;
-#if DEBUG_TYPEDEF_TYPE
-    printf("Inside of Unparse_Type::unparseTypedefType (do nothing) \n");
-#endif
-    // curprint ( "\n /* Inside of Unparse_Type::unparseTypedefType (do nothing)
-    // */ \n");
   } else {
-    // could be a scoped typedef type
-    // check if currrent type's parent type is the same as the context type */
-    // SgNamedType *ptype = NULL;
-#if DEBUG_TYPEDEF_TYPE
-    printf("Inside of Unparse_Type::unparseTypedefType (normal handling) \n");
-#endif
-    // curprint ( "\n /* Inside of Unparse_Type::unparseTypedefType (normal
-    // handling) */ \n";
-
     SgTypedefDeclaration *tdecl =
         isSgTypedefDeclaration(typedef_type->get_declaration());
     ASSERT_not_null(tdecl);
 
-    // DQ (10/16/2004): Keep this error checking for now!
     ASSERT_not_null(typedef_type);
     ASSERT_not_null(typedef_type->get_declaration());
-    // DQ (10/17/2004): This assertion forced me to set the parents of typedef
-    // in the legacy frontend connection code since I could not figure out why
-    // it was not being set in the post processing which sets parents.
     ASSERT_not_null(typedef_type->get_declaration()->get_parent());
 
-    if (SageInterface::is_C_language() == true ||
-        SageInterface::is_C99_language() == true) {
-      // DQ (10/11/2006): I think that now that we fill in all enmpty name as a
-      // post-processing step, we can assert this now!
+    if (info.get_language() == SgFile::e_C_language) {
       ROSE_ASSERT(typedef_type->get_name().getString() != "");
       printTypeToken(this, typedef_type->get_name().getString(), info);
     } else {
       // The C++ support is more complex and can require qualified names!
-
-      // DQ (6/22/2011): I don't think we can assert this for anything than
-      // internal testing.  The unparseToString tests will fail with this
-      // assertion in place.
-      // ASSERT_not_null(info.get_reference_node_for_qualification());
-      // SgName nameQualifier = unp->u_name->generateNameQualifier( tdecl , info
-      // ); SgName nameQualifier = unp->u_name->generateNameQualifier( tdecl,
-      // info, true ); printf ("info.get_reference_node_for_qualification() = %p
-      // = %s
-      // \n",info.get_reference_node_for_qualification(),info.get_reference_node_for_qualification()->class_name().c_str());
-
-      // printf ("In unparseTypedefType(): info.get_current_scope() = %p
-      // \n",info.get_current_scope());
 
       // DQ (6/25/2011): Fixing name qualifiction to work with
       // unparseToString().  In this case we don't have an associated node to
@@ -3144,7 +2293,6 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
           unparseTemplateTypedefName(templateInstantiationTypedefDeclaration,
                                      info);
         } else {
-          // curprint ( typedef_type->get_name().str());
           SgName nm = typedef_type->get_name();
           if (nm.getString() != "") {
             printTypeToken(this, nm.getString(), info);
@@ -3153,21 +2301,12 @@ void Unparse_Type::unparseTypedefType(SgType *type, SgUnparse_Info &info) {
       }
     }
   }
-
-#if DEBUG_TYPEDEF_TYPE
-  printf("Leaving Unparse_Type::unparseTypedefType \n");
-#endif
-#if DEBUG_TYPEDEF_TYPE
-  curprint("\n/* Leaving Unparse_Type::unparseTypedefType */ \n");
-#endif
 }
 
 void Unparse_Type::unparseTemplateTypedefName(
     SgTemplateInstantiationTypedefDeclaration
         *templateInstantiationTypedefDeclaration,
     SgUnparse_Info &info) {
-  // DQ (6/21/2011): Generated this function from refactored call to
-  // unparseTemplateArgumentList
   ASSERT_not_null(templateInstantiationTypedefDeclaration);
 
   const SgName template_name =
@@ -3194,8 +2333,6 @@ string Unparse_Type::unparseRestrictKeyword(bool prepend_space) {
   // keyword for different backend compilers.
   string returnString;
 
-  // DQ (8/29/2005): Added support for classification of back-end compilers
-  // (independent of the name invoked to execute them)
   bool usingGcc = false;
 
   // The configured backend identity is required. Clang and GCC both accept
@@ -3221,18 +2358,17 @@ string Unparse_Type::unparseRestrictKeyword(bool prepend_space) {
 void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
   SgModifierType *mod_type = isSgModifierType(type);
   ASSERT_not_null(mod_type);
+  const bool is_atomic = mod_type->get_typeModifier().isAtomic();
 
   // Determine if we have to print the base type first (before printing the
   // modifier). This is true in case of a pointer (e.g., int * a) or a reference
   // (e.g., int & a)
   bool btype_first = false;
-  // if ( isSgReferenceType(mod_type->get_base_type()) ||
-  // isSgPointerType(mod_type->get_base_type()) )
   if (isSgArrayType(mod_type->get_base_type())) {
     info.set_useRestrictKeywordInsideArrayBrackets();
   } else if (isSgReferenceType(mod_type->get_base_type()) ||
              isSgPointerType(mod_type->get_base_type())) {
-    btype_first = true;
+    btype_first = !is_atomic;
   } else {
     // DQ (6/19/2013): Check for case or base_type being a modifier (comes up in
     // complex templae argument handling for template arguments that are
@@ -3241,9 +2377,6 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
         isSgModifierType(mod_type->get_base_type());
     if (inner_mod_type != NULL) {
       ASSERT_not_null(inner_mod_type->get_base_type());
-      // btype_first = true;
-      // printf ("In Unparse_Type::unparseModifierType(): Make recursive call to
-      // unparseModifierType \n"); unparseModifierType(inner_mod_type,info);
     }
   }
 
@@ -3266,7 +2399,11 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
              << mod_type->get_typeModifier().get_address_space_value() << ")))";
       curprint(outstr.str().c_str());
     }
-    if (mod_type->get_typeModifier().isVectorType()) {
+    if (mod_type->get_typeModifier().isExtendedVectorType()) {
+      curprint("__attribute__((ext_vector_type(");
+      curprint(std::to_string(mod_type->get_typeModifier().get_vector_size()));
+      curprint("))) ");
+    } else if (mod_type->get_typeModifier().isVectorType()) {
       curprint("__attribute__((__vector_size__(sizeof(");
       SgUnparse_Info base_info(info);
       base_info.unset_isTypeFirstPart();
@@ -3288,14 +2425,23 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
       // PL (7/9/2025): restrict keywords on array types are unparsed inside of
       // the brackets, not here
       if (!isSgArrayType(mod_type->get_base_type())) {
-        // DQ (12/11/2012): Newer version of the code refactored.
         curprint(unparseRestrictKeyword(!btype_first));
       }
     }
     // Print the base type unless it has been printed up front
     if (!btype_first &&
         shouldUnparseDeclaratorBase(mod_type->get_base_type(), info)) {
-      unparseType(mod_type->get_base_type(), info);
+      if (is_atomic) {
+        curprint("_Atomic(");
+        SgUnparse_Info base_info(info);
+        base_info.unset_isTypeFirstPart();
+        base_info.unset_isTypeSecondPart();
+        base_info.unset_SkipBaseType();
+        unparseType(mod_type->get_base_type(), base_info);
+        curprint(") ");
+      } else {
+        unparseType(mod_type->get_base_type(), info);
+      }
       if (isSgArrayType(mod_type->get_base_type())) {
         // PL (7/9/2025): restrict keywords are unparsed with the array, since
         // it needs to go inside the square brackets.
@@ -3304,7 +2450,8 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
     }
   } else {
     if (info.isTypeSecondPart()) {
-      unparseType(mod_type->get_base_type(), info);
+      if (!is_atomic)
+        unparseType(mod_type->get_base_type(), info);
     } else {
       SgUnparse_Info ninfo(info);
       ninfo.set_isTypeFirstPart();
@@ -3318,150 +2465,89 @@ void Unparse_Type::unparseModifierType(SgType *type, SgUnparse_Info &info) {
 void Unparse_Type::unparseFunctionType(SgType *type, SgUnparse_Info &info) {
   SgFunctionType *func_type = isSgFunctionType(type);
   ASSERT_not_null(func_type);
-
-#define DEBUG_FUNCTION_TYPE 0
-
-  // DQ (1/8/2014): debugging test2014_25.c.
-  // info.unset_isPointerToSomething();
+  SgFunctionParameterTypeList *parameters = func_type->get_argument_list();
+  ASSERT_not_null(parameters);
+  parameters->validate_source_prototype();
+  const bool trailing_return = func_type->get_source_trailing_return();
+  ROSE_ASSERT(!trailing_return ||
+              parameters->get_source_parameters() != nullptr);
 
   SgUnparse_Info ninfo(info);
   int needParen = 0;
   if (ninfo.isReferenceToSomething() || ninfo.isPointerToSomething()) {
     needParen = 1;
   }
-
-  // needParen = 0;
-
-#if DEBUG_FUNCTION_TYPE
-  printf("In unparseFunctionType(): needParen = %d \n", needParen);
-  curprint("\n/* In unparseFunctionType: needParen = " +
-           StringUtility::numberToString(needParen) + " */ \n");
-#endif
-
-#if DEBUG_FUNCTION_TYPE
-  printf("In unparseFunctionType(): info.isReferenceToSomething() = %s \n",
-         info.isReferenceToSomething() ? "true" : "false");
-  printf("In unparseFunctionType(): info.isPointerToSomething()   = %s \n",
-         info.isPointerToSomething() ? "true" : "false");
-#endif
 
   ROSE_ASSERT(info.isReferenceToSomething() == ninfo.isReferenceToSomething());
   ROSE_ASSERT(info.isPointerToSomething() == ninfo.isPointerToSomething());
 
-  // DQ (10/8/2004): Skip output of class definition for return type! C++
-  // standard does not permit a defining declaration within a return type,
-  // function parameter, or sizeof expression.
+  // Return and parameter types cannot contain inline definitions.
   ninfo.set_SkipClassDefinition();
-
-  // DQ (1/7/2014): We also need to skip the enum definition (see
-  // test2014_24.c).
   ninfo.set_SkipEnumDefinition();
 
   if (ninfo.isTypeFirstPart()) {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-    curprint("\n/* In unparseFunctionType: handling first part */ \n");
-    curprint("\n/* Skipping the first part of the return type! */ \n");
-#endif
     if (needParen) {
       ninfo.unset_isReferenceToSomething();
       ninfo.unset_isPointerToSomething();
 
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      // DQ (9/21/2004): we don't want this for typedefs of function pointers
-      // where the function return type is a pointer
-      printf("Skipping the first part of the return type (in needParen == true "
-             "case)! \n");
-      curprint("\n/* Skipping the first part of the return type (in needParen "
-               "== true case)! */ \n");
-#endif
-#if OUTPUT_DEBUGGING_UNPARSE_INFO || DEBUG_FUNCTION_TYPE
-      curprint(string("\n/* ") +
-               ninfo.displayString("Skipping the first part of the return type "
-                                   "(in needParen == true case)") +
-               " */ \n");
-#endif
-      if (shouldUnparseDeclaratorBase(func_type->get_return_type(), ninfo)) {
+      if (trailing_return) {
+        curprint("auto ");
+      } else if (shouldUnparseDeclaratorBase(func_type->get_return_type(),
+                                             ninfo)) {
         unparseType(func_type->get_return_type(), ninfo);
       }
       curprint("(");
-      // curprint("/* unparseFunctionType */ (");
     } else {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      // DQ (9/21/2004): we don't want this for typedefs of function pointers
-      // where the function return type is a pointer
-      printf("Skipping the first part of the return type (in needParen == "
-             "false case)! \n");
-      curprint("\n/* Skipping the first part of the return type (in needParen "
-               "== false case)! */ \n");
-#endif
-      if (shouldUnparseDeclaratorBase(func_type->get_return_type(), ninfo)) {
+      if (trailing_return) {
+        curprint("auto ");
+      } else if (shouldUnparseDeclaratorBase(func_type->get_return_type(),
+                                             ninfo)) {
         unparseType(func_type->get_return_type(), ninfo);
       }
     }
   } else {
     if (ninfo.isTypeSecondPart()) {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint("\n/* In unparseFunctionType: handling second part */ \n");
-#endif
+      if (isSgMemberFunctionType(func_type))
+        ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
       if (needParen) {
-#if DEBUG_FUNCTION_TYPE
-        curprint("/* needParen must be true */ \n ");
-#endif
         curprint(")");
-        // curprint("/* unparseFunctionType */ )");
-
         info.unset_isReferenceToSomething();
         info.unset_isPointerToSomething();
       }
-      // print the arguments
       SgUnparse_Info ninfo2(info);
       ninfo2.set_inArgList();
       ninfo2.unset_SkipBaseType();
       ninfo2.unset_isTypeSecondPart();
       ninfo2.unset_isTypeFirstPart();
 
-      // DQ (3/15/2005): Don't let typedef declarations (or enum or struct
-      // definitions) be unparsed in the function parameter list type output
-      // (see test2005_16.C).
       ninfo2.set_SkipDefinition();
 
-#if DEBUG_FUNCTION_TYPE
-      printf("Using exact per-argument qualification identities for "
-             "SgFunctionType. \n");
-#endif
-#if DEBUG_FUNCTION_TYPE
-      curprint("/* Output the type arguments (with parenthesis) */ \n ");
-#endif
       curprint("(");
-      // curprint("/* unparseFunctionType:parameters */ (");
-
       const SgTypePtrList &argument_types = func_type->get_arguments();
       const SgFunctionTypeArgumentPtrList &qualification_use_sites =
           requireFunctionArgumentQualificationUseSites(
               func_type, ninfo2, "function-type-arguments");
+      if (argument_types.empty() && func_type->get_has_prototype() &&
+          info.get_language() == SgFile::e_C_language)
+        curprint("void");
       for (size_t index = 0; index < argument_types.size(); ++index) {
-        // printf ("Output function argument ... \n");
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-        curprint("\n/* In unparseFunctionType(): Output the function type "
-                 "arguments */ \n");
-#endif
-#if DEBUG_FUNCTION_TYPE
-        printf("In unparseFunctionType(): calling unparseType(): output "
-               "function arguments = %p \n",
-               argument_types[index]);
-        printf("   --- argument = %p = %s \n", argument_types[index],
-               argument_types[index]->class_name().c_str());
-        printf("   --- ninfo2.isTypeFirstPart()  = %s \n",
-               ninfo2.isTypeFirstPart() ? "true" : "false");
-        printf("   --- ninfo2.isTypeSecondPart() = %s \n",
-               ninfo2.isTypeSecondPart() ? "true" : "false");
-#endif
         SgUnparse_Info argument_info(ninfo2);
         applyFunctionArgumentQualification(unp, qualification_use_sites[index],
                                            argument_info);
-        unparseType(argument_types[index], argument_info);
-        if (qualification_use_sites[index]->get_is_pack_expansion()) {
-          curprint("...");
+        const auto *written = parameters->get_source_parameters();
+        if (written != nullptr && index < written->get_args().size()) {
+          argument_info.set_isTypeFirstPart();
+          unparseType(argument_types[index], argument_info);
+          if (qualification_use_sites[index]->get_is_pack_expansion())
+            curprint("...");
+          curprint(written->get_args()[index]->get_name());
+          argument_info.unset_isTypeFirstPart();
+          argument_info.set_isTypeSecondPart();
+          unparseType(argument_types[index], argument_info);
+        } else {
+          unparseType(argument_types[index], argument_info);
+          if (qualification_use_sites[index]->get_is_pack_expansion())
+            curprint("...");
         }
 
         if (index + 1 < argument_types.size()) {
@@ -3470,155 +2556,39 @@ void Unparse_Type::unparseFunctionType(SgType *type, SgUnparse_Info &info) {
       }
 
       curprint(")");
-      // curprint("/* unparseFunctionType:parameters */ )");
-
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint(
-          "\n/* In unparseFunctionType(): AFTER parenthesis are output */ \n");
-#endif
+      if (auto *member = isSgMemberFunctionType(func_type))
+        for (auto qualifier : memberFunctionQualifiers(member))
+          curprint(qualifier);
+      unp->u_exprStmt->unparseExceptionSpecification(func_type, info);
       SgUnparse_Info return_type_info(info);
       return_type_info.unset_inTypedefDecl();
+      if (trailing_return) {
+        curprint(" -> ");
+        return_type_info.unset_isTypeFirstPart();
+        return_type_info.unset_isTypeSecondPart();
+      }
       unparseType(func_type->get_return_type(),
                   return_type_info); // catch the 2nd part of the rtype
-
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint(
-          "\n/* Done: In unparseFunctionType(): handling second part */ \n");
-#endif
     } else {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint("\n/* In unparseFunctionType: recursive call with "
-               "isTypeFirstPart == true */ \n");
-#endif
       ninfo.set_isTypeFirstPart();
       printTrailingTypeSeparator(this, info);
       unparseType(func_type, ninfo);
 
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint("\n/* In unparseFunctionType: recursive call with "
-               "isTypeSecondPart == true */ \n");
-#endif
       ninfo.set_isTypeSecondPart();
       unparseType(func_type, ninfo);
-
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-      curprint("\n/* In unparseFunctionType: end of recursive call */ \n");
-#endif
     }
   }
-
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || DEBUG_FUNCTION_TYPE
-  printf("Leaving unparseFunctionType() \n");
-  curprint("\n/* Leaving unparseFunctionType() */ \n");
-#endif
 }
 
 void Unparse_Type::unparseMemberFunctionType(SgType *type,
                                              SgUnparse_Info &info) {
-
-  SgMemberFunctionType *mfunc_type = isSgMemberFunctionType(type);
-  ASSERT_not_null(mfunc_type);
-
-  SgUnparse_Info ninfo(info);
-  int needParen = 0;
-  if (ninfo.isReferenceToSomething() || ninfo.isPointerToSomething()) {
-    needParen = 1;
-  }
-
-  // DQ (10/7/2004): Skip output of class definition for return type! C++
-  // standard does not permit a defining declaration within a return type,
-  // function parameter, or sizeof expression.
-  ninfo.set_SkipClassDefinition();
-
-  // DQ (1/13/2014): Set the output of the enum defintion to match that of the
-  // class definition (consistancy is now inforced).
-  ninfo.set_SkipEnumDefinition();
-
-  if (ninfo.isTypeFirstPart()) {
-    if (needParen) {
-      ninfo.unset_isReferenceToSomething();
-      ninfo.unset_isPointerToSomething();
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
-
-      if (shouldUnparseDeclaratorBase(mfunc_type->get_return_type(), ninfo)) {
-        unparseType(mfunc_type->get_return_type(), ninfo);
-      }
-      curprint("(");
-    } else {
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
-
-      if (shouldUnparseDeclaratorBase(mfunc_type->get_return_type(), ninfo)) {
-        unparseType(mfunc_type->get_return_type(), ninfo);
-      }
-    }
-  } else {
-    if (ninfo.isTypeSecondPart()) {
-      if (needParen) {
-        curprint(")");
-        info.unset_isReferenceToSomething();
-        info.unset_isPointerToSomething();
-      }
-      // print the arguments
-      SgUnparse_Info ninfo2(info);
-      ninfo2.set_inArgList();
-      ninfo2.unset_SkipBaseType();
-      ninfo2.unset_isTypeFirstPart();
-      ninfo2.unset_isTypeSecondPart();
-
-      curprint("(");
-      const SgTypePtrList &argument_types = mfunc_type->get_arguments();
-      const SgFunctionTypeArgumentPtrList &qualification_use_sites =
-          requireFunctionArgumentQualificationUseSites(
-              mfunc_type, ninfo2, "member-function-type-arguments");
-      for (size_t index = 0; index < argument_types.size(); ++index) {
-        // printf ("In unparseMemberFunctionType: output the arguments \n");
-        SgUnparse_Info argument_info(ninfo2);
-        applyFunctionArgumentQualification(unp, qualification_use_sites[index],
-                                           argument_info);
-        unparseType(argument_types[index], argument_info);
-        if (qualification_use_sites[index]->get_is_pack_expansion()) {
-          curprint("...");
-        }
-        if (index + 1 < argument_types.size()) {
-          curprint(", ");
-        }
-      }
-      curprint(")");
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
-
-      SgUnparse_Info return_type_info(info);
-      return_type_info.unset_inTypedefDecl();
-      unparseType(mfunc_type->get_return_type(),
-                  return_type_info); // catch the 2nd part of the rtype
-      // add member function type qualifiers (&, &&, const, volatile)
-      for (auto qual : memberFunctionQualifiers(mfunc_type))
-        curprint(qual);
-    } else {
-      ninfo.set_isTypeFirstPart();
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
-
-      unparseType(mfunc_type, ninfo);
-
-      ninfo.unset_isTypeFirstPart();
-      printTrailingTypeSeparator(this, info);
-      ninfo.set_isTypeSecondPart();
-      // DQ (1/13/2014): These should have been setup to be the same.
-      ROSE_ASSERT(ninfo.SkipClassDefinition() == ninfo.SkipEnumDefinition());
-
-      unparseType(mfunc_type, ninfo);
-    }
-  }
+  ASSERT_not_null(isSgMemberFunctionType(type));
+  unparseFunctionType(type, info);
 }
 
 void Unparse_Type::unparseArrayType(SgType *type, SgUnparse_Info &info) {
   SgArrayType *array_type = isSgArrayType(type);
   ASSERT_not_null(array_type);
-
-#define DEBUG_ARRAY_TYPE 0
 
   // different cases to think about
   //    int (*) [10],  int (*var) [20]
@@ -3631,45 +2601,9 @@ void Unparse_Type::unparseArrayType(SgType *type, SgUnparse_Info &info) {
 
   bool is_variable_length_array = array_type->get_is_variable_length_array();
   SgFunctionDeclaration *functionDeclaration =
-      isSgFunctionDeclaration(info.get_decl_stmt());
+      isSgFunctionDeclaration(info.get_declstatement_ptr());
   bool isFunctionPrototype =
       functionDeclaration != NULL && functionDeclaration->isForward();
-
-#if DEBUG_ARRAY_TYPE
-  string firstPartString = (info.isTypeFirstPart() == true) ? "true" : "false";
-  string secondPartString =
-      (info.isTypeSecondPart() == true) ? "true" : "false";
-  printf("\nIn Unparse_Type::unparseArrayType(): type = %p type->class_name() "
-         "= %s firstPart = %s secondPart = %s \n",
-         type, type->class_name().c_str(), firstPartString.c_str(),
-         secondPartString.c_str());
-  printf("In Unparse_Type::unparseArrayType(): array_type->get_base_type() = "
-         "%p = %s \n",
-         array_type->get_base_type(),
-         array_type->get_base_type()->class_name().c_str());
-#endif
-
-#if DEBUG_ARRAY_TYPE
-  // DQ (5/8/2013): Note that this will make the type name very long and can
-  // cause problems with nexted type generating nested comments.
-  curprint(
-      string(
-          "\n/* Top of unparseArrayType() using generated type name string: ") +
-      type->class_name() + " firstPart " + firstPartString + " secondPart " +
-      secondPartString + " */ \n");
-#endif
-
-#if DEBUG_ARRAY_TYPE
-  printf("In Unparse_Type::unparseArrayType(): info.isReferenceToSomething() = "
-         "%s \n",
-         info.isReferenceToSomething() ? "true" : "false");
-  printf("In Unparse_Type::unparseArrayType(): info.isPointerToSomething()   = "
-         "%s \n",
-         info.isPointerToSomething() ? "true" : "false");
-#endif
-
-  //   printf ("In Unparse_Type::unparseArrayType(): Commented out special case
-  //   handling for SgTypeOf base type \n");
 
   SgUnparse_Info ninfo(info);
   bool needParen = false;
@@ -3677,77 +2611,35 @@ void Unparse_Type::unparseArrayType(SgType *type, SgUnparse_Info &info) {
     needParen = true;
   }
 
-#if DEBUG_ARRAY_TYPE || 0
-  printf("In unparseArrayType(): needParen = %s \n",
-         (needParen == true) ? "true" : "false");
-  curprint(string("/* In  unparseArrayType() needParen = ") +
-           string((needParen == true) ? "true" : "false") + string(" */ \n "));
-#endif
-
   if (ninfo.isTypeFirstPart() == true) {
     if (needParen == true) {
       ninfo.unset_isReferenceToSomething();
       ninfo.unset_isPointerToSomething();
-#if DEBUG_ARRAY_TYPE
-      printf("ninfo.isTypeFirstPart() == true: needParen == true: Calling "
-             "unparseType(array_type->get_base_type(), ninfo); \n");
-#endif
       if (shouldUnparseDeclaratorBase(array_type->get_base_type(), ninfo)) {
         unparseType(array_type->get_base_type(), ninfo);
       }
-#if DEBUG_ARRAY_TYPE
-      printf("DONE: ninfo.isTypeFirstPart() == true: needParen == true: "
-             "Calling unparseType(array_type->get_base_type(), ninfo); \n");
-#endif
       curprint("(");
-      // curprint(" /* unparseArrayType */ (");
     } else {
-#if DEBUG_ARRAY_TYPE
-      printf("ninfo.isTypeFirstPart() == true: needParen == false: Calling "
-             "unparseType(array_type->get_base_type(), ninfo); \n");
-#endif
       if (shouldUnparseDeclaratorBase(array_type->get_base_type(), ninfo)) {
         unparseType(array_type->get_base_type(), ninfo);
       }
-#if DEBUG_ARRAY_TYPE
-      printf("DONE: ninfo.isTypeFirstPart() == true: needParen == false: "
-             "Calling unparseType(array_type->get_base_type(), ninfo); \n");
-#endif
     }
   } else {
     if (ninfo.isTypeSecondPart() == true) {
       if (needParen == true) {
-#if DEBUG_ARRAY_TYPE
-        printf("ninfo.isTypeSecondPart() == true: needParen == true: output "
-               "parenthisis and unparse the array index \n");
-#endif
         curprint(")");
-        // curprint(" /* unparseArrayType */ )");
         // DQ (3/24/2015): Original code (also required to fix test2015_21.C).
         info.unset_isReferenceToSomething();
         info.unset_isPointerToSomething();
         // DQ (3/24/2015): I think we want to unset ninfo (see test2015_30.c).
         ninfo.unset_isReferenceToSomething();
         ninfo.unset_isPointerToSomething();
-      } else {
-#if DEBUG_ARRAY_TYPE
-        printf("ninfo.isTypeSecondPart() == true: needParen == false: unparse "
-               "the array index \n");
-#endif
       }
 
       curprint("[");
 
-#if DEBUG_ARRAY_TYPE
-      // DQ (6/3/2017): Added more debugging info.
-      printf("##### array_type = %p array_type->get_index() = %p = %s \n",
-             array_type, array_type->get_index(),
-             array_type->get_index() != NULL
-                 ? array_type->get_index()->class_name().c_str()
-                 : "null");
-#endif
       if (info.useRestrictKeywordInsideArrayBrackets() &&
-          SageInterface::is_C_language()) {
+          info.get_language() == SgFile::e_C_language) {
         curprint(unparseRestrictKeyword());
       }
 
@@ -3755,7 +2647,6 @@ void Unparse_Type::unparseArrayType(SgType *type, SgUnparse_Info &info) {
       // they are not the second part of the type.
       SgUnparse_Info ninfo2(ninfo);
       ninfo2.unset_isTypeSecondPart();
-      // DQ (1/9/2014): These should have been setup to be the same.
       ROSE_ASSERT(ninfo2.SkipClassDefinition() == ninfo2.SkipEnumDefinition());
 
       if (ninfo2.supressArrayBound() == false) {
@@ -3764,75 +2655,24 @@ void Unparse_Type::unparseArrayType(SgType *type, SgUnparse_Info &info) {
           // even after array-type uniquing drops the placeholder index.
           curprint("*");
         } else if (array_type->get_index()) {
-#if DEBUG_ARRAY_TYPE
-          printf("In unparseArrayType(): ninfo2.supressArrayBound()  = %s \n",
-                 (ninfo2.supressArrayBound() == true) ? "true" : "false");
-#endif
-          // DQ (2/2/2014): Allow the array bound to be subressed (e.g. in
-          // secondary declarations of array variable using "[]" syntax.
-          // unp->u_exprStmt->unparseExpression(array_type->get_index(),
-          // ninfo2);
-          // // get_index() returns an expr
-          // Unparse the array bound.
-
-          // DQ (3/28/2017): Eliminate warning about unused variable from Clang.
-          // DQ (2/12/2016): Adding support for variable length arrays.
-          // unp->u_exprStmt->unparseExpression(array_type->get_index(),
-          // ninfo2); // get_index() returns an expr SgExpression*
-          // indexExpression = array_type->get_index();
-
-          // DQ (3/28/2017): Eliminate warning about unused variable from Clang.
-          // SgNullExpression* nullExpression =
-          // isSgNullExpression(indexExpression);
-
           // Macro spelling is preserved by token replay at the declaration
           // frontier. Once this typed AST path is selected, emit the bound from
           // the AST in the active qualification context.
           unp->u_exprStmt->unparseExpression(array_type->get_index(), ninfo2);
         }
-      } else {
-#if DEBUG_ARRAY_TYPE
-        printf("In unparseArrayType(): Detected "
-               "info_for_type.supressArrayBound() == true \n");
-#endif
       }
 
       curprint("]");
 
-#if DEBUG_ARRAY_TYPE
-      printf("ninfo.isTypeSecondPart() == true: needParen = %s Calling "
-             "unparseType(array_type->get_base_type(), ninfo); \n",
-             needParen ? "true" : "false");
-#endif
       unparseType(array_type->get_base_type(), info); // second part
-#if DEBUG_ARRAY_TYPE
-      printf("DONE: ninfo.isTypeSecondPart() == true: needParen = %s Calling "
-             "unparseType(array_type->get_base_type(), ninfo); \n",
-             needParen ? "true" : "false");
-#endif
     } else {
-#if DEBUG_ARRAY_TYPE
-      printf("Calling unparseType(array_type, ninfo); with "
-             "ninfo.set_isTypeFirstPart(); \n");
-#endif
       ninfo.set_isTypeFirstPart();
       unparseType(array_type, ninfo);
 
-#if DEBUG_ARRAY_TYPE
-      printf("Calling unparseType(array_type, ninfo); with "
-             "ninfo.set_isTypeSecondPart(); \n");
-#endif
       ninfo.set_isTypeSecondPart();
       unparseType(array_type, ninfo);
     }
   }
-
-#if DEBUG_ARRAY_TYPE || 0
-  // DQ (5/8/2013): Note that this will make the type name very long and can
-  // cause problems with nexted type generating nested comments.
-  printf("Leaving unparseArrayType(): type = %p \n", type);
-  curprint("/* Leaving unparseArrayType() */ \n ");
-#endif
 }
 
 void Unparse_Type::unparseTemplateType(SgType *type, SgUnparse_Info &info) {
@@ -3846,16 +2686,20 @@ void Unparse_Type::unparseTemplateType(SgType *type, SgUnparse_Info &info) {
     return;
   }
 
-  curprint(template_type->get_name());
-
-  SgTemplateArgumentPtrList &tpl_args = template_type->get_tpl_args();
-  if (!tpl_args.empty()) {
-    SgUnparse_Info ninfo(info);
-    ninfo.set_SkipClassDefinition();
-    ninfo.set_SkipEnumDefinition();
-    ninfo.set_SkipClassSpecifier();
-    unp->u_exprStmt->unparseTemplateArgumentList(
-        tpl_args, ninfo, TemplateArgumentEmission::complete_typed_identity);
+  const SgTemplateParameter *parameter =
+      template_type->get_template_parameter();
+  if (parameter != nullptr &&
+      parameter->get_isAbbreviatedFunctionTemplateParameter()) {
+    ROSE_ASSERT(template_type->get_name().getString().empty());
+    if (SgExpression *constraint = parameter->get_sourceTypeConstraint()) {
+      ROSE_ASSERT(constraint->get_parent() == parameter);
+      SgUnparse_Info constraint_info(info);
+      unp->u_exprStmt->unparseExpression(constraint, constraint_info);
+      curprint(" ");
+    }
+    curprint("auto");
+  } else {
+    curprint(template_type->get_name());
   }
 
   printTrailingTypeSeparator(this, info);
@@ -3867,24 +2711,26 @@ void Unparse_Type::unparseAutoType(SgType *type, SgUnparse_Info &info) {
   bool unparse_type = info.isTypeFirstPart() ||
                       (!info.isTypeFirstPart() && !info.isTypeSecondPart());
   if (unparse_type) {
-    const std::string &constraint = auto_type->get_source_constraint_spelling();
-    if (auto_type->get_is_constrained() != !constraint.empty()) {
+    SgNonrealRefExp *constraint = auto_type->get_type_constraint();
+    if (auto_type->get_is_constrained() != (constraint != nullptr) ||
+        (constraint != nullptr &&
+         (constraint->get_parent() != auto_type ||
+          constraint->get_symbol() == nullptr ||
+          constraint->get_symbol()->get_declaration() == nullptr ||
+          !constraint->get_symbol()->get_declaration()->get_is_concept()))) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[constrained-auto-source]: semantic "
-              "constraint state has no exact source spelling\n");
+              "constraint state has no exact owned concept reference\n");
       ROSE_ABORT();
     }
     if (auto_type->get_is_constrained()) {
-      curprint(constraint);
+      unp->u_exprStmt->unparseExpression(constraint, info);
       curprint(" ");
     }
     curprint("auto");
     printTrailingTypeSeparator(this, info);
   }
 }
-
-#define DEBUG_UNPARSE_NONREAL_TYPE 0
-#define DEBUG_T0503_NONREAL_TYPE 0
 
 void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
                                       bool is_first_in_nonreal_chain,
@@ -3899,11 +2745,6 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
 
   SgNonrealType *nrtype = isSgNonrealType(type);
   ASSERT_not_null(nrtype);
-
-#if DEBUG_UNPARSE_NONREAL_TYPE
-  printf("In unparseNonrealType(type = %p): name = %s\n", type,
-         nrtype->get_name().str());
-#endif
 
   SgNonrealDecl *nrdecl = isSgNonrealDecl(nrtype->get_declaration());
   ASSERT_not_null(nrdecl);
@@ -4290,11 +3131,6 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
     // SgNonrealDecl identity (for example an unqualified `size_t` made visible
     // by `using std::size_t`).
   } else if (nrparent_nrscope != NULL) {
-#if DEBUG_UNPARSE_NONREAL_TYPE
-    printf(" --- nrparent_nrscope = %p (%s)\n", nrparent_nrscope,
-           nrparent_nrscope != NULL ? nrparent_nrscope->class_name().c_str()
-                                    : NULL);
-#endif
     has_nonreal_parent = true;
     if (is_first_in_nonreal_chain) {
       if (!source_qualification_present && exact_source_elaboration.empty() &&
@@ -4322,9 +3158,6 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
              nrdecl->get_templateDeclaration() != NULL) {
     SgName nameQualifier = lookupContextualTypeQualifier(
         unp, info.get_reference_node_for_qualification(), info);
-#if DEBUG_UNPARSE_NONREAL_TYPE
-    printf(" --- nameQualifier = %s\n", nameQualifier.str());
-#endif
     curprint(formatQualifiedNameForTypeOutput(nameQualifier.str(), info));
     has_nonreal_parent = true;
   } else if (has_global_qualifier) {
@@ -4346,20 +3179,15 @@ void Unparse_Type::unparseNonrealType(SgType *type, SgUnparse_Info &info,
   if (!source_qualification_owns_template_arguments &&
       (tpl_args.size() > 0 || nrdecl->get_nonreal_template_role() ==
                                   SgNonrealDecl::e_nonreal_template_id)) {
-#if DEBUG_UNPARSE_NONREAL_TYPE
-    printf("  tpl_args.size() = %d\n", tpl_args.size());
-#endif
     if (tpl_args.empty()) {
       curprint("<>");
     } else {
-      SgTemplateArgumentPtrList explicit_args = tpl_args;
       SgUnparse_Info ninfo(info);
       ninfo.set_SkipClassDefinition();
       ninfo.set_SkipEnumDefinition();
       ninfo.set_SkipClassSpecifier();
       unp->u_exprStmt->unparseTemplateArgumentList(
-          explicit_args, ninfo,
-          TemplateArgumentEmission::explicit_source_prefix);
+          tpl_args, ninfo, TemplateArgumentEmission::explicit_source_prefix);
     }
   }
 

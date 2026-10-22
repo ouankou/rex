@@ -7,7 +7,6 @@
 
 #include "unparser.h"
 
-#include <set>
 
 namespace {
 bool exactGeneratedFortranTypeUse(SgUnparse_Info &info) {
@@ -42,6 +41,12 @@ bool exactGeneratedFortranTypeUse(SgUnparse_Info &info) {
 bool exactFortranAssumedTypeUse(SgUnparse_Info &info,
                                 bool unlimitedPolymorphic) {
   SgNode *reference = info.get_reference_node_for_qualification();
+  if (const SgFortranImplicitRange *range =
+          isSgFortranImplicitRange(reference)) {
+    return range->get_type_spec() ==
+           (unlimitedPolymorphic ? SgFortranImplicitRange::e_class_star
+                                 : SgFortranImplicitRange::e_type_star);
+  }
   if (const SgInitializedName *name = isSgInitializedName(reference)) {
     return name->get_fortran_type_spec() ==
            (unlimitedPolymorphic
@@ -66,6 +71,10 @@ void requireFortranIntrinsicSourceType(SgType *type, SgUnparse_Info &info) {
     std::cerr << "REX_UNPARSE_INVARIANT[fortran-intrinsic-source-type]: "
                  "semantic intrinsic type reached declaration emission\n";
     ROSE_ABORT();
+  }
+  if (const SgFortranImplicitRange *range =
+          isSgFortranImplicitRange(info.get_reference_node_for_qualification())) {
+    ROSE_ASSERT(range->get_type_spec() == SgFortranImplicitRange::e_intrinsic);
   }
   if (const SgInitializedName *name =
           isSgInitializedName(info.get_reference_node_for_qualification())) {
@@ -93,6 +102,9 @@ void requireFortranIntrinsicSourceType(SgType *type, SgUnparse_Info &info) {
 
 SgSymbol *fortranSourceDerivedTypeSymbol(SgUnparse_Info &info) {
   SgNode *reference = info.get_reference_node_for_qualification();
+  if (const SgFortranImplicitRange *range = isSgFortranImplicitRange(reference)) {
+    return range->get_source_derived_type_symbol();
+  }
   if (const SgInitializedName *name = isSgInitializedName(reference)) {
     return name->get_fortran_source_derived_type_symbol();
   }
@@ -104,8 +116,12 @@ SgSymbol *fortranSourceDerivedTypeSymbol(SgUnparse_Info &info) {
           isSgAggregateInitializer(reference)) {
     return constructor->get_fortran_source_derived_type_symbol();
   }
+  if (const SgBaseClass *base = isSgBaseClass(reference)) {
+    return base->get_fortran_source_derived_type_symbol();
+  }
   return nullptr;
 }
+} // namespace
 
 SgName requireFortranSourceDerivedTypeName(SgClassType *classType,
                                            SgUnparse_Info &info) {
@@ -127,17 +143,9 @@ SgName requireFortranSourceDerivedTypeName(SgClassType *classType,
     ROSE_ABORT();
   }
 
-  std::set<SgAliasSymbol *> aliases;
   SgSymbol *canonical = sourceSymbol;
-  while (SgAliasSymbol *alias = isSgAliasSymbol(canonical)) {
-    if (!aliases.insert(alias).second || alias->get_alias() == nullptr) {
-      std::cerr << "REX_UNPARSE_INVARIANT[fortran-derived-type-binding]: "
-                   "source derived type binding contains a malformed alias "
-                   "chain\n";
-      ROSE_ABORT();
-    }
-    canonical = alias->get_alias();
-  }
+  if (auto *alias = isSgAliasSymbol(canonical))
+    canonical = alias->get_base();
   SgClassSymbol *classSymbol = isSgClassSymbol(canonical);
   SgClassDeclaration *declaration =
       classSymbol != nullptr ? classSymbol->get_declaration() : nullptr;
@@ -149,7 +157,6 @@ SgName requireFortranSourceDerivedTypeName(SgClassType *classType,
   }
   return sourceSymbol->get_name();
 }
-} // namespace
 
 //----------------------------------------------------------------------------
 //  void UnparserFort::unparseType
@@ -273,11 +280,6 @@ void UnparseFortran_type::unparseType(SgType *type, SgUnparse_Info &info,
     }
     break;
   }
-
-    // Rice coarrays
-  case V_SgTypeCAFTeam:
-    unparseBaseType(type, "TEAM", info);
-    break;
 
   case V_SgTypeCrayPointer:
     unparseBaseType(type, "POINTER", info);
@@ -489,6 +491,8 @@ void UnparseFortran_type::unparseClassType(SgType *type, SgUnparse_Info &info) {
         info.get_reference_node_for_qualification());
     const auto *fortranConstructor =
         isSgAggregateInitializer(info.get_reference_node_for_qualification());
+    const auto *implicitRange =
+        isSgFortranImplicitRange(info.get_reference_node_for_qualification());
     const SgName sourceTypeName =
         requireFortranSourceDerivedTypeName(class_type, info);
     bool emitClass = false;
@@ -521,6 +525,13 @@ void UnparseFortran_type::unparseClassType(SgType *type, SgUnparse_Info &info) {
                      "identity\n";
         ROSE_ABORT();
       }
+    } else if (implicitRange != nullptr) {
+      implicitRange->validate_range();
+      ROSE_ASSERT(
+          implicitRange->get_type_spec() == SgFortranImplicitRange::e_type ||
+          implicitRange->get_type_spec() == SgFortranImplicitRange::e_class);
+      emitClass =
+          implicitRange->get_type_spec() == SgFortranImplicitRange::e_class;
     } else if (procedure != nullptr) {
       const auto typeSpec = procedure->get_fortran_result_type_spec();
       if (typeSpec ==
@@ -578,15 +589,44 @@ void UnparseFortran_type::unparseFunctionType(SgType *type,
   const auto *initializedName =
       isSgInitializedName(info.get_reference_node_for_qualification());
   if (initializedName != nullptr &&
-      !initializedName->get_fortran_procedure_interface().is_null()) {
-    curprint(initializedName->get_fortran_procedure_interface().str());
-  } else if (func_type->get_return_type() != nullptr &&
-             isSgTypeVoid(func_type->get_return_type()) == nullptr) {
-    SgUnparse_Info returnTypeInfo(info);
-    returnTypeInfo.set_reference_node_for_qualification(nullptr);
-    unparseType(func_type->get_return_type(), returnTypeInfo, false);
+      initializedName->get_fortran_procedure_interface() != nullptr) {
+    SgExpression *interface =
+        initializedName->get_fortran_procedure_interface();
+    ROSE_ASSERT(interface->get_parent() == initializedName);
+    ROSE_ASSERT(SgInitializedName::is_valid_fortran_procedure_interface(
+        interface, initializedName->get_type()));
+    unp->u_fortran_locatedNode->unparseExpression(interface, info);
   }
   curprint(")");
+  if (initializedName != nullptr) {
+    const auto &binding =
+        initializedName->get_fortran_procedure_component_binding();
+    SgClassDefinition *owner =
+        isSgClassDefinition(initializedName->get_scope());
+    const bool component =
+        owner != nullptr &&
+        isSgDerivedTypeStatement(owner->get_declaration()) != nullptr;
+    ROSE_ASSERT(binding.has_value() == component);
+    if (binding) {
+      ROSE_ASSERT(binding->isValidForType(initializedName->get_type()));
+      using Kind = SgInitializedName::FortranProcedurePassKind;
+      switch (binding->kind) {
+      case Kind::implicit_pass:
+        break;
+      case Kind::explicit_pass:
+        curprint(", PASS");
+        break;
+      case Kind::named_pass:
+        curprint(", PASS(");
+        curprint(binding->written_dummy_name.str());
+        curprint(")");
+        break;
+      case Kind::no_pass:
+        curprint(", NOPASS");
+        break;
+      }
+    }
+  }
 }
 
 //----------------------------------------------------------------------------

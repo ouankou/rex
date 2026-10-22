@@ -11,7 +11,6 @@
  *
  *  \todo Extend this interface.
  */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include <string>
@@ -56,7 +55,6 @@ static SgStatement *processPragma(SgPragmaDeclaration *decl) {
 
   // Get statement to outline
   return const_cast<SgStatement *>(SageInterface::getNextStatement(decl));
-  // return const_cast<SgStatement *> (ASTtools::findNextStatement (decl));
 }
 
 /*!
@@ -81,9 +79,9 @@ static SgStatement *processFortranComment(SgLocatedNode *node) {
   AttachedPreprocessingInfoType::iterator i;
   std::vector<PreprocessingInfo *> removeList;
   for (i = comments->begin(); i != comments->end(); i++) {
-    if ((*i)->getTypeOfDirective() == PreprocessingInfo::FortranStyleComment) {
-      string commentString = (*i)->getString();
-      Rose::StringUtility::trim(commentString);
+    if ((*i)->getTypeOfDirective() == PreprocessingInfo::FortranStyleComment ||
+        (*i)->getTypeOfDirective() == PreprocessingInfo::F90StyleComment) {
+      const string commentString = Rose::StringUtility::trim((*i)->getString());
       if ((commentString == "!$" + PRAGMA_OUTLINE) ||
           (commentString == "c$" + PRAGMA_OUTLINE) ||
           (commentString == "*$" + PRAGMA_OUTLINE)) {
@@ -96,20 +94,13 @@ static SgStatement *processFortranComment(SgLocatedNode *node) {
         }
         removeList.push_back(*i);
       }
-    } // end if Fortran comment
-  } // end for-loop
-
-  // remove those special comments
-  for (std::vector<PreprocessingInfo *>::iterator j = removeList.begin();
-       j != removeList.end(); j++) {
-    comments->erase(find(comments->begin(), comments->end(), *j));
-
-    // DQ (2/27/2009): Don't mix free with C++ code (malloc/free for C and
-    // new/delete for C++) free memory also free(*j);
-    delete (*j);
+    }
   }
 
-  return target; // const_cast<SgStatement *> (target);
+  for (PreprocessingInfo *info : removeList)
+    delete node->detachPreprocessingInfo(info);
+
+  return target;
 }
 
 /* =====================================================================

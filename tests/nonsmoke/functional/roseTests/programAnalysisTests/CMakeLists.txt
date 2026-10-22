@@ -90,6 +90,8 @@ foreach(specimen IN LISTS CXX_TESTCODES)
   string(REPLACE "." "_" _vfa_name ${specimen})
   set(_vfa_target vfa_${_vfa_name}.passed)
   rex_get_cxx_specimen_extra_flags(_vfa_extra_flags ${specimen})
+  rex_get_cxx_specimen_standard_flag(_standard_flag ${specimen})
+  list(APPEND _vfa_extra_flags ${_standard_flag})
   string(JOIN " " _vfa_extra_flags_str ${_vfa_extra_flags})
   set(_vfa_cmd
     "${_vfa_exec} ${_vfa_switches} ${_vfa_includes}")
@@ -221,7 +223,11 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_side_effect_callable_channels_input.C
 )
 
-# Virtual function analysis tests (exit status only)
+add_test(NAME program_analysis_rex_vfa_pointer_conversion
+  COMMAND VirtualFunctionAnalysisTest -std=c++17
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_vfa_pointer_conversion.cpp)
+
+# Virtual function analysis tests
 add_test(
   NAME program_analysis_vf_01
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

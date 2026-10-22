@@ -1,13 +1,11 @@
 #ifndef ROSE_SourceLocation_H
 #define ROSE_SourceLocation_H
 
-#include "featureTests.h"
-
+#include <cstddef>
 #include <optional>
-
 #include <string>
-
 #include <tuple>
+#include <utility>
 
 namespace Rose {
 

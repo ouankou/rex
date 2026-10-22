@@ -4,15 +4,11 @@
  */
 #include "mlog.h"
 
-#include <array>
-
 #include <cstring>
 
 #include <stdarg.h>
 
 #include <stdio.h>
-
-#include <time.h>
 
 int mlogLevel = DEFAULT_MLOG_LEVEL;
 
@@ -44,24 +40,6 @@ const char *mlogLevelToString_C[] = {"FAIL ", // 0
                                      "FATAL", "ERROR", "WARN ", "NONE ",
                                      "KEY  ", "INFO ", "MARCH", "TRACE",
                                      "DEBUG", "UNDEF"};
-
-/**
- * return the Date/Time in the format of YYYY-MM-DD,HH:MM:SS, totally 16
- * characters
- */
-char *getDateTime() {
-  static thread_local std::array<char, 22> buffer{};
-  time_t curtime;
-  struct tm timeinfo;
-
-  curtime = time(NULL);
-  if (localtime_r(&curtime, &timeinfo) == nullptr) {
-    return buffer.data();
-  }
-
-  strftime(buffer.data(), buffer.size(), "%F,%H:%M:%S", &timeinfo);
-  return buffer.data();
-}
 
 std::string mlogLevelToString_CXX(MLOG_LEVEL_t level) {
   switch (level) {
@@ -135,7 +113,6 @@ void mlog_C(MLOG_LEVEL_t level, const char *subject, const char *file, int line,
     break;
   }
 
-  /* char * dateTime = getDateTime(); */
   fprintf(mlogFile, "%s\t[%s:%d,\t%s]: ", subject, file, line, funcname);
   fprintf(mlogFile, "\033[0m"); // reset the color
 
@@ -144,7 +121,6 @@ void mlog_C(MLOG_LEVEL_t level, const char *subject, const char *file, int line,
   vfprintf(mlogFile, format, l);
   va_end(l);
   fflush(mlogFile);
-  /* fprintf(f, "\n"); */
 }
 
 void mlogMore_C(const char *format, ...) {

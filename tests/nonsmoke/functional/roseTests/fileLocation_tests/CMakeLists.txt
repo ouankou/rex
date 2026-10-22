@@ -1,7 +1,4 @@
-
 include_directories(${ROSE_INCLUDES})
-
-########### next target ###############
 
 add_executable(fileLocation fileLocation.C)
 target_link_libraries(fileLocation ROSE_DLL ${link_with_libraries})
@@ -590,5 +587,3 @@ if(REX_EXTENDED_TEST_TIMEOUTS AND _filelocation_registered_tests)
   set_tests_properties(${_filelocation_registered_tests} PROPERTIES
     PROCESSORS 16)
 endif()
-
-########### install files ###############

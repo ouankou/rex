@@ -1,79 +1,36 @@
 #include "sage3basic.h"
 
-/** Obtain the class declaration for a constructor initializer if possible.
- *
- * If this is a constructor initializer for a class type then the first
- * non-defining declaration of the constructor's class is returned; the null
- * pointer is returned for constructor initializers of primitive types.
- *
- * The SgConstructorInitializer::p_declaration points to a
- * SgMemberFunctionDeclaration when the constructor is declared, but is the null
- * pointer when the constructor is not declared or when the constructor is for a
- * non-class type.
- *
- * When the p_declaration is the null pointer then the
- * SgConstructorInitializer::p_expression_type can be used to determine whether
- * the constructor initializer is for a class type without a declared
- * constructor, or for a non-class type.  In the former case, the
- * p_expression_type points to a SgClassType.  In the latter case it points to
- * either a SgFunctionType or null depending on frontend behavior. */
+#include <algorithm>
+
 SgClassDeclaration *SgConstructorInitializer::get_class_decl() const {
-  SgClassDeclaration *class_decl = NULL;
-
-  auto normalize_class_decl =
-      [](SgClassDeclaration *decl) -> SgClassDeclaration * {
-    if (decl == NULL) {
-      return NULL;
-    }
-
-    if (SgClassDeclaration *first_nondef =
-            isSgClassDeclaration(decl->get_firstNondefiningDeclaration())) {
-      return first_nondef;
-    }
-
-    return decl;
-  };
-
+  SgClassDeclaration *class_decl = nullptr;
   if (SgMemberFunctionDeclaration *fdecl = get_declaration()) {
-    // The constructor is declared (and is a member of a class type)
-    // DQ (11/11/2014): Modified version of code to address the fact that
-    // Fortran is organized a bit differently. That it is different from C++
-    // might be something to revisit later in the Fortran support.
-    ROSE_ASSERT(get_declaration() != NULL);
-    ROSE_ASSERT(fdecl->get_scope() != NULL);
-
-    SgClassDefinition *cdef = isSgClassDefinition(fdecl->get_scope());
-    if (cdef != NULL) {
-      assert(cdef != NULL);
-      class_decl = isSgClassDeclaration(cdef->get_parent());
-      assert(class_decl != NULL);
-    }
-  } else if (SgType *expr_type = get_expression_type()) {
+    ROSE_ASSERT(isSgClassDefinition(fdecl->get_scope()) != nullptr);
+    class_decl = isSgClassDeclaration(fdecl->get_associatedClassDeclaration());
+    ROSE_ASSERT(class_decl != nullptr);
+  } else {
+    SgType *expr_type = get_expression_type();
+    ROSE_ASSERT(expr_type != nullptr);
     SgType *stripped_type = expr_type->stripType(
         SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
         SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
 
     if (SgClassType *class_type = isSgClassType(stripped_type)) {
-      // Constructor initializer is for a class type with a non-declared
-      // default constructor. We can follow the expression type's declaration.
       class_decl = isSgClassDeclaration(class_type->get_declaration());
-      assert(class_decl != NULL);
+      ROSE_ASSERT(class_decl != NULL);
     } else if (SgNonrealType *nonreal_type = isSgNonrealType(stripped_type)) {
-      // Qualified class names can be preserved as SgNonrealType. Recover the
-      // associated class declaration when the frontend attached it to the
-      // nonreal declaration.
-      if (SgNonrealDecl *nonreal_decl =
-              isSgNonrealDecl(nonreal_type->get_declaration())) {
-        class_decl =
-            isSgClassDeclaration(nonreal_decl->get_templateDeclaration());
-      }
+      auto *nonreal_decl = isSgNonrealDecl(nonreal_type->get_declaration());
+      ROSE_ASSERT(nonreal_decl != nullptr);
+      class_decl =
+          isSgClassDeclaration(nonreal_decl->get_templateDeclaration());
     }
-  } else {
-    // Constructor is for a primitive type.  There is no class declaration to
-    // return.
   }
-
-  return normalize_class_decl(class_decl);
+  if (class_decl == nullptr)
+    return nullptr;
+  auto *canonical =
+      isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonical != nullptr);
+  return canonical;
 }
 
 void SgConstructorInitializer::post_construction_initialization() {
@@ -87,15 +44,9 @@ void SgConstructorInitializer::post_construction_initialization() {
     ROSE_ABORT();
   }
   if (p_declaration == NULL) {
-    // This can be NULL for the case of an undeclared constructor.
-
-    SgType *associated_type =
-        p_expression_type != NULL
-            ? p_expression_type->stripType(SgType::STRIP_MODIFIER_TYPE |
-                                           SgType::STRIP_TYPEDEF_TYPE |
-                                           SgType::STRIP_REFERENCE_TYPE |
-                                           SgType::STRIP_RVALUE_REFERENCE_TYPE)
-            : NULL;
+    SgType *associated_type = p_expression_type->stripType(
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
+        SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
     bool has_associated_class = false;
     if (SgClassType *class_type = isSgClassType(associated_type)) {
       has_associated_class = class_type->get_declaration() != NULL;
@@ -122,7 +73,106 @@ void SgConstructorInitializer::post_construction_initialization() {
                     "constructor initializer argument list is already owned\n");
     ROSE_ABORT();
   }
+  ROSE_ASSERT(SgCxxDefaultInitExp::is_valid_binding(
+      p_declaration, p_args->get_expressions(), 0, p_expression_type));
+  ROSE_ASSERT(is_valid_argument_source(p_declaration, p_args->get_expressions(),
+                                       p_argument_source));
+  if (p_args->get_source_form() == SgExprListExp::e_expression_list_braced) {
+    set_is_braced_initialized(true);
+    p_args->set_source_form(SgExprListExp::e_expression_list_plain);
+  }
   p_args->set_parent(this);
+}
+
+bool SgConstructorInitializer::is_valid_argument_source(
+    SgMemberFunctionDeclaration *declaration,
+    const SgExpressionPtrList &arguments, argument_source_enum source) {
+  if (declaration != nullptr && declaration->get_functionModifier().isDeleted())
+    return false;
+  switch (source) {
+  case e_constructor_argument_expressions:
+    return true;
+  case e_constructor_inherited_arguments:
+  case e_constructor_inherited_virtual_base_arguments:
+    return arguments.empty() && declaration != nullptr &&
+           declaration->get_specialFunctionModifier().isConstructor() &&
+           isSgClassDefinition(declaration->get_scope()) != nullptr;
+  }
+  return false;
+}
+
+bool SgConstructorInitializer::is_valid_elision_arguments(
+    SgMemberFunctionDeclaration *declaration,
+    const SgExpressionPtrList &arguments) {
+  if (declaration == nullptr ||
+      declaration->get_functionModifier().isDeleted() ||
+      !declaration->get_specialFunctionModifier().isConstructor() ||
+      isSgClassDefinition(declaration->get_scope()) == nullptr)
+    return false;
+  const auto role = declaration->get_functionModifier().getCopyMoveKind();
+  if (role != SgFunctionModifier::e_copy_constructor &&
+      role != SgFunctionModifier::e_move_constructor)
+    return false;
+  if (arguments.empty() || arguments.front() == nullptr ||
+      isSgCxxDefaultInitExp(arguments.front()) != nullptr ||
+      !SgCxxDefaultInitExp::is_valid_binding(declaration, arguments))
+    return false;
+  return std::all_of(arguments.begin() + 1, arguments.end(),
+                     [](SgExpression *argument) {
+                       return isSgCxxDefaultInitExp(argument) != nullptr;
+                     });
+}
+
+void SgConstructorInitializer::validate_argument_context() const {
+  ROSE_ASSERT(p_args != nullptr);
+  ROSE_ASSERT(is_valid_argument_source(p_declaration, p_args->get_expressions(),
+                                       p_argument_source));
+  if (p_argument_source != e_constructor_argument_expressions) {
+    const auto *name = isSgInitializedName(get_parent());
+    ROSE_ASSERT(name != nullptr && name->get_initializer() == this);
+    ROSE_ASSERT(name->get_preinitialization() ==
+                    SgInitializedName::e_virtual_base_class ||
+                name->get_preinitialization() ==
+                    SgInitializedName::e_nonvirtual_base_class);
+    ROSE_ASSERT(!name->get_ctor_initializer_source_order().has_value());
+    const auto *list = isSgCtorInitializerList(name->get_parent());
+    ROSE_ASSERT(list != nullptr);
+    ROSE_ASSERT(std::count(list->get_ctors().begin(), list->get_ctors().end(),
+                           name) == 1);
+    const auto *owner = isSgMemberFunctionDeclaration(list->get_parent());
+    ROSE_ASSERT(owner != nullptr && owner->get_CtorInitializerList() == list);
+    ROSE_ASSERT(owner->get_specialFunctionModifier().isConstructor());
+  }
+}
+
+void SgConstructorInitializer::validate_elision() const {
+  ROSE_ASSERT(p_args != nullptr);
+  ROSE_ASSERT(is_valid_argument_source(p_declaration, p_args->get_expressions(),
+                                       p_argument_source));
+  ROSE_ASSERT(p_argument_source == e_constructor_argument_expressions ||
+              (!p_is_elidable && !p_elision_permitted));
+  ROSE_ASSERT(!p_elision_permitted || p_is_elidable);
+  if (!p_is_elidable)
+    return;
+
+  ROSE_ASSERT(p_declaration != nullptr);
+  ROSE_ASSERT(p_declaration->get_specialFunctionModifier().isConstructor());
+  ROSE_ASSERT(isSgClassDefinition(p_declaration->get_scope()) != nullptr);
+  ROSE_ASSERT(p_expression_type != nullptr);
+  ROSE_ASSERT(isSgTypeUnknown(p_expression_type) == nullptr);
+  ROSE_ASSERT(isSgTypeDefault(p_expression_type) == nullptr);
+  ROSE_ASSERT(p_args != nullptr && p_args->get_parent() == this);
+  ROSE_ASSERT(
+      is_valid_elision_arguments(p_declaration, p_args->get_expressions()));
+  SgExpression *operand = p_args->get_expressions().front();
+  ROSE_ASSERT(operand != nullptr && operand->get_parent() == p_args);
+  ROSE_ASSERT(!p_need_name && !p_need_qualifier);
+  ROSE_ASSERT(!p_need_parenthesis_after_name || !get_is_braced_initialized());
+  ROSE_ASSERT(!p_explicit_name_qualification_present);
+  ROSE_ASSERT(!p_explicit_global_qualification);
+  ROSE_ASSERT(p_explicit_name_qualification_tokens.empty());
+  ROSE_ASSERT(p_source_type_elaboration_kind ==
+              SgNonrealDecl::e_source_elaboration_unspecified);
 }
 
 SgExpression *SgConstructorInitializer::get_next(int &n) const {
@@ -135,19 +185,27 @@ SgExpression *SgConstructorInitializer::get_next(int &n) const {
 
 int SgConstructorInitializer::replace_expression(SgExpression *o,
                                                  SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
-
-  if (get_args() == o) {
-    set_args(isSgExprListExp(n));
-    n->set_parent(this);
-    return 1;
-  } else
+  if (get_args() != o)
     return 0;
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+
+  auto *arguments = isSgExprListExp(n);
+  ROSE_ASSERT(arguments != nullptr);
+  ROSE_ASSERT(n->get_parent() == nullptr);
+  ROSE_ASSERT(is_valid_argument_source(
+      p_declaration, arguments->get_expressions(), p_argument_source));
+  if (arguments->get_source_form() == SgExprListExp::e_expression_list_braced) {
+    ROSE_ASSERT(get_is_braced_initialized());
+    arguments->set_source_form(SgExprListExp::e_expression_list_plain);
+  }
+  set_args(arguments);
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 // DQ (6/11/2015): Moved these six access functions, they should not be
@@ -155,45 +213,30 @@ int SgConstructorInitializer::replace_expression(SgExpression *o,
 // which is a problem in the name qualification support for C++ (interfering
 // with the token-based unparsing).
 int SgConstructorInitializer::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length;
 }
 
 void SgConstructorInitializer::set_name_qualification_length(
     int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_length = name_qualification_length;
 }
 
 bool SgConstructorInitializer::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
 
   return p_type_elaboration_required;
 }
 
 void SgConstructorInitializer::set_type_elaboration_required(
     bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgConstructorInitializer::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required;
 }
 
 void SgConstructorInitializer::set_global_qualification_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_required = global_qualification_required;
 }

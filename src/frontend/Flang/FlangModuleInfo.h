@@ -3,11 +3,13 @@
 
 #include <map>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 class SgModuleStatement;
 class SgProject;
 class SgSourceFile;
+class SgNode;
 
 class FlangModuleInfo {
 private:
@@ -24,10 +26,11 @@ public:
   enum class ModuleNature { intrinsic, nonintrinsic };
 
   static bool isModuleFile();
-  static void setCurrentProject(SgProject *project);
-  static SgProject *getCurrentProject();
 
   static void registerModule(SgModuleStatement *module);
+  static void replaceAstIdentities(
+      SgProject *project,
+      const std::unordered_map<SgNode *, SgNode *> &replacements);
   static SgModuleStatement *getModule(const std::string &modName,
                                       const std::string &moduleFile,
                                       ModuleNature nature);
@@ -35,15 +38,16 @@ public:
   requireModuleNatureForSourceFile(const std::string &modName,
                                    const std::string &moduleFile);
 
-  static void set_inputDirs(SgProject *project);
-
-  FlangModuleInfo() = default;
-  ~FlangModuleInfo() = default;
+  explicit FlangModuleInfo(SgProject *project);
+  ~FlangModuleInfo();
+  FlangModuleInfo(const FlangModuleInfo &) = delete;
+  FlangModuleInfo &operator=(const FlangModuleInfo &) = delete;
 
 private:
+  SgProject *project_;
+  static void set_inputDirs(SgProject *project);
   static SgSourceFile *createSgSourceFile(const std::string &moduleName);
   static void clearMap();
-  static void dumpMap();
 };
 
 #endif /* ROSE_FLANG_MODULE_INFO_H_ */

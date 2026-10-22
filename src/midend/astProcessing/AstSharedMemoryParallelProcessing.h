@@ -11,44 +11,35 @@
 
 #include "rosePublicConfig.h"
 
-// Class containing all the information needed to synchronize parallelizable
-// traversals. All traversals running synchronously must have a shallow copy of
-// this (they all need the same pointers!), the default copy mechanism takes
-// care of that.
+#ifdef ROSE_HAVE_PTHREAD_H
+#include <pthread.h>
+#endif
+
 struct AstSharedMemoryParallelProcessingSynchronizationInfo {
-#ifdef _REENTRANT // user wants mult-thread support? (e.g., g++ -pthread)?
-#ifdef ROSE_HAVE_PTHREAD_H // POSIX threads are available?
+#ifdef ROSE_HAVE_PTHREAD_H
   // mutex that controls access to the global stuff here
   pthread_mutex_t *mutex;
   // signal broadcast by last worker thread to arrive at a synchronization point
   pthread_cond_t *synchronizationEvent;
-  // signal sent by workers when they exit
-  pthread_cond_t *threadFinishedEvent;
-#else
-#warning "POSIX threads are unavailable on this platform."
-#endif
 #endif
 
   // global counter of the number of threads that are still working (i.e.
   // have not sent a synchronizationEvent)
   size_t *workingThreads;
-  // global counter of the number of threads that have completely finished
-  // (i.e. have traversed the whole AST)
-  size_t *finishedThreads;
+  size_t *synchronizationGeneration;
   // number of nodes to be visited by each traversal before they are
   // supposed to synchronize
   size_t synchronizationWindowSize;
+  bool ownsResources;
 
   AstSharedMemoryParallelProcessingSynchronizationInfo(
       size_t numberOfThreads, size_t synchronizationWindowSize);
   ~AstSharedMemoryParallelProcessingSynchronizationInfo();
 
-  // We can't implement this as private since it is required.  So we have a
-  // potential double free error here. private: DQ (9/13/2011): This copy
-  // constructor was built because static analysis tools (made it private to
-  // force compile time error if used).
   AstSharedMemoryParallelProcessingSynchronizationInfo(
       const AstSharedMemoryParallelProcessingSynchronizationInfo &X);
+  AstSharedMemoryParallelProcessingSynchronizationInfo &operator=(
+      const AstSharedMemoryParallelProcessingSynchronizationInfo &) = delete;
 };
 
 // Class containing the code needed for synchronization of parallelizable
@@ -60,8 +51,6 @@ protected:
       const AstSharedMemoryParallelProcessingSynchronizationInfo &);
   // called when threads want to synchronize
   void synchronize();
-  // called when threads are about to finish
-  void signalFinish();
 
 private:
   AstSharedMemoryParallelProcessingSynchronizationInfo syncInfo;

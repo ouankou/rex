@@ -1,7 +1,6 @@
-// #include "rose.h"
-
 #include "DependenceGraph.h"
 
+#include <list>
 #include <set>
 
 class ROSE_DLL_API CreateSliceSet {
@@ -14,6 +13,6 @@ protected:
   SystemDependenceGraph *sdg;
   std::list<SgNode *> sliceTargetNodes;
   std::set<DependenceNode *>
-  getSliceDepNodes(std::set<DependenceNode *> searchSet,
-                   std::set<DependenceGraph::EdgeType> allowedEdges);
+  getSliceDepNodes(const std::set<DependenceNode *> &searchSet,
+                   const std::set<DependenceGraph::EdgeType> &allowedEdges);
 };

@@ -7,7 +7,9 @@
 #include "rosedll.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <functional>
+#include <map>
 
 #include <iostream>
 
@@ -33,8 +35,6 @@ class AstInterfaceImpl;
 class AstNodePtr {
 public:
   typedef SgNode BaseType;
-  //! The UNKNOWN_AST and NULL_AST types have null as their values.
-  //! The other types have concrete BaseType pointers as their values.
   enum class SpecialAstType {
     SG_AST,
     GLOBAL_SIGNATURE,
@@ -69,7 +69,7 @@ public:
       break;
     default:
       std::cerr << "Error: UNKNOWN Special AST type!";
-      assert(0);
+      std::abort();
     }
   }
   ~AstNodePtr() {}
@@ -130,8 +130,6 @@ public:
 };
 #define AST_NULL AstNodePtr(AstNodePtr::SpecialAstType::NULL_AST)
 #define AST_UNKNOWN AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_AST)
-#define AST_UNKNOWN_CALL(x)                                                    \
-  AstNodePtr(AstNodePtr::SpecialAstType::UNKNOWN_FUNCTION_CALL, x)
 
 class AstNodeType {
 public:
@@ -156,7 +154,7 @@ public:
       break;
     default:
       std::cerr << "Error: UNKNOWN Special AST type!";
-      assert(0);
+      std::abort();
     }
   }
   AstNodeType(const AstNodeType &that)
@@ -203,6 +201,25 @@ public:
 class AstInterface {
 protected:
   AstInterfaceImpl *impl;
+
+public:
+  using CopyBindings = std::map<const SgNode *, SgNode *>;
+
+  class CopyScope {
+    AstInterface &interface;
+    CopyBindings &bindings;
+    CopyScope *previous;
+    friend class AstInterface;
+
+  public:
+    CopyScope(AstInterface &interface, CopyBindings &bindings);
+    ~CopyScope();
+    CopyScope(const CopyScope &) = delete;
+    CopyScope &operator=(const CopyScope &) = delete;
+  };
+
+private:
+  CopyScope *copyScope = nullptr;
 
 public:
   typedef ::AstNodePtr AstNodePtr;
@@ -296,7 +313,8 @@ public:
   bool ReplaceAst(const AstNodePtr &orig, const AstNodePtr &n);
   bool RemoveStmt(const AstNodePtr &n);
   void FreeAstTree(const AstNodePtr &n);
-  AstNodePtr CopyAstTree(const AstNodePtr &n);
+  AstNodePtr CopyAstTree(const AstNodePtr &n, CopyBindings *copies = nullptr);
+  AstNodePtr GetCopySource(const AstNodePtr &n) const;
 
   void SetParent(const AstNodePtr &n, const AstNodePtr &p);
   AstNodePtr GetParent(const AstNodePtr &n);
@@ -319,9 +337,6 @@ public:
   static bool IsBlock(const AstNodePtr &exp, std::string *blockname,
                       AstNodeList *stmts = 0);
   static AstList GetBlockStmtList(const AstNodePtr &n);
-  AstNodePtr GetBlockFirstStmt(const AstNodePtr &n);
-  AstNodePtr GetBlockLastStmt(const AstNodePtr &n);
-  int GetBlockSize(const AstNodePtr &n);
   AstNodePtr CreateBlock(const AstNodePtr &orig = AST_NULL);
   /* if flatter_s == true, always flatten s if it is a block*/
   void BlockAppendStmt(AstNodePtr &b, const AstNodePtr &s,
@@ -338,7 +353,6 @@ public:
   static bool IsFortranLoop(const AstNodePtr &s, AstNodePtr *ivar = 0,
                             AstNodePtr *lb = 0, AstNodePtr *ub = 0,
                             AstNodePtr *step = 0, AstNodePtr *body = 0);
-  AstNodePtr CreateLoop(const AstNodePtr &cond, const AstNodePtr &body);
   AstNodePtr CreateLoop(const AstNodePtr &ivar, const AstNodePtr &lb,
                         const AstNodePtr &ub, const AstNodePtr &step,
                         const AstNodePtr &stmts, bool negativeStep);
@@ -346,23 +360,23 @@ public:
   static bool IsIf(const AstNodePtr &s, AstNodePtr *cond = 0,
                    AstNodePtr *truebody = 0, AstNodePtr *falsebody = 0);
 
+  // The separate converted predicate follows a condition declaration at
+  // runtime. Expression conditions and compile-time IF tests have no additional
+  // step.
+  static AstNodePtr GetRuntimeDeclarationCondition(const AstNodePtr &s);
+  // The output identifies the source declaration, including compile-time IF.
+  static AstNodePtr GetRuntimeDeclarationCondition(const AstNodePtr &s,
+                                                   AstNodePtr *declaration);
+
+  // A selected runtime arm may be absent. Condition declarations still execute;
+  // constexpr condition expressions and consteval tests do not.
+  static bool IsIfWithKnownRuntimeBranch(const AstNodePtr &s,
+                                         AstNodePtr *body = nullptr,
+                                         AstNodePtr *condition = nullptr);
+
   ///  Creates if-else-statement, or if-statement (if \a __else_stmt is null).
   AstNodePtr CreateIf(const AstNodePtr &__cond, const AstNodePtr &__if_stmt,
                       const AstNodePtr &__else_stmt = AST_NULL) const;
-
-  // I/O Statements (Fortran oriented, to be refined):
-
-  ///  Creates a statement that reads \a __refs from \e stdin.
-  AstNodePtr CreateReadStatement(const AstList &__refs) const;
-
-  ///  Creates a statement that writes \a __refs to \e stdout.
-  AstNodePtr CreateWriteStatement(const AstList &__vals) const;
-
-  ///  Creates a statement that prints \a __refs to \e stdout.
-  AstNodePtr CreatePrintStatement(const AstList &__vals) const;
-
-  ///  Creates an empty statement.
-  AstNodePtr CreateNullStatement() const;
 
   //! Check whether $s$ is a jump (goto, return, continue, break, etc) stmt;
   //! if yes, grab the jump destination in 'dest'
@@ -408,9 +422,6 @@ public:
   AstNodePtr CreateMethodRef(std::string classname, std::string fieldname,
                              bool createIfNotFound);
 
-  bool IsIOInputStmt(const AstNodePtr &s, AstList *varlist = 0);
-  bool IsIOOutputStmt(const AstNodePtr &s, AstList *explist = 0);
-
   static bool IsAddressOfOp(const AstNodePtr &_s, AstNodePtr *ref = 0);
   // Returns whether s references memory stores and appends concrete stores to
   // subrefs when provided.
@@ -430,9 +441,6 @@ public:
   //! Check whether $exp$ is a constant value of type int, float, string, etc.
   bool IsConstant(const AstNodePtr &exp, std::string *valtype = 0,
                   std::string *value = 0);
-  //! Create AST for constant values of  types int, bool, string, float, etc. as
-  //! well as names of variable and function references. e.g:
-  //! CreateConstant("memberfunction","floatArray::length")
   AstNodePtr CreateConstant(const std::string &valtype, const std::string &val);
 
   static std::string GetGlobalUniqueName(const AstNodePtr &exp,
@@ -457,29 +465,24 @@ public:
 
   static bool IsSameVarRef(const AstNodePtr &v1, const AstNodePtr &v2);
 
-  /*QY: by default variable declarations are merely saved to be inserted later*/
   std::string NewVar(const AstNodeType &t, const std::string &name = "",
                      bool makeunique = false, bool delayInsert = true,
                      const AstNodePtr &declLoc = AST_NULL,
-                     const AstNodePtr &init = AST_NULL);
-  /*Invoke this function to add the list of new variable declarations*/
-  void AddNewVarDecls();
-  /* copy new var declarations to a new given basic block; by default, the new
-   * var declarations are removed from their original block*/
-  void CopyNewVarDecls(const AstNodePtr &nblock, bool clearNewVars = true);
+                     const AstNodePtr &init = AST_NULL,
+                     AstNodePtr *createdSymbol = nullptr);
+  void CopyNewVarDecls(const AstNodePtr &nblock);
 
   AstNodePtr CreateVarRef(std::string varname,
                           const AstNodePtr &declLoc = AST_NULL);
 
   bool IsScalarType(const AstNodeType &t);
   bool IsPointerType(const AstNodeType &t);
-  static bool IsArrayType(const AstNodeType &t, int *dim = 0,
-                          AstNodeType *base = 0, std::string *annotation = 0);
 
   AstNodeType GetType(const std::string &name);
+  AstNodeType GetPointerType(const AstNodeType &base);
   bool IsCompatibleType(const AstNodeType &t1, const AstNodeType &t2);
   static void GetTypeInfo(const AstNodeType &t, std::string *name = 0,
-                          std::string *stripname = 0, int *size = 0,
+                          std::string *stripname = 0,
                           bool use_global_unique_name = false);
   static AstNodeType GetBaseType(const AstNodeType &t1);
   static std::string GetTypeName(const AstNodeType &t) {

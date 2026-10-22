@@ -1,10 +1,40 @@
-# this defines ROSE__C_TESTS
-# include(${CMAKE_CURRENT_SOURCE_DIR}/C_Testcodes_bk.cmake)
+add_executable(rex_frontend_asm_modifier_contract
+  rex_frontend_asm_modifier_contract.cpp)
+target_link_libraries(rex_frontend_asm_modifier_contract ROSE_DLL
+  ${link_with_libraries})
+add_test(NAME C_tests_rex_frontend_asm_modifier_contract
+  COMMAND rex_frontend_asm_modifier_contract
+    -rose:verbose 0 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_if_asm_source_provenance.c)
+set_tests_properties(C_tests_rex_frontend_asm_modifier_contract
+  PROPERTIES LABELS "C_tests;rex;CFE")
+rex_lock_test_for_input(C_tests_rex_frontend_asm_modifier_contract
+  "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_if_asm_source_provenance.c")
+
+add_test(NAME C_tests_rex_frontend_asm_constraint_json_contract
+  COMMAND rex_frontend_asm_modifier_contract
+    -rose:verbose 0 -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${CMAKE_CURRENT_BINARY_DIR}/asm-json -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_if_asm_source_provenance.c)
+set_tests_properties(C_tests_rex_frontend_asm_constraint_json_contract
+  PROPERTIES LABELS "C_tests;rex;CFE;ast-json")
+rex_lock_test_for_input(C_tests_rex_frontend_asm_constraint_json_contract
+  "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_if_asm_source_provenance.c")
 
 set(C_TEST_LANG_FLAGS)
 set(C_TEST_ROSE_FLAGS -rose:verbose 0)
 set(ROSE_FLAGS ${C_TEST_ROSE_FLAGS})
 set(C_TEST_TRANSLATOR $<TARGET_FILE:testTranslator>)
+rex_register_compile_source_set(REX_C_TESTS_SOURCES
+  rex_frontend_diagnostic_options.c
+  rex_frontend_empty_function_prototype.c)
+add_test(NAME C_tests_rex_frontend_empty_function_prototype
+  COMMAND ${C_TEST_TRANSLATOR} -std=c11 -rose:verbose 0 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_empty_function_prototype.c)
+set_tests_properties(C_tests_rex_frontend_empty_function_prototype
+  PROPERTIES LABELS "C_tests;rex;CFE")
+rex_lock_test_for_input(C_tests_rex_frontend_empty_function_prototype
+  "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_empty_function_prototype.c")
 string(JOIN " " _c_tests_lang_flags_str ${C_TEST_LANG_FLAGS})
 string(JOIN " " _c_tests_rose_flags_str ${C_TEST_ROSE_FLAGS})
 set(_c_tests_special_dir ${CMAKE_CURRENT_BINARY_DIR}/special)
@@ -1283,6 +1313,7 @@ rex_register_compile_source_set(REX_C_TESTS_SOURCES
   ${C_TESTCODES_SPECIAL}
 )
 rex_register_compile_source_set(REX_C_TESTS_NEGATIVE_SOURCES
+  rex_frontend_diagnostic_options.c
   ${C_TESTCODES_NEGATIVE}
 )
 
@@ -1920,37 +1951,22 @@ if(REX_C_TESTS_HOST_IS_X86)
   set_tests_properties(C_tests_rtd_use PROPERTIES LABELS C_tests)
 endif()
 
-add_test(
-  NAME C_tests_optimization_specifier_O
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -O -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_153.c
-)
-set_tests_properties(C_tests_optimization_specifier_O PROPERTIES LABELS C_tests)
-
-add_test(
-  NAME C_tests_optimization_specifier_Os
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -Os -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_153.c
-)
-set_tests_properties(C_tests_optimization_specifier_Os PROPERTIES LABELS C_tests)
-
-add_test(
-  NAME C_tests_optimization_specifier_O1
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -O1 -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_153.c
-)
-set_tests_properties(C_tests_optimization_specifier_O1 PROPERTIES LABELS C_tests)
-
-add_test(
-  NAME C_tests_optimization_specifier_O2
-  WORKING_DIRECTORY ${_c_tests_special_dir}
-  COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -O2 -c
-          ${CMAKE_CURRENT_SOURCE_DIR}/test2015_153.c
-)
-set_tests_properties(C_tests_optimization_specifier_O2 PROPERTIES LABELS C_tests)
+# Each invocation produces rose_test2015_153.c and its object. Keep parallel
+# optimization cases independent without changing their compiler arguments.
+foreach(_optimization IN ITEMS O Os O1 O2)
+  set(_optimization_dir "${_c_tests_special_dir}/optimization_${_optimization}")
+  file(MAKE_DIRECTORY "${_optimization_dir}")
+  add_test(
+    NAME C_tests_optimization_specifier_${_optimization}
+    WORKING_DIRECTORY "${_optimization_dir}"
+    COMMAND ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS} -${_optimization} -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/test2015_153.c
+  )
+  set_tests_properties(C_tests_optimization_specifier_${_optimization}
+    PROPERTIES LABELS C_tests)
+endforeach()
+unset(_optimization_dir)
+unset(_optimization)
 
 add_test(
   NAME C_tests_rex_frontend_driver_argument_order
@@ -1966,6 +1982,15 @@ add_test(
 )
 set_tests_properties(C_tests_rex_frontend_driver_argument_order
   PROPERTIES LABELS "C_tests;rex")
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/verbose-output-name)
+add_test(
+  NAME C_tests_rex_backend_verbose_output_name
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/verbose-output-name
+  COMMAND ${C_TEST_TRANSLATOR} -rose:verbose 1
+    -DREX_DRIVER_ARGUMENT_ORDER=2
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_driver_argument_order.c
+    -o TestUnparseHeaders.o)
 
 set(_rex_frontend_linker_object
   ${_c_tests_special_dir}/rex_frontend_linker_input.o)
@@ -2023,6 +2048,32 @@ add_test(
 )
 set_tests_properties(C_tests_rex_frontend_exact_llvm_driver
   PROPERTIES LABELS "C_tests;rex;death")
+
+rex_register_clang_frontend_negative_diagnostic(
+  "error: expected expression" C_tests/rex_frontend_diagnostic_options.c)
+foreach(_rex_diagnostic_mode IN ITEMS options verify)
+  if(_rex_diagnostic_mode STREQUAL "options")
+    set(_rex_diagnostic_flags -fno-show-column)
+    set(_rex_diagnostic_expected
+      "${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_diagnostic_options.c:1: error: expected expression")
+  else()
+    set(_rex_diagnostic_flags -Xclang -verify)
+    set(_rex_diagnostic_expected
+      "REX_FRONTEND_INVARIANT[clang-diagnostics]: Clang reported 1 diagnostic error(s); frontend AST translation is forbidden")
+  endif()
+  add_test(
+    NAME C_tests_rex_frontend_diagnostic_${_rex_diagnostic_mode}
+    WORKING_DIRECTORY ${_c_tests_special_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=rex_frontend_diagnostic_$1.log; expected=\"$2\"; shift 2; set +e; \"$@\" >\"$log\" 2>&1; status=$?; set -e; test \"$status\" -eq 134; test \"$(grep -Fxc -- \"$expected\" \"$log\")\" -eq 1"
+      dummy ${_rex_diagnostic_mode} "${_rex_diagnostic_expected}"
+      ${C_TEST_TRANSLATOR} ${C_TEST_ROSE_FLAGS}
+      -rose:skipfinalCompileStep ${_rex_diagnostic_flags}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_diagnostic_options.c
+  )
+  set_tests_properties(C_tests_rex_frontend_diagnostic_${_rex_diagnostic_mode}
+    PROPERTIES LABELS "C_tests;rex;CFE;death")
+endforeach()
 
 if(REX_C_TESTS_HOST_IS_X86)
   add_test(

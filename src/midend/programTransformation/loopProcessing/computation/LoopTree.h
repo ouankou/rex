@@ -5,6 +5,8 @@
 #include <stdlib.h>
 
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "FunctionObject.h"
 
@@ -20,14 +22,8 @@
 
 class LoopTransformInterface;
 
-/* QY: The LoopTree data structure is a tree structure built as a wrapper
-of the real AST.  The AST nodes are treated differently depending on whether
-the node represents a loop.  There are two main different kinds of LoopTree
-nodes: LoopNode and StmtNode. All the non-loop ASTs are treated as atomic
-stmts (Stmt nodes) which are never modified. All the loops are reconstructed
-with internal symbolic information. The tree structure will be modified
-(loop optimizations).  After transformation, calling CodeGen will re-construct
-the transformed AST.  The goal is to support loop optimization more easily. */
+// Loop transformations modify this tree of source statements and symbolic
+// loops. CodeGen copies atomic statements and reconstructs enclosing controls.
 
 class LoopTreeNode;
 class LoopTreeLoopNode;
@@ -37,6 +33,7 @@ class LoopTreeDummyNode;
 class LoopTreeCreate;
 class LoopTreeObserveImpl;
 class LoopTreeObserveInfo;
+class LoopTreeEmission;
 
 class LoopInfo : public VarInfo {
   SymbolicVal step;
@@ -79,24 +76,30 @@ protected:
   void RemoveTree();
 
 public:
+  enum class BodyRole { None, Block, IfTrue, IfFalse };
+
   virtual AstNodePtr CodeGen(const AstNodePtr &c) const { return c; }
   virtual int LoopLevel() const {
     return Parent()->LoopLevel() + Parent()->IncreaseLoopLevel();
   }
   virtual int IncreaseLoopLevel() const { return 0; }
-
-  virtual std::string LoopTreeGetClassName() const = 0;
+  virtual bool IsAtomicStatement() const { return false; }
 
   virtual VarInfo GetVarInfo() const { return VarInfo(); }
   /* QY: returns the original stmt only if the stmt is not a loop */
   virtual AstNodePtr GetOrigStmt() const { return AST_NULL; }
+  virtual AstNodePtr GetSourceAst() const { return AST_NULL; }
+  virtual AstNodePtr GetRuntimeAst() const { return GetOrigStmt(); }
+  virtual AstNodePtr GetBodyAst() const { return AST_NULL; }
+  virtual BodyRole GetBodyRole() const { return BodyRole::None; }
 
   virtual const LoopInfo *GetLoopInfo() const { return 0; }
   virtual LoopInfo *GetLoopInfo() { return 0; }
 
   virtual bool SelfRemove() { return false; }
   virtual LoopTreeNode *Clone() const = 0;
-  LoopTreeNode *CloneTree();
+  using CloneNodes = std::vector<std::pair<LoopTreeNode *, LoopTreeNode *>>;
+  LoopTreeNode *CloneTree(CloneNodes *copies = nullptr);
 
   void Dump() const { std::cerr << toString() << std::endl; }
   virtual std::string toString() const { return ""; }
@@ -130,54 +133,72 @@ public:
                                         : res->EnclosingLoop();
   }
   friend class LoopTreeTransform;
+  friend class LoopTreeEmission;
+};
+
+class LoopTreeBodyNode : public LoopTreeNode {
+  AstNodePtr body;
+  BodyRole role;
+
+  LoopTreeBodyNode(const AstNodePtr &body, BodyRole role)
+      : body(body), role(role) {
+    ASSERT_require(body != AST_NULL && role != BodyRole::None);
+  }
+
+public:
+  AstNodePtr GetBodyAst() const override { return body; }
+  BodyRole GetBodyRole() const override { return role; }
+  LoopTreeNode *Clone() const override { return new LoopTreeBodyNode(*this); }
+  friend class LoopTreeCreate;
 };
 
 class LoopTreeStmtNode : public LoopTreeNode {
   AstNodePtr start;
 
 protected:
-  virtual ~LoopTreeStmtNode();
+  ~LoopTreeStmtNode() override;
   LoopTreeStmtNode(const AstNodePtr &s) : start(s) {}
   LoopTreeStmtNode(const LoopTreeStmtNode &that)
       : LoopTreeNode(that), start(that.start) {}
 
 public:
-  virtual std::string toString() const;
-  virtual std::string LoopTreeGetClassName() const {
-    return "LoopTreeStmtNode";
-  }
+  std::string toString() const override;
 
-  virtual AstNodePtr CodeGen(const AstNodePtr &c) const;
-  virtual AstNodePtr GetOrigStmt() const { return start; }
-  virtual LoopTreeNode *Clone() const { return new LoopTreeStmtNode(*this); }
+  AstNodePtr CodeGen(const AstNodePtr &c) const override;
+  bool IsAtomicStatement() const override { return true; }
+  AstNodePtr GetOrigStmt() const override { return start; }
+  AstNodePtr GetSourceAst() const override { return start; }
+  LoopTreeNode *Clone() const override { return new LoopTreeStmtNode(*this); }
 
   friend class LoopTreeCreate;
 };
 
 class LoopTreeIfCond : public LoopTreeStmtNode {
-  SymbolicVal cond;
-  virtual ~LoopTreeIfCond() {}
-  LoopTreeIfCond(const AstNodePtr &_cond);
+  AstNodePtr statement;
+  ~LoopTreeIfCond() override {}
+  LoopTreeIfCond(const AstNodePtr &statement, const AstNodePtr &condition);
   LoopTreeIfCond(const LoopTreeIfCond &that)
-      : LoopTreeStmtNode(that), cond(that.cond) {}
+      : LoopTreeStmtNode(that), statement(that.statement) {}
 
 public:
-  virtual std::string toString() const {
-    return "if (" + cond.toString() + ")";
+  std::string toString() const override {
+    return "if (" + AstInterface::AstToString(GetOrigStmt()) + ")";
   }
-  virtual std::string LoopTreeGetClassName() const { return "LoopTreeIfCond"; }
 
-  virtual AstNodePtr CodeGen(const AstNodePtr &c) const;
-  virtual LoopTreeNode *Clone() const { return new LoopTreeIfCond(*this); }
+  AstNodePtr CodeGen(const AstNodePtr &c) const override;
+  bool IsAtomicStatement() const override { return false; }
+  AstNodePtr GetSourceAst() const override { return statement; }
+  AstNodePtr GetRuntimeAst() const override;
+  LoopTreeNode *Clone() const override { return new LoopTreeIfCond(*this); }
   friend class LoopTreeCreate;
 };
 
-// QY: the key difference is whether if-conds should be included here..
-// #define IsSimpleStmt(a)  (a->GetOrigStmt()!=0 && a->ChildCount() == 0)
-#define IsSimpleStmt(a) (a->GetOrigStmt() != 0)
+inline bool IsSimpleStmt(const LoopTreeNode *node) {
+  return node->GetSourceAst() != AST_NULL && !node->IsLoop();
+}
 
 class LoopTreeLoopNode : public LoopTreeNode, public LoopTreeObserver {
-  AstNodePtr orig;
+  AstNodePtr source;
   LoopInfo info;
   virtual bool SelfRemove();
 
@@ -192,18 +213,13 @@ protected:
 
 public:
   virtual std::string toString() const;
-  virtual std::string LoopTreeGetClassName() const {
-    return "LoopTreeLoopNode";
-  }
   virtual int IncreaseLoopLevel() const { return 1; }
+  virtual AstNodePtr GetSourceAst() const { return source; }
   virtual LoopTreeNode *Clone() const { return new LoopTreeLoopNode(*this); }
   VarInfo GetVarInfo() const { return info; }
   const LoopInfo *GetLoopInfo() const { return &info; }
   LoopInfo *GetLoopInfo() { return &info; }
 
-  /*QY: should not e here b/c loopNodes are created from scratch */
-  /*Liao added here as a workaround --- but need to be removed eventually */
-  AstNodePtr GetOrigLoop() const { return orig; }
   friend class LoopTreeCreate;
 };
 
@@ -215,7 +231,6 @@ class LoopTreeRoot : public LoopTreeNode {
 public:
   std::string toString() const;
   LoopTreeNode *Clone() const { return 0; }
-  std::string LoopTreeGetClassName() const { return "LoopTreeRoot"; }
   virtual int LoopLevel() const { return level; }
 
   friend class LoopTreeCreate;
@@ -230,13 +245,20 @@ class LoopTreeCreate {
   LoopTreeObserveImpl *impl;
 
 public:
+  virtual LoopTreeNode *CreateBodyNode(const AstNodePtr &body,
+                                       LoopTreeNode::BodyRole role) {
+    auto *result = new LoopTreeBodyNode(body, role);
+    AttachObserver(result);
+    return result;
+  }
   virtual LoopTreeNode *CreateStmtNode(AstNodePtr s) {
     LoopTreeNode *r = new LoopTreeStmtNode(s);
     AttachObserver(r);
     return r;
   }
-  virtual LoopTreeIfCond *CreateIfCond(const AstNodePtr &_cond) {
-    LoopTreeIfCond *r = new LoopTreeIfCond(_cond);
+  virtual LoopTreeIfCond *CreateIfCond(const AstNodePtr &statement,
+                                       const AstNodePtr &condition) {
+    LoopTreeIfCond *r = new LoopTreeIfCond(statement, condition);
     AttachObserver(r);
     return r;
   }

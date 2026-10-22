@@ -34,6 +34,8 @@ using namespace std;
 
 #include "constantPropagation.h"
 
+using VirtualCFG::DataflowNode;
+
 int numFails = 0, numPass = 0;
 
 static std::string get_debug_output_dir() {
@@ -133,105 +135,140 @@ void evaluateAnalysisStates::visit(const Function &func, const DataflowNode &n,
 }
 
 int main(int argc, char *argv[]) {
+  for (bool value : {false, true}) {
+    BoolAndLattice unset;
+    ROSE_ASSERT(unset.set(value));
+    ROSE_ASSERT(unset.get() == value);
+    BoolAndLattice unset_conjunction;
+    ROSE_ASSERT(unset_conjunction.andUpd(value));
+    ROSE_ASSERT(unset_conjunction.get() == value);
+    for (bool previous : {false, true}) {
+      BoolAndLattice assignment(previous);
+      ROSE_ASSERT(assignment.set(value) == (previous != value));
+      ROSE_ASSERT(assignment.get() == value);
+      BoolAndLattice conjunction(previous);
+      const bool expected = previous && value;
+      ROSE_ASSERT(conjunction.andUpd(value) == (previous != expected));
+      ROSE_ASSERT(conjunction.get() == expected);
+    }
+  }
+  FiniteProductLattice single({new BoolAndLattice(false)});
+  FiniteProductLattice pair(
+      {new BoolAndLattice(false), new BoolAndLattice(true)});
+  ROSE_ASSERT(!(single == &pair));
+  ROSE_ASSERT(!(pair == &single));
+  Lattice *element = single.getLattices().front();
+  single.ProductLattice::copy(&single);
+  ROSE_ASSERT(single.getLattices().size() == 1);
+  ROSE_ASSERT(single.getLattices().front() == element);
   printf("========== S T A R T ==========\n");
 
   // Build the AST used by ROSE
   SgProject *project = frontend(argc, argv);
-
-  initAnalysis(project);
-  Dbg::init("Divisibility Analysis Test", get_debug_output_dir(), "index.html");
-
-  const bool verbose_debug = enable_verbose_analysis_debug();
-  liveDeadAnalysisDebugLevel = verbose_debug ? 1 : 0;
-  analysisDebugLevel = verbose_debug ? 1 : 0;
-  if (liveDeadAnalysisDebugLevel) {
-    printf("*******************************************************************"
-           "**\n");
-    printf("*****************   Constant Propagation Analysis   "
-           "*****************\n");
-    printf("*******************************************************************"
-           "**\n");
+  ASSERT_not_null(project);
+  if (project->get_frontendErrorCode() != 0) {
+    const int status = frontendExitStatus(project);
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    return status;
   }
 
-  // liveness analysis is used to generate FiniteVarsExprsProductLattice only
-  // for live variables at a CFG point &ldva can be set to NULL then all visible
-  // variables and expressions will be used to generate
-  // FiniteVarsExprsProductLattice
-  LiveDeadVarsAnalysis ldva(project);
-  UnstructuredPassInterDataflow ciipd_ldva(&ldva);
-  ciipd_ldva.runAnalysis();
+  {
+    initAnalysis(project);
+    Dbg::init("Divisibility Analysis Test", get_debug_output_dir(),
+              "index.html");
 
-  // prepare call graph
-  CallGraphBuilder cgb(project);
-  cgb.buildCallGraph();
-  SgIncidenceDirectedGraph *graph = cgb.getGraph();
-
-  // use constant propagation within the context insensitive interprocedural
-  // dataflow driver
-  analysisDebugLevel = verbose_debug ? 1 : 0;
-  ConstantPropagationAnalysis cpA(&ldva);
-  // ConstantPropagationAnalysis cpA(NULL);
-  ContextInsensitiveInterProceduralDataflow cpInter(&cpA, graph);
-  cpInter.runAnalysis();
-
-  // verify the results
-  evaluateAnalysisStates eas(&cpA, "    ");
-  UnstructuredPassInterAnalysis upia_eas(eas);
-  upia_eas.runAnalysis();
-
-  // A better verification method using pragma strings embedded in the input
-  // test code grab live-in information from a Pragma Declaration
-  Rose_STL_Container<SgNode *> nodeList =
-      NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
-  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
-       i != nodeList.end(); i++) {
-    SgPragmaDeclaration *pdecl = isSgPragmaDeclaration((*i));
-    ROSE_ASSERT(pdecl != NULL);
-    // skip irrelevant pragmas
-    if (SageInterface::extractPragmaKeyword(pdecl) != "rose")
-      continue;
-    // NOTE: it is not ConstantPropagationLattice here!!
-    // grab the first lattice attached to the pragma statement for this analysis
-    VarsExprsProductLattice *lattice = dynamic_cast<VarsExprsProductLattice *>(
-        NodeState::getLatticeAbove(&cpA, pdecl, 0)[0]);
-    ROSE_ASSERT(lattice != NULL);
-    string lattice_str = lattice->str();
-    erase_all(lattice_str, " ");
-    erase_all(lattice_str, "\n");
-    //    cout <<lattice_str<<endl;
-    std::string pragma_str = pdecl->get_pragma()->get_pragma();
-    pragma_str.erase(0, 5);
-    erase_all(pragma_str, "\n");
-    // cout <<pragma_str <<endl;
-
-    erase_all(pragma_str, " ");
-
-    if (lattice_str == pragma_str) {
-      cout << "Verified!" << endl;
-    } else {
-      cout << "Analysis results are not identical to the reference results "
-              "from the pragma !"
-           << endl;
-      cout << "=======pragma reference results========" << endl;
-      cout << pragma_str << endl;
-      cout << "-------analysis results--------" << endl;
-      cout << lattice_str << endl;
-      assert(false);
+    const bool verbose_debug = enable_verbose_analysis_debug();
+    liveDeadAnalysisDebugLevel = verbose_debug ? 1 : 0;
+    analysisDebugLevel = verbose_debug ? 1 : 0;
+    if (liveDeadAnalysisDebugLevel) {
+      printf(
+          "*******************************************************************"
+          "**\n");
+      printf("*****************   Constant Propagation Analysis   "
+             "*****************\n");
+      printf(
+          "*******************************************************************"
+          "**\n");
     }
+
+    // liveness analysis is used to generate FiniteVarsExprsProductLattice only
+    // for live variables at a CFG point &ldva can be set to NULL then all
+    // visible variables and expressions will be used to generate
+    // FiniteVarsExprsProductLattice
+    LiveDeadVarsAnalysis ldva(project);
+    UnstructuredPassInterDataflow ciipd_ldva(&ldva);
+    ciipd_ldva.runAnalysis();
+
+    // use constant propagation within the context insensitive interprocedural
+    // dataflow driver
+    analysisDebugLevel = verbose_debug ? 1 : 0;
+    ConstantPropagationAnalysis cpA(&ldva);
+    ContextInsensitiveInterProceduralDataflow cpInter(&cpA);
+    cpInter.runAnalysis();
+
+    // verify the results
+    evaluateAnalysisStates eas(&cpA, "    ");
+    UnstructuredPassInterAnalysis upia_eas(eas);
+    upia_eas.runAnalysis();
+
+    // A better verification method using pragma strings embedded in the input
+    // test code grab live-in information from a Pragma Declaration
+    Rose_STL_Container<SgNode *> nodeList =
+        NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
+    for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
+         i != nodeList.end(); i++) {
+      SgPragmaDeclaration *pdecl = isSgPragmaDeclaration((*i));
+      ROSE_ASSERT(pdecl != NULL);
+      // skip irrelevant pragmas
+      if (SageInterface::extractPragmaKeyword(pdecl) != "rose")
+        continue;
+      // NOTE: it is not ConstantPropagationLattice here!!
+      // grab the first lattice attached to the pragma statement for this
+      // analysis
+      VarsExprsProductLattice *lattice =
+          dynamic_cast<VarsExprsProductLattice *>(
+              NodeState::getLatticeAbove(&cpA, pdecl, 0)[0]);
+      ROSE_ASSERT(lattice != NULL);
+      string lattice_str = lattice->str();
+      erase_all(lattice_str, " ");
+      erase_all(lattice_str, "\n");
+      std::string pragma_str = pdecl->get_pragma()->get_pragma();
+      pragma_str.erase(0, 5);
+      erase_all(pragma_str, "\n");
+
+      erase_all(pragma_str, " ");
+
+      if (lattice_str == pragma_str) {
+        cout << "Verified!" << endl;
+      } else {
+        cout << "Analysis results are not identical to the reference results "
+                "from the pragma !"
+             << endl;
+        cout << "=======pragma reference results========" << endl;
+        cout << pragma_str << endl;
+        cout << "-------analysis results--------" << endl;
+        cout << lattice_str << endl;
+        ROSE_ASSERT(false);
+      }
+    }
+
+    // Liao 1/6/2012, optionally dump dot graph of the analysis result.
+    // Keep verbose graph/debug emission opt-in for very large regression
+    // inputs.
+    if (verbose_debug) {
+      Dbg::dotGraphGenerator(&cpA);
+    }
+    if (numFails == 0 && numPass == eas.total_expectations)
+      printf("PASS: %d / %d\n", numPass, eas.total_expectations);
+    else
+      printf("FAIL!: %d / %d\n", numPass, eas.total_expectations);
+
+    printf("==========  E  N  D  ==========\n");
   }
+  clearAnalysis();
+  SageInterface::deleteAST(project,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
 
-  // Liao 1/6/2012, optionally dump dot graph of the analysis result.
-  // Keep verbose graph/debug emission opt-in for very large regression inputs.
-  if (verbose_debug) {
-    Dbg::dotGraphGenerator(&cpA);
-  }
-  if (numFails == 0 && numPass == eas.total_expectations)
-    printf("PASS: %d / %d\n", numPass, eas.total_expectations);
-  else
-    printf("FAIL!: %d / %d\n", numPass, eas.total_expectations);
-
-  printf("==========  E  N  D  ==========\n");
-
-  // Unparse and compile the project (so this can be used for testing)
-  return /*backend(project) +*/ numFails;
+  return numFails;
 }

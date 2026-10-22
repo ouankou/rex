@@ -28,9 +28,6 @@ class NodeType
           NodeType (SgNode* node, string label, string options )
              : target(node), labelString(label), optionString(options) {}
 
-       // These are implemented to support the STL find function (STL algorithm)
-       // bool operator= (const NodeType & node) const { return node.target == target; }
-          bool operator!=(const NodeType & node) const { return node.target != target; }
           bool operator==(const NodeType & node) const { return node.target == target; }
    };
 
@@ -63,8 +60,6 @@ myAstDOTGeneration::addEdges ( list<EdgeType> & edgeList )
         {
           ROSE_ASSERT ((*i).start != NULL);
           ROSE_ASSERT ((*i).end   != NULL);
-       // printf ("Adding an edge from a %s to a %s with options = %s \n",
-       //      (*i).start->sage_class_name(),(*i).end->sage_class_name(),(*i).optionString.c_str());
           dotrep.addEdge((*i).start,(*i).end,(*i).optionString);
         }
    }
@@ -82,7 +77,6 @@ myAstDOTGeneration::additionalNodeInfo(SgNode* node)
      if (i != nodeList.end())
         {
           returnString = (*i).labelString;
-       // printf ("Adding node label info (%s) to %s \n",returnString.c_str(),node->sage_class_name());
         }
 
      return returnString;
@@ -100,7 +94,6 @@ myAstDOTGeneration::additionalNodeOptions(SgNode* node)
      if (i != nodeList.end())
         {
           returnString = (*i).optionString;
-       // printf ("Adding node option info (%s) to %s \n",returnString.c_str(),node->sage_class_name());
         }
 
      return returnString;
@@ -125,7 +118,6 @@ myAstDOTGeneration::generate ( string filename, SgProject* project, traversalTyp
      traversal = TOPDOWNBOTTOMUP;
      DOTInheritedAttribute ia;
 
-  // traverse(node,ia);
      traverseInputFiles(project,ia);
 
   // Put extra code here
@@ -308,11 +300,7 @@ main ( int argc, char* argv[] )
 
      SgProject* project = frontend(argc,argv);
 
-  // AstTests::runAllTests(const_cast<SgProject*>(project));
      AstTests::runAllTests(project);
-
-  // printf ("Generate the pdf output of the SAGE III AST \n");
-  // generatePDF ( project );
 
      ConstantFoldingColoringTraversal treeTraversal;
      ConstantFoldingColoringInheritedAttribute inheritedAttribute;
@@ -320,20 +308,11 @@ main ( int argc, char* argv[] )
   // Ignore the return value since we don't need it
      treeTraversal.traverseInputFiles(project, inheritedAttribute);
 
-     // myAstDOTGeneration graphics;
      myAstDOTGeneration graphics(treeTraversal.listOfNodes,treeTraversal.listOfEdges);
 
      graphics.generate("customGraphGenerationWithColors",project);
-     // graphics.generate("overloadedTest",project,treeTraversal.listOfNodes,treeTraversal.listOfEdges);
-     // graphics.generateInputFiles(project);
-     // graphics.generateInputFiles(project);
-     // graphics.addEdges(treeTraversal.listOfEdges);
-
-     // return backend(project);
-     // return backend(frontend(argc,argv));
      return 0;
    }
-
 
 
 

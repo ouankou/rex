@@ -1,15 +1,21 @@
 #ifndef ROSE_SAGE_BUILDER_INTERFACE
 #define ROSE_SAGE_BUILDER_INTERFACE
 
+#include <cstdint>
+#include <memory>
 #include <optional>
 #include <string>
+#include <type_traits>
+#include <utility>
 
+#include "Rose/FloatingValue.h"
 #include "sageInterface.h"
 
 // forward declarations required for templated functions using those functions
 namespace SageInterface {
 ROSE_DLL_API void setOneSourcePositionForTransformation(SgNode *root);
 ROSE_DLL_API void setSourcePosition(SgNode *node);
+ROSE_DLL_API bool containsUnknownType(const SgType *type);
 } // namespace SageInterface
 
 /** @brief High level SAGE III AST node and subtree builders.
@@ -49,8 +55,6 @@ pop
  */
 extern std::list<SgScopeStatement *> ScopeStack;
 
-// DQ (11/30/2010): Added support for building Fortran case insensitive symbol
-// table handling.
 //! Support for construction of case sensitive/insensitive symbol table handling
 //! in scopes.
 extern bool symbol_table_case_insensitive_semantics;
@@ -58,35 +62,18 @@ extern bool symbol_table_case_insensitive_semantics;
 //! Public interfaces of the scope stack, should be stable
 ROSE_DLL_API void pushScopeStack(SgScopeStatement *stmt);
 
-// DQ (3/20/2017): This function is not called (the function above is the more
-// useful one that is used). ROSE_DLL_API void pushScopeStack (SgNode* node);
-
 ROSE_DLL_API void popScopeStack();
 ROSE_DLL_API SgScopeStatement *topScopeStack();
 ROSE_DLL_API bool emptyScopeStack();
 ROSE_DLL_API void clearScopeStack();
 
-// DQ (3/11/2012): Added new function to the API for the internal scope stack.
 //! Support to retrive the SgGlobal from the internal scope stack (error if not
 //! present in a non-empty list, return null for empty list).
 SgScopeStatement *getGlobalScopeFromScopeStack();
 
-// DQ (3/20/2017): This function is not used.
-// bool isInScopeStack(SgScopeStatement * scope);
-
 bool inSwitchScope();
 
-// DQ (3/20/2017): This function is not used.
-// TV: for debug purpose
-// std::string stringFromScopeStack();
-
 //@}
-
-// *************************************************************************************************************
-// DQ (5/1/2012): This is another possible interface: supporting how we set the
-// source code position and mark is as either a transformation or as actual code
-// to be assigned a source position as part of the AST construction.
-// *************************************************************************************************************
 
 enum SourcePositionClassification {
   e_sourcePositionError,                //! Error value for enum.
@@ -133,9 +120,6 @@ ROSE_DLL_API void requireFreshNfiExpressionSourceState(SgExpression *expression,
   \brief Builders for simple and complex SgType nodes, such as integer type,
   function type, array type, struct type, etc.
 
-  \todo SgModifierType,SgNamedType(SgClassType,SgEnumType,SgTypedefType),
-  SgQualifiedNameType, SgTemplateType,SgTypeComplex,
-  SgTypeDefault,SgTypeEllipse,SgTypeGlobalVoid,SgTypeImaginary
 */
 
 //! Built in simple types
@@ -162,11 +146,7 @@ ROSE_DLL_API SgTypeTargetBuiltin *
 buildTargetBuiltinType(const SgName &spelling,
                        SgTypeTargetBuiltin::target_family_enum target_family);
 
-//! DQ (8/21/2010): We want to move to the new buildStringType(
-//! SgExpression*,size_t) function over the older buildStringType() function.
-ROSE_DLL_API SgTypeString *buildStringType();
-// SgTypeString* buildStringType( SgExpression* stringLengthExpression, size_t
-// stringLengthLiteral );
+//! Build a Fortran CHARACTER type from its typed length expression.
 ROSE_DLL_API SgTypeString *
 buildStringType(SgExpression *stringLengthExpression);
 
@@ -195,18 +175,11 @@ ROSE_DLL_API SgTypeUnknown *buildUnknownType();
 
 ROSE_DLL_API SgAutoType *buildAutoType();
 
-// CR (2/20/2020): Added builder functions for type size (kind) expressions for
-// Fortran
 //! Builder functions for primitive types with type size (kind) expressions
 ROSE_DLL_API SgTypeBool *buildBoolType(SgExpression *kind_expr);
 ROSE_DLL_API SgTypeInt *buildIntType(SgExpression *kind_expr);
 ROSE_DLL_API SgTypeFloat *buildFloatType(SgExpression *kind_expr);
 ROSE_DLL_API SgTypeUnsignedInt *buildUnsignedIntType(SgExpression *kind_expr);
-
-//! Build a type based on Fortran's implicit typing rules.
-//! Currently this interface does not take into account possible implicit
-//! statements that change the rules.
-ROSE_DLL_API SgType *buildFortranImplicitType(SgName name);
 
 //! Build a pointer type
 ROSE_DLL_API SgPointerType *buildPointerType(SgType *base_type = nullptr);
@@ -219,7 +192,8 @@ ROSE_DLL_API SgRvalueReferenceType *buildRvalueReferenceType(SgType *base_type);
 
 //! Build a decltype reference type
 ROSE_DLL_API SgDeclType *buildDeclType(SgExpression *base_expression,
-                                       SgType *base_type);
+                                       SgType *base_type,
+                                       bool is_gnu_decltype = false);
 
 //! Build a GNU typeof operator
 ROSE_DLL_API SgTypeOfType *buildTypeOfType(SgExpression *base_expression,
@@ -246,9 +220,7 @@ ROSE_DLL_API SgModifierType *buildRestrictType(SgType *base_type);
 ROSE_DLL_API SgArrayType *buildArrayType(SgType *base_type = nullptr,
                                          SgExpression *index = nullptr);
 
-// RASMUSSEN (1/25/2018)
 //! Build an ArrayType based on dimension information.
-//! Note, the index member variable will be set to a NullExpression.
 //!
 //! \param base_type The base type of the array.
 //!        Note that if the base type is itself an array type, the shape of the
@@ -258,8 +230,6 @@ ROSE_DLL_API SgArrayType *buildArrayType(SgType *base_type = nullptr,
 ROSE_DLL_API SgArrayType *buildArrayType(SgType *base_type,
                                          SgExprListExp *dim_info);
 
-// DQ (8/27/2010): Added Fortran specific support for types based on kind
-// expressions.
 //! Build a type based on the Fortran kind mechanism
 ROSE_DLL_API SgModifierType *buildFortranKindType(SgType *base_type,
                                                   SgExpression *kindExpression);
@@ -268,55 +238,43 @@ ROSE_DLL_API SgModifierType *buildFortranKindType(SgType *base_type,
 //! types. A final SgTypeEllipse atomically publishes variadic identity;
 //! ellipses in any other position are malformed and abort.
 ROSE_DLL_API SgFunctionType *
-buildFunctionType(SgType *return_type, SgFunctionParameterTypeList *typeList);
+buildFunctionType(SgType *return_type, SgFunctionParameterTypeList *typeList,
+                  bool hasPrototype = true);
+
+//! Intern a complete semantic signature, consuming its owned children even
+//! when an identical canonical type already exists.
+ROSE_DLL_API SgFunctionType *
+internFunctionType(std::unique_ptr<SgFunctionType> candidate);
+
+ROSE_DLL_API std::unique_ptr<SgFunctionType>
+copyFunctionSignature(const SgFunctionType *specification, SgType *returnType,
+                      std::unique_ptr<SgFunctionParameterTypeList> arguments,
+                      SgType *classType, unsigned int memberFlags,
+                      SgCopyHelp &bindings, SgFunctionType *semanticSignature);
 
 //! Build function type from return type and parameter list
 ROSE_DLL_API SgFunctionType *
 buildFunctionType(SgType *return_type, SgFunctionParameterList *argList);
 
-// DQ (1/10/2020): removed the default argument since we need to make sure it is
-// used.
 ROSE_DLL_API SgMemberFunctionType *buildMemberFunctionType(
     SgType *return_type, SgFunctionParameterTypeList *typeList,
     SgScopeStatement *struct_name, unsigned int mfunc_specifier);
 
-//! DQ (8/19/2012): Refactored some of the code supporting construction of the
-//! SgMemberFunctionType.
 ROSE_DLL_API SgMemberFunctionType *
 buildMemberFunctionType(SgType *return_type,
                         SgFunctionParameterTypeList *typeList,
                         SgType *classType, unsigned int mfunc_specifier);
 
-//! Pei-Hung (06/30/2023): support for SgPointerMemberType
+//! Bind a complete semantic function signature to its member class.
+ROSE_DLL_API SgMemberFunctionType *
+buildMemberFunctionType(const SgFunctionType *type, SgType *classType,
+                        unsigned int mfunc_specifier);
+ROSE_DLL_API SgMemberFunctionType *
+buildMemberFunctionType(const SgFunctionType *type, SgScopeStatement *scope,
+                        unsigned int mfunc_specifier);
+
 ROSE_DLL_API SgPointerMemberType *buildPointerMemberType(SgType *base_type,
                                                          SgType *classType);
-
-// PP (07/14/2016):
-//! Some support for building class template instantiation declarations.
-//! Note, the template is not actually instantiated, but a `forward declaration'
-//! node is created.
-//!
-//! \param template_decl the template class declaration
-//!        (e.g., template <class T> struct matrix {};)
-//! \param template_args the arguments of the template instantiation.
-//!        (e.g., [SgTypeFloat]).
-//!        WARNING: the objects in this list will be linked into the template
-//!        declaration
-//!                 and their parent pointer may change. Thus it is the caller's
-//!                 responsibility to clone nodes if used elsewhere.
-//!                 e.g., SomeClass<0> <- the expression representing 0 may be
-//!                 modified.
-//! \result a class type for the instantiated template (e.g., matrix<float>)
-ROSE_DLL_API
-SgClassType *
-buildClassTemplateType(SgTemplateClassDeclaration *template_decl,
-                       Rose_STL_Container<SgNode *> &template_args);
-
-//! Same as buildClassTemplateType(), just better name
-ROSE_DLL_API
-SgClassType *
-buildTemplateClassType(SgTemplateClassDeclaration *template_decl,
-                       Rose_STL_Container<SgNode *> &template_args);
 
 //! Build a complex type
 ROSE_DLL_API SgTypeComplex *buildComplexType(SgType *base_type = nullptr);
@@ -329,47 +287,28 @@ ROSE_DLL_API SgConstVolatileModifier *
 buildConstVolatileModifier(SgConstVolatileModifier::cv_modifier_enum mtype =
                                SgConstVolatileModifier::e_unknown);
 
-//! Build a non real type used for template parameter. Internally a SgNorealDecl
-//! is also built.
-ROSE_DLL_API SgNonrealType *buildNonrealType(const SgName &name,
-                                             SgDeclarationScope *scope);
-
 //! Build a semantic non-real dependent type (optionally with template
 //! arguments).  Every structurally owned located template-argument node must
 //! be unclassified or already have exact compiler-generated semantic
-//! provenance.  Internally a SgNonrealDecl is also built.
+//! provenance. The optional template declaration is linked before the
+//! internal SgNonrealDecl is published.
 ROSE_DLL_API SgNonrealType *
 buildSemanticNonrealType(const SgName &name, SgScopeStatement *scope,
                          const SgTemplateArgumentPtrList *tplArgs,
-                         const SgName *semanticName);
+                         SgDeclarationStatement *templateDeclaration = nullptr,
+                         SgType *aliasedType = nullptr);
+ROSE_DLL_API SgNonrealType *
+buildSemanticNonrealType(const SgNonrealDecl *source,
+                         const SgTemplateArgumentPtrList &arguments,
+                         SgType *aliasedType);
 
 //@}
 
 //--------------------------------------------------------------
 //@{
-/*! @name Builders for expressions
-  \brief handle side effects of parent pointers, Sg_File_Info, lvalue etc.
+/*! @name Builders for expressions */
 
-Expressions are usually built using bottomup approach, i.e. buiding operands
-first, then the expression operating on the operands. It is also possible to
-build expressions with NULL operands or empty values first, then set them
-afterwards.
-  - Value string is not included in the argument list for simplicty. It can be
-set afterwards using set_valueString()
-  - Expression builders are organized roughtly in the order of class hierarchy
-list of ROSE Web Reference
-  - default values for arguments are provided to support top-down construction.
-Should use SageInterface::setOperand(),setLhsOperand(), setRhsOperand() etc to
-set operands and handle side effects.
-  \todo SgAsmOp, SgAsteriskShapeExp,
-  SgValueExp, SgEnumVal,
-  SgThrowOp,
-*/
-
-// JJW (11/19/2008): _nfi versions of functions set file info objects to NULL
-// (used in frontend)
-
-ROSE_DLL_API SgVariantExpression *buildVariantExpression();
+ROSE_DLL_API SgVariantExpression *buildVariantExpression(SgType *anchor_type);
 
 //! Build a typed null-expression placeholder, set file info as the default one.
 ROSE_DLL_API SgNullExpression *
@@ -385,29 +324,24 @@ ROSE_DLL_API SgColonShapeExp *buildColonShapeExp();
 //! on.
 ROSE_DLL_API SgColonShapeExp *buildColonShapeExp_nfi();
 
-//! Build a bool value expression, the name convention of SgBoolValExp is little
-//! different from others for some unknown reason
+//! Build a bool value expression.
 ROSE_DLL_API SgBoolValExp *buildBoolValExp(int value = 0);
 ROSE_DLL_API SgBoolValExp *buildBoolValExp(bool value = 0);
 ROSE_DLL_API SgBoolValExp *buildBoolValExp_nfi(int value);
 
-ROSE_DLL_API SgCharVal *buildCharVal(char value = 0);
-ROSE_DLL_API SgCharVal *buildCharVal_nfi(char value, const std::string &str);
+ROSE_DLL_API SgCharVal *buildCharVal(int64_t value = 0);
+ROSE_DLL_API SgCharVal *buildCharVal_nfi(int64_t value, const std::string &str);
 
-//! DQ (7/31/2014): Adding support for C++11 nullptr const value expressions.
 ROSE_DLL_API SgNullptrValExp *buildNullptrValExp();
 ROSE_DLL_API SgNullptrValExp *buildNullptrValExp_nfi();
 
-//! DQ (2/14/2019): Adding support for C++14 void value expressions.
 ROSE_DLL_API SgVoidVal *buildVoidVal();
 ROSE_DLL_API SgVoidVal *buildVoidVal_nfi();
 
-ROSE_DLL_API SgWcharVal *buildWcharVal(wchar_t value = 0);
-ROSE_DLL_API SgWcharVal *buildWcharVal_nfi(wchar_t value,
+ROSE_DLL_API SgWcharVal *buildWcharVal(int64_t value = 0);
+ROSE_DLL_API SgWcharVal *buildWcharVal_nfi(int64_t value,
                                            const std::string &str);
 
-// DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-// specific types).
 ROSE_DLL_API SgChar16Val *buildChar16Val(unsigned short value = 0);
 ROSE_DLL_API SgChar16Val *buildChar16Val_nfi(unsigned short value,
                                              const std::string &str);
@@ -420,17 +354,13 @@ ROSE_DLL_API SgComplexVal *buildComplexVal(SgExpression *real_value,
                                            SgType *precision_type);
 ROSE_DLL_API SgComplexVal *buildComplexVal_nfi(SgExpression *real_value,
                                                SgExpression *imaginary_value,
-                                               SgType *precision_type,
-                                               const std::string &str);
-ROSE_DLL_API SgComplexVal *buildImaginaryVal(long double imaginary_value);
+                                               SgType *precision_type);
+ROSE_DLL_API SgComplexVal *
+buildImaginaryVal(Rose::FloatingValue imaginary_value);
 ROSE_DLL_API SgComplexVal *buildImaginaryVal(SgExpression *imaginary_value,
                                              SgType *precision_type);
-ROSE_DLL_API SgComplexVal *buildImaginaryVal(SgExpression *imaginary_value,
-                                             SgType *precision_type,
-                                             const std::string &str);
 ROSE_DLL_API SgComplexVal *buildImaginaryVal_nfi(SgExpression *imaginary_value,
-                                                 SgType *precision_type,
-                                                 const std::string &str);
+                                                 SgType *precision_type);
 
 //! Build a double value expression
 ROSE_DLL_API SgDoubleVal *buildDoubleVal(double value = 0.0);
@@ -440,8 +370,6 @@ ROSE_DLL_API SgDoubleVal *buildDoubleVal_nfi(double value,
 ROSE_DLL_API SgFloatVal *buildFloatVal(float value = 0.0);
 ROSE_DLL_API SgFloatVal *buildFloatVal_nfi(float value = 0.0);
 ROSE_DLL_API SgFloatVal *buildFloatVal_nfi(float value, const std::string &str);
-//! Build a float value expression by converting the string
-ROSE_DLL_API SgFloatVal *buildFloatVal_nfi(const std::string &str);
 
 //! Build an integer value expression
 ROSE_DLL_API SgIntVal *buildIntVal(int value = 0);
@@ -453,7 +381,6 @@ ROSE_DLL_API SgIntVal *buildIntVal_nfi(const std::string &str);
 
 //! Build a long integer value expression
 ROSE_DLL_API SgLongIntVal *buildLongIntVal(long value = 0);
-ROSE_DLL_API SgLongIntVal *buildLongIntValHex(long value = 0);
 ROSE_DLL_API SgLongIntVal *buildLongIntVal_nfi(long value,
                                                const std::string &str);
 
@@ -470,16 +397,17 @@ ROSE_DLL_API SgEnumVal *buildEnumVal(long long int value,
                                      SgEnumDeclaration *decl, SgName name);
 ROSE_DLL_API SgEnumVal *buildEnumVal(SgEnumFieldSymbol *sym);
 
-ROSE_DLL_API SgLongDoubleVal *buildLongDoubleVal(long double value = 0.0);
-ROSE_DLL_API SgLongDoubleVal *buildLongDoubleVal_nfi(long double value,
+ROSE_DLL_API SgLongDoubleVal *
+buildLongDoubleVal(Rose::FloatingValue value = 0.0);
+ROSE_DLL_API SgLongDoubleVal *buildLongDoubleVal_nfi(Rose::FloatingValue value,
                                                      const std::string &str);
 
-ROSE_DLL_API SgFloat80Val *buildFloat80Val(long double value = 0.0);
-ROSE_DLL_API SgFloat80Val *buildFloat80Val_nfi(long double value,
+ROSE_DLL_API SgFloat80Val *buildFloat80Val(Rose::FloatingValue value = 0.0);
+ROSE_DLL_API SgFloat80Val *buildFloat80Val_nfi(Rose::FloatingValue value,
                                                const std::string &str);
 
-ROSE_DLL_API SgFloat128Val *buildFloat128Val(long double value = 0.0);
-ROSE_DLL_API SgFloat128Val *buildFloat128Val_nfi(long double value,
+ROSE_DLL_API SgFloat128Val *buildFloat128Val(Rose::FloatingValue value = 0.0);
+ROSE_DLL_API SgFloat128Val *buildFloat128Val_nfi(Rose::FloatingValue value,
                                                  const std::string &str);
 
 //! Build a bfloat16
@@ -547,10 +475,11 @@ buildUnsignedLongLongIntVal_nfi(unsigned long long v, const std::string &str);
 
 //! Build an template parameter value expression
 ROSE_DLL_API SgTemplateParameterVal *
-buildTemplateParameterVal(int template_parameter_position = -1);
+buildTemplateParameterVal(int template_parameter_position,
+                          SgTemplateParameter *parameter);
 ROSE_DLL_API SgTemplateParameterVal *
 buildTemplateParameterVal_nfi(int template_parameter_position,
-                              const std::string &str);
+                              SgTemplateParameter *parameter);
 
 //! Build a template type, used for template parameter and later argument
 ROSE_DLL_API SgTemplateType *buildTemplateType(SgName name = "");
@@ -560,11 +489,15 @@ ROSE_DLL_API SgTemplateType *buildTemplateType(SgName name = "");
 //! nontype_parameter = 2,  template_parameter = 3}
 ROSE_DLL_API SgTemplateParameter *buildTemplateParameter(
     SgTemplateParameter::template_parameter_enum parameterType, SgType *,
-    SgTemplateParameter::template_parameter_keyword_enum keyword);
+    SgTemplateParameter::template_parameter_keyword_enum keyword,
+    SgInitializedName *initializedName = nullptr,
+    SgTemplateParameter *canonicalNonTypeParameter = nullptr,
+    SgTemplateDeclaration *templateDeclaration = nullptr);
 ROSE_DLL_API SgTemplateParameter *buildTemplateParameter(
     SgTemplateParameter::template_parameter_enum parameterType, SgType *,
     const SgName &parameterName, SgScopeStatement *scope,
-    SgTemplateParameter::template_parameter_keyword_enum keyword);
+    SgTemplateParameter::template_parameter_keyword_enum keyword,
+    SgTemplateDeclaration *templateDeclaration = nullptr);
 
 //! Build a declaration of a non-real class or class-member in an explicit,
 //! non-null lexical declaration scope. A null child scope requests creation of
@@ -582,21 +515,25 @@ ROSE_DLL_API SgThisExp *buildThisExp(SgSymbol *sym, SgType *expression_type);
 ROSE_DLL_API SgThisExp *buildThisExp_nfi(SgSymbol *sym,
                                          SgType *expression_type);
 
-//! Build super pointer
-ROSE_DLL_API SgSuperExp *buildSuperExp(SgClassSymbol *sym);
-ROSE_DLL_API SgSuperExp *buildSuperExp_nfi(SgClassSymbol *sym);
-
-//! Build class pointer
-ROSE_DLL_API SgClassExp *buildClassExp(SgClassSymbol *sym);
-ROSE_DLL_API SgClassExp *buildClassExp_nfi(SgClassSymbol *sym);
-
 #define BUILD_UNARY_PROTO(suffix)                                              \
   ROSE_DLL_API Sg##suffix *build##suffix(SgExpression *op,                     \
                                          SgType *result_type);                 \
   ROSE_DLL_API Sg##suffix *build##suffix##_nfi(SgExpression *op,               \
                                                SgType *result_type);
 
-BUILD_UNARY_PROTO(AddressOfOp)
+//! Build the exact semantic result type of applying unary '&' to an
+//! expression of operand_type.  C++ reference declarations denote their
+//! referred-to object in an expression, so this never constructs the illegal
+//! pointer-to-reference type.
+ROSE_DLL_API SgPointerType *buildAddressOfResultType(SgType *operand_type);
+
+ROSE_DLL_API SgAddressOfOp *
+buildAddressOfOp(SgExpression *operand, SgType *type,
+                 SgAddressOfOp::address_operand_form_enum form);
+ROSE_DLL_API SgAddressOfOp *
+buildAddressOfOp_nfi(SgExpression *operand, SgType *type,
+                     SgAddressOfOp::address_operand_form_enum form);
+
 BUILD_UNARY_PROTO(BitComplementOp)
 BUILD_UNARY_PROTO(MinusOp)
 BUILD_UNARY_PROTO(NotOp)
@@ -616,13 +553,14 @@ buildCastExp(SgExpression *operand_i, SgType *expression_type,
              SgCastExp::cast_type_enum cast_type,
              SgCastExp::semantic_conversion_kind_enum semantic_kind,
              SgCastExp::value_category_enum value_category,
-             const SgTypePtrList &conversion_base_path);
+             const SgTypePtrList &conversion_base_path, SgType *source_type);
 ROSE_DLL_API SgCastExp *
 buildCastExp_nfi(SgExpression *operand_i, SgType *expression_type,
                  SgCastExp::cast_type_enum cast_type,
                  SgCastExp::semantic_conversion_kind_enum semantic_kind,
                  SgCastExp::value_category_enum value_category,
-                 const SgTypePtrList &conversion_base_path);
+                 const SgTypePtrList &conversion_base_path,
+                 SgType *source_type);
 
 //! Build a source-emitting transformation cast whose semantics are completely
 //! determined by its exact operand and result types.  Ambiguous conversions
@@ -630,6 +568,10 @@ buildCastExp_nfi(SgExpression *operand_i, SgType *expression_type,
 ROSE_DLL_API SgCastExp *
 buildTransformationCastExp(SgExpression *operand_i, SgType *expression_type,
                            SgCastExp::cast_type_enum cast_type);
+ROSE_DLL_API SgCastExp *
+buildTransformationCastExp(SgExpression *operand_i, SgType *expression_type,
+                           SgCastExp::cast_type_enum cast_type,
+                           SgType *source_type);
 ROSE_DLL_API SgCastExp *
 buildTransformationCastExp_nfi(SgExpression *operand_i, SgType *expression_type,
                                SgCastExp::cast_type_enum cast_type);
@@ -682,27 +624,32 @@ ROSE_DLL_API SgThrowOp *buildThrowOp(SgExpression *, SgType *result_type,
 ROSE_DLL_API SgThrowOp *buildThrowOp_nfi(SgExpression *, SgType *result_type,
                                          SgThrowOp::e_throw_kind);
 
-ROSE_DLL_API SgNewExp *buildNewExp(SgType *type, SgExprListExp *exprListExp,
-                                   SgConstructorInitializer *constInit,
-                                   SgExpression *expr, short int val,
-                                   SgFunctionDeclaration *funcDecl);
-ROSE_DLL_API SgNewExp *buildNewExp_nfi(SgType *type, SgExprListExp *exprListExp,
-                                       SgConstructorInitializer *constInit,
-                                       SgExpression *expr, short int val,
-                                       SgFunctionDeclaration *funcDecl);
+ROSE_DLL_API SgNewExp *
+buildNewExp(SgType *type, SgPointerType *result_type, SgExpression *array_bound,
+            SgNewExp::array_bound_source_form_enum source_form,
+            SgExprListExp *exprListExp, SgConstructorInitializer *constInit,
+            SgExpression *expr, short int val, SgFunctionDeclaration *funcDecl,
+            unsigned int allocation_implicit_argument_count);
+ROSE_DLL_API SgNewExp *buildNewExp_nfi(
+    SgType *type, SgPointerType *result_type, SgExpression *array_bound,
+    SgNewExp::array_bound_source_form_enum source_form,
+    SgExprListExp *exprListExp, SgConstructorInitializer *constInit,
+    SgExpression *expr, short int val, SgFunctionDeclaration *funcDecl,
+    unsigned int allocation_implicit_argument_count);
 
 ROSE_DLL_API SgDeleteExp *
 buildDeleteExp(SgExpression *variable, short is_array,
                short need_global_specifier,
                SgFunctionDeclaration *deleteOperatorDeclaration);
 
-//! DQ (1/25/2013): Added support for typeId operators.
 ROSE_DLL_API SgTypeIdOp *buildTypeIdOp(SgExpression *operand_expr,
                                        SgType *operand_type,
-                                       SgType *expression_type = NULL);
+                                       SgType *expression_type,
+                                       bool operand_is_evaluated);
 ROSE_DLL_API SgTypeIdOp *buildTypeIdOp_nfi(SgExpression *operand_expr,
                                            SgType *operand_type,
-                                           SgType *expression_type);
+                                           SgType *expression_type,
+                                           bool operand_is_evaluated);
 
 #undef BUILD_UNARY_PROTO
 
@@ -757,6 +704,10 @@ BUILD_BINARY_PROTO(NotEqualOp)
 BUILD_BINARY_PROTO(OrOp)
 BUILD_BINARY_PROTO(PlusAssignOp)
 BUILD_BINARY_PROTO(PntrArrRefExp)
+ROSE_DLL_API SgPntrArrRefExp *buildPntrArrRefExp_nfi(
+    SgExpression *lhs, SgExpression *rhs, SgType *result_type,
+    std::optional<long long> result_storage_size_bytes,
+    const std::vector<std::optional<long long>> &subscript_stride_bits = {});
 BUILD_BINARY_PROTO(RshiftAssignOp)
 
 BUILD_BINARY_PROTO(RshiftOp)
@@ -767,7 +718,6 @@ BUILD_BINARY_PROTO(XorAssignOp)
 BUILD_BINARY_PROTO(VarArgCopyOp)
 BUILD_BINARY_PROTO(VarArgStartOp)
 
-// DQ (7/25/2020): Adding C++20 support
 BUILD_BINARY_PROTO(SpaceshipOp)
 
 #undef BUILD_BINARY_PROTO
@@ -830,14 +780,10 @@ ROSE_DLL_API SgVarRefExp *buildVarRefExp_nfi(SgVariableSymbol *varSymbol);
 //! AST.
 ROSE_DLL_API SgVarRefExp *buildVarRefExp(SgVariableDeclaration *vardecl);
 
-//! Build a variable reference from an initialized name
-//! It first tries to grab the associated symbol, then call buildVarRefExp(const
-//! SgName& name, SgScopeStatement*) if symbol does not exist.
+//! Build a variable reference from an initialized name's exact symbol.
 ROSE_DLL_API SgVarRefExp *buildVarRefExp(SgInitializedName *initname,
                                          SgScopeStatement *scope = NULL);
 
-// DQ (9/4/2013): Added support for building compound literals (similar to a
-// SgVarRefExp).
 //! Build function for compound literals (uses a SgVariableSymbol and is similar
 //! to buildVarRefExp_nfi()).
 SgCompoundLiteralExp *buildCompoundLiteralExp_nfi(SgVariableSymbol *varSymbol);
@@ -872,11 +818,15 @@ buildFunctionRefExp(const SgFunctionDeclaration *func_decl);
 
 //! Build SgFunctionRefExp based on a function's symbol.
 ROSE_DLL_API SgFunctionRefExp *buildFunctionRefExp(SgFunctionSymbol *sym);
+ROSE_DLL_API SgFunctionRefExp *buildFunctionRefExp(SgFunctionSymbol *sym,
+                                                   SgType *referenceType);
 
 SgFunctionRefExp *buildFunctionRefExp_nfi(const SgName &name,
                                           const SgType *func_type,
                                           SgScopeStatement *scope = NULL);
 SgFunctionRefExp *buildFunctionRefExp_nfi(SgFunctionSymbol *sym);
+ROSE_DLL_API SgFunctionRefExp *buildFunctionRefExp_nfi(SgFunctionSymbol *sym,
+                                                       SgType *referenceType);
 
 //! Build a Fortran function reference with separate resolved-procedure and
 //! source-visible binding identities.
@@ -887,11 +837,9 @@ ROSE_DLL_API SgFunctionRefExp *buildFortranFunctionRefExp_nfi(
     SgFunctionSymbol *semantic_symbol, SgFunctionSymbol *source_visible_symbol,
     SgFunctionRefExp::fortran_source_visible_binding_kind_enum kind);
 
-//! DQ (12/15/2011): Adding template declaration support to the AST.
 SgTemplateFunctionRefExp *
 buildTemplateFunctionRefExp_nfi(SgTemplateFunctionSymbol *sym);
 
-//! DQ (12/29/2011): Adding template declaration support to the AST.
 SgTemplateMemberFunctionRefExp *
 buildTemplateMemberFunctionRefExp_nfi(SgTemplateMemberFunctionSymbol *sym,
                                       bool virtual_call, bool need_qualifier);
@@ -993,7 +941,6 @@ ROSE_DLL_API SgAggregateInitializer *buildAggregateInitializer_nfi(
     SgExprListExp *initializers, SgType *type,
     SgAggregateInitializer::aggregate_initializer_source_form_enum source_form);
 
-// DQ (!/4/2009): Added support for building SgConstructorInitializer
 ROSE_DLL_API SgConstructorInitializer *buildConstructorInitializer(
     SgMemberFunctionDeclaration *declaration, SgExprListExp *args,
     SgType *expression_type, bool need_name, bool need_qualifier,
@@ -1001,7 +948,9 @@ ROSE_DLL_API SgConstructorInitializer *buildConstructorInitializer(
 ROSE_DLL_API SgConstructorInitializer *buildConstructorInitializer_nfi(
     SgMemberFunctionDeclaration *declaration, SgExprListExp *args,
     SgType *expression_type, bool need_name, bool need_qualifier,
-    bool need_parenthesis_after_name, bool associated_class_unknown);
+    bool need_parenthesis_after_name, bool associated_class_unknown,
+    SgConstructorInitializer::argument_source_enum argument_source =
+        SgConstructorInitializer::e_constructor_argument_expressions);
 
 //! Build an braced initializer
 ROSE_DLL_API SgBracedInitializer *
@@ -1011,37 +960,60 @@ buildBracedInitializer_nfi(SgExprListExp *initializers,
                            SgType *expression_type);
 
 //! Build sizeof() expression with an expression parameter
-ROSE_DLL_API SgSizeOfOp *buildSizeOfOp(SgExpression *exp,
-                                       SgType *expression_type);
-ROSE_DLL_API SgSizeOfOp *buildSizeOfOp_nfi(SgExpression *exp,
-                                           SgType *expression_type);
+ROSE_DLL_API SgSizeOfOp *buildSizeOfOp(
+    SgExpression *exp, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_sizeof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
+ROSE_DLL_API SgSizeOfOp *buildSizeOfOp_nfi(
+    SgExpression *exp, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_sizeof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
 
 //! Build sizeof() expression with a type parameter
-ROSE_DLL_API SgSizeOfOp *buildSizeOfOp(SgType *type, SgType *expression_type);
-ROSE_DLL_API SgSizeOfOp *buildSizeOfOp_nfi(SgType *type,
-                                           SgType *expression_type);
+ROSE_DLL_API SgSizeOfOp *buildSizeOfOp(
+    SgType *type, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_sizeof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
+ROSE_DLL_API SgSizeOfOp *buildSizeOfOp_nfi(
+    SgType *type, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_sizeof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
 
 //! Build __alignof__() expression with an expression parameter
-ROSE_DLL_API SgAlignOfOp *buildAlignOfOp(SgExpression *exp,
-                                         SgType *expression_type);
-ROSE_DLL_API SgAlignOfOp *buildAlignOfOp_nfi(SgExpression *exp,
-                                             SgType *expression_type);
+ROSE_DLL_API SgAlignOfOp *buildAlignOfOp(
+    SgExpression *exp, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_preferred_alignof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
+ROSE_DLL_API SgAlignOfOp *buildAlignOfOp_nfi(
+    SgExpression *exp, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_preferred_alignof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
 
 //! Build __alignof__() expression with a type parameter
-ROSE_DLL_API SgAlignOfOp *buildAlignOfOp(SgType *type, SgType *expression_type);
-ROSE_DLL_API SgAlignOfOp *buildAlignOfOp_nfi(SgType *type,
-                                             SgType *expression_type);
+ROSE_DLL_API SgAlignOfOp *buildAlignOfOp(
+    SgType *type, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_preferred_alignof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
+ROSE_DLL_API SgAlignOfOp *buildAlignOfOp_nfi(
+    SgType *type, SgType *expression_type,
+    SgExpression::unary_type_trait_kind_enum operator_kind =
+        SgExpression::e_preferred_alignof,
+    std::optional<Rose::Integer128Value> evaluated_value = std::nullopt);
 
 //! Build noexcept operator expression with an expression parameter
-ROSE_DLL_API SgNoexceptOp *buildNoexceptOp(SgExpression *exp = NULL);
+ROSE_DLL_API SgNoexceptOp *buildNoexceptOp(SgExpression *exp);
 ROSE_DLL_API SgNoexceptOp *buildNoexceptOp_nfi(SgExpression *exp);
 
-//! DQ (7/24/2014): Adding support for c11 generic operands.
 ROSE_DLL_API SgTypeExpression *buildTypeExpression(SgType *type);
 ROSE_DLL_API SgTypeExpression *buildTypeExpression_nfi(SgType *type);
 
-// DQ (8/11/2014): Added support for C++11 decltype used in new function return
-// syntax.
 ROSE_DLL_API SgFunctionParameterRefExp *
 buildFunctionParameterRefExp(int parameter_number, int parameter_level,
                              SgType *parameter_type);
@@ -1049,62 +1021,43 @@ ROSE_DLL_API SgFunctionParameterRefExp *
 buildFunctionParameterRefExp_nfi(int parameter_number, int parameter_level,
                                  SgType *parameter_type);
 
-//! DQ (9/3/2014): Adding support for C++11 Lambda expressions
-ROSE_DLL_API SgLambdaExp *
-buildLambdaExp(SgLambdaCaptureList *lambda_capture_list,
-               SgClassDeclaration *lambda_closure_class,
-               SgFunctionDeclaration *lambda_function);
 ROSE_DLL_API SgLambdaExp *
 buildLambdaExp_nfi(SgLambdaCaptureList *lambda_capture_list,
                    SgClassDeclaration *lambda_closure_class,
                    SgFunctionDeclaration *lambda_function);
 
-ROSE_DLL_API SgLambdaCapture *
-buildLambdaCapture(SgExpression *capture_variable,
-                   SgExpression *source_closure_variable,
-                   SgExpression *closure_variable);
-ROSE_DLL_API SgLambdaCapture *
-buildLambdaCapture_nfi(SgExpression *capture_variable,
-                       SgExpression *source_closure_variable,
-                       SgExpression *closure_variable);
+ROSE_DLL_API SgLambdaCapture *buildLambdaCapture_nfi(
+    SgExpression *capture_variable, SgExpression *capture_initializer,
+    SgExpression *closure_variable, bool capture_by_reference, bool implicit,
+    bool pack_expansion, bool is_init_capture);
 
-ROSE_DLL_API SgLambdaCaptureList *buildLambdaCaptureList();
 ROSE_DLL_API SgLambdaCaptureList *buildLambdaCaptureList_nfi();
 
-// DQ (7/25/2020): Adding C++17 support
-ROSE_DLL_API SgFoldExpression *
-buildFoldExpression(SgExpression *operands, std::string operator_token_string,
-                    bool is_left_associative, SgType *result_type);
 ROSE_DLL_API SgFoldExpression *
 buildFoldExpression_nfi(SgExpression *operands,
-                        std::string operator_token_string,
+                        SgFoldExpression::operator_kind_enum operator_kind,
                         bool is_left_associative, SgType *result_type);
 
-// DQ (7/25/2020): Adding C++20 support
-ROSE_DLL_API SgAwaitExpression *buildAwaitExpression(SgExpression *value,
-                                                     SgType *result_type);
-ROSE_DLL_API SgAwaitExpression *buildAwaitExpression_nfi(SgExpression *value,
-                                                         SgType *result_type);
+ROSE_DLL_API SgAwaitExpression *buildAwaitExpression_nfi(
+    SgExpression *value, SgType *result_type,
+    SgAwaitExpression::coroutine_keyword_kind_enum keyword);
 
-ROSE_DLL_API SgPackExpansionExpr *buildPackExpansionExpr(SgExpression *pattern,
-                                                         SgType *result_type);
 ROSE_DLL_API SgPackExpansionExpr *
 buildPackExpansionExpr_nfi(SgExpression *pattern, SgType *result_type);
 
-// DQ (7/25/2020): Adding C++20 support
-ROSE_DLL_API SgChooseExpression *
-buildChooseExpression(SgExpression *condition, SgExpression *true_expression,
-                      SgExpression *false_expression, SgType *result_type);
 ROSE_DLL_API SgChooseExpression *
 buildChooseExpression_nfi(SgExpression *condition,
                           SgExpression *true_expression,
-                          SgExpression *false_expression, SgType *result_type);
-ROSE_DLL_API SgRequiresExpr *
-buildRequiresExpr(SgFunctionParameterList *local_parameter_list,
-                  SgExprListExp *requirements);
-ROSE_DLL_API SgRequiresExpr *
-buildRequiresExpr_nfi(SgFunctionParameterList *local_parameter_list,
-                      SgExprListExp *requirements);
+                          SgExpression *false_expression, SgType *result_type,
+                          SgChooseExpression::selection_kind_enum selection);
+ROSE_DLL_API SgRequiresExpr *buildRequiresExpr(
+    SgFunctionParameterList *local_parameter_list, SgExprListExp *requirements,
+    SgFunctionParameterScope *local_parameter_scope = nullptr,
+    SgFunctionParameterList *local_parameter_list_syntax = nullptr);
+ROSE_DLL_API SgRequiresExpr *buildRequiresExpr_nfi(
+    SgFunctionParameterList *local_parameter_list, SgExprListExp *requirements,
+    SgFunctionParameterScope *local_parameter_scope = nullptr,
+    SgFunctionParameterList *local_parameter_list_syntax = nullptr);
 ROSE_DLL_API SgSimpleRequirement *
 buildSimpleRequirement_nfi(SgExpression *expression);
 ROSE_DLL_API SgTypeRequirement *buildTypeRequirement_nfi(SgType *required_type);
@@ -1124,7 +1077,6 @@ buildNestedRequirement_nfi(SgExpression *constraint);
 //@{
 /*! @name Builders for range expressions
  */
-ROSE_DLL_API SgRangeExp *buildRangeExp(SgExpression *start);
 ROSE_DLL_API SgRangeExp *buildRangeExp(SgExpression *start, SgExpression *end,
                                        SgExpression *stride);
 SgRangeExp *buildRangeExp_nfi(SgExpression *start, SgExpression *end,
@@ -1163,6 +1115,10 @@ buildSemanticInitializedName(const SgName &name, SgType *type,
                              SgInitializer *init = NULL,
                              SgVariableDeclaration *declptr = NULL);
 
+//! Derive a callable parameter type from a validated declared type without
+//! mutating the declaration's type.
+ROSE_DLL_API SgType *functionParameterTypeFromDeclaredType(SgType *type);
+
 //! Build SgFunctionParameterTypeList from SgFunctionParameterList
 ROSE_DLL_API SgFunctionParameterTypeList *
 buildFunctionParameterTypeList(SgFunctionParameterList *paralist);
@@ -1197,17 +1153,22 @@ buildFunctionParameterTypeList(SgType *type0 = NULL, SgType *type1 = NULL,
 //! Build a fresh, structurally detached variable declaration in an exact
 //! semantic scope.  A same-scope declaration with the same name is a hard
 //! error; use buildVariableRedeclaration() when the prior declaration is known.
+//! An explicit C/C++ written type must be distinct and semantically equivalent;
+//! it is attached before the declaration's variable symbol is published.
 ROSE_DLL_API SgVariableDeclaration *
 buildVariableDeclaration(const SgName &name, SgType *type,
-                         SgInitializer *varInit, SgScopeStatement *scope);
+                         SgInitializer *varInit, SgScopeStatement *scope,
+                         SgType *cxxSourceType = nullptr);
 
 ROSE_DLL_API SgVariableDeclaration *
 buildVariableDeclaration(const std::string &name, SgType *type,
-                         SgInitializer *varInit, SgScopeStatement *scope);
+                         SgInitializer *varInit, SgScopeStatement *scope,
+                         SgType *cxxSourceType = nullptr);
 
 ROSE_DLL_API SgVariableDeclaration *
 buildVariableDeclaration(const char *name, SgType *type, SgInitializer *varInit,
-                         SgScopeStatement *scope);
+                         SgScopeStatement *scope,
+                         SgType *cxxSourceType = nullptr);
 
 //! Build one source-positioned variable declaration without publishing a
 //! symbol.  This is an internal transaction primitive: the caller must
@@ -1290,23 +1251,13 @@ ROSE_DLL_API SgVariableDefinition *
 buildVariableDefinition_nfi(SgVariableDeclaration *decl,
                             SgInitializedName *init_name, SgInitializer *init);
 
-// DQ (8/31/2012): Note that this macro can't be used in header files since it
-// can only be set after sage3.h has been read.  The reason is that this is a
-// portability problem when "rose_config.h" appears in header files of
-// applications using ROSE's header files. DQ (12/6/2011): Adding support for
-// template declarations into the AST. SgTemplateDeclaration*
 class declaration_ownership;
-enum class template_variable_entity_kind {
-  primary_template,
-  specialization,
-};
-
 ROSE_DLL_API SgTemplateVariableDeclaration *
 buildTemplateVariableDeclaration_nfi(
     const SgName &name, SgType *type, SgInitializer *varInit,
     SgScopeStatement *scope,
-    template_variable_entity_kind entityKind =
-        template_variable_entity_kind::primary_template,
+    SgTemplateVariableDeclaration *specializedTemplateDeclaration,
+    const SgTemplateArgumentPtrList &semanticArguments,
     SgInitializedName *priorDeclaration = nullptr);
 
 //! Build and atomically publish a template variable declaration with explicit
@@ -1316,8 +1267,8 @@ buildTemplateVariableDeclaration_nfi(
 ROSE_DLL_API SgTemplateVariableDeclaration *buildTemplateVariableDeclaration(
     const declaration_ownership &ownership, const SgName &name, SgType *type,
     SgInitializer *varInit, SgScopeStatement *scope,
-    template_variable_entity_kind entityKind =
-        template_variable_entity_kind::primary_template,
+    SgTemplateVariableDeclaration *specializedTemplateDeclaration,
+    const SgTemplateArgumentPtrList &semanticArguments,
     SgInitializedName *priorDeclaration = nullptr);
 
 //! Build a typedef declaration, such as: typedef int myint;  typedef struct A
@@ -1442,29 +1393,21 @@ ROSE_DLL_API SgFunctionParameterList *
 buildFunctionParameterList_nfi(SgFunctionParameterTypeList *paraTypeList);
 
 SgCtorInitializerList *buildCtorInitializerList_nfi();
-//! DQ (2/11/2012): Added support to set the template name in function template
-//! instantiations (member and non-member).
 ROSE_DLL_API void
 setTemplateNameInTemplateInstantiations(SgFunctionDeclaration *func,
                                         const SgName &name);
 
-// DQ (9/13/2012): Need to set the parents of SgTemplateArgument IR nodes now
-// that they are passed in as part of the SageBuilder API.
 ROSE_DLL_API void setTemplateArgumentParents(SgDeclarationStatement *decl);
 ROSE_DLL_API void setTemplateArgumentParents(SgNonrealRefExp *ref);
 ROSE_DLL_API void testTemplateArgumentParents(SgDeclarationStatement *decl);
 ROSE_DLL_API SgTemplateArgumentPtrList *
 getTemplateArgumentList(SgDeclarationStatement *decl);
 
-//! DQ (9/16/2012): Added function to support setting the template parameters
-//! and setting their parents (and for any relevant declaration).
 ROSE_DLL_API void testTemplateParameterParents(SgDeclarationStatement *decl);
 ROSE_DLL_API void setTemplateParameterParents(SgDeclarationStatement *decl);
 ROSE_DLL_API SgTemplateParameterPtrList *
 getTemplateParameterList(SgDeclarationStatement *decl);
 
-//! DQ (9/16/2012): Added function to support setting the template arguments and
-//! setting their parents (and for any relevant declaration).
 ROSE_DLL_API void setTemplateArgumentsInDeclaration(
     SgDeclarationStatement *decl,
     SgTemplateArgumentPtrList *templateArgumentsList_input);
@@ -1484,13 +1427,40 @@ public:
     prohibited_for_rejected_template_instantiation
   };
 
-  //! Special-member identity that must be known before a member declaration's
-  //! structural initializer-list child is source-classified.
+  //! Function identity known before declaration and symbol publication.
   enum class special_member_kind {
     none,
     constructor,
     destructor,
-    overloaded_operator
+    overloaded_operator,
+    conversion,
+    literal_operator,
+    deduction_guide
+  };
+
+  struct explicit_specifier {
+    bool is_explicit;
+    SgExpression *condition;
+  };
+
+  struct special_member_properties {
+    bool is_default;
+    bool is_trivial;
+    bool is_ineligible;
+  };
+
+  struct deletion_properties {
+    bool is_deleted;
+    bool is_written;
+  };
+
+  struct method_properties {
+    bool is_virtual;
+    bool is_pure;
+    bool is_final;
+    bool is_override;
+    SgFunctionModifier::copy_move_kind_enum copy_move_kind =
+        SgFunctionModifier::e_copy_move_none;
   };
 
   enum class kind {
@@ -1636,6 +1606,51 @@ public:
   //! be changed once present.
   function_declaration_ownership
   withSpecialMemberKind(special_member_kind specialKind) const;
+  function_declaration_ownership
+  withMethodProperties(method_properties properties) const;
+  std::optional<method_properties> getMethodProperties() const;
+  function_declaration_ownership withDeletionProperties(bool is_deleted,
+                                                        bool is_written) const;
+  std::optional<deletion_properties> getDeletionProperties() const;
+  function_declaration_ownership
+  withSpecialMemberProperties(bool is_default, bool is_trivial,
+                              bool is_ineligible) const;
+  std::optional<special_member_properties> getSpecialMemberProperties() const;
+  function_declaration_ownership withDestructorProperties(
+      SgFunctionModifier::destructor_properties_enum properties) const;
+  SgFunctionModifier::destructor_properties_enum
+  getDestructorProperties() const;
+  //! Supply an independent, detached written parameter list to a function
+  //! builder; it constructs and owns the syntax signature before publication.
+  function_declaration_ownership
+  withSourceParameterList(SgFunctionParameterList *parameters) const;
+  SgFunctionParameterList *getSourceParameterList() const;
+  //! Transfer the declarator scope and source signature during construction.
+  //! Written parameters must already be bound to this declarator scope.
+  function_declaration_ownership withFunctionDeclaratorScope(
+      SgDeclarationScope *scope, SgFunctionType *source_type = nullptr,
+      SgFunctionParameterList *source_parameters = nullptr,
+      bool old_style_definition = false) const;
+  SgDeclarationScope *getFunctionDeclaratorScope() const;
+  SgFunctionType *getSourceFunctionType() const;
+  bool getOldStyleDefinition() const;
+  //! Supply the specifier before publication. Without an explicit value,
+  //! redeclarations inherit their exact canonical declaration's specifier.
+  function_declaration_ownership withConstexprSpecifier(
+      SgFunctionDeclaration::constexpr_specifier_enum specifier) const;
+  std::optional<SgFunctionDeclaration::constexpr_specifier_enum>
+  getConstexprSpecifier() const;
+  //! Transfer a detached condition and its resolved semantic value before
+  //! publication. Absence of an input inherits the exact canonical specifier.
+  function_declaration_ownership
+  withExplicitSpecifier(bool isExplicit, SgExpression *condition) const;
+  std::optional<explicit_specifier> getExplicitSpecifier() const;
+  //! Supply a complete canonical signature before declaration publication.
+  function_declaration_ownership withFunctionType(SgFunctionType *type) const;
+  SgFunctionType *getFunctionType() const;
+  function_declaration_ownership
+  withDeclaredExceptionSignature(SgFunctionType *signature) const;
+  SgFunctionType *getDeclaredExceptionSignature() const;
   //! Retarget an in-progress redeclaration or canonical-replacement
   //! transaction after re-entrant construction has re-rooted the same exact
   //! function family.  All other typed construction properties are preserved.
@@ -1662,6 +1677,7 @@ public:
   SgStatementFunctionStatement *getSourceStatementFunctionOwner() const;
 
 private:
+  void validate() const;
   function_declaration_ownership(
       kind ownership_kind, SgScopeStatement *lexical_owner,
       SgStatement *insertion_anchor, bool insertion_at_top,
@@ -1675,7 +1691,11 @@ private:
       SgExpression *template_requires_clause = nullptr,
       semantic_lookup_publication lookup_publication =
           semantic_lookup_publication::required,
-      special_member_kind special_kind = special_member_kind::none);
+      special_member_kind special_kind = special_member_kind::none,
+      std::optional<SgFunctionDeclaration::constexpr_specifier_enum>
+          constexpr_specifier = std::nullopt,
+      SgFunctionParameterList *source_parameter_list = nullptr,
+      std::optional<explicit_specifier> explicit_specifier = std::nullopt);
 
   kind ownership_kind_;
   SgScopeStatement *lexical_owner_;
@@ -1691,13 +1711,24 @@ private:
   SgExpression *template_requires_clause_;
   semantic_lookup_publication lookup_publication_;
   special_member_kind special_kind_;
+  std::optional<method_properties> method_properties_;
+  std::optional<deletion_properties> deletion_properties_;
+  std::optional<special_member_properties> special_member_properties_;
+  SgFunctionModifier::destructor_properties_enum destructor_properties_ =
+      SgFunctionModifier::e_destructor_unclassified;
+  std::optional<SgFunctionDeclaration::constexpr_specifier_enum>
+      constexpr_specifier_;
+  SgFunctionParameterList *source_parameter_list_;
+  SgDeclarationScope *function_declarator_scope_ = nullptr;
+  SgFunctionType *source_function_type_ = nullptr;
+  bool old_style_definition_ = false;
+  std::optional<explicit_specifier> explicit_specifier_;
+  SgFunctionType *function_type_ = nullptr;
+  SgFunctionType *declared_exception_signature_ = nullptr;
 };
 
 //! Build a prototype for a function, handle function type, symbol etc
 //! transparently
-// DQ (7/26/2012): Changing the API to include template arguments so that we can
-// generate names with and without template arguments (to support name
-// mangiling).
 ROSE_DLL_API SgFunctionDeclaration *buildNondefiningFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
     SgType *return_type, SgFunctionParameterList *parlist,
@@ -1706,7 +1737,8 @@ ROSE_DLL_API SgFunctionDeclaration *buildNondefiningFunctionDeclaration(
     SgStorageModifier::storage_modifier_enum sm = SgStorageModifier::e_default,
     bool forceFreeFunctionScope = false,
     const SgName *templateInstantiationName = NULL,
-    SgDeclarationStatement *expectedTemplateDeclaration = NULL);
+    SgDeclarationStatement *expectedTemplateDeclaration = NULL,
+    SgTemplateArgumentPtrList *semanticTemplateArguments = nullptr);
 
 //! Build a prototype for an existing function declaration (defining or
 //! nondefining is fine)
@@ -1725,10 +1757,6 @@ buildNondefiningTemplateFunctionDeclaration(
     SgScopeStatement *scope,
     SgTemplateParameterPtrList *templateParameterList = NULL);
 
-// DQ (8/11/2013): Note that access to the SgTemplateParameterPtrList should be
-// handled through the first_nondefining_declaration (which is a required
-// parameter). DQ (12/1/2011): Adding support for template declarations into the
-// AST.
 ROSE_DLL_API SgTemplateFunctionDeclaration *
 buildDefiningTemplateFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
@@ -1736,15 +1764,6 @@ buildDefiningTemplateFunctionDeclaration(
     SgScopeStatement *scope,
     SgTemplateFunctionDeclaration *first_nondefining_declaration,
     SgTemplateParameterPtrList *definingTemplateParameterList);
-
-// DQ (11/8/2020): Define a function to build a default constructor for a class.
-// ROSE_DLL_API SgMemberFunctionDeclaration* buildConstructor ( const SgName &
-// typeName, SgClassType* initializedName_classType, SgClassDefinition*
-// classDefinition);
-ROSE_DLL_API SgMemberFunctionDeclaration *
-buildDefaultConstructor(const function_declaration_ownership &ownership,
-                        SgClassType *classType,
-                        SgClassDefinition *classDefinition);
 
 //! Build a prototype member function declaration
 ROSE_DLL_API SgMemberFunctionDeclaration *
@@ -1755,10 +1774,9 @@ buildNondefiningMemberFunctionDeclaration(
     bool buildTemplateInstantiation,
     SgTemplateArgumentPtrList *templateArgumentsList,
     const SgName *templateInstantiationName = NULL,
-    SgDeclarationStatement *expectedTemplateDeclaration = NULL);
+    SgDeclarationStatement *expectedTemplateDeclaration = NULL,
+    SgTemplateArgumentPtrList *semanticTemplateArguments = nullptr);
 
-// DQ (8/12/2013): This function needs to supporte SgTemplateParameterPtrList
-// and SgTemplateArgumentPtrList parameters.
 ROSE_DLL_API SgTemplateMemberFunctionDeclaration *
 buildNondefiningTemplateMemberFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
@@ -1767,7 +1785,6 @@ buildNondefiningTemplateMemberFunctionDeclaration(
     SgTemplateParameterPtrList *templateParameterList,
     SgTemplateParameterPtrList *symbolIdentityTemplateParameterList);
 
-// DQ (12/1/2011): Adding support for template declarations in the AST.
 ROSE_DLL_API SgTemplateMemberFunctionDeclaration *
 buildDefiningTemplateMemberFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
@@ -1776,14 +1793,6 @@ buildDefiningTemplateMemberFunctionDeclaration(
     SgTemplateMemberFunctionDeclaration *first_nondefing_declaration,
     SgTemplateParameterPtrList *definingTemplateParameterList);
 
-////! Build a prototype member function declaration
-// SgMemberFunctionDeclaration* buildNondefiningMemberFunctionDeclaration (const
-// SgName & name, SgMemberFunctionType* func_type, SgFunctionParameterList*
-// paralist, SgScopeStatement* scope=NULL);
-
-// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList
-// is somewhat redundant with the required parameter
-// first_nondefinng_declaration (I think).
 //! Build a defining ( non-prototype) member function declaration
 ROSE_DLL_API SgMemberFunctionDeclaration *
 buildDefiningMemberFunctionDeclaration(
@@ -1794,27 +1803,18 @@ buildDefiningMemberFunctionDeclaration(
     SgMemberFunctionDeclaration *first_nondefinng_declaration,
     SgTemplateArgumentPtrList *templateArgumentsList);
 
-// DQ (8/28/2012): This preserves the original API with a simpler function
-// (however for C++ at least, it is frequently not sufficent). We need to decide
-// if the SageBuilder API should include these sorts of functions.
 ROSE_DLL_API SgMemberFunctionDeclaration *
 buildNondefiningMemberFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
     SgType *return_type, SgFunctionParameterList *parameter_list,
     SgScopeStatement *scope);
 
-// DQ (8/28/2012): This preserves the original API with a simpler function
-// (however for C++ at least, it is frequently not sufficent). We need to decide
-// if the SageBuilder API should include these sorts of functions.
 ROSE_DLL_API SgMemberFunctionDeclaration *
 buildDefiningMemberFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
     SgType *return_type, SgFunctionParameterList *parameter_list,
     SgScopeStatement *scope);
 
-// DQ (8/11/2013): Note that the specification of the SgTemplateArgumentPtrList
-// is somewhat redundant with the required parameter
-// first_nondefinng_declaration (I think).
 //! Build a function declaration with a function body
 ROSE_DLL_API SgFunctionDeclaration *buildDefiningFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
@@ -1824,9 +1824,6 @@ ROSE_DLL_API SgFunctionDeclaration *buildDefiningFunctionDeclaration(
     SgTemplateArgumentPtrList *templateArgumentsList,
     bool forceFreeFunctionScope);
 
-// DQ (8/28/2012): This preserves the original API with a simpler function
-// (however for C++ at least, it is frequently not sufficient). We need to
-// decide if the SageBuilder API should include these sorts of functions.
 ROSE_DLL_API SgFunctionDeclaration *buildDefiningFunctionDeclaration(
     const function_declaration_ownership &ownership, const SgName &name,
     SgType *return_type, SgFunctionParameterList *parameter_list,
@@ -1928,8 +1925,6 @@ SgGotoStatement *buildGotoStatement_nfi(SgLabelStatement *label);
 //! Fortran cases
 ROSE_DLL_API SgGotoStatement *buildGotoStatement(SgLabelSymbol *symbol);
 
-// DQ (11/22/2017): Added support for computed code goto as defined by GNU C/C++
-// extension.
 //! Build a goto statement from a label expression, supporting only C/C++ and
 //! not Fortran cases
 SgGotoStatement *buildGotoStatement_nfi(SgExpression *expr);
@@ -1948,7 +1943,6 @@ SgDefaultOptionStmt *buildDefaultOptionStmt_nfi(SgStatement *body);
 ROSE_DLL_API SgExprStatement *buildExprStatement(SgExpression *exp = NULL);
 SgExprStatement *buildExprStatement_nfi(SgExpression *exp);
 
-// DQ (3/27/2015): Added support for SgStatementExpression.
 //! Build a GNU statement expression
 ROSE_DLL_API SgStatementExpression *
 buildStatementExpression(SgStatement *exp, SgType *result_type,
@@ -1981,7 +1975,6 @@ ROSE_DLL_API SgIfStmt *buildIfStmt_nfi(SgStatement *conditional,
                                        SgStatement *true_body,
                                        SgStatement *false_body);
 
-// Rasmussen (9/3/2018)
 //! Build a Fortran do construct
 ROSE_DLL_API SgFortranDo *buildFortranDo(SgExpression *initialization,
                                          SgExpression *bound,
@@ -1999,7 +1992,6 @@ buildForInitStatement(const SgStatementPtrList &statements);
 ROSE_DLL_API SgForInitStatement *
 buildForInitStatement_nfi(SgStatementPtrList &statements);
 
-// DQ (10/12/2012): Added new function for a single statement.
 ROSE_DLL_API SgForInitStatement *buildForInitStatement(SgStatement *statement);
 
 //! Build a for statement, assume none of the arguments is NULL
@@ -2020,23 +2012,11 @@ ROSE_DLL_API void buildForStatement_nfi(SgForStatement *result,
                                         SgExpression *increment,
                                         SgStatement *loop_body);
 
-// DQ (3/26/2018): Adding support for range based for statement.
-// ROSE_DLL_API SgRangeBasedForStatement*
-// buildRangeBasedForStatement_nfi(SgVariableDeclaration* initializer,
-// SgExpression* range, SgStatement* body);
 ROSE_DLL_API SgRangeBasedForStatement *buildRangeBasedForStatement_nfi(
     SgVariableDeclaration *initializer, SgVariableDeclaration *range,
     SgVariableDeclaration *begin_declaration,
     SgVariableDeclaration *end_declaration, SgExpression *not_equal_expression,
     SgExpression *increment_expression, SgStatement *body);
-
-// legacy frontend 4.8 handled the do-while statement differently (more similar
-// to a block scope than before in legacy frontend 4.7 (i.e. with an
-// end-of-construct statement). So we need an builder function that can use the
-// existing SgDoWhileStatement scope already on the stack.
-ROSE_DLL_API void buildDoWhileStatement_nfi(SgDoWhileStmt *result,
-                                            SgStatement *body,
-                                            SgStatement *condition);
 
 //! Build while statement
 ROSE_DLL_API SgWhileStmt *buildWhileStmt(SgStatement *condition,
@@ -2061,6 +2041,9 @@ ROSE_DLL_API SgPragmaDeclaration *
 buildPragmaDeclaration(const std::string &name, SgScopeStatement *scope = NULL);
 SgPragmaDeclaration *buildPragmaDeclaration_nfi(const std::string &name,
                                                 SgScopeStatement *scope);
+SgPragmaDeclaration *buildPragmaDeclaration_nfi(
+    const std::string &name, SgScopeStatement *scope,
+    SgPragmaDeclaration::fortran_directive_family_enum family);
 
 //! Build SgPragma
 ROSE_DLL_API SgPragma *buildPragma(const std::string &name);
@@ -2091,18 +2074,11 @@ SgBasicBlock *buildBasicBlock_nfi(SgScopeStatement *parent);
 ROSE_DLL_API SgExprStatement *buildAssignStatement(SgExpression *lhs,
                                                    SgExpression *rhs);
 
-// DQ (8/16/2011): Generated a new version of this function to define consistant
-// semantics.
-//! This version does not recursively reset the file info as a transformation.
-ROSE_DLL_API SgExprStatement *
-buildAssignStatement_ast_translate(SgExpression *lhs, SgExpression *rhs);
-
 //! Build a break statement
 ROSE_DLL_API SgBreakStmt *buildBreakStmt();
 SgBreakStmt *buildBreakStmt_nfi();
 
 //! Build a continue statement
-ROSE_DLL_API SgContinueStmt *buildContinueStmt();
 SgContinueStmt *buildContinueStmt_nfi();
 
 //! Build a Fortran continue statement
@@ -2110,8 +2086,6 @@ ROSE_DLL_API SgFortranContinueStmt *buildFortranContinueStmt();
 SgFortranContinueStmt *buildFortranContinueStmt_nfi();
 
 //! Build an Actual Argument Expression
-ROSE_DLL_API SgActualArgumentExpression *
-buildActualArgumentExpression(SgName arg_name, SgExpression *arg);
 SgActualArgumentExpression *
 buildActualArgumentExpression_nfi(SgName arg_name, SgExpression *arg);
 
@@ -2126,7 +2100,8 @@ buildDeleteExp_nfi(SgExpression *target, bool is_array = false,
                    SgFunctionDeclaration *deleteOperatorDeclaration = NULL);
 
 //! Build a scope statement. Used to build SgNonrealDecl and SgNonrealType
-ROSE_DLL_API SgDeclarationScope *buildDeclarationScope();
+ROSE_DLL_API SgDeclarationScope *
+buildDeclarationScope(SgScopeStatement *semantic_outer_scope = nullptr);
 
 //! Attach semantic-only declaration-scope infrastructure to its exact
 //! structural owner.  Both the container and scope must already carry exact
@@ -2167,21 +2142,18 @@ ROSE_DLL_API SgDeclarationScope *
 getOrCreateNonrealDeclarationScope(SgDeclarationStatement *owner);
 
 //! Build a class definition scope statement
-// SgClassDefinition* buildClassDefinition(SgClassDeclaration *d = NULL);
 ROSE_DLL_API SgClassDefinition *
-buildClassDefinition(SgClassDeclaration *d = NULL,
+buildClassDefinition(SgClassDeclaration *d,
                      bool buildTemplateInstantiation = false);
 
 //! Build a class definition scope statement
-// SgClassDefinition* buildClassDefinition_nfi(SgClassDeclaration *d = NULL);
 SgClassDefinition *
-buildClassDefinition_nfi(SgClassDeclaration *d = NULL,
+buildClassDefinition_nfi(SgClassDeclaration *d,
                          bool buildTemplateInstantiation = false);
 
-// DQ (11/19/2011): Added more template declaration support.
 //! Build a template class definition statement
 SgTemplateClassDefinition *
-buildTemplateClassDefinition(SgTemplateClassDeclaration *d = NULL);
+buildTemplateClassDefinition(SgTemplateClassDeclaration *d);
 
 //! Exact structural ownership selected by named declaration producers.
 class ROSE_DLL_API declaration_ownership {
@@ -2196,7 +2168,9 @@ public:
     source_group_member,
     semantic_group_member,
     source_declarator_scope_child,
-    embedded_declarator_child
+    embedded_declarator_child,
+    semantic_embedded_declarator_child,
+    semantic_lexical
   };
 
   //! Publish in the semantic scope passed to the builder.
@@ -2217,6 +2191,8 @@ public:
   sourceLexicalClassRedeclarationIn(SgScopeStatement *lexicalOwner,
                                     SgClassDeclaration *canonicalTarget);
   static declaration_ownership semanticAuxiliary();
+  //! Publish a semantic declaration directly in its lexical scope.
+  static declaration_ownership semanticLexical();
   //! Publish through semantic auxiliary ownership while leaving provenance
   //! unclassified for one exact frontend publication.  The declaration is
   //! structurally auxiliary from construction and can never acquire a lexical
@@ -2231,6 +2207,8 @@ public:
   static declaration_ownership
   sourceDeclaratorScopeChildIn(SgDeclarationScope *owner);
   static declaration_ownership embeddedDeclaratorChild();
+  //! Construct a detached tag with semantic provenance for typed adoption.
+  static declaration_ownership semanticEmbeddedDeclaratorChild();
 
   kind getKind() const;
   SgDeclarationGroupStatement *getDeclarationGroupOwner() const;
@@ -2314,20 +2292,27 @@ private:
 //!
 //! A non-null templateDeclaration selects SgTemplateInstantiationDecl and is
 //! installed by its constructor. Template arguments without that exact
-//! identity are malformed input; a null templateDeclaration therefore
-//! requires both template-specific arguments to be null.
+//! identity or its exact selected primary/partial declaration are malformed
+//! input. The written list transfers detached arguments
+//! and copies arguments owned elsewhere. A separate complete list preserves
+//! identity when written arguments omit defaults. Both semantic lists are
+//! required for instantiations, including when empty. The deduced list
+//! transfers its detached children to the new node.
 ROSE_DLL_API SgClassDeclaration *buildNondefiningClassDeclaration_nfi(
     const declaration_ownership &ownership, const SgName &name,
     SgClassDeclaration::class_types kind, SgScopeStatement *scope,
     SgTemplateClassDeclaration *templateDeclaration,
+    SgTemplateClassDeclaration *specializedTemplateDeclaration,
     SgTemplateArgumentPtrList *templateArgumentsList,
     const SgName *templateInstantiationNameOverride,
-    bool anonymousInternalIdentity = false);
+    bool anonymousInternalIdentity = false,
+    const SgTemplateArgumentPtrList *semanticTemplateArgumentsList = nullptr,
+    bool sourceSpellsInjectedClassName = false,
+    SgTemplateArgumentPtrList *deducedTemplateArgumentsList = nullptr);
 
 // DQ (8/11/2013): We need to hand in both the SgTemplateParameterPtrList and
 // the SgTemplateArgumentPtrList because class templates can be partially
 // specialized.
-//! DQ (11/29/2011): Adding template declaration support to the AST.
 ROSE_DLL_API SgTemplateClassDeclaration *
 buildNondefiningTemplateClassDeclaration_nfi(
     const declaration_ownership &ownership, const SgName &name,
@@ -2360,7 +2345,6 @@ buildNondefiningTemplateClassDeclaration(
     SgTemplateArgumentPtrList *templateSpecializationArgumentList,
     const SgName *templateSpecializationNameOverride);
 
-//! DQ (11/7/2009): Added functions to build C++ class.
 ROSE_DLL_API SgClassDeclaration *
 buildNondefiningClassDeclaration(const declaration_ownership &ownership,
                                  SgName name, SgScopeStatement *scope);
@@ -2369,16 +2353,17 @@ buildDefiningClassDeclaration(const declaration_ownership &ownership,
                               SgName name, SgScopeStatement *scope,
                               SgClassDeclaration *nonDefiningDeclaration);
 
-//! DQ (11/7/2009): Added function to build C++ class (builds both the
-//! non-defining and defining declarations; in that order).
+//! Build both nondefining and defining class declarations, in that order.
 ROSE_DLL_API SgClassDeclaration *
 buildClassDeclaration(const declaration_ownership &ownership, SgName name,
                       SgScopeStatement *scope);
 
-//! Build an enum first nondefining declaration, without file info
-ROSE_DLL_API SgEnumDeclaration *buildNondefiningEnumDeclaration_nfi(
-    const SgName &name, bool isUnNamed, SgScopeStatement *scope,
-    const declaration_ownership &ownership, SgEnumType *sharedTypeIdentity);
+//! Build an enum nondefining declaration, without file info
+ROSE_DLL_API SgEnumDeclaration *
+buildNondefiningEnumDeclaration_nfi(const SgName &name, bool isUnNamed,
+                                    SgScopeStatement *scope,
+                                    const declaration_ownership &ownership,
+                                    SgEnumDeclaration *canonicalDeclaration);
 
 //! Build a structure, It is also a declaration statement in SAGE III
 ROSE_DLL_API SgClassDeclaration *
@@ -2397,12 +2382,6 @@ ROSE_DLL_API SgClassDeclaration *
 buildAnonymousStructDeclaration(const declaration_ownership &ownership,
                                 const SgName &internalName,
                                 SgScopeStatement *scope);
-
-//! Build a StmtDeclarationStmt
-ROSE_DLL_API SgStmtDeclarationStatement *
-buildStmtDeclarationStatement(SgStatement *stmt);
-ROSE_DLL_API SgStmtDeclarationStatement *
-buildStmtDeclarationStatement_nfi(SgStatement *stmt);
 
 //! tps (09/02/2009) : Added support for building namespaces
 ROSE_DLL_API SgNamespaceDeclarationStatement *
@@ -2437,16 +2416,6 @@ buildNamespaceAliasDeclarationStatement(
     SgNamespaceDeclarationStatement *namespaceDeclaration,
     SgScopeStatement *scope);
 
-// DQ (6/6/2012): Addeding support to include template arguments in the
-// generated type (template argument must be provided as early as possible). DQ
-// (1/24/2009): Added this "_nfi" function but refactored buildStructDeclaration
-// to also use it (this needs to be done uniformally). SgClassDeclaration *
-// buildClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types
-// kind, SgScopeStatement* scope, SgClassDeclaration* nonDefiningDecl, bool
-// buildTemplateInstantiation = false); SgClassDeclaration *
-// buildClassDeclaration_nfi(const SgName& name, SgClassDeclaration::class_types
-// kind, SgScopeStatement* scope, SgClassDeclaration* nonDefiningDecl, bool
-// buildTemplateInstantiation);
 ROSE_DLL_API SgClassDeclaration *buildClassDeclaration_nfi(
     const declaration_ownership &ownership, const SgName &name,
     SgClassDeclaration::class_types kind, SgScopeStatement *scope,
@@ -2454,11 +2423,6 @@ ROSE_DLL_API SgClassDeclaration *buildClassDeclaration_nfi(
     SgTemplateArgumentPtrList *templateArgumentsList,
     const SgName *templateInstantiationName);
 
-// DQ (8/11/2013): I think that the specification of both
-// SgTemplateParameterPtrList and SgTemplateArgumentPtrList is redundant with
-// the nonDefiningDecl (which is a required parameter). DQ (11/19/2011): Added
-// to support template class declaration using legacy frontend 4.x support (to
-// support the template declarations directly in the AST).
 ROSE_DLL_API SgTemplateClassDeclaration *buildTemplateClassDeclaration_nfi(
     const declaration_ownership &ownership, const SgName &name,
     SgClassDeclaration::class_types kind,
@@ -2506,7 +2470,7 @@ template <class DeclClass>
 ROSE_DLL_API DeclClass *buildClassDeclarationStatement_nfi(
     const declaration_ownership &ownership, const SgName &name,
     SgClassDeclaration::class_types kind, SgScopeStatement *scope,
-    SgClassDeclaration *nonDefiningDecl, bool exactScopeOnly);
+    SgClassDeclaration *nonDefiningDecl);
 
 //! Build an enum, It is also a declaration statement in SAGE III
 ROSE_DLL_API SgEnumDeclaration *
@@ -2519,8 +2483,12 @@ ROSE_DLL_API SgEnumDeclaration *buildEnumDeclaration_nfi(
     SgScopeStatement *scope, SgEnumDeclaration *canonicalDeclaration);
 
 //! Build a return statement
-ROSE_DLL_API SgReturnStmt *buildReturnStmt(SgExpression *expression = NULL);
-ROSE_DLL_API SgReturnStmt *buildReturnStmt_nfi(SgExpression *expression);
+ROSE_DLL_API SgReturnStmt *
+buildReturnStmt(SgExpression *expression = nullptr,
+                SgInitializedName *nrvo_candidate = nullptr);
+ROSE_DLL_API SgReturnStmt *
+buildReturnStmt_nfi(SgExpression *expression,
+                    SgInitializedName *nrvo_candidate = nullptr);
 
 //! Build a NULL statement
 ROSE_DLL_API SgNullStatement *buildNullStatement();
@@ -2529,12 +2497,14 @@ SgNullStatement *buildNullStatement_nfi();
 //! Build Fortran attribute specification statement
 ROSE_DLL_API SgAttributeSpecificationStatement *
 buildAttributeSpecificationStatement(
-    SgAttributeSpecificationStatement::attribute_spec_enum kind);
+    SgAttributeSpecificationStatement::attribute_spec_enum kind,
+    const SgDataStatementGroupPtrList &groups = {});
 //! Build a source-backed Fortran attribute specification statement whose exact
 //! file information will be published by the frontend.
 ROSE_DLL_API SgAttributeSpecificationStatement *
 buildAttributeSpecificationStatement_nfi(
-    SgAttributeSpecificationStatement::attribute_spec_enum kind);
+    SgAttributeSpecificationStatement::attribute_spec_enum kind,
+    const SgDataStatementGroupPtrList &groups = {});
 
 //! Build Fortran include line
 ROSE_DLL_API SgFortranIncludeLine *
@@ -2559,7 +2529,6 @@ ROSE_DLL_API SgCatchOptionStmt *
 buildCatchOptionStmt_nfi(SgVariableDeclaration *condition = NULL,
                          SgStatement *body = NULL);
 
-// driscoll6 (6/9/2011): Adding support for try stmts.
 //! Build a try statement.
 ROSE_DLL_API SgTryStmt *buildTryStmt(SgStatement *body,
                                      SgCatchOptionStmt *catch0 = NULL,
@@ -2568,37 +2537,19 @@ ROSE_DLL_API SgTryStmt *buildTryStmt(SgStatement *body,
                                      SgCatchOptionStmt *catch3 = NULL,
                                      SgCatchOptionStmt *catch4 = NULL);
 
-// charles4 (9/16/2011): Adding support for Catch Blocks.
-//! Build an initial sequence of Catch blocks containing 0 or 1 element.
-ROSE_DLL_API SgCatchStatementSeq *
-buildCatchStatementSeq(SgCatchOptionStmt * = NULL);
-
-// DQ (4/30/2010): Added support for building asm statements.
-//! Build a NULL statement
+//! Build an asm statement
 ROSE_DLL_API SgAsmStmt *buildAsmStatement(std::string s);
-SgAsmStmt *buildAsmStatement_nfi(std::string s);
 
-//! DQ (4/30/2010): Added support for building nop statement using asm statement
-//! Building nop statement using asm statement
-ROSE_DLL_API SgAsmStmt *buildMultibyteNopStatement(int n);
-
-//! DQ (5/6/2013): Added build functions to support SgBaseClass construction.
-ROSE_DLL_API SgBaseClass *buildBaseClass(SgClassDeclaration *classDeclaration,
-                                         SgType *sourceType,
-                                         SgClassDefinition *classDefinition,
-                                         bool isVirtual, bool isDirect);
+ROSE_DLL_API SgBaseClass *
+buildBaseClass(SgClassDeclaration *classDeclaration, SgType *sourceType,
+               SgClassDefinition *classDefinition, bool isVirtual,
+               bool isDirect, SgSymbol *fortranSourceSymbol = nullptr);
 
 ROSE_DLL_API SgNonrealBaseClass *
 buildNonrealBaseClass(SgNonrealDecl *classDeclaration, SgType *sourceType,
                       SgClassDefinition *classDefinition, bool isVirtual,
                       bool isDirect);
 
-// SgAccessModifier buildAccessModifier ( unsigned int access );
-
-//! DQ (7/25/2014): Adding support for C11 static assertions.
-ROSE_DLL_API SgStaticAssertionDeclaration *
-buildStaticAssertionDeclaration(SgExpression *condition,
-                                SgExpression *message = nullptr);
 ROSE_DLL_API SgStaticAssertionDeclaration *
 buildStaticAssertionDeclaration_nfi(SgExpression *condition,
                                     SgExpression *message = nullptr);
@@ -2621,11 +2572,11 @@ buildUsingDirectiveStatement_nfi(SgNamespaceDeclarationStatement *ns_decl);
 
 */
 //! Build a SgFile node and attach it to SgProject
-/*! The input file will be loaded if exists, or an empty one will be generated
- * from scratch transparently. Output file name is used to specify the output
- * file name of unparsing. The final SgFile will be inserted to project
- * automatically. If not provided, a new SgProject will be generated internally.
- * Using SgFile->get_project() to retrieve it in this case.
+/*! Parse an existing readable input file. An unreadable input or frontend
+ * failure is a hard error. Use buildGeneratedSourceFile for output-only AST
+ * construction. outputFileName selects the unparse destination. The file is
+ * registered in project; buildFile creates a project when none is supplied.
+ * Retrieve its owner with SgFile::get_project().
  */
 ROSE_DLL_API SgFile *buildFile(const std::string &inputFileName,
                                const std::string &outputFileName,
@@ -2644,11 +2595,11 @@ buildGeneratedSourceFile(const std::string &outputFileName,
                          SgProject *project = NULL);
 
 //! Build a SgSourceFile node and attach it to SgProject
-/*! The input file will be loaded if exists, or an empty one will be generated
- * from scratch transparently. Output file name is used to specify the output
- * file name of unparsing. The final SgFile will be inserted to project
- * automatically. If not provided, a new SgProject will be generated internally.
- * Using SgFile->get_project() to retrieve it in this case.
+/*! Parse an existing readable input file. An unreadable input or frontend
+ * failure is a hard error. Use buildGeneratedSourceFile for output-only AST
+ * construction. outputFileName selects the unparse destination. The file is
+ * registered in project; buildFile creates a project when none is supplied.
+ * Retrieve its owner with SgFile::get_project().
  */
 ROSE_DLL_API SgSourceFile *buildSourceFile(const std::string &inputFileName,
                                            const std::string &outputFileName,
@@ -2664,13 +2615,6 @@ ROSE_DLL_API void
 rebindCopiedSourceFilePhysicalIdentity(SgSourceFile *sourceFile,
                                        const std::string &newFileName);
 
-// DQ (11/10/2019): Support for sharing IR nodes when buildFile() is applied to
-// an existing file.
-//! Sharing IR nodes requires that the file id be added to the fileIDsToUnparse
-//! held in the Sg_File_Info object.
-ROSE_DLL_API void fixupSharingSourcePosition(SgNode *subtreeRoot,
-                                             int new_file_id);
-
 //! Build and attach a comment with an explicit lexical comment style. It is a
 //! wrapper of SageInterface::attachComment().
 ROSE_DLL_API PreprocessingInfo *
@@ -2685,57 +2629,27 @@ ROSE_DLL_API PreprocessingInfo *buildCpreprocessorDefineDeclaration(
     PreprocessingInfo::RelativePositionType position =
         PreprocessingInfo::before);
 
-// 03/17/2014 PHL
-// //! Build an equivalence statement from two expression operands
 ROSE_DLL_API SgEquivalenceStatement *
 buildEquivalenceStatement(SgExpression *lhs, SgExpression *rhs);
 
-//! Fixup any AST moved from one file two another (references to symbols, types,
-//! etc.).
-ROSE_DLL_API void fixupCopyOfAstFromSeparateFileInNewTargetAst(
-    SgStatement *insertionPoint, bool insertionPointIsScope,
-    SgStatement *toInsert, SgStatement *original_before_copy);
 ROSE_DLL_API void fixupCopyOfNodeFromSeparateFileInNewTargetAst(
     SgStatement *insertionPoint, bool insertionPointIsScope, SgNode *node_copy,
     SgNode *node_original);
-ROSE_DLL_API SgType *getTargetFileTypeSupport(SgType *snippet_type,
-                                              SgScopeStatement *targetScope);
 ROSE_DLL_API SgType *getTargetFileType(SgType *snippet_type,
                                        SgScopeStatement *targetScope);
 
-// DQ (12/6/2020): This is the original function (modified slightly, but mostly
-// I have defined a new function that will not effect the AST snippet support
-// that is used by this function.
 ROSE_DLL_API SgSymbol *
 findAssociatedSymbolInTargetAST(SgDeclarationStatement *snippet_declaration,
                                 SgScopeStatement *targetScope);
-
-// DQ (12/6/2020): This is the new function (modified in API and made suitable
-// for the codeSegregation support).
-ROSE_DLL_API SgDeclarationStatement *findAssociatedDeclarationInTargetAST(
-    SgDeclarationStatement *snippet_declaration, SgScopeStatement *targetScope);
+ROSE_DLL_API SgSymbol *
+findAssociatedSymbolInTargetAST(SgNode *snippet_declaration,
+                                SgScopeStatement *targetScope);
 
 //! Error checking the inserted snippet AST.
 ROSE_DLL_API void errorCheckingTargetAST(SgNode *node_copy,
                                          SgNode *node_original,
                                          SgFile *targetFile);
 
-//@}
-
-//----------------------------------------------------------
-//@{
-/*! @name Untyped IR Node Build Interfaces
-    \brief  Build function for ROSE AST's in terms of Untyped IR nodes.
-
-The ROSE Untyped IR nodes can be a starting place for defining the new language
-frontend, these IR nodes address the interface from an external language parser
-and the construction of the ROSE Untyped AST. Later iterations on the ROSE
-Untyped AST can be used to translate (or construct) a proper ROSE AST in terms
-of non-untyped IR nodes.
-
-All untyped IR nodes have been removed and this interface removed.
-
-*/
 //@}
 
 //----------------------build unary expressions----------------------
@@ -2748,8 +2662,9 @@ All untyped IR nodes have been removed and this interface removed.
  * using macros. Documentation tools do not expand these macros.
  */
 
-template <class T>
-T *buildUnaryExpression(SgExpression *operand, SgType *result_type) {
+template <class T, class... ConstructorArgs>
+T *buildUnaryExpression(SgExpression *operand, SgType *result_type,
+                        ConstructorArgs &&...constructor_args) {
   if (operand == nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[unary-operand-producer]: builder requires one "
@@ -2762,21 +2677,20 @@ T *buildUnaryExpression(SgExpression *operand, SgType *result_type) {
             "detached structural operand\n");
     ROSE_ABORT();
   }
-  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
-      isSgTypeDefault(result_type) != nullptr) {
+  if (SageInterface::containsUnknownType(result_type)) {
     fprintf(stderr,
             "REX_AST_INVARIANT[unary-result-type-producer]: builder requires "
             "an exact semantic result type\n");
     ROSE_ABORT();
   }
-  SgExpression *myoperand = operand;
-  T *result = new T(myoperand, result_type);
-  ROSE_ASSERT(result);
-  if (myoperand != NULL) {
-    myoperand->set_parent(result);
-    // set lvalue, it asserts operand!=NULL
-    markLhsValues(result);
+  if constexpr (std::is_same_v<T, SgMinusMinusOp> ||
+                std::is_same_v<T, SgPlusPlusOp>) {
+    operand->set_lvalue(true);
   }
+  T *result = new T(operand, result_type,
+                    std::forward<ConstructorArgs>(constructor_args)...);
+  ROSE_ASSERT(result);
+  operand->set_parent(result);
   SageInterface::setOneSourcePositionForTransformation(result);
   return result;
 }
@@ -2789,8 +2703,9 @@ T *buildUnaryExpression(SgExpression *operand, SgType *result_type) {
 /*! The instantiated functions' prototypes are not shown since they are expanded
  * using macros. Documentation tools do not expand these macros.
  */
-template <class T>
-T *buildUnaryExpression_nfi(SgExpression *operand, SgType *result_type) {
+template <class T, class... ConstructorArgs>
+T *buildUnaryExpression_nfi(SgExpression *operand, SgType *result_type,
+                            ConstructorArgs &&...constructor_args) {
   if (operand == nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[unary-operand-producer]: builder requires one "
@@ -2803,22 +2718,20 @@ T *buildUnaryExpression_nfi(SgExpression *operand, SgType *result_type) {
             "detached structural operand\n");
     ROSE_ABORT();
   }
-  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
-      isSgTypeDefault(result_type) != nullptr) {
+  if (SageInterface::containsUnknownType(result_type)) {
     fprintf(stderr,
             "REX_AST_INVARIANT[unary-result-type-producer]: builder requires "
             "an exact semantic result type\n");
     ROSE_ABORT();
   }
-  SgExpression *myoperand = operand;
-  T *result = new T(myoperand, result_type);
-  ROSE_ASSERT(result);
-
-  if (myoperand != NULL) {
-    myoperand->set_parent(result);
-    // set lvalue, it asserts operand!=NULL
-    markLhsValues(result);
+  if constexpr (std::is_same_v<T, SgMinusMinusOp> ||
+                std::is_same_v<T, SgPlusPlusOp>) {
+    operand->set_lvalue(true);
   }
+  T *result = new T(operand, result_type,
+                    std::forward<ConstructorArgs>(constructor_args)...);
+  ROSE_ASSERT(result);
+  operand->set_parent(result);
   requireFreshNfiExpressionSourceState(result, "buildUnaryExpression_nfi");
 
   result->set_need_paren(false);
@@ -2827,15 +2740,6 @@ T *buildUnaryExpression_nfi(SgExpression *operand, SgType *result_type) {
 
 //---------------------binary expressions-----------------------
 
-//! Template function to build a binary expression of type T, taking care of
-//! parent pointers, file info, lvalue, etc. Available instances include:
-//! buildAddOp(), buildAndAssignOp(), buildAndOp(),
-//! buildArrowExp(),buildArrowStarOp(),buildAtOp,
-//! buildAssignOp(),buildBitAndOp(),buildBitOrOp(),buildBitXorOp(),buildCommaOpExp(),
-//! buildConcatenationOp(),buildDivAssignOp(),buildDivideOp(),buildDotExp(),buildEqualityOp(),buildExponentiationOp(),buildGreaterOrEqualOp(),buildGreaterThanOp(),buildIntegerDivideOp(),buildIorAssignOp(),buildLessOrEqualOp(),buildLessThanOp(),buildLshiftAssignOp(),buildLshiftOp(),buildMinusAssignOp(),buildModAssignOp(),buildModOp(),buildMultAssignOp(),buildMultiplyOp(),buildNotEqualOp(),buildOrOp(),buildPlusAssignOp(),buildPntrArrRefExp(),buildRshiftAssignOp(),buildRshiftOp(),buildReplicationOp,buildScopeOp(),buildSubtractOp()buildXorAssignOp()
-/*! The instantiated functions' prototypes are not shown since they are expanded
- * using macros. Documentation tools do not expand these macros.
- */
 template <class T>
 T *buildBinaryExpression(SgExpression *lhs, SgExpression *rhs,
                          SgType *result_type) {
@@ -2852,41 +2756,32 @@ T *buildBinaryExpression(SgExpression *lhs, SgExpression *rhs,
             "two distinct detached structural operands\n");
     ROSE_ABORT();
   }
-  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
-      isSgTypeDefault(result_type) != nullptr) {
+  if (SageInterface::containsUnknownType(result_type)) {
     fprintf(stderr,
             "REX_AST_INVARIANT[binary-result-type-producer]: builder requires "
             "an exact semantic result type\n");
     ROSE_ABORT();
   }
-  SgExpression *mylhs, *myrhs;
-  mylhs = lhs;
-  myrhs = rhs;
-  T *result = new T(mylhs, myrhs, result_type);
-  ROSE_ASSERT(result);
-  if (mylhs != NULL) {
-    mylhs->set_parent(result);
-    // set lvalue
-    markLhsValues(result);
+  if constexpr (std::is_same_v<T, SgAssignOp> ||
+                std::is_base_of_v<SgCompoundAssignOp, T>) {
+    lhs->set_lvalue(true);
   }
-  if (myrhs != NULL)
-    myrhs->set_parent(result);
+  T *result;
+  if constexpr (std::is_same_v<T, SgPntrArrRefExp>)
+    result = new T(lhs, rhs, result_type, std::nullopt,
+                   std::vector<std::optional<long long>>{});
+  else
+    result = new T(lhs, rhs, result_type);
+  ROSE_ASSERT(result);
+  lhs->set_parent(result);
+  rhs->set_parent(result);
   SageInterface::setOneSourcePositionForTransformation(result);
   return result;
 }
 
-//! Template function to build a binary expression of type T, taking care of
-//! parent pointers, but without file-info. Available instances include:
-//! buildAddOp(), buildAndAssignOp(), buildAndOp(),
-//! buildArrowExp(),buildArrowStarOp(),buildAtOp,
-//! buildAssignOp(),buildBitAndOp(),buildBitOrOp(),buildBitXorOp(),buildCommaOpExp(),
-//! buildConcatenationOp(),buildDivAssignOp(),buildDivideOp(),buildDotExp(),buildEqualityOp(),buildExponentiationOp(),buildGreaterOrEqualOp(),buildGreaterThanOp(),buildIntegerDivideOp(),buildIorAssignOp(),buildLessOrEqualOp(),buildLessThanOp(),buildLshiftAssignOp(),buildLshiftOp(),buildMinusAssignOp(),buildModAssignOp(),buildModOp(),buildMultAssignOp(),buildMultiplyOp(),buildNotEqualOp(),buildOrOp(),buildPlusAssignOp(),buildPntrArrRefExp(),buildRshiftAssignOp(),buildRshiftOp(),buildReplicationOp(),buildScopeOp(),buildSubtractOp()buildXorAssignOp()
-/*! The instantiated functions' prototypes are not shown since they are expanded
- * using macros. Documentation tools do not expand these macros.
- */
-template <class T>
+template <class T, class... Args>
 T *buildBinaryExpression_nfi(SgExpression *lhs, SgExpression *rhs,
-                             SgType *result_type) {
+                             SgType *result_type, Args &&...args) {
   if (lhs == nullptr || rhs == nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[binary-operand-producer]: builder requires "
@@ -2900,25 +2795,25 @@ T *buildBinaryExpression_nfi(SgExpression *lhs, SgExpression *rhs,
             "two distinct detached structural operands\n");
     ROSE_ABORT();
   }
-  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
-      isSgTypeDefault(result_type) != nullptr) {
+  if (SageInterface::containsUnknownType(result_type)) {
     fprintf(stderr,
             "REX_AST_INVARIANT[binary-result-type-producer]: builder requires "
             "an exact semantic result type\n");
     ROSE_ABORT();
   }
-  SgExpression *mylhs, *myrhs;
-  mylhs = lhs;
-  myrhs = rhs;
-  T *result = new T(mylhs, myrhs, result_type);
-  ROSE_ASSERT(result);
-  if (mylhs != NULL) {
-    mylhs->set_parent(result);
-    // set lvalue
-    markLhsValues(result);
+  if constexpr (std::is_same_v<T, SgAssignOp> ||
+                std::is_base_of_v<SgCompoundAssignOp, T>) {
+    lhs->set_lvalue(true);
   }
-  if (myrhs != NULL)
-    myrhs->set_parent(result);
+  T *result;
+  if constexpr (std::is_same_v<T, SgPntrArrRefExp> && sizeof...(Args) == 0)
+    result = new T(lhs, rhs, result_type, std::nullopt,
+                   std::vector<std::optional<long long>>{});
+  else
+    result = new T(lhs, rhs, result_type, std::forward<Args>(args)...);
+  ROSE_ASSERT(result);
+  lhs->set_parent(result);
+  rhs->set_parent(result);
   requireFreshNfiExpressionSourceState(result, "buildBinaryExpression_nfi");
   result->set_need_paren(false);
 
@@ -2936,54 +2831,6 @@ SgTemplateArgument *buildTemplateArgument(SgExpression *e);
 SgTemplateArgument *buildTemplateArgument(int v);
 SgTemplateArgument *buildTemplateArgument(bool v);
 
-std::string strTemplateArgument(int v);
-std::string strTemplateArgument(bool v);
-std::string strTemplateArgument(SgType *t);
-std::string strTemplateArgument(SgNamedType *nt);
-std::string strTemplateArgument(SgExpression *e);
-
-template <typename... Args> struct TemplateArgumentList {
-  static std::string str() { return ""; }
-  static void fill(std::vector<SgTemplateArgument *> & /*tpl_args*/) {}
-};
-
-template <typename T> struct TemplateArgumentList<T> {
-  static std::string str(T v) { return strTemplateArgument(v); }
-  static void fill(std::vector<SgTemplateArgument *> &tpl_args, T v) {
-    tpl_args.push_back(buildTemplateArgument(v));
-  }
-};
-
-template <typename T, typename... Args>
-struct TemplateArgumentList<T, Args...> {
-  static std::string str(T v, Args... args) {
-    return strTemplateArgument(v) + ", " +
-           TemplateArgumentList<Args...>::str(args...);
-  }
-  static void fill(std::vector<SgTemplateArgument *> &tpl_args, T v,
-                   Args... args) {
-    tpl_args.push_back(buildTemplateArgument(v));
-    TemplateArgumentList<Args...>::fill(tpl_args, args...);
-  }
-};
-
-template <typename... Args> std::string strTemplateArgumentList(Args... args) {
-  return TemplateArgumentList<Args...>::str(args...);
-}
-
-template <typename... Args>
-void fillTemplateArgumentList(std::vector<SgTemplateArgument *> &tpl_args,
-                              Args... args) {
-  TemplateArgumentList<Args...>::fill(tpl_args, args...);
-}
-
-template <typename... Args>
-std::vector<SgTemplateArgument *> buildTemplateArgumentList(Args... args) {
-  std::vector<SgTemplateArgument *> tpl_args;
-  TemplateArgumentList<Args...>::fill(tpl_args, args...);
-  return tpl_args;
-}
-
 SgExpression *
 instantiateNonrealRefExps(SgExpression *expr,
                           std::vector<SgTemplateParameter *> &tpl_params,
@@ -2998,7 +2845,9 @@ SgType *instantiateNonrealTypes(SgType *type,
 } // namespace Rose
 
 namespace SageBuilder {
-using namespace Rose::Builder::Templates;
-}
+using Rose::Builder::Templates::buildTemplateArgument;
+using Rose::Builder::Templates::instantiateNonrealRefExps;
+using Rose::Builder::Templates::instantiateNonrealTypes;
+} // namespace SageBuilder
 
 #endif // ROSE_SAGE_BUILDER_INTERFACE

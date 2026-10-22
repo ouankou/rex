@@ -4,17 +4,14 @@
 #ifndef ANALYSIS_COMMON
 #define ANALYSIS_COMMON
 
-#include "CallGraphTraverse.h"
-
-#include "cfgUtils.h"
-
-#include "genericDataflowCommon.h"
+class SgProject;
+class SgIncidenceDirectedGraph;
 
 // initializes the compiler analysis framework
 void initAnalysis(SgProject *p);
 
-// returns the SgProject object that represents our current project
-// SgProject* getProject();
+// Retire analysis state and its graph; AST references remain borrowed.
+void clearAnalysis();
 
 // returns the call graph of the current project
 SgIncidenceDirectedGraph *getCallGraph();

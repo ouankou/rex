@@ -1,3 +1,4 @@
+#include "AstNodes/Expression/OpenMPModifierValidation.h"
 #include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
 #include "tokenStreamMapping.h"
@@ -6,6 +7,73 @@ namespace Rose {
 namespace AstJson {
 
 namespace {
+
+thread_local std::vector<SgCxxArrayInitBinding *> inlineArrayInitBindings;
+thread_local std::vector<SgOpaqueValueBinding *> inlineOpaqueBindings;
+thread_local unsigned inlineOpaqueDepth = 0;
+
+std::string
+rawOpaqueBindingRef(SgOpaqueValueBinding *binding,
+                    const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  std::vector<std::string> fields;
+  const auto found = std::find(inlineOpaqueBindings.rbegin(),
+                               inlineOpaqueBindings.rend(), binding);
+  if (serializingTypeOwnedExpression && found != inlineOpaqueBindings.rend()) {
+    fields.push_back(rawIntegerField(
+        "binding_depth", std::distance(inlineOpaqueBindings.rbegin(), found)));
+  } else {
+    const uint64_t id = idFor(ids, binding);
+    if (id == 0)
+      throw std::runtime_error("AST JSON opaque binding was not collected");
+    fields.push_back(rawIntegerField("binding", id));
+  }
+  std::ostringstream out;
+  writeRawObject(out, 0, fields, false);
+  return out.str();
+}
+
+std::string rawFunctionConstexprSpecifier(SgFunctionDeclaration *declaration) {
+  const auto specifier = declaration->get_constexpr_specifier();
+  if (specifier < SgFunctionDeclaration::e_constexpr_unspecified ||
+      specifier > SgFunctionDeclaration::e_consteval ||
+      (specifier != SgFunctionDeclaration::e_constexpr_unspecified &&
+       (isSgProgramHeaderStatement(declaration) != nullptr ||
+        isSgProcedureHeaderStatement(declaration) != nullptr ||
+        isSgEntryStatement(declaration) != nullptr)))
+    throw std::runtime_error("AST JSON function has an invalid C++ specifier");
+  return rawIntegerField("constexpr_specifier", specifier);
+}
+
+std::string rawTypeOwnedLiteralTokensJson(
+    SgCxxLiteralTokenList *list,
+    const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  if (list == nullptr || list->get_tokens().empty())
+    throw std::runtime_error("AST JSON type-owned UDL has no lexical tokens");
+  auto fieldsFor = [&](SgNode *node) {
+    return std::vector<std::string>{
+        rawStringField("kind", node->sage_class_name()),
+        jsonString("flags") + ": " + rawNodeFlagsJson(node),
+        jsonString("location") + ": " + rawLocationJson(node),
+        jsonString("properties") + ": " + rawNodeProperties(node, ids)};
+  };
+  std::ostringstream tokens;
+  tokens << "[";
+  for (size_t index = 0; index < list->get_tokens().size(); ++index) {
+    SgCxxLiteralToken *token = list->get_tokens()[index];
+    if (token == nullptr || token->get_parent() != list)
+      throw std::runtime_error(
+          "AST JSON type-owned UDL has a foreign lexical token");
+    if (index != 0)
+      tokens << ",";
+    writeRawObject(tokens, 0, fieldsFor(token), false);
+  }
+  tokens << "]";
+  auto fields = fieldsFor(list);
+  fields.push_back(jsonString("tokens") + ": " + tokens.str());
+  std::ostringstream out;
+  writeRawObject(out, 0, fields, false);
+  return out.str();
+}
 
 std::string fortranAnonymousProgramUnitSymbolKeyForJson(
     SgFunctionDeclaration *declaration) {
@@ -227,17 +295,11 @@ std::string rawOpenMPProducerSemanticRecords(
            fortran_bindings});
 }
 
-std::string rawSourceOperatorOperandRolesJson(const SgUnsignedCharList &roles) {
+std::string rawUnsignedCharListJson(const SgUnsignedCharList &roles) {
   std::ostringstream out;
   out << "[";
   for (size_t index = 0; index < roles.size(); ++index) {
     const unsigned char role = roles[index];
-    if (role != SgFunctionCallExp::e_source_operator_operand &&
-        role != SgFunctionCallExp::e_semantic_operator_operand) {
-      throw std::runtime_error(
-          "AST JSON SgFunctionCallExp has an invalid source operator operand "
-          "role");
-    }
     if (index != 0) {
       out << ", ";
     }
@@ -306,6 +368,52 @@ std::string rawTokenMappingNodeIdsJson(
       out << ", ";
     }
     out << requiredTokenMappingNodeId(ids, nodes[index], "node_vector entry");
+  }
+  out << "]";
+  return out.str();
+}
+
+std::string rawResolvedIncludeDirectivesJson(
+    SgSourceFile *file,
+    const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  std::ostringstream out;
+  out << "[";
+  bool first = true;
+  for (const auto &[path, directives] :
+       file->get_frontendResolvedIncludeDirectivesMap()) {
+    if (path.empty() || directives.empty())
+      throw std::runtime_error(
+          "AST JSON include edge has no target or records");
+    std::set<std::pair<uint64_t, size_t>> owners;
+    for (const PreprocessingInfo *directive : directives) {
+      SgLocatedNode *owner =
+          directive != nullptr ? directive->getAttachedOwner() : nullptr;
+      if (owner == nullptr || idFor(ids, owner) == 0)
+        throw std::runtime_error(
+            "AST JSON include record has no serialized owner");
+      owner->validateAttachedPreprocessingInfoOwnership();
+      const auto *records = owner->getAttachedPreprocessingInfo();
+      ROSE_ASSERT(records != nullptr);
+      const auto record =
+          std::find(records->begin(), records->end(), directive);
+      ROSE_ASSERT(record != records->end());
+      ROSE_ASSERT(owners
+                      .emplace(idFor(ids, owner),
+                               std::distance(records->begin(), record))
+                      .second);
+    }
+    if (!first)
+      out << ", ";
+    first = false;
+    out << "{\"path\": " << jsonString(path) << ", \"records\": [";
+    bool firstOwner = true;
+    for (const auto &[owner, index] : owners) {
+      if (!firstOwner)
+        out << ", ";
+      firstOwner = false;
+      out << "{\"owner\": " << owner << ", \"index\": " << index << "}";
+    }
+    out << "]}";
   }
   out << "]";
   return out.str();
@@ -486,15 +594,6 @@ rawExternalModuleJson(SgModuleStatement *module,
   return result;
 }
 
-std::string rawExternalFunctionParameterScopeJson(
-    SgFunctionDeclaration *function, SgFunctionParameterScope *scope,
-    const std::unordered_map<const SgNode *, uint64_t> &ids,
-    const std::string &function_name);
-std::string rawExternalInitializedNameJson(
-    SgInitializedName *name,
-    const std::unordered_map<const SgNode *, uint64_t> &ids,
-    const std::string &function_name);
-
 std::string
 rawExternalFunctionJson(SgFunctionDeclaration *decl,
                         const std::unordered_map<const SgNode *, uint64_t> &ids,
@@ -519,9 +618,25 @@ rawExternalFunctionJson(SgFunctionDeclaration *decl,
     }
     fields.push_back(rawStringField("kind", decl->sage_class_name()));
     fields.push_back(rawStringField("name", decl->get_name().getString()));
+    fields.push_back(rawFunctionConstexprSpecifier(decl));
+    decl->validate_explicit_specifier();
+    fields.push_back(
+        rawBoolField("is_explicit", decl->get_functionModifier().isExplicit()));
+    fields.push_back(
+        rawBoolField("is_deduction_guide", decl->get_is_deduction_guide()));
+    fields.push_back(jsonString("explicit_specifier_expression") + ": " +
+                     rawTypeOwnedExpressionRef(
+                         decl->get_explicit_specifier_expression(), ids));
     fields.push_back(rawStringField(
         "omp_declare_variant_source_name",
         decl->get_omp_declare_variant_source_name().getString()));
+    fields.push_back(jsonString("alignment_specifiers") + ": " +
+                     rawAlignmentSpecifiersJson(
+                         decl->get_alignment_specifiers(), decl, ids));
+    decl->validate_cuda_launch_bounds_expression();
+    fields.push_back(jsonString("cuda_launch_bounds_expression") + ": " +
+                     rawTypeOwnedExpressionRef(
+                         decl->get_cuda_launch_bounds_expression(), ids));
     fields.push_back(rawOptionalUnsignedIntegerField(
         "omp_declare_variant_region_ordinal",
         ompDeclareVariantRegionOrdinalForJson(decl)));
@@ -550,47 +665,119 @@ rawExternalFunctionJson(SgFunctionDeclaration *decl,
                      rawRequiredLocationJson(
                          parameter_list, "external_function parameterList " +
                                              decl->get_name().getString()));
+    SgDeclarationScope *declarator_scope =
+        decl->get_function_declarator_scope();
+    std::vector<std::string> declarator_scope_fields;
+    declarator_scope_fields.push_back(
+        rawBoolField("present", declarator_scope != nullptr));
+    if (declarator_scope != nullptr) {
+      SgSymbolTable *table = declarator_scope->get_symbol_table();
+      const auto *preprocessing =
+          declarator_scope->getAttachedPreprocessingInfo();
+      if (declarator_scope->get_parent() != decl ||
+          !declarator_scope->get_declarations().empty() ||
+          declarator_scope->get_auxiliary_declaration_scopes() != nullptr ||
+          (table != nullptr &&
+           (!table->get_table()->empty() || !table->get_symbols().empty())) ||
+          declarator_scope->get_attributeMechanism() != nullptr ||
+          (preprocessing != nullptr && !preprocessing->empty()) ||
+          declarator_scope->isCaseInsensitive() ||
+          declarator_scope->get_is_default_nonreal_scope() ||
+          declarator_scope->get_source_sequence_value() != -1 ||
+          declarator_scope->get_directive_end_kind() !=
+              SgStatement::e_directive_end_not_applicable ||
+          declarator_scope->get_omp_fortran_spelling() !=
+              SgStatement::e_omp_fortran_spelling_not_applicable) {
+        throw std::runtime_error(
+            "AST JSON external_function has a nonempty or foreign function "
+            "declarator scope");
+      }
+      declarator_scope_fields.push_back(
+          jsonString("location") + ": " +
+          rawRequiredLocationJson(declarator_scope,
+                                  "external_function declarator scope " +
+                                      decl->get_name().getString()));
+      declarator_scope_fields.push_back(jsonString("flags") + ": " +
+                                        rawNodeFlagsJson(declarator_scope));
+    }
+    std::ostringstream declarator_scope_json;
+    writeRawObject(declarator_scope_json, 0, declarator_scope_fields, false);
+    fields.push_back(jsonString("function_declarator_scope") + ": " +
+                     declarator_scope_json.str());
     SgFunctionParameterList *syntax_list = decl->get_parameterList_syntax();
-    if (syntax_list != nullptr && syntax_list != parameter_list) {
+    if (syntax_list != nullptr && syntax_list->get_parent() != decl) {
       throw std::runtime_error(
           "AST JSON external_function " + decl->get_name().getString() +
-          " has a distinct parameterList_syntax that is not yet serialized");
+          " has a parameterList_syntax with a foreign owner");
     }
+    const bool distinct_syntax =
+        syntax_list != nullptr && syntax_list != parameter_list;
+    if (distinct_syntax && declarator_scope == nullptr)
+      throw std::runtime_error(
+          "AST JSON external_function has source parameters without a "
+          "typed declarator scope");
     fields.push_back(
         rawBoolField("parameter_list_syntax_aliases_parameter_list",
                      syntax_list == parameter_list));
-    std::ostringstream parameters;
-    parameters << jsonString("parameters") << ": [";
-    const SgInitializedNamePtrList &args = parameter_list->get_args();
-    if (!args.empty()) {
-      parameters << '\n';
-      for (size_t i = 0; i < args.size(); ++i) {
-        SgInitializedName *parameter = args[i];
-        if (parameter == nullptr || parameter->get_parent() != parameter_list ||
-            parameter->get_declptr() != decl ||
-            std::count(args.begin(), args.end(), parameter) != 1) {
-          throw std::runtime_error("AST JSON external_function " +
-                                   decl->get_name().getString() +
-                                   " has malformed exact parameter ownership");
-        }
-        indent(parameters, 4);
-        parameters << rawExternalInitializedNameJson(
-            parameter, ids, decl->get_name().getString());
-        if (i + 1 != args.size()) {
-          parameters << ',';
-        }
+    fields.push_back(
+        rawBoolField("parameter_list_syntax_is_distinct", distinct_syntax));
+    auto parameter_array = [&](SgFunctionParameterList *list) {
+      std::ostringstream parameters;
+      parameters << '[';
+      const SgInitializedNamePtrList &args = list->get_args();
+      if (!args.empty()) {
         parameters << '\n';
+        for (size_t i = 0; i < args.size(); ++i) {
+          SgInitializedName *parameter = args[i];
+          if (parameter == nullptr || parameter->get_parent() != list ||
+              parameter->get_declptr() != decl ||
+              std::count(args.begin(), args.end(), parameter) != 1) {
+            throw std::runtime_error(
+                "AST JSON external_function " + decl->get_name().getString() +
+                " has malformed exact parameter ownership");
+          }
+          if (list == syntax_list && distinct_syntax &&
+              parameter->get_scope() != declarator_scope)
+            throw std::runtime_error(
+                "AST JSON external_function source parameter has the wrong "
+                "typed declarator scope");
+          indent(parameters, 4);
+          parameters << rawExternalInitializedNameJson(
+              parameter, ids, decl->get_name().getString());
+          if (i + 1 != args.size()) {
+            parameters << ',';
+          }
+          parameters << '\n';
+        }
+        indent(parameters, 2);
       }
-      indent(parameters, 2);
+      parameters << ']';
+      return parameters.str();
+    };
+    fields.push_back(jsonString("parameters") + ": " +
+                     parameter_array(parameter_list));
+    if (distinct_syntax) {
+      if (syntax_list->get_args().size() != parameter_list->get_args().size())
+        throw std::runtime_error(
+            "AST JSON external_function has mismatched semantic and source "
+            "parameter counts");
+      fields.push_back(
+          jsonString("parameter_list_syntax_location") + ": " +
+          rawRequiredLocationJson(syntax_list,
+                                  "external_function parameterList_syntax " +
+                                      decl->get_name().getString()));
+      fields.push_back(jsonString("syntax_parameters") + ": " +
+                       parameter_array(syntax_list));
     }
-    parameters << "]";
-    fields.push_back(parameters.str());
     fields.push_back(jsonString("function_parameter_scope") + ": " +
                      rawExternalFunctionParameterScopeJson(
                          decl, decl->get_functionParameterScope(), ids,
                          decl->get_name().getString()));
     fields.push_back(jsonString("function_type") + ": " +
                      rawTypeJson(decl->get_type(), ids));
+    fields.push_back(
+        jsonString("declared_exception_signature") + ": " +
+        rawTypeJson(decl->get_declared_exception_signature(), ids));
     if (decl->get_type_syntax_is_available() !=
             (decl->get_type_syntax() != nullptr) ||
         (decl->get_type_syntax() != nullptr &&
@@ -608,6 +795,9 @@ rawExternalFunctionJson(SgFunctionDeclaration *decl,
     if (SgProcedureHeaderStatement *procedure =
             isSgProcedureHeaderStatement(decl)) {
       SageInterface::isFortranProgramUnitWithoutSourceName(procedure);
+      fields.push_back(
+          rawStringField("fortran_binding_name",
+                         procedure->get_fortran_binding_name().getString()));
       fields.push_back(
           rawIntegerField("subprogram_kind", procedure->get_subprogram_kind()));
       fields.push_back(rawIntegerField("block_data_name_kind",
@@ -640,35 +830,30 @@ bool declarationNeedsExternalReferenceRecord(
            !isStructuralAstChildOfParent(decl)));
 }
 
-std::string externalFunctionParameterScopeSource(
+SgFunctionDeclaration *externalFunctionParameterScopeOwner(
     SgFunctionDeclaration *decl,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
   if (decl == nullptr || decl->get_functionParameterScope() == nullptr ||
       idFor(ids, decl->get_functionParameterScope()) != 0) {
-    return "";
+    return nullptr;
   }
-
-  auto has_external_scope = [&](SgDeclarationStatement *candidate) -> bool {
-    SgFunctionDeclaration *function = isSgFunctionDeclaration(candidate);
-    return function != nullptr &&
-           function->get_functionParameterScope() ==
-               decl->get_functionParameterScope() &&
-           declarationNeedsExternalReferenceRecord(function, ids);
-  };
-
-  if (has_external_scope(decl->get_firstNondefiningDeclaration())) {
-    return "firstNondefiningDeclaration";
-  }
-  if (has_external_scope(decl->get_definingDeclaration())) {
-    return "definingDeclaration";
-  }
-  return "";
+  auto *owner =
+      isSgFunctionDeclaration(decl->get_functionParameterScope()->get_parent());
+  if (owner == nullptr || owner == decl ||
+      (owner != decl->get_firstNondefiningDeclaration() &&
+       owner != decl->get_definingDeclaration()) ||
+      owner->get_functionParameterScope() !=
+          decl->get_functionParameterScope() ||
+      !declarationNeedsExternalReferenceRecord(owner, ids))
+    throw std::runtime_error("AST JSON shared external parameter scope has no "
+                             "exact declaration owner");
+  return owner;
 }
 
 bool functionParameterScopeNeedsExternalReferenceRecord(
     SgFunctionDeclaration *decl,
     const std::unordered_map<const SgNode *, uint64_t> &ids) {
-  return !externalFunctionParameterScopeSource(decl, ids).empty();
+  return externalFunctionParameterScopeOwner(decl, ids) != nullptr;
 }
 
 std::string rawExternalDeclarationReferenceJson(
@@ -757,6 +942,46 @@ std::string rawExternalDeclarationReferenceJson(
   return result;
 }
 
+std::string rawAlignmentSpecifiersJson(
+    const SgAlignmentSpecifierPtrList &specifiers, SgNode *owner,
+    const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  std::ostringstream out;
+  out << "[";
+  for (size_t i = 0; i < specifiers.size(); ++i) {
+    SgAlignmentSpecifier *specifier = specifiers[i];
+    if (specifier == nullptr || specifier->get_parent() != owner)
+      throw std::runtime_error("AST JSON alignment has a foreign owner");
+    specifier->validate();
+    if (i != 0)
+      out << ",";
+    writeRawObject(
+        out, 0,
+        {jsonString("flags") + ": " + rawNodeFlagsJson(specifier),
+         jsonString("location") + ": " + rawLocationJson(specifier),
+         jsonString("properties") + ": " + rawNodeProperties(specifier, ids),
+         jsonString("operand") + ": " +
+             rawTypeOwnedExpressionRef(specifier->get_operand(), ids)},
+        false);
+  }
+  out << "]";
+  return out.str();
+}
+
+std::string rawFortranProcedureComponentBindingJson(SgInitializedName *name) {
+  const auto &binding = name->get_fortran_procedure_component_binding();
+  requireFortranProcedureComponentBinding(binding, name->get_type(),
+                                          name->get_scope());
+  if (!binding)
+    return "null";
+  return "{" + rawIntegerField("kind", static_cast<int>(binding->kind)) + ", " +
+         rawOptionalUnsignedIntegerField("passed_object_index",
+                                         binding->passed_object_index) +
+         ", " +
+         rawStringField("written_dummy_name",
+                        binding->written_dummy_name.getString()) +
+         "}";
+}
+
 std::string rawExternalInitializedNameJson(
     SgInitializedName *name,
     const std::unordered_map<const SgNode *, uint64_t> &ids,
@@ -765,15 +990,24 @@ std::string rawExternalInitializedNameJson(
     throw std::runtime_error("AST JSON external_function " + function_name +
                              " has a null initialized name");
   }
-  if (name->get_initptr() != nullptr) {
+  SgExpression *procedure_interface = name->get_fortran_procedure_interface();
+  if (!SgInitializedName::is_valid_fortran_procedure_interface(
+          procedure_interface, name->get_type()) ||
+      (procedure_interface != nullptr &&
+       procedure_interface->get_parent() != name))
+    throw std::runtime_error("AST JSON external initializedName has an invalid "
+                             "procedure interface");
+  SgInitializer *initializer = name->get_initptr();
+  if (initializer != nullptr && initializer->get_parent() != name) {
     throw std::runtime_error(
         "AST JSON external_function " + function_name +
-        " has an initialized name with an initializer that is not yet "
-        "serialized: " +
+        " has an initialized name with a foreign initializer: " +
         name->get_name().getString());
   }
   if (name->get_preinitialization() !=
-      SgInitializedName::e_unknown_preinitialization) {
+          SgInitializedName::e_unknown_preinitialization ||
+      name->get_ctor_initializer_field_target() != nullptr ||
+      name->get_ctor_initializer_source_order().has_value()) {
     throw std::runtime_error(
         "AST JSON external_function " + function_name +
         " has a parameter initialized name with a constructor "
@@ -800,22 +1034,57 @@ std::string rawExternalInitializedNameJson(
                                         "::" + name->get_name().getString()));
   fields.push_back(jsonString("type") + ": " +
                    rawTypeJson(name->get_typeptr(), ids));
+  fields.push_back(jsonString("initializer") + ": " +
+                   rawTypeOwnedExpressionRef(initializer, ids));
   fields.push_back(jsonString("fortran_source_type") + ": " +
                    rawTypeJson(name->get_fortran_source_type(), ids));
+  fields.push_back(jsonString("fortran_source_derived_type_symbol") + ": " +
+                   rawExactBoundSymbolRef(
+                       name->get_fortran_source_derived_type_symbol(), ids));
   fields.push_back(jsonString("cxx_source_type") + ": " +
                    rawTypeJson(name->get_cxx_source_type(), ids));
+  fields.push_back(jsonString("storage_size_bytes") + ": " +
+                   (name->get_storage_size_bytes()
+                        ? std::to_string(*name->get_storage_size_bytes())
+                        : "null"));
+  fields.push_back(jsonString("auto_decltype") + ": " +
+                   rawTypeJson(name->get_auto_decltype(), ids));
+  fields.push_back(
+      jsonString("alignment_specifiers") + ": " +
+      rawAlignmentSpecifiersJson(name->get_alignment_specifiers(), name, ids));
   fields.push_back(rawIntegerField(
       "fortran_type_spec", static_cast<int>(name->get_fortran_type_spec())));
+  fields.push_back(rawIntegerField("fortran_c_argument_passing",
+                                   name->get_fortran_c_argument_passing()));
   fields.push_back(
-      rawStringField("fortran_procedure_interface",
-                     name->get_fortran_procedure_interface().getString()));
+      jsonString("fortran_procedure_interface") + ": " +
+      rawTypeOwnedExpressionRef(name->get_fortran_procedure_interface(), ids));
+  fields.push_back(jsonString("fortran_procedure_component_binding") + ": " +
+                   rawFortranProcedureComponentBindingJson(name));
   fields.push_back(rawBoolField("is_predefined_identifier",
                                 name->get_is_predefined_identifier()));
+  fields.push_back(
+      rawBoolField("is_braced_initialized", name->get_is_braced_initialized()));
+  fields.push_back(
+      rawBoolField("using_assignment_copy_constructor_syntax",
+                   name->get_using_assignment_copy_constructor_syntax()));
+  fields.push_back(
+      rawBoolField("is_parameter_pack", name->get_is_parameter_pack()));
+  fields.push_back(
+      rawBoolField("is_pack_element", name->get_is_pack_element()));
+  fields.push_back(rawBoolField("deduction_guide_default_available",
+                                name->get_deduction_guide_default_available()));
   fields.push_back(
       rawIntegerField("generated_variable_role",
                       static_cast<int>(name->get_generated_variable_role())));
   fields.push_back(rawIntegerField(
       "preinitialization", static_cast<int>(name->get_preinitialization())));
+  fields.push_back("\"ctor_initializer_source_order\": null");
+  fields.push_back(
+      name->get_cxx_field_index().has_value()
+          ? rawIntegerField("cxx_field_index", *name->get_cxx_field_index())
+          : "\"cxx_field_index\": null");
+  fields.push_back(rawIntegerField("ctor_initializer_field_target", 0));
   fields.push_back(rawIntegerField(
       "storage_modifier",
       static_cast<int>(name->get_storageModifier().get_modifier())));
@@ -859,28 +1128,30 @@ std::string rawExternalInitializedNameJson(
   return result;
 }
 
-void appendRawDeclarationTypeModifierFields(std::vector<std::string> &fields,
-                                            const SgTypeModifier &modifier) {
-  fields.push_back(jsonString("declaration_type_modifier_vector") + ": " +
+void appendRawTypeModifierFields(std::vector<std::string> &fields,
+                                 const SgTypeModifier &modifier,
+                                 const std::string &prefix) {
+  fields.push_back(jsonString(prefix + "_modifier_vector") + ": " +
                    rawBitVectorJson(modifier.get_modifierVector()));
   fields.push_back(rawIntegerField(
-      "declaration_type_const_volatile_modifier",
+      prefix + "_const_volatile_modifier",
       static_cast<int>(modifier.get_constVolatileModifier().get_modifier())));
   fields.push_back(rawIntegerField(
-      "declaration_type_elaborated_modifier",
+      prefix + "_elaborated_modifier",
       static_cast<int>(modifier.get_elaboratedTypeModifier().get_modifier())));
-  fields.push_back(rawIntegerField("declaration_type_gnu_attribute_alignment",
+  fields.push_back(rawIntegerField(prefix + "_gnu_attribute_alignment",
                                    modifier.get_gnu_attribute_alignment()));
-  fields.push_back(rawIntegerField("declaration_type_gnu_attribute_sentinel",
+  fields.push_back(rawIntegerField(prefix + "_gnu_attribute_sentinel",
                                    modifier.get_gnu_attribute_sentinel()));
-  fields.push_back(rawIntegerField("declaration_type_address_space_value",
+  fields.push_back(rawIntegerField(prefix + "_address_space_value",
                                    modifier.get_address_space_value()));
-  fields.push_back(rawIntegerField("declaration_type_vector_size",
-                                   modifier.get_vector_size()));
+  fields.push_back(
+      rawIntegerField(prefix + "_vector_size", modifier.get_vector_size()));
 }
 
 void appendRawExternalDeclarationStatementFields(
     std::vector<std::string> &fields, SgDeclarationStatement *decl,
+    const std::unordered_map<const SgNode *, uint64_t> &ids,
     const std::string &context) {
   if (decl == nullptr) {
     throw std::runtime_error("AST JSON " + context +
@@ -888,6 +1159,9 @@ void appendRawExternalDeclarationStatementFields(
   }
   SgDeclarationStatement *first_nondefining =
       decl->get_firstNondefiningDeclaration();
+  fields.push_back(
+      jsonString("alignment_specifiers") + ": " +
+      rawAlignmentSpecifiersJson(decl->get_alignment_specifiers(), decl, ids));
   SgDeclarationStatement *defining = decl->get_definingDeclaration();
   if (first_nondefining != nullptr && first_nondefining != decl) {
     throw std::runtime_error(
@@ -931,13 +1205,11 @@ void appendRawExternalDeclarationStatementFields(
         "frontend_declaration_origin",
         static_cast<int>(function->get_frontend_declaration_origin())));
   }
-  fields.push_back(
-      rawIntegerField("decl_attributes", decl->get_decl_attributes()));
   fields.push_back(rawStringField("linkage", decl->get_linkage()));
   fields.push_back(
       jsonString("declaration_modifier_vector") + ": " +
       rawBitVectorJson(decl->get_declarationModifier().get_modifierVector()));
-  appendRawDeclarationTypeModifierFields(
+  appendRawTypeModifierFields(
       fields, decl->get_declarationModifier().get_typeModifier());
   fields.push_back(rawIntegerField("declaration_storage_modifier",
                                    static_cast<int>(storage.get_modifier())));
@@ -959,6 +1231,8 @@ void appendRawExternalDeclarationStatementFields(
   fields.push_back(rawStringField("binding_label", decl->get_binding_label()));
   fields.push_back(
       rawBoolField("binding_cdefined", decl->get_binding_cdefined()));
+  fields.push_back(
+      rawBoolField("binding_label_present", decl->get_binding_label_present()));
   fields.push_back(
       rawBoolField("unparse_template_ast", decl->get_unparse_template_ast()));
   fields.push_back(rawBoolField("source_name_qualification_present",
@@ -1009,8 +1283,13 @@ std::string rawExternalVariableDeclarationJson(
       rawRequiredLocationJson(
           variable, "external_function variableDeclaration " + function_name));
   appendRawExternalDeclarationStatementFields(
-      fields, variable,
+      fields, variable, ids,
       "external_function " + function_name + " variableDeclaration");
+  fields.push_back(rawBoolField("is_constexpr", variable->get_is_constexpr()));
+  fields.push_back(
+      rawBoolField("is_thread_local", variable->get_is_thread_local()));
+  fields.push_back(rawIntegerField(
+      "variable_inline_kind", static_cast<int>(variable->get_inline_kind())));
   fields.push_back(
       rawBoolField("requires_global_name_qualification_on_type",
                    variable->get_requiresGlobalNameQualificationOnType()));
@@ -1085,7 +1364,8 @@ std::string rawExternalUseStatementJson(
       rawRequiredLocationJson(stmt, "external_function useStatement " +
                                         function_name));
   appendRawExternalDeclarationStatementFields(
-      fields, stmt, "external_function " + function_name + " useStatement");
+      fields, stmt, ids,
+      "external_function " + function_name + " useStatement");
   fields.push_back(rawStringField("name", stmt->get_name().getString()));
   fields.push_back(rawBoolField("only_option", stmt->get_only_option()));
   fields.push_back(rawStringField("module_nature", stmt->get_module_nature()));
@@ -1160,37 +1440,11 @@ std::string rawExternalFunctionParameterScopeJson(
           parameter->get_declptr() != function ||
           parameter->get_scope() != scope ||
           !parameter_indices.emplace(parameter, i).second) {
-        std::ostringstream message;
-        message << "AST JSON external_function " << function_name
-                << " parameter scope has malformed exact parameter ownership"
-                << " function=" << function << " scope=" << scope
-                << " parameter-list=" << function->get_parameterList()
-                << " index=" << i << " parameter=" << parameter;
-        if (parameter != nullptr) {
-          SgScopeStatement *actual_parameter_scope = parameter->get_scope();
-          message
-              << " parent=" << parameter->get_parent()
-              << " declaration=" << parameter->get_declptr()
-              << " parameter-scope=" << actual_parameter_scope << "/"
-              << (actual_parameter_scope != nullptr
-                      ? actual_parameter_scope->sage_class_name()
-                      : "<null>")
-              << " parameter-scope-parent="
-              << (actual_parameter_scope != nullptr
-                      ? actual_parameter_scope->get_parent()
-                      : nullptr)
-              << "/"
-              << (actual_parameter_scope != nullptr &&
-                          actual_parameter_scope->get_parent() != nullptr
-                      ? actual_parameter_scope->get_parent()->sage_class_name()
-                      : "<null>")
-              << " function-semantic-scope=" << function->get_scope()
-              << " function-first="
-              << function->get_firstNondefiningDeclaration()
-              << " function-defining=" << function->get_definingDeclaration()
-              << " name=" << parameter->get_name().getString();
-        }
-        throw std::runtime_error(message.str());
+        throw std::runtime_error(
+            "AST JSON external_function " + function_name +
+            " parameter scope has malformed exact parameter ownership at "
+            "index " +
+            std::to_string(i));
       }
     }
     std::map<SgInitializedName *, std::pair<size_t, size_t>> variable_indices;
@@ -1282,27 +1536,23 @@ std::string rawExternalFunctionParameterScopeJson(
             entry_fields.push_back(jsonString("symbol") + ": " +
                                    rawSymbolRef(symbol, ids));
           }
-          if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
-            if (alias->get_alias() == nullptr) {
-              throw std::runtime_error("AST JSON external_function " +
-                                       function_name +
-                                       " functionParameterScope SgAliasSymbol "
-                                       "has no alias target: " +
-                                       entry.first.getString());
-            }
-            entry_fields.push_back(jsonString("alias_target") + ": " +
-                                   rawSymbolRef(alias->get_alias(), ids));
-            entry_fields.push_back(
-                rawBoolField("alias_is_renamed", alias->get_isRenamed()));
-            entry_fields.push_back(rawStringField(
-                "alias_new_name", alias->get_new_name().getString()));
+          SgAliasSymbol *alias = isSgAliasSymbol(symbol);
+          SgRenameSymbol *rename = isSgRenameSymbol(symbol);
+          if (alias != nullptr || rename != nullptr)
+            for (auto &field : rawVisibilitySymbolFields(symbol, ids, scope))
+              entry_fields.push_back(std::move(field));
+          const SgNodePtrList *causes =
+              alias != nullptr    ? &alias->get_causal_nodes()
+              : rename != nullptr ? &rename->get_causal_nodes()
+                                  : nullptr;
+          if (causes != nullptr) {
             std::ostringstream causal_nodes;
             causal_nodes << jsonString("alias_causal_nodes") << ": [";
-            const SgNodePtrList &nodes = alias->get_causal_nodes();
-            if (nodes.empty()) {
+            const SgNodePtrList &nodes = *causes;
+            if (alias != nullptr && nodes.empty()) {
               throw std::runtime_error(
                   "AST JSON external_function " + function_name +
-                  " functionParameterScope SgAliasSymbol has no causal "
+                  " functionParameterScope visibility symbol has no causal "
                   "provenance: " +
                   entry.first.getString());
             }
@@ -1318,7 +1568,8 @@ std::string rawExternalFunctionParameterScopeJson(
                      declaration_index == declaration_indices.end())) {
                   throw std::runtime_error(
                       "AST JSON external_function " + function_name +
-                      " functionParameterScope SgAliasSymbol causal node is "
+                      " functionParameterScope visibility-symbol causal node "
+                      "is "
                       "null, uncollected, and not a nested declaration");
                 }
                 std::vector<std::string> causal_fields;
@@ -1340,20 +1591,6 @@ std::string rawExternalFunctionParameterScopeJson(
             }
             causal_nodes << "]";
             entry_fields.push_back(causal_nodes.str());
-          }
-          if (SgRenameSymbol *rename = isSgRenameSymbol(symbol)) {
-            if (rename->get_original_symbol() == nullptr) {
-              throw std::runtime_error(
-                  "AST JSON external_function " + function_name +
-                  " functionParameterScope "
-                  "SgRenameSymbol has no original symbol: " +
-                  entry.first.getString());
-            }
-            entry_fields.push_back(
-                jsonString("original_symbol") + ": " +
-                rawSymbolRef(rename->get_original_symbol(), ids));
-            entry_fields.push_back(rawStringField(
-                "rename_new_name", rename->get_new_name().getString()));
           }
           std::ostringstream entry_out;
           writeRawObject(entry_out, 0, entry_fields, false);
@@ -1428,7 +1665,146 @@ bool isExternalUseModuleEdge(
 std::string
 rawNodeProperties(SgNode *node,
                   const std::unordered_map<const SgNode *, uint64_t> &ids) {
+  ASSERT_not_null(node);
   std::vector<std::string> fields;
+  if (auto *list = isSgExprListExp(node))
+    fields.push_back(
+        rawIntegerField("expression_list_source_form",
+                        static_cast<int>(list->get_source_form())));
+  auto add_instantiation_results = [&](auto *tmpl) {
+    fields.push_back(rawBoolField("constraint_satisfaction_evaluated",
+                                  tmpl->get_constraintSatisfactionEvaluated()));
+    fields.push_back(rawBoolField("constraint_satisfaction_satisfied",
+                                  tmpl->get_constraintSatisfactionSatisfied()));
+    fields.push_back(
+        rawBoolField("constraint_satisfaction_contains_errors",
+                     tmpl->get_constraintSatisfactionContainsErrors()));
+    fields.push_back(
+        rawBoolField("constraint_satisfaction_substitution_failure",
+                     tmpl->get_constraintSatisfactionSubstitutionFailure()));
+    fields.push_back(rawStringField("constraint_satisfaction_summary",
+                                    tmpl->get_constraintSatisfactionSummary()));
+    fields.push_back(
+        rawBoolField("sfinae_evaluated", tmpl->get_sfinaeEvaluated()));
+    fields.push_back(rawBoolField("sfinae_substitution_failure",
+                                  tmpl->get_sfinaeSubstitutionFailure()));
+    fields.push_back(
+        rawStringField("sfinae_summary", tmpl->get_sfinaeSummary()));
+  };
+  if (auto *reference = isSgPntrArrRefExp(node)) {
+    const auto size = reference->get_result_storage_size_bytes();
+    fields.push_back(jsonString("result_storage_size_bytes") + ": " +
+                     (size ? std::to_string(*size) : "null"));
+    std::ostringstream strides;
+    strides << jsonString("subscript_stride_bits") << ": [";
+    bool first = true;
+    for (const auto stride : reference->get_subscript_stride_bits()) {
+      if (!first)
+        strides << ", ";
+      first = false;
+      strides << (stride ? std::to_string(*stride) : "null");
+    }
+    strides << ']';
+    fields.push_back(strides.str());
+  }
+  if (auto *binding = isSgCxxArrayInitBinding(node)) {
+    binding->validate();
+    fields.push_back(rawIntegerField("common_value_category",
+                                     binding->get_common_value_category()));
+  }
+  if (auto *destruction = isSgCxxSubobjectDestruction(node)) {
+    destruction->validate();
+    auto *list = isSgExprListExp(destruction->get_parent());
+    auto *definition =
+        list != nullptr ? isSgFunctionDefinition(list->get_parent()) : nullptr;
+    if (serializingTypeOwnedExpression || definition == nullptr ||
+        definition->get_destructor_epilogue() != list ||
+        std::count(list->get_expressions().begin(),
+                   list->get_expressions().end(), destruction) != 1)
+      throw std::runtime_error(
+          "AST JSON subobject destruction has no exact epilogue owner");
+    fields.push_back(
+        rawIntegerField("target_kind", destruction->get_target_kind()));
+  }
+  if (auto *definition = isSgFunctionDefinition(node)) {
+    auto *owner = isSgMemberFunctionDeclaration(definition->get_declaration());
+    const bool destructor =
+        owner != nullptr && owner->get_specialFunctionModifier().isDestructor();
+    const bool dependent = definition->get_destructor_epilogue_dependent();
+    auto *epilogue = definition->get_destructor_epilogue();
+    if (destructor != (dependent || epilogue != nullptr) ||
+        (dependent && epilogue != nullptr) ||
+        (dependent && !definition->has_dependent_destructor_context()) ||
+        (epilogue != nullptr && epilogue->get_parent() != definition))
+      throw std::runtime_error(
+          "AST JSON function definition has no exact destructor epilogue");
+    if (destructor)
+      fields.push_back(
+          rawBoolField("destructor_epilogue_dependent", dependent));
+  }
+  if (auto *statement = isSgAsmStmt(node)) {
+    fields.push_back(
+        rawStringField("assembly_code", statement->get_assemblyCode()));
+    fields.push_back(rawBoolField("gnu_extended_format",
+                                  statement->get_useGnuExtendedFormat()));
+    fields.push_back(rawBoolField("asm_volatile", statement->get_isVolatile()));
+    const auto &clobbers = statement->get_clobberRegisterList();
+    fields.push_back(
+        jsonString("asm_clobbers") + ": " +
+        rawStringListJson(SgStringList(clobbers.begin(), clobbers.end())));
+  }
+  if (auto *operand = isSgAsmOp(node)) {
+    const auto &constraint = operand->get_constraint();
+    auto rawBounds = [](const auto &bounds) {
+      if (!bounds)
+        return std::string("null");
+      std::ostringstream out;
+      writeRawObject(out, 0,
+                     {rawIntegerField("minimum", bounds->first),
+                      rawIntegerField("maximum", bounds->second)},
+                     false);
+      return out.str();
+    };
+    std::ostringstream values;
+    values << '[';
+    for (auto value = constraint.immediate_values.begin();
+         value != constraint.immediate_values.end(); ++value) {
+      if (value != constraint.immediate_values.begin())
+        values << ',';
+      values << *value;
+    }
+    values << ']';
+    std::ostringstream out;
+    writeRawObject(
+        out, 0,
+        {rawStringField("spelling", constraint.spelling),
+         rawBoolField("allows_memory", constraint.allows_memory),
+         rawBoolField("allows_register", constraint.allows_register),
+         rawBoolField("requires_immediate", constraint.requires_immediate),
+         rawBoolField("has_matching_input", constraint.has_matching_input),
+         rawIntegerField("tied_output", constraint.tied_output),
+         jsonString("immediate_range") + ": " +
+             rawBounds(constraint.immediate_range),
+         jsonString("immediate_values") + ": " + values.str(),
+         jsonString("output_bounds") + ": " +
+             rawBounds(constraint.output_bounds)},
+        false);
+    fields.push_back(jsonString("asm_constraint") + ": " + out.str());
+    fields.push_back(
+        rawIntegerField("asm_modifiers", operand->get_modifiers()));
+    fields.push_back(rawStringField("name", operand->get_name()));
+    if (operand->get_expression() == nullptr ||
+        operand->get_expression()->get_parent() != operand)
+      throw std::runtime_error(
+          "AST JSON asm operand lacks its owned expression");
+    if (serializingTypeOwnedExpression)
+      fields.push_back(
+          jsonString("expression") + ": " +
+          rawTypeOwnedExpressionRef(operand->get_expression(), ids));
+  }
+  if (auto *directive = isSgTemplateInstantiationDirectiveStatement(node))
+    fields.push_back(rawBoolField("do_not_instantiate",
+                                  directive->get_do_not_instantiate()));
   auto validate_iterator_definitions =
       [](SgOmpClause *owner, const SgOmpIteratorDefinitionPtrList &definitions,
          bool required) {
@@ -1581,6 +1957,13 @@ rawNodeProperties(SgNode *node,
         rawIntegerField("statement_attribute_loop_hint_state",
                         static_cast<int>(attribute->get_loop_hint_state())));
   }
+  if (auto *alignment = isSgAlignmentSpecifier(node)) {
+    alignment->validate();
+    fields.push_back(
+        rawIntegerField("alignment_spelling", alignment->get_spelling()));
+    fields.push_back(rawBoolField("alignment_pack_expansion",
+                                  alignment->get_is_pack_expansion()));
+  }
   if (SgNamespaceSourceFragment *fragment = isSgNamespaceSourceFragment(node)) {
     fragment->validate();
     fields.push_back(rawIntegerField("namespace_source_fragment_kind",
@@ -1592,24 +1975,27 @@ rawNodeProperties(SgNode *node,
   if (SgPragmaDeclaration *pragma = isSgPragmaDeclaration(node)) {
     const auto fortranFamily = pragma->get_fortran_directive_family();
     const bool hasFortranDirective =
-        fortranFamily != SgPragmaDeclaration::e_fortran_directive_none;
+        fortranFamily != SgPragmaDeclaration::e_fortran_directive_none &&
+        fortranFamily != SgPragmaDeclaration::e_fortran_directive_compiler;
     const bool validFortranFamily =
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_none ||
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_openmp ||
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_ompx ||
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_openacc ||
-        fortranFamily == SgPragmaDeclaration::e_fortran_directive_cuda;
+        fortranFamily == SgPragmaDeclaration::e_fortran_directive_cuda ||
+        fortranFamily == SgPragmaDeclaration::e_fortran_directive_compiler;
     const bool hasValidFortranOwnership =
         hasFortranDirective &&
         !pragma->get_fortran_directive_group_id().empty() &&
         pragma->get_fortran_directive_member_count() > 0 &&
         pragma->get_fortran_directive_member_index() <
             pragma->get_fortran_directive_member_count() &&
+        pragma->get_fortran_directive_primary() ==
+            (pragma->get_fortran_directive_member_index() == 0) &&
         !pragma->get_fortran_directive_raw_text().empty() &&
         (pragma->get_fortran_directive_primary()
              ? !pragma->get_fortran_directive_logical_text().empty() &&
-                   !pragma->get_fortran_directive_semantic_text().empty() &&
-                   pragma->get_fortran_directive_member_index() == 0
+                   !pragma->get_fortran_directive_semantic_text().empty()
              : pragma->get_fortran_directive_logical_text().empty() &&
                    pragma->get_fortran_directive_semantic_text().empty());
     const bool hasEmptyFortranOwnership =
@@ -1651,7 +2037,8 @@ rawNodeProperties(SgNode *node,
     if (payloadKind != SgPragmaDeclaration::e_cxx_pragma_payload_none &&
         payloadKind != SgPragmaDeclaration::e_cxx_pragma_source_spelled &&
         payloadKind != SgPragmaDeclaration::e_cxx_pragma_source_file_only &&
-        payloadKind != SgPragmaDeclaration::e_cxx_pragma_generated_semantic) {
+        payloadKind != SgPragmaDeclaration::e_cxx_pragma_generated_semantic &&
+        payloadKind != SgPragmaDeclaration::e_cxx_pragma_source_attribute) {
       throw std::runtime_error(
           "AST JSON SgPragmaDeclaration has invalid cxx pragma payload kind");
     }
@@ -1683,13 +2070,77 @@ rawNodeProperties(SgNode *node,
                         static_cast<int>(group->get_source_terminator())));
   }
 
+  if (SgIncludeFile *include = isSgIncludeFile(node)) {
+    include->validateIncludeOwnership();
+    fields.push_back(
+        rawStringField("filename", include->get_filename().getString()));
+    fields.push_back(rawStringField(
+        "name_used_in_include_directive",
+        include->get_name_used_in_include_directive().getString()));
+    fields.push_back(rawStringField(
+        "directory_prefix", include->get_directory_prefix().getString()));
+    fields.push_back(
+        rawStringField("applicationRootDirectory",
+                       include->get_applicationRootDirectory().getString()));
+    fields.push_back(
+        rawBoolField("isSystemInclude", include->get_isSystemInclude()));
+    fields.push_back(rawBoolField("isPreinclude", include->get_isPreinclude()));
+    fields.push_back(
+        rawBoolField("isApplicationFile", include->get_isApplicationFile()));
+    fields.push_back(
+        rawBoolField("isRootSourceFile", include->get_isRootSourceFile()));
+  }
   if (SgSourceFile *file = isSgSourceFile(node)) {
+    fields.push_back(rawIntegerField("standard", file->get_standard()));
+    fields.push_back(rawBoolField("gnu_standard", file->is_gnu_standard()));
+    const std::vector<std::string> arguments = commandLine(file);
+    if (arguments.empty() || arguments.front().empty()) {
+      throw std::runtime_error("AST JSON source file has no driver arguments");
+    }
+    for (const auto &argument : arguments)
+      if (argument.find('\0') != std::string::npos)
+        throw std::runtime_error(
+            "AST JSON source file command_line contains a NUL byte");
+    fields.push_back(jsonString("command_line") + ": " +
+                     rawStringListJson(arguments));
+    fields.push_back(
+        jsonString("frontend_include_ownership_paths") + ": " +
+        rawStringListJson(file->get_frontendIncludeOwnershipPathList()));
+    fields.push_back(
+        jsonString("frontend_system_include_ownership_paths") + ": " +
+        rawStringListJson(file->get_frontendSystemIncludeOwnershipPathList()));
+    fields.push_back(
+        jsonString("frontend_external_ownership_paths") + ": " +
+        rawStringListJson(file->get_frontendExternalOwnershipPathList()));
+    fields.push_back(jsonString("frontend_resolved_include_directives") + ": " +
+                     rawResolvedIncludeDirectivesJson(file, ids));
+    fields.push_back(rawBoolField("openmp", file->get_openmp()));
+    fields.push_back(
+        rawBoolField("openmp_parse_only", file->get_openmp_parse_only()));
+    fields.push_back(
+        rawBoolField("openmp_ast_only", file->get_openmp_ast_only()));
+    fields.push_back(
+        rawBoolField("openmp_analyzing", file->get_openmp_analyzing()));
+    fields.push_back(
+        rawBoolField("openmp_lowering", file->get_openmp_lowering()));
+    fields.push_back(
+        rawBoolField("openmp_processed", file->get_openmp_processed()));
+    fields.push_back(rawBoolField("openacc", file->get_openacc()));
+    fields.push_back(
+        rawBoolField("skipfinalCompileStep", file->get_skipfinalCompileStep()));
+    fields.push_back(
+        rawBoolField("unparse_tokens", file->get_unparse_tokens()));
+    fields.push_back(rawBoolField("is_header_file", file->get_isHeaderFile()));
+    fields.push_back(
+        rawBoolField("unparse_header_files", file->get_unparseHeaderFiles()));
     SgType *target_size_type = file->get_target_size_type();
-    if (target_size_type != nullptr) {
+    if (target_size_type != nullptr || file->get_target_abi().available) {
       SageInterface::requireTargetSizeType(file);
     }
     fields.push_back(jsonString("target_size_type") + ": " +
                      rawTypeJson(target_size_type, ids));
+    fields.push_back(jsonString("target_abi") + ": " +
+                     rawTargetAbiJson(file->get_target_abi()));
     fields.push_back(jsonString("token_mappings") + ": " +
                      rawTokenMappingsJson(file, ids));
     fields.push_back(rawStringField("source_filename_with_path",
@@ -1701,6 +2152,8 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawBoolField("skip_unparse", file->get_skip_unparse()));
     fields.push_back(
         rawBoolField("is_generated_source", file->get_isGeneratedSource()));
+    fields.push_back(rawBoolField("is_command_line_input_source",
+                                  file->get_isCommandLineInputSource()));
     fields.push_back(rawBoolField("C_only", file->get_C_only()));
     fields.push_back(rawBoolField("Cxx_only", file->get_Cxx_only()));
     fields.push_back(rawBoolField("Fortran_only", file->get_Fortran_only()));
@@ -1710,13 +2163,14 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawBoolField("OpenCL_only", file->get_OpenCL_only()));
     fields.push_back(rawBoolField("requires_C_preprocessor",
                                   file->get_requires_C_preprocessor()));
+    fields.push_back(
+        rawBoolField("processedToIncludeCppDirectivesAndComments",
+                     file->get_processedToIncludeCppDirectivesAndComments()));
     fields.push_back(rawIntegerField("input_format", file->get_inputFormat()));
     fields.push_back(
         rawIntegerField("output_format", file->get_outputFormat()));
     fields.push_back(rawIntegerField("backend_compile_format",
                                      file->get_backendCompileFormat()));
-    fields.push_back(rawBoolField("fortran_implicit_none",
-                                  file->get_fortran_implicit_none()));
     fields.push_back(
         rawIntegerField("input_language", file->get_inputLanguage()));
     fields.push_back(
@@ -1746,17 +2200,41 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawBoolField("source_uses_coarray_fortran_extension",
                      file->get_sourceFileUsesCoArrayFortranFileExtension()));
-    fields.push_back(rawBoolField("source_file_type_is_unknown",
-                                  file->get_sourceFileTypeIsUnknown()));
-    fields.push_back(rawBoolField("experimental_flang_frontend",
-                                  file->get_experimental_flang_frontend()));
+  } else if (SgCxxLiteralToken *token = isSgCxxLiteralToken(node)) {
+    const auto kind = token->get_token_kind();
+    if ((kind != SgCxxLiteralToken::e_numeric_token &&
+         kind != SgCxxLiteralToken::e_character_token &&
+         kind != SgCxxLiteralToken::e_string_token) ||
+        token->get_spelling().empty()) {
+      throw std::runtime_error(
+          "AST JSON SgCxxLiteralToken has malformed lexical state");
+    }
+    fields.push_back(rawIntegerField("token_kind", static_cast<int>(kind)));
+    fields.push_back(rawStringField("spelling", token->get_spelling()));
   } else if (SgToken *token = isSgToken(node)) {
+    if (token->get_classification_code() >
+        static_cast<unsigned int>(std::numeric_limits<int>::max())) {
+      throw std::runtime_error(
+          "AST JSON SgToken classification code is out of range");
+    }
     fields.push_back(
         rawStringField("lexeme_string", token->get_lexeme_string()));
     fields.push_back(rawIntegerField(
         "classification_code",
         static_cast<int64_t>(token->get_classification_code())));
+  } else if (SgVariableDefinition *definition = isSgVariableDefinition(node)) {
+    fields.push_back(rawBoolField("is_zero_width_bitfield",
+                                  definition->get_is_zero_width_bitfield()));
+    fields.push_back(rawBoolField("has_no_unique_address",
+                                  definition->get_has_no_unique_address()));
   } else if (SgInitializedName *name = isSgInitializedName(node)) {
+    SgExpression *procedure_interface = name->get_fortran_procedure_interface();
+    if (!SgInitializedName::is_valid_fortran_procedure_interface(
+            procedure_interface, name->get_type()) ||
+        (procedure_interface != nullptr &&
+         procedure_interface->get_parent() != name))
+      throw std::runtime_error("AST JSON initializedName has an invalid "
+                               "procedure interface");
     switch (name->get_generated_variable_role()) {
     case SgInitializedName::e_generated_variable_none:
     case SgInitializedName::e_generated_loop_tiling_index:
@@ -1797,6 +2275,12 @@ rawNodeProperties(SgNode *node,
     const bool has_constructor_preinitialization_role =
         name->get_preinitialization() !=
         SgInitializedName::e_unknown_preinitialization;
+    if ((name->get_preinitialization() == SgInitializedName::e_data_member) !=
+            (name->get_ctor_initializer_field_target() != nullptr) ||
+        (!has_constructor_preinitialization_role &&
+         name->get_ctor_initializer_source_order().has_value()))
+      throw std::runtime_error("AST JSON initialized-name has invalid "
+                               "constructor target or source order");
     if (is_constructor_preinitializer !=
         has_constructor_preinitialization_role) {
       throw std::runtime_error(
@@ -1813,6 +2297,20 @@ rawNodeProperties(SgNode *node,
           "AST JSON SgInitializedName has inconsistent enum-constant source "
           "ownership");
     }
+    if (is_enum_constant != name->get_enum_constant_value().has_value()) {
+      throw std::runtime_error(
+          "AST JSON enum-constant value and declaration ownership disagree");
+    }
+    if (is_enum_constant) {
+      if (auto *assignment = isSgAssignInitializer(name->get_initializer())) {
+        if (auto *value = isSgEnumVal(assignment->get_operand_i());
+            value != nullptr &&
+            value->get_value() != *name->get_enum_constant_value()) {
+          throw std::runtime_error(
+              "AST JSON enum initializer disagrees with its evaluated value");
+        }
+      }
+    }
     fields.push_back(rawStringField("name", name->get_name().getString()));
     fields.push_back(jsonString("type") + ": " +
                      rawTypeJson(name->get_typeptr(), ids));
@@ -1820,6 +2318,12 @@ rawNodeProperties(SgNode *node,
                      rawTypeJson(name->get_fortran_source_type(), ids));
     fields.push_back(jsonString("cxx_source_type") + ": " +
                      rawTypeJson(name->get_cxx_source_type(), ids));
+    fields.push_back(jsonString("storage_size_bytes") + ": " +
+                     (name->get_storage_size_bytes()
+                          ? std::to_string(*name->get_storage_size_bytes())
+                          : "null"));
+    fields.push_back(jsonString("auto_decltype") + ": " +
+                     rawTypeJson(name->get_auto_decltype(), ids));
     fields.push_back(jsonString("fortran_source_derived_type_symbol") + ": " +
                      rawExactBoundSymbolRef(
                          name->get_fortran_source_derived_type_symbol(), ids));
@@ -1828,11 +2332,33 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField(
         "fortran_cray_pointer_pointee_shape",
         idFor(ids, name->get_fortran_cray_pointer_pointee_shape())));
+    fields.push_back(
+        rawIntegerField("structured_binding_scope",
+                        idFor(ids, name->get_structured_binding_scope())));
+    fields.push_back(
+        rawIntegerField("structured_binding_pattern",
+                        idFor(ids, name->get_structured_binding_pattern())));
+    name->validate_structured_binding();
+    fields.push_back(rawIntegerField("structured_binding_kind",
+                                     name->get_structured_binding_kind()));
+    fields.push_back(
+        rawIntegerField("structured_binding_owner",
+                        idFor(ids, name->get_structured_binding_owner())));
+    fields.push_back(
+        rawIntegerField("structured_binding_value",
+                        idFor(ids, name->get_structured_binding_value())));
+    fields.push_back(rawIntegerField(
+        "structured_binding_holding_variable",
+        idFor(ids, name->get_structured_binding_holding_variable())));
     fields.push_back(rawIntegerField(
         "fortran_type_spec", static_cast<int>(name->get_fortran_type_spec())));
-    fields.push_back(
-        rawStringField("fortran_procedure_interface",
-                       name->get_fortran_procedure_interface().getString()));
+    fields.push_back(rawIntegerField("fortran_c_argument_passing",
+                                     name->get_fortran_c_argument_passing()));
+    fields.push_back(jsonString("fortran_procedure_interface") + ": " +
+                     rawTypeOwnedExpressionRef(
+                         name->get_fortran_procedure_interface(), ids));
+    fields.push_back(jsonString("fortran_procedure_component_binding") + ": " +
+                     rawFortranProcedureComponentBindingJson(name));
     fields.push_back(rawIntegerField(
         "fortran_separate_shape_declaration",
         idFor(ids, name->get_fortran_separate_shape_declaration())));
@@ -1842,14 +2368,42 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawBoolField("shape_deferred", name->get_shapeDeferred()));
     fields.push_back(rawBoolField("is_predefined_identifier",
                                   name->get_is_predefined_identifier()));
+    fields.push_back(rawBoolField("is_braced_initialized",
+                                  name->get_is_braced_initialized()));
+    fields.push_back(
+        rawBoolField("using_assignment_copy_constructor_syntax",
+                     name->get_using_assignment_copy_constructor_syntax()));
+    fields.push_back(
+        rawBoolField("is_parameter_pack", name->get_is_parameter_pack()));
+    fields.push_back(
+        rawBoolField("is_pack_element", name->get_is_pack_element()));
+    fields.push_back(
+        rawBoolField("deduction_guide_default_available",
+                     name->get_deduction_guide_default_available()));
     fields.push_back(
         rawIntegerField("generated_variable_role",
                         static_cast<int>(name->get_generated_variable_role())));
     fields.push_back(rawIntegerField(
         "enum_constant_source_ownership",
         static_cast<int>(name->get_enum_constant_source_ownership())));
+    fields.push_back(name->get_enum_constant_value().has_value()
+                         ? rawIntegerField("enum_constant_value",
+                                           *name->get_enum_constant_value())
+                         : "\"enum_constant_value\": null");
     fields.push_back(rawIntegerField(
         "preinitialization", static_cast<int>(name->get_preinitialization())));
+    fields.push_back(
+        name->get_ctor_initializer_source_order().has_value()
+            ? rawIntegerField("ctor_initializer_source_order",
+                              *name->get_ctor_initializer_source_order())
+            : "\"ctor_initializer_source_order\": null");
+    fields.push_back(
+        rawIntegerField("ctor_initializer_field_target",
+                        idFor(ids, name->get_ctor_initializer_field_target())));
+    fields.push_back(
+        name->get_cxx_field_index().has_value()
+            ? rawIntegerField("cxx_field_index", *name->get_cxx_field_index())
+            : "\"cxx_field_index\": null");
     fields.push_back(rawIntegerField(
         "storage_modifier",
         static_cast<int>(name->get_storageModifier().get_modifier())));
@@ -1931,28 +2485,18 @@ rawNodeProperties(SgNode *node,
                      decl->get_source_declarator_uses_wrapped_function_type()));
     fields.push_back(jsonString("function_type") + ": " +
                      rawTypeJson(function_type, ids));
+    fields.push_back(
+        jsonString("declared_exception_signature") + ": " +
+        rawTypeJson(decl->get_declared_exception_signature(), ids));
     fields.push_back(jsonString("function_type_syntax") + ": " +
                      rawTypeJson(decl->get_type_syntax(), ids));
-    if (functionParameterScopeNeedsExternalReferenceRecord(decl, ids)) {
-      fields.push_back(
-          rawStringField("external_function_parameter_scope_source",
-                         externalFunctionParameterScopeSource(decl, ids)));
-      SgFunctionParameterScope *external_scope =
-          decl->get_functionParameterScope();
-      SgFunctionDeclaration *external_owner =
-          external_scope != nullptr
-              ? isSgFunctionDeclaration(external_scope->get_parent())
-              : nullptr;
-      if (external_owner == nullptr || external_owner == decl) {
-        throw std::runtime_error(
-            "AST JSON external shared function parameter scope has no exact "
-            "external function owner");
-      }
-      fields.push_back(jsonString("external_function_parameter_scope") + ": " +
-                       rawExternalFunctionParameterScopeJson(
-                           external_owner, external_scope, ids,
-                           decl->get_name().getString()));
-    }
+    if (auto *owner = externalFunctionParameterScopeOwner(decl, ids))
+      fields.push_back(rawIntegerField(
+          "external_function_parameter_scope_owner",
+          static_cast<int>(
+              owner == decl->get_firstNondefiningDeclaration()
+                  ? ExternalFunctionParameterScopeOwner::FirstNondefining
+                  : ExternalFunctionParameterScopeOwner::Defining)));
     fields.push_back(jsonString("return_type") + ": " +
                      rawTypeJson(function_type->get_return_type(), ids));
     fields.push_back(
@@ -2042,7 +2586,7 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(rawBoolField("using_c11_noreturn_keyword",
                                   decl->get_using_C11_Noreturn_keyword()));
-    fields.push_back(rawBoolField("is_constexpr", decl->get_is_constexpr()));
+    fields.push_back(rawFunctionConstexprSpecifier(decl));
     fields.push_back(
         rawBoolField("using_new_function_return_type_syntax",
                      decl->get_using_new_function_return_type_syntax()));
@@ -2053,12 +2597,12 @@ rawNodeProperties(SgNode *node,
                      decl->get_marked_as_frontend_normalization()));
     fields.push_back(
         rawBoolField("is_implicit_function", decl->get_is_implicit_function()));
-    fields.push_back(rawBoolField(
-        "template_instantiation_pattern_is_unpublished",
-        decl->get_template_instantiation_pattern_is_unpublished()));
     if (SgProcedureHeaderStatement *procedure =
             isSgProcedureHeaderStatement(decl)) {
       SageInterface::isFortranProgramUnitWithoutSourceName(procedure);
+      fields.push_back(
+          rawStringField("fortran_binding_name",
+                         procedure->get_fortran_binding_name().getString()));
       fields.push_back(
           rawIntegerField("subprogram_kind", procedure->get_subprogram_kind()));
       fields.push_back(rawIntegerField("block_data_name_kind",
@@ -2081,6 +2625,7 @@ rawNodeProperties(SgNode *node,
     }
     if (SgTemplateInstantiationFunctionDecl *tmpl =
             isSgTemplateInstantiationFunctionDecl(decl)) {
+      add_instantiation_results(tmpl);
       fields.push_back(rawStringField("template_name",
                                       tmpl->get_templateName().getString()));
       fields.push_back(
@@ -2095,6 +2640,7 @@ rawNodeProperties(SgNode *node,
     }
     if (SgTemplateInstantiationMemberFunctionDecl *tmpl =
             isSgTemplateInstantiationMemberFunctionDecl(decl)) {
+      add_instantiation_results(tmpl);
       fields.push_back(rawStringField("template_name",
                                       tmpl->get_templateName().getString()));
       fields.push_back(
@@ -2123,6 +2669,9 @@ rawNodeProperties(SgNode *node,
                      decl->get_typedefBaseTypeContainsDefiningDeclaration()));
     fields.push_back(rawBoolField("is_autonomous_declaration",
                                   decl->get_isAutonomousDeclaration()));
+    fields.push_back(
+        rawBoolField("type_elaboration_required_for_base_type",
+                     decl->get_type_elaboration_required_for_base_type()));
     fields.push_back(
         rawBoolField("source_base_type_qualification_present",
                      decl->get_source_base_type_qualification_present()));
@@ -2163,27 +2712,7 @@ rawNodeProperties(SgNode *node,
                                       tmpl->get_templateHeader().getString()));
       fields.push_back(rawBoolField("source_spells_injected_class_name",
                                     tmpl->get_sourceSpellsInjectedClassName()));
-      fields.push_back(
-          rawBoolField("constraint_satisfaction_evaluated",
-                       tmpl->get_constraintSatisfactionEvaluated()));
-      fields.push_back(
-          rawBoolField("constraint_satisfaction_satisfied",
-                       tmpl->get_constraintSatisfactionSatisfied()));
-      fields.push_back(
-          rawBoolField("constraint_satisfaction_contains_errors",
-                       tmpl->get_constraintSatisfactionContainsErrors()));
-      fields.push_back(
-          rawBoolField("constraint_satisfaction_substitution_failure",
-                       tmpl->get_constraintSatisfactionSubstitutionFailure()));
-      fields.push_back(
-          rawStringField("constraint_satisfaction_summary",
-                         tmpl->get_constraintSatisfactionSummary()));
-      fields.push_back(
-          rawBoolField("sfinae_evaluated", tmpl->get_sfinaeEvaluated()));
-      fields.push_back(rawBoolField("sfinae_substitution_failure",
-                                    tmpl->get_sfinaeSubstitutionFailure()));
-      fields.push_back(
-          rawStringField("sfinae_summary", tmpl->get_sfinaeSummary()));
+      add_instantiation_results(tmpl);
       fields.push_back(
           jsonString("template_arguments") + ": " +
           rawTemplateArgumentListJson(tmpl->get_templateArguments(), ids));
@@ -2196,7 +2725,22 @@ rawNodeProperties(SgNode *node,
     }
   } else if (SgEnumDeclaration *decl = isSgEnumDeclaration(node)) {
     decl->validate_enumerator_source_ownership();
+    SgEnumType *type = decl->get_type();
+    SgEnumDeclaration *first =
+        isSgEnumDeclaration(decl->get_firstNondefiningDeclaration());
+    SgEnumDeclaration *owner =
+        type != nullptr ? isSgEnumDeclaration(type->get_declaration())
+                        : nullptr;
+    if (first == nullptr || type == nullptr || first->get_type() != type ||
+        owner == nullptr || owner->get_type() != type ||
+        owner->get_firstNondefiningDeclaration() != owner)
+      throw std::runtime_error(
+          "AST JSON enum declaration has no exact typed owner");
+    const uint64_t type_owner_id = idFor(ids, owner);
+    if (type_owner_id == 0)
+      throw std::runtime_error("AST JSON enum type owner was not collected");
     fields.push_back(rawStringField("name", decl->get_name().getString()));
+    fields.push_back(rawIntegerField("type_owner", type_owner_id));
     fields.push_back(rawBoolField("embedded", decl->get_embedded()));
     fields.push_back(rawBoolField("is_unnamed", decl->get_isUnNamed()));
     fields.push_back(rawBoolField("is_autonomous_declaration",
@@ -2206,6 +2750,19 @@ rawNodeProperties(SgNode *node,
                                   decl->get_underlying_type_source_spelled()));
     fields.push_back(jsonString("field_type") + ": " +
                      rawTypeJson(decl->get_field_type(), ids));
+    fields.push_back(jsonString("promotion_type") + ": " +
+                     rawTypeJson(decl->get_promotion_type(), ids));
+  } else if (auto *alias = isSgNamespaceAliasDeclarationStatement(node)) {
+    fields.push_back(rawStringField("name", alias->get_name().getString()));
+    fields.push_back(
+        rawIntegerField("namespace_declaration",
+                        idFor(ids, alias->get_namespaceDeclaration())));
+    fields.push_back(
+        rawIntegerField("namespace_alias_declaration",
+                        idFor(ids, alias->get_namespaceAliasDeclaration())));
+    fields.push_back(
+        rawBoolField("is_alias_for_another_namespace_alias",
+                     alias->get_is_alias_for_another_namespace_alias()));
   } else if (SgNamespaceDeclarationStatement *decl =
                  isSgNamespaceDeclarationStatement(node)) {
     decl->validate_source_fragments();
@@ -2222,32 +2779,46 @@ rawNodeProperties(SgNode *node,
   } else if (SgUsingDirectiveStatement *stmt =
                  isSgUsingDirectiveStatement(node)) {
     SgNamespaceDeclarationStatement *decl = stmt->get_namespaceDeclaration();
-    fields.push_back(
-        rawIntegerField("namespace_declaration", idFor(ids, decl)));
-    fields.push_back(rawStringField(
-        "namespace_name", decl != nullptr ? decl->get_name().getString() : ""));
-    fields.push_back(
-        rawBoolField("namespace_is_unnamed",
-                     decl != nullptr ? decl->get_isUnnamedNamespace() : false));
+    if (decl == nullptr)
+      throw std::runtime_error(
+          "AST JSON using directive has no exact namespace declaration");
+    const uint64_t namespace_id = idFor(ids, decl);
+    if (namespace_id == 0)
+      throw std::runtime_error(
+          "AST JSON using directive namespace declaration is outside the "
+          "serialized node identity set");
+    fields.push_back(rawIntegerField("namespace_declaration", namespace_id));
   } else if (SgUsingDeclarationStatement *stmt =
                  isSgUsingDeclarationStatement(node)) {
     SgDeclarationStatement *decl = stmt->get_declaration();
     SgInitializedName *name = stmt->get_initializedName();
-    fields.push_back(rawIntegerField("declaration", idFor(ids, decl)));
-    fields.push_back(
-        rawStringField("declaration_name",
-                       decl != nullptr ? SageInterface::get_name(decl) : ""));
-    fields.push_back(rawIntegerField("initialized_name", idFor(ids, name)));
-    fields.push_back(
-        rawStringField("initialized_name_name",
-                       name != nullptr ? name->get_name().getString() : ""));
-    fields.push_back(
-        jsonString("initialized_name_type") + ": " +
-        rawTypeJson(name != nullptr ? name->get_typeptr() : nullptr, ids));
+    const uint64_t declaration_id = idFor(ids, decl);
+    const uint64_t name_id = idFor(ids, name);
+    if ((decl == nullptr) == (name == nullptr) ||
+        (decl != nullptr && declaration_id == 0) ||
+        (name != nullptr && name_id == 0)) {
+      throw std::runtime_error(
+          "AST JSON using declaration has no exact typed target in the "
+          "serialized node identity set");
+    }
+    fields.push_back(rawIntegerField("declaration", declaration_id));
+    fields.push_back(rawIntegerField("initialized_name", name_id));
     fields.push_back(rawStringField(
         "source_terminal_name", stmt->get_source_terminal_name().getString()));
     fields.push_back(rawBoolField("is_inheriting_constructor",
                                   stmt->get_is_inheriting_constructor()));
+  } else if (SgImportStatement *stmt = isSgImportStatement(node)) {
+    stmt->validate_import_state();
+    fields.push_back(
+        rawStringField("module_name", stmt->get_module_name().getString()));
+    fields.push_back(
+        rawBoolField("is_cxx_module_import", stmt->get_is_cxx_module_import()));
+    fields.push_back(rawBoolField("is_cxx_header_unit_import",
+                                  stmt->get_is_cxx_header_unit_import()));
+    fields.push_back(rawIntegerField("fortran_import_kind",
+                                     stmt->get_fortran_import_kind()));
+    fields.push_back(jsonString("import_list") + ": " +
+                     rawStringListJson(stmt->get_import_list()));
   } else if (SgUseStatement *stmt = isSgUseStatement(node)) {
     fields.push_back(rawStringField("name", stmt->get_name().getString()));
     fields.push_back(rawBoolField("only_option", stmt->get_only_option()));
@@ -2258,20 +2829,21 @@ rawNodeProperties(SgNode *node,
                      rawExternalModuleJson(stmt->get_module(), ids));
   } else if (SgNonrealDecl *decl = isSgNonrealDecl(node)) {
     fields.push_back(rawStringField("name", decl->get_name().getString()));
-    fields.push_back(
-        rawStringField("semantic_name", decl->get_semantic_name().getString()));
     fields.push_back(jsonString("type") + ": " +
                      rawTypeJson(decl->get_type(), ids));
+    auto *type = isSgNonrealType(decl->get_type());
+    if (type == nullptr || type->get_declaration() != decl)
+      throw std::runtime_error(
+          "AST JSON SgNonrealDecl has no exact owned type");
+    type->validate_aliased_type();
+    fields.push_back(jsonString("aliased_type") + ": " +
+                     rawTypeJson(type->get_aliased_type(), ids));
     fields.push_back(rawIntegerField("template_parameter_position",
                                      decl->get_template_parameter_position()));
     fields.push_back(rawIntegerField("template_parameter_depth",
                                      decl->get_template_parameter_depth()));
     fields.push_back(
-        rawBoolField("is_class_member", decl->get_is_class_member()));
-    fields.push_back(
         rawBoolField("is_template_param", decl->get_is_template_param()));
-    fields.push_back(rawBoolField("is_template_template_param",
-                                  decl->get_is_template_template_param()));
     fields.push_back(
         rawBoolField("has_template_keyword", decl->get_has_template_keyword()));
     fields.push_back(
@@ -2283,11 +2855,16 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField("nonreal_template_role",
                                      decl->get_nonreal_template_role()));
     fields.push_back(rawBoolField("is_concept", decl->get_is_concept()));
-    fields.push_back(
-        rawBoolField("is_nonreal_function", decl->get_is_nonreal_function()));
     fields.push_back(jsonString("tpl_args") + ": " +
                      rawTemplateArgumentListJson(decl->get_tpl_args(), ids));
   } else if (SgBaseClass *base = isSgBaseClass(node)) {
+    if (isSgDerivedTypeStatement(base->get_base_class()) != nullptr &&
+        base->get_fortran_source_derived_type_symbol() == nullptr)
+      throw std::runtime_error(
+          "AST JSON Fortran base has no exact class-symbol binding");
+    fields.push_back(jsonString("fortran_source_derived_type_symbol") + ": " +
+                     rawExactBoundSymbolRef(
+                         base->get_fortran_source_derived_type_symbol(), ids));
     fields.push_back(
         rawIntegerField("base_class", idFor(ids, base->get_base_class())));
     fields.push_back(jsonString("source_type") + ": " +
@@ -2335,10 +2912,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawBoolField(
         "source_type_qualification_owns_template_arguments",
         base->get_source_type_qualification_owns_template_arguments()));
-    if (SgExpBaseClass *expr_base = isSgExpBaseClass(base)) {
-      fields.push_back(jsonString("base_class_exp") + ": " +
-                       rawExpressionRef(expr_base->get_base_class_exp(), ids));
-    }
     if (SgNonrealBaseClass *nonreal_base = isSgNonrealBaseClass(base)) {
       fields.push_back(
           rawIntegerField("base_class_nonreal",
@@ -2388,11 +2961,22 @@ rawNodeProperties(SgNode *node,
           "frontend_declaration_origin",
           static_cast<int>(function->get_frontend_declaration_origin())));
     }
-    fields.push_back(
-        rawIntegerField("decl_attributes", decl->get_decl_attributes()));
     if (SgVariableDeclaration *variable = isSgVariableDeclaration(decl)) {
+      fields.push_back(
+          rawBoolField("is_constexpr", variable->get_is_constexpr()));
+      fields.push_back(
+          rawBoolField("is_thread_local", variable->get_is_thread_local()));
+      fields.push_back(
+          rawIntegerField("variable_inline_kind",
+                          static_cast<int>(variable->get_inline_kind())));
       fields.push_back(rawIntegerField(
           "specialization", static_cast<int>(variable->get_specialization())));
+      if (auto *template_variable = isSgTemplateVariableDeclaration(variable)) {
+        fields.push_back(
+            jsonString("semantic_template_arguments") + ": " +
+            rawTemplateArgumentListJson(
+                template_variable->get_semanticTemplateArguments(), ids));
+      }
     } else if (SgClassDeclaration *class_declaration =
                    isSgClassDeclaration(decl)) {
       fields.push_back(rawIntegerField(
@@ -2407,7 +2991,7 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         jsonString("declaration_modifier_vector") + ": " +
         rawBitVectorJson(decl->get_declarationModifier().get_modifierVector()));
-    appendRawDeclarationTypeModifierFields(
+    appendRawTypeModifierFields(
         fields, decl->get_declarationModifier().get_typeModifier());
     fields.push_back(rawIntegerField("declaration_storage_modifier",
                                      static_cast<int>(storage.get_modifier())));
@@ -2431,6 +3015,8 @@ rawNodeProperties(SgNode *node,
         rawStringField("binding_label", decl->get_binding_label()));
     fields.push_back(
         rawBoolField("binding_cdefined", decl->get_binding_cdefined()));
+    fields.push_back(rawBoolField("binding_label_present",
+                                  decl->get_binding_label_present()));
     fields.push_back(
         rawBoolField("unparse_template_ast", decl->get_unparse_template_ast()));
     fields.push_back(
@@ -2471,6 +3057,9 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField(
         "return_keyword_kind",
         static_cast<int>(return_statement->get_return_keyword_kind())));
+    auto *candidate = return_statement->get_nrvo_candidate();
+    fields.push_back(rawIntegerField(
+        "nrvo_candidate", candidate != nullptr ? ids.at(candidate) : 0));
   }
 
   if (SgOmpVariablesClause *clause = isSgOmpVariablesClause(node)) {
@@ -2482,6 +3071,22 @@ rawNodeProperties(SgNode *node,
   }
 
   if (SgExpression *expr = isSgExpression(node)) {
+    auto add_conversion_type = [&](auto *reference) {
+      SgTypeExpression *type_id = reference->get_conversion_type_id();
+      if (type_id != nullptr && type_id->get_parent() != reference) {
+        throw std::runtime_error(
+            "AST JSON member conversion type-id has a foreign owner");
+      }
+      if (serializingTypeOwnedExpression) {
+        fields.push_back(jsonString("conversion_type_id") + ": " +
+                         rawTypeOwnedExpressionRef(type_id, ids));
+      }
+    };
+    if (auto *member = isSgMemberFunctionRefExp(expr)) {
+      add_conversion_type(member);
+    } else if (auto *member = isSgTemplateMemberFunctionRefExp(expr)) {
+      add_conversion_type(member);
+    }
     if (SgFortranCommonBlockRefExp *common =
             isSgFortranCommonBlockRefExp(expr)) {
       SageInterface::validateFortranCommonBlockRef(common);
@@ -2492,20 +3097,45 @@ rawNodeProperties(SgNode *node,
     }
     if (SgTypeExpression *type_expression = isSgTypeExpression(expr)) {
       SgType *represented_type = type_expression->get_represented_type();
-      if (represented_type == nullptr ||
-          isSgTypeUnknown(represented_type) != nullptr ||
-          isSgTypeDefault(represented_type) != nullptr) {
+      if (SageInterface::containsUnknownType(represented_type)) {
         throw std::runtime_error(
             "AST JSON SgTypeExpression has no exact represented type");
       }
       fields.push_back(jsonString("represented_type") + ": " +
                        rawTypeJson(represented_type, ids));
     }
+    if (auto *choice = isSgChooseExpression(expr)) {
+      choice->validate();
+      fields.push_back(rawIntegerField(
+          "selection_kind", static_cast<int>(choice->get_selection_kind())));
+      if (serializingTypeOwnedExpression) {
+        fields.push_back(
+            jsonString("condition") + ": " +
+            rawTypeOwnedExpressionRef(choice->get_condition(), ids));
+        fields.push_back(
+            jsonString("true_expression") + ": " +
+            rawTypeOwnedExpressionRef(choice->get_true_expression(), ids));
+        fields.push_back(
+            jsonString("false_expression") + ": " +
+            rawTypeOwnedExpressionRef(choice->get_false_expression(), ids));
+      }
+    }
     if (SgConditionalExp *conditional = isSgConditionalExp(expr)) {
       conditional->validate();
       fields.push_back(
           rawIntegerField("conditional_operator_kind",
                           static_cast<int>(conditional->get_operator_kind())));
+      if (serializingTypeOwnedExpression) {
+        fields.push_back(
+            jsonString("conditional_exp") + ": " +
+            rawTypeOwnedExpressionRef(conditional->get_conditional_exp(), ids));
+        fields.push_back(
+            jsonString("true_exp") + ": " +
+            rawTypeOwnedExpressionRef(conditional->get_true_exp(), ids));
+        fields.push_back(
+            jsonString("false_exp") + ": " +
+            rawTypeOwnedExpressionRef(conditional->get_false_exp(), ids));
+      }
     }
     fields.push_back(rawBoolField("lvalue", expr->get_lvalue()));
     fields.push_back(rawBoolField("need_paren", expr->get_need_paren()));
@@ -2514,6 +3144,27 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawIntegerField("semantic_wrapper_mask",
                         static_cast<int>(expr->get_semantic_wrapper_mask())));
+    if (auto *destructor = expr->get_bound_temporary_destructor()) {
+      if (!SgExpression::is_valid_bound_temporary_destructor(expr->get_type(),
+                                                             destructor))
+        throw std::runtime_error(
+            "AST JSON bound temporary has no exact typed destructor");
+      fields.push_back(rawIntegerField("bound_temporary_destructor",
+                                       idFor(ids, destructor)));
+    }
+    if (expr->has_semantic_wrapper(SgExpression::e_materialized_temporary)) {
+      const auto storage = expr->get_materialized_storage_duration();
+      auto *owner = expr->get_materialized_lifetime_owner();
+      const uint64_t owner_id = idFor(ids, owner);
+      if (!SgExpression::is_valid_temporary_materialization(storage, owner) ||
+          (owner != nullptr && owner_id == 0))
+        throw std::runtime_error(
+            "AST JSON materialized temporary has no collected lifetime owner");
+      fields.push_back(
+          rawIntegerField("materialized_storage_duration", storage));
+      fields.push_back(
+          rawIntegerField("materialized_lifetime_owner", owner_id));
+    }
     const bool fortranIntegerValueAvailable =
         expr->get_fortran_integer_constant_value_is_available();
     const std::int64_t fortranIntegerValue =
@@ -2579,12 +3230,15 @@ rawNodeProperties(SgNode *node,
     if (SgFoldExpression *fold_expression = isSgFoldExpression(expr)) {
       if (fold_expression->get_operands() == nullptr ||
           fold_expression->get_operands()->get_parent() != fold_expression ||
-          fold_expression->get_operator_token().empty()) {
+          fold_expression->get_operator_kind() < SgFoldExpression::e_fold_add ||
+          fold_expression->get_operator_kind() >
+              SgFoldExpression::e_fold_indirect_member_pointer) {
         throw std::runtime_error(
             "AST JSON SgFoldExpression has malformed operands or operator");
       }
-      fields.push_back(rawStringField("operator_token",
-                                      fold_expression->get_operator_token()));
+      fields.push_back(rawIntegerField(
+          "operator_kind",
+          static_cast<int>(fold_expression->get_operator_kind())));
       fields.push_back(rawBoolField(
           "is_left_associative", fold_expression->get_is_left_associative()));
     }
@@ -2617,11 +3271,173 @@ rawNodeProperties(SgNode *node,
       fields.push_back(
           rawIntegerField("assignment_initializer_source_form",
                           static_cast<int>(initializer->get_source_form())));
+      if (serializingTypeOwnedExpression) {
+        SgExpression *operand = initializer->get_operand_i();
+        if (operand == nullptr || operand->get_parent() != initializer)
+          throw std::runtime_error(
+              "AST JSON type-owned SgAssignInitializer has no exact operand");
+        fields.push_back(jsonString("operand") + ": " +
+                         rawTypeOwnedExpressionRef(operand, ids));
+      }
     }
     addExpressionQualificationFields(fields, expr);
+    if (auto *use = isSgCxxDefaultInitExp(expr)) {
+      use->validate();
+      fields.push_back(rawIntegerField("source_kind", use->get_source_kind()));
+      auto *parameter = use->get_source_declaration();
+      const uint64_t id = idFor(ids, parameter);
+      std::ostringstream reference;
+      if (id != 0) {
+        writeRawObject(reference, 0, {rawIntegerField("node", id)}, false);
+      } else {
+        if (use->get_source_kind() == SgCxxDefaultInitExp::e_member)
+          throw std::runtime_error(
+              "AST JSON default member declaration was not collected");
+        if (insideCollectionBoundary(parameter) &&
+            !hasExternalMarkerAncestor(parameter))
+          throw std::runtime_error(
+              "AST JSON default argument parameter was not collected");
+        auto *owner = isSgFunctionDeclaration(parameter->get_declptr());
+        auto *list = isSgFunctionParameterList(parameter->get_parent());
+        const auto position = std::find(list->get_args().begin(),
+                                        list->get_args().end(), parameter);
+        writeRawObject(
+            reference, 0,
+            {jsonString("external_function") + ": " +
+                 rawExternalFunctionJson(owner, ids, true),
+             rawBoolField("source_syntax", list != owner->get_parameterList()),
+             rawIntegerField(
+                 "parameter_index",
+                 std::distance(list->get_args().begin(), position))},
+            false);
+      }
+      fields.push_back(jsonString("source_declaration") + ": " +
+                       reference.str());
+      if (serializingTypeOwnedExpression)
+        fields.push_back(jsonString("expression") + ": " +
+                         rawTypeOwnedExpressionRef(use->get_expression(), ids));
+    }
+    if (auto *binding = isSgOpaqueValueBinding(expr)) {
+      binding->validate();
+      fields.push_back(
+          rawIntegerField("value_category", binding->get_value_category()));
+      fields.push_back(
+          rawIntegerField("object_kind", binding->get_object_kind()));
+      if (serializingTypeOwnedExpression) {
+        if (inlineOpaqueDepth == 0)
+          throw std::runtime_error(
+              "AST JSON inline opaque binding has no owner");
+        fields.push_back(
+            jsonString("source_expression") + ": " +
+            rawTypeOwnedExpressionRef(binding->get_source_expression(), ids));
+        inlineOpaqueBindings.push_back(binding);
+      }
+    }
+    if (auto *reference = isSgOpaqueValueReference(expr)) {
+      reference->validate();
+      fields.push_back(jsonString("binding_reference") + ": " +
+                       rawOpaqueBindingRef(reference->get_binding(), ids));
+    }
+    if (auto *pseudo = isSgPseudoObjectExp(expr)) {
+      pseudo->get_written_expression_checked();
+      fields.push_back(
+          rawIntegerField("value_category", pseudo->get_value_category()));
+      fields.push_back(
+          rawIntegerField("object_kind", pseudo->get_object_kind()));
+      if (serializingTypeOwnedExpression) {
+        std::ostringstream captures;
+        captures << '[';
+        bool first = true;
+        for (auto *binding : pseudo->get_captured_bindings()) {
+          if (!first)
+            captures << ',';
+          first = false;
+          captures << rawOpaqueBindingRef(binding, ids);
+        }
+        captures << ']';
+        fields.push_back(jsonString("captured_bindings") + ": " +
+                         captures.str());
+        fields.push_back(
+            jsonString("written_expression") + ": " +
+            rawTypeOwnedExpressionRef(pseudo->get_written_expression(), ids));
+        OpaqueBindingScope scope(inlineOpaqueBindings, inlineOpaqueDepth);
+        fields.push_back(
+            jsonString("semantic_evaluations") + ": " +
+            rawTypeOwnedExpressionRef(pseudo->get_semantic_evaluations(), ids));
+        const auto &evaluations =
+            pseudo->get_semantic_evaluations()->get_expressions();
+        auto *result = pseudo->get_result_expression();
+        fields.push_back(jsonString("result_index") + ": " +
+                         (result == nullptr
+                              ? "null"
+                              : std::to_string(std::distance(
+                                    evaluations.begin(),
+                                    std::find(evaluations.begin(),
+                                              evaluations.end(), result)))));
+      }
+    }
+    if (auto *loop = isSgCxxArrayInitLoop(expr)) {
+      loop->validate();
+      fields.push_back(jsonString("element_count") + ": " +
+                       rawInteger128Value(Rose::Integer128Value::fromBits(
+                           {loop->get_element_count(), 0}, true)));
+      if (serializingTypeOwnedExpression) {
+        auto *binding = loop->get_binding();
+        std::ostringstream input;
+        writeRawObject(
+            input, 0,
+            {jsonString("flags") + ": " + rawNodeFlagsJson(binding),
+             rawIntegerField("common_value_category",
+                             binding->get_common_value_category()),
+             jsonString("common_source") + ": " +
+                 rawTypeOwnedExpressionRef(binding->get_common_source(), ids)},
+            false);
+        fields.push_back(jsonString("binding") + ": " + input.str());
+        ArrayInitBindingScope scope(inlineArrayInitBindings, binding);
+        fields.push_back(
+            jsonString("element_initializer") + ": " +
+            rawTypeOwnedExpressionRef(loop->get_element_initializer(), ids));
+      }
+    }
+    if (auto *reference = isSgCxxArrayInitReference(expr)) {
+      reference->validate();
+      fields.push_back(
+          rawIntegerField("reference_kind", reference->get_reference_kind()));
+      fields.push_back(
+          rawIntegerField("value_category", reference->get_value_category()));
+      auto *binding = reference->get_binding();
+      if (serializingTypeOwnedExpression &&
+          reference->get_reference_kind() ==
+              SgCxxArrayInitReference::e_current_index &&
+          !inlineArrayInitBindings.empty() &&
+          inlineArrayInitBindings.back() != binding)
+        throw std::runtime_error("AST JSON array initialization index does not "
+                                 "name the innermost binding");
+      const auto found = std::find(inlineArrayInitBindings.rbegin(),
+                                   inlineArrayInitBindings.rend(), binding);
+      if (serializingTypeOwnedExpression &&
+          found != inlineArrayInitBindings.rend()) {
+        fields.push_back(rawIntegerField(
+            "binding_depth",
+            std::distance(inlineArrayInitBindings.rbegin(), found)));
+      } else {
+        const uint64_t id = idFor(ids, binding);
+        if (id == 0)
+          throw std::runtime_error(
+              "AST JSON array initialization binding was not collected");
+        fields.push_back(rawIntegerField("binding", id));
+      }
+    }
     if (SgMacroExpansionExp *macro = isSgMacroExpansionExp(expr)) {
       macro->get_expanded_expression_checked();
       fields.push_back(rawStringField("spelling", macro->get_spelling()));
+      fields.push_back(rawBoolField("expansion_is_modified",
+                                    macro->get_expansion_is_modified()));
+      if (serializingTypeOwnedExpression) {
+        fields.push_back(jsonString("expanded_expression") + ": " +
+                         rawTypeOwnedExpressionRef(
+                             macro->get_expanded_expression_checked(), ids));
+      }
     }
     if (SgSourceLocationBuiltinExp *builtin =
             isSgSourceLocationBuiltinExp(expr)) {
@@ -2637,6 +3453,16 @@ rawNodeProperties(SgNode *node,
           "role", static_cast<int>(null_expression->get_role())));
     }
     if (SgAggregateInitializer *aggregate = isSgAggregateInitializer(expr)) {
+      if (serializingTypeOwnedExpression) {
+        if (aggregate->get_initializers() == nullptr ||
+            aggregate->get_initializers()->get_parent() != aggregate)
+          throw std::runtime_error("AST JSON type-owned aggregate has no "
+                                   "exclusive initializer list");
+        fields.push_back(
+            jsonString("initializers") + ": " +
+            rawTypeOwnedExprListExpJson(aggregate->get_initializers(), ids));
+      }
+
       if (aggregate->get_source_form() ==
           SgAggregateInitializer::e_aggregate_initializer_source_unclassified) {
         throw std::runtime_error(
@@ -2645,6 +3471,25 @@ rawNodeProperties(SgNode *node,
       fields.push_back(
           rawIntegerField("aggregate_source_form",
                           static_cast<int>(aggregate->get_source_form())));
+      const auto &source_roles = aggregate->get_source_element_roles();
+      if (!source_roles.empty() &&
+          (aggregate->get_initializers() == nullptr ||
+           source_roles.size() !=
+               aggregate->get_initializers()->get_expressions().size() ||
+           source_roles.front() >=
+               SgAggregateInitializer::
+                   e_source_element_ast_after_owner_separator ||
+           std::any_of(
+               source_roles.begin(), source_roles.end(),
+               [](unsigned char role) {
+                 return role >
+                        SgAggregateInitializer::
+                            e_source_element_include_expansion_after_owner_separator;
+               })))
+        throw std::runtime_error(
+            "AST JSON aggregate has invalid source element roles");
+      fields.push_back(jsonString("source_element_roles") + ": " +
+                       rawUnsignedCharListJson(source_roles));
       const bool hasExplicitFortranType =
           aggregate->get_fortran_has_source_explicit_type();
       SgType *explicitFortranType =
@@ -2679,7 +3524,9 @@ rawNodeProperties(SgNode *node,
       if (call->get_source_syntax() !=
               SgFunctionCallExp::e_source_function_call &&
           call->get_source_syntax() !=
-              SgFunctionCallExp::e_implicit_conversion) {
+              SgFunctionCallExp::e_implicit_conversion &&
+          call->get_source_syntax() !=
+              SgFunctionCallExp::e_implicit_destruction) {
         throw std::runtime_error(
             "AST JSON SgFunctionCallExp has invalid source syntax");
       }
@@ -2706,7 +3553,7 @@ rawNodeProperties(SgNode *node,
           call->get_source_operator_operand_roles();
       const std::string source_user_defined_literal_suffix =
           call->get_source_user_defined_literal_suffix().getString();
-      SgExprListExp *source_user_defined_literal_operands =
+      SgCxxLiteralTokenList *source_user_defined_literal_operands =
           call->get_source_user_defined_literal_operands();
       const SgUnsignedCharList &source_user_defined_literal_suffix_roles =
           call->get_source_user_defined_literal_suffix_roles();
@@ -2723,8 +3570,8 @@ rawNodeProperties(SgNode *node,
           (has_operator_surface &&
            source_operator_callee_form ==
                SgFunctionCallExp::e_no_operator_callee_form) ||
-          (call->get_source_syntax() ==
-               SgFunctionCallExp::e_implicit_conversion &&
+          (call->get_source_syntax() !=
+               SgFunctionCallExp::e_source_function_call &&
            has_operator_surface) ||
           user_defined_literal != !source_user_defined_literal_suffix.empty() ||
           (user_defined_literal &&
@@ -2738,8 +3585,8 @@ rawNodeProperties(SgNode *node,
                         }) ||
             source_user_defined_literal_operands == nullptr ||
             source_user_defined_literal_operands->get_parent() != call ||
-            source_user_defined_literal_operands->get_expressions().empty() ||
-            source_user_defined_literal_operands->get_expressions().size() !=
+            source_user_defined_literal_operands->get_tokens().empty() ||
+            source_user_defined_literal_operands->get_tokens().size() !=
                 source_user_defined_literal_suffix_roles.size() ||
             std::none_of(source_user_defined_literal_suffix_roles.begin(),
                          source_user_defined_literal_suffix_roles.end(),
@@ -2763,13 +3610,13 @@ rawNodeProperties(SgNode *node,
             "arguments");
       }
       if (user_defined_literal) {
-        for (SgExpression *lexical :
-             source_user_defined_literal_operands->get_expressions()) {
+        fields.push_back(
+            rawBoolField("source_user_defined_literal_is_modified",
+                         call->get_source_user_defined_literal_is_modified()));
+        for (SgCxxLiteralToken *lexical :
+             source_user_defined_literal_operands->get_tokens()) {
           if (lexical == nullptr ||
-              lexical->get_parent() != source_user_defined_literal_operands ||
-              isSgValueExp(lexical) == nullptr ||
-              isSgValueExp(lexical)->get_literal_spelling_form() !=
-                  SgValueExp::e_literal_source_spelled) {
+              lexical->get_parent() != source_user_defined_literal_operands) {
             throw std::runtime_error(
                 "AST JSON SgFunctionCallExp has malformed UDL lexical "
                 "ownership");
@@ -2784,9 +3631,8 @@ rawNodeProperties(SgNode *node,
           rawIntegerField("source_operator_surface", source_operator_surface));
       fields.push_back(rawIntegerField("source_operator_callee_form",
                                        source_operator_callee_form));
-      fields.push_back(
-          jsonString("source_operator_operand_roles") + ": " +
-          rawSourceOperatorOperandRolesJson(source_operator_operand_roles));
+      fields.push_back(jsonString("source_operator_operand_roles") + ": " +
+                       rawUnsignedCharListJson(source_operator_operand_roles));
       fields.push_back(rawStringField("source_user_defined_literal_suffix",
                                       source_user_defined_literal_suffix));
       fields.push_back(
@@ -2804,7 +3650,22 @@ rawNodeProperties(SgNode *node,
                          rawTypeOwnedExpressionRef(call->get_function(), ids));
         fields.push_back(jsonString("args") + ": " +
                          rawTypeOwnedExprListExpJson(call->get_args(), ids));
+        if (user_defined_literal) {
+          fields.push_back(jsonString("source_user_defined_literal_operands") +
+                           ": " +
+                           rawTypeOwnedLiteralTokensJson(
+                               source_user_defined_literal_operands, ids));
+        }
       }
+    }
+    if (auto *range = isSgRangeExp(expr);
+        range != nullptr && serializingTypeOwnedExpression) {
+      fields.push_back(jsonString("start") + ": " +
+                       rawTypeOwnedExpressionRef(range->get_start(), ids));
+      fields.push_back(jsonString("end") + ": " +
+                       rawTypeOwnedExpressionRef(range->get_end(), ids));
+      fields.push_back(jsonString("stride") + ": " +
+                       rawTypeOwnedExpressionRef(range->get_stride(), ids));
     }
     if (SgSubscriptExpression *subscript = isSgSubscriptExpression(expr)) {
       if (serializingTypeOwnedExpression) {
@@ -2832,6 +3693,10 @@ rawNodeProperties(SgNode *node,
         require_owned_child(new_expr->get_constructor_args(),
                             "constructor_args");
         require_owned_child(new_expr->get_builtin_args(), "builtin_args");
+        require_owned_child(new_expr->get_array_bound(), "array_bound");
+        fields.push_back(
+            jsonString("array_bound") + ": " +
+            rawTypeOwnedExpressionRef(new_expr->get_array_bound(), ids));
         fields.push_back(
             jsonString("placement_args") + ": " +
             rawTypeOwnedExprListExpJson(new_expr->get_placement_args(), ids));
@@ -2850,6 +3715,22 @@ rawNodeProperties(SgNode *node,
         fields.push_back(rawIntegerField(
             "new_operator_declaration",
             idFor(ids, new_expr->get_newOperatorDeclaration())));
+      }
+      if (SgDeleteExp *delete_expr = isSgDeleteExp(expr)) {
+        SgExpression *operand = delete_expr->get_variable();
+        if (operand == nullptr || operand->get_parent() != delete_expr)
+          throw std::runtime_error(
+              "AST JSON type-owned SgDeleteExp has no exact owned operand");
+        fields.push_back(jsonString("variable") + ": " +
+                         rawTypeOwnedExpressionRef(operand, ids));
+        if (delete_expr->get_deleteOperatorDeclaration() != nullptr &&
+            idFor(ids, delete_expr->get_deleteOperatorDeclaration()) == 0)
+          throw std::runtime_error(
+              "AST JSON type-owned SgDeleteExp operator declaration was not "
+              "collected");
+        fields.push_back(rawIntegerField(
+            "delete_operator_declaration",
+            idFor(ids, delete_expr->get_deleteOperatorDeclaration())));
       }
       if (SgConstructorInitializer *initializer =
               isSgConstructorInitializer(expr)) {
@@ -2884,6 +3765,22 @@ rawNodeProperties(SgNode *node,
             jsonString("rhs_operand") + ": " +
             rawTypeOwnedExpressionRef(binary->get_rhs_operand_i(), ids));
       }
+      if (auto *requirement = isSgSimpleRequirement(expr)) {
+        fields.push_back(
+            jsonString("expression") + ": " +
+            rawTypeOwnedExpressionRef(requirement->get_expression(), ids));
+      } else if (auto *requirement = isSgCompoundRequirement(expr)) {
+        fields.push_back(
+            jsonString("expression") + ": " +
+            rawTypeOwnedExpressionRef(requirement->get_expression(), ids));
+        fields.push_back(
+            jsonString("type_constraint") + ": " +
+            rawTypeOwnedExpressionRef(requirement->get_type_constraint(), ids));
+      } else if (auto *requirement = isSgNestedRequirement(expr)) {
+        fields.push_back(
+            jsonString("constraint") + ": " +
+            rawTypeOwnedExpressionRef(requirement->get_constraint(), ids));
+      }
       if (SgAwaitExpression *await_expression = isSgAwaitExpression(expr)) {
         fields.push_back(
             jsonString("value") + ": " +
@@ -2898,6 +3795,11 @@ rawNodeProperties(SgNode *node,
             jsonString("pattern_expression") + ": " +
             rawTypeOwnedExpressionRef(pack->get_pattern_expression(), ids));
       }
+      if (SgTypeIdOp *type_id = isSgTypeIdOp(expr)) {
+        fields.push_back(
+            jsonString("operand_expr") + ": " +
+            rawTypeOwnedExpressionRef(type_id->get_operand_expr(), ids));
+      }
       if (SgNoexceptOp *noexcept_op = isSgNoexceptOp(expr)) {
         if (noexcept_op->get_operand_expr() == nullptr ||
             noexcept_op->get_operand_expr()->get_parent() != noexcept_op) {
@@ -2907,6 +3809,14 @@ rawNodeProperties(SgNode *node,
         fields.push_back(
             jsonString("operand_expr") + ": " +
             rawTypeOwnedExpressionRef(noexcept_op->get_operand_expr(), ids));
+      }
+      if (SgVarArgOp *vararg = isSgVarArgOp(expr)) {
+        SgExpression *operand = vararg->get_operand_expr();
+        if (operand == nullptr || operand->get_parent() != vararg)
+          throw std::runtime_error(
+              "AST JSON type-owned va_arg has no exact owned operand");
+        fields.push_back(jsonString("operand_expr") + ": " +
+                         rawTypeOwnedExpressionRef(operand, ids));
       }
       if (SgSizeOfOp *size_of = isSgSizeOfOp(expr)) {
         if (size_of->get_type_defining_declaration() != nullptr) {
@@ -2944,6 +3854,8 @@ rawNodeProperties(SgNode *node,
   if (SgTemplateArgument *argument = isSgTemplateArgument(node)) {
     fields.push_back(
         rawIntegerField("argument_type", argument->get_argumentType()));
+    fields.push_back(rawBoolField("type_elaboration_required",
+                                  argument->get_type_elaboration_required()));
     fields.push_back(rawBoolField("is_array_bound_unknown_type",
                                   argument->get_isArrayBoundUnknownType()));
     fields.push_back(jsonString("type") + ": " +
@@ -2964,8 +3876,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawIntegerField("template_declaration",
                         idFor(ids, argument->get_templateDeclaration())));
-    fields.push_back(rawIntegerField(
-        "initialized_name", idFor(ids, argument->get_initializedName())));
     fields.push_back(rawBoolField("explicitly_specified",
                                   argument->get_explicitlySpecified()));
     fields.push_back(
@@ -3008,12 +3918,19 @@ rawNodeProperties(SgNode *node,
     validateTemplateParameterContract(parameter, "serialization");
     fields.push_back(
         rawIntegerField("parameter_type", parameter->get_parameterType()));
+    fields.push_back(
+        rawIntegerField("canonical_nontype_parameter",
+                        parameter->get_canonicalNonTypeParameter() != nullptr
+                            ? ids.at(parameter->get_canonicalNonTypeParameter())
+                            : 0));
+    fields.push_back(
+        jsonString("canonical_source_identity") + ": " +
+        rawCanonicalSourceIdentityJson(
+            parameter->get_canonical_source_identity(), "SgTemplateParameter"));
     fields.push_back(jsonString("type") + ": " +
                      rawTypeJson(parameter->get_type(), ids));
     fields.push_back(jsonString("default_type_parameter") + ": " +
                      rawTypeJson(parameter->get_defaultTypeParameter(), ids));
-    fields.push_back(jsonString("expression") + ": " +
-                     rawExpressionRef(parameter->get_expression(), ids));
     fields.push_back(jsonString("type_constraint") + ": " +
                      rawExpressionRef(parameter->get_typeConstraint(), ids));
     fields.push_back(
@@ -3028,9 +3945,9 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField(
         "source_spelled_template_declaration",
         idFor(ids, parameter->get_sourceSpelledTemplateDeclaration())));
-    fields.push_back(rawIntegerField(
-        "default_template_declaration_parameter",
-        idFor(ids, parameter->get_defaultTemplateDeclarationParameter())));
+    fields.push_back(
+        rawIntegerField("default_template_argument",
+                        idFor(ids, parameter->get_defaultTemplateArgument())));
     fields.push_back(rawIntegerField(
         "initialized_name", idFor(ids, parameter->get_initializedName())));
     fields.push_back(
@@ -3048,21 +3965,37 @@ rawNodeProperties(SgNode *node,
                                     actual->get_argument_name().getString()));
   }
 
-  if (SgVarRefExp *ref = isSgVarRefExp(node)) {
+  if (auto *ref = isSgCxxDecompositionRefExp(node)) {
+    ref->validate();
+    fields.push_back(
+        rawIntegerField("decomposition", idFor(ids, ref->get_decomposition())));
+  } else if (SgVarRefExp *ref = isSgVarRefExp(node)) {
+    fields.push_back(rawBoolField("is_non_odr_use", ref->get_is_non_odr_use()));
     fields.push_back(rawIntegerField("symbol_declaration",
                                      varRefSymbolDeclarationId(ref, ids)));
-    fields.push_back(rawStringField("symbol_name",
-                                    ref->get_symbol()->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " +
                      rawSymbolRef(ref->get_symbol(), ids));
+  } else if (auto *ref = isSgFunctionParameterRefExp(node)) {
+    (void)ref->get_type();
+    fields.push_back(
+        rawIntegerField("parameter_number", ref->get_parameter_number()));
+    fields.push_back(
+        rawIntegerField("parameter_levels_up", ref->get_parameter_levels_up()));
+  } else if (auto *literal = isSgCompoundLiteralExp(node)) {
+    auto *symbol = literal->get_symbol();
+    const uint64_t declaration =
+        symbol == nullptr ? 0 : idFor(ids, symbol->get_declaration());
+    if (declaration == 0)
+      throw std::runtime_error(
+          "AST JSON SgCompoundLiteralExp requires its collected variable");
+    fields.push_back(rawIntegerField("symbol_declaration", declaration));
+    fields.push_back(jsonString("symbol") + ": " + rawSymbolRef(symbol, ids));
   } else if (SgLabelRefExp *ref = isSgLabelRefExp(node)) {
     if (ref->get_symbol() == nullptr) {
       throw std::runtime_error("AST JSON SgLabelRefExp has no symbol");
     }
     fields.push_back(rawIntegerField(
         "symbol_declaration", idFor(ids, symbolBasis(ref->get_symbol()))));
-    fields.push_back(rawStringField("symbol_name",
-                                    ref->get_symbol()->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " +
                      rawSymbolRef(ref->get_symbol(), ids));
   } else if (SgFunctionRefExp *ref = isSgFunctionRefExp(node)) {
@@ -3109,11 +4042,15 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(
         rawIntegerField("symbol_declaration", external_decl ? 0 : decl_id));
-    fields.push_back(
-        rawStringField("symbol_name", symbol->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " + rawSymbolRef(symbol, ids));
     fields.push_back(jsonString("external_function") + ": " +
                      rawExternalFunctionJson(decl, ids));
+    auto *implicit = ref->get_c_implicit_declaration();
+    const uint64_t implicit_id = idFor(ids, implicit);
+    if (implicit != nullptr && implicit_id == 0)
+      throw std::runtime_error(
+          "AST JSON implicit function declaration was not collected");
+    fields.push_back(rawIntegerField("c_implicit_declaration", implicit_id));
     fields.push_back(
         jsonString("fortran_source_visible_symbol") + ": " +
         rawExactBoundSymbolRef(ref->get_fortran_source_visible_symbol(), ids));
@@ -3129,8 +4066,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawIntegerField("symbol_declaration",
                         idFor(ids, ref->get_symbol()->get_declaration())));
-    fields.push_back(rawStringField("symbol_name",
-                                    ref->get_symbol()->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " +
                      rawSymbolRef(ref->get_symbol(), ids));
     SgFunctionDeclaration *semantic_function =
@@ -3152,8 +4087,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawIntegerField("symbol_declaration",
                         idFor(ids, ref->get_symbol_i()->get_declaration())));
-    fields.push_back(rawStringField(
-        "symbol_name", ref->get_symbol_i()->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " +
                      rawSymbolRef(ref->get_symbol_i(), ids));
     fields.push_back(rawIntegerField("virtual_call", ref->get_virtual_call()));
@@ -3170,8 +4103,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawIntegerField("symbol_declaration",
                         idFor(ids, ref->get_symbol()->get_declaration())));
-    fields.push_back(rawStringField("symbol_name",
-                                    ref->get_symbol()->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " +
                      rawSymbolRef(ref->get_symbol(), ids));
     fields.push_back(rawIntegerField("virtual_call", ref->get_virtual_call()));
@@ -3208,19 +4139,36 @@ rawNodeProperties(SgNode *node,
         "class_symbol_declaration",
         idFor(ids, class_symbol != nullptr ? class_symbol->get_declaration()
                                            : nullptr)));
-    fields.push_back(rawStringField(
-        "class_symbol_name",
-        class_symbol != nullptr ? class_symbol->get_name().getString() : ""));
     fields.push_back(rawIntegerField(
         "nonreal_symbol_declaration",
         idFor(ids, nonreal_symbol != nullptr ? nonreal_symbol->get_declaration()
                                              : nullptr)));
-    fields.push_back(rawStringField("nonreal_symbol_name",
-                                    nonreal_symbol != nullptr
-                                        ? nonreal_symbol->get_name().getString()
-                                        : ""));
-    fields.push_back(rawIntegerField("pobj_this", expr->get_pobj_this()));
   } else if (SgNonrealRefExp *ref = isSgNonrealRefExp(node)) {
+    if (ref->get_name_kind() == SgNonrealRefExp::e_destructor_id &&
+        (ref->get_semantic_role() != SgNonrealRefExp::e_dependent_callable ||
+         ref->get_explicit_template_argument_list() ||
+         !ref->get_templateArguments().empty() ||
+         ref->get_resolved_function_declaration() != nullptr ||
+         ref->get_resolved_variable_declaration() != nullptr)) {
+      throw std::runtime_error(
+          "AST JSON dependent destructor has invalid identity");
+    }
+    const bool conversion =
+        ref->get_name_kind() == SgNonrealRefExp::e_conversion_function_id;
+    SgTypeExpression *type_id = ref->get_conversion_type_id();
+    if ((!conversion &&
+         ref->get_name_kind() != SgNonrealRefExp::e_ordinary_name &&
+         ref->get_name_kind() != SgNonrealRefExp::e_destructor_id) ||
+        conversion != (type_id != nullptr) ||
+        (type_id != nullptr && type_id->get_parent() != ref)) {
+      throw std::runtime_error(
+          "AST JSON nonreal reference has inconsistent typed name");
+    }
+    fields.push_back(rawIntegerField("name_kind", ref->get_name_kind()));
+    if (serializingTypeOwnedExpression) {
+      fields.push_back(jsonString("conversion_type_id") + ": " +
+                       rawTypeOwnedExpressionRef(type_id, ids));
+    }
     SgNonrealSymbol *symbol = ref->get_symbol();
     if (symbol == nullptr || idFor(ids, symbol->get_declaration()) == 0) {
       throw std::runtime_error(
@@ -3228,13 +4176,15 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(rawIntegerField("symbol_declaration",
                                      idFor(ids, symbol->get_declaration())));
-    fields.push_back(
-        rawStringField("symbol_name", symbol->get_name().getString()));
     fields.push_back(jsonString("symbol") + ": " + rawSymbolRef(symbol, ids));
     SgFunctionDeclaration *resolved_function =
         ref->get_resolved_function_declaration();
     SgTemplateVariableDeclaration *resolved_variable =
         ref->get_resolved_variable_declaration();
+    if (ref->get_is_non_odr_use() && resolved_variable == nullptr) {
+      throw std::runtime_error(
+          "AST JSON non-ODR reference requires an exact variable template");
+    }
     if (resolved_function != nullptr && resolved_variable != nullptr) {
       throw std::runtime_error(
           "AST JSON SgNonrealRefExp resolves to both a function and a "
@@ -3262,6 +4212,7 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(rawIntegerField("resolved_variable_declaration",
                                      idFor(ids, resolved_variable)));
+    fields.push_back(rawBoolField("is_non_odr_use", ref->get_is_non_odr_use()));
     fields.push_back(rawIntegerField(
         "semantic_role", static_cast<int>(ref->get_semantic_role())));
     fields.push_back(
@@ -3334,8 +4285,25 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField("separator", item->get_separator()));
     fields.push_back(
         rawStringField("transformation_name", item->get_transformation_name()));
+  } else if (SgOmpInitModifierList *list = isSgOmpInitModifierList(node)) {
+    if (serializingTypeOwnedExpression) {
+      const SgExpressionPtrList modifiers(list->get_modifiers().begin(),
+                                          list->get_modifiers().end());
+      fields.push_back(jsonString("modifiers") + ": " +
+                       rawTypeOwnedExpressionListJson(modifiers, ids));
+    }
+  } else if (SgOmpAppendArgsOperation *operation =
+                 isSgOmpAppendArgsOperation(node)) {
+    if (serializingTypeOwnedExpression)
+      fields.push_back(
+          jsonString("modifier_list") + ": " +
+          rawTypeOwnedExpressionRef(operation->get_modifier_list(), ids));
   } else if (SgOmpInitModifier *modifier = isSgOmpInitModifier(node)) {
     fields.push_back(rawIntegerField("kind", modifier->get_kind()));
+    if (serializingTypeOwnedExpression)
+      fields.push_back(
+          jsonString("expression") + ": " +
+          rawTypeOwnedExpressionRef(modifier->get_expression(), ids));
   } else if (SgOmpMapDistDataPolicy *policy = isSgOmpMapDistDataPolicy(node)) {
     fields.push_back(rawIntegerField("policy", policy->get_policy()));
   } else if (SgBoolValExp *value = isSgBoolValExp(node)) {
@@ -3358,6 +4326,12 @@ rawNodeProperties(SgNode *node,
   } else if (SgUnsignedLongVal *value = isSgUnsignedLongVal(node)) {
     fields.push_back(rawIntegerField("value", value->get_value()));
     fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgInteger128Val *value = isSgInteger128Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawInteger128Value(value->get_value()));
+  } else if (SgFortranBOZVal *value = isSgFortranBOZVal(node)) {
+    fields.push_back(jsonString("bits") + ": " +
+                     rawInteger128Value(value->get_bits()));
   } else if (SgLongLongIntVal *value = isSgLongLongIntVal(node)) {
     fields.push_back(rawIntegerField("value", value->get_value()));
     fields.push_back(rawStringField("value_string", value->get_valueString()));
@@ -3369,13 +4343,57 @@ rawNodeProperties(SgNode *node,
   } else if (SgCharVal *value = isSgCharVal(node)) {
     fields.push_back(rawIntegerField("value", value->get_value()));
     fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgSignedCharVal *value = isSgSignedCharVal(node)) {
+    fields.push_back(rawIntegerField("value", value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
   } else if (SgUnsignedCharVal *value = isSgUnsignedCharVal(node)) {
     fields.push_back(rawIntegerField("value", value->get_value()));
     fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgWcharVal *value = isSgWcharVal(node)) {
+    fields.push_back(rawIntegerField("value", value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgChar16Val *value = isSgChar16Val(node)) {
+    fields.push_back(rawIntegerField("value", value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgChar32Val *value = isSgChar32Val(node)) {
+    fields.push_back(rawIntegerField("value", value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgFloat16Val *value = isSgFloat16Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgBFloat16Val *value = isSgBFloat16Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgFloat32Val *value = isSgFloat32Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgFloat64Val *value = isSgFloat64Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
   } else if (SgFloatVal *value = isSgFloatVal(node)) {
-    fields.push_back(rawStringField("value", value->get_valueString()));
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
   } else if (SgDoubleVal *value = isSgDoubleVal(node)) {
-    fields.push_back(rawStringField("value", value->get_valueString()));
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawFloatingValueBits(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgLongDoubleVal *value = isSgLongDoubleVal(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawExtendedFloatingValue(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgFloat80Val *value = isSgFloat80Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawExtendedFloatingValue(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
+  } else if (SgFloat128Val *value = isSgFloat128Val(node)) {
+    fields.push_back(jsonString("value_bits") + ": " +
+                     rawExtendedFloatingValue(value->get_value()));
+    fields.push_back(rawStringField("value_string", value->get_valueString()));
   } else if (SgComplexVal *value = isSgComplexVal(node)) {
     fields.push_back(jsonString("precision_type") + ": " +
                      rawTypeJson(value->get_precisionType(), ids));
@@ -3384,9 +4402,16 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         jsonString("imaginary_value") + ": " +
         rawTypeOwnedExpressionRef(value->get_imaginary_value(), ids));
-    fields.push_back(rawStringField("value_string", value->get_valueString()));
   } else if (SgStringVal *value = isSgStringVal(node)) {
-    fields.push_back(rawStringField("value", value->get_value()));
+    std::ostringstream units;
+    units << "[";
+    for (size_t index = 0; index < value->get_value().size(); ++index) {
+      if (index != 0)
+        units << ",";
+      units << value->get_value()[index];
+    }
+    units << "]";
+    fields.push_back(jsonString("code_units") + ": " + units.str());
     fields.push_back(rawIntegerField(
         "literal_encoding", static_cast<int>(value->get_literal_encoding())));
     fields.push_back(
@@ -3413,7 +4438,8 @@ rawNodeProperties(SgNode *node,
   } else if (SgTemplateParameterVal *value = isSgTemplateParameterVal(node)) {
     fields.push_back(rawIntegerField("template_parameter_position",
                                      value->get_template_parameter_position()));
-    fields.push_back(rawStringField("value_string", value->get_valueString()));
+    fields.push_back(rawIntegerField(
+        "template_parameter", idFor(ids, value->get_template_parameter())));
   } else if (SgCastExp *cast = isSgCastExp(node)) {
     cast->validate_semantic_conversion();
     if (serializingTypeOwnedExpression &&
@@ -3422,48 +4448,14 @@ rawNodeProperties(SgNode *node,
           "AST JSON type-owned SgCastExp cannot contain an inline defining "
           "declaration");
     }
-    const bool explicit_cast =
-        cast->get_cast_type() != SgCastExp::e_implicit_cast;
-    if (explicit_cast != (cast->get_source_type() != nullptr) ||
-        (!cast->get_explicit_name_qualification_present() &&
+    if ((!cast->get_explicit_name_qualification_present() &&
          (cast->get_explicit_global_qualification() ||
           !cast->get_explicit_name_qualification_tokens().empty())) ||
         (cast->get_explicit_name_qualification_present() !=
          (cast->get_source_type_elaboration_kind() !=
           SgNonrealDecl::e_source_elaboration_unspecified))) {
-      std::ostringstream message;
-      message << "AST JSON SgCastExp has inconsistent written type provenance"
-              << " cast=" << cast
-              << " cast_type=" << static_cast<int>(cast->get_cast_type())
-              << " source_type=" << cast->get_source_type()
-              << " result_type=" << cast->get_type() << " qualifier_present="
-              << cast->get_explicit_name_qualification_present()
-              << " global=" << cast->get_explicit_global_qualification()
-              << " qualifier_tokens="
-              << cast->get_explicit_name_qualification_tokens().size()
-              << " parent=" << cast->get_parent() << "/"
-              << (cast->get_parent() != nullptr
-                      ? cast->get_parent()->class_name()
-                      : std::string("<null>"))
-              << " file="
-              << (cast->get_file_info() != nullptr
-                      ? cast->get_file_info()->get_filenameString()
-                      : std::string("<null>"))
-              << ":"
-              << (cast->get_file_info() != nullptr
-                      ? cast->get_file_info()->get_line()
-                      : -1)
-              << ":"
-              << (cast->get_file_info() != nullptr
-                      ? cast->get_file_info()->get_col()
-                      : -1)
-              << " compiler_generated="
-              << (cast->get_file_info() != nullptr &&
-                  cast->get_file_info()->isCompilerGenerated())
-              << " transformation="
-              << (cast->get_file_info() != nullptr &&
-                  cast->get_file_info()->isTransformation());
-      throw std::runtime_error(message.str());
+      throw std::runtime_error(
+          "AST JSON SgCastExp has inconsistent written type qualification");
     }
     if (cast->get_type_defining_declaration() != nullptr &&
         cast->get_type_defining_declaration()->get_parent() != cast) {
@@ -3509,6 +4501,8 @@ rawNodeProperties(SgNode *node,
     fields.push_back(base_path.str());
   } else if (SgConstructorInitializer *init =
                  isSgConstructorInitializer(node)) {
+    init->validate_elision();
+    init->validate_argument_context();
     if ((!init->get_explicit_name_qualification_present() &&
          (init->get_explicit_global_qualification() ||
           !init->get_explicit_name_qualification_tokens().empty())) ||
@@ -3519,6 +4513,11 @@ rawNodeProperties(SgNode *node,
           "AST JSON SgConstructorInitializer has inconsistent written type "
           "provenance");
     }
+    fields.push_back(rawBoolField("is_elidable", init->get_is_elidable()));
+    fields.push_back(
+        rawIntegerField("argument_source", init->get_argument_source()));
+    fields.push_back(
+        rawBoolField("elision_permitted", init->get_elision_permitted()));
     fields.push_back(rawBoolField("need_name", init->get_need_name()));
     fields.push_back(
         rawBoolField("need_qualifier", init->get_need_qualifier()));
@@ -3544,17 +4543,27 @@ rawNodeProperties(SgNode *node,
   } else if (SgContinueStmt *stmt = isSgContinueStmt(node)) {
     fields.push_back(
         rawStringField("do_string_label", stmt->get_do_string_label()));
+  } else if (auto *stmt = isSgImageControlStatement(node)) {
+    if (auto *form_team = isSgFormTeamStatement(stmt))
+      form_team->validate_operands();
+    fields.push_back(rawIntegerField("image_control_statement",
+                                     stmt->get_image_control_statement()));
+    if (auto *images = isSgSyncImagesStatement(stmt))
+      fields.push_back(rawBoolField("all_images", images->get_all_images()));
   } else if (SgProcessControlStatement *stmt =
                  isSgProcessControlStatement(node)) {
     fields.push_back(rawIntegerField("control_kind", stmt->get_control_kind()));
   } else if (SgAttributeSpecificationStatement *stmt =
                  isSgAttributeSpecificationStatement(node)) {
+    stmt->validate_data_groups();
     fields.push_back(
         rawIntegerField("attribute_kind", stmt->get_attribute_kind()));
-    fields.push_back(rawIntegerField("intent", stmt->get_intent()));
     fields.push_back(jsonString("name_list") + ": " +
                      rawStringListJson(stmt->get_name_list()));
   } else if (SgInterfaceStatement *stmt = isSgInterfaceStatement(node)) {
+    validateFortranInterfaceFields(
+        {stmt->get_name(), stmt->get_generic_spec(),
+         stmt->get_declarationModifier().get_typeModifier().isAbstract()});
     fields.push_back(rawStringField("name", stmt->get_name().getString()));
     fields.push_back(rawIntegerField("generic_spec", stmt->get_generic_spec()));
   } else if (SgInterfaceBody *body = isSgInterfaceBody(node)) {
@@ -3565,9 +4574,21 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField(
         "function_declaration", idFor(ids, body->get_functionDeclaration())));
   } else if (SgCaseOptionStmt *stmt = isSgCaseOptionStmt(node)) {
+    auto *key = stmt->get_key();
+    auto *body = stmt->get_body();
+    auto *end = stmt->get_key_range_end();
+    if (key == nullptr || body == nullptr || key->get_parent() != stmt ||
+        body->get_parent() != stmt ||
+        (end != nullptr && (end == key || end->get_parent() != stmt)) ||
+        (isSgExprListExp(key) &&
+         (end != nullptr || isSgExprListExp(key)->get_expressions().empty())))
+      throw std::runtime_error("AST JSON CASE requires exact owned children");
     fields.push_back(
         rawStringField("case_construct_name", stmt->get_case_construct_name()));
   } else if (SgDefaultOptionStmt *stmt = isSgDefaultOptionStmt(node)) {
+    if (stmt->get_body() == nullptr || stmt->get_body()->get_parent() != stmt)
+      throw std::runtime_error(
+          "AST JSON DEFAULT requires its exact owned body");
     fields.push_back(rawStringField("default_construct_name",
                                     stmt->get_default_construct_name()));
   } else if (SgPseudoDestructorRefExp *pseudo =
@@ -3578,7 +4599,16 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(jsonString("object_type") + ": " +
                      rawTypeJson(pseudo->get_object_type(), ids));
+  } else if (SgTypeIdOp *type_id = isSgTypeIdOp(node)) {
+    (void)type_id->get_type();
+    fields.push_back(jsonString("operand_type") + ": " +
+                     rawTypeJson(type_id->get_operand_type(), ids));
+    fields.push_back(rawBoolField("operand_is_evaluated",
+                                  type_id->get_operand_is_evaluated()));
   } else if (SgSizeOfOp *size_of = isSgSizeOfOp(node)) {
+    fields.push_back(
+        jsonString("evaluated_value") + ": " +
+        rawUnaryTraitEvaluatedValue(size_of->get_evaluated_value(), false));
     if ((size_of->get_operand_expr() == nullptr) ==
         (size_of->get_operand_type() == nullptr)) {
       throw std::runtime_error(
@@ -3596,8 +4626,18 @@ rawNodeProperties(SgNode *node,
         "is_objectless_nonstatic_data_member_reference",
         size_of->get_is_objectless_nonstatic_data_member_reference()));
     fields.push_back(
-        rawBoolField("is_sizeof_pack", size_of->get_is_sizeof_pack()));
+        rawIntegerField("operator_kind", size_of->get_operator_kind()));
+    fields.push_back(rawBoolField("type_elaboration_required",
+                                  size_of->get_type_elaboration_required()));
+    fields.push_back(
+        rawIntegerField("source_type_elaboration_kind",
+                        size_of->get_source_type_elaboration_kind()));
   } else if (SgAlignOfOp *align_of = isSgAlignOfOp(node)) {
+    fields.push_back(
+        jsonString("evaluated_value") + ": " +
+        rawUnaryTraitEvaluatedValue(align_of->get_evaluated_value(), true));
+    fields.push_back(
+        rawIntegerField("operator_kind", align_of->get_operator_kind()));
     if ((align_of->get_operand_expr() == nullptr) ==
         (align_of->get_operand_type() == nullptr)) {
       throw std::runtime_error(
@@ -3611,15 +4651,42 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(jsonString("operand_type") + ": " +
                      rawTypeJson(align_of->get_operand_type(), ids));
+    fields.push_back(rawBoolField("type_elaboration_required",
+                                  align_of->get_type_elaboration_required()));
+    fields.push_back(
+        rawIntegerField("source_type_elaboration_kind",
+                        align_of->get_source_type_elaboration_kind()));
   } else if (SgRequiresExpr *requires_expr = isSgRequiresExpr(node)) {
+    SgFunctionParameterList *parameters =
+        requires_expr->get_local_parameter_list();
+    SgFunctionParameterScope *scope =
+        requires_expr->get_local_parameter_scope();
+    auto *syntax = requires_expr->get_local_parameter_list_syntax();
     if (requires_expr->get_requirements() == nullptr ||
         requires_expr->get_requirements()->get_parent() != requires_expr ||
         requires_expr->get_requirements()->get_expressions().empty() ||
-        (requires_expr->get_local_parameter_list() != nullptr &&
-         requires_expr->get_local_parameter_list()->get_parent() !=
-             requires_expr)) {
+        ((parameters == nullptr) != (scope == nullptr)) ||
+        (syntax != nullptr &&
+         (parameters == nullptr || syntax == parameters ||
+          syntax->get_parent() != requires_expr ||
+          syntax->get_args().size() != parameters->get_args().size())) ||
+        (parameters != nullptr && (parameters->get_parent() != requires_expr ||
+                                   scope->get_parent() != requires_expr))) {
       throw std::runtime_error(
           "AST JSON SgRequiresExpr has malformed typed ownership");
+    }
+    for (SgExpression *requirement :
+         requires_expr->get_requirements()->get_expressions()) {
+      if (requirement == nullptr ||
+          requirement->get_parent() != requires_expr->get_requirements() ||
+          !(isSgSimpleRequirement(requirement) ||
+            isSgTypeRequirement(requirement) ||
+            isSgCompoundRequirement(requirement) ||
+            isSgNestedRequirement(requirement) ||
+            isSgRequirementSubstitutionFailure(requirement))) {
+        throw std::runtime_error(
+            "AST JSON SgRequiresExpr has an invalid owned requirement");
+      }
     }
   } else if (SgSimpleRequirement *requirement = isSgSimpleRequirement(node)) {
     if (requirement->get_expression() == nullptr ||
@@ -3645,10 +4712,28 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawStringField("diagnostic_message",
                                     failure->get_diagnostic_message()));
   } else if (SgTypeRequirement *requirement = isSgTypeRequirement(node)) {
-    if (requirement->get_required_type() == nullptr) {
+    if (SageInterface::containsUnknownType(requirement->get_required_type())) {
       throw std::runtime_error(
           "AST JSON SgTypeRequirement has no exact required type");
     }
+    const SgStringList qualification_tokens =
+        requirement->get_explicit_name_qualification_tokens();
+    if ((!requirement->get_explicit_name_qualification_present() &&
+         (requirement->get_explicit_global_qualification() ||
+          !qualification_tokens.empty())) ||
+        std::any_of(qualification_tokens.begin(), qualification_tokens.end(),
+                    [](const std::string &token) { return token.empty(); })) {
+      throw std::runtime_error(
+          "AST JSON SgTypeRequirement has contradictory source qualification");
+    }
+    fields.push_back(
+        rawBoolField("explicit_name_qualification_present",
+                     requirement->get_explicit_name_qualification_present()));
+    fields.push_back(
+        rawBoolField("explicit_global_qualification",
+                     requirement->get_explicit_global_qualification()));
+    fields.push_back(jsonString("explicit_name_qualification_tokens") + ": " +
+                     rawStringListJson(qualification_tokens));
     fields.push_back(jsonString("required_type") + ": " +
                      rawTypeJson(requirement->get_required_type(), ids));
   } else if (SgCompoundRequirement *requirement =
@@ -3673,8 +4758,42 @@ rawNodeProperties(SgNode *node,
                                      clause->get_directive_name_modifier()));
   }
 
+  if (auto *address = isSgAddressOfOp(node)) {
+    (void)address->get_type();
+    fields.push_back(rawIntegerField("address_operand_form",
+                                     address->get_address_operand_form()));
+  }
   if (SgUnaryOp *unary = isSgUnaryOp(node)) {
     fields.push_back(rawIntegerField("mode", unary->get_mode()));
+  }
+  if (auto *defined = isSgUserDefinedUnaryOp(node)) {
+    if (defined->get_symbol() == nullptr ||
+        defined->get_symbol()->get_declaration() == nullptr ||
+        defined->get_operator_name().getString().empty() ||
+        defined->get_mode() != SgUnaryOp::prefix) {
+      throw std::runtime_error("AST JSON SgUserDefinedUnaryOp has no exact "
+                               "procedure binding or prefix source form");
+    }
+    fields.push_back(rawStringField("operator_name",
+                                    defined->get_operator_name().getString()));
+    fields.push_back(jsonString("symbol") + ": " +
+                     rawSymbolRef(defined->get_symbol(), ids));
+  }
+
+  if (auto *element = isSgVectorElementExp(node)) {
+    fields.push_back(
+        rawIntegerField("selector_kind", element->get_selector_kind()));
+    fields.push_back(rawBoolField("is_arrow", element->get_is_arrow()));
+    std::ostringstream components;
+    components << '[';
+    const auto &indices = element->get_components();
+    for (size_t index = 0; index < indices.size(); ++index) {
+      if (index != 0)
+        components << ", ";
+      components << indices[index];
+    }
+    components << ']';
+    fields.push_back(jsonString("components") + ": " + components.str());
   }
 
   if (SgThrowOp *throw_op = isSgThrowOp(node)) {
@@ -3710,47 +4829,16 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawIntegerField("modifier1", clause->get_modifier1()));
     fields.push_back(rawIntegerField("modifier2", clause->get_modifier2()));
     fields.push_back(rawIntegerField("modifier3", clause->get_modifier3()));
-    const SgOmpClause::omp_map_modifier_enum modifiers[] = {
+    const std::array<SgOmpClause::omp_map_modifier_enum, 3> modifiers = {
         clause->get_modifier1(), clause->get_modifier2(),
         clause->get_modifier3()};
-    bool saw_unspecified_modifier = false;
-    std::set<int> unique_modifiers;
-    size_t mapper_modifier_count = 0;
-    size_t iterator_modifier_count = 0;
-    for (SgOmpClause::omp_map_modifier_enum modifier : modifiers) {
-      switch (modifier) {
-      case SgOmpClause::e_omp_map_modifier_unspecified:
-        saw_unspecified_modifier = true;
-        continue;
-      case SgOmpClause::e_omp_map_modifier_always:
-      case SgOmpClause::e_omp_map_modifier_close:
-      case SgOmpClause::e_omp_map_modifier_present:
-      case SgOmpClause::e_omp_map_modifier_self:
-      case SgOmpClause::e_omp_map_modifier_mapper:
-      case SgOmpClause::e_omp_map_modifier_iterator:
-        break;
-      default:
-        throw std::runtime_error(
-            "AST JSON OpenMP map clause has an invalid modifier");
-      }
-      if (saw_unspecified_modifier ||
-          !unique_modifiers.insert(static_cast<int>(modifier)).second) {
-        throw std::runtime_error(
-            "AST JSON OpenMP map modifiers are not a unique contiguous "
-            "sequence");
-      }
-      mapper_modifier_count +=
-          modifier == SgOmpClause::e_omp_map_modifier_mapper ? 1 : 0;
-      iterator_modifier_count +=
-          modifier == SgOmpClause::e_omp_map_modifier_iterator ? 1 : 0;
-    }
-    if (mapper_modifier_count > 1 || iterator_modifier_count > 1) {
-      throw std::runtime_error(
-          "AST JSON OpenMP map clause has duplicate mapper or iterator "
-          "modifiers");
-    }
+    Rose::OpenMP::Detail::MapModifierFields modifier_fields;
+    std::string modifier_error;
+    if (!Rose::OpenMP::Detail::validateMapModifiers(modifiers, modifier_fields,
+                                                    &modifier_error))
+      throw std::runtime_error("AST JSON OpenMP " + modifier_error);
     SgOmpNameExpression *mapper_identifier = clause->get_mapper_identifier();
-    if ((mapper_modifier_count == 1) != (mapper_identifier != nullptr) ||
+    if (modifier_fields.mapper != (mapper_identifier != nullptr) ||
         (mapper_identifier != nullptr &&
          (mapper_identifier->get_spelling().empty() ||
           mapper_identifier->get_parent() != clause))) {
@@ -3759,7 +4847,7 @@ rawNodeProperties(SgNode *node,
           "disagree");
     }
     validate_iterator_definitions(clause, clause->get_iterator_definitions(),
-                                  iterator_modifier_count == 1);
+                                  modifier_fields.iterator);
   } else if (SgOmpDeviceClause *clause = isSgOmpDeviceClause(node)) {
     fields.push_back(rawIntegerField("modifier", clause->get_modifier()));
   } else if (SgOmpDefaultClause *clause = isSgOmpDefaultClause(node)) {
@@ -3894,11 +4982,6 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         jsonString("allocator_traits_array") + ": " +
         rawExpressionRef(definition->get_allocator_traits_array(), ids));
-  } else if (SgOmpUsesAllocatorsClause *clause =
-                 isSgOmpUsesAllocatorsClause(node)) {
-    fields.push_back(jsonString("uses_allocators_definitions") + ": " +
-                     rawOmpUsesAllocatorsDefinitionsJson(
-                         clause->get_uses_allocators_defination(), ids));
   } else if (SgOmpDependClause *clause = isSgOmpDependClause(node)) {
     fields.push_back(
         rawIntegerField("depend_modifier", clause->get_depend_modifier()));
@@ -4191,32 +5274,121 @@ rawNodeProperties(SgNode *node,
         rawIntegerField("device_type_kind", stmt->get_device_type_kind()));
   }
   if (SgImplicitStatement *stmt = isSgImplicitStatement(node)) {
-    fields.push_back(rawBoolField("implicit_none", stmt->get_implicit_none()));
+    stmt->validate_implicit_statement();
     fields.push_back(
         rawIntegerField("implicit_spec", stmt->get_implicit_spec()));
+  }
+  if (auto *initializer = isSgFortranDataInitializer(node))
+    initializer->validate_initializer();
+  if (auto *item = isSgFormatItem(node)) {
+    item->validate();
+    fields.push_back(jsonString("descriptor") + ": " +
+                     rawFormatDescriptor(item->get_descriptor()));
+    fields.push_back(jsonString("repeat_count") + ": " +
+                     (item->get_repeat_count()
+                          ? rawInteger128Value(Rose::Integer128Value::fromBits(
+                                {*item->get_repeat_count(), 0}, true))
+                          : "null"));
+  }
+  if (auto *list = isSgFormatItemList(node))
+    list->validate();
+  if (auto *statement = isSgFormatStatement(node)) {
+    ASSERT_not_null(statement->get_format_item_list());
+    ROSE_ASSERT(statement->get_format_item_list()->get_parent() == statement);
+    statement->get_format_item_list()->validate();
+  }
+  if (auto *group = isSgDataStatementGroup(node))
+    group->validate_group();
+  if (auto *object = isSgDataStatementObject(node))
+    object->validate_object();
+  if (auto *statement = isSgReadStatement(node))
+    fields.push_back(jsonString("namelist") + ": " +
+                     rawExactBoundSymbolRef(statement->get_namelist(), ids));
+  if (auto *statement = isSgWriteStatement(node))
+    fields.push_back(jsonString("namelist") + ": " +
+                     rawExactBoundSymbolRef(statement->get_namelist(), ids));
+  if (auto *group = isSgNameGroup(node)) {
+    group->validate_group();
+    fields.push_back(jsonString("group_name") + ": " +
+                     jsonString(group->get_group_name()));
+  }
+  if (auto *value = isSgDataStatementValue(node))
+    value->validate_value();
+  if (auto *range = isSgFortranImplicitRange(node)) {
+    range->validate_range();
+    fields.push_back(
+        rawIntegerField("first_letter", range->get_first_letter()));
+    fields.push_back(
+        jsonString("last_letter") + ": " +
+        (range->get_last_letter()
+             ? std::to_string(static_cast<int>(*range->get_last_letter()))
+             : "null"));
+    fields.push_back(rawIntegerField("type_spec", range->get_type_spec()));
+    fields.push_back(jsonString("type") + ": " +
+                     rawTypeJson(range->get_type(), ids));
+    fields.push_back(
+        jsonString("source_derived_type_symbol") + ": " +
+        rawExactBoundSymbolRef(range->get_source_derived_type_symbol(), ids));
   }
   if (SgFortranIncludeLine *stmt = isSgFortranIncludeLine(node)) {
     fields.push_back(rawStringField("filename", stmt->get_filename()));
   }
   if (SgLabelStatement *stmt = isSgLabelStatement(node)) {
     fields.push_back(rawStringField("label", stmt->get_label().getString()));
-    fields.push_back(
-        rawBoolField("gnu_extension_unused", stmt->get_gnu_extension_unused()));
   }
   if (SgBasicBlock *stmt = isSgBasicBlock(node)) {
     fields.push_back(rawBoolField("is_fortran_block_construct",
                                   stmt->get_is_fortran_block_construct()));
+    fields.push_back(rawBoolField("is_implicit_control_flow_scope",
+                                  stmt->get_is_implicit_control_flow_scope()));
     fields.push_back(rawStringField("fortran_block_construct_name",
                                     stmt->get_fortran_block_construct_name()));
   }
   if (SgIfStmt *stmt = isSgIfStmt(node)) {
+    const auto if_kind = stmt->get_if_statement_kind();
+    if (if_kind < SgIfStmt::e_if_ordinary ||
+        if_kind > SgIfStmt::e_if_not_consteval)
+      throw std::runtime_error("AST JSON IF has an invalid statement kind");
+    if (stmt->get_use_then_keyword() && if_kind != SgIfStmt::e_if_ordinary)
+      throw std::runtime_error("AST JSON IF has an invalid Fortran role");
+    if (stmt->get_is_if_consteval_statement() &&
+        (stmt->get_conditional() != nullptr ||
+         isSgBasicBlock(stmt->get_true_body()) == nullptr ||
+         (stmt->get_false_body() != nullptr &&
+          isSgBasicBlock(stmt->get_false_body()) == nullptr)))
+      throw std::runtime_error("AST JSON IF has an invalid consteval shape");
+    if ((stmt->get_if_constexpr_value_known() &&
+         !stmt->get_is_if_constexpr_statement()) ||
+        (stmt->get_if_constexpr_value() &&
+         !stmt->get_if_constexpr_value_known()))
+      throw std::runtime_error("AST JSON IF has invalid constexpr state");
+    if (stmt->get_is_else_if_statement() &&
+        (!stmt->get_use_then_keyword() || stmt->get_has_end_statement() ||
+         stmt->get_is_if_constexpr_statement()))
+      throw std::runtime_error("AST JSON IF has an invalid ELSE IF role");
     fields.push_back(rawStringField("string_label", stmt->get_string_label()));
+    if (!stmt->get_else_construct_name().empty() &&
+        (!stmt->get_use_then_keyword() ||
+         stmt->get_is_if_constexpr_statement() ||
+         isSgBasicBlock(stmt->get_false_body()) == nullptr))
+      throw std::runtime_error("AST JSON IF has an invalid named ELSE role");
+    fields.push_back(
+        rawStringField("else_construct_name", stmt->get_else_construct_name()));
     fields.push_back(
         rawBoolField("has_end_statement", stmt->get_has_end_statement()));
     fields.push_back(
         rawBoolField("use_then_keyword", stmt->get_use_then_keyword()));
     fields.push_back(
         rawBoolField("is_else_if_statement", stmt->get_is_else_if_statement()));
+    fields.push_back(rawIntegerField("if_statement_kind", if_kind));
+    fields.push_back(rawBoolField("if_constexpr_value_known",
+                                  stmt->get_if_constexpr_value_known()));
+    fields.push_back(
+        rawBoolField("if_constexpr_value", stmt->get_if_constexpr_value()));
+  }
+  if (auto *statement = isSgSwitchStatement(node)) {
+    fields.push_back(
+        rawStringField("string_label", statement->get_string_label()));
   }
   if (SgTryStmt *stmt = isSgTryStmt(node)) {
     fields.push_back(rawBoolField("is_function_try_block",
@@ -4241,15 +5413,24 @@ rawNodeProperties(SgNode *node,
     fields.push_back(rawBoolField("is_device", lambda->get_is_device()));
   }
   if (SgLambdaCapture *capture = isSgLambdaCapture(node)) {
-    if (capture->get_capture_variable() == nullptr) {
-      throw std::runtime_error(
-          "AST JSON cannot serialize SgLambdaCapture without a variable");
+    const SgExpression *variable = capture->get_capture_variable();
+    const SgExpression *initializer = capture->get_capture_initializer();
+    const SgExpression *closure = capture->get_closure_variable();
+    if (variable == nullptr || initializer == nullptr ||
+        variable == initializer || variable->get_parent() != capture ||
+        initializer->get_parent() != capture ||
+        (closure != nullptr && (closure == variable || closure == initializer ||
+                                closure->get_parent() != capture))) {
+      throw std::runtime_error("AST JSON lambda capture requires distinct "
+                               "constructor-owned operands");
     }
     fields.push_back(rawBoolField("capture_by_reference",
                                   capture->get_capture_by_reference()));
     fields.push_back(rawBoolField("implicit", capture->get_implicit()));
     fields.push_back(
         rawBoolField("pack_expansion", capture->get_pack_expansion()));
+    fields.push_back(
+        rawBoolField("is_init_capture", capture->get_is_init_capture()));
   }
   if (SgWhileStmt *stmt = isSgWhileStmt(node)) {
     fields.push_back(rawStringField("string_label", stmt->get_string_label()));
@@ -4258,33 +5439,62 @@ rawNodeProperties(SgNode *node,
   }
   if (SgFortranDo *stmt = isSgFortranDo(node)) {
     fields.push_back(rawStringField("string_label", stmt->get_string_label()));
-    fields.push_back(rawBoolField("old_style", stmt->get_old_style()));
     fields.push_back(
         rawBoolField("has_end_statement", stmt->get_has_end_statement()));
   }
-  if (SgIOStatement *stmt = isSgIOStatement(node)) {
-    switch (stmt->get_io_statement()) {
-    case SgIOStatement::e_read:
-    case SgIOStatement::e_print:
-    case SgIOStatement::e_write:
-    case SgIOStatement::e_open:
-    case SgIOStatement::e_close:
-    case SgIOStatement::e_inquire:
-    case SgIOStatement::e_backspace:
-    case SgIOStatement::e_endfile:
-    case SgIOStatement::e_rewind:
-    case SgIOStatement::e_flush:
-    case SgIOStatement::e_wait:
-      break;
-    case SgIOStatement::e_unknown:
-    case SgIOStatement::e_last_io_statment_kind:
-    default:
-      throw std::runtime_error(
-          "AST JSON SgIOStatement has no exact concrete statement kind");
+  if (isSgWhereStatement(node) || isSgElseWhereStatement(node)) {
+    auto *where = isSgWhereStatement(node);
+    auto *elsewhere = isSgElseWhereStatement(node);
+    auto *condition =
+        where ? where->get_condition() : elsewhere->get_condition();
+    auto *body = where ? where->get_body() : elsewhere->get_body();
+    auto *next = where ? where->get_elsewhere() : elsewhere->get_elsewhere();
+    if (condition == nullptr || body == nullptr ||
+        condition->get_parent() != node || body->get_parent() != node ||
+        (next != nullptr && next->get_parent() != node) ||
+        (isSgNullExpression(condition) &&
+         (where != nullptr || next != nullptr)))
+      throw std::runtime_error("AST JSON WHERE requires an owned mask, block "
+                               "and exact clause chain");
+    if (where) {
+      if ((!where->get_has_end_statement() &&
+           (next != nullptr || where->get_end_numeric_label() != nullptr ||
+            !where->get_string_label().empty())) ||
+          (where->get_end_numeric_label() != nullptr &&
+           where->get_end_numeric_label()->get_parent() != where))
+        throw std::runtime_error(
+            "AST JSON WHERE has inconsistent construct form");
+      fields.push_back(
+          rawBoolField("has_end_statement", where->get_has_end_statement()));
+      fields.push_back(
+          rawStringField("string_label", where->get_string_label()));
     }
-    fields.push_back(rawIntegerField("io_statement", stmt->get_io_statement()));
+  }
+  if (auto *stmt = isSgForAllStatement(node)) {
+    if ((stmt->get_forall_statement_kind() !=
+             SgForAllStatement::e_forall_statement &&
+         stmt->get_forall_statement_kind() !=
+             SgForAllStatement::e_do_concurrent_statement) ||
+        stmt->get_forall_header() == nullptr || stmt->get_body() == nullptr ||
+        stmt->get_forall_header()->get_expressions().empty() ||
+        stmt->get_forall_header()->get_parent() != stmt ||
+        stmt->get_body()->get_parent() != stmt ||
+        (stmt->get_end_numeric_label() != nullptr &&
+         stmt->get_end_numeric_label()->get_parent() != stmt))
+      throw std::runtime_error("AST JSON FORALL requires its exact kind and "
+                               "owned header/body/label");
+    fields.push_back(rawIntegerField("forall_statement_kind",
+                                     stmt->get_forall_statement_kind()));
+    fields.push_back(
+        rawBoolField("has_end_statement", stmt->get_has_end_statement()));
+    fields.push_back(rawStringField("string_label", stmt->get_string_label()));
   }
   if (SgNewExp *expr = isSgNewExp(node)) {
+    const auto implicit_arguments =
+        expr->get_allocation_implicit_argument_count();
+    if (implicit_arguments < 1 || implicit_arguments > 3)
+      throw std::runtime_error(
+          "AST JSON new-expression implicit argument count is out of range");
     fields.push_back(jsonString("specified_type") + ": " +
                      rawTypeJson(expr->get_specified_type(), ids));
     fields.push_back(rawIntegerField(
@@ -4292,6 +5502,10 @@ rawNodeProperties(SgNode *node,
         static_cast<int64_t>(expr->get_need_global_specifier())));
     fields.push_back(rawBoolField("type_id_is_parenthesized",
                                   expr->get_type_id_is_parenthesized()));
+    fields.push_back(rawIntegerField("allocation_implicit_argument_count",
+                                     implicit_arguments));
+    fields.push_back(rawIntegerField("array_bound_source_form",
+                                     expr->get_array_bound_source_form()));
   }
   if (SgDeleteExp *expr = isSgDeleteExp(node)) {
     fields.push_back(rawIntegerField(
@@ -4325,6 +5539,33 @@ rawNodeProperties(SgNode *node,
     }
     fields.push_back(rawIntegerField("omp_fortran_spelling",
                                      statement->get_omp_fortran_spelling()));
+  }
+  if (const auto *task = isSgOmpTaskStatement(node)) {
+    if (task->has_semantic_data_environment())
+      task->validate_semantic_data_environment();
+    fields.push_back(rawBoolField("semantic_data_environment_is_available",
+                                  task->has_semantic_data_environment()));
+  }
+  if (const auto *directive = isSgOmpExecStatement(node)) {
+    fields.push_back(rawBoolField("source_form_is_attribute",
+                                  directive->get_source_form_is_attribute()));
+    directive->validate_runtime_source_context();
+    fields.push_back(rawIntegerField("runtime_source_origin",
+                                     directive->get_runtime_source_origin()));
+    fields.push_back(
+        rawStringField("runtime_source_function_name",
+                       directive->get_runtime_source_function_name()));
+    const std::string filename =
+        directive->get_runtime_source_origin() ==
+                SgOmpExecStatement::e_runtime_source_unavailable
+            ? std::string()
+            : Sg_File_Info::getFilenameFromID(
+                  directive->get_runtime_source_physical_file_id());
+    fields.push_back(rawStringField("runtime_source_file", filename));
+    fields.push_back(rawIntegerField("runtime_source_line",
+                                     directive->get_runtime_source_line()));
+    fields.push_back(rawBoolField("runtime_source_is_copied",
+                                  directive->get_runtime_source_is_copied()));
   }
 
   if (SgDeclarationStatement *decl = isSgDeclarationStatement(node)) {

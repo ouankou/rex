@@ -1,11 +1,6 @@
 
 
 // Author: Gergo Barany
-// $Id: AstCombinedSimpleProcessing.C,v 1.1 2008/01/08 02:56:38 dquinlan Exp $
-
-#ifndef ASTCOMBINEDSIMPLEPROCESSING_C
-#define ASTCOMBINEDSIMPLEPROCESSING_C
-
 #include "sage3basic.h"
 
 #include "AstCombinedSimpleProcessing.h"
@@ -41,7 +36,6 @@ void AstCombinedSimpleProcessing::atTraversalStart() {
   // using the reference we provide.
   tBegin = traversals.begin();
   tEnd = traversals.end();
-  numberOfTraversals = traversals.size();
 
   // Call this function for all traversals.
   TraversalPtrList::iterator t;
@@ -94,7 +88,6 @@ void AstCombinedPrePostProcessing::atTraversalStart() {
   // using the reference we provide.
   tBegin = traversals.begin();
   tEnd = traversals.end();
-  numberOfTraversals = traversals.size();
 
   // Call this function for all traversals.
   TraversalPtrList::iterator t;
@@ -108,5 +101,3 @@ void AstCombinedPrePostProcessing::atTraversalEnd() {
   for (t = tBegin; t != tEnd; ++t)
     (*t)->atTraversalEnd();
 }
-
-#endif

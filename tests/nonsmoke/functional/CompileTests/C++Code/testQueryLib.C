@@ -67,9 +67,6 @@ dqInheritedAttribute dqTraversal::evaluateInheritedAttribute(
 
   switch (astNode->variantT()) {}
 
-  // This query is not longer used and so we have removed it and we no longer
-  // need the test! bool isInAClass =
-  // BooleanQuery::isContainedInSubtreeOfType(astNode,V_SgClassDeclaration);
   bool isInAClass = false;
   printf("Is in a class declaration = %s \n",
          (isInAClass == true) ? "true" : "false");

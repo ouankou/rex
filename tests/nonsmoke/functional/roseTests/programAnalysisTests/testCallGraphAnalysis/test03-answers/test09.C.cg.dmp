@@ -1,5 +1,6 @@
 A::A ->
+B::B -> A::A
 C::C ->
-C::C ->
+C::C -> B::B
 main -> user_sysinit
-user_sysinit -> A::A C::C
+user_sysinit -> C::C

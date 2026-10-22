@@ -1,15 +1,29 @@
 #include "rose.h"
 
-#include "SgNodeHelper.h"
+#include "AstInterface.h"
+#include "AstInterface_ROSE.h"
+#include "CFG/CFGImpl.h"
+#include "DepInfoAnal.h"
 #include "tokenStreamMapping.h"
+#include "virtualCFG.h"
 
 #include <algorithm>
 #include <cstdlib>
+#include <iterator>
 #include <map>
 #include <string>
 #include <vector>
 
 namespace {
+class CollectedReferences : public CollectObject<AstNodePtr> {
+public:
+  std::vector<SgNode *> nodes;
+  bool operator()(const AstNodePtr &reference) override {
+    nodes.push_back(reference.get_ptr());
+    return true;
+  }
+};
+
 SgSourceFile *findMainSourceFile(SgProject *project) {
   for (SgFile *file : project->get_fileList()) {
     if (SgSourceFile *source = isSgSourceFile(file)) {
@@ -64,7 +78,7 @@ SgDeclarationGroupStatement *requireGroup(SgVariableDeclaration *declaration) {
 
 SgDeclarationGroupStatement *checkGroup(
     const std::map<std::string, SgVariableDeclaration *> &byName,
-    const std::vector<std::string> &names, bool requireSymbols = true,
+    const std::vector<std::string> &names,
     SgDeclarationGroupStatement::source_terminator_enum terminator =
         SgDeclarationGroupStatement::e_source_terminator_file_semicolon) {
   ROSE_ASSERT(names.size() >= 2);
@@ -79,12 +93,10 @@ SgDeclarationGroupStatement *checkGroup(
     ROSE_ASSERT(initializedName != nullptr);
     ROSE_ASSERT(initializedName->get_parent() == declaration);
     ROSE_ASSERT(initializedName->get_prev_decl_item() == nullptr);
-    if (requireSymbols) {
-      SgVariableSymbol *variableSymbol =
-          isSgVariableSymbol(initializedName->get_symbol_from_symbol_table());
-      ROSE_ASSERT(variableSymbol != nullptr);
-      ROSE_ASSERT(variableSymbol->get_declaration() == initializedName);
-    }
+    SgVariableSymbol *variableSymbol =
+        isSgVariableSymbol(initializedName->get_symbol_from_symbol_table());
+    ROSE_ASSERT(variableSymbol != nullptr);
+    ROSE_ASSERT(variableSymbol->get_declaration() == initializedName);
 
     if (index == 0) {
       group = requireGroup(declaration);
@@ -372,7 +384,7 @@ int main(int argc, char **argv) {
   }
 
   if (!conditionDeclarations.empty()) {
-    ROSE_ASSERT(conditionDeclarations.size() == 5);
+    ROSE_ASSERT(conditionDeclarations.size() == 9);
     auto checkConditionOwner = [&](const char *name, VariantT expectedParent) {
       SgVariableDeclaration *declaration = conditionDeclarations.at(name);
       checkNoGroup(declaration);
@@ -392,25 +404,137 @@ int main(int argc, char **argv) {
         ownedCondition = switchStatement->get_item_selector();
       } else if (SgForStatement *forStatement = isSgForStatement(parent)) {
         ownedCondition = forStatement->get_test();
+        AstNodePtr loopCondition;
+        ROSE_ASSERT(AstInterface::IsLoop(AstNodePtr(forStatement), nullptr,
+                                         &loopCondition));
+        ROSE_ASSERT(loopCondition.get_ptr() == declaration);
       } else if (SgCatchOptionStmt *catchStatement =
                      isSgCatchOptionStmt(parent)) {
         ownedCondition = catchStatement->get_condition();
       }
       ROSE_ASSERT(ownedCondition == declaration);
+      if (isSgCatchOptionStmt(parent) == nullptr) {
+        const unsigned branch = isSgForStatement(parent) != nullptr ? 2 : 1;
+        const auto edges = VirtualCFG::CFGNode(parent, branch).outEdges();
+        ROSE_ASSERT(!edges.empty());
+        auto *value = edges.front().conditionBasedOn();
+        ROSE_ASSERT(value != nullptr && value->get_parent() == parent);
+        ROSE_ASSERT(isSgSwitchStatement(parent) != nullptr ||
+                    isSgTypeBool(value->get_type()) != nullptr);
+        const auto references = NodeQuery::querySubTree(value, V_SgVarRefExp);
+        ROSE_ASSERT(references.size() == 1);
+        ROSE_ASSERT(isSgVarRefExp(references.front())
+                        ->get_symbol()
+                        ->get_declaration() ==
+                    declaration->get_variables().front());
+        const auto initialized = declaration->cfgForEnd().outEdges();
+        ROSE_ASSERT(initialized.size() == 1 &&
+                    initialized.front().target() == value->cfgForBeginning());
+        const auto tested = value->cfgForEnd().outEdges();
+        ROSE_ASSERT(tested.size() == 1 &&
+                    tested.front().target() ==
+                        VirtualCFG::CFGNode(parent, branch));
+        AstInterfaceImpl implementation(parent);
+        AstInterface interface(&implementation);
+        auto *previousEffects =
+            LoopTransformInterface::getSideEffectInterface();
+        NoFunctionSideEffectAnalysis unknownEffects;
+        LoopTransformInterface::set_sideEffectInfo(&unknownEffects);
+        CollectedReferences writes, declarationReads, controlReads,
+            initializerReads, predicateReads;
+        const bool declarationComplete = AnalyzeConditionRefs(
+            interface, AstNodePtrImpl(declaration), writes, declarationReads);
+        const bool controlComplete = AnalyzeConditionRefs(
+            interface, AstNodePtrImpl(parent), writes, controlReads);
+        const bool initializerComplete = AnalyzeStmtRefs(
+            interface, AstNodePtrImpl(declaration), writes, initializerReads);
+        const bool predicateComplete = AnalyzeStmtRefs(
+            interface, AstNodePtrImpl(value), writes, predicateReads);
+        LoopTransformInterface::set_sideEffectInfo(previousEffects);
+        ROSE_ASSERT(!declarationComplete && !controlComplete &&
+                    !initializerComplete);
+        ROSE_ASSERT(
+            predicateComplete ==
+            NodeQuery::querySubTree(value, V_SgFunctionCallExp).empty());
+        ROSE_ASSERT(std::count(initializerReads.nodes.begin(),
+                               initializerReads.nodes.end(),
+                               references.front()) == 0);
+        ROSE_ASSERT(std::count(predicateReads.nodes.begin(),
+                               predicateReads.nodes.end(),
+                               references.front()) == 1);
+        ROSE_ASSERT(std::count(declarationReads.nodes.begin(),
+                               declarationReads.nodes.end(),
+                               references.front()) == 1);
+        ROSE_ASSERT(std::count(controlReads.nodes.begin(),
+                               controlReads.nodes.end(),
+                               references.front()) == 1);
+        if (isSgSwitchStatement(parent) == nullptr) {
+          DefaultCFGImpl graph;
+          ROSE_Analysis::BuildCFG(interface, AstNodePtrImpl(parent), graph);
+          size_t declarations = 0, predicates = 0;
+          for (auto nodes = graph.GetNodeIterator(); !nodes.ReachEnd();
+               ++nodes) {
+            const auto &statements = nodes.Current()->GetStmts();
+            for (auto current = statements.begin(); current != statements.end();
+                 ++current) {
+              if (current->get_ptr() == value)
+                ++predicates;
+              if (current->get_ptr() != declaration)
+                continue;
+              ++declarations;
+              const auto next = std::next(current);
+              ROSE_ASSERT(next != statements.end() && next->get_ptr() == value);
+            }
+          }
+          ROSE_ASSERT(declarations == 1 && predicates == 1);
+        }
+        if (auto *selection = isSgSwitchStatement(parent)) {
+          const auto entered = VirtualCFG::CFGNode(selection, 0).outEdges();
+          ROSE_ASSERT(entered.size() == 1 &&
+                      entered.front().conditionBasedOn() == nullptr);
+        }
+        if (auto *loop = isSgWhileStmt(parent)) {
+          const auto repeated = loop->get_body()->cfgForEnd().outEdges();
+          ROSE_ASSERT(repeated.size() == 1 && repeated.front().target() ==
+                                                  VirtualCFG::CFGNode(loop, 0));
+        }
+        auto *copy = isSgScopeStatement(SageInterface::copyStatement(parent));
+        ROSE_ASSERT(copy != nullptr);
+        auto *copiedValue = SageInterface::getConditionValue(copy);
+        ROSE_ASSERT(copiedValue != value && copiedValue->get_parent() == copy);
+        const auto copiedReferences =
+            NodeQuery::querySubTree(copiedValue, V_SgVarRefExp);
+        ROSE_ASSERT(copiedReferences.size() == 1);
+        auto *copiedName = isSgVarRefExp(copiedReferences.front())
+                               ->get_symbol()
+                               ->get_declaration();
+        ROSE_ASSERT(copiedName != declaration->get_variables().front() &&
+                    copiedName->get_scope() == copy &&
+                    copiedName->get_parent()->get_parent() == copy);
+        SageInterface::deleteAST(
+            copy, SageInterface::DeleteAstMode::kRequireIsolated);
+      }
       if (!source->get_tokenSubsequenceMap().empty()) {
         requireDirectTokenMapping(source, declaration);
+        if (isSgCatchOptionStmt(parent) == nullptr) {
+          for (SgNode *semantic : NodeQuery::querySubTree(
+                   SageInterface::getConditionValue(parent), V_SgNode))
+            ROSE_ASSERT(source->get_tokenSubsequenceMap().count(semantic) == 0);
+        }
       }
     };
     checkConditionOwner("rex_condition_if", V_SgIfStmt);
     checkConditionOwner("rex_condition_while", V_SgWhileStmt);
     checkConditionOwner("rex_condition_switch", V_SgSwitchStatement);
     checkConditionOwner("rex_condition_for", V_SgForStatement);
+    checkConditionOwner("rex_condition_class_if", V_SgIfStmt);
+    checkConditionOwner("rex_condition_class_while", V_SgWhileStmt);
+    checkConditionOwner("rex_condition_class_switch", V_SgSwitchStatement);
+    checkConditionOwner("rex_condition_class_for", V_SgForStatement);
     checkConditionOwner("rex_condition_catch", V_SgCatchOptionStmt);
 
     // A catch variable reference must bind directly to the initialized name
-    // structurally owned by the catch condition declaration.  This exercises
-    // the production SgNodeHelper path that formerly repaired a malformed
-    // catch-variable edge after frontend construction.
+    // structurally owned by the catch condition declaration.
     SgVariableDeclaration *catchDeclaration =
         conditionDeclarations.at("rex_condition_catch");
     SgInitializedName *catchName = catchDeclaration->get_variables().front();
@@ -431,9 +555,7 @@ int main(int argc, char **argv) {
         continue;
       }
       ++catchReferenceCount;
-      SgSymbol *symbol = SgNodeHelper::getSymbolOfVariable(reference);
-      ROSE_ASSERT(symbol == reference->get_symbol());
-      SgVariableSymbol *variableSymbol = isSgVariableSymbol(symbol);
+      SgVariableSymbol *variableSymbol = reference->get_symbol();
       ROSE_ASSERT(variableSymbol != nullptr);
       ROSE_ASSERT(variableSymbol->get_declaration() == catchName);
     }
@@ -457,7 +579,7 @@ int main(int argc, char **argv) {
   checkGroup(byName, {"rex_group_global_a", "rex_group_global_b",
                       "rex_group_global_c"});
   checkGroup(byName, {"rex_group_file_macro_a", "rex_group_file_macro_b"});
-  checkGroup(byName, {"rex_group_macro_a", "rex_group_macro_b"}, true,
+  checkGroup(byName, {"rex_group_macro_a", "rex_group_macro_b"},
              SgDeclarationGroupStatement::e_source_terminator_macro_semicolon);
   checkGroup(byName, {"rex_group_enum_a", "rex_group_enum_b"});
   checkGroup(byName, {"rex_group_namespace_a", "rex_group_namespace_b"});
@@ -536,17 +658,9 @@ int main(int argc, char **argv) {
     }
   }
   ROSE_ASSERT(copiedByName.size() == 2);
-  checkGroup(copiedByName, {"rex_group_copy_a", "rex_group_copy_b"}, false);
-
-  SgSymbolTable *copySymbolTable = copy->get_symbol_table();
-  ROSE_ASSERT(copySymbolTable != nullptr);
-  ROSE_ASSERT(copySymbolTable->get_table() != nullptr);
-  copySymbolTable->get_table()->clear();
-  copySymbolTable->set_symbolSet(SgNodeSet());
-  copySymbolTable->clear_functionSymbolExactIndex();
-  ROSE_ASSERT(copySymbolTable->size() == 0);
-  SageInterface::rebuildSymbolTable(copy);
   checkGroup(copiedByName, {"rex_group_copy_a", "rex_group_copy_b"});
+  SageInterface::validateSymbolOwnership(copy);
+  SageInterface::deepDelete(copy);
 
   return backend(project);
 }

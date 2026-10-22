@@ -145,7 +145,8 @@ void runPositive(SgProject *project, const std::string &function_name,
   addBroadcastAndStoreIr(ir, generated, source_symbol,
                          copyExactStoreDestination(directive), false);
 
-  omp_simd_write_intel(directive, loop, &ir, 4);
+  OmpSimdCompiler compiler;
+  omp_simd_write_intel(directive, loop, &ir, 4, compiler);
 
   SgVariableSymbol *output_symbol = nullptr;
   for (SgInitializedName *name : SageInterface::querySubTree<SgInitializedName>(
@@ -192,7 +193,8 @@ void runMissingOutputDeath(SgProject *project) {
   Rose_STL_Container<SgNode *> ir;
   addBroadcastAndStoreIr(ir, generated, source_symbol,
                          copyExactStoreDestination(directive), true);
-  omp_simd_write_intel(directive, loops.front(), &ir, 4);
+  OmpSimdCompiler compiler;
+  omp_simd_write_intel(directive, loops.front(), &ir, 4, compiler);
 }
 } // namespace
 

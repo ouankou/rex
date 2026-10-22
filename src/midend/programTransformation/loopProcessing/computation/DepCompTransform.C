@@ -48,66 +48,7 @@ bool DebugLoopDist() {
   }
   return r == 1;
 }
-class CollectTreeNodes {
-  LoopTreeDepComp &comp;
-  PtrSetWrap<LoopTreeNode> &result;
-
-public:
-  CollectTreeNodes(LoopTreeDepComp &c, PtrSetWrap<LoopTreeNode> &r)
-      : comp(c), result(r) {}
-  bool operator()(const LoopTreeDepGraphNode *n) {
-    LoopTreeNode *s = comp.GetTreeNode(n);
-    if (result.IsMember(s))
-      return false;
-    result.insert(s);
-    return true;
-  }
-};
-void DepLinkedNodes(LoopTreeDepComp &comp, LoopTreeNodeIterator stmts,
-                    GraphAccess::EdgeDirection dir,
-                    PtrSetWrap<LoopTreeNode> &result) {
-  CollectTreeNodes collect(comp, result);
-
-  LoopTreeDepGraph *depGraph = comp.GetDepGraph();
-  for (; !stmts.ReachEnd(); stmts++) {
-    LoopTreeNode *s = stmts.Current();
-    if (result.IsMember(s))
-      continue;
-    LoopTreeDepGraphNode *n = comp.GetDepNode(s);
-    GraphGetNodeReachable<LoopTreeDepGraph, CollectTreeNodes>()(depGraph, n,
-                                                                dir, collect);
-  }
-}
-
-DepCompDistributeLoop::Result
-DepCompDistributeLoop ::operator()(LoopTreeDepComp &tc, LoopTreeNode *l,
-                                   LoopTreeNodeIterator stmts) {
-  typedef PtrSetWrap<LoopTreeNode> LoopTreeNodeList;
-  LoopTreeNodeList stmts1, stmts2;
-
-  LoopTreeDepCompSubtree loopComp(tc, l);
-  if (DebugLoopDist()) {
-    std::cerr << "***************Loop Distribution: From sub tree *******\n";
-    std::cerr << loopComp.TreeToString() << "\n";
-    std::cerr << loopComp.DepToString() << "\n";
-    std::cerr << "***************end sub tree *******\n";
-  }
-  DepLinkedNodes(loopComp, stmts, GraphAccess::EdgeIn, stmts1);
-  DepLinkedNodes(loopComp, stmts, GraphAccess::EdgeOut, stmts2);
-
-  stmts2 &= stmts1;
-  stmts1 -= stmts2;
-
-  if (stmts1.NumberOfEntries()) {
-    SelectPtrSet<LoopTreeNode> sel(stmts1);
-    LoopTreeDistributeNode()(l, sel);
-  }
-  SelectPtrSet<LoopTreeNode> sel2(stmts2);
-  return Result(LoopTreeDistributeNode()(l, sel2), stmts2);
-}
-
-DepCompDistributeLoop::Result
-DepCompDistributeLoop ::operator()(LoopTreeDepComp &tc, LoopTreeNode *l) {
+void DepCompDistributeLoop::operator()(LoopTreeDepComp &tc, LoopTreeNode *l) {
   typedef PtrSetWrap<LoopTreeNode> LoopTreeNodeSet;
 
   LoopTreeDepCompSubtree loopComp(tc, l);
@@ -120,14 +61,11 @@ DepCompDistributeLoop ::operator()(LoopTreeDepComp &tc, LoopTreeNode *l) {
     std::cerr << "***************original dependence graph *******\n";
     tc.DumpDep();
   }
-  Result result;
 
   LoopTreeDepGraph *depGraph = loopComp.GetDepGraph();
   GraphAccessWrapTemplate<void, void, LoopTreeDepGraph> access(depGraph);
   SCCGraphCreate sccGraph(&access);
   sccGraph.TopoSort();
-  // write_graph(sccGraph, std::cerr, std::string("scc dump"));
-
   for (GroupGraphCreate::NodeIterator sccIter = sccGraph.GetNodeIterator();
        !sccIter.ReachEnd(); sccIter++) {
     GroupGraphNode *scc = sccIter.Current();
@@ -142,11 +80,7 @@ DepCompDistributeLoop ::operator()(LoopTreeDepComp &tc, LoopTreeNode *l) {
     }
     if (treeSet.NumberOfEntries()) {
       SelectPtrSet<LoopTreeNode> sel(treeSet);
-      LoopTreeNode *tmp = LoopTreeDistributeNode()(l, sel);
-      if (result.node == 0) {
-        result.node = tmp;
-        result.sel = treeSet;
-      }
+      LoopTreeDistributeNode()(l, sel);
     }
   }
   if (DebugLoopDist()) {
@@ -155,7 +89,6 @@ DepCompDistributeLoop ::operator()(LoopTreeDepComp &tc, LoopTreeNode *l) {
     loopComp.DumpDep();
     std::cerr << "***************end sub tree *******\n";
   }
-  return result;
 }
 
 class DepCompAstRefDAG : public DepCompAstRefGraphCreate {

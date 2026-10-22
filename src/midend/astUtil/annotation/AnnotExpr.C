@@ -43,16 +43,7 @@ std::string ReadQualifiedId(std::istream &in) {
 
 template class CloseDescriptor<SymbolicValDescriptor, '{', '}'>;
 
-// DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
-// compile using ROSE).
-#ifndef USE_ROSE
-
-// DQ (1/9/2010): This is a problem for the Intel icpc compiler.
-#ifndef __INTEL_COMPILER
 template bool CloseDescriptor<SymbolicValDescriptor, '{', '}'>::read(istream &);
-#endif
-
-#endif
 
 void SymbolicValDescriptor ::set_val(const SymbolicVal &v) {
   if (v.IsNIL() || FindVal(v, get_top()))
@@ -169,6 +160,8 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
   if (c == '(') {
     read_ch(in, c);
     result = ReadSymbolicExpr(0, in);
+    if (result.IsNIL())
+      throw ReadError("annotation group has no expression");
     read_ch(in, ')');
     c = peek_ch(in);
   } else if (is_num(c)) {
@@ -180,27 +173,27 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
     c = 0;
   } else if (is_id(c)) {
     string id = ReadQualifiedId(in);
-    if (id == "Min" || id == "min") {
+    if (id == "Min" || id == "min" || id == "Max" || id == "max") {
       read_ch(in, '(');
-      SymbolicSelect *r = new SymbolicSelect(-1);
-      ReadContainerWrap<SymbolicValDescriptor, SymbolicSelect> accu(*r);
-      read_list(in, accu, ',');
+      SymbolicFunction::Arguments args;
+      ReadContainerWrap<SymbolicValDescriptor, SymbolicFunction::Arguments>
+          accu(args);
+      if (!read_list(in, accu, ','))
+        throw ReadError("annotation Min/Max has no argument");
       read_ch(in, ')');
-      result = r;
-      c = 0;
-    } else if (id == "Max" || id == "max") {
-      read_ch(in, '(');
-      SymbolicSelect *r = new SymbolicSelect(1);
-      ReadContainerWrap<SymbolicValDescriptor, SymbolicSelect> accu(*r);
-      read_list(in, accu, ',');
-      read_ch(in, ')');
+      SymbolicSelect *r =
+          new SymbolicSelect(id == "Min" || id == "min" ? -1 : 1);
+      for (const SymbolicVal &arg : args)
+        r->push_back(arg);
       result = r;
       c = 0;
     } else {
       c = peek_ch(in);
       if (c != '(') {
+        if (id == "none")
+          throw ReadError(
+              "annotation expression cannot use 'none' as a variable");
         result = new SymbolicVar(id, AST_NULL);
-        assert(id != "none");
       } else {
         read_ch(in, c);
         SymbolicFunction::Arguments args;
@@ -217,11 +210,13 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
   } else if (is_operator(c)) { // unary operators
     string op = read_operator(in);
     SymbolicVal v = ReadSymbolicTerm(in);
+    if (v.IsNIL())
+      throw ReadError("annotation unary operator has no operand");
     if (op == "-") {
       result = (-1) * v;
     } else {
       SymbolicFunction::Arguments args;
-      args.push_back(result);
+      args.push_back(v);
       result = new SymbolicFunction(AstInterface::OP_NONE, op, args);
     }
     c = peek_ch(in);
@@ -232,6 +227,8 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
   while (c == '.') {
     read_ch(in, c);
     string id = read_id(in);
+    if (id.empty())
+      throw ReadError("annotation member access has no identifier");
     c = peek_ch(in);
     SymbolicFunction::Arguments args;
     args.push_back(result);
@@ -256,6 +253,8 @@ SymbolicVal ReadSymbolicTerm(istream &in) {
   } else if (c == '[') {
     read_ch(in, c);
     SymbolicVal r2 = ReadSymbolicExpr(0, in);
+    if (r2.IsNIL())
+      throw ReadError("annotation array access has no index");
     read_ch(in, ']');
     result =
         new SymbolicFunction(AstInterface::OP_ARRAY_ACCESS, "[]", result, r2);
@@ -271,6 +270,8 @@ SymbolicVal ReadSymbolicExpr(int level, istream &in) {
   while (level1 > level) { // binary operator
     string op = read_operator(in);
     SymbolicVal r2 = ReadSymbolicExpr(level1, in);
+    if (result.IsNIL() || r2.IsNIL())
+      throw ReadError("annotation binary operator has no operand");
     if (op == "*") {
       result = result * r2;
     } else if (op == "+") {
@@ -284,7 +285,7 @@ SymbolicVal ReadSymbolicExpr(int level, istream &in) {
       args.push_back(result);
       args.push_back(r2);
       if (op == "$")
-        result = result = new SymbolicExtendVar(args);
+        result = new SymbolicExtendVar(args);
       else
         result = new SymbolicFunction(AstInterface::OP_NONE, op, result, r2);
     }

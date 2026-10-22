@@ -28,8 +28,8 @@ void SimpleInstrumentation::visit(SgNode *astNode) {
     // *****************************************************
     SgName func_name = "my_function";
     SgFunctionDeclaration *func = buildDefiningFunctionDeclaration(
-        function_declaration_ownership::semanticAuxiliary(), func_name,
-        buildIntType(), parameterList, globalScope);
+        function_declaration_ownership::sourceLexicalAtTop(globalScope),
+        func_name, buildIntType(), parameterList, globalScope);
     SgBasicBlock *func_body = func->get_definition()->get_body();
 
     // ********************************************************
@@ -37,14 +37,14 @@ void SimpleInstrumentation::visit(SgNode *astNode) {
     // *******************************************************
 
     SgVarRefExp *var_ref = buildVarRefExp(var1_name, func_body);
-    SgPlusPlusOp *pp_expression = buildPlusPlusOp(var_ref, var_ref->get_type());
+    SgPlusPlusOp *pp_expression =
+        buildPlusPlusOp(var_ref, var_ref->get_type(), SgUnaryOp::prefix);
     SgExprStatement *new_stmt = buildExprStatement(pp_expression);
 
     // insert a statement into the function body
     prependStatement(new_stmt, func_body);
-    ROSE_ASSERT(detachAuxiliaryDeclaration(globalScope, func));
-    ROSE_ASSERT(func->get_parent() == nullptr);
-    prependStatement(func, globalScope);
+    appendStatement(buildReturnStmt(buildVarRefExp(var1_name, func_body)),
+                    func_body);
   }
 }
 

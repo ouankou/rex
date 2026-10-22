@@ -48,6 +48,49 @@ int main(int argc, char *argv[]) {
   AstTests::runAllTests(project); // run internal consistency tests on the AST
 
   size_t nerrors = 0;
+  for (const char *text : {"rex_query", "prefix rex_query = rex_value"}) {
+    auto *pragma = SageBuilder::buildPragmaDeclaration(text);
+    SgName match("rex_query");
+    ROSE_ASSERT(NodeQuery::queryNodePragmaDeclarationFromName(pragma, &match) ==
+                NodeQuerySynthesizedAttributeType{pragma});
+    for (const char *name : {"rex_missing", "rex_value"}) {
+      SgName nonmatch(name);
+      ROSE_ASSERT(
+          NodeQuery::queryNodePragmaDeclarationFromName(pragma, &nonmatch)
+              .empty());
+    }
+    SageInterface::deleteAST(pragma);
+  }
+  const std::vector<SgNode *> queryInputs = {project, project};
+  const auto typedResults = AstQueryNamespace::queryRange(
+      queryInputs.begin(), queryInputs.end(),
+      [](SgNode *node) { return std::vector<SgProject *>{isSgProject(node)}; });
+  ROSE_ASSERT(typedResults == std::vector<SgProject *>({project, project}));
+  size_t visited = 0;
+  void *sideEffectResult = AstQueryNamespace::queryRange(
+      queryInputs.begin(), queryInputs.end(), [&](SgNode *) -> void * {
+        ++visited;
+        return nullptr;
+      });
+  ROSE_ASSERT(visited == queryInputs.size() && sideEffectResult == nullptr);
+  const NameQuerySynthesizedAttributeType structFields = {"rex_struct_first",
+                                                          "rex_struct_second"};
+  const NameQuerySynthesizedAttributeType unionFields = {"rex_union_first",
+                                                         "rex_union_second"};
+  ROSE_ASSERT(NameQuery::querySubTree(project, NameQuery::StructFieldNames) ==
+              structFields);
+  ROSE_ASSERT(NameQuery::querySubTree(project, NameQuery::UnionFieldNames) ==
+              unionFields);
+  const auto structDeclarations =
+      NodeQuery::querySubTree(project, NodeQuery::StructFields);
+  const auto unionDeclarations =
+      NodeQuery::querySubTree(project, NodeQuery::UnionFields);
+  ROSE_ASSERT(structDeclarations.size() == 2 && unionDeclarations.size() == 2);
+  ROSE_ASSERT(
+      NameQuery::queryNodeList(structDeclarations, NameQuery::VariableNames) ==
+      structFields);
+  ROSE_ASSERT(NameQuery::queryNodeList(
+                  unionDeclarations, NameQuery::VariableNames) == unionFields);
   std::string separator = std::string(80, '-') + "\n";
 
   std::cerr << separator
@@ -65,6 +108,22 @@ int main(int argc, char *argv[]) {
     }
   }
   ROSE_ASSERT(0 == nerrors); // optional, to exit early
+
+  bool sawConstructorArguments = false;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgMemberFunctionDeclaration)) {
+    auto *declaration = isSgMemberFunctionDeclaration(node);
+    if (declaration->get_name().getString() != "Bar" ||
+        declaration->get_args().size() != 2)
+      continue;
+    const auto arguments = NodeQuery::querySolverArguments(node);
+    ROSE_ASSERT(arguments.size() == 2);
+    ROSE_ASSERT(arguments[0] == declaration->get_args()[0] &&
+                arguments[1] == declaration->get_args()[1]);
+    ROSE_ASSERT(NodeQuery::querySolverVariableDeclarations(node) == arguments);
+    sawConstructorArguments = true;
+  }
+  ROSE_ASSERT(sawConstructorArguments);
 
   std::cerr << separator
             << "Testing NodeQuery::queryNodeList for all SgFunctionDeclaration "
@@ -123,6 +182,74 @@ int main(int argc, char *argv[]) {
     ++nerrors;
   }
   ROSE_ASSERT(0 == nerrors); // optional, to exit early
+
+  for (SgSizeOfOp *sizeOf :
+       {SageBuilder::buildSizeOfOp(SageBuilder::buildIntVal(1),
+                                   SageBuilder::buildUnsignedLongType()),
+        SageBuilder::buildSizeOfOp(SageBuilder::buildIntType(),
+                                   SageBuilder::buildUnsignedLongType())}) {
+    const auto operands = NumberQuery::queryNumberOfOperands(sizeOf);
+    ROSE_ASSERT(operands.size() == 1 && operands.front() == 1);
+    SageInterface::deleteAST(sizeOf);
+  }
+
+  SgBasicBlock *callScope = SageBuilder::buildBasicBlock();
+  const auto definitions =
+      NodeQuery::querySubTree(project, V_SgFunctionDefinition);
+  ROSE_ASSERT(!definitions.empty());
+  SgFunctionDefinition *definition =
+      isSgFunctionDefinition(definitions.front());
+  ROSE_ASSERT(definition != nullptr && definition->get_body() != nullptr);
+  SageInterface::appendStatement(callScope, definition->get_body());
+  SgType *intType = SageBuilder::buildIntType();
+  SgFunctionType *functionType = SageBuilder::buildFunctionType(
+      intType, SageBuilder::buildFunctionParameterTypeList(intType, intType));
+  SgVariableDeclaration *functionPointer =
+      SageBuilder::buildVariableDeclaration(
+          "rex_query_function_pointer",
+          SageBuilder::buildPointerType(functionType), nullptr, callScope);
+  SageInterface::appendStatement(functionPointer, callScope);
+  SgFunctionCallExp *call = SageBuilder::buildFunctionCallExp(
+      SageBuilder::buildVarRefExp(functionPointer), intType,
+      SageBuilder::buildExprListExp(SageBuilder::buildIntVal(1),
+                                    SageBuilder::buildIntVal(2)));
+  const auto arguments =
+      NumberQuery::queryNumberOfArgsInParenthesisOperator(call, intType);
+  ROSE_ASSERT(NameQuery::queryNameFunctionReferenceNames(call).empty());
+  ROSE_ASSERT(arguments.size() == 1 && arguments.front() == 2);
+  ROSE_ASSERT(NumberQuery::queryNumberOfArgsInParenthesisOperator(
+                  call, SageBuilder::buildDoubleType())
+                  .empty());
+  ROSE_ASSERT(NumberQuery::queryNumberOfArgsInScalarIndexingOperator(call) ==
+              arguments);
+  ROSE_ASSERT(NumberQuery::getFunction(
+                  NumberQuery::NumberOfArgsInScalarIndexingOperator)(call) ==
+              arguments);
+  ROSE_ASSERT(NumberQuery::queryNumberOfArgsInParenthesisOperator(
+                  call->get_args(), intType) == arguments);
+  SageInterface::deleteAST(call);
+  SageInterface::removeStatement(callScope);
+  SageInterface::deleteAST(callScope);
+
+  bool checkedDirectCall = false;
+  for (SgNode *node : funcDecls) {
+    auto *declaration = isSgFunctionDeclaration(node);
+    if (isSgMemberFunctionDeclaration(declaration) ||
+        !declaration->get_args().empty()) {
+      continue;
+    }
+    auto *directCall = SageBuilder::buildFunctionCallExp(
+        SageBuilder::buildFunctionRefExp(declaration),
+        declaration->get_type()->get_return_type(),
+        SageBuilder::buildExprListExp());
+    const auto names = NameQuery::queryNameFunctionReferenceNames(directCall);
+    ROSE_ASSERT(names.size() == 1 &&
+                names.front() == declaration->get_name().getString());
+    SageInterface::deleteAST(directCall);
+    checkedDirectCall = true;
+    break;
+  }
+  ROSE_ASSERT(checkedDirectCall);
 
   // It is not necessary to call backend for this test; that functionality is
   // tested elsewhere.

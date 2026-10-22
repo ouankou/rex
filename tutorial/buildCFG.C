@@ -14,9 +14,6 @@
 
 using namespace std;
 
-// Use the ControlFlowGraph is defined in both PRE
-// and the DominatorTreesAndDominanceFrontiers namespaces.
-// We want to use the one in the PRE namespace.
 using namespace legacy::PRE;
 
 class visitorTraversal : public AstSimpleProcessing {

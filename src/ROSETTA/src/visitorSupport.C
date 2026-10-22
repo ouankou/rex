@@ -77,6 +77,11 @@ string Grammar::buildVisitorBaseClass() {
   string s;
   // s += string("#ifndef ROSE_USE_SWIG_SUPPORT \n\n");
   s += string("#ifndef SWIG \n\n");
+  s += "#define ROSE_AST_FOR_EACH_NODE(APPLY)";
+  for (const auto *node : terminalList) {
+    s += " \\\n  APPLY(" + node->name + ")";
+  }
+  s += "\n\n";
   s += string("class ROSE_VisitorPattern  {\npublic:\n    virtual "
               "~ROSE_VisitorPattern() {};\n");
 

@@ -279,12 +279,8 @@ vector<string> FlangModuleInfo::inputDirs;
 
 bool FlangModuleInfo::isModuleFile() { return nestedSgFile != 0; }
 
-SgProject *FlangModuleInfo::getCurrentProject() { return currentProject; }
-
 void FlangModuleInfo::set_inputDirs(SgProject *project) {
-  inputDirs.clear();
-  vector<string> args = project->get_originalCommandLineArgumentList();
-  string rmodDir;
+  std::vector<std::string> directories;
 
   auto addInputDir = [](std::vector<std::string> &dirs,
                         const std::string &dir) {
@@ -309,12 +305,12 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
       "src/frontend/Flang/intrinsics", "share/rose");
   const std::string intrinsic_install_path = findRoseSupportPathFromSource(
       "src/frontend/Flang/intrinsics", "share/rose");
-  addInputDir(inputDirs, intrinsic_src_path);
-  addInputDir(inputDirs, intrinsic_build_path);
-  addInputDir(inputDirs, intrinsic_install_path);
+  addInputDir(directories, intrinsic_src_path);
+  addInputDir(directories, intrinsic_build_path);
+  addInputDir(directories, intrinsic_install_path);
 
   const std::string flang_intrinsic_dir = find_flang_intrinsic_module_dir();
-  addInputDir(inputDirs, flang_intrinsic_dir);
+  addInputDir(directories, flang_intrinsic_dir);
 
   // Add source file directories to find module sources in the same tree.
   for (const auto &source : project->get_sourceFileNameList()) {
@@ -322,38 +318,38 @@ void FlangModuleInfo::set_inputDirs(SgProject *project) {
     std::string dir = source_path.has_parent_path()
                           ? source_path.parent_path().string()
                           : std::string(".");
-    addInputDir(inputDirs, dir);
+    addInputDir(directories, dir);
   }
 
-  int sizeArgs = args.size();
-  for (int i = 0; i < sizeArgs; i++) {
-    if (args[i].find("-I", 0) == 0) {
-      rmodDir = args[i].substr(2);
-      string rmodDir_no_quotes =
-          Rose::StringUtility::replaceAllCopy(rmodDir, "\"", "");
-
-      if (std::filesystem::exists(rmodDir_no_quotes.c_str())) {
-        inputDirs.push_back(rmodDir_no_quotes);
-      } else {
-        MLOG_DEBUG_CXX("FlangModuleInfo")
-            << "The input directory does not exist (rose): " << rmodDir << endl;
-      }
-    }
+  // Reuse the project's parsed -I options. Their path characters are literal;
+  // stripping quotes changes valid filenames and breaks nested module loads.
+  for (const std::string &option :
+       project->get_includeDirectorySpecifierList()) {
+    ROSE_ASSERT(option.compare(0, 2, "-I") == 0 && option.size() > 2);
+    addInputDir(directories, option.substr(2));
   }
+  inputDirs = std::move(directories);
 }
 
-void FlangModuleInfo::setCurrentProject(SgProject *project) {
-  if (currentProject != project) {
-    if (!activeIntrinsicModuleLoads.empty()) {
-      MLOG_ERROR_CXX("FlangModuleInfo")
-          << "REX_FRONTEND_INVARIANT[fortran-module-registry]: project "
-             "changed during an active module-load transaction";
-      ROSE_ABORT();
-    }
-    moduleNameAstMap.clear();
-    intrinsicModuleNameAstMap.clear();
-  }
-  currentProject = project;
+FlangModuleInfo::FlangModuleInfo(SgProject *project) : project_(project) {
+  ROSE_ASSERT(project_ != nullptr);
+  ROSE_ASSERT(currentProject == nullptr);
+  ROSE_ASSERT(moduleNameAstMap.empty() && intrinsicModuleNameAstMap.empty());
+  ROSE_ASSERT(activeIntrinsicModuleLoads.empty() && nestedSgFile == 0);
+  ROSE_ASSERT(inputDirs.empty());
+  set_inputDirs(project_);
+  currentProject = project_;
+}
+
+FlangModuleInfo::~FlangModuleInfo() {
+  ROSE_ASSERT(currentProject == project_);
+  ROSE_ASSERT(activeIntrinsicModuleLoads.empty() && nestedSgFile == 0);
+  // The registry borrows nodes only during parsing. Retaining its project
+  // pointer afterward would confuse a reused AST pool address with the same
+  // project and retain declarations belonging to the previous parse.
+  clearMap();
+  std::vector<std::string>().swap(inputDirs);
+  currentProject = nullptr;
 }
 
 void FlangModuleInfo::registerModule(SgModuleStatement *module) {
@@ -378,6 +374,25 @@ void FlangModuleInfo::registerModule(SgModuleStatement *module) {
         << (intrinsic ? "intrinsic" : "non-intrinsic") << " module '"
         << lowerName << "' has two distinct AST declarations";
     ROSE_ABORT();
+  }
+}
+
+void FlangModuleInfo::replaceAstIdentities(
+    SgProject *project,
+    const std::unordered_map<SgNode *, SgNode *> &replacements) {
+  if (currentProject != project)
+    return; // The registry belongs to a different project.
+  ROSE_ASSERT(activeIntrinsicModuleLoads.empty());
+  for (ModuleMapType *modules :
+       {&moduleNameAstMap, &intrinsicModuleNameAstMap}) {
+    for (auto &entry : *modules) {
+      const auto replacement = replacements.find(entry.second);
+      ROSE_ASSERT(replacement != replacements.end());
+      auto *module = isSgModuleStatement(replacement->second);
+      ROSE_ASSERT(module != nullptr);
+      entry.second = require_defining_module_statement(
+          module, entry.first, "project AST replacement");
+    }
   }
 }
 
@@ -451,13 +466,6 @@ SgModuleStatement *FlangModuleInfo::getModule(const string &modName,
     ROSE_ABORT();
   }
   activeIntrinsicModuleLoads.pop_back();
-  if (newModuleFile == nullptr) {
-    MLOG_ERROR_CXX("FlangModuleInfo")
-        << "REX_FRONTEND_INVARIANT[fortran-module-lookup]: cannot parse "
-           "module file for '"
-        << lowerName << "'";
-    ROSE_ABORT();
-  }
 
   Rose_STL_Container<SgNode *> moduleDeclarationList =
       NodeQuery::querySubTree(newModuleFile, V_SgModuleStatement);
@@ -562,27 +570,20 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
 
   publish_external_module_ownership(saved_source_file, moduleFileName);
 
-  std::string extension =
-      std::filesystem::path(moduleFileName).extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 [](unsigned char c) { return std::tolower(c); });
-
   for (const auto &dir : inputDirs) {
     if (!dir.empty()) {
       argv.push_back("-I" + dir);
     }
   }
 
-  if (SgProject *project = getCurrentProject()) {
+  if (SgProject *project = currentProject) {
     const SgStringList &macroSpecifierList = project->get_macroSpecifierList();
     for (const auto &macro : macroSpecifierList) {
       argv.push_back("-D" + macro);
     }
   }
 
-  if (extension == ".rmod" || extension == ".rcmp" || extension == ".mod") {
-    argv.push_back("-ffree-form");
-  }
+  argv.push_back("-ffree-form");
 
   argv.push_back(moduleFileName);
 
@@ -594,17 +595,23 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
         << "): nestedSgFile = " << nestedSgFile;
   }
 
-  SgProject *project = getCurrentProject();
-  SgSourceFile *newFile =
-      isSgSourceFile(determineFileType(argv, errorCode, project));
-  ROSE_ASSERT(newFile != nullptr);
-
-  if (extension == ".rmod" || extension == ".rcmp" || extension == ".mod") {
-    newFile->set_sourceFileUsesFortran90FileExtension(true);
-    newFile->set_outputFormat(SgFile::e_free_form_output_format);
-    newFile->set_backendCompileFormat(SgFile::e_free_form_output_format);
-    newFile->set_F90_only();
+  SgProject *project = currentProject;
+  SgFileList *externalFiles = saved_source_file->get_frontendExternalFileList();
+  if (externalFiles == nullptr) {
+    externalFiles = new SgFileList();
+    externalFiles->set_parent(saved_source_file);
+    saved_source_file->set_frontendExternalFileList(externalFiles);
   }
+  ROSE_ASSERT(externalFiles->get_parent() == saved_source_file);
+  SgSourceFile *newFile = determineFileType(argv, project, externalFiles);
+  ROSE_ASSERT(newFile != nullptr);
+  ROSE_ASSERT(newFile->get_parent() == externalFiles);
+  externalFiles->get_listOfFiles().push_back(newFile);
+
+  newFile->set_sourceFileUsesFortran90FileExtension(true);
+  newFile->set_outputFormat(SgFile::e_free_form_output_format);
+  newFile->set_backendCompileFormat(SgFile::e_free_form_output_format);
+  newFile->set_F90_only();
 
   newFile->runFrontend(errorCode);
   ROSE_ASSERT(errorCode == 0);
@@ -627,26 +634,6 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
   newFile->set_skipfinalCompileStep(true);
   newFile->set_skip_unparse(true);
 
-  SgFileList *externalFiles = saved_source_file->get_frontendExternalFileList();
-  if (externalFiles == nullptr) {
-    externalFiles = new SgFileList();
-    ASSERT_not_null(externalFiles);
-    externalFiles->set_parent(saved_source_file);
-    saved_source_file->set_frontendExternalFileList(externalFiles);
-  }
-  if (externalFiles->get_parent() != saved_source_file ||
-      newFile->get_parent() != project ||
-      std::find(externalFiles->get_listOfFiles().begin(),
-                externalFiles->get_listOfFiles().end(),
-                newFile) != externalFiles->get_listOfFiles().end()) {
-    MLOG_ERROR_CXX("FlangModuleInfo")
-        << "REX_FRONTEND_INVARIANT[fortran-external-module-owner]: module '"
-        << moduleFileName
-        << "' has no exact project-external AST ownership transaction";
-    ROSE_ABORT();
-  }
-  externalFiles->get_listOfFiles().push_back(newFile);
-  newFile->set_parent(externalFiles);
   if (newFile->get_parent() != externalFiles ||
       externalFiles->get_listOfFiles().empty() ||
       externalFiles->get_listOfFiles().back() != newFile ||
@@ -673,20 +660,4 @@ SgSourceFile *FlangModuleInfo::createSgSourceFile(const string &moduleName) {
 void FlangModuleInfo::clearMap() {
   moduleNameAstMap.clear();
   intrinsicModuleNameAstMap.clear();
-}
-
-void FlangModuleInfo::dumpMap() {
-  std::map<std::string, SgModuleStatement *>::iterator iter;
-
-  std::cout << "Module Statement* map::" << std::endl;
-  for (iter = moduleNameAstMap.begin(); iter != moduleNameAstMap.end();
-       iter++) {
-    std::cout << "NON_INTRINSIC FIRST : " << (*iter).first
-              << " SECOND : " << (*iter).second << std::endl;
-  }
-  for (iter = intrinsicModuleNameAstMap.begin();
-       iter != intrinsicModuleNameAstMap.end(); iter++) {
-    std::cout << "INTRINSIC FIRST : " << (*iter).first
-              << " SECOND : " << (*iter).second << std::endl;
-  }
 }

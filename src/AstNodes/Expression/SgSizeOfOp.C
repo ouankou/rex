@@ -1,31 +1,8 @@
 #include "sage3basic.h"
 
-namespace {
-bool isUnsignedSizeType(SgType *type) {
-  if (type == nullptr) {
-    return false;
-  }
-  type =
-      type->stripType(SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
-  return isSgTypeUnsignedChar(type) != nullptr ||
-         isSgTypeUnsignedShort(type) != nullptr ||
-         isSgTypeUnsignedInt(type) != nullptr ||
-         isSgTypeUnsignedLong(type) != nullptr ||
-         isSgTypeUnsignedLongLong(type) != nullptr;
-}
-
-const SgSourceFile *findOwningSourceFile(const SgNode *node) {
-  for (const SgNode *current = node; current != nullptr;
-       current = current->get_parent()) {
-    if (const SgSourceFile *source_file = isSgSourceFile(current)) {
-      return source_file;
-    }
-  }
-  return nullptr;
-}
-} // namespace
-
 SgType *SgSizeOfOp::get_type() const {
+  ROSE_ASSERT(p_operator_kind == e_sizeof || p_operator_kind == e_sizeof_pack ||
+              p_operator_kind == e_datasizeof);
   if ((p_operand_expr == nullptr) == (p_operand_type == nullptr)) {
     fprintf(stderr,
             "REX_AST_INVARIANT[sizeof-operand]: SgSizeOfOp must have exactly "
@@ -38,6 +15,42 @@ SgType *SgSizeOfOp::get_type() const {
             "operand is not owned by the operator\n");
     ROSE_ABORT();
   }
+  if (p_operator_kind == e_sizeof_pack) {
+    SgTemplateType *template_type = isSgTemplateType(p_operand_type);
+    SgTemplateParameterVal *template_value =
+        isSgTemplateParameterVal(p_operand_expr);
+    SgVarRefExp *function_pack = isSgVarRefExp(p_operand_expr);
+    SgTemplateParameter *type_parameter =
+        template_type != nullptr ? template_type->get_template_parameter()
+                                 : nullptr;
+    SgTemplateParameter *value_parameter =
+        template_value != nullptr ? template_value->get_template_parameter()
+                                  : nullptr;
+    SgInitializedName *function_name =
+        function_pack != nullptr && function_pack->get_symbol() != nullptr
+            ? function_pack->get_symbol()->get_declaration()
+            : nullptr;
+    const bool type_pack = type_parameter != nullptr &&
+                           type_parameter->get_is_parameter_pack() &&
+                           (type_parameter->get_parameterType() ==
+                                SgTemplateParameter::type_parameter ||
+                            type_parameter->get_parameterType() ==
+                                SgTemplateParameter::template_parameter) &&
+                           type_parameter->get_type() == template_type &&
+                           !template_type->get_name().is_null();
+    const bool value_pack = value_parameter != nullptr &&
+                            value_parameter->get_is_parameter_pack() &&
+                            value_parameter->get_parameterType() ==
+                                SgTemplateParameter::nontype_parameter;
+    const bool function_parameter_pack =
+        function_name != nullptr && function_name->get_is_parameter_pack();
+    if (!type_pack && !value_pack && !function_parameter_pack) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[sizeof-pack-identity]: sizeof... requires "
+              "an exact typed parameter-pack operand\n");
+      ROSE_ABORT();
+    }
+  }
   if (p_type_defining_declaration != nullptr &&
       (p_operand_type == nullptr ||
        p_type_defining_declaration->get_parent() != this)) {
@@ -46,15 +59,17 @@ SgType *SgSizeOfOp::get_type() const {
             "malformed inline type declaration owner\n");
     ROSE_ABORT();
   }
-  const SgSourceFile *source_file = findOwningSourceFile(this);
+  const SgSourceFile *source_file =
+      SageInterface::getEnclosingNode<SgSourceFile>(this, true);
   SgType *target_size_type =
       source_file != nullptr ? source_file->get_target_size_type() : nullptr;
   if (p_expression_type == nullptr ||
-      isSgTypeUnknown(p_expression_type) != nullptr ||
-      isSgTypeDefault(p_expression_type) != nullptr ||
-      !isUnsignedSizeType(p_expression_type) ||
+      SageInterface::containsUnknownType(p_expression_type) ||
+      !p_expression_type->isUnsignedType() ||
       (source_file != nullptr &&
-       (target_size_type == nullptr || !isUnsignedSizeType(target_size_type) ||
+       (target_size_type == nullptr ||
+        SageInterface::containsUnknownType(target_size_type) ||
+        !target_size_type->isUnsignedType() ||
         p_expression_type != target_size_type))) {
     fprintf(stderr,
             "REX_AST_INVARIANT[sizeof-result-type]: SgSizeOfOp has no exact "
@@ -64,12 +79,25 @@ SgType *SgSizeOfOp::get_type() const {
   return p_expression_type;
 }
 
-// Liao, 11/17/2009
-int SgSizeOfOp::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
+bool SgSizeOfOp::expression_operand_is_evaluated() const {
+  (void)get_type();
+  if (p_operand_expr == nullptr || p_operator_kind == e_sizeof_pack)
+    return false;
+  SgType *argument_type = p_operand_expr->get_type();
+  ROSE_ASSERT(!SageInterface::containsUnknownType(argument_type));
+  while (auto *array = isSgArrayType(argument_type->stripType(
+             SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+             SgType::STRIP_REFERENCE_TYPE |
+             SgType::STRIP_RVALUE_REFERENCE_TYPE))) {
+    if (array->get_is_variable_length_array())
+      return true;
+    argument_type = array->get_base_type();
+    ROSE_ASSERT(argument_type != nullptr);
+  }
+  return false;
+}
 
+int SgSizeOfOp::replace_expression(SgExpression *o, SgExpression *n) {
   if (o == nullptr || n == nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[sizeof-replace-operands]: replacement requires "
@@ -103,99 +131,61 @@ int SgSizeOfOp::replace_expression(SgExpression *o, SgExpression *n) {
   return 1;
 }
 
-// DQ (6/11/2015): Moved these six access functions, they should not be
-// generated by ROSETTA so that we could avoid them setting the isModified flag
-// which is a problem in the name qualification support for C++ (interfering
-// with the token-based unparsing).
 int SgSizeOfOp::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length;
 }
 
 void SgSizeOfOp::set_name_qualification_length(int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_length = name_qualification_length;
 }
 
 bool SgSizeOfOp::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_required;
 }
 
 void SgSizeOfOp::set_type_elaboration_required(bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgSizeOfOp::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required;
 }
 
 void SgSizeOfOp::set_global_qualification_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_required = global_qualification_required;
 }
 
-// DQ (4/15/2019): These six access functions should not be generated by ROSETTA
-// so that we could avoid them setting the isModified flag which is a problem in
-// the name qualification support for C++ (interfering with the token-based
-// unparsing).
 int SgSizeOfOp::get_name_qualification_for_pointer_to_member_class_length()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_for_pointer_to_member_class_length;
 }
 
 void SgSizeOfOp::set_name_qualification_for_pointer_to_member_class_length(
     int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_for_pointer_to_member_class_length =
       name_qualification_length;
 }
 
 bool SgSizeOfOp::get_type_elaboration_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_for_pointer_to_member_class_required;
 }
 
 void SgSizeOfOp::set_type_elaboration_for_pointer_to_member_class_required(
     bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_for_pointer_to_member_class_required =
       type_elaboration_required;
 }
 
 bool SgSizeOfOp::get_global_qualification_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_for_pointer_to_member_class_required;
 }
 
 void SgSizeOfOp::set_global_qualification_for_pointer_to_member_class_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_for_pointer_to_member_class_required =
       global_qualification_required;

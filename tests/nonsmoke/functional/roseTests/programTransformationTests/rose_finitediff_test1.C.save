@@ -1,12 +1,13 @@
 
 int foo(int n) {
   int y;
-  // Finite differencing: cache_fd__1 is an exact generated expression cache
-  int cache_fd__1;
   {
-    int x;
-    for ((cache_fd__1 = 0 , x = 0); x < 1000; (cache_fd__1 += n , ++x)) {
-      y = cache_fd__1;
+    int x = 0;
+    // Finite differencing: cache_fd__1 is an exact generated expression cache
+    unsigned int cache_fd__1 = (unsigned int)0;
+    unsigned int cache_fd__1_rhs = (unsigned int)0;
+    for (; x < 1000; ++x) {
+      ((cache_fd__1 += (unsigned int)n * ((unsigned int)x - cache_fd__1_rhs) , cache_fd__1_rhs = (unsigned int)x) , y = cache_fd__1 > ~((unsigned int)0) >> 1?-((int)~cache_fd__1) - (int)1 : (int)cache_fd__1);
     }
   }
   return y;

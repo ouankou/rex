@@ -7,230 +7,45 @@
 #include <errno.h>
 #include <limits>
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT).
 #include "rose_config.h"
-// DQ (11/28/2009): I think this is equivalent to "USE_ROSE"
-// #if CAN_NOT_COMPILE_WITH_ROSE != true
-// #if (CAN_NOT_COMPILE_WITH_ROSE == 0)
-// #ifndef USE_ROSE
 
-// DQ (9/30/2013): This global variable is used in only the initial accumulation
-// of the CPP directives, comments and tokens by file name in the
-// src/frontend/SageIII/preproc-c.ll file.  Later after processin it is an empty
-// map (e.g. in the unparsing phase). This is a confusing global variable to
-// have and it appears to have be used within a specific phase of the processing
-// of CPP directives, comments and tokens. AS(01/04/07) Global map of filenames
-// to PreprocessingInfo*'s as it is inefficient to get this by a traversal of
-// the AST
-std::map<std::string, ROSEAttributesList *> mapFilenameToAttributes;
-
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 using namespace Rose;
-
-// JH (01/03/2006) methods for packing the PreprocessingInfo data, in order to
-// store it into a file and rebuild it!
-unsigned int PreprocessingInfo::packed_size() const {
-  // This function computes the size of the packed representation of this
-  // classes data members.
-
-  ASSERT_this();
-
-  unsigned int packedSize = sizeof(file_info) +
-                            /* string size and string */ sizeof(unsigned int) +
-                            internalString.size() + sizeof(numberOfLines) +
-                            sizeof(whatSortOfDirective) +
-                            sizeof(relativePosition) + sizeof(outputPlacement) +
-                            sizeof(p_isTransformation) +
-                            sizeof(lineNumberForCompilerGeneratedLinemarker) +
-                            /* string size and string */ sizeof(unsigned int) +
-                            filenameForCompilerGeneratedLinemarker.size() +
-                            /* string size and string */ sizeof(unsigned int) +
-                            optionalflagsForCompilerGeneratedLinemarker.size();
-
-  // This is part of preprocessing support in ROSE.
-  // #ifndef USE_ROSE
-  // Add in the four pointers required for preprocessing support.
-  // Until we add the support to save all the preprocessing data into
-  // the AST file we would have to reprocess the relevant
-  // file to store this.
-  // #endif
-
-  // Debugging information.  What can we assert about the packedSize vs. the
-  // sizeof(PreprocessingInfo)? If there is anything, then it might make for
-  // a simple test here.  However, there does not appear to be any
-  // relationship since the sizeof(PreprocessingInfo) does not account for
-  // the sizes of internal strings used. printf ("In
-  // PreprocessingInfo::packed_size(): packedSize = %u
-  // sizeof(PreprocessingInfo) = %" PRIuPTR "
-  // \n",packedSize,sizeof(PreprocessingInfo));
-
-  // I think that because we have to save additional information the
-  // packedSize will be a little larger than the sizeof(PreprocessingInfo).
-  // So assert this as a test. Unfortunately it is not always true!
-  // ROSE_ASSERT(packedSize >= sizeof(PreprocessingInfo));
-
-  return packedSize;
-}
-
-// JH (01/03/2006) This pack methods might cause memory leaks. Think of deleting
-// them after stored to file ...
-char *PreprocessingInfo::packed() const {
-  ASSERT_this();
-
-  // printf ("Inside of PreprocessingInfo::packed() internalString = %s
-  // \n",internalString.c_str());
-
-  const char *saveString = internalString.c_str();
-  unsigned int stringSize = internalString.size();
-
-  // Wouldn't padding of data cause us to under compute the size of the buffer?
-  char *returnData = new char[packed_size()];
-
-  char *storePointer = returnData;
-
-  // printf ("Error, need to get the info out of the SgFileInfo object! \n");
-  // ROSE_ABORT();
-
-  // DQ (2/28/2010): We do want to write out the data value for this since it
-  // has been converted to a global index value in the AST file I/O.
-  memcpy(storePointer, (char *)(&file_info), sizeof(file_info));
-  storePointer += sizeof(file_info);
-
-  // memcpy (storePointer , (char*)(&lineNumber), sizeof(lineNumber) );
-  // storePointer += sizeof(lineNumber);
-  // memcpy (storePointer , (char*)(&columnNumber), sizeof(columnNumber) );
-  // storePointer += sizeof(columnNumber);
-
-  memcpy(storePointer, (char *)(&numberOfLines), sizeof(numberOfLines));
-  storePointer += sizeof(numberOfLines);
-  memcpy(storePointer, (char *)(&whatSortOfDirective),
-         sizeof(whatSortOfDirective));
-  storePointer += sizeof(DirectiveType);
-  memcpy(storePointer, (char *)(&relativePosition), sizeof(relativePosition));
-  storePointer += sizeof(RelativePositionType);
-  memcpy(storePointer, (char *)(&outputPlacement), sizeof(outputPlacement));
-  storePointer += sizeof(OutputPlacementType);
-  memcpy(storePointer, (char *)(&p_isTransformation),
-         sizeof(p_isTransformation));
-  storePointer += sizeof(p_isTransformation);
-  memcpy(storePointer, (char *)(&stringSize), sizeof(stringSize));
-  storePointer += sizeof(stringSize);
-  memcpy(storePointer, saveString, stringSize);
-
-  // printf ("Inside of PreprocessingInfo::packed(): Note some Fortran
-  // specific data members are not packed yet (also all the preprocessing
-  // data is not packed). \n");
-
-  // DQ (2/28/2010): Some assertion checking that will be done later in the
-  // unparser. printf ("In PreprocessingInfo::packed(): getTypeOfDirective() =
-  // %d \n",getTypeOfDirective());
-  ROSE_ASSERT(getTypeOfDirective() !=
-              PreprocessingInfo::CpreprocessorUnknownDeclaration);
-
-  return returnData;
-}
-
-// JH (01/03/2006) This unpack method works complementary to packed ...
-void PreprocessingInfo::unpacked(char *storePointer) {
-  ASSERT_this();
-
-  // std::cout << " in PreprocessingInfo::unpacked ... " << std::endl;
-  // printf ("Error, need to build a new SgFileInfo object! \n");
-  // ROSE_ABORT();
-
-  // DQ (2/28/2010): But jump over the file_info data member so that all ther
-  // other data members will be unpacked properly.
-  storePointer += sizeof(file_info);
-
-  // memcpy ( (char*)(&lineNumber), storePointer, sizeof(lineNumber) );
-  // storePointer += sizeof(lineNumber);
-  // memcpy ( (char*)(&columnNumber), storePointer, sizeof(columnNumber) );
-  // storePointer += sizeof(columnNumber);
-
-  memcpy((char *)(&numberOfLines), storePointer, sizeof(numberOfLines));
-  storePointer += sizeof(numberOfLines);
-  memcpy((char *)(&whatSortOfDirective), storePointer,
-         sizeof(whatSortOfDirective));
-  storePointer += sizeof(DirectiveType);
-  memcpy((char *)(&relativePosition), storePointer, sizeof(relativePosition));
-  storePointer += sizeof(RelativePositionType);
-  memcpy((char *)(&outputPlacement), storePointer, sizeof(outputPlacement));
-  storePointer += sizeof(OutputPlacementType);
-  memcpy((char *)(&p_isTransformation), storePointer,
-         sizeof(p_isTransformation));
-  storePointer += sizeof(p_isTransformation);
-  int stringSize = 0;
-  memcpy((char *)(&stringSize), storePointer, sizeof(stringSize));
-  storePointer += sizeof(stringSize);
-  internalString = string(storePointer, stringSize);
-
-  // DQ (2/28/2010): Some assertion checking that will be done later in the
-  // unparser. This test helps debug if any of the data members are set at an
-  // offset to there proper positions. printf ("In
-  // PreprocessingInfo::unpacked(): getTypeOfDirective() = %d
-  // \n",getTypeOfDirective());
-  ROSE_ASSERT(getTypeOfDirective() !=
-              PreprocessingInfo::CpreprocessorUnknownDeclaration);
-}
-
-// ********************************************
-// Member functions for class PreprocessingInfo
-// ********************************************
-
-// #endif
 
 PreprocessingInfo::PreprocessingInfo()
     : outputPlacement(source_position), attachedOwner(nullptr) {
   // Set these values so that they are not set to zero (a valid value) if a
   // PreprocessingInfo object is reused
 
-  // DQ (4/22/2006): This default constructor is called by the
-  // EasyStorage<PreprocessingInfo*>::rebuildDataStoredInEasyStorageClass()
-  // if this constructor builds a Sg_File_Info object during the AST
-  // reconstruction phase then errors result in the final AST.
-  // Very Strange Errors!!!
-
-  // DQ (4/21/2006): These are illegal values for a Sg_File_Info object
-  // file_info = new Sg_File_Info("comment filename",-1,-1);
-  // file_info = new Sg_File_Info("comment filename",0,0);
   file_info = NULL;
-  // lineNumber          = -1;
-  // columnNumber        = -1;
 
   numberOfLines = -1;
   whatSortOfDirective = CpreprocessorUnknownDeclaration;
   relativePosition = before;
 
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of
-  // new data member.
   p_isTransformation = false;
 }
 
 // Typical constructor used by lex-based code retrieve comments and preprocessor
 // control directives
-PreprocessingInfo::PreprocessingInfo(
-    DirectiveType dt, const string &inputString, const string &inputFileName,
-    int line_no, int col_no, int nol, RelativePositionType relPos
-    // DQ (7/19/2008): Removed these: bool copiedFlag, bool unparsedFlag
-    )
-    : file_info(NULL),
-      // lineNumber(line_no), columnNumber (col_no),
-      numberOfLines(nol), whatSortOfDirective(dt), relativePosition(relPos),
-      outputPlacement(source_position), attachedOwner(nullptr) {
-  // DQ (10/29/2007): Test the filename is a way similar to how it is failing in
-  // lower level code
-  if (inputFileName == "NULL_FILE") {
-    // printf ("In PreprocessingInfo constructor, inputFileName == "NULL_FILE"
-    // \n");
-    ROSE_ASSERT(true);
-  }
+PreprocessingInfo::PreprocessingInfo(DirectiveType dt,
+                                     const string &inputString,
+                                     const string &inputFileName, int line_no,
+                                     int col_no, int nol,
+                                     RelativePositionType relPos)
+    : PreprocessingInfo(
+          dt, inputString,
+          std::make_unique<Sg_File_Info>(inputFileName, line_no, col_no), nol,
+          relPos) {}
 
-  // printf ("In PreprocessingInfo (constructor): dt = %d line_no = %d col_no =
-  // %d nol = %d s = %s \n",dt,line_no,col_no,nol,inputString.c_str());
-  file_info = new Sg_File_Info(inputFileName, line_no, col_no);
+PreprocessingInfo::PreprocessingInfo(DirectiveType dt,
+                                     const string &inputString,
+                                     std::unique_ptr<Sg_File_Info> position,
+                                     int nol, RelativePositionType relPos)
+    : file_info(position.get()), numberOfLines(nol), whatSortOfDirective(dt),
+      relativePosition(relPos), outputPlacement(source_position),
+      attachedOwner(nullptr) {
+  ROSE_ASSERT(file_info != nullptr);
 
   // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can
   // know that the parent being NULL is not meaningful in the AST consistancy
@@ -238,26 +53,11 @@ PreprocessingInfo::PreprocessingInfo(
   file_info->setCommentOrDirective();
   file_info->setOutputInCodeGeneration();
 
-  // DQ (3/7/2010): Switch this is a SgTypeDefault since one of these are
-  // referenced in the generated rose_required_macros_and_functions.h which
-  // means that it will always be formally in the AST.  This may fix (or help
-  // fix) a bug in the AST file I/O where nodes not properly connected to the
-  // AST don't appear to get there global index and freepointer set properly.
-  // DQ (6/13/2007): Set the parent to a shared type for now so that it is at
-  // least set to a non-null value This can if we like to used as a signature
-  // for Sg_File_Info nodes that are associated with comments and directives.
-  // file_info->set_parent(file_info);
-  // file_info->set_parent(SgTypeShort::get_builtin_type());
-  // file_info->set_parent(SgTypeLongLong::createType());
-  file_info->set_parent(SgTypeDefault::createType());
+  // The record owns its file info while detached. Attachment publishes the
+  // owning located node as its AST parent; no surrogate type node is needed.
 
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of
-  // new data member.
   p_isTransformation = false;
 
-  // DQ (4/15/2007): Temp code to trace common position in unparsing.
-  // internalString = inputString;
-  // Normal code
   internalString = inputString;
 
   // DQ (1/13/2014): Added checking for logic to compute macro name for #define
@@ -266,60 +66,36 @@ PreprocessingInfo::PreprocessingInfo(
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
     (void)getMacroName();
   }
+  position.release();
 }
 
-// Copy constructor
 PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo)
     : outputPlacement(prepInfo.outputPlacement), attachedOwner(nullptr) {
   ROSE_ASSERT(prepInfo.file_info != NULL);
-  file_info = new Sg_File_Info(*(prepInfo.file_info));
+  auto position = std::make_unique<Sg_File_Info>(*prepInfo.file_info);
+  file_info = position.get();
+  file_info->set_parent(nullptr);
 
-  // DQ (12/23/2006): Mark this as a comment or directive (mostly so that we can
-  // know that the parent being NULL is not meaningful.
   file_info->setCommentOrDirective();
 
-  // lineNumber          = prepInfo.getLineNumber();
-  // columnNumber        = prepInfo.getColumnNumber();
   numberOfLines = prepInfo.getNumberOfLines();
   whatSortOfDirective = prepInfo.getTypeOfDirective();
   relativePosition = prepInfo.getRelativePosition();
   internalString = prepInfo.internalString;
 
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of
-  // new data member.
   p_isTransformation = prepInfo.p_isTransformation;
 
-  // DQ (1/13/2014): Added checking for logic to compute macro name for #define
-  // macros.
   if (whatSortOfDirective ==
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
     (void)getMacroName();
   }
+  position.release();
 }
 
-PreprocessingInfo::~PreprocessingInfo() {
-  ASSERT_this();
+PreprocessingInfo::~PreprocessingInfo() { delete file_info; }
 
-  // Reset these values so that they are not set to zero (a valid value) if a
-  // PreprocessingInfo object is reused
-  delete file_info;
-  file_info = NULL;
-  // lineNumber          = -1;
-  // columnNumber        = -1;
-  numberOfLines = -1;
-  relativePosition = undef;
-  whatSortOfDirective = CpreprocessorUnknownDeclaration;
-  internalString = "";
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of
-  // new data member.
-  p_isTransformation = false;
-}
-
-/* starting column == 1 (DQ (10/27/2006): used to be 0, but changed to 1 for
- * consistancy with legacy frontend) */
+// Source columns are 1-based.
 int PreprocessingInfo::getColumnNumberOfEndOfString() const {
-  ASSERT_this();
   int col = 1;
   int i = 0;
 
@@ -350,14 +126,12 @@ int PreprocessingInfo::getColumnNumberOfEndOfString() const {
 
 PreprocessingInfo::DirectiveType PreprocessingInfo::getTypeOfDirective() const {
   // Access function for the type of directive
-  ASSERT_this();
   return whatSortOfDirective;
 }
 
 void PreprocessingInfo::setTypeOfDirective(
     PreprocessingInfo::DirectiveType dt) {
   // Access function for the type of directive
-  ASSERT_this();
   whatSortOfDirective = dt;
 }
 
@@ -464,47 +238,29 @@ string PreprocessingInfo::directiveTypeName(const DirectiveType &directive) {
 }
 
 int PreprocessingInfo::getLineNumber() const {
-  ASSERT_this();
   ROSE_ASSERT(file_info != NULL);
   return file_info->get_line();
-  // return lineNumber;
 }
 
 int PreprocessingInfo::getColumnNumber() const {
-  ASSERT_this();
   ROSE_ASSERT(file_info != NULL);
   return file_info->get_col();
-  // return columnNumber;
 }
 
-// DQ (2/27/2019): Adding support for CPP directives and comments to have
-// filename information (already present, but we need to access it).
 std::string PreprocessingInfo::getFilename() const {
-  ASSERT_this();
   ROSE_ASSERT(file_info != NULL);
   return file_info->get_filenameString();
 }
 
-// DQ (2/27/2019): Adding support for CPP directives and comments to have
-// filename information (already present, but we need to access it).
-int PreprocessingInfo::getFileId() const {
-  ASSERT_this();
-  ROSE_ASSERT(file_info != NULL);
-  return file_info->get_file_id();
-}
-
 string PreprocessingInfo::getString() const {
-  ASSERT_this();
   return internalString;
 }
 
 void PreprocessingInfo::setString(const std::string &s) {
-  ASSERT_this();
   internalString = s;
 }
 
 int PreprocessingInfo::getNumberOfLines() const {
-  ASSERT_this();
   int line = 0;
   int i = 0;
   while (internalString[i] != '\0') {
@@ -521,20 +277,16 @@ int PreprocessingInfo::getNumberOfLines() const {
   return line;
 }
 
-void PreprocessingInfo::display(const string &label) const {
-  printf("\n");
-  printf("Inside of PreprocessingInfo display(%s): \n", label.c_str());
-  ASSERT_this();
+void PreprocessingInfo::display(const std::string &label) const {
+  ROSE_ASSERT(file_info != nullptr);
+  printf("\nInside of PreprocessingInfo display(%s): \n", label.c_str());
   file_info->display(label);
-  // printf ("     lineNumber     = %d \n",lineNumber);
-  // printf ("     columnNumber   = %d \n",columnNumber);
   printf("     numberOfLines  = %d \n", numberOfLines);
   printf("     relativePosition = %s \n",
          relativePositionName(relativePosition).c_str());
   printf("     directiveType  = %s \n",
          directiveTypeName(whatSortOfDirective).c_str());
-  printf("     internalString = %s \n", internalString.c_str());
-  printf("\n");
+  printf("     internalString = %s \n\n", internalString.c_str());
 }
 
 std::string
@@ -561,13 +313,11 @@ PreprocessingInfo::relativePositionName(const RelativePositionType &position) {
 
 PreprocessingInfo::RelativePositionType
 PreprocessingInfo::getRelativePosition(void) const {
-  ASSERT_this();
 
   return relativePosition;
 }
 
 void PreprocessingInfo::setRelativePosition(RelativePositionType relPos) {
-  ASSERT_this();
 
   if (attachedOwner != nullptr && relPos != relativePosition) {
     fprintf(stderr,
@@ -581,7 +331,6 @@ void PreprocessingInfo::setRelativePosition(RelativePositionType relPos) {
 
 PreprocessingInfo::OutputPlacementType
 PreprocessingInfo::getOutputPlacement() const {
-  ASSERT_this();
   if (outputPlacement != source_position &&
       outputPlacement != attached_output_boundary &&
       outputPlacement != attached_output_trailing_line) {
@@ -595,7 +344,6 @@ PreprocessingInfo::getOutputPlacement() const {
 }
 
 void PreprocessingInfo::setOutputPlacement(OutputPlacementType placement) {
-  ASSERT_this();
   if ((placement != source_position && placement != attached_output_boundary &&
        placement != attached_output_trailing_line) ||
       (outputPlacement != source_position && outputPlacement != placement)) {
@@ -610,24 +358,24 @@ void PreprocessingInfo::setOutputPlacement(OutputPlacementType placement) {
 }
 
 SgLocatedNode *PreprocessingInfo::getAttachedOwner() const {
-  ASSERT_this();
   return attachedOwner;
 }
 
 void PreprocessingInfo::claimAttachedOwner(SgLocatedNode *owner) {
-  ASSERT_this();
-  if (owner == nullptr || attachedOwner != nullptr) {
+  if (owner == nullptr || attachedOwner != nullptr || file_info == nullptr ||
+      file_info->get_parent() != nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[preprocessing-attachment-owner]: record is "
             "not uniquely detached\n");
     ROSE_ABORT();
   }
+  file_info->set_parent(owner);
   attachedOwner = owner;
 }
 
 void PreprocessingInfo::releaseAttachedOwner(SgLocatedNode *owner) {
-  ASSERT_this();
-  if (owner == nullptr || attachedOwner != owner) {
+  if (owner == nullptr || attachedOwner != owner || file_info == nullptr ||
+      file_info->get_parent() != owner) {
     fprintf(stderr,
             "REX_AST_INVARIANT[preprocessing-attachment-owner]: record=%p "
             "current-owner=%p release-owner=%p does not own the record\n",
@@ -635,12 +383,12 @@ void PreprocessingInfo::releaseAttachedOwner(SgLocatedNode *owner) {
             static_cast<void *>(owner));
     ROSE_ABORT();
   }
+  file_info->set_parent(nullptr);
   attachedOwner = nullptr;
 }
 
 void PreprocessingInfo::changeAttachedPosition(SgLocatedNode *owner,
                                                RelativePositionType position) {
-  ASSERT_this();
   if (owner == nullptr || attachedOwner != owner) {
     fprintf(stderr,
             "REX_AST_INVARIANT[preprocessing-attached-position]: record=%p "
@@ -654,7 +402,6 @@ void PreprocessingInfo::changeAttachedPosition(SgLocatedNode *owner,
 
 void PreprocessingInfo::changeAttachedOutputPlacement(
     SgLocatedNode *owner, OutputPlacementType placement) {
-  ASSERT_this();
   if (owner == nullptr || attachedOwner != owner ||
       (placement != attached_output_boundary &&
        placement != attached_output_trailing_line)) {
@@ -670,18 +417,15 @@ void PreprocessingInfo::changeAttachedOutputPlacement(
 }
 
 int PreprocessingInfo::getStringLength(void) const {
-  ASSERT_this();
 
   return internalString.length();
 }
 
 bool PreprocessingInfo::has_file_info() const {
-  ASSERT_this();
   return file_info != NULL;
 }
 
 Sg_File_Info *PreprocessingInfo::get_file_info() const {
-  ASSERT_this();
 
   if (file_info == NULL) {
     fprintf(stderr,
@@ -693,52 +437,19 @@ Sg_File_Info *PreprocessingInfo::get_file_info() const {
 }
 
 void PreprocessingInfo::set_file_info(Sg_File_Info *info) {
-  ASSERT_this();
-
-  file_info = info;
-}
-
-// DQ (8/26/2020): include directive have a filename imbedded inside, and we
-// need to extract that for from tools (e.g. the fixup for initializers from
-// include files).
-std::string PreprocessingInfo::get_filename_from_include_directive() {
-  std::string s;
-
-  // s = "#line 12345\"foobar.h\"6789";
-  // s = "#line \"foobar.h\"";
-  // s = "#line <foobar.h>";
-  // s = "#line 12345<foobar.h>6789";
-
-  if (this->getTypeOfDirective() == CpreprocessorIncludeDeclaration) {
-    // std::string line = s;
-    std::string line = internalString;
-    std::string name;
-
-    std::string tester = "\"";
-
-    size_t findPos = line.find(tester); // finds first quote mark
-
-    if (findPos == string::npos) {
-      tester = "<";
-      findPos = line.find(tester); // finds first quote mark
-      tester = ">";
-    }
-
-    size_t findPos2 = line.find(tester, findPos + 1); // finds second quote mark
-    ROSE_ASSERT(findPos2 > findPos);
-    name = line.substr(findPos + 1,
-                       (findPos2 - findPos) - 1); // copies the name into name
-
-    // printf ("before adding terminal: name = |%s| \n",name.c_str());
-    s = name;
-  } else {
-    printf(
-        "Error: In PreprocessingInfo::get_filename_from_include_directive(): "
-        "getTypeOfDirective != CpreprocessorIncludeDeclaration \n");
+  if (info == nullptr || (info != file_info && info->get_parent() != nullptr) ||
+      (file_info != nullptr && file_info->get_parent() != attachedOwner)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[preprocessing-source-owner]: replacement "
+            "requires detached file info and an exact existing owner\n");
     ROSE_ABORT();
   }
-
-  return s;
+  if (info == file_info)
+    return;
+  if (file_info != nullptr)
+    file_info->set_parent(nullptr);
+  info->set_parent(attachedOwner);
+  file_info = info;
 }
 
 // DQ (11/28/2008): Support for CPP generated linemarkers
@@ -775,12 +486,6 @@ namespace {
 struct PhaseTwoSpelling {
   std::string logical;
   std::vector<size_t> rawOffsets;
-};
-
-struct MacroDefinitionSpelling {
-  std::string logicalName;
-  size_t rawNameBegin;
-  size_t rawNameEnd;
 };
 
 std::string diagnosticDirectiveSpelling(const std::string &spelling) {
@@ -897,16 +602,18 @@ size_t consumeUniversalCharacterName(const std::string &spelling,
   return cursor + 2 + digitCount;
 }
 
-MacroDefinitionSpelling
-parseMacroDefinitionSpelling(const std::string &spelling) {
+std::string parseMacroDefinitionSpelling(const std::string &spelling) {
   const PhaseTwoSpelling phaseTwo = deletePhaseTwoLineSplices(spelling);
   const std::string &logical = phaseTwo.logical;
   size_t cursor = 0;
   skipMacroDefinitionTrivia(logical, cursor, spelling);
-  if (cursor >= logical.size() || logical[cursor] != '#') {
+  if (cursor < logical.size() && logical[cursor] == '#') {
+    ++cursor;
+  } else if (logical.compare(cursor, 2, "%:") == 0) {
+    cursor += 2;
+  } else {
     failMacroDefinitionSpelling("missing-hash", spelling);
   }
-  ++cursor;
   skipMacroDefinitionTrivia(logical, cursor, spelling);
 
   constexpr char keyword[] = "define";
@@ -958,17 +665,12 @@ parseMacroDefinitionSpelling(const std::string &spelling) {
     failMacroDefinitionSpelling("macro-name-offset-mismatch", spelling);
   }
 
-  return {logicalName, rawNameBegin, rawNameEnd};
+  return logicalName;
 }
 
 } // namespace
 
 std::string PreprocessingInfo::getMacroName() {
-  // This function is only supporting the retrival of the macro name for #define
-  // macros (all other cases are an error trapped below).
-
-#define DEBUG_MACRO_NAME 0
-
   if (this->getTypeOfDirective() !=
       PreprocessingInfo::CpreprocessorDefineDeclaration) {
     fprintf(stderr,
@@ -978,51 +680,54 @@ std::string PreprocessingInfo::getMacroName() {
     ROSE_ABORT();
   }
 
-  const MacroDefinitionSpelling spelling =
-      parseMacroDefinitionSpelling(internalString);
-#if DEBUG_MACRO_NAME
-  printf("s = %s \n", internalString.c_str());
-  printf("   --- macroName = %s raw range = [%" PRIuPTR ", %" PRIuPTR ") \n",
-         spelling.logicalName.c_str(), spelling.rawNameBegin,
-         spelling.rawNameEnd);
-#endif
-
-  return spelling.logicalName;
+  return parseMacroDefinitionSpelling(internalString);
 }
 
-// DQ (1/15/2015): Adding support for token-based unparsing. Access function for
-// new data member.
 bool PreprocessingInfo::isTransformation() const {
-  ASSERT_this();
   return p_isTransformation;
 }
 
 void PreprocessingInfo::setAsTransformation() {
-  ASSERT_this();
   p_isTransformation = true;
 }
 
-void PreprocessingInfo::unsetAsTransformation() {
-  ASSERT_this();
-  p_isTransformation = false;
-}
+void PreprocessingInfo::unsetAsTransformation() { p_isTransformation = false; }
 
-// *********************************************
-// Member functions for class ROSEATTRIBUTESList
-// *********************************************
+ROSEAttributesList::ROSEAttributesList() : rawTokenStream(nullptr) {}
 
-ROSEAttributesList::ROSEAttributesList() {
-  index = 0;
-
-  // DQ (9/29/2013): Added initialization of data members (when using
-  // token-based preprocessing this data member was not being set before
-  // being tested). Note: data members: attributeList, fileName, and
-  // filenameIdSet will default to proper values using there default
-  // constrcutors.
-  rawTokenStream = NULL;
-
-  // DQ (1/15/2015): Adding support for token-based unparsing, initialization of
-  // new data member. p_isTransformation = false;
+ROSEAttributesList::ROSEAttributesList(const ROSEAttributesList &source)
+    : rawTokenStream(nullptr), fileName(source.fileName),
+      filenameIdSet(source.filenameIdSet) {
+  std::map<const PreprocessingInfo *, PreprocessingInfo *> records;
+  ROSEAttributesList pending;
+  for (const auto *record : source.attributeList) {
+    ROSE_ASSERT(record != nullptr);
+    auto copy = std::make_unique<PreprocessingInfo>(*record);
+    ROSE_ASSERT(records.emplace(record, copy.get()).second);
+    pending.attributeList.push_back(copy.get());
+    copy.release();
+  }
+  if (source.rawTokenStream != nullptr) {
+    pending.rawTokenStream = new LexTokenStreamType();
+    for (const auto *element : *source.rawTokenStream) {
+      ROSE_ASSERT(element != nullptr && element->p_tok_elem != nullptr);
+      auto copy = std::make_unique<stream_element>();
+      auto token = std::make_unique<token_element>(*element->p_tok_elem);
+      copy->p_tok_elem = token.get();
+      copy->beginning_fpi = element->beginning_fpi;
+      copy->ending_fpi = element->ending_fpi;
+      if (element->p_preprocessingInfo != nullptr) {
+        auto record = records.find(element->p_preprocessingInfo);
+        ROSE_ASSERT(record != records.end());
+        copy->p_preprocessingInfo = record->second;
+      }
+      pending.rawTokenStream->push_back(copy.get());
+      token.release();
+      copy.release();
+    }
+  }
+  attributeList.swap(pending.attributeList);
+  std::swap(rawTokenStream, pending.rawTokenStream);
 }
 
 ROSEAttributesList::~ROSEAttributesList() { deepClean(); }
@@ -1031,107 +736,48 @@ void ROSEAttributesList::addElement(PreprocessingInfo::DirectiveType dt,
                                     const std::string &pLine,
                                     const std::string &filename, int lineNumber,
                                     int columnNumber, int numOfLines) {
-  ASSERT_this();
-  // ROSE_ASSERT(pLine != NULL);
-
-  // DQ (10/28/2007): An empty file name is now allowed (to handle #line 1 ""
-  // directives) ROSE_ASSERT(filename.empty() == false);
   ROSE_ASSERT(pLine.empty() == false);
   ROSE_ASSERT(lineNumber > 0);
   ROSE_ASSERT(columnNumber > 0);
   ROSE_ASSERT(numOfLines >= 0); // == 0, if cpp_comment in a single line
-  // PreprocessingInfo *pElem = new PreprocessingInfo(dt, pLine, filename,
-  // lineNumber, columnNumber, numOfLines, PreprocessingInfo::undef, false,
-  // false);
-  PreprocessingInfo *pElem =
-      new PreprocessingInfo(dt, pLine, filename, lineNumber, columnNumber,
-                            numOfLines, PreprocessingInfo::undef);
-
-  // PreprocessingInfo &pRef = *pElem;
-  // insertElement(pRef);
-  attributeList.push_back(pElem);
+  auto element = std::make_unique<PreprocessingInfo>(
+      dt, pLine, filename, lineNumber, columnNumber, numOfLines,
+      PreprocessingInfo::undef);
+  attributeList.push_back(element.get());
+  element.release();
 }
 
-// DQ (9/29/2013): Added to support adding processed CPP directives and comments
-// as tokens to token list.
 PreprocessingInfo *ROSEAttributesList::lastElement() {
-  ASSERT_this();
-
   ROSE_ASSERT(attributeList.empty() == false);
-
+  if (attributeList.back() == nullptr) {
+    fprintf(stderr, "REX_AST_INVARIANT[preprocessing-list-entry]: lastElement "
+                    "contains null entry\n");
+    ROSE_ABORT();
+  }
   return attributeList.back();
 }
 
 void ROSEAttributesList::moveElements(ROSEAttributesList &pList) {
-  ASSERT_this();
-
-  int length = pList.size();
-  if (length > 0) {
-    vector<PreprocessingInfo *>::iterator i = pList.attributeList.begin();
-    for (i = pList.attributeList.begin(); i != pList.attributeList.end(); i++) {
-      length = pList.getLength();
-      // PreprocessingInfo *pElem = new PreprocessingInfo((*i)->stringPointer,
-      // (*i)->lineNumber, (*i)->columnNumber); PreprocessingInfo & pRef =
-      // *pElem; DQ (4/13/2007): Skip the insertElement() which requires a
-      // traversal over the list, we are building this in order so the order is
-      // preserved in copying from pList. This is a performance optimization.
-      PreprocessingInfo &pRef = *(*i);
-      attributeList.push_back(&pRef);
-    }
-
-    // empty the STL list
-    vector<PreprocessingInfo *>::iterator head = pList.attributeList.begin();
-    vector<PreprocessingInfo *>::iterator tail = pList.attributeList.end();
-    pList.attributeList.erase(head, tail);
-    ROSE_ASSERT(pList.attributeList.size() == 0);
-  }
+  ASSERT_require(this != &pList);
+  attributeList.insert(attributeList.end(), pList.attributeList.begin(),
+                       pList.attributeList.end());
+  pList.attributeList.clear();
+  ROSE_ASSERT(pList.attributeList.empty());
 }
 
-void ROSEAttributesList::setFileName(const string &fName) {
-  // DQ (10/4/2013): This function is called by the
-  // EasyStorage<ROSEAttributesList>::rebuildDataStoredInEasyStorageClass()
-  // which is called as part of the AST File I/O (AST serialization).  It was
-  // not previously called until more information was added to the AST (likely
-  // as part of the new token stream support for parse tree reconstruction in
-  // ROSE).
+void ROSEAttributesList::setFileName(const string &fName) { fileName = fName; }
 
-  ASSERT_this();
-
-  // Should have an assert(fName!=NULL) here?
-  // strcpy(fileName,fName);
-  fileName = fName;
-
-  // TV (11/19/2018): ROSE-1470: with File I/O, SgFile (and contained
-  // ROSEAttributesList) are loaded before Sg_File_Info causing issues....
-}
-
-string ROSEAttributesList::getFileName() {
-  ASSERT_this();
-  return fileName;
-}
-
-void ROSEAttributesList::setIndex(int i) {
-  ASSERT_this();
-  index = i;
-}
-
-int ROSEAttributesList::getIndex() {
-  ASSERT_this();
-  return index;
-}
+string ROSEAttributesList::getFileName() { return fileName; }
 
 int ROSEAttributesList::size(void) {
-  ASSERT_this();
   return getLength();
 }
 
 int ROSEAttributesList::getLength(void) {
-  ASSERT_this();
   return attributeList.size();
 }
 
 void ROSEAttributesList::clean(void) {
-  ASSERT_this();
 
   for (PreprocessingInfo *info : attributeList) {
     delete info;
@@ -1140,7 +786,6 @@ void ROSEAttributesList::clean(void) {
 }
 
 void ROSEAttributesList::deepClean(void) {
-  ASSERT_this();
 
   clean();
 
@@ -1157,109 +802,15 @@ void ROSEAttributesList::deepClean(void) {
 }
 
 PreprocessingInfo *ROSEAttributesList::operator[](int i) {
-  ASSERT_this();
   return attributeList[i];
 }
 
-void ROSEAttributesList::display(const string &label) {
-  printf("ROSEAttributesList::display (label = %s): size = %zu \n",
-         label.c_str(), attributeList.size());
-  ASSERT_this();
-
-  // fprintf(outFile,"\n%s: \n", getFileName() );
-  for (size_t index = 0; index < attributeList.size(); ++index) {
-    PreprocessingInfo *entry = attributeList[index];
-    // printf("  %s\n",( (*j)->stringPointer );
-
-    // DQ (12/19/2008): Modified to report NULL pointers
-    // ROSE_ASSERT ( (*j) != NULL );
-    // printf("LineNumber: %5d:
-    // %s\n",(*j)->getLineNumber(),(*j)->getString().c_str());
-    printf("-----------------------\n");
-    if (entry == NULL) {
-      fprintf(stderr,
-              "REX_AST_INVARIANT[preprocessing-list-entry]: display "
-              "label=%s contains null entry index=%zu\n",
-              label.c_str(), index);
-      ROSE_ABORT();
-    }
-    printf("Directive Type: %s; Relative position: %s; \nLine:%5d; Column:%5d; "
-           "String: %s\n",
-           PreprocessingInfo::directiveTypeName(entry->getTypeOfDirective())
-               .c_str(),
-           PreprocessingInfo::relativePositionName(entry->getRelativePosition())
-               .c_str(),
-           entry->getLineNumber(), entry->getColumnNumber(),
-           entry->getString().c_str());
-  }
-
-  printf("END: ROSEAttributesList::display (label = %s) \n", label.c_str());
-}
-
 void ROSEAttributesList::set_rawTokenStream(LexTokenStreamTypePointer s) {
-  ASSERT_this();
   rawTokenStream = s;
 }
 
 LexTokenStreamTypePointer ROSEAttributesList::get_rawTokenStream() {
-  ASSERT_this();
   return rawTokenStream;
-}
-
-// void ROSEAttributesList::generatePreprocessorDirectivesAndCommentsForAST(
-// SgFile* file )
-void ROSEAttributesList::generatePreprocessorDirectivesAndCommentsForAST(
-    const string &filename) {
-  // This function does not work for fixed-format, which is processed
-  // separately. This function reads the token stream and extracts out the
-  // comments for inclusion into the attributeList.
-
-  ASSERT_this();
-  ROSE_ASSERT(filename.empty() == false);
-
-  printf("This is an old version of the function to collect CPP directives and "
-         "comments \n");
-  ROSE_ABORT();
-
-  ROSE_ASSERT(rawTokenStream != NULL);
-
-  if (attributeList.empty() == false) {
-    // Detect where these these have been previously built using a mechanism we
-    // are testing. Delete the entries built by the expermiental mechanism and
-    // use the previous approach. This allows for the new mechanism to be widely
-    // tested in C, C++, and Fortran.
-
-    printf("attributeList has already been build, remove the existing entries "
-           "attributeList.size() = %" PRIuPTR " \n",
-           attributeList.size());
-    std::vector<PreprocessingInfo *>::iterator i = attributeList.begin();
-    while (i != attributeList.end()) {
-      delete *i;
-      i++;
-    }
-    attributeList.clear();
-  }
-  ROSE_ASSERT(attributeList.empty() == true);
-
-  LexTokenStreamType::iterator i = rawTokenStream->begin();
-  while (i != rawTokenStream->end()) {
-    token_element *token = (*i)->p_tok_elem;
-    ROSE_ASSERT(token != NULL);
-    file_pos_info &start = (*i)->beginning_fpi;
-
-    bool isComment = (token->token_id == SgToken::FORTRAN_COMMENTS);
-    if (isComment == true) {
-      int numberOfLines = 1;
-      PreprocessingInfo *comment = new PreprocessingInfo(
-          PreprocessingInfo::FortranStyleComment, token->token_lexeme, filename,
-          start.line_num, start.column_num, numberOfLines,
-          PreprocessingInfo::before);
-      ROSE_ASSERT(comment != NULL);
-      attributeList.push_back(comment);
-    }
-
-    i++;
-  }
 }
 
 bool ROSEAttributesList::isFortran90Comment(const string &line) {
@@ -1275,20 +826,10 @@ bool ROSEAttributesList::isFortran90Comment(const string &line) {
 }
 
 bool ROSEAttributesList::isFortran77Comment(const string &line) {
-  // This refactored code tests if a line is a fortran fixed format comment (it
-  // maybe that it is less specific to F77). It is a very simple test on the
-  // character in column zero, but there are a few details...
-
-  // We handle CPP directives first and then comments, Fortran fixed format
-  // comments should be easy. if there is a character in the first column, then
-  // the whole line is a comment. Also, more subtle, if it is a blank line then
-  // it is a comment, so save the blank lines too.
-
   if (line.find_first_not_of(" \t\r") == string::npos) {
     return true;
   }
 
-  bool isComment = false;
   const unsigned char firstCharacter = static_cast<unsigned char>(line.front());
   if (firstCharacter != ' ' && firstCharacter != '\t' &&
       (firstCharacter < 0x20 || firstCharacter > 0x7e)) {
@@ -1298,50 +839,11 @@ bool ROSEAttributesList::isFortran77Comment(const string &line) {
             static_cast<unsigned int>(firstCharacter));
     ROSE_ABORT();
   }
-  if (firstCharacter != ' ' /* SPACE */ && firstCharacter != '\n' /* CR  */ &&
-      firstCharacter != '\0' /* NUL   */ && firstCharacter != '\t' /* TAB */) {
-    // This has something in the first column, so it might be a comment (check
-    // further)...
-
-#define RELAXED_FORTRAN_COMMENT_SPECIFICATION 1
-#if RELAXED_FORTRAN_COMMENT_SPECIFICATION
-    // Most fortran compilers do not enforce the strinct langauge definition of
-    // what a comment is so we have to handle the more relaxed comment
-    // specification (which does not appear to be written down anywhere). Make
-    // sure it is not part a number (which could be part of a Fortran label)
-    if (firstCharacter >= '0' && firstCharacter <= '9') {
-      // This is NOT a comment it is part of a label in the first column (see
-      // test2008_03.f) Some compilers can interpret a label even if
-      // it starts in the first column (column 1 (fortran perspective) column 0
-      // (C perspective)). printf ("This is not a comment, it is part of a label
-      // in the first column: line = %s \n",line.c_str());
-    } else {
-      // DQ (11/19/2008): Commented this out since I can't understand
-      // why it was here and it appears to mark everything as a comment!
-
-      // This is position (column) 0 in the line, for F77 this means it is a
-      // comment. Note that we check for CPP directives first and only then if
-      // the line is not a CPP directive do we test for a F77 style comment, so
-      // if the first character of the line is a '#' then it will only be
-      // considered a comment if it is not a CPP directive.
-      isComment = true;
-    }
-#else
-    // DQ (1/22/2008): Separate from the F77 standard, no compiler is this
-    // restrictive (unfortunately)! The Fortran 77 standard says: comments must
-    // have a C or * in the first column (check for case)
-    if (firstCharacter == 'C' || firstCharacter == 'c' ||
-        firstCharacter == '*') {
-      isComment = true;
-    }
-#endif
-    // printf ("This is a comment! lineCounter = %d \n",lineCounter);
-  }
-
-  return isComment;
+  // A digit in column one begins a label; other nonblank characters are
+  // treated as fixed-format comments after directives have been classified.
+  return firstCharacter != ' ' && firstCharacter != '\t' &&
+         (firstCharacter < '0' || firstCharacter > '9');
 }
-
-#define DEBUG_CPP_DIRECTIVE_COLLECTION 0
 
 bool ROSEAttributesList::isCppDirective(
     const string &line, PreprocessingInfo::DirectiveType &cppDeclarationKind,
@@ -1358,10 +860,8 @@ bool ROSEAttributesList::isCppDirective(
   ++cursor;
   cursor = logicalLine.find_first_not_of(" \t", cursor);
   if (cursor == string::npos) {
-    fprintf(stderr,
-            "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash "
-            "directive has no identifier\n");
-    ROSE_ABORT();
+    cppDeclarationKind = PreprocessingInfo::CpreprocessorEmptyDeclaration;
+    return true;
   }
 
   if (std::isdigit(static_cast<unsigned char>(logicalLine[cursor]))) {
@@ -1456,28 +956,6 @@ static bool preprocessingLineStartsHashDirective(const string &line) {
 
 void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
     const string &filename, ROSEAttributesList::languageTypeEnum languageType) {
-  // This is required for Fortran, but is redundant for C and C++.
-  // This is a more direct approach to collecting the CPP directives, where as
-  // for C and C++ we have had a solution (using lex) and a second (superior)
-  // solution using the token stream pipeline, the Fortran support for CPP is
-  // not addressed properly by the existing lex approach (and the token stream
-  // pipeline does not apply to Fortran). Thus we have implemented a more direct
-  // collection of CPP directives to support the requirements of Fortran CPP
-  // handling (such files have a suffix such as: "F", "F90", "F95", "F03",
-  // "F08".
-
-  // The lex pass for free-format Fortran collects comments properly, but does
-  // not classify CPP directives properly. So maybe we should just extract them
-  // separately in an other pass over the file.  Also if we separate out the
-  // recognition of CPP directives from comments this function may be useful for
-  // the fix format CPP case. CPP directives should also be easier than a lot of
-  // other token recognition.
-
-  // printf ("This function
-  // ROSEAttributesList::collectFreeFormatPreprocessorDirectivesAndCommentsForAS():
-  // is not implemented yet! \n"); ROSE_ABORT();
-
-  ASSERT_this();
 
   ROSE_ASSERT(filename.empty() == false);
 
@@ -1487,29 +965,11 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
   string line;
   constexpr int colNumber = 1;
 
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-  printf(
-      "In ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST: "
-      "Opening file %s for reading comments and CPP directives \n",
-      filename.c_str());
-#endif
-
   errno = 0;
   ifstream targetFile(filename.c_str());
   if (targetFile.is_open()) {
-    // The first line is defined to be line 1, line zero does not exist  and is
-    // an error value. This synch's the line numbering convention of the OFP
-    // with the line numbering convention for CPP directives and comments.
     int lineCounter = 1;
     while (getline(targetFile, line)) {
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      printf("\nAt top of loop over lines in the file ... lineCounter = %d \n",
-             lineCounter);
-#endif
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      // Debugging output
-      cout << "collect CPP directives: " << line << endl;
-#endif
       int numberOfLines = 1;
 
       if (preprocessingLineStartsHashDirective(line)) {
@@ -1538,9 +998,6 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
           physicalLine = nextLine;
           ++numberOfLines;
         }
-
-        // printf ("After processing continuation lines: line.length() = %"
-        // PRIuPTR " line = %s \n",line.length(),line.c_str());
       }
 
       string restOfTheLine;
@@ -1549,36 +1006,12 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
       bool cppDirective =
           isCppDirective(line, cppDeclarationKind, restOfTheLine);
 
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      // printf ("cppDirective = %s \n",cppDirective ? "true" : "false");
-      printf("cppDirective = %s cppDeclarationKind = %s \n",
-             cppDirective ? "true" : "false",
-             PreprocessingInfo::directiveTypeName(cppDeclarationKind).c_str());
-#endif
-
-      // DQ (11/17/2008): Refactored the code to make it simpler to add here!
-      // If this is not a CPP directive, then check if it is a comment (note
-      // that for Fortran (for fixed format), a CPP directive could be
-      // identified as a comment so we have to check for CPP directives first.
       if (cppDirective == false) {
         bool isComment = false;
 
-        // Used switch to provide room for additional frontends if
-        // needed. Note that C permits multiple comments on a single
-        // line, this is not addressed here.
         switch (languageType) {
-          // case e_Cxx_language: /* C and C++ cases are already handled via the
-          // lex based pass. */
-
-          // For C and C++ ignore the collection of comments for now (this
-          // function is defined for Fortran but since C and C++ code is great
-          // for testing the CPP we allow it to be used for testing CPP on C and
-          // C++ code, but we ignore comments for this case.
         case e_C_language:
-          isComment = false;
-          break;
         case e_Cxx_language:
-          isComment = false;
           break;
 
         case e_Fortran77_language:
@@ -1596,10 +1029,7 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
         }
         }
 
-        // bool isComment = isFortran90Comment(line);
         if (isComment == true) {
-          // PP was: cppDeclarationKind =
-          // PreprocessingInfo::FortranStyleComment;
           cppDeclarationKind = commentKind;
         }
       }
@@ -1613,8 +1043,6 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
             numberOfLines, PreprocessingInfo::before);
         ROSE_ASSERT(cppDirective != NULL);
         attributeList.push_back(cppDirective);
-        // DQ (11/28/2008): Gather additional data for specific directives (CPP
-        // generated linemarkers (e.g. "# <line number> <filename> <flags>").
         if (cppDeclarationKind ==
             PreprocessingInfo::CpreprocessorCompilerGeneratedLinemarker) {
           size_t cursor = 0;
@@ -1687,13 +1115,6 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
       }
 
       lineCounter += numberOfLines;
-
-      // printf ("increment lineCounter = %d \n",lineCounter);
-#if DEBUG_CPP_DIRECTIVE_COLLECTION
-      printf("At bottom of loop over lines in the file ... incremented "
-             "lineCounter = %d attributeList.size() = %" PRIuPTR " \n\n",
-             lineCounter, attributeList.size());
-#endif
     }
 
     if (targetFile.bad()) {
@@ -1704,7 +1125,6 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
       ROSE_ABORT();
     }
 
-    // printf ("Closing file \n");
     targetFile.close();
   } else {
     const int openError = errno;
@@ -1719,14 +1139,9 @@ void ROSEAttributesList::collectPreprocessorDirectivesAndCommentsForAST(
 }
 
 void ROSEAttributesList::generateFileIdListFromLineDirectives() {
-  // This function generates a list of fileId numbers associated with each of
-  // the different names specified in #line directives.
-
-  // DQ (12/17/2012): Added assertion.
   ROSE_ASSERT(Sg_File_Info::get_nametofileid_map().size() ==
               Sg_File_Info::get_fileidtoname_map().size());
 
-  // DQ (12/17/2012): Added assertion.
   ROSE_ASSERT(Sg_File_Info::get_nametofileid_map().find("") ==
               Sg_File_Info::get_nametofileid_map().end());
 
@@ -1766,20 +1181,12 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
       // number.
       p = directiveStringWithoutHashAndKeyword.find_first_not_of("0123456789");
 
-      string lineNumberString =
-          directiveStringWithoutHashAndKeyword.substr(0, p);
-      if (lineNumberString.empty()) {
+      if (p == 0) {
         continue;
       }
-      int line = atoi(lineNumberString.c_str());
-      // DQ (1/7/2014): Added handling for case where filename is not present in
-      // #line directive.
       if (p != string::npos) {
-        // string directiveStringWithoutHashAndKeywordAndLineNumber =
-        // directiveStringWithoutHashAndKeyword.substr(p,directiveStringWithoutHashAndKeyword.length()-(p+1));
         string directiveStringWithoutHashAndKeywordAndLineNumber =
-            directiveStringWithoutHashAndKeyword.substr(
-                p, directiveStringWithoutHashAndKeyword.length());
+            directiveStringWithoutHashAndKeyword.substr(p);
         // Remove white space between the line number and the filename.
         p = directiveStringWithoutHashAndKeywordAndLineNumber.find_first_not_of(
             " \t");
@@ -1789,22 +1196,12 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
         directiveStringWithoutHashAndKeywordAndLineNumber.erase(0, p);
         string quotedFilename =
             directiveStringWithoutHashAndKeywordAndLineNumber;
-        // DQ (6/1/2016): Fix for case of trailing spaces after the line number
-        // (no quoted file name).  See test2016_17.c.
-        // ROSE_ASSERT(quotedFilename[0] == '\"');
         if (!quotedFilename.empty() &&
             (quotedFilename[0] == '\"' || quotedFilename[0] == '<' ||
              quotedFilename[0] == '\'')) {
           char opener = quotedFilename[0];
           char closer = (opener == '<') ? '>' : opener;
-          // DQ (8/22/2020): C_tests/test2020_22.c demonstrates that this is not
-          // reasonable. ROSE_ASSERT(quotedFilename[quotedFilename.length()-1]
-          // == '\"');
-
-          // DQ (8/22/2020): find the closing quote.
           size_t positionOfNextQuote = quotedFilename.find(closer, 1);
-          // std::string filename =
-          // quotedFilename.substr(1,quotedFilename.length()-2);
           if (positionOfNextQuote == string::npos) {
             continue;
           }
@@ -1814,19 +1211,7 @@ void ROSEAttributesList::generateFileIdListFromLineDirectives() {
           // (no action if filename is already in the map).
           Sg_File_Info::addFilenameToMap(filename);
 
-          int fileId = Sg_File_Info::getIDFromFilename(filename);
-
-          if (SgProject::get_verbose() > 1) {
-            printf(
-                "In "
-                "ROSEAttributesList::generateFileIdListFromLineDirectives(): "
-                "line = %d fileId = %d quotedFilename = %s filename = %s \n",
-                line, fileId, quotedFilename.c_str(), filename.c_str());
-          }
-
-          if (filenameIdSet.find(fileId) == filenameIdSet.end()) {
-            filenameIdSet.insert(fileId);
-          }
+          filenameIdSet.insert(Sg_File_Info::getIDFromFilename(filename));
         }
       } else {
         printf("NOTE: In "
@@ -1851,6 +1236,18 @@ ROSEAttributesListContainer::ROSEAttributesListContainer() {
   // Nothing to do here?
 }
 
+ROSEAttributesListContainer::ROSEAttributesListContainer(
+    const ROSEAttributesListContainer &source) {
+  ROSEAttributesListContainer pending;
+  for (const auto &entry : source.attributeListMap) {
+    ROSE_ASSERT(entry.second != nullptr);
+    auto list = std::make_unique<ROSEAttributesList>(*entry.second);
+    pending.attributeListMap.emplace(entry.first, list.get());
+    list.release();
+  }
+  attributeListMap.swap(pending.attributeListMap);
+}
+
 ROSEAttributesListContainer::~ROSEAttributesListContainer() {
   for (auto &entry : attributeListMap) {
     delete entry.second;
@@ -1860,84 +1257,22 @@ ROSEAttributesListContainer::~ROSEAttributesListContainer() {
 
 void ROSEAttributesListContainer::addList(std::string fileName,
                                           ROSEAttributesList *listPointer) {
-  // DQ (7/2/2020): Added assertion to catch when this function is called from a
-  // NULL pointer.
-  ASSERT_this();
 
-  // attributeListList.push_back ( listPointer );
-  attributeListMap[fileName] = listPointer;
+  ROSEAttributesList *&entry = attributeListMap[fileName];
+  if (entry != listPointer) {
+    delete entry;
+    entry = listPointer;
+  }
 }
 
 ROSEAttributesList &
 ROSEAttributesListContainer::operator[](const string &fName) {
-  // return *(findList (fName.c_str()) );
-  // return *( findList (fName) );
-  return *(attributeListMap[fName]);
-}
-
-bool ROSEAttributesListContainer::isInList(const string &fName) {
-  bool returnValue = false;
-
-  // printf ("Looking for list for file = %s attributeListList.size() = %d
-  // \n",fName,attributeListList.size());
-
-  // Trap out this special case (generated by SAGE/legacy frontend code)
-  // if ( Rose::containsString (fName,"NULL_FILE") == true )
-  if (fName == "NULL_FILE")
-    return false;
-
-  returnValue = (attributeListMap.find(fName) != attributeListMap.end());
-
-  // printf ("In ROSEAttributesListContainer::isInList(): returnValue = %d
-  // \n",returnValue);
-
-  return returnValue;
-}
-
-void ROSEAttributesListContainer::dumpContents(void) {
-  FILE *outFile = NULL;
-
-  // This should be based on the specificed output file name
-  outFile = fopen("rose_directives_list.txt", "w");
-
-  printf("ROSEAttributesListContainer::dumpContents() not implemented for new "
-         "map datastructure \n");
-  ROSE_ABORT();
-
-  fclose(outFile);
-}
-
-void ROSEAttributesListContainer::display(const string &label) {
-  printf("ROSEAttributesListContainer::display (label = %s) \n", label.c_str());
-  // std::map<std::string, ROSEAttributesList*> attributeListMap;
-
-  printf("In ROSEAttributesListContainer::display(): attributeListMap.size() = "
-         "%" PRIuPTR " \n",
-         attributeListMap.size());
-  map<std::string, ROSEAttributesList *>::iterator i = attributeListMap.begin();
-  while (i != attributeListMap.end()) {
-    string filename = i->first;
-    ROSEAttributesList *attributeList = i->second;
-
-    printf("   --- filename = %s \n", filename.c_str());
-    ROSE_ASSERT(attributeList != NULL);
-
-    // DQ (9/25/2018): Added output the the list for each file (debugging header
-    // file unparsing).
-    attributeList->display("In ROSEAttributesListContainer::display(): xxx");
-
-    i++;
-  }
-
-  // printf ("ROSEAttributesListContainer::display() not implemented for new map
-  // datastructure \n"); ROSE_ABORT();
+  ROSEAttributesList *list = attributeListMap.at(fName);
+  ASSERT_not_null(list);
+  return *list;
 }
 
 void ROSEAttributesListContainer::deepClean(void) {
-  //
-  // Call deepClean for each list.
-  //
-
   for (auto &entry : attributeListMap) {
     if (entry.second != NULL) {
       entry.second->deepClean();
@@ -1946,10 +1281,6 @@ void ROSEAttributesListContainer::deepClean(void) {
 }
 
 void ROSEAttributesListContainer::clean(void) {
-  //
-  // Call clean for each list.
-  //
-
   for (auto &entry : attributeListMap) {
     if (entry.second != NULL) {
       entry.second->clean();

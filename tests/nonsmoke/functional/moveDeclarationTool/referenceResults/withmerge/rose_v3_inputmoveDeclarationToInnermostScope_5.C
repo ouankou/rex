@@ -33,7 +33,6 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt, Int32 hiSt)
     Int32 ltLo;
     Int32 gtHi;
     Int32 n;
-    Int32 m;
     Int32 lo;
     Int32 hi;
     UInt32 med;
@@ -103,7 +102,7 @@ static void fallbackQSort3(UInt32 *fmap, UInt32 *eclass, Int32 loSt, Int32 hiSt)
         yyn--;
       }
     };
-    m = fmin(hi-gtHi, gtHi-unHi);
+    Int32 m = fmin(hi-gtHi, gtHi-unHi);
     {
       Int32 yyp1 = (unLo);
       Int32 yyp2 = (hi - m + 1);

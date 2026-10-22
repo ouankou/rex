@@ -3,13 +3,9 @@
 
 #include <string>
 
-#include <vector>
 // external API for generation of graphs of AST
 
 #include "wholeAST.h"
-
-// DQ (8/20/2013): Added initial support for IR node specific graphs.
-#include "intermediateRepresentationNodeGraphs.h"
 
 //! Generate a whole AST graph with a specified filename, using filter_flags to
 //! turn on/off builtin node filters and using skippedNodeSet to exclude
@@ -36,10 +32,6 @@ ROSE_DLL_API void generateWholeGraphOfAST(const char *filename);
 ROSE_DLL_API void
 generateWholeGraphOfAST(std::string filename,
                         CustomMemoryPoolDOTGeneration::s_Filter_Flags *flags);
-
-ROSE_DLL_API void generateWholeGraphOfAST_filteredFrontendSpecificNodes(
-    std::string filename,
-    CustomMemoryPoolDOTGeneration::s_Filter_Flags *flags /*=NULL*/);
 
 ROSE_DLL_API void generateGraphOfAST(SgProject *project, std::string filename,
                                      std::set<SgNode *> skippedNodeSet);

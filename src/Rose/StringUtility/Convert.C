@@ -21,28 +21,16 @@ namespace StringUtility {
 std::string convertToLowerCase(const std::string &inputString) {
   std::string returnString = inputString;
   for (size_t i = 0; i < returnString.length(); i++)
-    returnString[i] = tolower(returnString[i]);
+    returnString[i] =
+        static_cast<char>(tolower(static_cast<unsigned char>(returnString[i])));
   return returnString;
 }
 
 std::string fixLineTermination(const std::string &input) {
-
-  // DQ (12/30/2018): This function normalizes CRLF line endings in CPP
-  // directives. However, eliminating the function from being called is
-  // preferable to modifying this function.
   std::string output;
   size_t nchars = input.size();
   for (size_t i = 0; i < nchars; ++i) {
     if ('\r' == input[i] && i + 1 < nchars && '\n' == input[i + 1]) {
-      // CRLF ("\r\n")
-
-      // DQ (12/30/2018): Detect the code that recognizes CRLF line endings.
-      // printf ("In fixLineTermination(): Found a CRLF line ending \n");
-
-      // DQ (12/30/2018): Fix the output string to reproduce the CRLF line
-      // ending.
-      // output += '\n';
-      // output += "\r\n";
       output += '\n';
 
       ++i;
@@ -121,7 +109,7 @@ std::string makeOneLine(const std::string &s, std::string replacement) {
     if ('\n' == s[i] || '\r' == s[i]) {
       spaces = result.empty() ? "" : replacement;
       eat_spaces = true;
-    } else if (isspace(s[i])) {
+    } else if (isspace(static_cast<unsigned char>(s[i]))) {
       if (!eat_spaces)
         spaces += s[i];
     } else {
@@ -150,31 +138,6 @@ std::string trim(const std::string &str, const std::string &strip,
   return str.substr(first, last + 1 - first);
 }
 
-std::string untab(const std::string &str, size_t tabstops, size_t colnum) {
-  tabstops = std::max(tabstops, (size_t)1);
-  std::string retval;
-  for (size_t i = 0; i < str.size(); ++i) {
-    switch (str[i]) {
-    case '\t': {
-      size_t nspc = tabstops - colnum % tabstops;
-      retval += std::string(nspc, ' ');
-      colnum += nspc;
-      break;
-    }
-    case '\n':
-    case '\r':
-      retval += str[i];
-      colnum = 0;
-      break;
-    default:
-      retval += str[i];
-      ++colnum;
-      break;
-    }
-  }
-  return retval;
-}
-
 std::string removeRedundantSubstrings(const std::string &s) {
   // Convert the string into a list of strings and separate out the redundant
   // entries
@@ -185,7 +148,7 @@ std::string removeRedundantSubstrings(const std::string &s) {
 }
 
 std::string removeAnsiEscapes(const std::string &s) {
-  std::regex csiSequences("\\033\\[[\\x30-\\x3f]*[\\x20-\\x2f]*[\\x40-x7e]");
+  std::regex csiSequences("\x1b\\[[0-?]*[ -/]*[@-~]");
   std::string retval;
 
   const char *iter = s.c_str();
@@ -202,7 +165,7 @@ std::string removeAnsiEscapes(const std::string &s) {
 }
 
 std::string encode_base64(const std::vector<uint8_t> &data, bool do_pad) {
-  return encode_base64(&data[0], data.size(), do_pad);
+  return encode_base64(data.data(), data.size(), do_pad);
 }
 
 std::string encode_base64(const uint8_t *data, size_t nbytes, bool do_pad) {
@@ -284,45 +247,6 @@ std::vector<uint8_t> decode_base64(const std::string &s) {
       retval.push_back(IntegerOps::shiftRightLogical2(val, 8) & 0xff);
   }
   return retval;
-}
-
-// DQ (2/18/2006): Added general name mangling for all declarations (and some
-// other IR nodes). JJW (10/15/2007): Does this compute a ones-complement
-// checksum like used for TCP?
-unsigned long generate_checksum(std::string s) {
-  std::string uniqueName = s;
-
-  // The checksum function requires a even length string (so we have to fix it
-  // up)
-  if (uniqueName.size() % 2 != 0) {
-    // printf ("Adding another character to make string an even valued length
-    // \n"); Use a character that does not appear in mangled names so that no
-    // other mangled name could include it.
-    uniqueName += "#";
-  }
-  assert(uniqueName.size() % 2 == 0);
-
-  // Call a simple checksum function
-  // unsigned short int checksum =
-  // StringUtility::chksum(buffer,uniqueName.size());
-
-  unsigned long accum = 0;
-  unsigned long chksm;
-
-  accum = 0;
-  unsigned int len = uniqueName.size() / 2; /* Words only */
-  for (unsigned int i = 0; i < len; i++)
-    accum += (unsigned long)(((unsigned short *)uniqueName.data())[i]);
-
-  chksm = (accum & 0xffff); /* Mask all but low word */
-  chksm += (accum >> 16);   /* Sum all the carries */
-
-  if (chksm > 0xffff) /* If this also carried */
-    chksm++;          /* Sum this too */
-  unsigned short checksum = (unsigned short)(chksm & 0xffff);
-
-  // printf ("Checksum = %d \n",checksum);
-  return (unsigned long)checksum;
 }
 
 } // namespace StringUtility

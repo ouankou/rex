@@ -100,6 +100,19 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(direct != nullptr && nested != nullptr);
 
   if (mode == "--accept-direct") {
+    size_t packed_size_constants = 0;
+    for (auto *name : SageInterface::querySubTree<SgInitializedName>(
+             project, V_SgInitializedName)) {
+      if (name->get_name() != "rex_packed_size")
+        continue;
+      auto *initializer = isSgAssignInitializer(name->get_initializer());
+      ROSE_ASSERT(initializer != nullptr);
+      ROSE_ASSERT(OmpSupport::requireExactPositiveIntegralConstant(
+                      initializer->get_operand(), 16,
+                      "packed-record-size-contract") == 5);
+      ++packed_size_constants;
+    }
+    ROSE_ASSERT(packed_size_constants == 1);
     ROSE_ASSERT(exactLoop(direct) != nullptr);
     return 0;
   }
@@ -170,7 +183,8 @@ int main(int argc, char **argv) {
     else if (mode == "--reject-task-wrapper")
       wrapper = new SgOmpTaskStatement(nullptr, loop);
     else
-      wrapper = new SgOmpCriticalStatement(nullptr, loop, SgName());
+      wrapper = new SgOmpCriticalStatement(nullptr, loop, new SgOmpClauseList(),
+                                           SgName());
     ROSE_ASSERT(wrapper != nullptr);
     if (loop->get_parent() == nullptr)
       loop->set_parent(wrapper);

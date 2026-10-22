@@ -1,6 +1,17 @@
 namespace rex_function_instantiation {
 template <class T> T twice(T value) { return value + value; }
 
+template <class T> T rex_variadic(T value, ...) { return value; }
+extern template int rex_variadic<int>(int, ...);
+template long rex_variadic<long>(long, ...);
+
+struct RexDecltypeOwner {
+  static int value;
+};
+template <class T> void rex_decltype_pointer(decltype(T::value) *) {}
+extern template void rex_decltype_pointer<RexDecltypeOwner>(int *);
+template void rex_decltype_pointer<RexDecltypeOwner>(int *);
+
 template <class T> struct ForwardAllocator;
 template <class T> struct ForwardTraits;
 template <class T, class TTraits = ForwardTraits<T>,

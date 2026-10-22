@@ -39,10 +39,12 @@ findSpecialization(SgProject *project, const std::string &name,
         declaration->get_templateName().getString() != name ||
         declaration->get_specialization() !=
             SgDeclarationStatement::e_specialization ||
-        (declaration->get_templateDeclaration() != nullptr) !=
-            isFunctionTemplate) {
+        declaration->isTemplateFunction() != isFunctionTemplate) {
       continue;
     }
+    ROSE_ASSERT(declaration->get_templateDeclaration() != nullptr);
+    ROSE_ASSERT(declaration->get_specializedTemplateDeclaration() ==
+                declaration->get_templateDeclaration());
     if (requiresEnclosingHeader != hasOneExactEmptyOuterHeader(declaration)) {
       continue;
     }

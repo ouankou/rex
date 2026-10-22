@@ -7,6 +7,8 @@
 
 #include <memory>
 
+#include <set>
+
 #include <stack>
 
 #include <unordered_map>
@@ -893,6 +895,12 @@ buildDetachedSimdBackendPlan(SgOmpSimdStatement *source_target) {
        !source_file->get_Cxx_only()))
     failSimdContract("omp-simd-backend", source_target,
                      "has no exact supported source-language owner");
+  const auto &target_abi = source_file->get_target_abi();
+  if (!target_abi.available)
+    failSimdContract("omp-simd-backend", source_target,
+                     "has no exact source target ABI");
+  SgType *target_size_type =
+      SageInterface::requireTargetSizeType(source_target);
 
   SgProject *destination_project = SageInterface::getProject(source_target);
   if (destination_project == nullptr)
@@ -917,6 +925,8 @@ buildDetachedSimdBackendPlan(SgOmpSimdStatement *source_target) {
       SageInterface::getProject(semantic_global) != semantic_owner.get())
     failSimdContract("omp-simd-backend", semantic_source,
                      "could not construct an owned semantic translation unit");
+  semantic_source->set_target_abi(target_abi);
+  semantic_source->set_target_size_type(target_size_type);
 
   SgFunctionDeclaration *source_function =
       SageInterface::getEnclosingFunctionDeclaration(source_target, true);
@@ -1008,6 +1018,42 @@ buildDetachedSimdBackendPlan(SgOmpSimdStatement *source_target) {
     original_by_copy.emplace(sandbox_symbol, source_symbol);
   }
 
+  // Normalization performs ordinary lexical lookup in the private translation
+  // unit. Publish exact shadows for referenced globals as well as parameters.
+  std::map<SgInitializedName *, SgVariableSymbol *> global_shadows;
+  for (SgNode *node : NodeQuery::querySubTree(copied_scope, V_SgVarRefExp)) {
+    SgVarRefExp *reference = isSgVarRefExp(node);
+    ROSE_ASSERT(reference != nullptr && reference->get_symbol() != nullptr);
+    SgVariableSymbol *source_symbol = reference->get_symbol();
+    SgInitializedName *source_name = source_symbol->get_declaration();
+    ROSE_ASSERT(source_name != nullptr);
+    if (isSgGlobal(source_name->get_scope()) == nullptr)
+      continue;
+    auto found = global_shadows.find(source_name);
+    if (found == global_shadows.end()) {
+      if (semantic_global->lookup_symbol(source_name->get_name()) != nullptr)
+        failSimdContract("omp-simd-global-shadow", source_name,
+                         "conflicts with a distinct sandbox declaration");
+      SgType *type = SageBuilder::getTargetFileType(source_name->get_type(),
+                                                    semantic_global);
+      ROSE_ASSERT(type != nullptr);
+      SgVariableDeclaration *declaration = buildVariableDeclaration(
+          source_name->get_name(), type, nullptr, semantic_global);
+      declaration->get_declarationModifier().get_storageModifier().setExtern();
+      appendStatement(declaration, semantic_global);
+      ROSE_ASSERT(declaration->get_variables().size() == 1);
+      SgInitializedName *shadow = declaration->get_variables().front();
+      SgVariableSymbol *symbol =
+          isSgVariableSymbol(shadow->get_symbol_from_symbol_table());
+      ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == shadow &&
+                  shadow->get_scope() == semantic_global);
+      original_by_copy.emplace(shadow, source_name);
+      original_by_copy.emplace(symbol, source_symbol);
+      found = global_shadows.emplace(source_name, symbol).first;
+    }
+    reference->set_symbol(found->second);
+  }
+
   definition->set_body(nullptr);
   region->set_parent(nullptr);
   definition->set_body(copied_scope);
@@ -1056,13 +1102,12 @@ buildDetachedSimdBackendPlan(SgOmpSimdStatement *source_target) {
   compiler->omp_simd_pass1();
   compiler->omp_simd_pass2();
   if (simd_arch == Addr3 || simd_arch == ArmAddr3) {
-    SgStatement *loop_body = getLoopBody(loop);
-    replaceStatement(loop_body, compiler->releaseBlock(), true);
+    compiler->finishScalarLowering();
   } else if (simd_arch == Intel_AVX512) {
     omp_simd_write_intel(target, loop, compiler->getIR(),
-                         compiler->omp_simd_get_length());
+                         compiler->omp_simd_get_length(), *compiler);
   } else if (simd_arch == Arm_SVE2) {
-    omp_simd_write_arm(target, loop, compiler->getIR());
+    omp_simd_write_arm(target, loop, compiler->getIR(), *compiler);
   } else {
     failSimdContract("omp-simd-architecture", source_target,
                      "selected an unsupported exact SIMD backend");
@@ -1110,19 +1155,75 @@ buildDetachedSimdBackendPlan(SgOmpSimdStatement *source_target) {
 }
 } // namespace
 
-std::string OmpSimdCompiler::simdGenName(int type) {
-  std::string prefix = "__vec";
-  if (type == 1)
-    prefix = "__ptr";
-  else if (type == 2)
-    prefix = "__part";
+SgVariableSymbol *OmpSimdCompiler::buildTemporary(SgType *type,
+                                                  TemporaryKind kind,
+                                                  SgInitializer *initializer) {
+  const char *prefix = kind == TemporaryKind::Pointer   ? "__ptr"
+                       : kind == TemporaryKind::Partial ? "__part"
+                                                        : "__vec";
+  if (for_loop == nullptr || new_block_owner == nullptr)
+    failSimdContract("omp-simd-name", new_block,
+                     "has no source loop or exact semantic scope");
+  const auto source_scopes =
+      NodeQuery::querySubTree(for_loop, V_SgScopeStatement);
+  std::string name;
+  bool collision;
+  do {
+    if (next_name_id_ == std::numeric_limits<unsigned int>::max())
+      failSimdContract("omp-simd-name", nullptr,
+                       "temporary-name counter overflowed");
+    name = prefix + std::to_string(next_name_id_++);
+    collision = lookupSymbolInParentScopes(name, new_block) != nullptr;
+    for (SgNode *node : source_scopes) {
+      SgScopeStatement *scope = isSgScopeStatement(node);
+      ROSE_ASSERT(scope != nullptr);
+      collision = collision || scope->lookup_symbol(name) != nullptr;
+    }
+  } while (collision);
+  SgVariableDeclaration *declaration =
+      buildVariableDeclaration(name, type, initializer, new_block);
+  appendStatement(declaration, new_block);
+  ROSE_ASSERT(declaration->get_variables().size() == 1);
+  SgInitializedName *binding = declaration->get_variables().front();
+  SgVariableSymbol *symbol =
+      isSgVariableSymbol(binding->get_symbol_from_symbol_table());
+  if (symbol == nullptr || symbol->get_declaration() != binding ||
+      binding->get_scope() != new_block)
+    failSimdContract("omp-simd-temporary", declaration,
+                     "did not publish its exact generated symbol");
+  ROSE_ASSERT(temporary_kinds_.emplace(binding, kind).second);
+  return symbol;
+}
 
-  if (next_name_id_ == std::numeric_limits<unsigned int>::max())
-    failSimdContract("omp-simd-name", nullptr,
-                     "temporary-name counter overflowed");
-  std::string name = prefix + std::to_string(next_name_id_);
-  ++next_name_id_;
-  return name;
+bool OmpSimdCompiler::isTemporary(SgVariableSymbol *symbol,
+                                  TemporaryKind kind) const {
+  if (symbol == nullptr || symbol->get_declaration() == nullptr)
+    failSimdContract("omp-simd-temporary", symbol,
+                     "has no exact declaration identity");
+  const auto found = temporary_kinds_.find(symbol->get_declaration());
+  return found != temporary_kinds_.end() && found->second == kind;
+}
+
+bool OmpSimdCompiler::isPartialTemporary(SgVariableSymbol *symbol) const {
+  return isTemporary(symbol, TemporaryKind::Partial);
+}
+
+bool OmpSimdCompiler::isGeneratedTemporary(SgVariableSymbol *symbol) const {
+  if (symbol == nullptr || symbol->get_declaration() == nullptr)
+    failSimdContract("omp-simd-temporary", symbol,
+                     "has no exact declaration identity");
+  return temporary_kinds_.count(symbol->get_declaration()) != 0;
+}
+
+bool OmpSimdCompiler::isProductReduction(SgVariableSymbol *symbol) const {
+  if (!isPartialTemporary(symbol))
+    failSimdContract("omp-simd-reduction", symbol,
+                     "is not an exact partial reduction temporary");
+  for (const auto &entry : reduction_map_)
+    if (entry.second.partial == symbol)
+      return entry.second.operation == SgOmpClause::e_omp_reduction_mul;
+  failSimdContract("omp-simd-reduction", symbol,
+                   "has no exact reduction operation");
 }
 
 SgPntrArrRefExp *OmpSimdCompiler::omp_simd_convert_ptr(SgExpression *pntr_exp) {
@@ -1168,17 +1269,12 @@ SgPntrArrRefExp *OmpSimdCompiler::omp_simd_convert_ptr(SgExpression *pntr_exp) {
       SgExpression *index = stack.top();
       stack.pop();
 
-      // SgType *baseType = buildFloatType();
       SgType *baseType = pntr->get_type()->findBaseType();
       SgType *type = buildPointerType(baseType);
 
-      std::string name = simdGenName(1);
-      SgVariableDeclaration *vd =
-          buildVariableDeclaration(name, type, NULL, new_block);
-      appendStatement(vd, new_block);
-
-      SgVarRefExp *va = buildVarRefExp(name, new_block);
-      lastPntr = buildVarRefExp(name, new_block);
+      SgVariableSymbol *symbol = buildTemporary(type, TemporaryKind::Pointer);
+      SgVarRefExp *va = buildVarRefExp(symbol);
+      lastPntr = buildVarRefExp(symbol);
 
       SgPntrArrRefExp *pntr =
           buildPntrArrRefExp(copyExpression(lval), index, type);
@@ -1204,14 +1300,9 @@ void OmpSimdCompiler::omp_simd_build_ptr_assign(SgExpression *pntr_exp,
   SgPntrArrRefExp *array = omp_simd_convert_ptr(pntr_exp);
 
   // Now that we are done, build the assignment
-  std::string name = simdGenName();
-  nameStack.push(name);
-
-  SgVariableDeclaration *vd =
-      buildVariableDeclaration(name, type, NULL, new_block);
-  appendStatement(vd, new_block);
-
-  SgVarRefExp *va = buildVarRefExp(name, new_block);
+  SgVariableSymbol *symbol = buildTemporary(type, TemporaryKind::Vector);
+  value_stack_.push(symbol);
+  SgVarRefExp *va = buildVarRefExp(symbol);
   SgExprStatement *expr = buildAssignStatement(va, array);
   appendStatement(expr, new_block);
 }
@@ -1220,16 +1311,17 @@ void OmpSimdCompiler::omp_simd_build_scalar_assign(SgExpression *node,
                                                    SgType *type) {
   if (node->variantT() == V_SgVarRefExp) {
     SgVarRefExp *ref = static_cast<SgVarRefExp *>(node);
-    std::string name = ref->get_symbol()->get_name().getString();
-
-    if (name.rfind("__part", 0) == 0) {
-      nameStack.push(name);
+    const auto reduction =
+        reduction_map_.find(ref->get_symbol()->get_declaration());
+    if (reduction != reduction_map_.end()) {
+      value_stack_.push(reduction->second.partial);
+      return;
+    }
+    if (isTemporary(ref->get_symbol(), TemporaryKind::Partial)) {
+      value_stack_.push(ref->get_symbol());
       return;
     }
   }
-
-  std::string name = simdGenName();
-  nameStack.push(name);
 
   // Build the assignment
   SgExpression *expr = NULL;
@@ -1278,38 +1370,30 @@ void OmpSimdCompiler::omp_simd_build_scalar_assign(SgExpression *node,
   }
   }
 
-  // Build the variable declaration
-  SgVariableDeclaration *vd =
-      buildVariableDeclaration(name, type, NULL, new_block);
-  appendStatement(vd, new_block);
-
-  // Build the assignment
-  SgVarRefExp *va = buildVarRefExp(name, new_block);
+  SgVariableSymbol *symbol = buildTemporary(type, TemporaryKind::Vector);
+  value_stack_.push(symbol);
+  SgVarRefExp *va = buildVarRefExp(symbol);
   SgExprStatement *assign = buildAssignStatement(va, expr);
   appendStatement(assign, new_block);
 }
 
 // Builds the math operations
 void OmpSimdCompiler::omp_simd_build_math(VariantT op_type, SgType *type) {
-  if (nameStack.size() < 2)
+  if (value_stack_.size() < 2)
     failSimdContract("omp-simd-three-address", nullptr,
                      "math operation has fewer than two exact operands");
-  std::string name = simdGenName();
-
-  SgVariableDeclaration *vd =
-      buildVariableDeclaration(name, type, NULL, new_block);
-  appendStatement(vd, new_block);
+  SgVariableSymbol *result = buildTemporary(type, TemporaryKind::Vector);
 
   // Build the assignment
   // The variables
-  const std::string rhs_name = nameStack.top();
-  nameStack.pop();
+  SgVariableSymbol *rhs_symbol = value_stack_.top();
+  value_stack_.pop();
 
-  const std::string lhs_name = nameStack.top();
-  nameStack.pop();
+  SgVariableSymbol *lhs_symbol = value_stack_.top();
+  value_stack_.pop();
 
-  SgVarRefExp *lhs = buildVarRefExp(lhs_name, new_block);
-  SgVarRefExp *rhs = buildVarRefExp(rhs_name, new_block);
+  SgVarRefExp *lhs = buildVarRefExp(lhs_symbol);
+  SgVarRefExp *rhs = buildVarRefExp(rhs_symbol);
 
   // The operators
   SgBinaryOp *op = NULL;
@@ -1335,11 +1419,11 @@ void OmpSimdCompiler::omp_simd_build_math(VariantT op_type, SgType *type) {
 
   // The rest of the assignment
   SgExprListExp *exprList = buildExprListExp(op);
-  SgVarRefExp *va = buildVarRefExp(name, new_block);
+  SgVarRefExp *va = buildVarRefExp(result);
   SgExprStatement *expr = buildAssignStatement(va, exprList);
   appendStatement(expr, new_block);
 
-  nameStack.push(name);
+  value_stack_.push(result);
 }
 
 void OmpSimdCompiler::omp_simd_build_3addr(SgExpression *rval, SgType *type) {
@@ -1381,54 +1465,102 @@ void OmpSimdCompiler::omp_simd_build_3addr(SgExpression *rval, SgType *type) {
   }
 }
 
-// This scans an OMP SIMD statement for a reduction clause containing a variable
-// matching that of the parameter. If it is found, the modifier (operator) is
-// converted to a char for easier processing, and returned
-//
-char OmpSimdCompiler::omp_simd_get_reduction_mod(SgVarRefExp *var) {
-  if (target == nullptr || var == nullptr || var->get_symbol() == nullptr)
-    failSimdContract("omp-simd-reduction", var,
-                     "has no exact directive or variable symbol");
-  SgOmpClausePtrList clauses = target->get_clauses();
-  for (size_t i = 0; i < clauses.size(); i++) {
-    if (clauses.at(i)->variantT() != V_SgOmpReductionClause)
+void OmpSimdCompiler::prepareReductions() {
+  ROSE_ASSERT(target != nullptr && reduction_map_.empty());
+  for (SgOmpClause *clause : target->get_clauses()) {
+    SgOmpReductionClause *reduction = isSgOmpReductionClause(clause);
+    if (reduction == nullptr)
       continue;
-
-    SgOmpReductionClause *rc =
-        static_cast<SgOmpReductionClause *>(clauses.at(i));
-    SgExpressionPtrList vars = rc->get_variables()->get_expressions();
-    bool found = false;
-
-    for (size_t j = 0; j < vars.size(); j++) {
-      SgVarRefExp *v_current = isSgVarRefExp(vars.at(j));
-      if (v_current == nullptr || v_current->get_symbol() == nullptr)
-        failSimdContract("omp-simd-reduction", vars.at(j),
-                         "is not one exact reduction variable reference");
-      if (v_current->get_symbol() == var->get_symbol()) {
-        found = true;
-        break;
-      }
-    }
-
-    if (!found)
-      continue;
-
-    SgOmpClause::omp_reduction_identifier_enum omp_op = rc->get_identifier();
-    switch (omp_op) {
-    case SgOmpClause::e_omp_reduction_plus:
-      return '+';
-    case SgOmpClause::e_omp_reduction_minus:
-      return '-';
-    case SgOmpClause::e_omp_reduction_mul:
-      return '*';
-    default:
-      failSimdContract("omp-simd-reduction", rc,
+    const auto operation = reduction->get_identifier();
+    const bool product = operation == SgOmpClause::e_omp_reduction_mul;
+    if (!product && operation != SgOmpClause::e_omp_reduction_plus &&
+        operation != SgOmpClause::e_omp_reduction_minus)
+      failSimdContract("omp-simd-reduction", reduction,
                        "uses an unsupported reduction operator");
+    ROSE_ASSERT(reduction->get_variables() != nullptr);
+    for (SgExpression *expression :
+         reduction->get_variables()->get_expressions()) {
+      SgVarRefExp *reference = isSgVarRefExp(expression);
+      if (reference == nullptr || reference->get_symbol() == nullptr ||
+          reference->get_symbol()->get_declaration() == nullptr)
+        failSimdContract("omp-simd-reduction", expression,
+                         "has no exact reduction declaration");
+      SgType *type = reference->get_type();
+      SgInitializer *initializer = nullptr;
+      if (simd_arch == Addr3 || simd_arch == ArmAddr3) {
+        SgExpression *identity = nullptr;
+        if (isSgTypeInt(type))
+          identity = buildIntVal(product ? 1 : 0);
+        else if (isSgTypeFloat(type))
+          identity = buildFloatVal(product ? 1.0f : 0.0f);
+        else if (isSgTypeDouble(type))
+          identity = buildDoubleVal(product ? 1.0 : 0.0);
+        else
+          failSimdContract("omp-simd-reduction", reference,
+                           "has an unsupported scalar accumulator type");
+        initializer = buildAssignInitializer(identity, type);
+      }
+      SgVariableSymbol *partial =
+          buildTemporary(type, TemporaryKind::Partial, initializer);
+      const bool inserted =
+          reduction_map_
+              .emplace(reference->get_symbol()->get_declaration(),
+                       Reduction{reference->get_symbol(), partial, operation})
+              .second;
+      ROSE_ASSERT(inserted);
     }
   }
+}
 
-  failSimdContract("omp-simd-reduction", var,
-                   "does not have an exact matching reduction clause");
+void OmpSimdCompiler::finishScalarLowering() {
+  if ((simd_arch != Addr3 && simd_arch != ArmAddr3) || target == nullptr ||
+      for_loop == nullptr)
+    failSimdContract("omp-simd-scalar-region", target,
+                     "has no exact scalar lowering transaction");
+  SgStatement *body = target->get_body();
+  requireSimdEdge(target, body, "omp-simd-scalar-region");
+  SgBasicBlock *region = buildBasicBlock();
+  SageInterface::publishGeneratedSubtreeOutputOwner(region, target);
+  target->set_body(nullptr);
+  body->set_parent(nullptr);
+  target->set_body(region);
+  region->set_parent(target);
+  appendStatement(body, region);
+  replaceStatement(getLoopBody(for_loop), releaseBlock(), true);
+  for (const auto &entry : reduction_map_) {
+    const Reduction &reduction = entry.second;
+    SgInitializedName *binding = reduction.partial->get_declaration();
+    SgVariableDeclaration *declaration =
+        isSgVariableDeclaration(binding->get_parent());
+    ROSE_ASSERT(declaration != nullptr && binding->get_scope() == new_block);
+    requireSimdEdge(new_block, declaration, "omp-simd-partial-owner");
+    ROSE_ASSERT(new_block->lookup_variable_symbol(binding->get_name()) ==
+                    reduction.partial &&
+                region->lookup_symbol(binding->get_name()) == nullptr);
+    auto &statements = new_block->get_statements();
+    const auto position =
+        std::find(statements.begin(), statements.end(), declaration);
+    ROSE_ASSERT(position != statements.end());
+    statements.erase(position);
+    declaration->set_parent(nullptr);
+    new_block->remove_symbol(reduction.partial);
+    binding->set_scope(region);
+    region->insert_symbol(binding->get_name(), reduction.partial);
+    prependStatement(declaration, region);
+    ROSE_ASSERT(binding->get_scope() == region &&
+                region->lookup_variable_symbol(binding->get_name()) ==
+                    reduction.partial);
+    SgExpression *source = buildVarRefExp(reduction.source);
+    SgExpression *partial = buildVarRefExp(reduction.partial);
+    SgExpression *combine =
+        reduction.operation == SgOmpClause::e_omp_reduction_mul
+            ? static_cast<SgExpression *>(
+                  buildMultAssignOp(source, partial, binding->get_type()))
+            : static_cast<SgExpression *>(
+                  buildPlusAssignOp(source, partial, binding->get_type()));
+    appendStatement(buildExprStatement(combine), region);
+  }
+  requireSimdEdge(target, region, "omp-simd-scalar-region");
 }
 
 // This runs the first pass of the SIMD lowering. This pass converts
@@ -1438,6 +1570,7 @@ char OmpSimdCompiler::omp_simd_get_reduction_mod(SgVarRefExp *var) {
 // The main purpose of this function is to break each expression between the
 // load and store
 void OmpSimdCompiler::omp_simd_pass1() {
+  prepareReductions();
   // Get the loop body
   SgStatement *loop_body = getLoopBody(for_loop);
   Rose_STL_Container<SgNode *> bodyList =
@@ -1447,7 +1580,7 @@ void OmpSimdCompiler::omp_simd_pass1() {
 
   for (Rose_STL_Container<SgNode *>::iterator i = bodyList.begin();
        i != bodyList.end(); i++) {
-    if (!nameStack.empty())
+    if (!value_stack_.empty())
       failSimdContract("omp-simd-pass1", *i,
                        "started an assignment with stale temporary results");
     SgExprStatement *source_statement = isSgExprStatement(*i);
@@ -1465,23 +1598,19 @@ void OmpSimdCompiler::omp_simd_pass1() {
     SgExpression *dest;
     SgType *type;
 
-    char reduction_mod = 0;
     bool need_partial = false;
-    std::string reduction_name = "";
+    SgInitializedName *reduction_declaration = nullptr;
 
-    // If we have a variable, we need to indicate a partial sum variable
-    // These are prefixed with __part, and in this step, they are simply
-    // assigned Like this: __part0 = scalar;
+    // Scalar destinations must name an exact reduction declaration.
     if (orig->variantT() == V_SgVarRefExp) {
       SgVarRefExp *var = static_cast<SgVarRefExp *>(copyExpression(orig));
       type = var->get_type();
 
-      // Make sure we have a valid reduction clause
-      reduction_mod = omp_simd_get_reduction_mod(var);
-      if (reduction_mod == 0)
+      reduction_declaration = var->get_symbol()->get_declaration();
+      if (reduction_declaration == nullptr ||
+          reduction_map_.count(reduction_declaration) != 1)
         failSimdContract("omp-simd-pass1", var,
-                         "has no exact reduction modifier");
-      reduction_name = var->get_symbol()->get_name();
+                         "has no exact private reduction binding");
       need_partial = true;
       dest = var;
 
@@ -1511,18 +1640,9 @@ void OmpSimdCompiler::omp_simd_pass1() {
     }
     }
 
-    std::string partial_vec = "";
-    if (need_partial) {
-      if (reduction_map_.find(reduction_name) == reduction_map_.end()) {
-        partial_vec = simdGenName(2);
-        SgVariableDeclaration *vd =
-            buildVariableDeclaration(partial_vec, type, NULL, new_block);
-        appendStatement(vd, new_block);
-        reduction_map_[reduction_name] = partial_vec;
-      } else {
-        partial_vec = reduction_map_[reduction_name];
-      }
-    }
+    SgVariableSymbol *partial =
+        need_partial ? reduction_map_.at(reduction_declaration).partial
+                     : nullptr;
 
     // Expand compound assignments only in the detached pass-1 transaction.
     // The source loop remains untouched until the final replacement commits.
@@ -1530,8 +1650,8 @@ void OmpSimdCompiler::omp_simd_pass1() {
     SgExpression *lhs = nullptr;
     if (isSgPlusAssignOp(op) || isSgMinusAssignOp(op) || isSgMultAssignOp(op) ||
         isSgDivAssignOp(op)) {
-      lhs = partial_vec.empty() ? copyExpression(op->get_lhs_operand())
-                                : buildVarRefExp(partial_vec, new_block);
+      lhs = partial == nullptr ? copyExpression(op->get_lhs_operand())
+                               : buildVarRefExp(partial);
     }
     if (isSgPlusAssignOp(op)) {
       rvalue = buildAddOp(lhs, rvalue, type);
@@ -1555,25 +1675,22 @@ void OmpSimdCompiler::omp_simd_pass1() {
                              SageInterface::DeleteAstMode::kRequireIsolated);
 
     // Build the lval (the store/assignment)
-    if (nameStack.size() != 1)
+    if (value_stack_.size() != 1)
       failSimdContract("omp-simd-pass1", op,
                        "did not produce exactly one three-address result");
-    std::string name = nameStack.top();
-    nameStack.pop();
+    SgVariableSymbol *result = value_stack_.top();
+    value_stack_.pop();
 
-    // If application, build the reduction assignment
     if (need_partial) {
-      std::string dest_vec = name;
-      name = partial_vec;
-
-      SgVarRefExp *va = buildVarRefExp(partial_vec, new_block);
-      SgVarRefExp *vec = buildVarRefExp(dest_vec, new_block);
+      SgVarRefExp *va = buildVarRefExp(partial);
+      SgVarRefExp *vec = buildVarRefExp(result);
+      result = partial;
 
       SgExprStatement *assign = buildAssignStatement(va, vec);
       appendStatement(assign, new_block);
     }
 
-    SgVarRefExp *var = buildVarRefExp(name, new_block);
+    SgVarRefExp *var = buildVarRefExp(result);
     SgExprStatement *storeExpr = buildAssignStatement(dest, var);
     appendStatement(storeExpr, new_block);
 
@@ -1588,7 +1705,7 @@ void OmpSimdCompiler::omp_simd_pass1() {
     }
   }
 
-  std::map<std::string, std::string> reduction_map2;
+  std::set<SgInitializedName *> stored_reductions;
 
   for (size_t i = assign_list.size(); i-- > 0;) {
     SgAssignOp *op = assign_list.at(i);
@@ -1599,14 +1716,20 @@ void OmpSimdCompiler::omp_simd_pass1() {
     }
 
     SgVarRefExp *lval = isSgVarRefExp(op->get_lhs_operand());
-    SgVarRefExp *rval = isSgVarRefExp(op->get_rhs_operand());
-    std::string lval_name = lval->get_symbol()->get_name();
-    std::string rval_name = rval->get_symbol()->get_name();
-
-    if (reduction_map2.find(lval_name) == reduction_map2.end()) {
-      reduction_map2[lval_name] = rval_name;
-    } else {
-      removeStatement(reduction_statements.at(i));
+    SgInitializedName *binding = lval->get_symbol()->get_declaration();
+    ROSE_ASSERT(binding != nullptr && reduction_map_.count(binding) == 1);
+    if (simd_arch == Addr3 || simd_arch == ArmAddr3 ||
+        !stored_reductions.insert(binding).second) {
+      SgStatement *discarded = reduction_statements.at(i);
+      requireSimdEdge(new_block, discarded, "omp-simd-reduction-store");
+      auto &statements = new_block->get_statements();
+      const auto position =
+          std::find(statements.begin(), statements.end(), discarded);
+      ROSE_ASSERT(position != statements.end());
+      statements.erase(position);
+      discarded->set_parent(nullptr);
+      SageInterface::deleteAST(discarded,
+                               SageInterface::DeleteAstMode::kRequireIsolated);
     }
   }
 }
@@ -1672,17 +1795,12 @@ void OmpSimdCompiler::omp_simd_pass2() {
     } else if (lval->variantT() == V_SgVarRefExp &&
                rval->variantT() == V_SgVarRefExp) {
       SgVarRefExp *lvar = static_cast<SgVarRefExp *>(lval);
-      std::string name = lvar->get_symbol()->get_name().getString();
-
-      // If the variable name starts with __part, we store to a partial sums
-      // register
-      if (name.rfind("__part", 0) == 0) {
+      if (isTemporary(lvar->get_symbol(), TemporaryKind::Partial)) {
         SgSIMDPartialStore *str = buildBinaryExpression<SgSIMDPartialStore>(
             deepCopy(lval), deepCopy(rval), lval->get_type());
         ir_block->push_back(str);
 
-        // If the variable name starts with __vec, we broadcast
-      } else if (name.rfind("__vec", 0) == 0) {
+      } else if (isTemporary(lvar->get_symbol(), TemporaryKind::Vector)) {
         SgSIMDBroadcast *ld = buildBinaryExpression<SgSIMDBroadcast>(
             deepCopy(lval), deepCopy(rval), lval->get_type());
         ir_block->push_back(ld);
@@ -1695,7 +1813,6 @@ void OmpSimdCompiler::omp_simd_pass2() {
       }
 
       // Broadcast
-      // TODO: This is not the most elegent piece of code...
     } else if (lval->variantT() == V_SgVarRefExp &&
                (rval->variantT() == V_SgIntVal ||
                 rval->variantT() == V_SgFloatVal ||
@@ -1742,15 +1859,10 @@ void OmpSimdCompiler::omp_simd_pass2() {
                          "has non-variable three-address operands");
       }
 
-      // First, check to see if its a reduction assignment
-      std::string name = dest->get_symbol()->get_name().getString();
-      if (name.rfind("__part", 0) == 0) {
-        SgSIMDPartialStore *str = buildBinaryExpression<SgSIMDPartialStore>(
-            deepCopy(lval), NULL, lval->get_type());
-        ir_block->push_back(str);
-      }
+      if (!isTemporary(dest->get_symbol(), TemporaryKind::Vector))
+        failSimdContract("omp-simd-pass2", dest,
+                         "math result is not an exact vector temporary");
 
-      // Then, build math
       SgSIMDBinaryOp *math = NULL;
       SgExprListExp *parameters =
           buildExprListExp(deepCopy(lval), deepCopy(rval));

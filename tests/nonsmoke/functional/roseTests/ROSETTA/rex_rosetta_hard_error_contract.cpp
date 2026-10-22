@@ -1,3 +1,4 @@
+#include "Rose/StringUtility.h"
 #include "sage3basic.h"
 
 #include "resetParentPointers.h"
@@ -163,7 +164,8 @@ int verifyMixedTraversalSuccessorOrder() {
 int verifyMultipleContainerTraversalSuccessorOrder() {
   SgTemplateVariableDeclaration *declaration =
       new SgTemplateVariableDeclaration(SgName("rex_multiple_containers"),
-                                        SageBuilder::buildIntType(), nullptr);
+                                        SageBuilder::buildIntType(), nullptr,
+                                        {});
   ROSE_ASSERT(declaration->get_variables().size() == 1);
   SgInitializedName *variable = declaration->get_variables().front();
   SgTemplateParameter *parameter = new SgTemplateParameter();
@@ -253,13 +255,13 @@ int verifyCanonicalClassTypeOwner() {
 }
 
 struct RequiredDeclarationOwnershipFixture {
-  SgGlobal *scope = nullptr;
+  SgBasicBlock *scope = nullptr;
   SgAccessLabelStatement *declaration = nullptr;
 };
 
 RequiredDeclarationOwnershipFixture buildRequiredDeclarationOwnershipFixture() {
   RequiredDeclarationOwnershipFixture fixture;
-  fixture.scope = new SgGlobal();
+  fixture.scope = SageBuilder::buildBasicBlock();
   fixture.declaration =
       new SgAccessLabelStatement(SgAccessLabelStatement::e_access_label_public);
   SageInterface::setSourcePosition(fixture.declaration);
@@ -289,11 +291,12 @@ int verifyRequiredDeclarationOwnership() {
     return 12;
   }
 
-  ValidateParentPointers validator;
-  validator.validateParentPointersInDeclaration(fixture.declaration,
-                                                fixture.scope);
+  validateFreshSubtreeOwnership(fixture.declaration, fixture.scope);
   SgClassType *namedType = buildPublishedNamedType(fixture.scope);
-  validator.validateParentPointersInType(namedType, nullptr);
+  auto *use = SageBuilder::buildVariableDeclaration(
+      "rex_named_type_use", namedType, nullptr, fixture.scope);
+  fixture.scope->append_statement(use);
+  validateFreshSubtreeOwnership(use, fixture.scope);
   return 0;
 }
 
@@ -318,6 +321,150 @@ int verifyAccessLabelConstruction() {
   }
   return 0;
 }
+
+int verifyStatementExpressionReplacement() {
+  SgExpression *comparison = SageBuilder::buildIntVal(1);
+  SgExpression *increment = SageBuilder::buildIntVal(2);
+  SgRangeBasedForStatement *range =
+      SageBuilder::buildRangeBasedForStatement_nfi(
+          nullptr, nullptr, nullptr, nullptr, comparison, increment, nullptr);
+  SgExpression *new_comparison = SageBuilder::buildIntVal(3);
+  SgStatement *statement = range;
+  statement->replace_expression(comparison, new_comparison);
+  if (range->get_not_equal_expression() != new_comparison ||
+      new_comparison->get_parent() != range ||
+      comparison->get_parent() != nullptr ||
+      range->get_increment_expression() != increment ||
+      increment->get_parent() != range)
+    return 11;
+
+  SgExpression *new_increment = SageBuilder::buildIntVal(4);
+  statement->replace_expression(increment, new_increment);
+  if (range->get_increment_expression() != new_increment ||
+      new_increment->get_parent() != range ||
+      increment->get_parent() != nullptr)
+    return 12;
+
+  SgExpression *returned = SageBuilder::buildIntVal(5);
+  SgReturnStmt *return_statement = new SgReturnStmt(returned, nullptr);
+  if (returned->get_parent() != return_statement)
+    return 13;
+  SgExpression *new_returned = SageBuilder::buildIntVal(6);
+  statement = return_statement;
+  statement->replace_expression(returned, new_returned);
+  if (return_statement->get_expression() != new_returned ||
+      new_returned->get_parent() != return_statement ||
+      returned->get_parent() != nullptr)
+    return 14;
+
+  SgExprListExp *list = SageBuilder::buildExprListExp();
+  SgExpression *old_element = SageBuilder::buildIntVal(7);
+  SgExpression *new_element = SageBuilder::buildIntVal(8);
+  list->append_expression(old_element);
+  if (list->replace_expression(old_element, new_element) != 1 ||
+      list->get_expressions().size() != 1 ||
+      list->get_expressions().front() != new_element ||
+      new_element->get_parent() != list ||
+      old_element->get_parent() != nullptr ||
+      list->replace_expression(new_element, new_element) != 1)
+    return 15;
+
+  SgExpression *left = SageBuilder::buildIntVal(9);
+  SgExpression *right = SageBuilder::buildIntVal(10);
+  SgAddOp *binary = new SgAddOp(left, right, SageBuilder::buildIntType());
+  left->set_parent(binary);
+  right->set_parent(binary);
+  SgExpression *replacement = SageBuilder::buildIntVal(11);
+  if (binary->replace_expression(left, replacement) != 1 ||
+      binary->get_lhs_operand() != replacement ||
+      replacement->get_parent() != binary || left->get_parent() != nullptr ||
+      binary->get_rhs_operand() != right || right->get_parent() != binary)
+    return 16;
+
+  SgExpression *prefix = SageBuilder::buildIntVal(12);
+  if (replacement->get_parent() != binary)
+    return 17;
+  SgCommaOpExp *wrapper =
+      SageInterface::insertBeforeUsingCommaOp(prefix, replacement);
+  if (binary->get_lhs_operand() != wrapper || wrapper->get_parent() != binary ||
+      wrapper->get_lhs_operand() != prefix || prefix->get_parent() != wrapper ||
+      wrapper->get_rhs_operand() != replacement ||
+      replacement->get_parent() != wrapper)
+    return 17;
+
+  SgExpression *old_operand = SageBuilder::buildIntVal(13);
+  SgMinusOp *unary = new SgMinusOp(old_operand, SageBuilder::buildIntType(),
+                                   SgUnaryOp::prefix);
+  old_operand->set_parent(unary);
+  SgExpression *new_operand = SageBuilder::buildIntVal(14);
+  if (unary->replace_expression(old_operand, new_operand) != 1 ||
+      unary->get_operand() != new_operand ||
+      new_operand->get_parent() != unary ||
+      old_operand->get_parent() != nullptr ||
+      unary->replace_expression(new_operand, new_operand) != 1)
+    return 18;
+
+  SgExpression *condition = SageBuilder::buildIntVal(15);
+  SgExpression *true_expression = SageBuilder::buildIntVal(16);
+  SgExpression *false_expression = SageBuilder::buildIntVal(17);
+  SgConditionalExp *conditional = SageBuilder::buildConditionalExp(
+      condition, true_expression, false_expression,
+      SageBuilder::buildIntType());
+  SgExpression *new_true_expression = SageBuilder::buildIntVal(18);
+  if (conditional->replace_expression(true_expression, new_true_expression) !=
+          1 ||
+      conditional->get_true_exp() != new_true_expression ||
+      new_true_expression->get_parent() != conditional ||
+      true_expression->get_parent() != nullptr ||
+      conditional->get_conditional_exp() != condition ||
+      condition->get_parent() != conditional ||
+      conditional->get_false_exp() != false_expression ||
+      false_expression->get_parent() != conditional)
+    return 19;
+
+  SgVarArgOp *vararg = SageBuilder::buildVarArgOp_nfi(
+      SageBuilder::buildIntVal(19), SageBuilder::buildIntType());
+  SgExpression *old_vararg_operand = vararg->get_operand_expr();
+  SgExpression *new_vararg_operand = SageBuilder::buildIntVal(20);
+  if (vararg->replace_expression(old_vararg_operand, new_vararg_operand) != 1 ||
+      vararg->get_operand_expr() != new_vararg_operand ||
+      new_vararg_operand->get_parent() != vararg ||
+      old_vararg_operand->get_parent() != nullptr)
+    return 20;
+
+  SgAssignInitializer *initializer = SageBuilder::buildAssignInitializer(
+      SageBuilder::buildIntVal(21), SageBuilder::buildIntType());
+  SgExpression *old_initializer_operand = initializer->get_operand();
+  SgExpression *new_initializer_operand = SageBuilder::buildIntVal(22);
+  if (initializer->replace_expression(old_initializer_operand,
+                                      new_initializer_operand) != 1 ||
+      initializer->get_operand() != new_initializer_operand ||
+      new_initializer_operand->get_parent() != initializer ||
+      old_initializer_operand->get_parent() != nullptr)
+    return 21;
+
+  SgExprListExp *aggregate_list = SageBuilder::buildExprListExp();
+  SgAggregateInitializer *aggregate = SageBuilder::buildAggregateInitializer(
+      aggregate_list, SageBuilder::buildIntType(),
+      SgAggregateInitializer::e_aggregate_initializer_source_braced);
+  SgExprListExp *new_aggregate_list = SageBuilder::buildExprListExp();
+  if (aggregate->replace_expression(aggregate_list, new_aggregate_list) != 1 ||
+      aggregate->get_initializers() != new_aggregate_list ||
+      new_aggregate_list->get_parent() != aggregate ||
+      aggregate_list->get_parent() != nullptr)
+    return 22;
+
+  SgExprListExp *braced_list = SageBuilder::buildExprListExp();
+  SgBracedInitializer *braced = SageBuilder::buildBracedInitializer(
+      braced_list, SageBuilder::buildIntType());
+  SgExprListExp *new_braced_list = SageBuilder::buildExprListExp();
+  if (braced->replace_expression(braced_list, new_braced_list) != 1 ||
+      braced->get_initializers() != new_braced_list ||
+      new_braced_list->get_parent() != braced ||
+      braced_list->get_parent() != nullptr)
+    return 23;
+  return 0;
+}
 } // namespace
 
 int main(int argc, char **argv) {
@@ -327,7 +474,18 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  if (std::strcmp(argv[1], "function-argument-index") == 0) {
+  if (std::strcmp(argv[1], "empty-replace-search") == 0) {
+    (void)Rose::StringUtility::replaceAllCopy("value", "", "new");
+  } else if (std::strcmp(argv[1], "empty-copy-search") == 0) {
+    (void)Rose::StringUtility::copyEdit("value", "", "new");
+  } else if (std::strcmp(argv[1], "empty-copy-lines-search") == 0) {
+    (void)Rose::StringUtility::copyEdit(
+        Rose::StringUtility::FileWithLineNumbers{}, "", "new");
+  } else if (std::strcmp(argv[1], "empty-insert-lines-search") == 0) {
+    (void)Rose::StringUtility::copyEdit(
+        Rose::StringUtility::FileWithLineNumbers{}, "",
+        Rose::StringUtility::FileWithLineNumbers{});
+  } else if (std::strcmp(argv[1], "function-argument-index") == 0) {
     SgFunctionParameterTypeList *arguments = new SgFunctionParameterTypeList();
     arguments->insert_argument(1, SageBuilder::buildIntType());
   } else if (std::strcmp(argv[1], "null-symbol") == 0) {
@@ -408,35 +566,36 @@ int main(int argc, char **argv) {
     RequiredDeclarationOwnershipFixture fixture =
         buildRequiredDeclarationOwnershipFixture();
     fixture.declaration->set_startOfConstruct(nullptr);
-    ValidateParentPointers().validateParentPointersInDeclaration(
-        fixture.declaration, fixture.scope);
+    validateFreshSubtreeOwnership(fixture.declaration, fixture.scope);
   } else if (std::strcmp(argv[1], "declaration-end-null") == 0) {
     RequiredDeclarationOwnershipFixture fixture =
         buildRequiredDeclarationOwnershipFixture();
     fixture.declaration->set_endOfConstruct(nullptr);
-    ValidateParentPointers().validateParentPointersInDeclaration(
-        fixture.declaration, fixture.scope);
+    validateFreshSubtreeOwnership(fixture.declaration, fixture.scope);
   } else if (std::strcmp(argv[1], "declaration-start-foreign-owner") == 0) {
     RequiredDeclarationOwnershipFixture fixture =
         buildRequiredDeclarationOwnershipFixture();
     fixture.declaration->get_startOfConstruct()->set_parent(
         SageBuilder::buildBasicBlock());
-    ValidateParentPointers().validateParentPointersInDeclaration(
-        fixture.declaration, fixture.scope);
+    validateFreshSubtreeOwnership(fixture.declaration, fixture.scope);
   } else if (std::strcmp(argv[1], "declaration-end-foreign-owner") == 0) {
     RequiredDeclarationOwnershipFixture fixture =
         buildRequiredDeclarationOwnershipFixture();
     fixture.declaration->get_endOfConstruct()->set_parent(
         SageBuilder::buildBasicBlock());
-    ValidateParentPointers().validateParentPointersInDeclaration(
-        fixture.declaration, fixture.scope);
+    validateFreshSubtreeOwnership(fixture.declaration, fixture.scope);
   } else if (std::strcmp(argv[1], "named-type-null-declaration") == 0) {
-    SgGlobal *scope = new SgGlobal();
+    SgBasicBlock *scope = SageBuilder::buildBasicBlock();
     SgClassType *namedType = buildPublishedNamedType(scope);
+    auto *use = SageBuilder::buildVariableDeclaration(
+        "rex_named_type_use", namedType, nullptr, scope);
+    scope->append_statement(use);
     namedType->set_declaration(nullptr);
-    ValidateParentPointers().validateParentPointersInType(namedType, nullptr);
+    validateFreshSubtreeOwnership(use, scope);
   } else if (std::strcmp(argv[1], "access-label-construction") == 0) {
     return verifyAccessLabelConstruction();
+  } else if (std::strcmp(argv[1], "statement-expression-replacement") == 0) {
+    return verifyStatementExpressionReplacement();
   } else if (std::strcmp(argv[1], "access-label-conflicting-legacy") == 0) {
     SgAccessLabelStatement *label = new SgAccessLabelStatement(
         SgAccessLabelStatement::e_access_label_public);
@@ -475,7 +634,8 @@ int main(int argc, char **argv) {
                                    SageBuilder::buildIntVal(4));
   } else if (std::strcmp(argv[1], "unary-foreign-replacement") == 0) {
     SgMinusOp *expression =
-        new SgMinusOp(SageBuilder::buildIntVal(1), SageBuilder::buildIntType());
+        new SgMinusOp(SageBuilder::buildIntVal(1), SageBuilder::buildIntType(),
+                      SgUnaryOp::prefix);
     expression->replace_expression(SageBuilder::buildIntVal(2),
                                    SageBuilder::buildIntVal(3));
   } else if (std::strcmp(argv[1], "vararg-foreign-replacement") == 0) {
@@ -497,7 +657,8 @@ int main(int argc, char **argv) {
                                     SgThrowOp::rethrow);
   } else if (std::strcmp(argv[1], "unary-owned-operand") == 0) {
     SgIntVal *owned = SageBuilder::buildIntVal(1);
-    SgMinusOp *owner = new SgMinusOp(owned, SageBuilder::buildIntType());
+    SgMinusOp *owner =
+        new SgMinusOp(owned, SageBuilder::buildIntType(), SgUnaryOp::prefix);
     owned->set_parent(owner);
     (void)SageBuilder::buildMinusOp(owned, SageBuilder::buildIntType());
   } else if (std::strcmp(argv[1], "binary-owned-operand") == 0) {
@@ -512,7 +673,8 @@ int main(int argc, char **argv) {
     (void)SageBuilder::buildAddOp(shared, shared, SageBuilder::buildIntType());
   } else if (std::strcmp(argv[1], "throw-owned-operand") == 0) {
     SgIntVal *owned = SageBuilder::buildIntVal(1);
-    SgMinusOp *owner = new SgMinusOp(owned, SageBuilder::buildIntType());
+    SgMinusOp *owner =
+        new SgMinusOp(owned, SageBuilder::buildIntType(), SgUnaryOp::prefix);
     owned->set_parent(owner);
     (void)SageBuilder::buildThrowOp(owned, SageBuilder::buildVoidType(),
                                     SgThrowOp::throw_expression);

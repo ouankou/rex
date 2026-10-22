@@ -63,14 +63,11 @@ struct Fixture {
     setSourcePosition(case_body, 2, 1, true);
     case_statement = new SgCaseOptionStmt(key, case_body);
     setSourcePosition(case_statement, 1, 1);
-    key->set_parent(case_statement);
-    case_body->set_parent(case_statement);
 
     default_body = new SgNullStatement();
     setSourcePosition(default_body, 4, 1, true);
     default_statement = new SgDefaultOptionStmt(default_body);
     setSourcePosition(default_statement, 3, 1);
-    default_body->set_parent(default_statement);
 
     ROSE_ASSERT(case_body->isCompilerGenerated());
     ROSE_ASSERT(default_body->isCompilerGenerated());

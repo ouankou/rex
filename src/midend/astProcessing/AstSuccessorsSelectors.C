@@ -1,33 +1,20 @@
 
 
-// Author: Markus Schordan
-// $Id: AstSuccessorsSelectors.C,v 1.4 2008/01/08 02:56:39 dquinlan Exp $
-
 #include "roseInternal.h"
 
 #include "sage3basic.h"
 
 #include <algorithm>
 
-#include <typeinfo>
-
 #include "AstSuccessorsSelectors.h"
 
-#include <Cxx_GrammarTreeTraversalAccessEnums.h>
-// MS: 2003
 void AstSuccessorsSelectors::selectDefaultSuccessors(
     SgNode *node, SuccessorsContainer &succContainer) {
   ROSE_ASSERT(node != NULL);
 
   succContainer = node->get_traversalSuccessorContainer();
-  // GB (09/26/2007): This code is not used anymore! There are a few special
-  // cases regarding traversals, but they are now handled in ROSETTA (special
-  // code is generated there). The reason is that we want the new index-based
-  // traversals to behave identically to the successor container based ones, so
-  // special cases have to be handled in a uniform way. handle special cases
 }
 
-// MS: 2003
 void AstSuccessorsSelectors::selectReversePrefixSuccessors(
     SgNode *node, SuccessorsContainer &succContainer) {
   selectReverseBranchSuccessors(
@@ -35,7 +22,6 @@ void AstSuccessorsSelectors::selectReversePrefixSuccessors(
                             // statements
 }
 
-// MS: 2003
 SgNode *AstSuccessorsSelectors::leftSibling(SgNode *node) {
   ROSE_ASSERT(node != 0);
   SgNode *p = node->get_parent();
@@ -52,7 +38,6 @@ SgNode *AstSuccessorsSelectors::leftSibling(SgNode *node) {
             // not found) -> no left sibling
 }
 
-// MS: 2003
 void AstSuccessorsSelectors::selectReverseBranchSuccessors(
     SgNode *node, SuccessorsContainer &succContainer) {
   // pre condition
@@ -67,13 +52,4 @@ void AstSuccessorsSelectors::selectReverseBranchSuccessors(
 
   // post condition
   ROSE_ASSERT(succContainer.size() <= 1);
-
-  /*
-  cout << "SUCCESSORS @" << node->sage_class_name() << ":";
-  for(SuccessorsContainer::iterator
-  i=succContainer.begin();i!=succContainer.end();i++) { cout <<
-  (*i)->sage_class_name() << " ";
-  }
-  cout << endl;
-  */
 }

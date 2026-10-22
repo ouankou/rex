@@ -72,6 +72,7 @@ set(CXX17_TESTCODES
   test2018_73.C
   rex_exact_special_expression_result_types.cpp
   rex_frontend_recursive_default_argument_publication.cpp
+  rex_frontend_constexpr_if.cpp
   test2018_03.C
   test2018_12.C
 )

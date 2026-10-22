@@ -4,10 +4,6 @@
 #ifndef DOTGENERATION_C
 #define DOTGENERATION_C
 
-// DQ (3/6/2003): added from AstProcessing.h to avoid referencing
-// the traversal classes in AstFixes.h before they are defined.
-// #include "sage3.h"
-
 #include "roseInternal.h"
 
 #include "DOTGeneration.h"
@@ -48,7 +44,7 @@ DOTSynthesizedAttribute DOTGeneration<Node>::evaluateSynthesizedAttribute(
   SubTreeSynthesizedAttributes::iterator iter;
   ROSE_ASSERT(node);
   std::string nodeoption;
-  std::string nodelabel = std::string("\\n") + typeid(*node).name();
+  std::string nodelabel = std::string("\\n") + node->class_name();
   nodelabel += additionalNodeInfo(node);
   // DQ (11/1/2003) added mechanism to add options (to add color, etc.)
   nodeoption += additionalNodeOptions(node);
@@ -73,10 +69,8 @@ DOTSynthesizedAttribute DOTGeneration<Node>::evaluateSynthesizedAttribute(
 
   ++tdbuTrace;
   ++buTrace;
-  DOTSynthesizedAttribute d(0);
 
   // add edges or null values
-  int testnum = 0;
   for (iter = l.begin(); iter != l.end(); iter++) {
     // DQ (3/5/2007): Added addional function to add more edge information to
     // the label and option string
@@ -108,12 +102,9 @@ DOTSynthesizedAttribute DOTGeneration<Node>::evaluateSynthesizedAttribute(
         ROSE_ABORT();
       }
     }
-    testnum++;
   }
 
-  d.node = node;
-  ROSE_ASSERT(node != 0);
-  return d;
+  return DOTSynthesizedAttribute(node);
 }
 
 template <class Node>

@@ -287,7 +287,7 @@ rex_filter_negative_sources(REX_UNINIT_C99_POSITIVE_SOURCES
 rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_UNINIT_C99_POSITIVE_SOURCES FALSE -std=gnu99)
 rex_add_uninit_c_copy_tests(uninit_fields_c99 REX_C99_TESTS_NEGATIVE_SOURCES TRUE -std=gnu99)
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   rex_filter_negative_sources(REX_UNINIT_FORTRAN_F90_POSITIVE_SOURCES
     REX_FORTRAN_F90_SOURCES
     REX_FORTRAN_F90_NEGATIVE_SOURCES)

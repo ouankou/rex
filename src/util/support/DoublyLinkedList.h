@@ -105,6 +105,8 @@ public:
   void push_front(const T &o) { PushFirst(o); }
 
   void Sort(MapObject<T, int> &f) {
+    if (count == 0)
+      return;
     DoublyLinkedEntryWrap<T> **buf = new DoublyLinkedEntryWrap<T> *[count];
     for (size_t i = 0; i < count; ++i)
       buf[i] = 0;

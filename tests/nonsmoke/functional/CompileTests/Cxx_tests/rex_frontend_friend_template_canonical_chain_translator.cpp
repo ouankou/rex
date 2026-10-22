@@ -26,6 +26,43 @@ int main(int argc, char **argv) {
   SgSourceFile *sourceFile = isSgSourceFile(project->get_fileList().front());
   ROSE_ASSERT(sourceFile != nullptr);
 
+  unsigned variadicFriends = 0;
+  unsigned ordinaryFunctions = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgFunctionDeclaration)) {
+    auto *function = isSgFunctionDeclaration(node);
+    if (function->get_name() == "rex_variadic_plain" &&
+        isFromMainFile(function, sourceFile)) {
+      ROSE_ASSERT(!function->get_type()->get_has_ellipses());
+      ROSE_ASSERT(function->get_parameterList()->get_args().size() == 1);
+      ROSE_ASSERT(function->get_type()->get_arguments().size() == 1);
+      ++ordinaryFunctions;
+    }
+    if (!function->get_declarationModifier().isFriend() ||
+        !isFromMainFile(function, sourceFile))
+      continue;
+    if (isSgMemberFunctionDeclaration(function) != nullptr) {
+      ROSE_ASSERT(!function->get_declarationModifier()
+                       .get_storageModifier()
+                       .isStatic());
+      auto *first = function->get_firstNondefiningDeclaration();
+      ROSE_ASSERT(first != nullptr);
+      ROSE_ASSERT(
+          first->get_declarationModifier().get_storageModifier().isStatic());
+    }
+    ROSE_ASSERT(function->get_type()->get_has_ellipses());
+    const auto &parameters = function->get_parameterList()->get_args();
+    const auto &arguments = function->get_type()->get_arguments();
+    ROSE_ASSERT(parameters.size() == 2 && arguments.size() == 2);
+    ROSE_ASSERT(isSgTypeEllipse(parameters.back()->get_type()) != nullptr &&
+                isSgTypeEllipse(arguments.back()) != nullptr);
+    ROSE_ASSERT(parameters.back()->get_parent() ==
+                function->get_parameterList());
+    ++variadicFriends;
+  }
+  ROSE_ASSERT(variadicFriends == 4);
+  ROSE_ASSERT(ordinaryFunctions == 1);
+
   SgTemplateClassDeclaration *canonical = nullptr;
   SgTemplateClassDeclaration *definition = nullptr;
   SgTemplateClassDeclaration *lexicalFriend = nullptr;
@@ -96,5 +133,54 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(friendParameters[index]->get_parent() == lexicalFriend);
   }
 
+  size_t emptyPackFriends = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgTemplateInstantiationDecl)) {
+    auto *declaration = isSgTemplateInstantiationDecl(node);
+    if (declaration->get_templateName() != "empty_pack" ||
+        !declaration->get_declarationModifier().isFriend())
+      continue;
+    ++emptyPackFriends;
+    ROSE_ASSERT(declaration->get_templateArguments().empty());
+    ROSE_ASSERT(declaration->get_templateDeclaration() != nullptr);
+    ROSE_ASSERT(declaration->get_specializedTemplateDeclaration() ==
+                declaration->get_templateDeclaration());
+    auto *canonical = isSgTemplateInstantiationDecl(
+        declaration->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(canonical != nullptr && canonical != declaration);
+    ROSE_ASSERT(canonical->get_templateArguments().empty());
+    ROSE_ASSERT(canonical->get_type() == declaration->get_type());
+    ROSE_ASSERT(canonical->get_templateDeclaration() ==
+                declaration->get_templateDeclaration());
+  }
+  ROSE_ASSERT(emptyPackFriends == 1);
+
+  size_t defaultedFriends = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgTemplateInstantiationDecl)) {
+    auto *declaration = isSgTemplateInstantiationDecl(node);
+    if (declaration->get_templateName() != "defaulted" ||
+        !declaration->get_declarationModifier().isFriend())
+      continue;
+    ++defaultedFriends;
+    ROSE_ASSERT(declaration->get_templateArguments().empty());
+    ROSE_ASSERT(declaration->get_semanticTemplateArguments().size() == 1);
+    ROSE_ASSERT(declaration->get_specializedTemplateDeclaration() ==
+                declaration->get_templateDeclaration());
+    auto *canonical = isSgTemplateInstantiationDecl(
+        declaration->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(canonical != nullptr && canonical != declaration);
+    ROSE_ASSERT(canonical->get_templateArguments().empty());
+    ROSE_ASSERT(SageInterface::templateArgumentListEquivalence(
+        declaration->get_semanticTemplateArguments(),
+        canonical->get_semanticTemplateArguments()));
+    SgClassSymbol *symbol =
+        declaration->get_scope()->get_symbol_table()->find_class_instantiation(
+            declaration->get_templateDeclaration(),
+            declaration->get_semanticTemplateArguments());
+    ROSE_ASSERT(symbol != nullptr);
+    ROSE_ASSERT(symbol->get_declaration() == canonical);
+  }
+  ROSE_ASSERT(defaultedFriends == 1);
   return backend(project);
 }

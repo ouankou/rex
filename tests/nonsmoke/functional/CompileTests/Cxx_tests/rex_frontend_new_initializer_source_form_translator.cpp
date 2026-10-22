@@ -89,6 +89,18 @@ int main(int argc, char **argv) {
   std::map<std::string, SgNewExp *> expressions =
       collectNewExpressions(function);
   ROSE_ASSERT(expressions.size() == 8);
+  for (const auto &entry : expressions) {
+    SgNewExp *expression = entry.second;
+    SgFunctionDeclaration *allocation =
+        expression->get_newOperatorDeclaration();
+    ROSE_ASSERT(allocation != nullptr);
+    ROSE_ASSERT(allocation->get_specialFunctionModifier().isOperator());
+    ROSE_ASSERT(!allocation->get_specialFunctionModifier().isConstructor());
+    ROSE_ASSERT(expression->get_allocation_implicit_argument_count() == 1);
+    if (auto *constructor = expression->get_constructor_args()) {
+      ROSE_ASSERT(allocation != constructor->get_declaration());
+    }
+  }
 
   validateNewExpression(expressions.at("rex_default"), false, false, 0, 0);
   validateNewExpression(expressions.at("rex_value"), true, false, 0, 0);

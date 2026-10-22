@@ -1,5 +1,7 @@
 #include "sage3basic.h"
 
+#include <algorithm>
+
 #include <sstream>
 
 #include <string>
@@ -115,11 +117,6 @@ void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
           default:
             break;
           }
-          DebugSaveDep([&first, details]() {
-            return "saving side effect for:" +
-                   AstInterface::AstToString(first) + " = " +
-                   AstInterface::AstToString(details);
-          });
           if (!main_table.SaveOperatorSideEffect(input, first, relation,
                                                  details)) {
             DebugSaveDep([]() { return "Did not save dependene"; });
@@ -134,16 +131,38 @@ void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
       AstNodePtr current = *p;
       ComputeDependences(current.get_ptr(), root);
     }
-  } else if (AstInterface::IsVariableDecl(input)) {
-    SgVariableDeclaration *declaration = isSgVariableDeclaration(input);
-    if (declaration == nullptr) {
-      std::cerr << "REX_DEPENDENCE_INVARIANT[variable-declaration]: "
-                << input->class_name()
-                << " was classified as a declaration but is not an exact "
-                   "SgVariableDeclaration"
-                << std::endl;
+  } else if (SgInitializedName *parameter = isSgInitializedName(input)) {
+    SgFunctionParameterList *parameters =
+        isSgFunctionParameterList(parameter->get_parent());
+    SgFunctionDeclaration *function = isSgFunctionDeclaration(
+        parameters != nullptr ? parameters->get_parent() : nullptr);
+    SgScopeStatement *scope = nullptr;
+    if (function != nullptr) {
+      scope = function->get_definition();
+      if (scope == nullptr)
+        scope = function->get_functionParameterScope();
+      if (scope == nullptr && parameter->get_name().getString().empty())
+        scope = function->get_scope();
+    }
+    if (function == nullptr || function->get_parameterList() != parameters ||
+        parameter->get_declptr() != function || scope == nullptr ||
+        parameter->get_scope() != scope ||
+        std::count(parameters->get_args().begin(), parameters->get_args().end(),
+                   parameter) != 1 ||
+        ((scope == function->get_definition() ||
+          scope == function->get_functionParameterScope()) &&
+         scope->get_parent() != function) ||
+        (function->get_definition() != nullptr &&
+         function->get_definition()->get_declaration() != function)) {
+      std::cerr << "REX_DEPENDENCE_INVARIANT[parameter-owner]: parameter="
+                << parameter << " function=" << function << " scope=" << scope
+                << " has no exact function parameter ownership" << std::endl;
       ROSE_ABORT();
     }
+    // Parameters belong to the function's dependence domain, not to the
+    // namespace/global initializer domain below.
+  } else if (SgVariableDeclaration *declaration =
+                 isSgVariableDeclaration(input)) {
     SgScopeStatement *declaration_scope = declaration->get_scope();
     if (declaration_scope == nullptr) {
       std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-scope]: declaration="
@@ -173,13 +192,11 @@ void WholeProgramDependenceAnalysis::ComputeDependences(SgNode *input,
         continue;
 
       const AstNodePtr variable(initialized_name);
-      const std::string variable_signature =
-          AstInterface::GetVariableSignature(variable);
-      if (variable_signature.empty() ||
-          variable_signature.find("_UNKNOWN_") != std::string::npos) {
+      if (initialized_name->get_name().getString().empty() ||
+          SageInterface::containsUnknownType(initialized_name->get_type())) {
         std::cerr << "REX_DEPENDENCE_INVARIANT[initializer-target]: "
                   << initialized_name->class_name()
-                  << " has no exact variable signature" << std::endl;
+                  << " has no exact variable name or type" << std::endl;
         ROSE_ABORT();
       }
 

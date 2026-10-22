@@ -1,6 +1,20 @@
 include_directories(${ROSE_INCLUDES})
 add_executable(copyExample copyExample.C)
 target_link_libraries(copyExample ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(rex_copy_typedef_identity rex_copy_typedef_identity.cpp)
+target_link_libraries(rex_copy_typedef_identity ROSE_DLL)
+add_test(NAME copyAST_rex_typedef_identity
+  COMMAND rex_copy_typedef_identity -std=c++14
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_typedef_identity_input.cpp)
+set_tests_properties(copyAST_rex_typedef_identity PROPERTIES
+  LABELS "COPYASTTEST;rex;typed")
+add_executable(rex_copy_typedef_lifetime rex_copy_typedef_lifetime.cpp)
+target_link_libraries(rex_copy_typedef_lifetime ROSE_DLL)
+add_test(NAME copyAST_rex_typedef_lifetime
+  COMMAND rex_copy_typedef_lifetime -std=c++14
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_typedef_lifetime_input.cpp)
+set_tests_properties(copyAST_rex_typedef_lifetime PROPERTIES
+  LABELS "COPYASTTEST;rex;typed")
 add_executable(copyLoops copyLoops.C)
 target_link_libraries(copyLoops ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
 add_executable(rex_copy_located_end_contract
@@ -11,6 +25,8 @@ add_executable(rex_copy_explicit_scope_contract
                rex_copy_explicit_scope_contract.cpp)
 target_link_libraries(rex_copy_explicit_scope_contract
                       ROSE_DLL ${CMAKE_THREAD_LIBS_INIT})
+add_executable(rex_copy_type_cache_contract rex_copy_type_cache_contract.cpp)
+target_link_libraries(rex_copy_type_cache_contract ROSE_DLL)
 add_executable(rex_copy_structural_ownership_contract
                rex_copy_structural_ownership_contract.cpp)
 target_link_libraries(rex_copy_structural_ownership_contract
@@ -278,6 +294,11 @@ set_tests_properties(
   copyAST_rex_external_explicit_scope_identity
   PROPERTIES LABELS "COPYASTTEST;rex")
 
+add_test(NAME copyAST_rex_type_cache_contract
+         COMMAND rex_copy_type_cache_contract)
+set_tests_properties(copyAST_rex_type_cache_contract
+                     PROPERTIES LABELS "COPYASTTEST;rex")
+
 add_test(
   NAME copyAST_rex_internal_missing_explicit_scope_map_is_rejected
   COMMAND ${BASH_EXECUTABLE} -c
@@ -343,11 +364,17 @@ set_tests_properties(
 set(_copyast_structural_invalid_modes
   reject-template-semantic-edge
   reject-missing-owned-scope
-  reject-catch-semantic-edge)
+  reject-catch-semantic-edge
+  reject-shallow-body
+  reject-shallow-initializer)
 set(_copyast_structural_invalid_diagnostics
-  "^REX_COPY_INVARIANT\\[semantic-edge-remap\\]: relation=template-parameter-declaration source=0x[[:xdigit:]]+/SgTemplateDeclaration provisional=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTemplateDeclaration$"
+  "^REX_COPY_INVARIANT\\[semantic-edge-map\\]: relation=template-parameter-declaration source=0x[[:xdigit:]]+/SgTemplateDeclaration copy-edge=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTemplateDeclaration$"
   "^REX_COPY_INVARIANT\\[owned-declaration-scope-null\\]: context=owned-nonreal-declaration-scope original=0x[[:xdigit:]]+/SgTemplateClassDeclaration scope=0x[[:xdigit:]]+ copy=0x[[:xdigit:]]+/SgTemplateClassDeclaration scope=\\(nil\\)$"
-  "^REX_COPY_INVARIANT\\[semantic-edge-remap\\]: relation=catch-handler-try source=0x[[:xdigit:]]+/SgTryStmt provisional=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTryStmt$")
+  "^REX_COPY_INVARIANT\\[semantic-edge-remap\\]: relation=catch-handler-try source=0x[[:xdigit:]]+/SgTryStmt provisional=\\(nil\\)/<null> expected=0x[[:xdigit:]]+/SgTryStmt$"
+  "^.*FAIL : ASSERTION:require:[[:space:]]+\\[.*/Cxx_GrammarCopyMemberFunctions\\.C:[0-9]+,[[:space:]]+copy\\]:[[:space:]]+.*\
+body_copy == nullptr \\|\\| body_copy->get_parent\\(\\) == nullptr \\|\\| body_copy->get_parent\\(\\) == result$"
+  "^.*FAIL : ASSERTION:require:[[:space:]]+\\[.*/Cxx_GrammarCopyMemberFunctions\\.C:[0-9]+,[[:space:]]+copy\\]:[[:space:]]+.*\
+initptr_copy == nullptr \\|\\| initptr_copy->get_parent\\(\\) == nullptr \\|\\| initptr_copy->get_parent\\(\\) == result$")
 list(LENGTH _copyast_structural_invalid_modes
   _copyast_structural_invalid_mode_count)
 list(LENGTH _copyast_structural_invalid_diagnostics
@@ -470,3 +497,22 @@ endforeach()
 # beyond CTest's 1,500-second dashboard default.  Keep the semantic test intact
 # and give that measured workload an explicit per-test boundary.
 set_tests_properties(copyAST_copytest2007_48 PROPERTIES TIMEOUT 3600)
+
+add_executable(rex_copy_source_file_ownership rex_copy_source_file_ownership.cpp)
+target_link_libraries(rex_copy_source_file_ownership PRIVATE ROSE_DLL)
+foreach(mode IN ITEMS ast tokens ast_headers tokens_headers)
+  set(copy_options -c)
+  if(mode STREQUAL "tokens" OR mode STREQUAL "tokens_headers")
+    list(APPEND copy_options -rose:unparse_tokens)
+  endif()
+  if(mode STREQUAL "ast_headers" OR mode STREQUAL "tokens_headers")
+    list(APPEND copy_options -rose:unparseHeaderFiles)
+  endif()
+  set(copy_work "${CMAKE_CURRENT_BINARY_DIR}/source_file_copy_${mode}")
+  file(MAKE_DIRECTORY "${copy_work}")
+  add_test(NAME copyAST_rex_source_file_ownership_${mode}
+    COMMAND rex_copy_source_file_ownership ${copy_options}
+      "${CMAKE_CURRENT_SOURCE_DIR}/rex_copy_source_file_input.c")
+  set_tests_properties(copyAST_rex_source_file_ownership_${mode} PROPERTIES
+    WORKING_DIRECTORY "${copy_work}" LABELS "copyAST;frontend;ownership")
+endforeach()

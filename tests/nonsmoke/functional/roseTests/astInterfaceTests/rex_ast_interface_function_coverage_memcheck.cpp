@@ -11,14 +11,30 @@ private:
 
 class rex_base {
 public:
-  virtual int evaluate(int value) { return value; }
+  virtual int f(int value) { return value; }
 };
 
-class rex_derived : public rex_base {
+class Derived : public rex_base {
 public:
-  template <class T> int evaluate(T value) { return static_cast<int>(value); }
-  int evaluate(int value) override { return evaluate<>(value); }
+  template <class T> int f(T value) { return static_cast<int>(value); }
+  int f(int value) override { return f<>(value); }
 };
+
+class MyList {
+public:
+  int &operator[](int index) { return values_[index]; }
+
+private:
+  int values_[4] = {0, 1, 2, 3};
+};
+
+struct rex_default_value {
+  int value;
+};
+
+int rex_default_value_init(rex_default_value value = {3}) {
+  return value.value;
+}
 
 int foo(int argc, char **) { return argc; }
 
@@ -32,13 +48,14 @@ int test_moveVariableDeclaration(int input) {
 }
 
 int rex_interface_function_coverage(int input) {
-  rex_pair<int> values(input, 3);
-  rex_derived derived;
+  rex_pair<int> values(input, rex_default_value_init());
+  Derived derived;
+  MyList indices;
   int result = values.maximum();
   int marker = 12345;
 
   for (int index = 0; index < 4; ++index) {
-    result += index;
+    result += indices[index];
   }
 
   while (result < 16) {
@@ -50,7 +67,7 @@ int rex_interface_function_coverage(int input) {
     result += marker;
     break;
   default:
-    result += derived.evaluate(input);
+    result += derived.f(input);
     break;
   }
 

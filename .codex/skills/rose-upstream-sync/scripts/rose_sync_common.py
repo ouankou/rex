@@ -31,6 +31,8 @@ UPSTREAM_REMOTE_URL = "https://github.com/llnl/rose.git"
 UPSTREAM_REF = "rose/weekly"
 
 DROPPED_PATH_PATTERNS = [
+    "src/midend/programTransformation/astOutlining/lib_test/*",
+    "exampleTranslators/documentedExamples/astProcessingExamples/*",
     ".gitlab-ci.yml",
     "Makefile.am",
     "*/Makefile.am",

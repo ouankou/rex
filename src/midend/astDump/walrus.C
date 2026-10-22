@@ -1,173 +1,101 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
-
 #include "walrus.h"
 
 #include <fstream>
+#include <stdexcept>
+#include <unordered_set>
+#include <utility>
+#include <vector>
 
-using namespace std;
+namespace WalrusGraph {
+namespace {
+// Keep the traversal root even when it is a project/file wrapper. Carrying the
+// nearest exported ancestor through filtered nodes produces one connected tree
+// without inventing parent-map entries or dropping additional source files.
+class Graph : public AstTopDownProcessing<size_t> {
+  SgNode *root;
+  std::unordered_set<SgNode *> exported;
 
-void WalrusGraph::Counter::visit(SgNode *astNode) {
-  SgLocatedNode *locatedNode = isSgLocatedNode(astNode);
-  if ((isBinary == true) ||
-      (locatedNode != NULL &&
-       locatedNode->get_file_info()->isFrontendSpecific() == false)) {
-    node_to_index_map[astNode] = counter++;
-  }
-}
+public:
+  size_t node_count = 0;
+  std::vector<std::pair<size_t, size_t>> edges;
+  explicit Graph(SgNode *root) : root(root) {}
 
-void WalrusGraph::OutputEdges::visit(SgNode *astNode) {
-  // printf ("astNode = %p = %s \n",astNode,astNode->class_name().c_str());
-
-  int numberOfNodes = node_to_index_map.size() + 1;
-  static int num = 0;
-
-  SgLocatedNode *locatedNode = isSgLocatedNode(astNode);
-  if ((isBinary == true) ||
-      (locatedNode != NULL &&
-       locatedNode->get_file_info()->isFrontendSpecific() == false)) {
-    if (isSgGlobal(astNode) == NULL) {
-      printf("            { @source=%d; @destination=%d; }",
-             node_to_index_map[astNode->get_parent()],
-             node_to_index_map[astNode]);
-      *outputFilePtr << "            { @source="
-                     << node_to_index_map[astNode->get_parent()]
-                     << "; @destination=" << node_to_index_map[astNode]
-                     << "; }";
-
-      if (num < numberOfNodes - 2) {
-        printf(",");
-        *outputFilePtr << ",";
-      }
-      printf("\n");
-      *outputFilePtr << endl;
+  size_t evaluateInheritedAttribute(SgNode *node, size_t parent) override {
+    bool visible = false;
+    if (auto *located = isSgLocatedNode(node)) {
+      ROSE_ASSERT(located->get_file_info() != nullptr);
+      visible = !located->get_file_info()->isFrontendSpecific();
     }
-
-    num++;
-  }
-}
-
-void WalrusGraph::OutputNodes::visit(SgNode *astNode) {
-  int numberOfNodes = node_to_index_map.size();
-  static int num = 0;
-
-  SgLocatedNode *locatedNode = isSgLocatedNode(astNode);
-  if ((isBinary == true) ||
-      (locatedNode != NULL &&
-       locatedNode->get_file_info()->isFrontendSpecific() == false)) {
-    // if (node_to_index_map[astNode] < numberOfNodes-2);
-    if (num < numberOfNodes - 1) {
-      printf("            { @id=%d; @value=T; }", node_to_index_map[astNode]);
-      *outputFilePtr << "            { @id=" << node_to_index_map[astNode]
-                     << "; @value=T; }";
-      if (num < numberOfNodes - 2) {
-        printf(",");
-        *outputFilePtr << ",";
-      }
-      printf("\n");
-      *outputFilePtr << endl;
+    if (node != root && !visible)
+      return parent;
+    if (!exported.insert(node).second)
+      throw std::runtime_error("Walrus traversal repeats an exported AST node");
+    const size_t id = node_count++;
+    if (node != root) {
+      ROSE_ASSERT(parent < id);
+      edges.emplace_back(parent, id);
     }
-
-    num++;
+    return id;
   }
-}
+};
 
-void WalrusGraph::generateEdges(SgNode *node) {
-  int numberOfNodes = node_to_index_map.size();
-  int numberOfEdges = node_to_index_map.size() - 1;
+void writeGraph(const Graph &graph, std::ostream &output) {
+  output << "Graph\n{\n   ### metadata ###\n   @name=\"ROSE AST\";\n   "
+            "@description=\"Source-visible ROSE AST with its traversal "
+            "root.\";\n   @numNodes="
+         << graph.node_count << ";\n   @numLinks=" << graph.edges.size()
+         << ";\n   @numPaths=0;\n   @numPathLinks=0;\n   ### "
+            "structural data ###\n   @links=[\n";
 
-  printf("Graph\n{\n   ### metadata ###\n   @name=\"ROSE AST\";\n   "
-         "@description=\"A complete ROSE AST.\";\n   @numNodes=%d;\n   "
-         "@numLinks=%d;\n   @numPaths=0;\n   @numPathLinks=0;\n   ### "
-         "structural data ###\n   @links=[\n",
-         numberOfNodes, numberOfEdges);
-  *outputFilePtr << "Graph\n{\n   ### metadata ###\n   @name=\"ROSE AST\";\n   "
-                    "@description=\"A complete ROSE AST.\";\n   @numNodes="
-                 << numberOfNodes << ";\n   @numLinks=" << numberOfEdges
-                 << ";\n   @numPaths=0;\n   @numPathLinks=0;\n   ### "
-                    "structural data ###\n   @links=[\n";
-
-  OutputEdges traversal;
-
-  traversal.traverse(node, preorder);
-
-  printf("   ];\n   @paths=;\n\n   ### attribute data ###\n   "
-         "@enumerations=;\n   @attributeDefinitions=[\n      {\n         "
-         "@name=$root;\n         @type=bool;\n         @default=|| false ||;\n "
-         "        @nodeValues=[ { @id=0; @value=T; } ];\n");
-  printf("         @linkValues=;\n         @pathValues=;\n      },\n      {\n  "
-         "       @name=$tree_link;\n         @type=bool;\n         @default=|| "
-         "false ||;\n         @nodeValues=;\n         @linkValues=[\n");
-
-  *outputFilePtr
+  for (size_t i = 0; i < graph.edges.size(); ++i) {
+    if (i != 0)
+      output << ",\n";
+    output << "            { @source=" << graph.edges[i].first
+           << "; @destination=" << graph.edges[i].second << "; }";
+  }
+  output << '\n';
+  output
       << "   ];\n   @paths=;\n\n   ### attribute data ###\n   "
          "@enumerations=;\n   @attributeDefinitions=[\n      {\n         "
          "@name=$root;\n         @type=bool;\n         @default=|| false ||;\n "
          "        @nodeValues=[ { @id=0; @value=T; } ];\n";
-  *outputFilePtr
+  output
       << "         @linkValues=;\n         @pathValues=;\n      },\n      {\n  "
          "       @name=$tree_link;\n         @type=bool;\n         @default=|| "
          "false ||;\n         @nodeValues=;\n         @linkValues=[\n";
-}
-void WalrusGraph::generateNodes(SgNode *node) {
-  OutputNodes traversal;
-
-  traversal.traverse(node, preorder);
-
-  printf("         ];\n         @pathValues=;\n      }\n");
-  printf("   ];\n   @qualifiers=[\n      {\n         @type=$spanning_tree;\n   "
-         "      @name=$sample_spanning_tree;\n         @description=;\n        "
-         " @attributes=[\n");
-  printf("            { @attribute=0; @alias=$root; },\n            { "
-         "@attribute=1; @alias=$tree_link; }\n         ];\n      }\n   ];\n   "
-         "### visualization hints ###\n");
-  printf("   @filters=;\n   @selectors=;\n   @displays=;\n   "
-         "@presentations=;\n\n   ### interface hints ###\n   "
-         "@presentationMenus=;\n   @displayMenus=;\n   @selectorMenus=;\n   "
-         "@filterMenus=;\n   @attributeMenus=;\n}\n");
-
-  *outputFilePtr << "         ];\n         @pathValues=;\n      }\n";
-  *outputFilePtr
+  for (size_t i = 0; i < graph.edges.size(); ++i) {
+    if (i != 0)
+      output << ",\n";
+    output << "            { @id=" << i << "; @value=T; }";
+  }
+  output << '\n';
+  output << "         ];\n         @pathValues=;\n      }\n";
+  output
       << "   ];\n   @qualifiers=[\n      {\n         @type=$spanning_tree;\n   "
          "      @name=$sample_spanning_tree;\n         @description=;\n        "
          " @attributes=[\n";
-  *outputFilePtr << "            { @attribute=0; @alias=$root; },\n            "
-                    "{ @attribute=1; @alias=$tree_link; }\n         ];\n      "
-                    "}\n   ];\n   ### visualization hints ###\n";
-  *outputFilePtr
-      << "   @filters=;\n   @selectors=;\n   @displays=;\n   "
-         "@presentations=;\n\n   ### interface hints ###\n   "
-         "@presentationMenus=;\n   @displayMenus=;\n   @selectorMenus=;\n   "
-         "@filterMenus=;\n   @attributeMenus=;\n}\n";
+  output << "            { @attribute=0; @alias=$root; },\n            "
+            "{ @attribute=1; @alias=$tree_link; }\n         ];\n      "
+            "}\n   ];\n   ### visualization hints ###\n";
+  output << "   @filters=;\n   @selectors=;\n   @displays=;\n   "
+            "@presentations=;\n\n   ### interface hints ###\n   "
+            "@presentationMenus=;\n   @displayMenus=;\n   @selectorMenus=;\n   "
+            "@filterMenus=;\n   @attributeMenus=;\n}\n";
 }
+} // namespace
 
-void WalrusGraph::generateWalrusGraph(SgNode *node, string outputFilename) {
-  // Notes: The generated file in the Walrus format typically requies some
-  // editing by hand. For large files the "comma" always has to be remove at the
-  // end of the edge list and the node list. For Binary files the first edge
-  // which points to itself ("source=0 distination=0") has to be removed. Then
-  // the last entry for the node list has to be removed. Then is can often work.
-
-  SgProject *project = isSgProject(node);
-  if (project != NULL)
-    printf("Found the SgProject \n");
-
-  Counter traversal;
-  traversal.traverse(node, preorder);
-
-  printf("node_to_index_map.size() = %" PRIuPTR " \n",
-         node_to_index_map.size());
-
-  filebuf fb;
-  fb.open(outputFilename.c_str(), ios::out);
-  ostream os(&fb);
-
-  ostream outputFile(&fb);
-  outputFilePtr = &outputFile;
-  ROSE_ASSERT(outputFilePtr != NULL);
-
-  generateEdges(node);
-  generateNodes(node);
-
-  outputFile.flush();
+void generateWalrusGraph(SgNode *node, std::string outputFilename) {
+  ROSE_ASSERT(node != nullptr);
+  Graph graph(node);
+  graph.traverse(node, 0);
+  ROSE_ASSERT(graph.node_count == graph.edges.size() + 1);
+  std::ofstream output(outputFilename);
+  if (!output)
+    throw std::runtime_error("Cannot open Walrus graph: " + outputFilename);
+  writeGraph(graph, output);
+  output.close();
+  if (!output)
+    throw std::runtime_error("Cannot write Walrus graph: " + outputFilename);
 }
+} // namespace WalrusGraph

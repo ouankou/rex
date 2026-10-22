@@ -28,6 +28,7 @@ class LoopTreeObserver {
 public:
   LoopTreeObserver(LoopTreeObserver *n = 0) { next = n; }
   virtual ~LoopTreeObserver() {}
+  virtual bool ObservesNode(const LoopTreeNode *node) const { return true; }
   virtual void UpdateBlockLoop(const BlockLoopInfo &info) {
     if (next != 0)
       next->UpdateBlockLoop(info);
@@ -284,18 +285,13 @@ public:
 
 class SplitStmtInfo2 : public LoopTreeObserveInfo {
   LoopTreeNode *splitstmt;
-  int loop;
-  SymbolicVal le;
 
 public:
-  SplitStmtInfo2(LoopTreeNode *stmt, LoopTreeNode *n, int l,
-                 const SymbolicVal &mid)
-      : LoopTreeObserveInfo(stmt), splitstmt(n), loop(l), le(mid) {}
+  SplitStmtInfo2(LoopTreeNode *stmt, LoopTreeNode *n)
+      : LoopTreeObserveInfo(stmt), splitstmt(n) {}
   virtual ~SplitStmtInfo2() {}
 
   LoopTreeNode *GetSplitStmt() const { return splitstmt; }
-  int GetLoop() const { return loop; }
-  SymbolicVal GetLE() const { return le; }
   virtual void UpdateObserver(LoopTreeObserver &o) const {
     o.UpdateSplitStmt2(*this);
   }

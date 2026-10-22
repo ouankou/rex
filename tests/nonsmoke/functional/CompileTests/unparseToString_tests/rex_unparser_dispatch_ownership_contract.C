@@ -204,7 +204,7 @@ int main(int argc, char **argv) {
   if (mode == "function-symbol") {
     SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
         SgName("rex_function_symbol"), static_cast<SgFunctionType *>(nullptr),
-        nullptr);
+        nullptr, nullptr);
     (new SgFunctionSymbol(declaration))->unparseToString();
     return 0;
   }

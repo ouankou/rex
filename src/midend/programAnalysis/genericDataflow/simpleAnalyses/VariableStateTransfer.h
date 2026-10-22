@@ -50,38 +50,18 @@ protected:
       if (resLat == NULL && arg1Lat != NULL)
         resLat = arg1Lat;
     }
-    // Dbg::dbg << "transfer B, resLat="<<resLat<<"\n";
-
-    return (arg1Lat && arg2Lat && resLat);
-  }
-
-  bool getLattices(const SgUnaryOp *sgn, LatticeType *&arg1Lat,
-                   LatticeType *&arg2Lat, LatticeType *&resLat) {
-    arg1Lat = getLattice(sgn->get_operand());
-    resLat = getLattice(sgn);
-
-    // Unary Update
-    if (isSgMinusMinusOp(sgn) || isSgPlusPlusOp(sgn)) {
-      arg2Lat = new LatticeType(1);
-    }
-    // Dbg::dbg << "res="<<res.str()<<" arg1="<<arg1.str()<<"
-    // arg1Lat="<<arg1Lat<<", arg2Lat="<<arg2Lat<<"\n"; Dbg::dbg << "transfer B,
-    // resLat="<<resLat<<"\n";
 
     return (arg1Lat && arg2Lat && resLat);
   }
 
 public:
-  VariableStateTransfer(const Function &func, const DataflowNode &n,
+  VariableStateTransfer(const Function &func, const VirtualCFG::DataflowNode &n,
                         NodeState &state, const std::vector<Lattice *> &dfInfo,
                         const int &debugLevel_)
       : IntraDFTransferVisitor(func, n, state, dfInfo), modified(false),
         debugLevel(debugLevel_),
         prodLat(
             dynamic_cast<FiniteVarsExprsProductLattice *>(*(dfInfo.begin()))) {
-    // Dbg::dbg << "transfer A prodLat="<<prodLat<<"="<<prodLat->str(" ")<<"\n";
-    //  Make sure that all the lattices are initialized
-    // prodLat->initialize();
     const std::vector<Lattice *> &lattices = prodLat->getLattices();
     for (std::vector<Lattice *>::const_iterator it = lattices.begin();
          it != lattices.end(); it++)

@@ -15,9 +15,6 @@
  *    if change to in[n]
  *       for all predecessors m of n, w.push(m)
  *****************************************/
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 19,1 MB to
-// 8,8MB
-
 #include "LivenessAnalysis.h"
 
 #include "BottomUpTraversalLiveness.h"
@@ -27,11 +24,12 @@
 #include "GlobalVarAnalysis.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
 using namespace std;
+using VirtualCFG::CFGNode;
+using VirtualCFG::FilteredCFGEdge;
+using VirtualCFG::FilteredCFGNode;
 
-/******************************************
- * Merge two containers
- *****************************************/
 template <class T> T LivenessAnalysis::merge_no_dups(T &v1, T &v2) {
   T ret(v1);
   for (typename T::const_iterator i = v2.begin(); i != v2.end(); ++i) {
@@ -49,10 +47,6 @@ template <class T> T LivenessAnalysis::merge_no_dups(T &v1, T &v2) {
   return ret;
 }
 
-/******************************************
- * Helper Function
- * Get the enclosing function definition of a node
- *****************************************/
 SgFunctionDefinition *LivenessAnalysis::getFunction(SgNode *node) {
   ROSE_ASSERT(node);
   // make sure that this node is within a function
@@ -75,10 +69,6 @@ SgFunctionDefinition *LivenessAnalysis::getFunction(SgNode *node) {
   return funcDef;
 }
 
-/******************************************
- * Helper Function
- * !Print out live-in and live-out variables for a node
- *****************************************/
 void LivenessAnalysis::printInAndOut(SgNode *sgNode) {
   if (DEBUG_MODE)
     cout << ">>> in and out for : " << sgNode << "  " << sgNode->class_name()
@@ -121,43 +111,8 @@ void LivenessAnalysis::printInAndOut(SgNode *sgNode) {
   }
 }
 
-/******************************************
- * Helper Function
- * used for sorting
- *****************************************/
 static bool sort_using_greater_than(SgNode *u, SgNode *v) { return u > v; }
 
-/**********************************************************
- * Traverse the CFG backwards from a given node to
- * determine whether a change has occurred at that path
- * until the first split (2 in-edges) or root.
- *********************************************************/
-template <typename T>
-bool LivenessAnalysis::hasANodeAboveCurrentChanged(T source) {
-  bool changed = false;
-  // go cfg back until split or root
-  // check nodeChangeMap if a all nodes have changed.
-  // if any has changed return true.
-  vector<FilteredCFGEdge<IsDFAFilter>> in_edges = source.outEdges();
-  if (in_edges.size() == 1) {
-    FilteredCFGEdge<IsDFAFilter> filterEdge = in_edges[0];
-    FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-    SgNode *sgNode = filterNode.getNode();
-    ROSE_ASSERT(sgNode);
-    bool changedInTable = nodeChangedMap[sgNode];
-    if (DEBUG_MODE)
-      cout << " >>> backward CFG : visiting node : " << sgNode << " "
-           << sgNode->class_name() << "  changed : " << changedInTable << endl;
-    if (changedInTable) {
-      return true;
-    } else {
-      changed = hasANodeAboveCurrentChanged(filterNode);
-    }
-  }
-  return changed;
-}
-
-// get all nodes above
 template <class T>
 void LivenessAnalysis::getAllNodesAbove(T source, std::vector<T> &visited) {
   vector<FilteredCFGNode<IsDFAFilter>> worklist;
@@ -180,36 +135,12 @@ void LivenessAnalysis::getAllNodesAbove(T source, std::vector<T> &visited) {
   }
 }
 
-// get all nodes below
-template <class T>
-void LivenessAnalysis::getAllNodesBelow(T source, std::vector<T> &visited) {
-  vector<FilteredCFGNode<IsDFAFilter>> worklist;
-  worklist.push_back(source);
-  while (!worklist.empty()) {
-    source = worklist.front();
-    worklist.erase(worklist.begin());
-    vector<FilteredCFGEdge<IsDFAFilter>> in_edges = source.outEdges();
-    vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator it = in_edges.begin();
-    for (; it != in_edges.end(); ++it) {
-      FilteredCFGEdge<IsDFAFilter> filterEdge = *it;
-      FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-      SgNode *sgNode = filterNode.getNode();
-      ROSE_ASSERT(sgNode);
-      if (find(visited.begin(), visited.end(), filterNode) == visited.end()) {
-        worklist.push_back(filterNode);
-        visited.push_back(filterNode);
-      }
-    }
-  }
-}
-
 /**********************************************************
  * Def-use algorithm used for variable live analysis: the transfer function for
  *each node This algorithm is almost a match to def-use algorithm
  *********************************************************/
 template <typename T>
 bool LivenessAnalysis::defuse(T cfgNode, bool *unhandled) {
-  // get SgNode from CFG Node
   SgNode *sgNode = cfgNode.getNode();
   ROSE_ASSERT(sgNode);
   // count the amount of times this nodes was visited (used for visualization)
@@ -217,39 +148,20 @@ bool LivenessAnalysis::defuse(T cfgNode, bool *unhandled) {
     visited[sgNode] = 1;
   else
     visited[sgNode]++;
-  // remember the Node the comes before
-
-  // Determine if the in_edges have been visited before
-  // Have we been here before, if not, unhandled is true
-  if (forwardAlgo) {
-    vector<FilteredCFGEdge<IsDFAFilter>> in_edgesCFG = cfgNode.outEdges();
-    for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
-             in_edgesCFG.begin();
-         i != in_edgesCFG.end(); ++i) {
-      FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
-      FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-      SgNode *sgNode2 = filterNode.getNode();
-      if (visited.find(sgNode2) == visited.end())
-        *unhandled = true;
-    }
-  } else {
-    vector<FilteredCFGEdge<IsDFAFilter>> in_edgesCFG = cfgNode.inEdges();
-    for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
-             in_edgesCFG.begin();
-         i != in_edgesCFG.end(); ++i) {
-      FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
-      FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.source();
-      SgNode *sgNode2 = filterNode.getNode();
-      if (visited.find(sgNode2) == visited.end())
-        *unhandled = true;
-    }
+  vector<FilteredCFGEdge<IsDFAFilter>> out_edgesCFG = cfgNode.outEdges();
+  for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
+           out_edgesCFG.begin();
+       i != out_edgesCFG.end(); ++i) {
+    FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
+    FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
+    SgNode *sgNode2 = filterNode.getNode();
+    if (visited.find(sgNode2) == visited.end())
+      *unhandled = true;
   }
-  bool has_changed = false;
   if (DEBUG_MODE) {
     cout << "\n\n--------------------------------------------------------------"
             "----\ncurrent Node: "
          << sgNode << endl;
-    //"  previous Node : " << sgNodeBefore << endl;
     printInAndOut(sgNode);
   }
 
@@ -373,7 +285,6 @@ bool LivenessAnalysis::defuse(T cfgNode, bool *unhandled) {
     break;
   }
   default: {
-    // WE ARE HANDLING SPECIAL CASES HERE WHERE INFINITE LOOPS MAY OCCUR
     break;
   }
   }
@@ -391,47 +302,16 @@ bool LivenessAnalysis::defuse(T cfgNode, bool *unhandled) {
       inOLD = in[sgNode];
     }
   }
-  // This is save -- out[sgNode] always exists
   in[sgNode] = out[sgNode];
-  bool sgNodeForINexists = false;
-  {
-    std::map<SgNode *, std::vector<SgInitializedName *>>::const_iterator it_in =
-        in.find(sgNode);
-    if (it_in != in.end()) {
-      sgNodeForINexists = true;
-    }
-  }
   if (defNode) {
-    // delete all definitions
-    // (out[n] - def[n])
-    if (sgNodeForINexists) {
-      // make sure this operation is safe
-      std::vector<SgInitializedName *> vec = in[sgNode];
-      for (std::vector<SgInitializedName *>::iterator inIt = vec.begin();
-           inIt != vec.end(); ++inIt) {
-        if (*inIt == initName) {
-          vec.erase(inIt); // = initName
-          break;
-        }
-      }
-      in[sgNode] = vec;
-    }
+    auto &liveIn = in[sgNode];
+    const auto definition = std::find(liveIn.begin(), liveIn.end(), initName);
+    if (definition != liveIn.end())
+      liveIn.erase(definition);
   }
   if (useNode) {
-    // if this initName is used but it is not in the in[sgNode] map
-    // then we need to add it
-    bool found = false;
-    if (sgNodeForINexists) {
-      std::vector<SgInitializedName *> vec = in[sgNode];
-      std::vector<SgInitializedName *>::iterator inIt = vec.begin();
-      for (; inIt != vec.end(); ++inIt) {
-        if (*inIt == initName) {
-          found = true;
-          break;
-        }
-      }
-    }
-    if (!found) {
+    const auto &liveIn = in[sgNode];
+    if (std::find(liveIn.begin(), liveIn.end(), initName) == liveIn.end()) {
       ROSE_ASSERT(initName != NULL);
       std::string name = initName->get_name().str();
       in[sgNode].push_back(initName); // = varRef
@@ -447,19 +327,7 @@ bool LivenessAnalysis::defuse(T cfgNode, bool *unhandled) {
   // ****************************************************************************
 
   // ****************************************************************************
-  // Has in[n] changed?
-  std::map<SgNode *, std::vector<SgInitializedName *>>::const_iterator it_in =
-      in.find(sgNode);
-  if (it_in != in.end() && inOLD.size() > 0) {
-    // compare the oldIN and the newIN and see if in[n] has changed
-    bool equal = false;
-
-    if (in[sgNode].size() == inOLD.size()) {
-      equal = std::equal(in[sgNode].begin(), in[sgNode].end(), inOLD.begin());
-    }
-    if (!equal)
-      has_changed = true;
-  }
+  const bool has_changed = in[sgNode] != inOLD;
 
   // ****************************************************************************
 
@@ -481,39 +349,24 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
   abort = false;
   counter = 0;
   nrOfNodesVisitedPF = 0;
-  breakPointForWhileNode = NULL;
-  breakPointForWhile = 0;
-  ;
-  // clear those maps for each function run
   doNotVisitMap.clear();
-  nodeChangedMap.clear();
 
-  string funcName = getFullName(funcDecl);
-  //  DEBUG_MODE = false;
-  DEBUG_MODE_EXTRA = false;
-
-  if (funcName == "") {
+  if (!shouldAnalyzeFunction(funcDecl)) {
     FilteredCFGNode<IsDFAFilter> empty(CFGNode(NULL, 0));
     return empty;
   }
-  ROSE_ASSERT(funcDecl);
 
   if (DEBUG_MODE)
-    cout << " Found function " << funcName << endl;
+    cout << " Found function "
+         << funcDecl->get_declaration()->get_qualified_name().getString()
+         << endl;
 
   // DFA on that function
   vector<FilteredCFGNode<IsDFAFilter>> worklist;
 
-  // waitAtMergeNode.clear();
-
-  forwardAlgo = false;
   // add this node to worklist and work through the outgoing edges
   FilteredCFGNode<IsDFAFilter> source =
       FilteredCFGNode<IsDFAFilter>(funcDecl->cfgForEnd());
-  if (forwardAlgo)
-    source = FilteredCFGNode<IsDFAFilter>(funcDecl->cfgForBeginning());
-
-  // CFGNode cmpSrc = CFGNode(funcDecl->cfgForEnd());
   FilteredCFGNode<IsDFAFilter> rem_source = source;
 
   if (DEBUG_MODE) {
@@ -526,35 +379,17 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
   vector<FilteredCFGNode<IsDFAFilter>> debug_path;
   debug_path.push_back(source);
 
-  // add all nodes to worklist -
-  if (forwardAlgo) {
-    vector<FilteredCFGNode<IsDFAFilter>> allNodesAfter;
-    getAllNodesBelow(source, allNodesAfter);
-    for (vector<FilteredCFGNode<IsDFAFilter>>::const_iterator i =
-             allNodesAfter.begin();
-         i != allNodesAfter.end(); ++i) {
-      FilteredCFGNode<IsDFAFilter> filterNode = *i;
-      if (find(worklist.begin(), worklist.end(), filterNode) ==
-          worklist.end()) {
-        worklist.push_back(filterNode);
-        debug_path.push_back(filterNode);
-      }
-    }
-  } else {
-    vector<FilteredCFGNode<IsDFAFilter>> allNodesBefore;
-    getAllNodesAbove(source, allNodesBefore);
-    for (vector<FilteredCFGNode<IsDFAFilter>>::const_iterator i =
-             allNodesBefore.begin();
-         i != allNodesBefore.end(); ++i) {
-      FilteredCFGNode<IsDFAFilter> filterNode = *i;
-      if (find(worklist.begin(), worklist.end(), filterNode) ==
-          worklist.end()) {
-        worklist.push_back(filterNode);
-        debug_path.push_back(filterNode);
-      }
+  vector<FilteredCFGNode<IsDFAFilter>> allNodesBefore;
+  getAllNodesAbove(source, allNodesBefore);
+  for (vector<FilteredCFGNode<IsDFAFilter>>::const_iterator i =
+           allNodesBefore.begin();
+       i != allNodesBefore.end(); ++i) {
+    FilteredCFGNode<IsDFAFilter> filterNode = *i;
+    if (find(worklist.begin(), worklist.end(), filterNode) == worklist.end()) {
+      worklist.push_back(filterNode);
+      debug_path.push_back(filterNode);
     }
   }
-  // cerr << "   . Total nodes to check : " << worklist.size() << endl;
   bool valueHasChanged = false;
   bool unhandledNode = false;
   while (!worklist.empty()) {
@@ -566,11 +401,6 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
     if (doNotVisitMap.find(next) != doNotVisitMap.end())
       continue;
     valueHasChanged = defuse(source, &unhandledNode);
-    //    cerr << " First run : " << next->class_name() << "  changed: " <<
-    //  valueHasChanged << "  unhandled: " << unhandledNode << endl;
-    nodeChangedMap[source.getNode()] = valueHasChanged;
-    // do follow-up nodes
-    // get nodes of outgoing edges and pushback (if not already contained)
     if (DEBUG_MODE) {
       cout << " Current Node: " << source.getNode() << " "
            << source.getNode()->class_name()
@@ -579,19 +409,12 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
            << " unhandled: " << resBool(unhandledNode) << endl;
     }
     if (valueHasChanged || unhandledNode) {
-      vector<FilteredCFGEdge<IsDFAFilter>> in_edges;
-      if (forwardAlgo)
-        in_edges = source.inEdges();
-      else
-        // default :
-        in_edges = source.outEdges();
+      vector<FilteredCFGEdge<IsDFAFilter>> in_edges = source.inEdges();
       for (vector<FilteredCFGEdge<IsDFAFilter>>::const_iterator i =
                in_edges.begin();
            i != in_edges.end(); ++i) {
         FilteredCFGEdge<IsDFAFilter> filterEdge = *i;
-        FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.target();
-        if (forwardAlgo)
-          filterNode = filterEdge.source();
+        FilteredCFGNode<IsDFAFilter> filterNode = filterEdge.source();
         if (find(worklist.begin(), worklist.end(), filterNode) ==
             worklist.end()) {
           worklist.push_back(filterNode);
@@ -604,9 +427,6 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
     }
 
     counter++;
-    // Liao 1/27/2010
-    // Increase the upper limit to handle larger input
-    // if (counter == 4000)
     if (counter == 80000)
       abort = true;
 
@@ -615,26 +435,19 @@ LivenessAnalysis::run(SgFunctionDefinition *funcDecl, bool &abortme) {
               "INFINITE EXECUTION ... \n\n"
            << endl;
       worklist.clear();
-      // need to fix this, apperently some cases run indefinetly
       abortme = true;
     }
   }
   nrOfNodesVisitedPF = debug_path.size();
 
   if (DEBUG_MODE) {
-    cout << " Exiting function " << funcName << endl;
+    cout << " Exiting function "
+         << funcDecl->get_declaration()->get_qualified_name().getString()
+         << endl;
     cout << "\nNr of nodes visited " << debug_path.size()
          << "  of nodes : " << endl;
     printCFGVector(debug_path);
   }
-
-  // ---------------------------------------------------------------
-  // algorithm to interate over all CFG and propagate IN and OUT
-  // information from all non-statements to statements (move up in AST)
-  // ---------------------------------------------------------------
-
-  // we should traverse the AST in bottom up order and collect information
-  // for in and out until we reach a statement
 
   return rem_source;
 }
@@ -652,66 +465,9 @@ void LivenessAnalysis::fixupStatementsINOUT(SgFunctionDefinition *funcDecl) {
   bottomUpOUT.traverse(root);
 }
 
-// DQ (6/25/2011): Moved function definition to source file (function
-// definitions should not be in the header files). std::string
-// getAppName(SgFunctionDeclaration* functionDeclaration) {
-std::string Support::getAppName(SgFunctionDeclaration *functionDeclaration) {
-  std::string nodeNameApp = "";
-  std::vector<SgNode *> children = functionDeclaration->get_parameterList()
-                                       ->get_traversalSuccessorContainer();
-  for (unsigned int i = 0; i < children.size(); i++) {
-    SgInitializedName *initName = (SgInitializedName *)children[i];
-    SgType *parameterType = initName->get_type();
-    SgSourceFile *sourceFile =
-        SageInterface::getEnclosingSourceFile(functionDeclaration);
-    SgScopeStatement *scope = SageInterface::getScope(functionDeclaration);
-    if (parameterType == nullptr || sourceFile == nullptr || scope == nullptr ||
-        initName->get_parent() != functionDeclaration->get_parameterList() ||
-        initName->get_declptr() != functionDeclaration) {
-      fprintf(stderr,
-              "REX_DEFUSE_INVARIANT[application-parameter-context]: "
-              "function=%p name=%s parameter=%p has no exact type, source "
-              "file, semantic scope, or declaration ownership\n",
-              static_cast<void *>(functionDeclaration),
-              functionDeclaration->get_name().str(),
-              static_cast<void *>(initName));
-      ROSE_ABORT();
-    }
-    SgUnparse_Info typeInfo;
-    typeInfo.set_current_source_file(sourceFile);
-    typeInfo.set_current_scope(scope);
-    typeInfo.set_template_argument_qualification_context(functionDeclaration);
-    typeInfo.set_reference_node_for_qualification(initName);
-    nodeNameApp += parameterType->unparseToString(&typeInfo);
-    if (i != (children.size() - 1))
-      nodeNameApp = nodeNameApp + ", ";
-    // yed can not handle & signs.. replacing
-    while (nodeNameApp.find("&") != std::string::npos) {
-      int pos = nodeNameApp.find("&");
-      nodeNameApp.replace(pos, 1, "?");
-    }
-  }
-  std::string retVal =
-      "(" + nodeNameApp + ")"; //+"-"+NodeToString(functionDeclaration);
-  return retVal;
-}
-
-// DQ (6/25/2011): Moved function definition to source file (function
-// definitions should not be in the header files). std::string
-// getFullName(SgFunctionDefinition* functionDef);
-std::string Support::getFullName(SgFunctionDefinition *functionDef) {
+bool Support::shouldAnalyzeFunction(SgFunctionDefinition *functionDef) {
+  ROSE_ASSERT(functionDef != nullptr);
   SgFunctionDeclaration *functionDeclaration = functionDef->get_declaration();
-  ::std::string fullName = functionDeclaration->get_qualified_name().str();
-
-  if ((fullName.find("std::") != std::string::npos) ||
-      (fullName.find("__") != std::string::npos) ||
-      (fullName.find("operator") != std::string::npos))
-    return ""; // Explicitly ignore all nodes in the ::std namespace
-
-  std::string filename =
-      getFileNameString(functionDeclaration->get_file_info()->get_filename());
-  if ((filename.find("/usr/") != std::string::npos))
-    return ""; // Explicitly ignore all nodes in the ::std namespace
-  fullName = fullName + getAppName(functionDeclaration);
-  return fullName;
+  ROSE_ASSERT(functionDeclaration != nullptr);
+  return !SageInterface::insideSystemHeader(functionDeclaration);
 }

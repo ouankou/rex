@@ -5,13 +5,9 @@
 
 using namespace Rose;
 
-// documented in header file
-size_t checkPhysicalSourcePosition(SgNode *ast) {
-  struct T1 : public AstSimpleProcessing {
-    size_t nviolations;
-    T1() : nviolations(0) {}
-
-    void visit(SgNode *node) {
+void checkPhysicalSourcePosition(SgNode *ast) {
+  struct Validator : public AstSimpleProcessing {
+    void visit(SgNode *node) override {
       SgLocatedNode *located = isSgLocatedNode(node);
       if (located) {
         Sg_File_Info *primary = located->get_file_info();
@@ -64,43 +60,41 @@ size_t checkPhysicalSourcePosition(SgNode *ast) {
     }
 
     void check(SgNode *node, Sg_File_Info *finfo) {
-      if (finfo != NULL) {
-        if (finfo->get_raw_physical_file_id() >= 0) {
-          if (finfo->isFrontendSpecific()) {
-            if (SageInterface::hasExactSemanticFrontendSourcePosition(node,
-                                                                      finfo)) {
-              return;
-            }
-            fprintf(stderr,
-                    "REX_AST_INVARIANT[physical-source-position]: node=%p/%s "
-                    "file-info=%p claims both frontend-semantic and physical "
-                    "source ownership\n",
-                    static_cast<void *>(node),
-                    node != nullptr ? node->class_name().c_str() : "<null>",
-                    static_cast<void *>(finfo));
-            ROSE_ABORT();
+      const int physical_file_id = finfo->get_physical_file_id();
+      if (physical_file_id >= 0) {
+        if (finfo->isFrontendSpecific()) {
+          if (SageInterface::hasExactSemanticFrontendSourcePosition(node,
+                                                                    finfo)) {
+            return;
           }
-          return;
-        }
-        if (finfo->isTransformation() || finfo->isCompilerGenerated() ||
-            finfo->isFrontendSpecific() ||
-            finfo->isSourcePositionUnavailableInFrontend()) {
-          return;
-        }
-        if (finfo->get_file_id() >= 0 && finfo->get_physical_file_id() < 0) {
-          SgNode *parent = finfo->get_parent();
-          ROSE_ASSERT(parent != NULL);
-          printf("Detected inconsistant physical source position information: "
-                 "%p parent = %p = %s \n",
-                 finfo, parent, parent->class_name().c_str());
-          finfo->display("checkPhysicalSourcePosition()");
-
+          fprintf(stderr,
+                  "REX_AST_INVARIANT[physical-source-position]: node=%p/%s "
+                  "file-info=%p claims both frontend-semantic and physical "
+                  "source ownership\n",
+                  static_cast<void *>(node),
+                  node != nullptr ? node->class_name().c_str() : "<null>",
+                  static_cast<void *>(finfo));
           ROSE_ABORT();
         }
+        return;
+      }
+      if (finfo->isTransformation() || finfo->isCompilerGenerated() ||
+          finfo->isFrontendSpecific() ||
+          finfo->isSourcePositionUnavailableInFrontend()) {
+        return;
+      }
+      if (finfo->get_file_id() >= 0) {
+        SgNode *parent = finfo->get_parent();
+        ROSE_ASSERT(parent != NULL);
+        printf("Detected inconsistant physical source position information: "
+               "%p parent = %p = %s \n",
+               finfo, parent, parent->class_name().c_str());
+        finfo->display("checkPhysicalSourcePosition()");
+
+        ROSE_ABORT();
       }
     }
-  } t1;
+  } validator;
 
-  t1.traverse(ast, preorder);
-  return t1.nviolations;
+  validator.traverse(ast, preorder);
 }

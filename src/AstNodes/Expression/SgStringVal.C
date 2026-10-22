@@ -1,6 +1,159 @@
 #include "sage3basic.h"
 
 #include <cctype>
+#include <iomanip>
+#include <limits>
+#include <sstream>
+
+namespace {
+std::string escapedCxxCharacter(uint32_t value) {
+  switch (value) {
+  case '\0':
+    return "\\0";
+  case '\a':
+    return "\\a";
+  case '\b':
+    return "\\b";
+  case '\f':
+    return "\\f";
+  case '\n':
+    return "\\n";
+  case '\r':
+    return "\\r";
+  case '\t':
+    return "\\t";
+  case '\v':
+    return "\\v";
+  case '\\':
+    return "\\\\";
+  case '"':
+    return "\\\"";
+  default:
+    return {};
+  }
+}
+static std::string escapeOrdinaryStringLiteralContentsForUnparse(
+    const SgStringCodeUnitList &contents) {
+  std::string escaped;
+  escaped.reserve(contents.size());
+  bool last_hex_escape = false;
+
+  for (uint32_t ch : contents) {
+    switch (ch) {
+    case '\\':
+      escaped.append("\\\\");
+      last_hex_escape = false;
+      break;
+    case '\n':
+      escaped.append("\\n");
+      last_hex_escape = false;
+      break;
+    case '\r':
+      escaped.append("\\r");
+      last_hex_escape = false;
+      break;
+    case '"':
+      escaped.append("\\\"");
+      last_hex_escape = false;
+      break;
+    default:
+      if (!(ch >= 0x20 && ch <= 0x7e) ||
+          (last_hex_escape && std::isxdigit(ch))) {
+        std::stringstream escape;
+        escape << "\\x" << std::uppercase << std::hex << std::setw(2)
+               << std::setfill('0') << static_cast<unsigned>(ch);
+        escaped.append(escape.str());
+        last_hex_escape = true;
+      } else {
+        escaped.push_back(static_cast<char>(ch));
+        last_hex_escape = false;
+      }
+      break;
+    }
+  }
+
+  return escaped;
+}
+
+static void appendUnicodeEscape(std::string &escaped, uint32_t code_point) {
+  std::stringstream escape;
+  escape << std::uppercase << std::hex << std::setfill('0');
+  if (code_point <= 0xFFFF) {
+    escape << "\\u" << std::setw(4) << code_point;
+  } else {
+    escape << "\\U" << std::setw(8) << code_point;
+  }
+  escaped.append(escape.str());
+}
+
+static void appendHexEscape(std::string &escaped, uint32_t code_unit) {
+  std::stringstream escape;
+  escape << "\\x" << std::uppercase << std::hex << code_unit;
+  escaped.append(escape.str());
+}
+
+static void appendOctalEscape(std::string &escaped, uint32_t code_unit) {
+  ROSE_ASSERT(code_unit <= 0xFF);
+  std::stringstream escape;
+  escape << '\\' << std::setfill('0') << std::setw(3) << std::oct << code_unit;
+  escaped.append(escape.str());
+}
+
+static std::string escapeWideStringLiteralCodeUnitsForUnparse(
+    const SgStringCodeUnitList &code_units, bool is_wide, bool is_utf16) {
+  std::string escaped;
+  bool last_hex_escape = false;
+
+  for (size_t ii = 0; ii < code_units.size(); ++ii) {
+    uint32_t content_val = code_units[ii];
+
+    if (is_utf16 && content_val >= 0xD800 && content_val <= 0xDBFF &&
+        ii + 1 < code_units.size()) {
+      uint32_t low_surrogate = code_units[ii + 1];
+      if (low_surrogate >= 0xDC00 && low_surrogate <= 0xDFFF) {
+        content_val =
+            0x10000 + (((content_val & 0x3FF) << 10) | (low_surrogate & 0x3FF));
+        ++ii;
+      }
+    }
+
+    if ((content_val >= 0xD800 && content_val <= 0xDFFF) ||
+        content_val > 0x10FFFF) {
+      appendHexEscape(escaped, content_val);
+      last_hex_escape = true;
+    } else if (!is_wide && content_val > 0xFF) {
+      appendUnicodeEscape(escaped, content_val);
+      last_hex_escape = false;
+      continue;
+    } else if (content_val == 0 && last_hex_escape) {
+      appendOctalEscape(escaped, content_val);
+      last_hex_escape = false;
+      continue;
+    } else if (auto mapped = escapedCxxCharacter(content_val);
+               !mapped.empty()) {
+      escaped.append(mapped);
+      last_hex_escape = false;
+      continue;
+    } else if (content_val > 0xFF ||
+               (last_hex_escape && content_val <= 0xFF &&
+                std::isxdigit(static_cast<unsigned char>(content_val)))) {
+      appendHexEscape(escaped, content_val);
+      last_hex_escape = true;
+    } else if (!(content_val >= 0x20 && content_val <= 0x7e)) {
+      appendOctalEscape(escaped, content_val);
+      last_hex_escape = false;
+      continue;
+    } else {
+      escaped.push_back(static_cast<char>(content_val));
+      last_hex_escape = false;
+      continue;
+    }
+  }
+
+  return escaped;
+}
+
+} // namespace
 
 SgType *SgStringVal::get_type(void) const {
   if (get_cxx_unevaluated()) {
@@ -84,9 +237,72 @@ SgType *SgStringVal::get_type(void) const {
   return literalType;
 }
 
-void SgStringVal::post_construction_initialization() {
-  // We can't initialize this to NULL since it might have just been set!
-  // p_value = (char*)0L;
+void SgStringVal::post_construction_initialization() {}
+
+const SgStringCodeUnitList &SgStringVal::get_value() const { return p_value; }
+
+SgStringCodeUnitList
+SgStringVal::code_units_from_bytes(const std::string &bytes) {
+  SgStringCodeUnitList result;
+  result.reserve(bytes.size());
+  for (unsigned char byte : bytes)
+    result.push_back(byte);
+  return result;
+}
+
+std::string SgStringVal::get_byte_value() const {
+  std::string result;
+  result.reserve(p_value.size());
+  for (uint32_t unit : p_value) {
+    if (unit > 0xff) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[string-byte-value]: code unit=%u cannot "
+              "be represented as one byte\n",
+              unit);
+      ROSE_ABORT();
+    }
+    result.push_back(static_cast<char>(unit));
+  }
+  return result;
+}
+
+void SgStringVal::set_value(const SgStringCodeUnitList &value) {
+  if (value.size() != p_value.size() && get_literal_type() != nullptr) {
+    ROSE_ASSERT(value.size() <
+                static_cast<size_t>(std::numeric_limits<int>::max()));
+    SgType *type = get_type()->stripTypedefsAndModifiers();
+    const bool cxx = get_stringDelimiter() == 0;
+    SgIntVal *length = SageBuilder::buildIntVal_nfi(
+        static_cast<int>(value.size() + (cxx ? 1 : 0)), "");
+    SageBuilder::initializeSemanticExpressionSourceProvenance(length);
+    if (cxx) {
+      auto *array = isSgArrayType(type);
+      ROSE_ASSERT(array != nullptr);
+      set_literal_type(
+          SageBuilder::buildArrayType(array->get_base_type(), length));
+    } else {
+      auto *string = isSgTypeString(type);
+      ROSE_ASSERT(string != nullptr);
+      SgExpression *kind = string->get_type_kind();
+      set_literal_type(SgTypeString::createType(
+          length,
+          kind != nullptr ? SageInterface::copyExpression(kind) : nullptr));
+    }
+  }
+  p_value = value;
+  p_isRawString = false;
+  p_raw_string_delimiter.clear();
+  p_raw_string_payload.clear();
+  markAsModified();
+}
+
+std::string SgStringVal::get_cxx_literal_contents() const {
+  validate_cxx_literal_state();
+  const bool wide = get_literal_encoding() == e_string_encoding_wide;
+  const bool utf16 = get_literal_encoding() == e_string_encoding_utf16;
+  if (wide || utf16 || get_literal_encoding() == e_string_encoding_utf32)
+    return escapeWideStringLiteralCodeUnitsForUnparse(p_value, wide, utf16);
+  return escapeOrdinaryStringLiteralContentsForUnparse(p_value);
 }
 
 void SgStringVal::set_usesSingleQuotes(bool usesSingleQuotes) {
@@ -128,6 +344,22 @@ void SgStringVal::validate_cxx_literal_state() const {
             "carries a Fortran delimiter=%d\n",
             static_cast<int>(get_stringDelimiter()));
     ROSE_ABORT();
+  }
+
+  const uint32_t maximum =
+      get_literal_encoding() == e_string_encoding_ordinary ||
+              get_literal_encoding() == e_string_encoding_utf8
+          ? 0xffu
+      : get_literal_encoding() == e_string_encoding_utf16 ? 0xffffu
+                                                          : 0xffffffffu;
+  for (uint32_t unit : p_value) {
+    if (unit > maximum) {
+      fprintf(
+          stderr,
+          "REX_AST_INVARIANT[string-code-unit]: value=%u exceeds encoding=%d\n",
+          unit, static_cast<int>(get_literal_encoding()));
+      ROSE_ABORT();
+    }
   }
 
   if (!get_isRawString()) {
@@ -197,5 +429,5 @@ std::string SgStringVal::get_cxx_literal_spelling() const {
     return prefix + "R\"" + delimiter + "(" + get_raw_string_payload() + ")" +
            delimiter + "\"";
   }
-  return prefix + "\"" + get_value() + "\"";
+  return prefix + "\"" + get_cxx_literal_contents() + "\"";
 }

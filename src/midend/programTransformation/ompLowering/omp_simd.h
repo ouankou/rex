@@ -20,20 +20,13 @@ enum OpType {
   Gather,
   ExplicitGather,
   Scatter,
-  ScalarStore,
   Store,
-  HAdd,
   Add,
   Sub,
   Mul,
-  Div,
-  Extract
+  Div
 };
 
-//
-// A class to hold SIMD operations
-// The goal is to eventually migrate the SIMD compiler to this
-//
 struct OmpSimdCompiler {
 
 public:
@@ -47,7 +40,6 @@ public:
   void omp_simd_pass2();
 
   void omp_simd_build_3addr(SgExpression *rval, SgType *type);
-  char omp_simd_get_reduction_mod(SgVarRefExp *var);
   void omp_simd_build_math(VariantT op_type, SgType *type);
   void omp_simd_build_scalar_assign(SgExpression *node, SgType *type);
   void omp_simd_build_ptr_assign(SgExpression *pntr_exp, SgType *type);
@@ -57,13 +49,26 @@ public:
 
   // Helper functions
   SgBasicBlock *releaseBlock();
+  void finishScalarLowering();
   Rose_STL_Container<SgNode *> *getIR();
   void setTarget(SgOmpSimdStatement *target);
   void setForLoop(SgForStatement *for_loop);
   void setInductionSymbol(SgVariableSymbol *symbol);
+  bool isGeneratedTemporary(SgVariableSymbol *symbol) const;
+  bool isPartialTemporary(SgVariableSymbol *symbol) const;
+  bool isProductReduction(SgVariableSymbol *symbol) const;
 
 private:
-  std::string simdGenName(int type = 0);
+  enum class TemporaryKind { Vector, Pointer, Partial };
+  struct Reduction {
+    SgVariableSymbol *source;
+    SgVariableSymbol *partial;
+    SgOmpClause::omp_reduction_identifier_enum operation;
+  };
+  void prepareReductions();
+  SgVariableSymbol *buildTemporary(SgType *type, TemporaryKind kind,
+                                   SgInitializer *initializer = nullptr);
+  bool isTemporary(SgVariableSymbol *symbol, TemporaryKind kind) const;
 
   SgBasicBlock *new_block = nullptr;
   SgBasicBlock *new_block_owner = nullptr;
@@ -75,9 +80,10 @@ private:
   std::optional<unsigned int> simdlen_;
   std::optional<unsigned int> safelen_;
   unsigned int next_name_id_ = 0;
-  std::map<std::string, std::string> reduction_map_;
+  std::map<SgInitializedName *, Reduction> reduction_map_;
+  std::map<SgInitializedName *, TemporaryKind> temporary_kinds_;
 
-  std::stack<std::string> nameStack;
+  std::stack<SgVariableSymbol *> value_stack_;
 };
 
 //
@@ -88,6 +94,8 @@ extern SimdType simd_arch;
 
 void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
                           Rose_STL_Container<SgNode *> *ir_block,
-                          unsigned int simd_length);
+                          unsigned int simd_length,
+                          const OmpSimdCompiler &compiler);
 void omp_simd_write_arm(SgOmpSimdStatement *target, SgForStatement *for_loop,
-                        Rose_STL_Container<SgNode *> *ir_block);
+                        Rose_STL_Container<SgNode *> *ir_block,
+                        const OmpSimdCompiler &compiler);

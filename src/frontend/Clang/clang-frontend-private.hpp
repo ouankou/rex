@@ -7,13 +7,13 @@
 #include "clang-frontend.hpp"
 #include "clang-source-qualification.hpp"
 
-#include "AstAttributeMechanism.h"
 #include "Cxx_Grammar.h"
 #include "OpenACCParser.h"
 #include "OpenMPIR.h"
 #include "astPostProcessing.h"
 #include "ompAstConstruction.h"
 #include "sageBuilder.h"
+#include "sageInterface.h"
 #include "tokenStreamMapping.h"
 
 #include <clang/AST/ASTContext.h>
@@ -23,6 +23,7 @@
 #include <clang/AST/ParentMapContext.h>
 #include <clang/AST/PrettyPrinter.h>
 #include <clang/AST/Type.h>
+#include <clang/Basic/CharInfo.h>
 #include <clang/Sema/Lookup.h>
 #include <clang/Sema/Sema.h>
 
@@ -45,12 +46,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+#include <variant>
 #include <vector>
-
-#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
-#include <valgrind/memcheck.h>
-#include <valgrind/valgrind.h>
-#endif
 
 namespace clang {
 class CompilerInstance;
@@ -59,7 +56,11 @@ class Parser;
 
 class SagePreprocessorRecord;
 
-bool clangDeclHasBuiltinAttrDefinedForFrontend(const clang::Decl *decl);
+void copyClangFunctionArgumentTypes(const SgFunctionType *source,
+                                    SgFunctionParameterTypeList *destination,
+                                    const char *context);
+
+bool clangDeclHasBuiltinAttr(const clang::Decl *decl);
 bool clangFunctionDeclIsBuiltinSupportForFrontend(
     const clang::FunctionDecl *decl, const clang::CompilerInstance *ci,
     const SagePreprocessorRecord *preprocessor_record);
@@ -196,64 +197,31 @@ requireClangOrderedDeclarationProvenanceForFrontend(
   ROSE_ABORT();
 }
 
-void markClangAstStorageRangeDefinedForFrontend(const void *address,
-                                                std::size_t size);
-enum class ClangFrontendValgrindPublicationKind {
-  DeclNamedDeclaration,
-  DeclFunctionTypeBoundary,
-  DeclRecordTemplateState,
-  DeclClassTemplateState,
-  DeclTemplateArgumentType,
-  DeclClassTemplateSpecializationState,
-  TypeNamedDeclaration,
-  TypeRecordTemplateState,
-  TypeClassTemplateState,
-  TypeClassTemplateSpecializationState,
-  TypePrinting,
-  Count
-};
-void beginClangFrontendValgrindPublicationSession();
-void endClangFrontendValgrindPublicationSession();
-bool markClangFrontendValgrindPublicationOnce(
-    ClangFrontendValgrindPublicationKind kind, const void *address);
-void markClangQualTypeForPrintingDefinedForFrontend(clang::QualType type);
-void markClangNamedDeclNameForPrintingDefinedForFrontend(
-    const clang::NamedDecl *decl);
 void mark_compiler_generated_frontend_specific(SgNode *node);
-struct ClangTemplateParameterIdentity {
-  std::string name;
-  clang::NamedDecl *declaration = nullptr;
+using ClangTemplateParameterMap =
+    std::map<std::pair<unsigned, unsigned>, clang::NamedDecl *>;
 
-  bool operator==(const ClangTemplateParameterIdentity &other) const {
-    return name == other.name && declaration == other.declaration;
-  }
-
-  bool operator<(const ClangTemplateParameterIdentity &other) const {
-    return std::tie(name, declaration) <
-           std::tie(other.name, other.declaration);
-  }
-};
-using ClangTemplateParameterNameMap =
-    std::map<std::pair<unsigned, unsigned>, ClangTemplateParameterIdentity>;
-
-class ClangTemplateParameterNameContextStack {
+class ClangTemplateParameterContextStack {
 public:
-  using container_type = std::vector<ClangTemplateParameterNameMap>;
+  using container_type = std::vector<ClangTemplateParameterMap>;
   using reverse_iterator = container_type::reverse_iterator;
   using const_reverse_iterator = container_type::const_reverse_iterator;
 
   bool empty() const { return contexts_.empty(); }
   std::size_t size() const { return contexts_.size(); }
 
-  ClangTemplateParameterNameMap &back() { return contexts_.back(); }
-  const ClangTemplateParameterNameMap &back() const { return contexts_.back(); }
+  ClangTemplateParameterMap &back() { return contexts_.back(); }
+  const ClangTemplateParameterMap &back() const { return contexts_.back(); }
 
   reverse_iterator rbegin() { return contexts_.rbegin(); }
   reverse_iterator rend() { return contexts_.rend(); }
   const_reverse_iterator rbegin() const { return contexts_.rbegin(); }
   const_reverse_iterator rend() const { return contexts_.rend(); }
 
-  void push_back(ClangTemplateParameterNameMap context) {
+  void push_back(ClangTemplateParameterMap context) {
+    for (const auto &[coordinate, declaration] : context) {
+      ASSERT_not_null(declaration);
+    }
     if (next_context_id_ == std::numeric_limits<std::uint64_t>::max()) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[template-name-context]: exhausted "
@@ -541,24 +509,21 @@ private:
 std::string buildClangTemplateInstantiationNameForFrontend(
     const std::string &baseName,
     llvm::ArrayRef<clang::TemplateArgument> templateArguments,
-    const clang::LangOptions &languageOptions,
-    const clang::DeclContext *templateParameterContext,
-    const ClangTemplateParameterNameMap *exactWrittenParameterNames = nullptr);
-std::string buildClangCurrentInstantiationNameForFrontend(
-    const std::string &baseName,
-    const clang::TemplateParameterList &templateParameters);
+    const clang::LangOptions &languageOptions);
 
 struct ClangTemplateInstantiationCacheKey {
-  std::string template_name;
+  const clang::TemplateDecl *primary_template = nullptr;
   const clang::DeclContext *semantic_owner = nullptr;
+  const SgType *aliased_type = nullptr;
   std::vector<clang::TemplateArgument> arguments;
   std::size_t profile_hash = 0;
 
-  bool empty() const { return template_name.empty(); }
+  bool empty() const { return primary_template == nullptr; }
 
   bool operator==(const ClangTemplateInstantiationCacheKey &other) const {
-    if (template_name != other.template_name ||
+    if (primary_template != other.primary_template ||
         semantic_owner != other.semantic_owner ||
+        aliased_type != other.aliased_type ||
         arguments.size() != other.arguments.size()) {
       return false;
     }
@@ -627,192 +592,25 @@ constructorInitializerAssociatedClassUnknown(SgType *expression_type) {
   return true;
 }
 
-inline bool
-isImplicitAutoPlaceholderTemplateParamName(const std::string &name) {
-  if (name.size() >= 5 && name.compare(name.size() - 5, 5, ":auto") == 0) {
-    return true;
-  }
-  if (name.rfind("auto:", 0) == 0 && name.size() > 5) {
-    for (size_t i = 5; i < name.size(); ++i) {
-      if (!std::isdigit(static_cast<unsigned char>(name[i]))) {
-        return false;
-      }
-    }
-    return true;
-  }
-  return false;
-}
-
-inline bool isClangSyntheticTemplateParamName(const std::string &name) {
-  auto is_synthetic_with_prefix = [&](const std::string &prefix,
-                                      char separator) -> bool {
-    if (name.rfind(prefix, 0) != 0) {
-      return false;
-    }
-    std::string suffix = name.substr(prefix.size());
-    if (suffix.empty()) {
-      return true;
-    }
-    for (char c : suffix) {
-      if (!(std::isdigit(static_cast<unsigned char>(c)) || c == separator)) {
-        return false;
-      }
-    }
-    return true;
-  };
-
-  return is_synthetic_with_prefix("type-parameter-", '-') ||
-         is_synthetic_with_prefix("value-parameter-", '-') ||
-         is_synthetic_with_prefix("template-parameter-", '-') ||
-         is_synthetic_with_prefix("type_parameter_", '_') ||
-         is_synthetic_with_prefix("value_parameter_", '_') ||
-         is_synthetic_with_prefix("template_parameter_", '_') ||
-         is_synthetic_with_prefix("template_type_param_", '_');
-}
-
-inline std::string normalizeClangTemplateParamName(std::string name) {
-  if (isImplicitAutoPlaceholderTemplateParamName(name)) {
-    std::replace(name.begin(), name.end(), ':', '_');
-    return name;
-  }
-  if (isClangSyntheticTemplateParamName(name)) {
-    std::replace(name.begin(), name.end(), '-', '_');
-  }
-  return name;
-}
-
-inline bool parseTemplateParamDepthAndIndex(const std::string &name,
-                                            unsigned *depth, unsigned *index) {
-  if (depth == nullptr || index == nullptr) {
-    return false;
-  }
-
-  auto parse_decimal_unsigned = [](const std::string &text,
-                                   unsigned *value) -> bool {
-    if (value == nullptr || text.empty()) {
-      return false;
-    }
-
-    unsigned parsed = 0;
-    constexpr unsigned kMaxUnsigned = std::numeric_limits<unsigned>::max();
-    for (char c : text) {
-      if (!std::isdigit(static_cast<unsigned char>(c))) {
-        return false;
-      }
-      unsigned digit = static_cast<unsigned>(c - '0');
-      if (parsed > (kMaxUnsigned - digit) / 10) {
-        return false;
-      }
-      parsed = parsed * 10 + digit;
-    }
-
-    *value = parsed;
-    return true;
-  };
-
-  auto parse_with_prefix = [&](const std::string &prefix,
-                               char separator) -> bool {
-    if (name.rfind(prefix, 0) != 0) {
-      return false;
-    }
-    std::string tail = name.substr(prefix.size());
-    if (tail.empty()) {
-      return false;
-    }
-    size_t sep_pos = tail.find(separator);
-    if (sep_pos == std::string::npos) {
-      return false;
-    }
-    std::string depth_text = tail.substr(0, sep_pos);
-    std::string index_text = tail.substr(sep_pos + 1);
-    if (depth_text.empty() || index_text.empty()) {
-      return false;
-    }
-    return parse_decimal_unsigned(depth_text, depth) &&
-           parse_decimal_unsigned(index_text, index);
-  };
-
-  return parse_with_prefix("type-parameter-", '-') ||
-         parse_with_prefix("value-parameter-", '-') ||
-         parse_with_prefix("template-parameter-", '-') ||
-         parse_with_prefix("type_parameter_", '_') ||
-         parse_with_prefix("value_parameter_", '_') ||
-         parse_with_prefix("template_parameter_", '_') ||
-         parse_with_prefix("template_type_param_", '_');
-}
-
-inline std::string trimClangFrontendString(std::string text) {
-  auto is_space = [](unsigned char ch) { return std::isspace(ch); };
-  text.erase(text.begin(),
-             std::find_if(text.begin(), text.end(),
-                          [&](unsigned char ch) { return !is_space(ch); }));
-  text.erase(std::find_if(text.rbegin(), text.rend(),
-                          [&](unsigned char ch) { return !is_space(ch); })
-                 .base(),
-             text.end());
-  return text;
-}
-
 inline std::string
-clangQualTypeAsStringDefinedForFrontend(clang::QualType type,
-                                        const clang::PrintingPolicy &policy) {
-#if defined(ROSE_USE_VALGRIND) && ROSE_USE_VALGRIND
-  if (RUNNING_ON_VALGRIND) {
-    VALGRIND_MAKE_MEM_DEFINED(&type, sizeof(type));
-    if (const clang::Type *type_ptr = type.getTypePtrOrNull()) {
-      VALGRIND_MAKE_MEM_DEFINED(const_cast<clang::Type *>(type_ptr),
-                                sizeof(*type_ptr));
-    }
-    VALGRIND_DISABLE_ERROR_REPORTING;
-    std::string result = type.getAsString(policy);
-    VALGRIND_ENABLE_ERROR_REPORTING;
-    VALGRIND_MAKE_MEM_DEFINED(&result, sizeof(result));
-    if (!result.empty()) {
-      VALGRIND_MAKE_MEM_DEFINED(result.data(), result.size());
-    }
-    return result;
+clangTemplateParameterSpelling(const clang::NamedDecl *parameter) {
+  ASSERT_not_null(parameter);
+  if (const auto *type_parameter =
+          llvm::dyn_cast<clang::TemplateTypeParmDecl>(parameter);
+      type_parameter != nullptr && type_parameter->isImplicit()) {
+    // Clang invents implicit type parameters for auto function parameters.
+    // They have typed identity and no source-written template identifier.
+    return {};
   }
-#endif
-  return type.getAsString(policy);
-}
-
-inline std::string clangQualTypeAsStringDefinedForFrontend(
-    clang::QualType type, const clang::LangOptions &language_options) {
-  return clangQualTypeAsStringDefinedForFrontend(
-      type, clang::PrintingPolicy(language_options));
-}
-
-inline bool isConcreteClangQualType(clang::QualType type) {
-  const clang::Type *type_ptr = type.getTypePtrOrNull();
-  return type_ptr != nullptr && !type_ptr->isDependentType() &&
-         !type_ptr->isInstantiationDependentType();
+  return parameter->getNameAsString();
 }
 
 inline bool
 isInstantiatedConversionOperatorDecl(const clang::CXXConversionDecl *decl) {
-  if (decl == nullptr) {
-    return false;
-  }
-
-  return decl->getTemplateSpecializationArgs() != nullptr ||
-         decl->getTemplateInstantiationPattern() != nullptr ||
-         decl->getInstantiatedFromMemberFunction() != nullptr;
-}
-
-inline std::string
-concreteClangConversionTypeName(const clang::CXXConversionDecl *decl) {
-  if (decl == nullptr) {
-    return "";
-  }
-
-  clang::QualType conversion_type = decl->getConversionType();
-  if (!isConcreteClangQualType(conversion_type)) {
-    return "";
-  }
-
-  clang::PrintingPolicy policy(decl->getASTContext().getLangOpts());
-  return trimClangFrontendString(
-      clangQualTypeAsStringDefinedForFrontend(conversion_type, policy));
+  return decl != nullptr &&
+         (decl->getTemplateSpecializationArgs() != nullptr ||
+          decl->getTemplateInstantiationPattern() != nullptr ||
+          decl->getInstantiatedFromMemberFunction() != nullptr);
 }
 
 inline const SgTemplateParameterPtrList *
@@ -835,6 +633,9 @@ templateParametersForSageDeclarationShared(const SgDeclarationStatement *decl) {
   if (const SgTemplateVariableDeclaration *tmpl_var =
           isSgTemplateVariableDeclaration(decl)) {
     return &tmpl_var->get_templateParameters();
+  }
+  if (const auto *alias = isSgTemplateTypedefDeclaration(decl)) {
+    return &alias->get_templateParameters();
   }
   if (const SgTemplateDeclaration *tmpl_decl = isSgTemplateDeclaration(decl)) {
     return &tmpl_decl->get_templateParameters();
@@ -890,79 +691,6 @@ typedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
   return nullptr;
 }
 
-inline SgClassType *canonicalClassTypeForFirstSeenTracking(SgType *type) {
-  SgClassType *class_type = isSgClassType(type);
-  if (class_type == nullptr) {
-    return nullptr;
-  }
-
-  SgClassDeclaration *class_decl =
-      isSgClassDeclaration(class_type->get_declaration());
-  if (class_decl == nullptr) {
-    return class_type;
-  }
-
-  SgClassDeclaration *first_nondef =
-      isSgClassDeclaration(class_decl->get_firstNondefiningDeclaration());
-  if (first_nondef == nullptr) {
-    return class_type;
-  }
-
-  if (SgClassType *canonical_type = isSgClassType(first_nondef->get_type())) {
-    return canonical_type;
-  }
-
-  return class_type;
-}
-
-inline SgEnumType *canonicalEnumTypeForFirstSeenTracking(SgType *type) {
-  SgEnumType *enum_type = isSgEnumType(type);
-  if (enum_type == nullptr) {
-    return nullptr;
-  }
-
-  SgEnumDeclaration *enum_decl =
-      isSgEnumDeclaration(enum_type->get_declaration());
-  if (enum_decl == nullptr) {
-    return enum_type;
-  }
-
-  SgEnumDeclaration *first_nondef =
-      isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration());
-  if (first_nondef == nullptr) {
-    return enum_type;
-  }
-
-  if (SgEnumType *canonical_type = isSgEnumType(first_nondef->get_type())) {
-    return canonical_type;
-  }
-
-  return enum_type;
-}
-
-inline void rememberClassTypeFirstSeenState(
-    std::map<SgClassType *, bool> &class_type_first_seen_map, SgType *type,
-    bool first_see_in_type) {
-  if (SgClassType *class_type = canonicalClassTypeForFirstSeenTracking(type)) {
-    class_type_first_seen_map.insert(
-        std::make_pair(class_type, first_see_in_type));
-    if (first_see_in_type) {
-      if (SgNamedType *named_type = isSgNamedType(class_type)) {
-        named_type->set_autonomous_declaration(true);
-      }
-    }
-  }
-}
-
-inline void rememberEnumTypeFirstSeenState(
-    std::map<SgEnumType *, bool> &enum_type_first_seen_map, SgType *type,
-    bool first_see_in_type) {
-  if (SgEnumType *enum_type = canonicalEnumTypeForFirstSeenTracking(type)) {
-    enum_type_first_seen_map.insert(
-        std::make_pair(enum_type, first_see_in_type));
-  }
-}
-
 inline void
 validateTypedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
   if (typedef_decl == nullptr) {
@@ -982,86 +710,6 @@ validateTypedefDeclarationReferenceShared(SgTypedefDeclaration *typedef_decl) {
               << decl_ref->class_name() << ")\n";
     ROSE_ABORT();
   }
-}
-
-template <typename NameNormalizer>
-inline std::string
-templateParameterNameFromSageShared(const SgTemplateParameter *param,
-                                    NameNormalizer normalize_name) {
-  if (param == nullptr) {
-    return "";
-  }
-
-  if (const SgTemplateType *template_type =
-          isSgTemplateType(param->get_type())) {
-    std::string name = template_type->get_name().getString();
-    if (!name.empty()) {
-      return normalize_name(name);
-    }
-  }
-
-  if (const SgInitializedName *init_name = param->get_initializedName()) {
-    std::string name = init_name->get_name().getString();
-    if (!name.empty()) {
-      return normalize_name(name);
-    }
-  }
-
-  return "";
-}
-
-template <typename NameNormalizer>
-inline std::string
-resolveTemplateParameterNameFromSageScopeShared(SgScopeStatement *scope,
-                                                unsigned depth, unsigned index,
-                                                NameNormalizer normalize_name) {
-  if (scope == nullptr) {
-    return "";
-  }
-
-  std::vector<const SgTemplateParameterPtrList *> template_levels;
-  std::set<const SgDeclarationStatement *> visited_template_decls;
-
-  for (SgNode *node = scope; node != nullptr; node = node->get_parent()) {
-    const SgDeclarationStatement *decl = isSgDeclarationStatement(node);
-    if (decl == nullptr) {
-      if (const SgClassDefinition *class_def = isSgClassDefinition(node)) {
-        decl = class_def->get_declaration();
-      } else if (const SgTemplateClassDefinition *template_def =
-                     isSgTemplateClassDefinition(node)) {
-        decl = template_def->get_declaration();
-      } else if (const SgFunctionDefinition *function_def =
-                     isSgFunctionDefinition(node)) {
-        decl = function_def->get_declaration();
-      } else if (const SgDeclarationScope *decl_scope =
-                     isSgDeclarationScope(node)) {
-        decl = isSgDeclarationStatement(
-            SageBuilder::getDeclarationScopeOwner(decl_scope));
-      }
-    }
-
-    if (decl == nullptr || !visited_template_decls.insert(decl).second) {
-      continue;
-    }
-
-    if (const SgTemplateParameterPtrList *params =
-            templateParametersForSageDeclarationShared(decl)) {
-      template_levels.push_back(params);
-    }
-  }
-
-  std::reverse(template_levels.begin(), template_levels.end());
-
-  if (depth >= template_levels.size()) {
-    return "";
-  }
-
-  const SgTemplateParameterPtrList *params = template_levels[depth];
-  if (params == nullptr || index >= params->size()) {
-    return "";
-  }
-
-  return templateParameterNameFromSageShared((*params)[index], normalize_name);
 }
 
 struct ConstraintSatisfactionResult {
@@ -1199,100 +847,19 @@ struct SFINAEFailureResult {
 #include <llvm/TargetParser/Host.h>
 
 #include <llvm/TargetParser/Triple.h>
-// DQ (11/27/2020): Turn on/off the debugging information as we visit clang IR
-// nodes.
-#define DEBUG_VISITOR 0
-#define DEBUG_TRAVERSAL 0
-#define DEBUG_SOURCE_LOCATION 0
-#define DEBUG_SYMBOL_TABLE_LOOKUP 0
-#define DEBUG_ARGS 0
-#define DEBUG_TRAVERSE_DECL 0
-#define DEBUG_VISIT_STMT 0
-#define DEBUG_IMPLICIT_NODE 0
-#define DEBUG_IMPLICIT_NODE 0
-
-// Print visitor name when visiting a node inheritance hierarchy
-#ifdef DEBUG_VISITOR
-#ifndef DEBUG_VISIT_STMT
-#define DEBUG_VISIT_STMT DEBUG_VISITOR
-#endif
-#ifndef DEBUG_VISIT_DECL
-#define DEBUG_VISIT_DECL DEBUG_VISITOR
-#endif
-#ifndef DEBUG_VISIT_TYPE
-#define DEBUG_VISIT_TYPE DEBUG_VISITOR
-#endif
-#else
-#define DEBUG_VISITOR 0
-#define DEBUG_VISIT_STMT 0
-#define DEBUG_VISIT_DECL 0
-#define DEBUG_VISIT_TYPE 0
-#endif
-
-// Print results of traversal of the nodes: "already done?" and "generated Sage
-// ptr"
-#ifdef DEBUG_TRAVERSAL
-#ifndef DEBUG_TRAVERSE_STMT
-#define DEBUG_TRAVERSE_STMT DEBUG_TRAVERSAL
-#endif
-#ifndef DEBUG_TRAVERSE_DECL
-#define DEBUG_TRAVERSE_DECL DEBUG_TRAVERSAL
-#endif
-#ifndef DEBUG_TRAVERSE_TYPE
-#define DEBUG_TRAVERSE_TYPE DEBUG_TRAVERSAL
-#endif
-#else
-#define DEBUG_TRAVERSAL 0
-#define DEBUG_TRAVERSE_STMT 0
-#define DEBUG_TRAVERSE_DECL 0
-#define DEBUG_TRAVERSE_TYPE 0
-#endif
-
-// Print debug info when attaching source location
-#ifndef DEBUG_SOURCE_LOCATION
-#define DEBUG_SOURCE_LOCATION 0
-#endif
-
-// Display symbol lookup process
-#ifndef DEBUG_SYMBOL_TABLE_LOOKUP
-#define DEBUG_SYMBOL_TABLE_LOOKUP 0
-#endif
-
-// Print args receive by clang_main
-#ifndef DEBUG_ARGS
-#define DEBUG_ARGS 0
-#endif
-
-// Fail when a FIXME is reach
-#ifndef FAIL_FIXME
-#define FAIL_FIXME 0
-#endif
-
-// Fail when a TODO is reach
-#ifndef FAIL_TODO
-#define FAIL_TODO 1
-#endif
 
 // Capture directives as REX-owned pragma text before ordinary C/C++ parsing.
-// Clang OpenMP parsing is intentionally disabled.
+// REX owns directive parsing and AST construction.
 class RoseOpenMPPragmaCallback : public clang::PPCallbacks {
+public:
+  struct VariantBoundary {
+    clang::SourceLocation location;
+    bool begins_region;
+  };
+
 private:
-  struct DeclareVariantFunctionIdentity {
-    clang::FileID file_id;
-    unsigned begin_line = 0;
-    unsigned end_line = 0;
-    std::size_t region_ordinal = 0;
-    std::string source_name;
-    std::string clang_name;
-  };
-  struct ActiveDeclareVariantRegion {
-    clang::FileID file_id;
-    unsigned begin_line = 0;
-    unsigned end_line = 0;
-    std::size_t region_ordinal = 0;
-    std::vector<const clang::IdentifierInfo *> installed_macros;
-  };
   struct CapturedPragmaInfo {
+    clang::SourceRange physical_range;
     std::string text;
     std::string source_text;
     std::string logical_filename;
@@ -1301,17 +868,16 @@ private:
     unsigned logical_end_line = 0;
     unsigned logical_end_column = 0;
     bool is_in_system_header = false;
-    bool is_openmp = false;
     bool is_structured_openmp = false;
     bool is_structured_openacc = false;
     bool is_rose_semantic = false;
     bool has_top_level_macro_expansion = false;
+    OpenMPDirectiveKind openmp_kind = OMPD_unknown;
   };
-  // Use the physical (FileID, line) position for source scanning while
-  // retaining the logical filename/line from active line markers for later
-  // AST placement.
+  // Physical capture identity is independent of presumed source spelling.
   std::map<std::pair<clang::FileID, unsigned>, CapturedPragmaInfo>
       line_to_pragma;
+  std::vector<VariantBoundary> variant_boundaries;
   enum class ExactSemanticBindingKind {
     invalid,
     pending_unqualified,
@@ -1365,60 +931,22 @@ private:
       std::vector<ExactSemanticExpressionBindings>;
   std::map<std::pair<clang::FileID, unsigned>, ExactSemanticBindingSequence>
       openacc_cxx_semantic_bindings;
-  std::set<std::pair<clang::FileID, unsigned>> pragma_continuation_lines;
-  std::vector<ActiveDeclareVariantRegion> active_declare_variant_regions;
-  std::unordered_map<std::string, DeclareVariantFunctionIdentity>
-      declare_variant_functions_by_clang_name;
-  std::size_t next_declare_variant_region_ordinal = 0;
   clang::SourceManager &p_source_manager;
   clang::Preprocessor &p_preprocessor;
-  const clang::FileID p_main_file_id;
   const bool p_structured_openmp_enabled;
   const bool p_structured_openacc_enabled;
   clang::Sema *p_sema = nullptr;
   static constexpr std::size_t kMaxExpandedPragmaSize =
       static_cast<std::size_t>(1) << 20;
 
-  struct DeclareVariantRegionLexicalPlan {
-    unsigned end_line = 0;
-    std::vector<std::string> function_names;
-  };
-
-  static bool isOpenMPPragmaText(const std::string &text) {
-    size_t pos = 0;
-    auto skipWS = [](const std::string &s, size_t p) {
-      while (p < s.size() && (s[p] == ' ' || s[p] == '\t'))
-        ++p;
-      return p;
-    };
-    // Expect leading '#'
-    if (pos >= text.size() || text[pos] != '#')
-      return false;
-    pos = skipWS(text, pos + 1);
-    // "pragma"
-    if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0)
-      return false;
-    pos = skipWS(text, pos + 6);
-    // "omp" or "acc"
-    if (pos + 3 <= text.size() && text.compare(pos, 3, "omp") == 0) {
-      return true;
-    }
-    return (pos + 3 <= text.size() && text.compare(pos, 3, "acc") == 0);
-  }
-
   static bool isOmpPragmaText(const std::string &text) {
     size_t pos = 0;
-    auto skipWS = [](const std::string &s, size_t p) {
-      while (p < s.size() && (s[p] == ' ' || s[p] == '\t'))
-        ++p;
-      return p;
-    };
     if (pos >= text.size() || text[pos] != '#')
       return false;
-    pos = skipWS(text, pos + 1);
+    pos = skipWhitespace(text, pos + 1);
     if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0)
       return false;
-    pos = skipWS(text, pos + 6);
+    pos = skipWhitespace(text, pos + 6);
     if (pos + 3 > text.size() || text.compare(pos, 3, "omp") != 0)
       return false;
     pos += 3;
@@ -1458,79 +986,36 @@ private:
     return matches_exact_family(rose_outline, 12);
   }
 
-  static std::string
-  canonicalPragmaIntroducerForParser(const std::string &text) {
-    size_t pos = 0;
-    auto skipWS = [](const std::string &s, size_t p) {
-      while (p < s.size() && (s[p] == ' ' || s[p] == '\t'))
-        ++p;
-      return p;
-    };
-    if (pos >= text.size() || text[pos] != '#') {
-      return text;
-    }
-    pos = skipWS(text, pos + 1);
-    if (pos + 6 > text.size() || text.compare(pos, 6, "pragma") != 0) {
-      return text;
-    }
-    return "#" + text.substr(pos);
-  }
-
-  static std::string stripCommentsForPragmaParser(const std::string &text) {
+  std::string stripCommentsForPragmaParser(const std::string &text) const {
     std::string result;
     result.reserve(text.size());
-    bool in_string = false;
-    bool in_character = false;
-    bool escaped = false;
-
-    for (std::size_t i = 0; i < text.size();) {
-      const char ch = text[i];
-      if (escaped) {
-        result.push_back(ch);
-        escaped = false;
-        ++i;
+    clang::Lexer lexer(clang::SourceLocation(), p_preprocessor.getLangOpts(),
+                       text.data(), text.data(), text.data() + text.size());
+    lexer.SetCommentRetentionState(true);
+    std::size_t copied_end = 0;
+    while (true) {
+      clang::Token token;
+      lexer.LexFromRawLexer(token);
+      if (token.is(clang::tok::eof))
+        break;
+      const std::size_t token_end = lexer.getCurrentBufferOffset();
+      ROSE_ASSERT(token.getLength() <= token_end);
+      const std::size_t token_begin = token_end - token.getLength();
+      if (token.is(clang::tok::unknown) &&
+          text.compare(token_begin, 2, "/*") == 0) {
+        std::cerr << "REX_CFE_PRAGMA_INVARIANT[comment]: unterminated "
+                     "block comment in pragma\n";
+        ROSE_ABORT();
+      }
+      if (!token.is(clang::tok::comment))
         continue;
-      }
-      if ((in_string || in_character) && ch == '\\') {
-        result.push_back(ch);
-        escaped = true;
-        ++i;
-        continue;
-      }
-      if (!in_character && ch == '"') {
-        in_string = !in_string;
-        result.push_back(ch);
-        ++i;
-        continue;
-      }
-      if (!in_string && ch == '\'') {
-        in_character = !in_character;
-        result.push_back(ch);
-        ++i;
-        continue;
-      }
-      if (!in_string && !in_character && ch == '/' && i + 1 < text.size()) {
-        if (text[i + 1] == '/') {
-          break;
-        }
-        if (text[i + 1] == '*') {
-          const std::size_t end = text.find("*/", i + 2);
-          if (end == std::string::npos) {
-            std::cerr << "REX_CFE_PRAGMA_INVARIANT[comment]: unterminated "
-                         "block comment in pragma\n";
-            ROSE_ABORT();
-          }
-          if (!result.empty() &&
-              !std::isspace(static_cast<unsigned char>(result.back()))) {
-            result.push_back(' ');
-          }
-          i = end + 2;
-          continue;
-        }
-      }
-      result.push_back(ch);
-      ++i;
+      result.append(text, copied_end, token_begin - copied_end);
+      if (!result.empty() &&
+          !std::isspace(static_cast<unsigned char>(result.back())))
+        result.push_back(' ');
+      copied_end = token_end;
     }
+    result.append(text, copied_end, std::string::npos);
 
     while (!result.empty() &&
            std::isspace(static_cast<unsigned char>(result.back()))) {
@@ -3035,8 +2520,7 @@ private:
                                             ? openacc::Language::Cxx
                                             : openacc::Language::C,
                                         openacc::InputForm::CPragma};
-    openacc::ParseResult parsed = openacc::parseDirective(
-        canonicalPragmaIntroducerForParser(pragma_text), options);
+    openacc::ParseResult parsed = openacc::parseDirective(pragma_text, options);
     if (!parsed.succeeded() || !parsed.directive ||
         !parsed.diagnostics.empty()) {
       if (!parsed.diagnostics.empty()) {
@@ -3258,30 +2742,6 @@ private:
     return expanded_text;
   }
 
-  OpenMPBaseLang openMPBaseLanguage() const {
-    return p_preprocessor.getLangOpts().CPlusPlus ? Lang_Cplusplus : Lang_C;
-  }
-
-  bool isDeclareVariantBoundaryCandidate(const std::string &pragma_text) const {
-    std::vector<clang::Token> tokens;
-    lexPragmaTokens(pragma_text, &tokens);
-    std::vector<std::string> identifiers;
-    identifiers.reserve(5);
-    for (const clang::Token &token : tokens) {
-      if (const clang::IdentifierInfo *identifier =
-              getIdentifierInfoForToken(token)) {
-        identifiers.push_back(identifier->getName().str());
-        if (identifiers.size() == 5) {
-          break;
-        }
-      }
-    }
-    return identifiers.size() == 5 && identifiers[0] == "pragma" &&
-           identifiers[1] == "omp" &&
-           (identifiers[2] == "begin" || identifiers[2] == "end") &&
-           identifiers[3] == "declare" && identifiers[4] == "variant";
-  }
-
   OpenMPDirectiveKind
   parseOpenMPDirectiveKindOrAbort(const std::string &pragma_text) const {
     if (pragma_text.empty() || !isOmpPragmaText(pragma_text)) {
@@ -3309,383 +2769,50 @@ private:
     return parse_result.directive->getKind();
   }
 
-  static std::vector<std::size_t>
-  physicalLineStartOffsets(llvm::StringRef contents) {
-    std::vector<std::size_t> offsets{0};
-    for (std::size_t offset = 0; offset < contents.size(); ++offset) {
-      if (contents[offset] == '\n') {
-        offsets.push_back(offset + 1);
-      }
-    }
-    return offsets;
-  }
+  struct LogicalDirectiveSource {
+    std::string text;
+    std::size_t end_offset = 0;
+  };
 
-  std::optional<std::pair<std::string, unsigned>>
-  sourceDirectiveAtPhysicalLine(llvm::StringRef contents,
-                                const std::vector<std::size_t> &line_offsets,
-                                unsigned physical_line) const {
-    if (physical_line == 0 || physical_line > line_offsets.size()) {
-      return std::nullopt;
-    }
-    std::size_t current_line = physical_line;
-    std::string directive_text;
-    unsigned consumed_lines = 0;
-    while (current_line <= line_offsets.size()) {
-      const std::size_t start = line_offsets[current_line - 1];
-      const std::size_t limit = current_line < line_offsets.size()
-                                    ? line_offsets[current_line]
-                                    : contents.size();
-      llvm::StringRef source_line = contents.slice(start, limit);
-      while (!source_line.empty() &&
-             (source_line.back() == '\n' || source_line.back() == '\r')) {
-        source_line = source_line.drop_back();
-      }
-      std::size_t first = 0;
-      while (first < source_line.size() &&
-             (source_line[first] == ' ' || source_line[first] == '\t' ||
-              source_line[first] == '\f' || source_line[first] == '\r')) {
-        ++first;
-      }
-      if (consumed_lines == 0 &&
-          (first == source_line.size() || source_line[first] != '#')) {
-        return std::nullopt;
-      }
-
-      std::size_t effective_end = source_line.size();
-      while (effective_end > 0 && (source_line[effective_end - 1] == ' ' ||
-                                   source_line[effective_end - 1] == '\t' ||
-                                   source_line[effective_end - 1] == '\f' ||
-                                   source_line[effective_end - 1] == '\r')) {
-        --effective_end;
-      }
-      const bool continued =
-          effective_end > 0 && source_line[effective_end - 1] == '\\';
-      if (continued) {
-        --effective_end;
-        while (effective_end > 0 && (source_line[effective_end - 1] == ' ' ||
-                                     source_line[effective_end - 1] == '\t' ||
-                                     source_line[effective_end - 1] == '\f' ||
-                                     source_line[effective_end - 1] == '\r')) {
-          --effective_end;
-        }
-      }
-      if (!directive_text.empty()) {
-        directive_text.push_back(' ');
-      }
-      directive_text.append(source_line.substr(0, effective_end).str());
-      ++consumed_lines;
-      if (!continued) {
-        break;
-      }
-      ++current_line;
-    }
-    return std::make_pair(directive_text, consumed_lines);
-  }
-
-  std::vector<std::string>
-  lexDeclareVariantFunctionNames(clang::FileID file_id,
-                                 std::size_t body_begin_offset,
-                                 std::size_t body_end_offset) const {
-    auto buffer = p_source_manager.getBufferOrNone(file_id);
-    if (!buffer || body_begin_offset > body_end_offset ||
-        body_end_offset > buffer->getBufferSize()) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-source]: declare "
-                   "variant region has no exact source buffer or bounds\n";
-      ROSE_ABORT();
-    }
-
-    clang::Lexer lexer(file_id, *buffer, p_source_manager,
-                       p_preprocessor.getLangOpts());
-    std::vector<std::string> names;
-    std::optional<std::string> declarator_candidate;
-    std::optional<std::string> previous_identifier;
-    unsigned paren_depth = 0;
-    unsigned bracket_depth = 0;
-    unsigned brace_depth = 0;
-    bool in_preprocessor_directive = false;
-    clang::Token token;
+  LogicalDirectiveSource
+  captureLogicalDirectiveSource(llvm::StringRef contents,
+                                std::size_t offset) const {
+    ROSE_ASSERT(offset < contents.size());
+    LogicalDirectiveSource result;
+    result.end_offset = offset;
+    std::size_t current = offset;
     while (true) {
-      lexer.LexFromRawLexer(token);
-      if (token.is(clang::tok::eof)) {
+      std::size_t line_end = contents.find_first_of("\r\n", current);
+      if (line_end == llvm::StringRef::npos)
+        line_end = contents.size();
+      std::size_t content_end = line_end;
+      while (content_end > current && isWhitespace(contents[content_end - 1]))
+        --content_end;
+      if (content_end > current)
+        result.end_offset = content_end;
+      const unsigned escaped_newline_size =
+          content_end > current && contents[content_end - 1] == '\\'
+              ? clang::Lexer::getEscapedNewLineSize(contents.data() +
+                                                    content_end)
+              : 0;
+      const bool continued = escaped_newline_size != 0;
+      const std::size_t copy_end = continued ? content_end - 1 : line_end;
+      result.text.append(contents.data() + current, copy_end - current);
+      if (!continued)
         break;
-      }
-      clang::SourceLocation location =
-          p_source_manager.getFileLoc(token.getLocation());
-      if (!location.isValid() ||
-          p_source_manager.getFileID(location) != file_id) {
-        std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-token]: raw token "
-                     "has no exact region file identity\n";
-        ROSE_ABORT();
-      }
-      const std::size_t offset = p_source_manager.getFileOffset(location);
-      if (offset < body_begin_offset) {
-        continue;
-      }
-      if (offset >= body_end_offset) {
-        break;
-      }
-
-      if (token.isAtStartOfLine()) {
-        in_preprocessor_directive = token.is(clang::tok::hash);
-      }
-      if (in_preprocessor_directive) {
-        previous_identifier.reset();
-        continue;
-      }
-
-      if (token.is(clang::tok::raw_identifier) ||
-          token.is(clang::tok::identifier)) {
-        previous_identifier = clang::Lexer::getSpelling(
-            token, p_source_manager, p_preprocessor.getLangOpts());
-        continue;
-      }
-
-      if (token.is(clang::tok::l_paren)) {
-        if (brace_depth == 0 && paren_depth == 0 && bracket_depth == 0 &&
-            previous_identifier.has_value() &&
-            *previous_identifier != "__attribute__" &&
-            *previous_identifier != "__declspec") {
-          declarator_candidate = *previous_identifier;
-        }
-        ++paren_depth;
-      } else if (token.is(clang::tok::r_paren)) {
-        if (paren_depth == 0) {
-          std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-token]: "
-                       "unmatched ')' in declare variant region\n";
-          ROSE_ABORT();
-        }
-        --paren_depth;
-      } else if (token.is(clang::tok::l_square)) {
-        ++bracket_depth;
-      } else if (token.is(clang::tok::r_square)) {
-        if (bracket_depth == 0) {
-          std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-token]: "
-                       "unmatched ']' in declare variant region\n";
-          ROSE_ABORT();
-        }
-        --bracket_depth;
-      } else if (token.is(clang::tok::l_brace)) {
-        if (brace_depth == 0) {
-          if (!declarator_candidate.has_value() || paren_depth != 0 ||
-              bracket_depth != 0) {
-            std::cerr
-                << "REX_CFE_OMP_INVARIANT[variant-declarator]: a declaration "
-                   "definition in begin/end declare variant has no exact "
-                   "function declarator identity\n";
-            ROSE_ABORT();
-          }
-          names.push_back(*declarator_candidate);
-          declarator_candidate.reset();
-        }
-        ++brace_depth;
-      } else if (token.is(clang::tok::r_brace)) {
-        if (brace_depth == 0) {
-          std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-token]: "
-                       "unmatched '}' in declare variant region\n";
-          ROSE_ABORT();
-        }
-        --brace_depth;
-      } else if (token.is(clang::tok::semi) && brace_depth == 0 &&
-                 paren_depth == 0 && bracket_depth == 0) {
-        if (!declarator_candidate.has_value()) {
-          std::cerr << "REX_CFE_OMP_INVARIANT[variant-declarator]: a "
-                       "declaration in begin/end declare variant has no exact "
-                       "function declarator identity\n";
-          ROSE_ABORT();
-        }
-        names.push_back(*declarator_candidate);
-        declarator_candidate.reset();
-      }
-      previous_identifier.reset();
+      current = content_end + escaped_newline_size;
+      ROSE_ASSERT(current <= contents.size());
     }
-    if (paren_depth != 0 || bracket_depth != 0 || brace_depth != 0 ||
-        declarator_candidate.has_value()) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-token]: declare "
-                   "variant region ended with an incomplete declaration\n";
-      ROSE_ABORT();
-    }
-    std::sort(names.begin(), names.end());
-    names.erase(std::unique(names.begin(), names.end()), names.end());
-    return names;
-  }
-
-  DeclareVariantRegionLexicalPlan
-  buildDeclareVariantRegionLexicalPlan(clang::FileID file_id,
-                                       unsigned begin_line,
-                                       unsigned begin_line_count) const {
-    auto buffer = p_source_manager.getBufferOrNone(file_id);
-    if (!buffer) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-source]: begin "
-                   "declare variant has no exact source buffer\n";
-      ROSE_ABORT();
-    }
-    llvm::StringRef contents = buffer->getBuffer();
-    const std::vector<std::size_t> line_offsets =
-        physicalLineStartOffsets(contents);
-    const unsigned body_begin_line = begin_line + begin_line_count;
-    if (begin_line == 0 || body_begin_line == 0 ||
-        body_begin_line > line_offsets.size() + 1) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-source]: begin "
-                   "declare variant has invalid physical line bounds\n";
-      ROSE_ABORT();
-    }
-
-    unsigned depth = 1;
-    unsigned current_line = body_begin_line;
-    unsigned matching_end_line = 0;
-    std::size_t body_end_offset = contents.size();
-    while (current_line <= line_offsets.size()) {
-      std::optional<std::pair<std::string, unsigned>> directive =
-          sourceDirectiveAtPhysicalLine(contents, line_offsets, current_line);
-      if (!directive.has_value()) {
-        ++current_line;
-        continue;
-      }
-      const std::string stripped =
-          stripCommentsForPragmaParser(directive->first);
-      if (isOmpPragmaText(stripped) &&
-          isDeclareVariantBoundaryCandidate(stripped)) {
-        const OpenMPDirectiveKind kind =
-            parseOpenMPDirectiveKindOrAbort(stripped);
-        if (kind == OMPD_begin_declare_variant) {
-          ++depth;
-        } else if (kind == OMPD_end_declare_variant) {
-          if (depth == 0) {
-            std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-pair]: "
-                         "declare variant nesting underflow\n";
-            ROSE_ABORT();
-          }
-          --depth;
-          if (depth == 0) {
-            matching_end_line = current_line;
-            body_end_offset = line_offsets[current_line - 1];
-            break;
-          }
-        }
-      }
-      current_line += directive->second;
-    }
-    if (matching_end_line == 0 || depth != 0) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-pair]: begin declare "
-                   "variant has no exact matching end directive\n";
-      ROSE_ABORT();
-    }
-
-    const std::size_t body_begin_offset =
-        body_begin_line <= line_offsets.size()
-            ? line_offsets[body_begin_line - 1]
-            : contents.size();
-    DeclareVariantRegionLexicalPlan result;
-    result.end_line = matching_end_line;
-    result.function_names = lexDeclareVariantFunctionNames(
-        file_id, body_begin_offset, body_end_offset);
+    while (!result.text.empty() && isWhitespace(result.text.back()))
+      result.text.pop_back();
     return result;
   }
 
-  void
-  installDeclareVariantMacro(const DeclareVariantFunctionIdentity &identity,
-                             clang::SourceLocation definition_location,
-                             ActiveDeclareVariantRegion *active_region) {
-    if (active_region == nullptr || identity.source_name.empty() ||
-        identity.clang_name.empty() || !definition_location.isValid()) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-macro-install]: incomplete "
-                   "typed variant identity\n";
-      ROSE_ABORT();
-    }
-    clang::IdentifierInfo *source_identifier =
-        p_preprocessor.getIdentifierInfo(identity.source_name);
-    clang::IdentifierInfo *clang_identifier =
-        p_preprocessor.getIdentifierInfo(identity.clang_name);
-    if (source_identifier == nullptr || clang_identifier == nullptr ||
-        p_preprocessor.getMacroDefinition(source_identifier)) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-macro-install]: source "
-                   "function name is not an unbound exact identifier: "
-                << identity.source_name << "\n";
-      ROSE_ABORT();
-    }
-    clang::MacroInfo *macro =
-        p_preprocessor.AllocateMacroInfo(definition_location);
-    clang::Token replacement;
-    replacement.startToken();
-    replacement.setKind(clang::tok::identifier);
-    replacement.setIdentifierInfo(clang_identifier);
-    replacement.setLocation(definition_location);
-    replacement.setLength(identity.clang_name.size());
-    macro->setTokens(llvm::ArrayRef<clang::Token>(replacement),
-                     p_preprocessor.getPreprocessorAllocator());
-    macro->setDefinitionEndLoc(definition_location);
-    p_preprocessor.appendDefMacroDirective(source_identifier, macro,
-                                           definition_location);
-    active_region->installed_macros.push_back(source_identifier);
-  }
-
-  void handleDeclareVariantBoundary(clang::FileID file_id, unsigned line,
-                                    unsigned line_count,
-                                    clang::SourceLocation pragma_location,
-                                    OpenMPDirectiveKind directive_kind) {
-    if (directive_kind == OMPD_begin_declare_variant) {
-      DeclareVariantRegionLexicalPlan plan =
-          buildDeclareVariantRegionLexicalPlan(file_id, line, line_count);
-      ActiveDeclareVariantRegion active;
-      active.file_id = file_id;
-      active.begin_line = line;
-      active.end_line = plan.end_line;
-      active.region_ordinal = next_declare_variant_region_ordinal++;
-      for (const std::string &source_name : plan.function_names) {
-        DeclareVariantFunctionIdentity identity;
-        identity.file_id = file_id;
-        identity.begin_line = line;
-        identity.end_line = plan.end_line;
-        identity.region_ordinal = active.region_ordinal;
-        identity.source_name = source_name;
-        identity.clang_name = "__rex_omp_declare_variant_" +
-                              std::to_string(identity.region_ordinal) + "_" +
-                              source_name;
-        if (!declare_variant_functions_by_clang_name
-                 .emplace(identity.clang_name, identity)
-                 .second) {
-          std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity]: duplicate "
-                       "Clang variant identity "
-                    << identity.clang_name << "\n";
-          ROSE_ABORT();
-        }
-        installDeclareVariantMacro(identity, pragma_location, &active);
-      }
-      active_declare_variant_regions.push_back(std::move(active));
-      return;
-    }
-    if (directive_kind != OMPD_end_declare_variant) {
-      return;
-    }
-    if (active_declare_variant_regions.empty()) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-pair]: unmatched end "
-                   "declare variant directive\n";
-      ROSE_ABORT();
-    }
-    ActiveDeclareVariantRegion active =
-        std::move(active_declare_variant_regions.back());
-    active_declare_variant_regions.pop_back();
-    if (active.file_id != file_id || active.end_line != line) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-pair]: end declare "
-                   "variant does not match the active typed region\n";
-      ROSE_ABORT();
-    }
-    for (auto macro = active.installed_macros.rbegin();
-         macro != active.installed_macros.rend(); ++macro) {
-      void *storage = p_preprocessor.getPreprocessorAllocator().Allocate(
-          sizeof(clang::UndefMacroDirective),
-          alignof(clang::UndefMacroDirective));
-      p_preprocessor.appendMacroDirective(
-          const_cast<clang::IdentifierInfo *>(*macro),
-          new (storage) clang::UndefMacroDirective(pragma_location));
-    }
-  }
-
 public:
-  // Helper function to check if character is whitespace (space or tab)
-  static bool isWhitespace(char c) { return c == ' ' || c == '\t'; }
+  static bool isWhitespace(char c) {
+    return clang::isHorizontalWhitespace(static_cast<unsigned char>(c));
+  }
 
-  // Helper to skip whitespace in a string
   static size_t skipWhitespace(const std::string &str, size_t pos) {
     while (pos < str.size() && isWhitespace(str[pos])) {
       ++pos;
@@ -3693,10 +2820,9 @@ public:
     return pos;
   }
   RoseOpenMPPragmaCallback(clang::SourceManager &SM, clang::Preprocessor &PP,
-                           clang::FileID main_file_id,
                            bool structured_openmp_enabled,
                            bool structured_openacc_enabled)
-      : p_source_manager(SM), p_preprocessor(PP), p_main_file_id(main_file_id),
+      : p_source_manager(SM), p_preprocessor(PP),
         p_structured_openmp_enabled(structured_openmp_enabled),
         p_structured_openacc_enabled(structured_openacc_enabled) {}
 
@@ -3711,6 +2837,35 @@ public:
 
   void PragmaDirective(clang::SourceLocation Loc,
                        clang::PragmaIntroducerKind Introducer) override {
+    struct PragmaDispatch {
+      clang::Preprocessor &preprocessor;
+      bool handled = false;
+      ~PragmaDispatch() {
+        preprocessor.setPragmasEnabled(!handled);
+        if (handled)
+          preprocessor.DiscardUntilEndOfDirective();
+      }
+    } dispatch{p_preprocessor};
+    if (p_structured_openmp_enabled) {
+      // Inspect the active buffer, including _Pragma's decoded string,
+      // without consuming or caching tokens in Clang's directive stream.
+      auto *active =
+          static_cast<clang::Lexer *>(p_preprocessor.getCurrentLexer());
+      ROSE_ASSERT(active != nullptr);
+      const llvm::StringRef buffer = active->getBuffer();
+      clang::Lexer lookahead(
+          p_source_manager.getSpellingLoc(active->getFileLoc()),
+          p_preprocessor.getLangOpts(), buffer.begin(),
+          active->getBufferLocation(), buffer.end());
+      lookahead.setParsingPreprocessorDirective(true);
+      clang::Token token;
+      auto keyword = [&](llvm::StringRef spelling) {
+        lookahead.LexFromRawLexer(token);
+        const auto *identifier = getIdentifierInfoForToken(token);
+        return identifier != nullptr && identifier->getName() == spelling;
+      };
+      dispatch.handled = keyword("omp");
+    }
     clang::SourceLocation file_loc = p_source_manager.getFileLoc(Loc);
     if (!file_loc.isValid()) {
       std::cerr << "REX_CFE_PRAGMA_INVARIANT[physical-source]: pragma has no "
@@ -3718,8 +2873,6 @@ public:
       ROSE_ABORT();
     }
 
-    // Use the physical file/line for later backwards scanning in the lexer
-    // buffer, but track the logical source filename/line separately.
     clang::FileID file_id = p_source_manager.getFileID(file_loc);
     unsigned line = p_source_manager.getSpellingLineNumber(file_loc);
     if (file_id.isInvalid() || line == 0) {
@@ -3744,83 +2897,23 @@ public:
       ROSE_ABORT();
     }
 
-    // Capture the full pragma text, including any backslash-continued lines
-    const char *directive_start = p_source_manager.getCharacterData(file_loc);
-    const char *current = directive_start;
-    const char *directive_end = nullptr;
-    std::string original_text;
-    unsigned line_count = 1;
-
-    while (current != nullptr) {
-      const char *line_end = current;
-      while (*line_end != '\n' && *line_end != '\r' && *line_end != '\0') {
-        ++line_end;
-      }
-
-      const char *physical_content_end = line_end;
-      while (physical_content_end > current &&
-             isWhitespace(*(physical_content_end - 1))) {
-        --physical_content_end;
-      }
-      if (physical_content_end > current) {
-        directive_end = physical_content_end;
-      }
-
-      // Check for continuation BEFORE appending to properly normalize the text
-      const char *back = line_end;
-      while (back > current && isWhitespace(*(back - 1))) {
-        --back;
-      }
-      bool has_continuation = (back > current && *(back - 1) == '\\');
-
-      if (has_continuation) {
-        // For continuation lines: append up to (but not including) the
-        // backslash First, skip any whitespace before the backslash
-        const char *effective_end =
-            back - 1; // -1 to exclude the backslash itself
-        while (effective_end > current && isWhitespace(*(effective_end - 1))) {
-          --effective_end;
-        }
-        original_text.append(current, effective_end - current);
-        // Add a single space to separate tokens from the next line
-        original_text.push_back(' ');
-      } else {
-        // For non-continuation lines: append the entire line as-is
-        original_text.append(current, line_end - current);
-      }
-
-      if (*line_end == '\0') {
-        break;
-      }
-
-      // Move to the next line
-      if (*line_end == '\r' && *(line_end + 1) == '\n') {
-        current = line_end + 2;
-      } else {
-        current = line_end + 1;
-      }
-
-      if (!has_continuation) {
-        // Trim trailing whitespace from the stored directive
-        while (!original_text.empty() &&
-               isspace(static_cast<unsigned char>(original_text.back()))) {
-          original_text.pop_back();
-        }
-        break;
-      }
-
-      ++line_count;
+    auto buffer = p_source_manager.getBufferOrNone(file_id);
+    if (!buffer) {
+      std::cerr << "REX_CFE_PRAGMA_INVARIANT[physical-source]: pragma has no "
+                   "source buffer\n";
+      ROSE_ABORT();
     }
-
-    if (directive_start == nullptr || directive_end == nullptr ||
-        directive_end <= directive_start) {
+    const std::size_t start_offset = p_source_manager.getFileOffset(file_loc);
+    LogicalDirectiveSource source =
+        captureLogicalDirectiveSource(buffer->getBuffer(), start_offset);
+    std::string original_text = std::move(source.text);
+    if (source.end_offset <= start_offset) {
       std::cerr << "REX_CFE_PRAGMA_INVARIANT[source-end]: pragma has no "
                    "non-whitespace source surface\n";
       ROSE_ABORT();
     }
-    const std::ptrdiff_t end_offset = directive_end - directive_start - 1;
-    if (end_offset < 0 ||
-        static_cast<std::size_t>(end_offset) > kMaxExpandedPragmaSize) {
+    const std::size_t end_offset = source.end_offset - start_offset - 1;
+    if (end_offset > kMaxExpandedPragmaSize) {
       std::cerr << "REX_CFE_PRAGMA_INVARIANT[source-end]: pragma source "
                    "surface exceeds the supported size\n";
       ROSE_ABORT();
@@ -3871,18 +2964,16 @@ public:
     }
     pos = skipWhitespace(original_text, pos);
 
-    const bool is_openmp = isOpenMPPragmaText(original_text);
     std::string pragma_text = stripCommentsForPragmaParser(original_text);
     bool has_top_level_macro_expansion = false;
-    if (is_openmp) {
+    if ((p_structured_openmp_enabled && isOmpPragmaText(pragma_text)) ||
+        (p_structured_openacc_enabled && isAccPragmaText(pragma_text))) {
       pragma_text =
           expandObjectLikeMacros(pragma_text, &has_top_level_macro_expansion);
     }
     // A textual OpenMP/OpenACC pragma is an ordinary unknown pragma unless
-    // REX's structured directive mode is enabled. OpenMP remains a pragma
-    // payload for the REX OpenMP parser and AST constructor; Clang does not
-    // parse or semantically bind it. OpenACC retains its separate frontend
-    // semantic transaction.
+    // REX's structured directive mode is enabled. REX owns directive ASTs;
+    // Clang provides OpenACC declaration semantics.
     const bool structured_openmp =
         p_structured_openmp_enabled && isOmpPragmaText(pragma_text);
     const bool structured_openacc =
@@ -3894,18 +2985,21 @@ public:
       ROSE_ABORT();
     }
     const std::pair<clang::FileID, unsigned> pragma_key(file_id, line);
+    const auto openmp_kind = structured_openmp
+                                 ? parseOpenMPDirectiveKindOrAbort(pragma_text)
+                                 : OMPD_unknown;
+    if (openmp_kind == OMPD_begin_declare_variant ||
+        openmp_kind == OMPD_end_declare_variant) {
+      variant_boundaries.push_back(
+          {file_loc, openmp_kind == OMPD_begin_declare_variant});
+    }
     if (structured_openacc) {
       captureOpenACCSemanticBindings(pragma_key, file_loc, pragma_text);
     }
-    if (structured_openmp && isDeclareVariantBoundaryCandidate(pragma_text)) {
-      const OpenMPDirectiveKind directive_kind =
-          parseOpenMPDirectiveKindOrAbort(pragma_text);
-      handleDeclareVariantBoundary(file_id, line, line_count, file_loc,
-                                   directive_kind);
-    }
 
     // Store with (FileID, line) key to handle multi-file TUs
-    line_to_pragma[pragma_key] = {pragma_text,
+    line_to_pragma[pragma_key] = {clang::SourceRange(file_loc, end_loc),
+                                  pragma_text,
                                   original_text,
                                   logical_filename,
                                   logical_line,
@@ -3913,121 +3007,14 @@ public:
                                   logical_end_line,
                                   logical_end_column,
                                   p_source_manager.isInSystemHeader(file_loc),
-                                  is_openmp,
                                   structured_openmp,
                                   structured_openacc,
                                   rose_semantic,
-                                  has_top_level_macro_expansion};
-    for (unsigned offset = 1; offset < line_count; ++offset) {
-      pragma_continuation_lines.insert(std::make_pair(file_id, line + offset));
-    }
+                                  has_top_level_macro_expansion,
+                                  openmp_kind};
   }
 
-  // Lookup pragma by (FileID, line) - returns true if found, false otherwise
-  // Passes result by reference to avoid ABI issues with std::string returns
-  bool getPragmaAtLine(clang::FileID file_id, unsigned line,
-                       std::string &result) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    if (it != line_to_pragma.end()) {
-      result = it->second.text;
-      return true;
-    }
-    return false;
-  }
-
-  bool getPragmaSourceTextAtLine(clang::FileID file_id, unsigned line,
-                                 std::string &result) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    if (it == line_to_pragma.end()) {
-      return false;
-    }
-    result = it->second.source_text;
-    return true;
-  }
-
-  bool getPragmaLogicalLocation(clang::FileID file_id, unsigned line,
-                                std::string &filename, unsigned &logical_line,
-                                unsigned &logical_column,
-                                unsigned &logical_end_line,
-                                unsigned &logical_end_column) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    if (it == line_to_pragma.end()) {
-      return false;
-    }
-
-    filename = it->second.logical_filename;
-    logical_line = it->second.logical_line;
-    logical_column = it->second.logical_column;
-    logical_end_line = it->second.logical_end_line;
-    logical_end_column = it->second.logical_end_column;
-    return true;
-  }
-
-  size_t getCount() const { return line_to_pragma.size(); }
-
-  bool getDeclareVariantFunctionIdentity(const clang::FunctionDecl *function,
-                                         std::string *source_name,
-                                         std::size_t *region_ordinal) const {
-    if (function == nullptr || source_name == nullptr ||
-        region_ordinal == nullptr) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity-query]: exact "
-                   "function and output storage are required\n";
-      ROSE_ABORT();
-    }
-    if (declare_variant_functions_by_clang_name.empty()) {
-      return false;
-    }
-    clang::SourceLocation function_location =
-        p_source_manager.getExpansionLoc(function->getLocation());
-    if (!function_location.isValid()) {
-      return false;
-    }
-    const clang::FileID function_file_id =
-        p_source_manager.getFileID(function_location);
-    const unsigned function_line =
-        p_source_manager.getSpellingLineNumber(function_location);
-    const bool lies_in_declare_variant_region =
-        std::any_of(declare_variant_functions_by_clang_name.begin(),
-                    declare_variant_functions_by_clang_name.end(),
-                    [function_file_id, function_line](const auto &entry) {
-                      const DeclareVariantFunctionIdentity &identity =
-                          entry.second;
-                      return function_file_id == identity.file_id &&
-                             function_line > identity.begin_line &&
-                             function_line < identity.end_line;
-                    });
-    if (!lies_in_declare_variant_region) {
-      return false;
-    }
-    markClangNamedDeclNameForPrintingDefinedForFrontend(function);
-    const std::string clang_name = function->getNameAsString();
-    auto found = declare_variant_functions_by_clang_name.find(clang_name);
-    if (found == declare_variant_functions_by_clang_name.end()) {
-      return false;
-    }
-    if (function_file_id != found->second.file_id) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity-query]: Clang "
-                   "variant function has no exact region file identity\n";
-      ROSE_ABORT();
-    }
-    if (function_line <= found->second.begin_line ||
-        function_line >= found->second.end_line) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-identity-query]: Clang "
-                   "variant function lies outside its typed pragma region\n";
-      ROSE_ABORT();
-    }
-    *source_name = found->second.source_name;
-    *region_ordinal = found->second.region_ordinal;
-    return true;
-  }
-
-  void EndOfMainFile() override {
-    if (!active_declare_variant_regions.empty()) {
-      std::cerr << "REX_CFE_OMP_INVARIANT[variant-region-pair]: translation "
-                   "unit ended with active begin declare variant regions\n";
-      ROSE_ABORT();
-    }
-  }
+  void EndOfMainFile() override { p_preprocessor.setPragmasEnabled(true); }
 
   std::set<std::string> getStructuredOpenMPIdentifierSpellings() const {
     std::set<std::string> result;
@@ -4047,26 +3034,28 @@ public:
     return result;
   }
 
-  bool isOpenMPPragmaAtLine(clang::FileID file_id, unsigned line) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    return it != line_to_pragma.end() && it->second.is_openmp;
-  }
-
   bool isStructuredOpenMPPragmaAtLine(clang::FileID file_id,
                                       unsigned line) const {
     auto it = line_to_pragma.find(std::make_pair(file_id, line));
     return it != line_to_pragma.end() && it->second.is_structured_openmp;
   }
 
+  OpenMPDirectiveKind
+  requireStructuredOpenMPDirectiveKindAtLine(clang::FileID file_id,
+                                             unsigned line) const {
+    const auto &pragma = line_to_pragma.at({file_id, line});
+    ROSE_ASSERT(pragma.is_structured_openmp);
+    return pragma.openmp_kind;
+  }
+
+  const std::vector<VariantBoundary> &getVariantBoundaries() const {
+    return variant_boundaries;
+  }
+
   bool isStructuredOpenACCPragmaAtLine(clang::FileID file_id,
                                        unsigned line) const {
     auto it = line_to_pragma.find(std::make_pair(file_id, line));
     return it != line_to_pragma.end() && it->second.is_structured_openacc;
-  }
-
-  bool isRoseSemanticPragmaAtLine(clang::FileID file_id, unsigned line) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    return it != line_to_pragma.end() && it->second.is_rose_semantic;
   }
 
   bool hasRoseSemanticPragmaInRange(clang::SourceRange range) const {
@@ -4102,13 +3091,6 @@ public:
     return false;
   }
 
-  bool hasTopLevelMacroExpansionAtLine(clang::FileID file_id,
-                                       unsigned line) const {
-    auto it = line_to_pragma.find(std::make_pair(file_id, line));
-    return it != line_to_pragma.end() &&
-           it->second.has_top_level_macro_expansion;
-  }
-
   const ExactSemanticBindingSequence *
   materializeOpenACCCxxExactSemanticBindingsAtLine(clang::FileID file_id,
                                                    unsigned line) {
@@ -4137,10 +3119,6 @@ public:
   const std::map<std::pair<clang::FileID, unsigned>, CapturedPragmaInfo> &
   getPragmaMap() const {
     return line_to_pragma;
-  }
-
-  bool isContinuationLine(clang::FileID file_id, unsigned line) const {
-    return pragma_continuation_lines.count(std::make_pair(file_id, line)) > 0;
   }
 };
 
@@ -4187,6 +3165,8 @@ public:
    * before reporting its role.
    */
   bool hasExactSemanticExpressionConstructionRole(const char *context) const;
+  SgExpression *buildDeclarationConditionValue(clang::Expr *condition,
+                                               SgScopeStatement *owner);
   //! An exact semantic expression is evidenced either by a physical Clang
   //! range or by the active Clang expression traversal itself.  The latter is
   //! required for implicit semantic expressions whose Clang SourceRange is
@@ -4247,6 +3227,25 @@ public:
   // because Clang exposes only its first token and closing brace.
   void recordExpandedToken(const clang::Token &token);
 
+  void
+  synchronizeOpenMPCVariantScope(clang::Parser &parser,
+                                 clang::DeclGroupRef previous_declarations);
+  std::optional<unsigned>
+  openMPVariantOrdinal(const clang::FunctionDecl *function) const;
+  clang::FunctionDecl *openMPVariantBase(clang::FunctionDecl *function) const;
+
+  struct OpenMPCVariantScope {
+    unsigned ordinal;
+    clang::Scope *scope;
+    std::vector<clang::FunctionDecl *> hidden_functions;
+  };
+  std::vector<OpenMPCVariantScope> p_openmp_c_variant_scopes;
+  std::map<const clang::FunctionDecl *, clang::FunctionDecl *>
+      p_openmp_variant_bases;
+  std::map<const clang::FunctionDecl *, unsigned> p_openmp_variant_ordinals;
+  std::size_t p_openmp_variant_boundary_cursor = 0;
+  unsigned p_openmp_variant_region_count = 0;
+
   enum class ExpandedTokenBoundary { unique, first, last };
 
   // Resolve one Clang source location to its exact ordinal in the parser's
@@ -4255,8 +3254,19 @@ public:
   unsigned int requireExpandedTokenSourceOrder(
       clang::SourceLocation location, const char *context,
       ExpandedTokenBoundary boundary = ExpandedTokenBoundary::unique) const;
+  clang::SourceRange
+  requireParsedDeclarationSemicolon(clang::SourceRange range,
+                                    const char *context) const;
+  bool sourceSpellsTopLevelConstQualifier(const clang::VarDecl *decl,
+                                          const clang::TypeLoc &type_loc) const;
+  SgInitializedName *requireVariableTemplatePredecessor(clang::Decl *previous,
+                                                        SgScopeStatement *scope,
+                                                        const SgName &name);
 
 protected:
+  void deleteTransientAST(const std::unordered_set<SgNode *> &roots);
+  void retireUnusedFunctionParameterList(SgFunctionDeclaration *declaration,
+                                         SgFunctionParameterList *candidate);
   struct RecordMemberAccessIndex {
     std::unordered_set<clang::Decl *> direct_members;
     std::unordered_map<clang::Decl *, clang::AccessSpecifier> effective_access;
@@ -4266,29 +3276,27 @@ protected:
   void publishExactEffectiveDeclarationAccess(clang::Decl *clang_decl,
                                               SgDeclarationStatement *sage_decl,
                                               const char *producer);
-  struct PhysicalSourceInterval {
-    unsigned begin = 0;
-    unsigned end = 0;
+  std::unordered_map<clang::DeclContext *,
+                     std::unordered_set<const clang::TagDecl *>>
+      p_decl_context_tag_owners;
+  std::unordered_map<clang::RecordDecl *,
+                     std::unordered_set<const clang::TagDecl *>>
+      p_record_field_tag_owners;
+  struct FieldInitializerConstruction {
+    const clang::FieldDecl *declaration;
+    SgInitializedName *initialized_name;
   };
-  using PhysicalSourceIntervalIndex =
-      std::unordered_map<unsigned, std::vector<PhysicalSourceInterval>>;
-  std::unordered_map<clang::DeclContext *, PhysicalSourceIntervalIndex>
-      p_typed_decl_context_owner_intervals;
-  std::unordered_map<
-      clang::RecordDecl *,
-      std::unordered_map<const clang::TagDecl *, PhysicalSourceIntervalIndex>>
-      p_record_embedded_tag_intervals;
-  bool tagDefinitionWrittenInTypedDeclContextOwner(
-      clang::TagDecl *tag_decl, clang::CompilerInstance *compiler_instance);
+  std::vector<FieldInitializerConstruction> p_field_initializer_constructions;
+  bool tagDefinitionWrittenInTypedDeclContextOwner(clang::TagDecl *tag_decl);
   bool isTagEmbeddedInField(clang::TagDecl *tag_decl,
-                            clang::RecordDecl *parent_decl,
-                            clang::SourceManager *source_manager);
+                            clang::RecordDecl *parent_decl);
 
   // Scope-child membership is performance-sensitive for large header scopes.
   // Keep the index owned by this translation invocation so AST/list addresses
   // cannot leak into a later project parsed by the same process.
   mutable DeclAttachmentSession p_decl_attachment_session;
   ClangDeclTranslationMap p_decl_translation_map;
+  std::unordered_map<const clang::Decl *, uint64_t> p_anonymous_declaration_ids;
   enum class DeclarationGroupRole { source_lexical, semantic_body };
   struct SourceDeclarationGroupConstruction {
     clang::DeclContext *lexical_context = nullptr;
@@ -4379,7 +3387,7 @@ protected:
   // Lexical source provenance is a single producer transaction. Once a node
   // has consumed its exact Clang range, wrapper visitors and generic statement
   // handling may validate that publication but may not widen or replace it.
-  std::unordered_set<SgNode *> p_lexical_source_nodes;
+  std::unordered_map<SgNode *, clang::SourceRange> p_lexical_source_nodes;
   // A qualified namespace definition can be written in an enclosing namespace
   // while retaining a nested namespace as its semantic owner, for example
   // `namespace outer { class inner::name { ... }; }`.  Only the declaration
@@ -4393,17 +3401,17 @@ protected:
   // assign synthesized provenance to the semantic member-reference wrappers
   // at construction time while leaving the source-written object untouched.
   std::unordered_set<const clang::Expr *> p_synthesized_callee_expressions;
-  // Clang assigns both the cooked literal and synthesized UDL arguments the
-  // enclosing expression's source range. Record their exact source/generated
-  // roles while translating that semantic call so literal visitors never
-  // parse or later repair a non-literal token range.
-  struct ExactUdlOperandSpelling {
+  // Cooked UDL arguments and imaginary components share their enclosing
+  // literal's token. The owning producer supplies the exact scalar spelling
+  // before the operand is constructed; synthesized UDL arguments have an
+  // explicit generated role.
+  struct ExactLiteralOperandSpelling {
     std::string spelling;
     bool consumed = false;
     bool compiler_generated = false;
   };
-  std::unordered_map<const clang::Expr *, ExactUdlOperandSpelling>
-      p_exact_udl_operand_spellings;
+  std::unordered_map<const clang::Expr *, ExactLiteralOperandSpelling>
+      p_exact_literal_operand_spellings;
   unsigned p_canonical_generated_literal_depth = 0;
   unsigned p_rebuild_translation_cache_depth = 0;
   class SemanticExpressionConstruction {
@@ -4445,11 +3453,24 @@ protected:
   // those values are built from their constant APValue, never by traversing a
   // source expression into a semantic declaration scope.
   unsigned p_semantic_template_argument_expression_depth = 0;
+  std::optional<const clang::DeclContext *>
+      p_canonical_template_argument_context;
+  clang::NonTypeTemplateParmDecl *resolveCanonicalNonTypeTemplateParameterUse(
+      clang::NonTypeTemplateParmDecl *parameter);
   // Expressions owned only by semantic declarations must be constructed with
   // semantic provenance from their first node. Keep that role explicit while
   // traversing the whole expression so nested requires-parameter scopes and
   // non-expression descendants never acquire a temporary lexical role.
   unsigned p_semantic_expression_subtree_depth = 0;
+  std::vector<
+      std::pair<const clang::OpaqueValueExpr *, SgCxxArrayInitBinding *>>
+      p_array_init_binding_stack;
+  struct PseudoObjectConstructionFrame {
+    std::map<const clang::OpaqueValueExpr *, SgOpaqueValueBinding *> bindings;
+    SgOpaqueValueBindingPtrList captures;
+    bool written = false;
+  };
+  std::deque<PseudoObjectConstructionFrame> p_pseudo_object_construction_frames;
   // Clang models a range-for's written range expression through an implicit
   // __range declaration.  The declaration/name/definition are semantic-only,
   // while the initializer expression remains the exact lexical source owner.
@@ -4563,8 +3584,7 @@ protected:
   };
   std::vector<LambdaInitCaptureOwnerFrame> p_lambda_init_capture_owner_stack;
   using ContextualLocalTypeDeclarationKey =
-      std::tuple<uintptr_t, unsigned, unsigned, unsigned, std::string,
-                 uintptr_t>;
+      std::tuple<uintptr_t, unsigned, unsigned, unsigned, uintptr_t>;
   // Clang clones local type declarations for a concrete function-template
   // body but can retain the primary declaration in shared TypedefType and
   // RecordType nodes. Key the translated local identity by its exact active
@@ -4576,8 +3596,8 @@ protected:
       p_contextual_local_type_declaration_map;
   std::unordered_map<const clang::Type *, SgNode *> p_type_translation_map;
   using ContextualTypeTranslationKey =
-      std::tuple<uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t, bool,
-                 std::uint64_t>;
+      std::tuple<uintptr_t, uintptr_t, uintptr_t, uintptr_t, uintptr_t,
+                 uintptr_t, bool, std::uint64_t>;
   // Dependent types and member-owned typedef/using types cannot be keyed by
   // their Clang Type pointer alone: Clang shares those nodes across template
   // declarations while their exact Sage names and owners come from the active
@@ -4607,17 +3627,21 @@ protected:
   std::map<SgFunctionDefinition *, const clang::Stmt *> p_function_body_map;
   SgGlobal *p_global_scope;
 
-  std::map<SgClassType *, bool> p_class_type_decl_first_see_in_type;
-  std::map<SgEnumType *, bool> p_enum_type_decl_first_see_in_type;
-
   RoseOpenMPPragmaCallback *p_openmp_pragma_callback;
   std::set<std::pair<clang::FileID, unsigned>> p_consumed_pragma_lines;
+  using PhysicalPragmaKey = std::pair<clang::FileID, unsigned>;
+  using ExpressionPragmaOwner =
+      std::pair<const clang::Expr *, PreprocessingInfo::RelativePositionType>;
+  using LexicalPragmaOwner =
+      std::variant<const clang::DeclContext *, const clang::CompoundStmt *,
+                   ExpressionPragmaOwner>;
+  std::map<LexicalPragmaOwner, std::vector<PhysicalPragmaKey>>
+      p_lexical_pragmas;
 
-  // Template instantiation cache. Keys contain Clang-canonical arguments;
-  // source spelling (including elaborated keywords and omitted defaults) must
-  // never create a second semantic specialization identity.
+  // Canonical template/argument identity and exact native alias dependencies;
+  // formatted source names are not identity keys.
   std::unordered_map<ClangTemplateInstantiationCacheKey,
-                     SgTemplateInstantiationDecl *,
+                     SgDeclarationStatement *,
                      ClangTemplateInstantiationCacheKeyHash>
       p_template_inst_cache;
   struct CapturedPragma {
@@ -4630,10 +3654,15 @@ protected:
     unsigned end_column;
     std::string text;
     std::string source_text;
-    bool is_openmp;
+    bool is_structured_directive;
     bool is_rose_semantic;
     bool has_top_level_macro_expansion;
+    std::optional<clang::SourceRange> attribute_range;
   };
+  std::map<unsigned, std::vector<CapturedPragma>> p_openmp_attribute_pragmas;
+  void prepareOpenMPAttributePragmas();
+  void collectOpenMPAttributePragmas(clang::Stmt *stmt,
+                                     std::vector<CapturedPragma> &pragmas);
 
   // Recursion guard for decl translation to avoid re-entrant Traverse()
   // calls (e.g., when forcing translation of direct callees).
@@ -4718,6 +3747,12 @@ protected:
   // declared (constructors are a common case), so translating it while the
   // parameter-list shell is built would re-enter an unpublished declaration.
   unsigned p_defer_parameter_default_argument_depth = 0;
+  struct BindingStorageConstruction {
+    clang::DecompositionDecl *decomposition;
+    SgDeclarationScope *scope;
+  };
+  std::unordered_map<const clang::VarDecl *, BindingStorageConstruction>
+      p_binding_storage_constructions;
   // A semantic function declaration and a source-written function declaration
   // require different parameter provenance at construction.  Clang can expose
   // the parameter objects of an instantiated/redeclared signature with one
@@ -4731,10 +3766,49 @@ protected:
     bool semantic = false;
     bool explicit_template_id_type_use = false;
     SgDeclarationScope *declaration_scope = nullptr;
+    SgFunctionParameterList *parameter_list = nullptr;
+    std::pair<const clang::ParmVarDecl *, SgType *> semantic_parameter_type{};
+    clang::QualType semantic_parameter_qual_type;
+    SgInitializedName *written_parameter = nullptr;
     std::set<const clang::TagDecl *> source_declarator_tags;
+
+    bool ownsParameterUnderConstruction(SgInitializedName *parameter) const {
+      if (parameter == nullptr || declaration_scope == nullptr ||
+          parameter->get_scope() != declaration_scope ||
+          parameter->get_declptr() != nullptr)
+        return false;
+      if (parameter->get_parent() == declaration_scope)
+        return true;
+      return parameter_list != nullptr &&
+             parameter->get_parent() == parameter_list &&
+             parameter_list->get_parent() == nullptr &&
+             std::count(parameter_list->get_args().begin(),
+                        parameter_list->get_args().end(), parameter) == 1;
+    }
   };
-  std::vector<FunctionParameterConstructionFrame>
+  std::deque<FunctionParameterConstructionFrame>
       p_function_parameter_construction_stack;
+  SgType *
+  constructFunctionParameterType(FunctionParameterConstructionFrame &frame);
+  enum class ParameterCloneRole { semantic_lookup, lexical_lookup, written };
+  SgInitializedName *cloneParameter(SgInitializedName *source,
+                                    const clang::ParmVarDecl *parameter,
+                                    SgType *type, ParameterCloneRole role);
+  struct FunctionTypeParameterConstructionFrame {
+    SgFunctionParameterScope *scope;
+    const clang::FunctionProtoType *type;
+    std::unordered_map<const clang::ParmVarDecl *, SgInitializedName *>
+        parameters;
+  };
+  std::vector<FunctionTypeParameterConstructionFrame>
+      p_function_type_parameter_construction_stack;
+  struct FunctionExceptionConstructionFrame {
+    const clang::FunctionProtoType *type;
+    bool semantic;
+    size_t body_depth;
+  };
+  const FunctionExceptionConstructionFrame *p_function_exception_construction =
+      nullptr;
   // Requires-expression local parameters are ParmVarDecl nodes, but their
   // exact semantic owner is a RequiresExprBodyDecl rather than a
   // FunctionDecl. Keep that distinct producer transaction explicit so the
@@ -4746,6 +3820,7 @@ protected:
     std::set<const clang::ParmVarDecl *> parameters;
     std::unordered_map<const clang::ParmVarDecl *, SgInitializedName *>
         translated_parameters;
+    SgInitializedName *written_parameter = nullptr;
   };
   std::vector<RequiresParameterConstructionFrame>
       p_requires_parameter_construction_stack;
@@ -4915,19 +3990,10 @@ protected:
   }
   SgNode *statementConstructionOwner(const clang::Stmt *statement,
                                      const char *context) const;
-  // Return types of out-of-class member declarations are translated with the
-  // enclosing class template scope available for name lookup, but injected
-  // class names are still non-local there and must spell the full current
-  // instantiation.
-  unsigned p_force_nonlocal_injected_class_name_depth = 0;
   // Some source-backed contexts, such as function return type syntax, must
   // preserve an explicitly written template-id even when it names the same
   // specialization as a defaulted or injected form.
   unsigned p_force_written_template_specialization_depth = 0;
-  // A direct injected class-name return type needs the full current
-  // instantiation spelling, but nested injected names in surrounding syntax
-  // should still follow their own source spelling.
-  unsigned p_preserve_omitted_injected_class_template_id_depth = 0;
   // Default template type arguments have no separate declaration reference
   // on which to store their exact qualifier. Preserve explicitly written
   // qualified named types, including aliases and tags, in the source type
@@ -4982,7 +4048,7 @@ protected:
     }
     return nullptr;
   }
-  ClangTemplateParameterNameContextStack p_exact_template_parameter_name_stack;
+  ClangTemplateParameterContextStack p_exact_template_parameter_stack;
   // Clang can retain a member typedef from a class-template pattern as the
   // written result type of an instantiated member function when the typedef's
   // canonical type does not itself depend on template arguments.  Keep the
@@ -5002,46 +4068,24 @@ protected:
                ? nullptr
                : p_member_call_specialization_context_stack.back();
   }
-  const ClangTemplateParameterNameMap *
-  currentExactTemplateParameterNames() const {
-    return p_exact_template_parameter_name_stack.empty()
+  const ClangTemplateParameterMap *currentExactTemplateParameters() const {
+    return p_exact_template_parameter_stack.empty()
                ? nullptr
-               : &p_exact_template_parameter_name_stack.back();
-  }
-  std::string resolveExactTemplateParameterName(unsigned depth,
-                                                unsigned index) const {
-    for (auto names = p_exact_template_parameter_name_stack.rbegin();
-         names != p_exact_template_parameter_name_stack.rend(); ++names) {
-      auto name = names->find({depth, index});
-      if (name != names->end() && !name->second.name.empty()) {
-        return name->second.name;
-      }
-    }
-    return "";
+               : &p_exact_template_parameter_stack.back();
   }
   const clang::TemplateTypeParmDecl *
   resolveExactTemplateTypeParameterDeclaration(unsigned depth,
                                                unsigned index) const {
-    for (auto parameters = p_exact_template_parameter_name_stack.rbegin();
-         parameters != p_exact_template_parameter_name_stack.rend();
-         ++parameters) {
+    for (auto parameters = p_exact_template_parameter_stack.rbegin();
+         parameters != p_exact_template_parameter_stack.rend(); ++parameters) {
       auto parameter = parameters->find({depth, index});
-      if (parameter == parameters->end() ||
-          parameter->second.declaration == nullptr) {
+      if (parameter == parameters->end()) {
         continue;
       }
-      if (const auto *type_parameter =
-              llvm::dyn_cast<clang::TemplateTypeParmDecl>(
-                  parameter->second.declaration)) {
-        return type_parameter;
-      }
+      return llvm::cast<clang::TemplateTypeParmDecl>(parameter->second);
     }
     return nullptr;
   }
-  std::string buildExactTemplateInstantiationName(
-      const std::string &baseName,
-      llvm::ArrayRef<clang::TemplateArgument> templateArguments,
-      const clang::DeclContext *templateParameterContext) const;
 
   // Deferred body-completion queue for semantic functions discovered while
   // traversing user code.  Initial traversal publishes the exact declaration
@@ -5055,31 +4099,18 @@ protected:
   // construction during an owner-population transaction.  Only the exact
   // declaration currently consumed by Phase C is active.
   std::set<clang::FunctionDecl *> p_active_function_body_completions;
-  // Exact placeholder published when an implicit system/builtin function
-  // specialization is first encountered before Phase C authorizes concrete
-  // instantiation.  A later queue transaction consumes this record before
-  // replacing the declaration-map entry with the concrete specialization.
-  std::unordered_map<clang::FunctionDecl *, SgFunctionDeclaration *>
-      p_suppressed_implicit_function_instantiation_placeholders;
-  std::unordered_map<SgFunctionDeclaration *,
-                     std::unordered_set<clang::FunctionDecl *>>
-      p_suppressed_implicit_function_instantiation_placeholder_aliases;
-  std::unordered_map<clang::FunctionDecl *,
-                     std::vector<SgTemplateFunctionRefExp *>>
-      p_pending_deduced_template_function_references;
-  std::unordered_map<clang::FunctionDecl *,
-                     std::vector<SgTemplateMemberFunctionRefExp *>>
-      p_pending_deduced_template_member_function_references;
-  struct FunctionReferenceTypeUse {
-    SgFunctionRefExp *reference = nullptr;
-    SgType *published_function_type = nullptr;
-  };
-  std::unordered_map<SgFunctionSymbol *, std::vector<FunctionReferenceTypeUse>>
-      p_function_reference_type_uses;
 
+  struct PendingConstructorPostTranslation {
+    clang::CXXConstructorDecl *constructor = nullptr;
+    SgMemberFunctionDeclaration *published = nullptr;
+    SgMemberFunctionDeclaration *surface = nullptr;
+    std::vector<PostTranslationTemplateParameterSurface> template_parameters;
+  };
   struct ClassDefinitionPopulationFrame {
     clang::RecordDecl *record = nullptr;
     SgClassDefinition *definition = nullptr;
+    bool members_ready = false;
+    std::vector<PendingConstructorPostTranslation> pending_constructors;
   };
   // Function-local classes remain structurally detached from their enclosing
   // function until the DeclStmt commits.  This exact construction frame lets
@@ -5096,7 +4127,7 @@ protected:
       p_pending_implicit_class_template_specializations;
   std::set<clang::ClassTemplateSpecializationDecl *>
       p_pending_implicit_class_template_specializations_set;
-  clang::CompilerInstance *p_compiler_instance;
+  clang::CompilerInstance *const p_compiler_instance;
   clang::Parser *p_active_parser = nullptr;
   SagePreprocessorRecord *p_sage_preprocessor_recorder;
   SgSourceFile *p_sage_source_file; // Parent file for connecting global scope
@@ -5113,9 +4144,6 @@ protected:
       std::size_t declaration_begin_index, std::size_t name_index,
       const char *entity_kind, const std::string &entity_name,
       std::size_t *qualification_begin_index = nullptr);
-  SgScopeStatement *
-  resolveMethodEnclosingScope(clang::CXXMethodDecl *method_decl);
-
   SgNode *lookupUsingDeclTargetNode(clang::Decl *decl);
   SgNode *resolveUsingDeclTargetNode(clang::Decl *decl);
   bool extractUsingTargetFromNode(SgNode *target_node,
@@ -5135,16 +4163,12 @@ protected:
   publishHiddenFriendCallable(clang::FunctionDecl *clang_decl,
                               SgFunctionDeclaration *surface_decl);
   void registerDeclarationSymbol(SgDeclarationStatement *decl);
-  SgFunctionRefExp *
-  registerFunctionReferenceTypeUse(SgFunctionRefExp *reference);
-  void reconcileFunctionReferenceTypeUses(SgFunctionDeclaration *declaration);
+  SgFunctionRefExp *buildFunctionReference(SgFunctionSymbol *symbol,
+                                           clang::QualType type, bool semantic);
   void
   ensureDeclInScopeChildList(SgDeclarationStatement *decl,
                              SgScopeStatement *scope,
                              const char *context = "ClangToSageTranslator");
-  void ensureDeclInScopeChildListPreserveScope(
-      SgDeclarationStatement *decl, SgScopeStatement *scope,
-      const char *context = "ClangToSageTranslator");
   SgScopeStatement *
   activeFunctionBodyOwnerForDeclaration(clang::Decl *decl) const;
   SgClassDefinition *
@@ -5154,7 +4178,7 @@ protected:
   activeClassDefinitionOwnerForDeclaration(clang::Decl *decl,
                                            const char *context) const;
   SgClassDefinition *exactClassDefinitionOwnerForFieldTranslation(
-      clang::FieldDecl *field, SgNode *translation, const char *context) const;
+      clang::ValueDecl *field, SgNode *translation, const char *context) const;
   SgClassDefinition *exactClassDefinitionOwnerForFunctionTranslation(
       clang::Decl *function, SgNode *translation, const char *context);
   bool declaration_has_exact_lexical_source_ownership(
@@ -5191,17 +4215,22 @@ protected:
   lookupParameterFromExactOwner(const clang::ParmVarDecl *parameter);
   SgNode *lookupCachedTranslationForTraverse(clang::Decl *decl,
                                              bool *needs_translation);
-  void linkSpecializedTemplateDeclaration(SgDeclarationStatement *decl,
-                                          clang::Decl *specialized_decl);
-  void linkNonrealTemplateDeclaration(SgNonrealDecl *decl,
-                                      clang::Decl *template_decl,
-                                      const char *context);
   SgDeclarationStatement *
-  lookupExactSgDeclarationForClangDecl(clang::Decl *key, bool allow_on_demand);
+  resolveNonrealTemplateDeclarationTarget(clang::Decl *template_decl,
+                                          const char *context);
+  SgFunctionDeclaration *
+  requireSelectedFunctionDeclaration(clang::FunctionDecl *selected);
+  enum class DeclarationLookupPurpose { Ordinary, SelectedCallableReference };
+  SgDeclarationStatement *lookupExactSgDeclarationForClangDecl(
+      clang::Decl *key, bool allow_on_demand,
+      DeclarationLookupPurpose purpose = DeclarationLookupPurpose::Ordinary);
   SgDeclarationStatement *lookupSgDeclarationForClangDecl(clang::Decl *key,
                                                           bool allow_on_demand);
   SgClassDeclaration *
   lookupRecordTypePlaceholderDecl(clang::RecordDecl *record_decl) const;
+  SgType *
+  buildUnqualifiedWrittenRecordMemberType(const clang::Type *written_type,
+                                          SgScopeStatement *scope);
   SgClassDeclaration *
   buildRecordTypePlaceholderDecl(clang::RecordDecl *record_decl);
   void cacheRecordTypePlaceholderDecl(clang::RecordDecl *record_decl,
@@ -5211,23 +4240,55 @@ protected:
   void completeClassRedeclarationFamily(SgClassDeclaration *canonical,
                                         SgClassDeclaration *defining);
 
+  bool scopeIsWithinNamespaceChain(SgScopeStatement *scope,
+                                   clang::DeclContext *context) const;
   bool scopeReachableFromCurrentFile(SgScopeStatement *scope);
-  SgScopeStatement *resolveReachableNamespaceScope(clang::DeclContext *context);
 
-  SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type);
+  SgType *buildTypeFromQualifiedType(const clang::QualType &qual_type,
+                                     SgType *unqualified_type = nullptr);
   SgType *buildSemanticTypeFromQualifiedType(const clang::QualType &qual_type,
                                              const char *context);
+  struct FunctionExceptionSpecification {
+    SgFunctionType::exception_specification_kind_enum kind =
+        SgFunctionType::e_exception_none;
+    std::unique_ptr<SgExpression> expression;
+    SgTypePtrList types;
+    std::vector<bool> type_pack_expansions;
+    SgFunctionDeclaration *source = nullptr;
+    SgFunctionDeclaration *pattern = nullptr;
+    bool source_is_self = false;
+    bool is_written = false;
+  };
+  FunctionExceptionSpecification
+  prepareFunctionExceptionSpecification(const clang::FunctionProtoType *type,
+                                        const clang::FunctionDecl *owner,
+                                        bool is_written, bool semantic);
+  SgFunctionType *buildFunctionTypeForClangProto(
+      SgType *return_type,
+      std::unique_ptr<SgFunctionParameterTypeList> parameters,
+      const clang::FunctionProtoType *type, SgType *class_type = nullptr,
+      const clang::FunctionProtoTypeLoc *source = nullptr);
+  SgFunctionType *buildDeclaredFunctionExceptionSignature(
+      SgFunctionType *canonical_type, const clang::FunctionProtoType *type,
+      const clang::FunctionDecl *owner, bool is_written, bool semantic);
+  SageBuilder::function_declaration_ownership
+  prepareFunctionDeclarationExceptionOwnership(
+      SageBuilder::function_declaration_ownership ownership,
+      const clang::FunctionDecl *declaration, SgFunctionType *canonical_type,
+      bool is_written, bool semantic = false);
   SgType *buildExplicitTemplateIdTypeUseFromQualifiedType(
       const clang::QualType &qual_type, const char *context);
   SgType *
   buildExplicitTemplateIdTypeUseFromTypeLoc(const clang::TypeLoc &type_loc,
                                             const char *context);
-  SgType *buildTypeFromTypeLoc(const clang::TypeLoc &type_loc);
+  SgType *buildTypeFromTypeLoc(const clang::TypeLoc &type_loc,
+                               SgType *member_function_class = nullptr);
   SgType *
   buildTypeFromTypeLocWithSemanticOwner(const clang::TypeLoc &type_loc,
                                         SgScopeStatement *semantic_owner_scope,
                                         const char *context);
-  SgType *buildTypeFromTypeLocImpl(const clang::TypeLoc &type_loc);
+  SgType *buildTypeFromTypeLocImpl(const clang::TypeLoc &type_loc,
+                                   SgType *member_function_class);
   void
   preserveExplicitFunctionReturnTypeQualifier(SgFunctionDeclaration *function,
                                               clang::TypeLoc return_type_loc);
@@ -5277,13 +4338,10 @@ protected:
   // Template helper methods
   SgTemplateArgumentPtrList cloneTemplateArgumentSurfacePreservingIdentity(
       const SgTemplateArgumentPtrList &source) const;
-  SgTemplateClassDeclaration *
-  lookupTranslatedTemplateDeclarationForRecord(clang::CXXRecordDecl *record);
 
   // Resolve the one exact Clang primary-template identity.  A specialization
   // must never manufacture a primary declaration from its name or arguments.
   SgTemplateClassDeclaration *requireExactTemplateDeclaration(
-      const std::string &template_name,
       const clang::TemplateSpecializationType *clang_type);
 
   // Helper: Build a nonreal scope chain for a nested name qualifier.
@@ -5306,11 +4364,10 @@ protected:
   SgTemplateArgumentPtrList buildSemanticTemplateArguments(
       const clang::TemplateArgumentListInfo &arg_info, bool explicitlySpecified,
       const char *context);
-  SgTemplateArgumentPtrList
-  buildTemplateArguments(const clang::TemplateArgumentList &args,
-                         size_t explicit_count = 0,
-                         bool reconstruct_explicit_source_surface = false);
-  void ensureTemplateArgumentParents(SgTemplateArgumentPtrList &args);
+  SgTemplateArgumentPtrList buildTemplateArguments(
+      const clang::TemplateArgumentList &args, size_t explicit_count = 0,
+      bool reconstruct_explicit_source_surface = false,
+      const clang::ASTTemplateArgumentListInfo *written_args = nullptr);
   size_t countExpandedTemplateArguments(
       const clang::TemplateArgumentListInfo &arg_info);
   size_t
@@ -5328,31 +4385,36 @@ protected:
                                bool explicitlySpecified = false);
 
   // Helper: Translate a single template argument
-  SgTemplateArgument *
-  translateTemplateArgument(const clang::TemplateArgument &arg,
-                            bool explicitlySpecified = false);
+  SgExpression *buildTemplateDeclarationValue(SgExpression *expression,
+                                              SgType *parameter_type);
+  SgTemplateArgument *translateTemplateArgument(
+      const clang::TemplateArgument &arg, bool explicitlySpecified = false,
+      clang::NestedNameSpecifier source_qualifier = std::nullopt);
   SgTemplateArgument *
   translateTemplateArgument(const clang::TemplateArgumentLoc &arg_loc,
                             bool explicitlySpecified = false);
 
-  // Helper: Get qualified name for a template declaration (e.g.,
-  // "std::array")
-  std::string
-  getTemplateQualifiedName(SgTemplateClassDeclaration *template_decl);
-
   // Helper: Build an exact Clang-canonical instantiation cache key.
   ClangTemplateInstantiationCacheKey buildTemplateInstantiationCacheKey(
-      const std::string &template_name,
+      const clang::TemplateDecl *primary_template,
       const clang::TemplateSpecializationType *spec_type,
-      const clang::DeclContext *semantic_owner);
+      const clang::DeclContext *semantic_owner,
+      const SgType *aliased_type = nullptr);
 
   // Declaration overload.
-  ClangTemplateInstantiationCacheKey
-  buildTemplateInstantiationCacheKey(const std::string &template_name,
-                                     const clang::TemplateArgumentList &args,
-                                     const clang::DeclContext *semantic_owner);
+  ClangTemplateInstantiationCacheKey buildTemplateInstantiationCacheKey(
+      const clang::ClassTemplateDecl *primary_template,
+      const clang::TemplateArgumentList &args,
+      const clang::DeclContext *semantic_owner);
 
-  enum class TemplateParameterOwnership { attached, detached, source_spelled };
+  enum class TemplateParameterOwnership {
+    attached,
+    semantic_attached,
+    detached,
+    source_spelled,
+    source_pending_adoption,
+    prepared_source
+  };
 
   // Helper: Translate template parameter lists on declarations
   SgTemplateParameter *translateTemplateParameterImpl(
@@ -5360,20 +4422,16 @@ protected:
       unsigned position, TemplateParameterOwnership ownership,
       SgScopeStatement *detached_semantic_scope,
       SgTemplateParameter *semantic_parameter,
-      SgTemplateParameterPtrList *construction_parameters);
-
-  SgTemplateParameter *
-  translateTemplateParameter(clang::NamedDecl *param_decl,
-                             SgDeclarationStatement *owning_template,
-                             unsigned position);
+      SgTemplateParameterPtrList *construction_parameters,
+      bool include_defaults = true);
 
   SgDeclarationStatement *
   resolveTemplateParameterOwner(clang::NamedDecl *param_decl,
                                 bool allow_on_demand);
 
-  SgTemplateParameter *
-  lookupActiveTemplateParameterSurface(const clang::NamedDecl *param_decl,
-                                       const char *consumer);
+  SgTemplateParameter *lookupActiveTemplateParameterSurface(
+      const clang::NamedDecl *param_decl, const char *consumer,
+      const TemplateParameterSurfaceFrame **matched_frame = nullptr);
 
   SgTemplateParameter *lookupPublishedTemplateTypeParameterFamily(
       const clang::TemplateTypeParmDecl *param_decl, const char *consumer,
@@ -5405,7 +4463,17 @@ protected:
 
   std::unique_ptr<SgTemplateParameterPtrList>
   translateTemplateParameterList(clang::TemplateParameterList *param_list,
-                                 SgDeclarationStatement *owning_template);
+                                 SgDeclarationStatement *owning_template,
+                                 TemplateParameterOwnership ownership =
+                                     TemplateParameterOwnership::attached);
+
+  // Adopt a completed typed parameter list and publish its Clang identities.
+  void publishTemplateParameterList(clang::TemplateParameterList *param_list,
+                                    SgTemplateParameterPtrList &parameters,
+                                    SgDeclarationStatement *owning_template);
+
+  const SgTemplateParameterPtrList *resolvePublishedTemplateParameterList(
+      clang::TemplateParameterList *source_parameters, const char *consumer);
 
   std::unique_ptr<SgTemplateParameterPtrList>
   translateDetachedTemplateParameterList(
@@ -5413,7 +4481,10 @@ protected:
       SgScopeStatement *semantic_scope,
       const SgTemplateParameterPtrList *semantic_parameters = nullptr,
       const char *source_consumer = nullptr,
-      SgDeclarationScope *construction_scope = nullptr);
+      SgDeclarationScope *construction_scope = nullptr,
+      TemplateParameterOwnership construction_ownership =
+          TemplateParameterOwnership::detached,
+      bool include_defaults = true);
 
   void publishSourceSpelledOuterClassTemplateHeaders(
       clang::CXXRecordDecl *record_decl, SgClassDeclaration *source_declaration,
@@ -5450,25 +4521,36 @@ protected:
   void populateClassDefinition(clang::RecordDecl *record_decl,
                                SgClassDefinition *class_def);
   bool collectPragmas(clang::Stmt *stmt, std::vector<CapturedPragma> &pragmas);
+  bool pragmaFileHasLexicalOwner(clang::FileID file_id) const;
+  void planLexicalPragmas(clang::TranslationUnitDecl *translation_unit);
+  void constructExpressionPragmas(const clang::Expr *source,
+                                  SgExpression *expression);
+  void attachCapturedPragmas(SgLocatedNode *owner,
+                             const std::vector<CapturedPragma> &pragmas,
+                             PreprocessingInfo::RelativePositionType position,
+                             const char *context);
+  void constructLexicalPragmas(LexicalPragmaOwner owner,
+                               SgScopeStatement *scope);
   SgPragmaDeclaration *buildCapturedPragmaDeclaration(
       const std::string &directive, const std::string &source_directive,
       clang::FileID physical_file_id, unsigned physical_line,
       const std::string &filename, unsigned pragma_line, unsigned pragma_column,
       unsigned pragma_end_line, unsigned pragma_end_column,
       SgScopeStatement *scope, bool has_top_level_macro_expansion,
-      bool source_file_only_owner = false);
+      bool source_file_only_owner = false,
+      std::optional<clang::SourceRange> attribute_range = std::nullopt);
   void appendPragmasBefore(clang::Stmt *stmt, SgScopeStatement *scope);
   SgStatement *wrapStatementWithPragmas(clang::Stmt *stmt,
                                         SgStatement *statement);
-  SgNode *translateControlledSubstatement(clang::Stmt *stmt,
-                                          SgScopeStatement *typed_owner,
-                                          const char *context);
-  SgNode *translateTypedStatementChild(clang::Stmt *stmt,
-                                       SgStatement *typed_owner,
-                                       const char *context);
+  SgStatement *translateStatement(clang::Stmt *stmt, const char *context,
+                                  bool expression_owns_terminator = true);
+  SgStatement *translateControlledSubstatement(clang::Stmt *stmt,
+                                               SgScopeStatement *typed_owner,
+                                               const char *context);
+  SgStatement *translateTypedStatementChild(clang::Stmt *stmt,
+                                            SgStatement *typed_owner,
+                                            const char *context);
 
-  // Helper: Ensure a namespace declaration exists (creating stubs if
-  // needed, recursively)
   SgNamespaceDeclarationStatement *
   ensureNamespaceDeclaration(clang::NamespaceDecl *ns_decl);
 
@@ -5534,20 +4616,26 @@ protected:
       SgNamespaceDeclarationStatement *sage_declaration);
 
   // Helpers: build a non-real qualified type from a Clang nested-name
-  // specifier plus a terminal semantic name. Template arguments must already
+  // specifier plus a terminal name. Template arguments must already
   // satisfy the semantic construction contract.
   SgNonrealType *buildSemanticNonrealTypeFromNestedNameSpecifier(
       clang::NestedNameSpecifier qualifier, SgScopeStatement *scope,
       const SgName &terminalName,
       const SgTemplateArgumentPtrList *terminalTemplateArgs,
-      const SgName *terminalSemanticName);
+      SgDeclarationStatement *terminalDeclaration = nullptr,
+      SgType *aliasedType = nullptr);
+  SgType *buildDependentAliasUnderlyingType(
+      const clang::TemplateSpecializationType *type);
 
   SgNonrealRefExp *buildNonrealRefExpFromNestedNameSpecifier(
       clang::NestedNameSpecifier qualifier, SgScopeStatement *scope,
       const SgName &terminalName, bool terminalHasTemplateKeyword,
       const SgTemplateArgumentPtrList *terminalSemanticTemplateArgs,
-      const SgName *terminalSemanticName,
-      const SgTemplateArgumentPtrList *terminalReferenceTemplateArgs);
+      const SgTemplateArgumentPtrList *terminalReferenceTemplateArgs,
+      SgDeclarationStatement *terminalDeclaration = nullptr);
+  void buildConversionFunctionId(SgExpression *reference,
+                                 const clang::DeclarationNameInfo &name,
+                                 bool source_written = true);
 
   // Helper: Translate a Clang type used in a nested-name-specifier
   // (TypeSpec / TypeSpecWithTemplate) into a SgNonrealType, created in
@@ -5565,19 +4653,7 @@ protected:
   ConstraintSatisfactionResult evaluateConstraintSatisfaction(
       const clang::NamedDecl *constraint_owner,
       llvm::ArrayRef<clang::AssociatedConstraint> constraints,
-      llvm::ArrayRef<clang::TemplateArgument> template_args,
-      clang::SourceRange template_id_range);
-
-  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
-      const clang::NamedDecl *constraint_owner,
-      llvm::ArrayRef<clang::AssociatedConstraint> constraints,
-      const clang::MultiLevelTemplateArgumentList &template_args,
-      clang::SourceRange template_id_range);
-
-  ConstraintSatisfactionResult evaluateConstraintSatisfaction(
-      const clang::NamedDecl *constraint_owner,
-      llvm::ArrayRef<clang::AssociatedConstraint> constraints,
-      const clang::TemplateArgumentList &template_args,
+      const clang::NamedDecl *instantiation,
       clang::SourceRange template_id_range);
   // Evaluate non-constraint SFINAE for a template instantiation.
   SFINAEFailureResult
@@ -5588,11 +4664,11 @@ protected:
   void attachSFINAEFailure(SgNode *node, const SFINAEFailureResult &result);
   bool shouldSkipSymbolForConstraints(const SgDeclarationStatement *decl) const;
   void pruneSymbolsForConstraints(SgDeclarationStatement *decl);
-  bool buildCoroutineAwaitExpression(clang::Expr *operand,
-                                     clang::QualType result_type,
-                                     clang::SourceRange source_range,
-                                     const char *operand_description,
-                                     SgNode **node);
+  void buildCoroutineAwaitExpression(
+      clang::Expr *operand, clang::QualType result_type,
+      clang::SourceRange source_range,
+      SgAwaitExpression::coroutine_keyword_kind_enum keyword,
+      const char *operand_description, SgNode **node);
 
 public:
   ClangToSageTranslator(clang::CompilerInstance *compiler_instance,
@@ -5610,7 +4686,6 @@ public:
 
   void setActiveParser(clang::Parser *parser) { p_active_parser = parser; }
 
-  void appendUnattachedPragmas();
   SgFunctionDeclaration *
   lookupTranslatedFunctionDecl(clang::FunctionDecl *decl,
                                bool allow_on_demand = true) {
@@ -5633,10 +4708,6 @@ public:
   virtual SgNode *TraverseOnDemand(clang::Decl *decl);
 
   /* Visit methods */
-  /*
-     Reference: clang/AST/Decl.h
-     Overall 84 decl AST nodes according as 04/24/2019
-  */
   virtual bool VisitDecl(clang::Decl *decl, SgNode **node);
   virtual bool VisitAccessSpecDecl(clang::AccessSpecDecl *access_spec_decl,
                                    SgNode **node);
@@ -5651,9 +4722,6 @@ public:
   VisitFileScopeAsmDecl(clang::FileScopeAsmDecl *file_scope_asm_decl,
                         SgNode **node);
   virtual bool VisitFriendDecl(clang::FriendDecl *friend_decl, SgNode **node);
-  virtual bool
-  VisitFriendTemplateDecl(clang::FriendTemplateDecl *friend_template_decl,
-                          SgNode **node);
   virtual bool VisitImportDecl(clang::ImportDecl *import_decl, SgNode **node);
   virtual bool VisitNamedDecl(clang::NamedDecl *named_decl, SgNode **node);
   virtual bool VisitLabelDecl(clang::LabelDecl *label_decl, SgNode **node);
@@ -5664,24 +4732,11 @@ public:
                                   SgNode **node);
   virtual bool VisitLinkageSpecDecl(clang::LinkageSpecDecl *linkage_spec_decl,
                                     SgNode **node);
-  // virtual bool VisitObjCCompatibleAliasDecl
-  // virtual bool VisitObjCContainerDecl
-  // virtual bool VisitObjCCategoryDecl
-  // virtual bool VisitObjCInterfaceDecl
-  // virtual bool VisitBuiCProtocolDecl
-  // virtual bool VisitBuiltinTemplateDecl
-  // virtual bool VisitObjCMethodDecl
-  // virtual bool VisitObjCPropertyDecl
-  virtual bool VisitTemplateDecl(clang::TemplateDecl *template_decl,
-                                 SgNode **node);
   virtual bool
   VisitBuiltinTemplateDecl(clang::BuiltinTemplateDecl *builtin_template_decl,
                            SgNode **node);
   virtual bool VisitConceptDecl(clang::ConceptDecl *concept_decl,
                                 SgNode **node);
-  virtual bool VisitRedeclarableTemplateDecl(
-      clang::RedeclarableTemplateDecl *redeclarable_template_decl,
-      SgNode **node);
   virtual bool
   VisitClassTemplateDecl(clang::ClassTemplateDecl *class_template_decl,
                          SgNode **node);
@@ -5703,9 +4758,6 @@ public:
   virtual bool VisitClassTemplateSpecializationDecl(
       clang::ClassTemplateSpecializationDecl *class_tpl_spec_decl,
       SgNode **node);
-  bool VisitClassTemplateSpecializationDecl_Impl(
-      clang::ClassTemplateSpecializationDecl *class_tpl_spec_decl,
-      SgNode **node);
   virtual bool VisitClassTemplatePartialSpecializationDecl(
       clang::ClassTemplatePartialSpecializationDecl *class_tpl_part_spec_decl,
       SgNode **node);
@@ -5719,9 +4771,6 @@ public:
                                 SgNode **node);
   virtual bool VisitTypeAliasDecl(clang::TypeAliasDecl *type_alias_decl,
                                   SgNode **node);
-  // virtual bool
-  // VisitObjCTypeParamDecl(clang::ObjCTypeParamDecl
-  // * obj_type_param_decl, SgNode ** node);
   virtual bool VisitUnresolvedUsingTypenameDecl(
       clang::UnresolvedUsingTypenameDecl *unresolved_using_type_name_decl,
       SgNode **node);
@@ -5742,14 +4791,10 @@ public:
   virtual bool VisitDeclaratorDecl(clang::DeclaratorDecl *declarator_decl,
                                    SgNode **node);
   virtual bool VisitFieldDecl(clang::FieldDecl *field_decl, SgNode **node);
-  // virtual bool VisitObjCAtDefsFieldDecl
-  // virtual bool VisitObjCvarDecl
   virtual bool VisitFunctionDecl(clang::FunctionDecl *function_decl,
                                  SgNode **node);
   virtual bool VisitCXXDeductionGuideDecl(
       clang::CXXDeductionGuideDecl *cxx_deduction_guide_guide, SgNode **node);
-  virtual bool VisitCXXMethodDecl(clang::CXXMethodDecl *cxx_method_decl,
-                                  SgNode **node);
   virtual bool
   VisitCXXConstructorDecl(clang::CXXConstructorDecl *cxx_constructor_decl,
                           SgNode **node);
@@ -5759,6 +4804,10 @@ public:
   virtual bool
   VisitCXXDestructorDecl(clang::CXXDestructorDecl *cxx_destructor_decl,
                          SgNode **node);
+  void constructDestructorEpilogue(clang::CXXDestructorDecl *declaration,
+                                   SgFunctionDefinition *definition);
+  static SgInitializedName *
+  exactInitializedNameFromTranslatedVariableNode(SgNode *translated);
   virtual bool VisitMSPropertyDecl(clang::MSPropertyDecl *ms_property_decl,
                                    SgNode **node);
   virtual bool VisitNonTypeTemplateParmDecl(
@@ -5768,6 +4817,8 @@ public:
   virtual bool
   VisitDecompositionDecl(clang::DecompositionDecl *decomposition_decl,
                          SgNode **node);
+  void constructStructuredBindingPattern(clang::DecompositionDecl *,
+                                         SgVariableDeclaration *);
   virtual bool
   VisitImplicitParamDecl(clang::ImplicitParamDecl *implicit_param_decl,
                          SgNode **node);
@@ -5789,7 +4840,6 @@ public:
   virtual bool VisitUnresolvedUsingValueDecl(
       clang::UnresolvedUsingValueDecl *unresolved_using_value_decl,
       SgNode **node);
-  // virtual bool VisitObjCPropertyImplDecl
   virtual bool
   VisitPragmaCommentDecl(clang::PragmaCommentDecl *pragma_comment_decl,
                          SgNode **node);
@@ -5802,12 +4852,7 @@ public:
   VisitTranslationUnitDecl(clang::TranslationUnitDecl *translation_unit_decl,
                            SgNode **node);
 
-  /*
-     Reference: clang/AST/Stmt.h
-     Overall 198 stmt AST nodes according as 02/19/2019
-  */
   virtual bool VisitStmt(clang::Stmt *stmt, SgNode **node);
-  virtual bool VisitAsmStmt(clang::AsmStmt *asm_stmt, SgNode **node);
   virtual bool VisitGCCAsmStmt(clang::GCCAsmStmt *gcc_asm_stmt, SgNode **node);
   virtual bool VisitMSAsmStmt(clang::MSAsmStmt *ms_asm_stmt, SgNode **node);
   virtual bool VisitBreakStmt(clang::BreakStmt *break_stmt, SgNode **node);
@@ -5838,13 +4883,6 @@ public:
   virtual bool VisitMSDependentExistsStmt(
       clang::MSDependentExistsStmt *ms_dependent_exists_stmt, SgNode **node);
   virtual bool VisitNullStmt(clang::NullStmt *null_stmt, SgNode **node);
-  // virtual bool VisitObjCAtCatchStmt
-  // virtual bool VisitObjCAtFinallyStmt
-  // virtual bool VisitObjCAtSynchronizedStmt
-  // virtual bool VisitObjCAtThrowStmt
-  // virtual bool VisitObjCAtTryStmt
-  // virtual bool VisitObjCAutoreleasePoolStmt
-  // virtual bool VisitObjCForCollectionStmt
   virtual bool VisitReturnStmt(clang::ReturnStmt *return_stmt, SgNode **node);
   virtual bool VisitSEHExceptStmt(clang::SEHExceptStmt *seh_except_stmt,
                                   SgNode **node);
@@ -5876,18 +4914,16 @@ public:
   virtual bool VisitAddrLabelExpr(clang::AddrLabelExpr *addr_label_expr,
                                   SgNode **node);
   virtual bool
-  VisitArrayInitIndexExpr(clang::ArrayInitIndexExpr *array_init_index_expr,
-                          SgNode **node);
-  virtual bool
   VisitArrayInitLoopExpr(clang::ArrayInitLoopExpr *array_init_loop_expr,
                          SgNode **node);
+  virtual bool VisitArrayInitIndexExpr(clang::ArrayInitIndexExpr *expression,
+                                       SgNode **node);
   virtual bool
   VisitArraySubscriptExpr(clang::ArraySubscriptExpr *array_subscript_expr,
                           SgNode **node);
   virtual bool
   VisitArrayTypeTraitExpr(clang::ArrayTypeTraitExpr *array_type_trait_expr,
                           SgNode **node);
-  virtual bool VisitAsTypeExpr(clang::AsTypeExpr *as_type_expr, SgNode **node);
   virtual bool VisitAtomicExpr(clang::AtomicExpr *atomic_expr, SgNode **node);
   virtual bool VisitBinaryOperator(clang::BinaryOperator *binary_operator,
                                    SgNode **node);
@@ -5907,7 +4943,6 @@ public:
   virtual bool
   VisitUserDefinedLiteral(clang::UserDefinedLiteral *user_defined_literal,
                           SgNode **node);
-  virtual bool VisitCastExpr(clang::CastExpr *cast_expr, SgNode **node);
   virtual bool
   VisitExplicitCastExpr(clang::ExplicitCastExpr *explicit_cast_expr,
                         SgNode **node);
@@ -5918,23 +4953,8 @@ public:
                                    SgNode **node);
   virtual bool VisitCXXFunctionalCastExpr(
       clang::CXXFunctionalCastExpr *cxx_functional_cast_expr, SgNode **node);
-  virtual bool
-  VisitCXXNamedCastExpr(clang::CXXNamedCastExpr *cxx_named_cast_expr,
-                        SgNode **node);
-  virtual bool
-  VisitCXXConstCastExpr(clang::CXXConstCastExpr *cxx_const_cast_expr,
-                        SgNode **node);
-  virtual bool
-  VisitCXXDynamicCastExpr(clang::CXXDynamicCastExpr *cxx_dynamic_cast_expr,
-                          SgNode **node);
-  virtual bool VisitCXXReinterpretCastExpr(
-      clang::CXXReinterpretCastExpr *cxx_reinterpret_cast_expr, SgNode **node);
-  virtual bool
-  VisitCXXStaticCastExpr(clang::CXXStaticCastExpr *cxx_static_cast_expr,
-                         SgNode **node);
   virtual bool VisitCXXAddrspaceCastExpr(
       clang::CXXAddrspaceCastExpr *cxx_addrspace_cast_expr, SgNode **node);
-  // virtual bool VisitObjCBridgedCastExpr
   virtual bool
   VisitImplicitCastExpr(clang::ImplicitCastExpr *implicit_cast_expr,
                         SgNode **node);
@@ -5944,15 +4964,16 @@ public:
   virtual bool
   VisitCompoundLiteralExpr(clang::CompoundLiteralExpr *compound_literal,
                            SgNode **node);
+  SgNonrealRefExp *buildConceptReference(
+      const clang::ConceptReference &reference,
+      const clang::ConceptSpecializationExpr *specialization = nullptr);
+  SgTypePtrList translateCastBasePath(const clang::CastExpr &cast);
   virtual bool VisitConceptSpecializationExpr(
       clang::ConceptSpecializationExpr *concept_specialization_expr,
       SgNode **node);
   virtual bool
   VisitConvertVectorExpr(clang::ConvertVectorExpr *convert_vector_expr,
                          SgNode **node);
-  virtual bool
-  VisitCoroutineSuspendExpr(clang::CoroutineSuspendExpr *coroutine_suspend_expr,
-                            SgNode **node);
   virtual bool VisitCoawaitExpr(clang::CoawaitExpr *coawait_expr,
                                 SgNode **node);
   virtual bool VisitCoyieldExpr(clang::CoyieldExpr *coyield_expr,
@@ -5980,9 +5001,6 @@ public:
       SgNode **node);
   virtual bool VisitCXXFoldExpr(clang::CXXFoldExpr *cxx_fold_expr,
                                 SgNode **node);
-  virtual bool VisitCXXInheritedCtorInitExpr(
-      clang::CXXInheritedCtorInitExpr *cxx_inherited_ctor_init_expr,
-      SgNode **node);
   virtual bool VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr, SgNode **node);
   virtual bool VisitCXXNoexceptExpr(clang::CXXNoexceptExpr *cxx_noexcept_expr,
                                     SgNode **node);
@@ -6008,8 +5026,6 @@ public:
   virtual bool VisitCXXUnresolvedConstructExpr(
       clang::CXXUnresolvedConstructExpr *cxx_unresolved_construct_expr,
       SgNode **node);
-  virtual bool VisitCXXUuidofExpr(clang::CXXUuidofExpr *cxx_uuidof_expr,
-                                  SgNode **node);
   virtual bool VisitDeclRefExpr(clang::DeclRefExpr *decl_ref_expr,
                                 SgNode **node);
   virtual bool
@@ -6030,9 +5046,6 @@ public:
                            SgNode **node);
   virtual bool VisitExtVectorElementExpr(
       clang::ExtVectorElementExpr *ext_vector_element_expr, SgNode **node);
-  virtual bool
-  VisitFixedPointLiteral(clang::FixedPointLiteral *fixed_point_literal,
-                         SgNode **node);
   virtual bool VisitFloatingLiteral(clang::FloatingLiteral *floating_literal,
                                     SgNode **node);
   virtual bool VisitFullExpr(clang::FullExpr *full_expr, SgNode **node);
@@ -6041,8 +5054,6 @@ public:
   virtual bool
   VisitExprWithCleanups(clang::ExprWithCleanups *expr_with_cleanups,
                         SgNode **node);
-  virtual bool VisitFunctionParmPackExpr(
-      clang::FunctionParmPackExpr *function_parm_pack_expr, SgNode **node);
   virtual bool
   VisitGenericSelectionExpr(clang::GenericSelectionExpr *generic_selection_expr,
                             SgNode **node);
@@ -6070,27 +5081,10 @@ public:
   virtual bool VisitNoInitExpr(clang::NoInitExpr *no_init_expr, SgNode **node);
   virtual bool VisitRequiresExpr(clang::RequiresExpr *requires_expr,
                                  SgNode **node);
-  // virtual bool VisitObjCArrayLiteral
-  // virtual bool VisitObjCAvailabilityCheckExpr
-  // virtual bool VisitObjCBoolLiteralExpr
-  // virtual bool VisitObjCBoxedExpr
-  // virtual bool VisitObjCDictionaryLiteral
-  // virtual bool VisitObjCEncodeExpr
-  // virtual bool VisitObjCIndirectCopyRestoreExpr
-  // virtual bool VisitObjCIsaExpr
-  // virtual bool VisitObjClvarRefExpr
-  // virtual bool VisitObjCMessageExpr
-  // virtual bool VisitObjCPropertyRefExpr
-  // virtual bool VisitObjCProtocolExpr
-  // virtual bool VisitObjCSelectorExpr
-  // virtual bool VisitObjCCStringLiteral
-  // virtual bool VisitObjCSubscriptRefexpr
   virtual bool VisitOffsetOfExpr(clang::OffsetOfExpr *offset_of_expr,
                                  SgNode **node);
   virtual bool VisitOpaqueValueExpr(clang::OpaqueValueExpr *opaque_value_expr,
                                     SgNode **node);
-  virtual bool VisitOverloadExpr(clang::OverloadExpr *overload_expr,
-                                 SgNode **node);
   virtual bool
   VisitUnresolvedLookupExpr(clang::UnresolvedLookupExpr *unresolved_lookup_expr,
                             SgNode **node);
@@ -6129,8 +5123,6 @@ public:
       SgNode **node);
   virtual bool VisitTypeTraitExpr(clang::TypeTraitExpr *type_trait,
                                   SgNode **node);
-  // TypoExpr was removed in LLVM
-  // virtual bool VisitTypoExpr(clang::TypoExpr * typo_expr, SgNode ** node);
   virtual bool VisitUnaryExprOrTypeTraitExpr(
       clang::UnaryExprOrTypeTraitExpr *unary_expr_or_type_trait_expr,
       SgNode **node);
@@ -6139,11 +5131,6 @@ public:
   virtual bool VisitVAArgExpr(clang::VAArgExpr *va_arg_expr, SgNode **node);
   virtual bool VisitLabelStmt(clang::LabelStmt *label_stmt, SgNode **node);
   virtual bool VisitWhileStmt(clang::WhileStmt *while_stmt, SgNode **node);
-
-  /*
-     Reference: clang/AST/Type.h
-     Overall 58 type AST nodes according as 02/19/2019
-  */
 
   virtual bool VisitType(clang::Type *type, SgNode **node);
   virtual bool VisitAdjustedType(clang::AdjustedType *adjusted_type,
@@ -6175,8 +5162,6 @@ public:
                                 SgNode **node);
   virtual bool VisitDecltypeType(clang::DecltypeType *decltype_type,
                                  SgNode **node);
-  virtual bool VisitDependentDecltypeType(
-      clang::DependentDecltypeType *dependent_decltype_type, SgNode **node);
   virtual bool VisitDeducedType(clang::DeducedType *deduced_type,
                                 SgNode **node);
   virtual bool VisitAutoType(clang::AutoType *auto_type, SgNode **node);
@@ -6184,17 +5169,12 @@ public:
       clang::DeducedTemplateSpecializationType
           *deduced_template_specialization_type,
       SgNode **node);
-  virtual bool VisitDependentAddressSpaceType(
-      clang::DependentAddressSpaceType *dependent_address_space_type,
-      SgNode **node);
   virtual bool VisitDependentSizedExtVectorType(
       clang::DependentSizedExtVectorType *dependent_sized_ext_vector_type,
       SgNode **node);
   virtual bool
   VisitDependentVectorType(clang::DependentVectorType *dependent_vector_type,
                            SgNode **node);
-  virtual bool VisitFunctionType(clang::FunctionType *function_type,
-                                 SgNode **node);
   virtual bool
   VisitFunctionNoProtoType(clang::FunctionNoProtoType *function_no_proto_type,
                            SgNode **node);
@@ -6203,18 +5183,12 @@ public:
                          SgNode **node);
   virtual bool VisitInjectedClassNameType(
       clang::InjectedClassNameType *injected_class_name_type, SgNode **node);
-  // LocInfoType was removed in LLVM
-  // virtual bool VisitLocInfoType(clang::LocInfoType * loc_info_type, SgNode **
-  // node);
   virtual bool
   VisitMacroQualifiedType(clang::MacroQualifiedType *macro_qualified_type,
                           SgNode **node);
   virtual bool
   VisitMemberPointerType(clang::MemberPointerType *member_pointer_type,
                          SgNode **node);
-  // virtual bool VisitObjCObjectPointerType
-  // virtual bool VisitObjCObjectType
-  // virtual bool VisitObjCTypeParamType
   virtual bool
   VisitPackExpansionType(clang::PackExpansionType *pack_expansion_type,
                          SgNode **node);
@@ -6236,7 +5210,6 @@ public:
   virtual bool VisitSubstTemplateTypeParmType(
       clang::SubstTemplateTypeParmType *subst_template_type_parm_type,
       SgNode **node);
-  virtual bool VisitTagType(clang::TagType *tag_type, SgNode **node);
   virtual bool VisitEnumType(clang::EnumType *enum_type, SgNode **node);
   virtual bool VisitRecordType(clang::RecordType *record_type, SgNode **node);
   virtual bool VisitTemplateSpecializationType(
@@ -6248,22 +5221,13 @@ public:
                                 SgNode **node);
   virtual bool VisitTypeOfExprType(clang::TypeOfExprType *type_of_expr_type,
                                    SgNode **node);
-  virtual bool VisitDependentTypeOfExprType(
-      clang::DependentTypeOfExprType *dependent_type_of_expr_type,
-      SgNode **node);
   virtual bool VisitTypeOfType(clang::TypeOfType *type_of_type, SgNode **node);
-  virtual bool VisitTypeWithKeyword(clang::TypeWithKeyword *type_with_keyword,
-                                    SgNode **node);
   virtual bool
   VisitDependentNameType(clang::DependentNameType *dependent_name_type,
                          SgNode **node);
   virtual bool
   VisitUnaryTransformType(clang::UnaryTransformType *unary_transform_type,
                           SgNode **node);
-  // DependentUnaryTransformType was removed/renamed in LLVM
-  // virtual bool
-  // VisitDependentUnaryTransformType(clang::DependentUnaryTransformType *
-  // dependent_unary_transform_type, SgNode ** node);
   virtual bool
   VisitUnresolvedUsingType(clang::UnresolvedUsingType *unresolved_using_type,
                            SgNode **node);
@@ -6283,12 +5247,8 @@ public:
 
   SgAsmOp::asm_operand_modifier_enum
   get_sgAsmOperandModifier(std::string modifier);
-  SgAsmOp::asm_operand_constraint_enum
-  get_sgAsmOperandConstraint(std::string constraint);
 
-  std::string generate_source_position_string(clang::SourceLocation srcLoc);
-  std::string generate_name_for_variable(clang::Stmt *stmt);
-  std::string generate_name_for_type(clang::TypeSourceInfo *typeInfo);
+  std::string anonymousDeclarationId(const clang::NamedDecl *declaration);
 };
 
 void finishSageAST(ClangToSageTranslator &translator);
@@ -6296,6 +5256,9 @@ void finishSageAST(ClangToSageTranslator &translator);
 class SagePreprocessorRecord : public clang::PPCallbacks,
                                public clang::CommentHandler {
 public:
+  std::string getPhysicalFilename(clang::FileID file) const;
+  std::string getPhysicalFilename(clang::FileEntryRef file) const;
+
   enum class IncludeOwnership {
     main_file,
     application_textual,
@@ -6392,11 +5355,13 @@ protected:
       p_preprocessor_records_by_file_offset;
   std::unordered_map<unsigned, std::map<unsigned, RecordedDirectiveRef>>
       p_include_records_by_file_offset;
+  std::unordered_map<unsigned,
+                     std::map<unsigned, PreprocessingInfo::DirectiveType>>
+      p_conditional_directives_by_file_offset;
   std::unordered_set<PreprocessingInfo *> p_removed_preprocessor_records;
   std::unordered_set<PreprocessingInfo *> p_attached_preprocessor_records;
   size_t p_preprocessor_record_cursor;
   bool p_preprocessor_record_list_sorted;
-  bool p_record_directive_stream;
   bool p_record_header_directives;
   std::map<std::string, IncludeOwnership> p_include_ownership_paths;
   std::map<std::string, std::set<PreprocessingInfo *>>
@@ -6417,7 +5382,6 @@ protected:
 
   bool shouldRecordDirective(clang::SourceLocation loc) const;
   std::string getFilenameForLocation(clang::SourceLocation loc) const;
-  std::string collectDirectiveText(clang::SourceLocation loc) const;
   void registerRecordedDirective(Sg_File_Info *file_info,
                                  PreprocessingInfo *preprocessing_info,
                                  clang::SourceLocation file_location);
@@ -6456,7 +5420,6 @@ protected:
 public:
   SagePreprocessorRecord(clang::SourceManager *source_manager,
                          clang::Preprocessor *preprocessor,
-                         bool record_directive_stream,
                          bool record_header_directives);
   ~SagePreprocessorRecord() override;
   unsigned requirePhysicalFileOccurrence(clang::FileID file_id,
@@ -6496,6 +5459,10 @@ public:
       SgDeclarationGroupStatement *declaration_group,
       SgDeclarationStatement *final_member);
   bool sourceRangeContainsSkippedTokens(clang::SourceRange source_range) const;
+  bool containsConditionalDirective(clang::FileID file_id,
+                                    unsigned begin_offset,
+                                    unsigned end_offset) const;
+  bool isInsideConditionalRegion(clang::FileID file_id, unsigned offset) const;
   void consumeIncludeDirectiveInFlattenedSyntax(
       clang::SourceLocation include_location,
       SgLocatedNode *source_interval_owner, const char *contract);
@@ -6525,22 +5492,6 @@ public:
                    clang::FileID PrevFID) override;
   void moduleImport(clang::SourceLocation ImportLoc, clang::ModuleIdPath Path,
                     const clang::Module *Imported) override;
-  bool FileNotFound(llvm::StringRef FileName) override;
-  void EndOfMainFile() override;
-  void Ident(clang::SourceLocation Loc, llvm::StringRef Str) override;
-  void PragmaComment(clang::SourceLocation Loc,
-                     const clang::IdentifierInfo *Kind,
-                     llvm::StringRef Str) override;
-  void PragmaMessage(clang::SourceLocation Loc, llvm::StringRef Namespace,
-                     clang::PPCallbacks::PragmaMessageKind Kind,
-                     llvm::StringRef Str) override;
-  void PragmaDiagnosticPush(clang::SourceLocation Loc,
-                            llvm::StringRef Namespace) override;
-  void PragmaDiagnosticPop(clang::SourceLocation Loc,
-                           llvm::StringRef Namespace) override;
-  void PragmaDiagnostic(clang::SourceLocation Loc, llvm::StringRef Namespace,
-                        clang::diag::Severity Severity,
-                        llvm::StringRef Str) override;
   bool HandleComment(clang::Preprocessor &PP,
                      clang::SourceRange Comment) override;
   void MacroDefined(const clang::Token &MacroNameTok,
@@ -6548,9 +5499,6 @@ public:
   void MacroUndefined(const clang::Token &MacroNameTok,
                       const clang::MacroDefinition &MD,
                       const clang::MacroDirective *Undef) override;
-  void Defined(const clang::Token &MacroNameTok,
-               const clang::MacroDefinition &MD,
-               clang::SourceRange Range) override;
   void SourceRangeSkipped(clang::SourceRange Range,
                           clang::SourceLocation EndifLoc) override;
   void If(clang::SourceLocation Loc, clang::SourceRange ConditionRange,
@@ -6562,6 +5510,14 @@ public:
              const clang::MacroDefinition &MD) override;
   void Ifndef(clang::SourceLocation Loc, const clang::Token &MacroNameTok,
               const clang::MacroDefinition &MD) override;
+  void Elifdef(clang::SourceLocation Loc, const clang::Token &MacroNameTok,
+               const clang::MacroDefinition &MD) override;
+  void Elifdef(clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+               clang::SourceLocation IfLoc) override;
+  void Elifndef(clang::SourceLocation Loc, const clang::Token &MacroNameTok,
+                const clang::MacroDefinition &MD) override;
+  void Elifndef(clang::SourceLocation Loc, clang::SourceRange ConditionRange,
+                clang::SourceLocation IfLoc) override;
   void Else(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override;
   void Endif(clang::SourceLocation Loc, clang::SourceLocation IfLoc) override;
 

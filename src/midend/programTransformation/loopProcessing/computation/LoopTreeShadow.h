@@ -36,6 +36,11 @@ protected:
 
 public:
   AstNodePtr GetOrigStmt() const override { return repr->GetOrigStmt(); }
+  AstNodePtr GetSourceAst() const override { return repr->GetSourceAst(); }
+  AstNodePtr GetRuntimeAst() const override { return repr->GetRuntimeAst(); }
+  AstNodePtr GetBodyAst() const override { return repr->GetBodyAst(); }
+  BodyRole GetBodyRole() const override { return repr->GetBodyRole(); }
+  bool IsAtomicStatement() const override { return repr->IsAtomicStatement(); }
   LoopInfo *GetLoopInfo() override { return repr->GetLoopInfo(); }
   LoopTreeNode *GetRepr() const { return repr; }
   int IncreaseLoopLevel() const override { return repr->IncreaseLoopLevel(); }
@@ -43,9 +48,6 @@ public:
   LoopTreeNode *set_preAnnot(const std::string &content) override { return 0; }
   LoopTreeNode *set_postAnnot(const std::string &content) override { return 0; }
 
-  std::string LoopTreeGetClassName() const override {
-    return "LoopTreeShadowNode";
-  }
   LoopTreeNode *Clone() const override { return 0; }
   virtual LoopTreeShadowNode *CloneNode(LoopTreeNode *n) const {
     return new LoopTreeShadowNode(n, *this);
@@ -77,15 +79,6 @@ public:
   }
 
   friend class LoopTreeShadowNode;
-};
-
-class LoopTreeShadowSelect : public LoopTreeShadowCreate {
-  LoopTreeNode *Build(LoopTreeNode *orig, LoopTreeNode *r = 0);
-  virtual bool select_stmt(LoopTreeNode *n) const = 0;
-
-public:
-  ~LoopTreeShadowSelect() {}
-  LoopTreeShadowSelect(LoopTreeNode *orig);
 };
 
 #endif

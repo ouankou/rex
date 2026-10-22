@@ -1,3 +1,4 @@
+#include "AstNodes/Expression/OpenMPModifierValidation.h"
 #include "sage3basic.h"
 
 SgType *SgOmpInductionItem::get_type() const {
@@ -17,19 +18,16 @@ int SgOmpInductionItem::replace_expression(SgExpression *old_expression,
     ROSE_ABORT();
   }
   SgExpression *owned_expression = get_expression();
-  const bool binding = get_kind() == SgOmpClause::e_omp_induction_item_binding;
   if (owned_expression == nullptr || owned_expression->get_parent() != this ||
-      binding != !get_label().empty() ||
-      (get_kind() != SgOmpClause::e_omp_induction_item_step && !binding &&
-       get_kind() != SgOmpClause::e_omp_induction_item_expression)) {
+      !Rose::OpenMP::Detail::validInductionItemFields(get_kind(),
+                                                      get_label())) {
     fprintf(stderr,
             "REX_AST_INVARIANT[openmp-induction-replacement]: induction "
             "item has invalid kind, payload, or child ownership\n");
     ROSE_ABORT();
   }
-  if (owned_expression != old_expression) {
+  if (owned_expression != old_expression)
     return 0;
-  }
   if (old_expression == new_expression) {
     return 1;
   }

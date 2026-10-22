@@ -3,7 +3,7 @@ void
 $CLASSNAME::processDataMemberReferenceToPointers(ReferenceToPointerHandler* handler)
    {
   // ------------ checking pointers of $CLASSNAME -------------------
-     ROSE_ASSERT ( p_freepointer == AST_FileIO::IS_VALID_POINTER() );
+     ROSE_ASSERT ( p_freepointer == ASTMemoryPool::validNodeMarker() );
 
   // DQ (9/7/2016): Added assertion as part of debugging C++11 test2016_49.C
      ROSE_ASSERT(handler != NULL);
@@ -11,4 +11,3 @@ $CLASSNAME::processDataMemberReferenceToPointers(ReferenceToPointerHandler* hand
 $CODE_STRING
 
    }
-

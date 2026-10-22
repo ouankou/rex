@@ -578,10 +578,11 @@ void checkMacroSpliceDirectives(SgSourceFile *file) {
   ROSE_ASSERT(sawRawLineSplice);
 }
 
-void checkPreprocOrdering(SgSourceFile *file) {
+void checkPreprocOrdering(SgSourceFile *file, bool trigraphs) {
   std::vector<stream_element *> tokens = getTokenVector(file);
   bool hasPragmaToken = false;
   bool hasPreprocToken = false;
+  bool hasCommentToken = false;
   for (size_t i = 0; i < tokens.size(); ++i) {
     int tokenId = tokens[i]->p_tok_elem->token_id;
     if (tokenId == ROSE_token_ids::C_CXX_PRAGMA) {
@@ -590,11 +591,17 @@ void checkPreprocOrdering(SgSourceFile *file) {
     if (tokenId == ROSE_token_ids::C_CXX_PREPROCESSING_INFO) {
       hasPreprocToken = true;
     }
+    if (tokenId == ROSE_token_ids::C_CXX_COMMENTS) {
+      hasCommentToken = true;
+    }
   }
   ROSE_ASSERT(hasPragmaToken);
   ROSE_ASSERT(hasPreprocToken);
+  ROSE_ASSERT(hasCommentToken);
 
   std::set<PreprocessingInfo::DirectiveType> seen;
+  std::set<std::string> adjacentComments;
+  std::set<std::string> exactDirectives;
   bool sawAttachments = false;
 
   auto processInfoList = [&](AttachedPreprocessingInfoType *info) {
@@ -607,6 +614,15 @@ void checkPreprocOrdering(SgSourceFile *file) {
          it != info->end(); ++it) {
       PreprocessingInfo *entry = *it;
       ROSE_ASSERT(entry != NULL);
+      const std::string text = entry->getString();
+      if (text.find("REX_DIRECTIVE_") != std::string::npos)
+        exactDirectives.insert(text);
+      if (text.find("trailing comment") != std::string::npos ||
+          text.find("adjacent comment") != std::string::npos) {
+        ROSE_ASSERT(text == "/* trailing comment */\n" ||
+                    text == "/* adjacent comment */\n");
+        adjacentComments.insert(text);
+      }
       Sg_File_Info *fi = entry->get_file_info();
       ROSE_ASSERT(fi != NULL);
       int line = fi->get_line();
@@ -639,6 +655,20 @@ void checkPreprocOrdering(SgSourceFile *file) {
   }
 
   ROSE_ASSERT(sawAttachments);
+  ROSE_ASSERT(adjacentComments.size() == 2);
+  const std::set<std::string> expectedDirectives = {
+      "#define REX_DIRECTIVE_COMMENT 1\n",
+      "#\\\ndefine REX_DIRECTIVE_CONTINUED 2\n",
+      "%:define REX_DIRECTIVE_DIGRAPH 3\n",
+      "#undef REX_DIRECTIVE_COMMENT\n",
+      "#\\\nundef REX_DIRECTIVE_CONTINUED\n",
+      "%:undef REX_DIRECTIVE_DIGRAPH\n",
+      trigraphs ? "#define REX_DIRECTIVE_TRIGRAPH ?"
+                  "?/\nint delta = gamma;\n"
+                : "#define REX_DIRECTIVE_TRIGRAPH ?"
+                  "?/\n",
+      "#undef REX_DIRECTIVE_TRIGRAPH\n"};
+  ROSE_ASSERT(exactDirectives == expectedDirectives);
   ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorIncludeDeclaration) >
               0);
   ROSE_ASSERT(seen.count(PreprocessingInfo::CpreprocessorIfDeclaration) > 0);
@@ -695,7 +725,9 @@ int main(int argc, char **argv) {
   } else if (base == kMacroSpliceFile) {
     checkMacroSpliceDirectives(sourceFile);
   } else if (base == kPreprocFile) {
-    checkPreprocOrdering(sourceFile);
+    const bool trigraphs =
+        std::find(argv, argv + argc, std::string("-trigraphs")) != argv + argc;
+    checkPreprocOrdering(sourceFile, trigraphs);
   } else {
     ROSE_ASSERT(false && "Unexpected token-stream mapping test input.");
   }

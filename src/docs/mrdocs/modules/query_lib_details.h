@@ -22,15 +22,4 @@ struct nodeQueryLib {};
  */
 struct nameQueryLib {};
 
-/** @brief Boolean Query Library
- *
- * This library simplifies the development of queries on the AST that return a
- * single boolean value.
- *
- * It represents a library of queries over subtrees that return boolean results.
- *
- * See @ref subtreeQueryLib.
- */
-struct booleanQueryLib {};
-
 #endif

@@ -4,8 +4,6 @@
 
 #include "Rose/StringUtility/StringToNumber.h"
 
-#include "ROSE_ASSERT.h"
-
 #include <cctype>
 
 #include <cstdio>
@@ -15,8 +13,6 @@
 #include <iomanip>
 
 #include <sstream>
-
-#include <stdexcept>
 
 namespace Rose {
 namespace StringUtility {
@@ -84,7 +80,7 @@ std::string cEscape(char ch, char context) {
     result += "\\\\";
     break;
   default:
-    if (isprint(ch)) {
+    if (isprint(static_cast<unsigned char>(ch))) {
       result += ch;
     } else {
       char buf[8];
@@ -147,7 +143,8 @@ std::string cUnescape(const std::string &s) {
         break;
       case 'x': {
         unsigned byte = 0;
-        while (i + 1 < s.size() && isxdigit(s[i + 1]))
+        while (i + 1 < s.size() &&
+               isxdigit(static_cast<unsigned char>(s[i + 1])))
           byte = ((16 * byte) + hexadecimalToInt(s[++i])) & 0xff;
         result += (char)byte;
         break;
@@ -162,7 +159,8 @@ std::string cUnescape(const std::string &s) {
       case '7': {
         unsigned byte = 0, nchars = 0;
         --i;
-        while (i + 1 < s.size() && nchars++ < 3 && strchr("01234567", s[i + 1]))
+        while (i + 1 < s.size() && nchars++ < 3 && s[i + 1] >= '0' &&
+               s[i + 1] <= '7')
           byte = 8 * byte + s[++i] - '0';
         result += (char)byte;
         break;
@@ -201,14 +199,14 @@ std::string bourneEscape(const std::string &s) {
   // The presence of non-printing characters or single quotes trumps all others
   // and requires C-style quoting
   for (char ch : s) {
-    if (!::isprint(ch) || '\'' == ch)
+    if (!::isprint(static_cast<unsigned char>(ch)) || '\'' == ch)
       return "$'" + cEscape(s, '\'') + "'";
   }
 
   // If the string contains any shell meta characters or white space that must
   // be quoted then single-quote the entire string and escape backslashes.
   for (char ch : s) {
-    if (!::isalnum(ch) && !strchr("_-+./", ch))
+    if (!::isalnum(static_cast<unsigned char>(ch)) && !strchr("_-+./", ch))
       return "'" + Rose::StringUtility::replaceAllCopy(s, "\\", "\\\\") + "'";
   }
 
@@ -262,29 +260,18 @@ std::string csvEscape(const std::string &s) {
   return quote + Rose::StringUtility::replaceAllCopy(s, "\"", "\"\"") + quote;
 }
 
-// DQ (12/8/2016): This version fixed most of the issues that Robb raised with
-// the escapeNewLineCharaters() function. Unaddressed is: point #4. It escapes
-// newlines using "l" rather than the more customary "n". I have implemented
-// this to support the DOT graphics where it is used.  This can be a subject for
-// discussion at some point a bit later (it is late evening on the west coast
-// presently).
 std::string escapeNewlineAndDoubleQuoteCharacters(const std::string &X) {
-  std::string returnString;
-  int stringLength = X.length();
-
-  for (int i = 0; i < stringLength; i++) {
-    if (X[i] == '\n') {
-      returnString += "\\l";
+  std::string result;
+  for (char ch : X) {
+    if (ch == '\n') {
+      result += "\\l";
+    } else if (ch == '"') {
+      result += "\\\"";
     } else {
-      if (X[i] == '\"') {
-        returnString += "\\\"";
-      } else {
-        returnString += X[i];
-      }
+      result += ch;
     }
   }
-
-  return returnString;
+  return result;
 }
 
 } // namespace StringUtility
@@ -328,7 +315,7 @@ std::string escapeString(const std::string &s) {
       result += "\\v";
       break;
     default:
-      if (isprint(s[i])) {
+      if (isprint(static_cast<unsigned char>(s[i]))) {
         result.push_back(s[i]);
       } else {
         std::ostringstream stream;
@@ -338,68 +325,6 @@ std::string escapeString(const std::string &s) {
         result += stream.str();
       }
       break;
-    }
-  }
-  return result;
-}
-
-std::string unescapeString(const std::string &s) {
-  std::string result;
-  for (size_t i = 0; i < s.length(); ++i) {
-    // Body of this loop can change i
-    if (s[i] == '\\') {
-      ROSE_ASSERT(i + 1 < s.length());
-      if (i + 1 >= s.length()) {
-        throw std::runtime_error("unescapeString: invalid trailing backslash");
-      }
-      char escaped = s[++i];
-      switch (escaped) {
-      case 'a':
-        result += '\a';
-        break;
-      case 'e':
-        result += '\033';
-        break;
-      case 'f':
-        result += '\f';
-        break;
-      case 'n':
-        result += '\n';
-        break;
-      case 'r':
-        result += '\r';
-        break;
-      case 't':
-        result += '\t';
-        break;
-      case 'v':
-        result += '\v';
-        break;
-      case '0':
-      case '1':
-      case '2':
-      case '3':
-      case '4':
-      case '5':
-      case '6':
-      case '7': {
-        unsigned value = static_cast<unsigned>(escaped - '0');
-        size_t digits = 1;
-        while (digits < 3 && i + 1 < s.length() && s[i + 1] >= '0' &&
-               s[i + 1] <= '7') {
-          value = (value << 3) + static_cast<unsigned>(s[i + 1] - '0');
-          ++i;
-          ++digits;
-        }
-        result += static_cast<char>(value);
-        break;
-      }
-      default:
-        result += escaped;
-        break;
-      }
-    } else {
-      result += s[i];
     }
   }
   return result;

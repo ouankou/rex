@@ -1,37 +1,13 @@
 // Author: Markus Schordan
-// $Id: AstStatistics.h,v 1.3 2008/01/08 02:56:38 dquinlan Exp $
-
 #ifndef AST_STATISTICS_H
 #define AST_STATISTICS_H
 
 #include "AstProcessing.h"
 
+#include <cstddef>
 #include <iomanip>
 
 #include <string>
-
-/*! \brief This is a mechanism for reporting statistical data about the AST,
-   subtrees, and IR nodes.
-
-    This is where interesting (hopefully relevant) information about the AST
-    may be data-mined and reported).  Such information includes:
-    -#) the total number of nodes,
-    -#) the number of nodes organized by IR node type
-    -#) ...
-
- */
-
-// This function causes output to cout and as a result should not be called
-// when using the options that are sensative to output (-E, -H, etc.).
-// Unfortunately this is not a great design and we should have a policy about
-// output from the compiler tools built by ROSE.
-
-// Future Design:
-//   1) Different levels of output
-//   2) External file output (for more complete statistics)
-//   3) A mechanism to report on hotspots, performance data, etc. ???
-//   4) Number of functions and the length of each function
-//   5) Complexity (numerous software metrics) ???
 
 namespace ROSE_Statistics {
 class AstNodeTraversalStatistics : public SgSimpleProcessing {
@@ -49,95 +25,50 @@ protected:
   std::string cmpStatistics(AstNodeTraversalStatistics &q);
   std::string generateCMPStatisticsValueString(std::string name, ElementType v1,
                                                ElementType v2);
-  StatisticsContainerType getStatisticsData();
-  StatisticsContainerType
-      numNodeTypes; // MS 2020-02-11: changed data representation
-
-private:
-};
-
-// MS 2020: ROSE-2529
-class AstNodeTraversalCSVStatistics : public AstNodeTraversalStatistics {
-public:
-  AstNodeTraversalCSVStatistics();
-
-  // generate CSV format for each entry (2 columns): <AST Node Name>, <Node
-  // Count>
-  virtual std::string toString(SgNode *node) override;
-
-  // set minimum node count to show in CSV file (default is 1)
-  // example: when setting it to 0, all entries (including those with count 0)
-  // are shown.
-  void setMinCountToShow(int minValue);
-  unsigned int getMinCountToShow();
-
-private:
-  unsigned int minCountToShow;
+  StatisticsContainerType numNodeTypes;
 };
 
 class AstNodeMemoryPoolStatistics : public ROSE_VisitTraversal {
 public:
-  class ElementType {
-  public:
-    std::string name;
-    int count;
-    int memoryRequirement;
+  std::size_t totalMemoryUsed;
 
-    ElementType(std::string name, int count, int memoryRequirement);
-
-    bool operator<(const ElementType &x);
-  };
-
-  typedef std::vector<ElementType> StatisticsContainerType;
-
-  int counter;
-
-  // DQ (9/1/2009): Added support to computer percentage of total memory for
-  // each IR node
-  int totalMemoryUsed; // = SgNode::memoryUsage();
-
-  int statement_nodes;
-  int statement_memoryFootprint;
+  std::size_t statement_nodes;
+  std::size_t statement_memoryFootprint;
   double statement_percent;
 
-  int declaration_nodes;
-  int declaration_memoryFootprint;
+  std::size_t declaration_nodes;
+  std::size_t declaration_memoryFootprint;
   double declaration_percent;
 
-  int support_nodes;
-  int support_memoryFootprint;
+  std::size_t support_nodes;
+  std::size_t support_memoryFootprint;
   double support_percent;
 
-  int expression_nodes;
-  int expression_memoryFootprint;
+  std::size_t expression_nodes;
+  std::size_t expression_memoryFootprint;
   double expression_percent;
 
-  int type_nodes;
-  int type_memoryFootprint;
+  std::size_t type_nodes;
+  std::size_t type_memoryFootprint;
   double type_percent;
 
-  int symbol_nodes;
-  int symbol_memoryFootprint;
+  std::size_t symbol_nodes;
+  std::size_t symbol_memoryFootprint;
   double symbol_percent;
 
-  int node_nodes;
-  int node_memoryFootprint;
+  std::size_t node_nodes;
+  std::size_t node_memoryFootprint;
   double node_percent;
 
-  int file_info_nodes;
-  int file_info_memoryFootprint;
+  std::size_t file_info_nodes;
+  std::size_t file_info_memoryFootprint;
   double file_info_percent;
 
   AstNodeMemoryPoolStatistics();
   virtual ~AstNodeMemoryPoolStatistics();
-  // virtual std::string toString(SgNode* node); // to become obsolete
 
 protected:
   void visit(SgNode *node);
-  StatisticsContainerType getStatisticsData();
-
-private:
-  StatisticsContainerType numNodeTypes;
 };
 
 // end of "ROSE_Statistics" namespace

@@ -45,7 +45,7 @@ _add_spurious_output_test(
   "-c ${CMAKE_CURRENT_SOURCE_DIR}/helloworld.C"
 )
 
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   foreach(testcode IN LISTS _f90_tests)
     get_filename_component(_name ${testcode} NAME_WE)
     _add_spurious_output_test(

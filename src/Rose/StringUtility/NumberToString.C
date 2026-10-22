@@ -1,4 +1,11 @@
 #include "NumberToString.h"
+#include "mlog.h"
+
+#include <algorithm>
+#include <cassert>
+#include <cstdio>
+#include <iomanip>
+#include <sstream>
 
 namespace Rose {
 namespace StringUtility {
@@ -27,24 +34,32 @@ std::string numberToString(const void *x) {
 }
 
 std::string numberToString(double x) {
-  char numberString[128];
-  sprintf(numberString, "%2.2f", x);
-  return std::string(numberString);
+  const int length = std::snprintf(nullptr, 0, "%2.2f", x);
+  ROSE_ASSERT(length >= 0);
+  std::string result(static_cast<std::size_t>(length) + 1, '\0');
+  const int written = std::snprintf(result.data(), result.size(), "%2.2f", x);
+  ROSE_ASSERT(written == length);
+  result.resize(static_cast<std::size_t>(length));
+  return result;
 }
 
-#if defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                    \
-    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&                        \
-      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                        \
-     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                         \
-    __WORDSIZE == 64
+#if defined(__SIZEOF_INT128__)
 std::string numberToString(__int128 x) {
-  long long temp_x = (long long)x;
-  return std::to_string(temp_x);
+  if (x >= 0)
+    return numberToString(static_cast<unsigned __int128>(x));
+  const unsigned __int128 magnitude =
+      static_cast<unsigned __int128>(-(x + 1)) + 1;
+  return "-" + numberToString(magnitude);
 }
 
 std::string numberToString(unsigned __int128 x) {
-  unsigned long long temp_x = (unsigned long long)x;
-  return std::to_string(temp_x);
+  std::string result;
+  do {
+    result.push_back('0' + static_cast<unsigned>(x % 10));
+    x /= 10;
+  } while (x != 0);
+  std::reverse(result.begin(), result.end());
+  return result;
 }
 #endif
 
@@ -70,10 +85,6 @@ std::string toHex2(uint64_t value, size_t nbits, bool show_unsigned_decimal,
   uint64_t sign_bit = ((uint64_t)1 << (nbits - 1));
 
   // Hexadecimal value
-
-  // std::string retval;
-  // int nnibbles = (nbits+3)/4;
-  // std::string fmt = "0x%0" + std::to_string(nnibbles) + "x";
 
   std::stringstream ss;
   ss << "0x" << std::setw((nbits + 3) / 4) << std::setfill('0') << std::hex
@@ -117,9 +128,5 @@ std::string addrToString(uint64_t value, size_t nbits) {
   return toHex2(value, nbits, false, false);
 }
 
-std::string addrIntervalToString(uint64_t low, uint64_t high, size_t nbits) {
-  return "[" + addrToString(low, nbits) + ", " + addrToString(high, nbits) +
-         "]";
-}
 } // namespace StringUtility
 } // namespace Rose

@@ -7,6 +7,7 @@
 #include "CountRefHandle.h"
 
 #include "FunctionObject.h"
+#include "ROSE_ASSERT.h"
 
 #include <assert.h>
 
@@ -140,6 +141,8 @@ public:
 
   std::string GetVarName() const { return varname; }
   AstNodePtr GetVarScope() const { return scope; }
+  static AstNodePtr ReferenceDeclaration(const AstNodePtr &reference);
+  AstNodePtr GetVarDeclaration() const;
   bool operator==(const SymbolicVar &that) const;
   void Visit(SymbolicVisitor *op) const { op->VisitVar(*this); }
 };
@@ -516,20 +519,20 @@ SymbolicVal ReplaceVal(const SymbolicVal &v,
                        MapObject<SymbolicVal, SymbolicVal> &valmap);
 
 class AstTreeReplaceVar : public ProcessAstNode<AstNodePtr> {
-  SymbolicVar oldvar;
+  AstNodePtr oldDeclaration;
   SymbolicVal val;
 
 public:
   AstTreeReplaceVar(const SymbolicVar &ov, const SymbolicVal &nv)
-      : oldvar(ov), val(nv) {}
+      : oldDeclaration(ov.GetVarDeclaration()), val(nv) {
+    ROSE_ASSERT(oldDeclaration != AST_NULL);
+  }
   bool Traverse(AstInterface &fa, const AstNodePtr &r,
                 AstInterface::TraversalVisitType t) {
-    std::string varname;
-    if (t == AstInterface::PostVisit && fa.IsVarRef(r, 0, &varname)) {
-      if (varname == oldvar.GetVarName()) {
-        AstNodePtr r1 = val.CodeGen(fa);
-        fa.ReplaceAst(r, r1);
-      }
+    if (t == AstInterface::PostVisit &&
+        SymbolicVar::ReferenceDeclaration(r) == oldDeclaration) {
+      AstNodePtr r1 = val.CodeGen(fa);
+      ROSE_ASSERT(fa.ReplaceAst(r, r1));
     }
     return true;
   }

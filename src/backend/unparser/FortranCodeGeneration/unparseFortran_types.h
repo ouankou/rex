@@ -68,7 +68,6 @@ public:
   // info); virtual void unparseEnumType(SgType* type, SgUnparse_Info& info);
   // virtual void unparseTypedefType(SgType* type, SgUnparse_Info& info);
   // virtual void unparseMemberFunctionType(SgType* type, SgUnparse_Info& info);
-  // virtual void unparseQualifiedNameType(SgType* type, SgUnparse_Info& info );
 
   // CI
   // virtual void unparseStructType(SgType* type, SgUnparse_Info& info);

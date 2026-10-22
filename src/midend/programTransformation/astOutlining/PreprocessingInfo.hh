@@ -13,8 +13,6 @@
 
 #include "rose_attributes_list.h"
 
-#include <iostream>
-
 #include <string>
 
 class SgBasicBlock;
@@ -87,9 +85,6 @@ void moveAfterPreprocInfo(SgStatement *src, SgStatement *dest);
 
 //! Moves preprocessingInfo of stmt2 to stmt1.
 void moveUpPreprocInfo(SgStatement *stmt1, SgStatement *stmt2);
-
-//! Dumps a statement's preprocessing information.
-void dumpPreprocInfo(const SgStatement *s, std::ostream &o);
 
 } // namespace ASTtools
 

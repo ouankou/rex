@@ -5,9 +5,9 @@
 
 /** @brief AST construction
  *
- * AST construction is a fundamental operation needed for building ROSE
+ * AST construction is a fundamental operation needed for building REX
  * source-to-source translators. Several levels of interfaces are available in
- * ROSE for users to build AST from scratch. High-level interfaces are
+ * REX for users to build AST from scratch. High-level interfaces are
  * recommended whenever possible for their simplicity. Low-level interfaces can
  * give users maximum freedom to manipulate details in AST trees.
  *
@@ -55,8 +55,8 @@
  *
  * @section functions Function Declarations
  *
- * Adding a function at the top of a global scope using both high-level and
- * low-level constructions.
+ * Adding a function at the top of a global scope with an explicit declaration
+ * ownership policy, a complete parameter list, and a body.
  *
  * @subsection func_decl_high High-Level Function Declaration
  *
@@ -67,14 +67,14 @@
  *
  *  Full listing: `tutorial/addFunctionDeclaration3.C`
  *
- * @subsection func_decl_low Low-Level Function Declaration
+ * @subsection func_decl_low Function Declaration with an Exact Parameter Symbol
  *
  *  Full listing: `tutorial/addFunctionDeclaration.C`
  *
  * @section func_calls Function Calls
  *
- * Adding function calls to instrument code using the AST string-based rewrite
- * mechanism or the AST builder interface.
+ * Adding function calls to instrument code using typed declarations, symbols,
+ * arguments, and the AST builder interface.
  *
  * @subsection func_call_ast_builder AST Builder Interface Example
  *
@@ -95,36 +95,6 @@
  *
  * The following example repackages global variables in an application into a
  * `struct`.
- *
- *  Full listing: `tutorial/CharmSupport.C`
- *
- * @subsection global_struct_example2 Referencing Global Variables via Struct
- * (Part 2)
- *
- * This part shows the continuation of the repackaging of global variables into
- * a `struct`.
- *
- *  Full listing: `tutorial/CharmSupport.C`
- *
- * @subsection global_struct_example3 Handling Global Variables (Part 3)
- *
- * The third part of the example, continuing the transformation of global
- * variables into a `struct`.
- *
- *  Full listing: `tutorial/CharmSupport.C`
- *
- * @subsection global_struct_example4 Final Steps of Global Variable Repackaging
- * (Part 4)
- *
- * This part completes the transformation and repackaging of global variables
- * into a `struct`.
- *
- *  Full listing: `tutorial/CharmSupport.C`
- *
- * @subsection global_struct_example5 Struct Usage Finalization (Part 5)
- *
- * This is the final part of the global variable repackaging and struct
- * manipulation process.
  *
  *  Full listing: `tutorial/CharmSupport.C`
  *

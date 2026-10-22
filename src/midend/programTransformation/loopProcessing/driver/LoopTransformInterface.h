@@ -5,6 +5,8 @@
 
 #include "AstInterface.h"
 
+#include "ROSE_ASSERT.h"
+
 #include "SymbolicVal.h"
 
 #include <iostream>
@@ -24,12 +26,10 @@ public:
   virtual bool GetArrayBound(AstInterface &fa, const AstNodePtr &array, int dim,
                              int &lb, int &ub) = 0;
   virtual bool IsUniqueArray(AstInterface &fa, const AstNodePtr &array) = 0;
-  //{ return false; }
   virtual AstNodePtr CreateArrayAccess(AstInterface &fa, const AstNodePtr &arr,
                                        const AstNodeList &index) = 0;
   virtual SymbolicVal CreateArrayAccess(const SymbolicVal &arr,
                                         const SymbolicVal &index) = 0;
-  //{ /*QY: need to be defined by a derived class*/ assert(0); }
   virtual ~ArrayAbstractionInterface() {}
 };
 
@@ -62,7 +62,6 @@ public:
                         CollectObject<AstNodePtr> *collect = 0);
 };
 
-class AutoTuningInterface;
 /**********
 QY: Singular interface class which remembers configurations for loop
     optimizations
@@ -73,7 +72,6 @@ class LoopTransformInterface {
   static AliasAnalysisInterface *aliasInfo;
   static FunctionSideEffectInterface *funcInfo;
   static ArrayAbstractionInterface *arrayInfo;
-  static AutoTuningInterface *tuning;
 
 public:
   static void set_aliasInfo(AliasAnalysisInterface *alias) {
@@ -89,7 +87,6 @@ public:
   static void set_astInterface(AstInterface &_fa);
   static AstInterface *get_astInterface() { return fa; }
   static void set_astInterfacePtr(AstInterface *fa_ptr) { fa = fa_ptr; }
-  static void set_tuningInterface(AutoTuningInterface *_tuning);
   static void cmdline_configure(std::vector<std::string> &argv);
 
   static AstInterface &getAstInterface() {
@@ -100,10 +97,9 @@ public:
   static FunctionSideEffectInterface *getSideEffectInterface() {
     return funcInfo;
   }
-  static AutoTuningInterface *getAutoTuningInterface() { return tuning; }
 
   static bool IsAliasedRef(const AstNodePtr &r1, const AstNodePtr &r2) {
-    assert(fa != 0 && aliasInfo != 0);
+    ROSE_ASSERT(fa != nullptr && aliasInfo != nullptr);
     return aliasInfo->may_alias(*fa, r1, r2);
   }
   static bool GetFunctionCallSideEffect(const AstNodePtr &fc,
@@ -115,9 +111,6 @@ public:
     return (arrayInfo != 0 && arrayInfo->IsArrayAccess(*fa, s)) ||
            fa->IsMemoryAccess(s);
   }
-  static bool IsLoop(const AstNodePtr &s, SymbolicVal *init = 0,
-                     SymbolicVal *cond = 0, SymbolicVal *incr = 0,
-                     AstNodePtr *body = 0);
   static bool IsUniqueArray(const AstNodePtr &array) {
     assert(fa != 0);
     return arrayInfo != 0 && arrayInfo->IsUniqueArray(*fa, array);

@@ -1,9 +1,9 @@
 #ifndef ROSE_FileSystem_H
 #define ROSE_FileSystem_H
 
-#include "mlog.h"
-
 #include "rosedll.h"
+
+#include <algorithm>
 
 #include <filesystem>
 
@@ -17,15 +17,14 @@
 
 #include <string>
 
+#include <utility>
+
 #include <vector>
 
 namespace Rose {
 
 /** Functions for operating on files in a filesystem. */
 namespace FileSystem {
-
-/** Pattern to use when creating temporary files. */
-extern const char *tempNamePattern;
 
 /** Name of entities in a filesystem. */
 typedef std::filesystem::path Path;
@@ -83,10 +82,10 @@ ROSE_UTIL_API bool isNotSymbolicLink(const Path &path);
  * baseNameMatches(std::regex("rose_.*")));
  * @endcode */
 class ROSE_UTIL_API baseNameMatches {
-  const std::regex &re_;
+  std::regex re_;
 
 public:
-  baseNameMatches(const std::regex &re) : re_(re) {}
+  baseNameMatches(std::regex re) : re_(std::move(re)) {}
   bool operator()(const Path &path);
 };
 
@@ -96,21 +95,15 @@ public:
  * is suitable for temporary files under the conventions of the operating
  * system.  The specifics of how this path is determined are implementation
  * defined (see `std::filesystem::temp_directory_path`).  The created
- * subdirectory has a name of the form "rose-%%%%%%%%-%%%%%%%%" where each "%"
- * is a random hexadecimal digit.  Returns the path to this directory. */
+ * subdirectory has a unique name beginning with "rose-". Returns the path to
+ * this directory. */
 ROSE_UTIL_API Path createTemporaryDirectory();
 
 /** Normalize a path name.
  *
- *  Normalizes a path by removing "." and ".." components to the extent which is
- * possible.
- *
- *  For instance, a name like "/foo/bar/../baz" will become "/foo/baz" and the
- * name "/foo/./baz" will become
- *  "/foo/baz". However, the names "/../foo" and "./foo" cannot be changed
- * because removing the ".." in the first case would place it in a different
- * directory if the name were appended to another name, and in the second case
- * it would convert a relative name to an absolute name. */
+ *  Uses std::filesystem::path::lexically_normal without consulting the
+ * filesystem. Preserves leading parent components in relative paths; for
+ * example, "../../file" stays relative and "/../file" becomes "/file". */
 ROSE_UTIL_API Path makeNormal(const Path &);
 
 /** Make path relative.
@@ -249,8 +242,9 @@ template <class Select, class Descend>
 void copyFilesRecursively(const Path &root, const Path &destination,
                           Select select, Descend descend) {
   std::vector<Path> files = findNamesRecursively(root, select, descend);
-  files.erase(files.begin(), std::remove_if(files.begin(), files.end(),
-                                            isFile)); // keep only isFile names
+  files.erase(std::remove_if(files.begin(), files.end(),
+                             [](const Path &path) { return !isFile(path); }),
+              files.end());
   copyFiles(files, root, destination);
 }
 
@@ -270,35 +264,35 @@ ROSE_UTIL_API std::string toString(const Path &path);
  *
  * @param fileName File path to read.
  * @param openMode Stream open mode.
- * @return Container filled with file contents. */
+ * @return Container filled with file contents.
+ * @throws std::ios_base::failure if opening or reading the file fails. */
 template <class Container>
 Container readFile(const std::filesystem::path &fileName,
                    std::ios_base::openmode openMode = std::ios_base::in |
                                                       std::ios_base::binary) {
   using streamIterator = std::istreambuf_iterator<char>;
-  std::ifstream stream(fileName.c_str(), openMode);
-  if (!stream.good())
-    MLOG_ERROR_CXX("UTIL") << "unable to open file " << fileName.string();
+  std::ifstream stream;
+  stream.exceptions(std::ios::failbit | std::ios::badbit);
+  stream.open(fileName, openMode);
   Container container;
   std::copy(streamIterator(stream), streamIterator(),
             std::back_inserter(container));
-  if (stream.fail())
-    MLOG_ERROR_CXX("UTIL") << "unable to read from file " << fileName.string();
+  stream.close();
   return container;
 }
 
+/** Write a container to a file.
+ * @throws std::ios_base::failure if opening, writing, or closing fails. */
 template <class Container>
 void writeFile(const std::filesystem::path &fileName, const Container &data,
                std::ios_base::openmode openMode = std::ios_base::out |
                                                   std::ios_base::binary) {
-  std::ofstream stream(fileName.c_str(), openMode);
-  if (!stream.good())
-    MLOG_ERROR_CXX("UTIL") << "unable to open file " << fileName.string();
+  std::ofstream stream;
+  stream.exceptions(std::ios::failbit | std::ios::badbit);
+  stream.open(fileName, openMode);
   std::ostream_iterator<char> streamIterator(stream);
   std::copy(data.begin(), data.end(), streamIterator);
   stream.close();
-  if (stream.fail())
-    MLOG_ERROR_CXX("UTIL") << "unable to write to file " << fileName.string();
 }
 
 } // namespace FileSystem

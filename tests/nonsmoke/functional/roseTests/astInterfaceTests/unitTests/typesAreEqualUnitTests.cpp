@@ -15,6 +15,8 @@
  *       Fortran types..?
  */
 #include <cassert>
+#include <memory>
+#include <vector>
 
 #include "testSupport.h"
 
@@ -222,6 +224,18 @@ TEST(SageInterfaceTypeEquivalence, ReferenceTypesAreEqual) {
   EXPECT_EQ(tcRef, true);
 }
 
+TEST(SageInterfaceTypeEquivalence, RvalueReferenceCopiesPreserveEquivalence) {
+  auto *integer = SageBuilder::buildIntType();
+  auto copy = std::make_unique<SgRvalueReferenceType>(integer);
+  EXPECT_TRUE(SageInterface::isEquivalentType(
+      copy.get(), SageBuilder::buildRvalueReferenceType(integer)));
+  EXPECT_FALSE(SageInterface::isEquivalentType(
+      copy.get(), SageBuilder::buildReferenceType(integer)));
+  EXPECT_FALSE(SageInterface::isEquivalentType(
+      copy.get(),
+      SageBuilder::buildRvalueReferenceType(SageBuilder::buildDoubleType())));
+}
+
 TEST(SageInterfaceTypeEquivalence, VoidReferenceTypesAreEqual) {
   ::SgReferenceType *r_3 =
       SageBuilder::buildReferenceType(SageBuilder::buildVoidType());
@@ -254,13 +268,13 @@ TEST(SageInterfaceTypeEquivalence,
  * Array Types
  */
 TEST(SageInterfaceTypeEquivalence, IntArrayTypesAreEqual) {
-  // type(int a[10]) == type(int a[v]) (with v being const int v = 10.
   ::SgArrayType *a_1 = SageBuilder::buildArrayType(SageBuilder::buildIntType(),
                                                    SageBuilder::buildIntVal(3));
   ::SgArrayType *a_2 = SageBuilder::buildArrayType(SageBuilder::buildIntType(),
                                                    SageBuilder::buildIntVal(3));
   bool tcRef = SageInterface::checkTypesAreEqual(a_1, a_2);
   EXPECT_EQ(tcRef, true);
+  EXPECT_TRUE(SageInterface::isEquivalentType(a_1, a_2));
 }
 
 TEST(SageInterfaceTypeEquivalence, CharArrayIsEqual) {
@@ -301,6 +315,9 @@ TEST(SageInterfaceTypeEquivalence, IntArrayDifferentDimensionAreUnequal) {
       SageBuilder::buildCharType(), SageBuilder::buildIntVal(21));
   bool tcRef = SageInterface::checkTypesAreEqual(a_3, a_4);
   EXPECT_EQ(tcRef, false);
+  EXPECT_FALSE(SageInterface::isEquivalentType(a_3, a_4));
+  EXPECT_FALSE(SageInterface::isEquivalentType(
+      SageBuilder::buildPointerType(a_3), SageBuilder::buildPointerType(a_4)));
 }
 
 TEST(SageInterfaceTypeEquivalence, ConstCharArrayCharArrayAreUnequal) {
@@ -342,7 +359,58 @@ TEST(SageInterfaceTypeEquivalence, TypedefTypesAreUnequal) {
   delete unit.project;
 }
 
-// #if 0
+TEST(SageInterfaceTypeEquivalence, FunctionCategoriesAndQualifiersDiffer) {
+  SgType *result = SageBuilder::buildIntType();
+  auto *variadic_arguments = new SgFunctionParameterTypeList();
+  variadic_arguments->append_argument(SgTypeEllipse::createType());
+  std::vector<SgFunctionType *> types{
+      new SgFunctionType(result, false, new SgFunctionParameterTypeList()),
+      new SgFunctionType(result, true, variadic_arguments),
+      new SgMemberFunctionType(result, false, new SgFunctionParameterTypeList(),
+                               nullptr, 0),
+      new SgMemberFunctionType(result, false, new SgFunctionParameterTypeList(),
+                               nullptr, SgMemberFunctionType::e_const),
+      new SgMemberFunctionType(result, false, new SgFunctionParameterTypeList(),
+                               nullptr, SgMemberFunctionType::e_volatile),
+      new SgMemberFunctionType(result, false, new SgFunctionParameterTypeList(),
+                               nullptr,
+                               SgMemberFunctionType::e_ref_qualifier_lvalue),
+      new SgMemberFunctionType(result, false, new SgFunctionParameterTypeList(),
+                               nullptr,
+                               SgMemberFunctionType::e_ref_qualifier_rvalue)};
+  for (size_t left = 0; left < types.size(); ++left) {
+    for (size_t right = 0; right < types.size(); ++right) {
+      EXPECT_EQ(
+          SageInterface::isEquivalentFunctionType(types[left], types[right]),
+          left == right);
+    }
+  }
+  auto *equivalent =
+      new SgFunctionType(result, false, new SgFunctionParameterTypeList());
+  EXPECT_TRUE(
+      SageInterface::isEquivalentFunctionType(types.front(), equivalent));
+  types.push_back(equivalent);
+  for (SgFunctionType *type : types) {
+    delete type;
+  }
+}
+
+TEST(SageInterfaceTypeEquivalence, NonrealNamesInSameScopeAreDistinct) {
+  auto unit = buildTypeTestTranslationUnit("rex_nonreal_type_identity.cpp");
+  auto *left =
+      SageBuilder::buildSemanticNonrealType("Left", unit.global, nullptr);
+  auto *right =
+      SageBuilder::buildSemanticNonrealType("Right", unit.global, nullptr);
+  auto *repeated =
+      SageBuilder::buildSemanticNonrealType("Left", unit.global, nullptr);
+  EXPECT_TRUE(SageInterface::isEquivalentType(left, repeated));
+  EXPECT_FALSE(SageInterface::isEquivalentType(left, right));
+  EXPECT_FALSE(SageInterface::isEquivalentType(right, left));
+  EXPECT_TRUE(SageInterface::checkTypesAreEqual(left, repeated));
+  EXPECT_FALSE(SageInterface::checkTypesAreEqual(left, right));
+  delete unit.project;
+}
+
 /*
  *
  * We now test function type equivalence
@@ -360,12 +428,9 @@ TEST_F(CleanFunctionTypeTableFixture, VoidXIntAndVoidXIntEqual) {
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
   ::SgFunctionType *ft2 =
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
-  EXPECT_EQ(
-      SgNode::get_globalFunctionTypeTable()->get_function_type_table()->size(),
-      1);
+  EXPECT_EQ(SgNode::get_globalFunctionTypeTable()->size(), 1);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, true);
-  delete paramList;
 }
 
 TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntIntEqual) {
@@ -378,18 +443,15 @@ TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntIntEqual) {
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, true);
-  delete paramList;
 }
 
 TEST_F(CleanFunctionTypeTableFixture,
        VoidXCharConstIntAndVoidXCharConstIntEqual) {
-  ::SgFunctionParameterTypeList *paramList = new SgFunctionParameterTypeList();
-  ::SgFunctionParameterTypeList *paramList2 = new SgFunctionParameterTypeList();
-  paramList->append_argument(SageBuilder::buildCharType());
-  paramList->append_argument(
+  auto *paramList = SageBuilder::buildFunctionParameterTypeList(
+      SageBuilder::buildCharType(),
       SageBuilder::buildConstType(SageBuilder::buildIntType()));
-  paramList2->append_argument(SageBuilder::buildCharType());
-  paramList2->append_argument(
+  auto *paramList2 = SageBuilder::buildFunctionParameterTypeList(
+      SageBuilder::buildCharType(),
       SageBuilder::buildConstType(SageBuilder::buildIntType()));
   ::SgFunctionType *ft1 =
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
@@ -397,7 +459,8 @@ TEST_F(CleanFunctionTypeTableFixture,
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList2);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, true);
-  delete paramList;
+  ROSE_ASSERT(paramList2->get_parent() == nullptr);
+  delete paramList2;
 }
 
 TEST_F(CleanFunctionTypeTableFixture, IntXVoidAndIntXVoidEqual) {
@@ -409,7 +472,6 @@ TEST_F(CleanFunctionTypeTableFixture, IntXVoidAndIntXVoidEqual) {
       SageBuilder::buildFunctionType(SageBuilder::buildIntType(), paramList);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, true);
-  delete paramList;
 }
 
 /*
@@ -419,27 +481,28 @@ TEST_F(CleanFunctionTypeTableFixture, IntXVoidAndIntXVoidEqual) {
 TEST_F(CleanFunctionTypeTableFixture, IntXVoidAndConstIntXVoidUnequal) {
   ::SgFunctionParameterTypeList *paramList = new SgFunctionParameterTypeList();
   paramList->append_argument(SageBuilder::buildVoidType());
+  auto *paramList2 = new SgFunctionParameterTypeList();
+  paramList2->append_argument(SageBuilder::buildVoidType());
   ::SgFunctionType *ft1 =
       SageBuilder::buildFunctionType(SageBuilder::buildIntType(), paramList);
   ::SgFunctionType *ft2 = SageBuilder::buildFunctionType(
-      SageBuilder::buildConstType(SageBuilder::buildIntType()), paramList);
+      SageBuilder::buildConstType(SageBuilder::buildIntType()), paramList2);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, false);
-  delete paramList;
 }
 
 TEST_F(CleanFunctionTypeTableFixture, VoidXVoidAndIntXVoidUnequal) {
   ::SgFunctionParameterTypeList *paramList = new SgFunctionParameterTypeList();
   paramList->append_argument(SageBuilder::buildVoidType());
+  auto *paramList2 = new SgFunctionParameterTypeList();
+  paramList2->append_argument(SageBuilder::buildVoidType());
   ::SgFunctionType *ft1 =
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
   ::SgFunctionType *ft2 =
-      SageBuilder::buildFunctionType(SageBuilder::buildIntType(), paramList);
+      SageBuilder::buildFunctionType(SageBuilder::buildIntType(), paramList2);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, false);
-  delete paramList;
 }
-// #endif
 TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntUnequal) {
   SgFunctionTypeTable *ftt = SgNode::get_globalFunctionTypeTable();
 
@@ -465,24 +528,23 @@ TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntUnequal) {
 
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
   EXPECT_EQ(tcRef, false);
-  delete paramList;
-  delete paramList2;
 }
 
-TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntConstIntUnequal) {
+TEST_F(CleanFunctionTypeTableFixture, VoidXIntIntAndVoidXIntConstIntEqual) {
   ::SgFunctionParameterTypeList *paramList = new SgFunctionParameterTypeList();
   paramList->append_argument(SageBuilder::buildIntType());
   paramList->append_argument(SageBuilder::buildIntType());
-  ::SgFunctionParameterTypeList *paramList2 = new SgFunctionParameterTypeList();
-  paramList2->append_argument(SageBuilder::buildIntType());
-  paramList2->append_argument(
-      SageBuilder::buildConstType(SageBuilder::buildIntType()));
+  SgType *declaredConstInt =
+      SageBuilder::buildConstType(SageBuilder::buildIntType());
+  auto *paramList2 = SageBuilder::buildFunctionParameterTypeList(
+      SageBuilder::buildIntType(), declaredConstInt);
+  EXPECT_TRUE(SageInterface::isConstType(declaredConstInt));
+  EXPECT_EQ(paramList2->get_arguments().size(), 2);
+  EXPECT_EQ(paramList2->get_arguments()[1], SageBuilder::buildIntType());
   ::SgFunctionType *ft1 =
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList);
   ::SgFunctionType *ft2 =
       SageBuilder::buildFunctionType(SageBuilder::buildVoidType(), paramList2);
   bool tcRef = SageInterface::checkTypesAreEqual(ft1, ft2);
-  EXPECT_EQ(tcRef, false);
-  delete paramList;
-  delete paramList2;
+  EXPECT_EQ(tcRef, true);
 }

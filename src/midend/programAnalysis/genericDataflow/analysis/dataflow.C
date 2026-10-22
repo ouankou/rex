@@ -14,11 +14,10 @@ using std::unique_ptr;
 using std::make_pair;
 using std::pair;
 
+using namespace VirtualCFG;
+
 NodeState *IntraBWDataflow::initializeFunctionNodeState(const Function &func,
                                                         NodeState *fState) {
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable.
-
   ROSE_ASSERT(func.get_definition() != NULL);
   DataflowNode funcCFGEnd =
       cfgUtils::getFuncEndCFG(func.get_definition(), filter);
@@ -221,15 +220,6 @@ bool IntraUniDirectionalDataflow::runAnalysis(const Function &func,
     ids.runAnalysis(func, fState);
     visited.insert(func);
   }
-
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=deprecated-declarations. DQ (12/10/2016): This is a technique to
-  // suppress warnings in generated code that we want to be an error elsewhere
-  // in ROSE. See https://gcc.gnu.org/onlinedocs/gcc/Diagnostic-Pragmas.html for
-  // more detail.
-#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
 
   unique_ptr<VirtualCFG::dataflow> workList(getInitialWorklist(
       func, firstVisit, analyzeDueToCallers, calleesUpdated, fState));

@@ -6,7 +6,6 @@
 #include <string>
 
 ROSE_UTIL_API std::string escapeString(const std::string &s);
-ROSE_UTIL_API std::string unescapeString(const std::string &s);
 
 namespace Rose {
 namespace StringUtility {
@@ -75,31 +74,13 @@ ROSE_UTIL_API std::string jsonEscape(const std::string &);
 
 /** Escapes characters that are special in CSV tables.
  *
- *  Assumes that the context is outside of any quoting and possib9 adds quotes.
+ *  Assumes that the context is outside of any quoting and possibly adds quotes.
  * See RFC 4180 for details.
  *
  * @return Escaped string. */
 ROSE_UTIL_API std::string csvEscape(const std::string &);
 
-// [Robb Matzke 2016-05-06]: I am deprecating escapeNewLineCharaters because:
-//   1. Its name is spelled wrong: "Charater"
-//   2. "newline" in this context is a single word and should be capitalized as
-//   "Newline" not "NewLine"
-//   3. Its name is misleading because it also escapes double quotes.
-//   4. It escapes newlines using "l" rather than the more customary "n".
-// I would just remove it, but it seems to be used in some projects and the
-// tutorial.
-
-/** Escapes line feeds and double quotes.
- *
- *  Scans the input string character by character and replaces line-feed
- * characters with a backslash followed by the letter "l" and replaces double
- * quotes by a backslash followed by a double qoute.
- *
- * @return Escaped string. */
-ROSE_UTIL_API std::string escapeNewLineCharaters(const std::string &);
-
-// DQ (12/8/2016): This is ued in the generation of dot files.
+/** Escapes line feeds as `\l` and double quotes for DOT labels. */
 ROSE_UTIL_API std::string
 escapeNewlineAndDoubleQuoteCharacters(const std::string &);
 

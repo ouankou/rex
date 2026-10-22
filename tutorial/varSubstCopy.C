@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
   SgInitializedName *firstParamName = exampleFunctionDecl->get_args().front();
   ROSE_ASSERT(firstParamName != NULL);
   SgVariableSymbol *firstParamSym =
-      exampleFunctionDef->lookup_var_symbol(firstParamName->get_name());
+      exampleFunctionDef->lookup_variable_symbol(firstParamName->get_name());
   ROSE_ASSERT(firstParamSym != NULL);
 
   // Construct the expression to substitute for

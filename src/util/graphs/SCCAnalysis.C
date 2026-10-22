@@ -150,10 +150,4 @@ SCCGraphCreate::SCCGraphCreate(const GraphAccessInterface *orig,
   }
 }
 
-void SCCGraphCreate::TopoSort(bool reverse) {
-  impl->TopoSort(reverse);
-
-  //  if (reverse)
-  //     cerr << "reverse ";
-  //  cerr << "Topo sort Graph : " << GraphToString(impl) << endl;
-}
+void SCCGraphCreate::TopoSort(bool reverse) { impl->TopoSort(reverse); }

@@ -34,13 +34,19 @@ int main(int argc, char **argv) {
       findClassDefinition(project, "rex_class_include_contract");
   ROSE_ASSERT(definition != nullptr);
   const SgDeclarationStatementPtrList &members = definition->get_members();
-  ROSE_ASSERT(members.size() == 4);
+  ROSE_ASSERT(members.size() == 5);
   const SgUnsignedCharList &roles = definition->get_source_member_roles();
   ROSE_ASSERT(roles.size() == members.size());
   ROSE_ASSERT(roles[0] == SgClassDefinition::e_source_member_ast);
   ROSE_ASSERT(roles[1] == SgClassDefinition::e_source_member_include_expansion);
   ROSE_ASSERT(roles[2] == SgClassDefinition::e_source_member_include_expansion);
-  ROSE_ASSERT(roles[3] == SgClassDefinition::e_source_member_ast);
+  ROSE_ASSERT(roles[3] == SgClassDefinition::e_source_member_include_expansion);
+  ROSE_ASSERT(roles[4] == SgClassDefinition::e_source_member_ast);
+  SgPragmaDeclaration *pragma = isSgPragmaDeclaration(members[3]);
+  ROSE_ASSERT(pragma != nullptr && pragma->get_parent() == definition &&
+              pragma->get_scope() == definition);
+  ROSE_ASSERT(pragma->get_pragma()->get_pragma() ==
+              "rex_class_included_marker");
 
   size_t includeCount = 0;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgLocatedNode)) {

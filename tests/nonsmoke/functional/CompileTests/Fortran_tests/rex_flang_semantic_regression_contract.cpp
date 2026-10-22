@@ -1,7 +1,10 @@
 #include "rose.h"
+#include "virtualCFG.h"
 
 #include <algorithm>
 #include <cstdint>
+#include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -139,6 +142,7 @@ std::vector<SgNode *> frontendAstRoots(SgProject *project) {
     SgFileList *external =
         source != nullptr ? source->get_frontendExternalFileList() : nullptr;
     if (external != nullptr && uniqueRoots.insert(external).second) {
+      ROSE_ASSERT(external->get_parent() == source);
       roots.push_back(external);
     }
   }
@@ -181,7 +185,50 @@ SgClassType *findDefinedClassType(SgProject *project, const std::string &name) {
   return result;
 }
 
+void verifyDataInitialization(SgNode *root) {
+  for (const char *name : {"repeated", "named", "scalar"}) {
+    const auto names = findNames(root, name);
+    ROSE_ASSERT(names.size() == 1);
+    auto *owner = names.front();
+    auto *initializer = isSgFortranDataInitializer(owner->get_initializer());
+    ROSE_ASSERT(initializer != nullptr &&
+                initializer->get_type() == owner->get_type());
+    initializer->validate_initializer();
+    ROSE_ASSERT(initializer->cfgIndexForEnd() == 0);
+    assertExactPhysicalExpressionSource(initializer);
+    const auto &values = initializer->get_values();
+    const bool scalar = std::string(name) == "scalar";
+    ROSE_ASSERT(values.size() == (scalar ? 1 : 2));
+    ROSE_ASSERT(values.back()->get_repeat_expression() == nullptr);
+    if (!scalar) {
+      auto *repeat = values.front()->get_repeat_expression();
+      ROSE_ASSERT(repeat != nullptr);
+      ROSE_ASSERT(repeat->get_fortran_integer_constant_value_is_available());
+      ROSE_ASSERT(repeat->get_fortran_integer_constant_value() == 2);
+      assertExactPhysicalExpressionSource(repeat);
+      if (std::string(name) == "named") {
+        auto *reference = isSgVarRefExp(repeat);
+        ROSE_ASSERT(reference != nullptr &&
+                    reference->get_symbol()->get_name() == "copies");
+      }
+    }
+    for (auto *value : values)
+      assertExactPhysicalExpressionSource(value->get_constant_expression());
+  }
+  const auto groups = NodeQuery::querySubTree(root, V_SgDataStatementGroup);
+  ROSE_ASSERT(groups.size() == 1);
+  auto *group = isSgDataStatementGroup(groups.front());
+  group->validate_group();
+  ROSE_ASSERT(group->get_object_list().size() == 1);
+  ROSE_ASSERT(group->get_value_list().size() == 2);
+  ROSE_ASSERT(group->get_value_list()
+                  .front()
+                  ->get_repeat_expression()
+                  ->get_fortran_integer_constant_value() == 2);
+}
+
 void verifyCustomImplicitTypes(SgProject *project) {
+  verifyDataInitialization(project);
   const auto requireType = [&](const std::string &name,
                                VariantT expectedVariant,
                                std::size_t minimumCount) {
@@ -199,6 +246,7 @@ void verifyCustomImplicitTypes(SgProject *project) {
   requireType("alpha", V_SgTypeComplex, 2);
   requireType("beta", V_SgTypeComplex, 2);
   requireType("cobalt", V_SgTypeComplex, 1);
+  requireType("echo", V_SgTypeComplex, 1);
   requireType("zeta", V_SgTypeBool, 1);
   requireType("zenith", V_SgTypeBool, 1);
 
@@ -213,6 +261,91 @@ void verifyCustomImplicitTypes(SgProject *project) {
   ROSE_ASSERT(result->get_name() == "beta");
   ROSE_ASSERT(isSgTypeComplex(elementType(result->get_type())) != nullptr);
   ROSE_ASSERT(result->get_type() == functionType->get_return_type());
+
+  const auto requireRanges = [](SgProject *root) {
+    std::vector<SgNode *> ranges =
+        NodeQuery::querySubTree(root, V_SgFortranImplicitRange);
+    ROSE_ASSERT(ranges.size() == 7);
+    for (SgNode *node : ranges) {
+      auto *range = isSgFortranImplicitRange(node);
+      range->validate_range();
+      assertExactPhysicalLocatedSource(range);
+      auto *owner = isSgImplicitStatement(range->get_parent());
+      ROSE_ASSERT(owner != nullptr);
+      owner->validate_implicit_statement();
+      ROSE_ASSERT(NodeQuery::querySubTree(owner, V_SgInitializedName).empty());
+      ROSE_ASSERT(range->get_type_spec() ==
+                  SgFortranImplicitRange::e_intrinsic);
+      ROSE_ASSERT(range->get_source_derived_type_symbol() == nullptr);
+      if (range->get_first_letter() == 'e') {
+        ROSE_ASSERT(range->get_last_letter() == std::optional<char>('e'));
+        ROSE_ASSERT(owner->get_ranges().size() == 3);
+        ROSE_ASSERT(owner->get_ranges()[0]->get_first_letter() == 'a');
+        ROSE_ASSERT(owner->get_ranges()[0]->get_last_letter() ==
+                    std::optional<char>('c'));
+        ROSE_ASSERT(owner->get_ranges()[0]->get_type() == range->get_type());
+        auto *complexType = isSgTypeComplex(range->get_type());
+        ROSE_ASSERT(complexType != nullptr &&
+                    complexType->get_hasTypeKindStar());
+        auto *kind = isSgLongLongIntVal(complexType->get_type_kind());
+        ROSE_ASSERT(kind != nullptr && kind->get_value() == 8);
+        ROSE_ASSERT(kind->get_valueString() == "008");
+        ROSE_ASSERT(kind->get_fortran_integer_constant_value_is_available());
+        ROSE_ASSERT(kind->get_fortran_integer_constant_value() == 8);
+        ROSE_ASSERT(kind->get_parent() == complexType->get_base_type());
+        assertExactPhysicalExpressionSource(kind);
+        ROSE_ASSERT(kind->get_endOfConstruct()->get_col() ==
+                    kind->get_startOfConstruct()->get_col() + 2);
+        const auto echoes = findNames(root, "echo");
+        ROSE_ASSERT(echoes.size() == 1);
+        ROSE_ASSERT(SageInterface::fortranSourceTypeMatchesSemanticType(
+            complexType, echoes.front()->get_type()));
+        ROSE_ASSERT(range->get_endOfConstruct()->get_col() ==
+                    range->get_startOfConstruct()->get_col() + 2);
+      } else if (range->get_first_letter() == 'z') {
+        ROSE_ASSERT(!range->get_last_letter());
+        ROSE_ASSERT(range->get_endOfConstruct()->get_col() ==
+                    range->get_startOfConstruct()->get_col());
+      }
+    }
+    return ranges;
+  };
+  const auto ranges = requireRanges(project);
+  SgTreeCopy copy;
+  auto *copied = isSgProject(project->copy(copy));
+  ROSE_ASSERT(copied != nullptr && copied != project);
+  const auto copiedRanges = requireRanges(copied);
+  verifyDataInitialization(copied);
+  const auto originalValues =
+      NodeQuery::querySubTree(project, V_SgDataStatementValue);
+  const auto copiedValues =
+      NodeQuery::querySubTree(copied, V_SgDataStatementValue);
+  ROSE_ASSERT(originalValues.size() == copiedValues.size());
+  for (size_t i = 0; i < originalValues.size(); ++i) {
+    ROSE_ASSERT(originalValues[i] != copiedValues[i]);
+    ROSE_ASSERT(originalValues[i]->get_parent() !=
+                copiedValues[i]->get_parent());
+    auto *originalValue = isSgDataStatementValue(originalValues[i]);
+    auto *copiedValue = isSgDataStatementValue(copiedValues[i]);
+    ROSE_ASSERT(originalValue->get_constant_expression() !=
+                copiedValue->get_constant_expression());
+  }
+  for (std::size_t i = 0; i < ranges.size(); ++i) {
+    auto *original = isSgFortranImplicitRange(ranges[i]);
+    auto *replacement = isSgFortranImplicitRange(copiedRanges[i]);
+    ROSE_ASSERT(original != replacement);
+    ROSE_ASSERT(original->get_parent() != replacement->get_parent());
+    ROSE_ASSERT(original->get_startOfConstruct() !=
+                replacement->get_startOfConstruct());
+    ROSE_ASSERT(original->get_endOfConstruct() !=
+                replacement->get_endOfConstruct());
+    ROSE_ASSERT(original->get_first_letter() ==
+                replacement->get_first_letter());
+    ROSE_ASSERT(original->get_last_letter() == replacement->get_last_letter());
+  }
+  AstTests::runAllTests(copied);
+  SageInterface::deleteAST(copied,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
 }
 
 void verifyDefinedOperatorArrayResults(SgProject *project) {
@@ -370,6 +503,31 @@ void verifyDuplicateIntrinsicUse(SgProject *project) {
 }
 
 void verifySemanticNameAndComponentIdentity(SgProject *project) {
+  auto verifyBinding = [](SgProject *root) {
+    auto *type = findDefinedClassType(root, "rex_c_payload");
+    auto *declaration = isSgDerivedTypeStatement(
+        type->get_declaration()->get_definingDeclaration());
+    ROSE_ASSERT(declaration != nullptr);
+    ROSE_ASSERT(
+        declaration->get_declarationModifier().get_typeModifier().isBind());
+    ROSE_ASSERT(SageInterface::getEnclosingModuleStatement(declaration) ==
+                nullptr);
+    ROSE_ASSERT(declaration->unparseToString().find("BIND(C)") !=
+                std::string::npos);
+  };
+  verifyBinding(project);
+  const auto sourceFiles = SgSourceFile::numberOfNodes();
+  const auto fileLists = SgFileList::numberOfNodes();
+  SgTreeCopy copy;
+  auto *copied = isSgProject(project->copy(copy));
+  ROSE_ASSERT(copied != nullptr && copied != project);
+  verifyBinding(copied);
+  AstTests::runAllTests(copied);
+  SageInterface::deleteAST(copied,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(SgSourceFile::numberOfNodes() == sourceFiles);
+  ROSE_ASSERT(SgFileList::numberOfNodes() == fileLists);
+  verifyBinding(project);
   SgClassType *payloadType = findDefinedClassType(project, "rex_payload");
   const std::vector<SgInitializedName *> componentDeclarations =
       findNames(project, "value");
@@ -467,8 +625,28 @@ void verifyStatementFunctionIdentity(SgProject *project) {
   ROSE_ASSERT(scope != nullptr);
   ROSE_ASSERT(function->get_parent() == statement);
   ROSE_ASSERT(function->get_scope() == scope);
-  ROSE_ASSERT(function->get_firstNondefiningDeclaration() == function);
+  SgProcedureHeaderStatement *sourceDeclaration =
+      isSgProcedureHeaderStatement(function->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(sourceDeclaration != nullptr);
+  ROSE_ASSERT(sourceDeclaration != function);
+  ROSE_ASSERT(sourceDeclaration->get_fortran_procedure_source_form() ==
+              SgProcedureHeaderStatement::
+                  e_fortran_procedure_source_form_type_declaration);
+  ROSE_ASSERT(sourceDeclaration->get_parent() == scope);
+  ROSE_ASSERT(sourceDeclaration->get_scope() == scope);
+  ROSE_ASSERT(scope->statementExistsInScope(sourceDeclaration));
+  ROSE_ASSERT(sourceDeclaration->get_type_syntax_is_available());
+  ROSE_ASSERT(sourceDeclaration->get_type_syntax() != nullptr);
+  ROSE_ASSERT(sourceDeclaration->get_type_syntax()->get_parent() ==
+              sourceDeclaration);
+  ROSE_ASSERT(sourceDeclaration->get_file_info()->get_line() <
+              statement->get_file_info()->get_line());
+  ROSE_ASSERT(scope->lookup_variable_symbol("rex_statement_value") == nullptr);
   ROSE_ASSERT(function->get_definingDeclaration() == nullptr);
+  ROSE_ASSERT(sourceDeclaration->get_definingDeclaration() == nullptr);
+  const SgName mangledName = function->get_mangled_name();
+  ROSE_ASSERT(!mangledName.getString().empty());
+  ROSE_ASSERT(statement->get_mangled_name() == mangledName);
   ROSE_ASSERT(function->get_parameterList() != nullptr);
   ROSE_ASSERT(function->get_parameterList()->get_parent() == function);
   for (SgLocatedNode *node : {static_cast<SgLocatedNode *>(statement),
@@ -482,6 +660,11 @@ void verifyStatementFunctionIdentity(SgProject *project) {
   }
   SgFunctionType *functionType = function->get_type();
   ROSE_ASSERT(functionType != nullptr);
+  ROSE_ASSERT(sourceDeclaration->get_type() == functionType);
+  SgFunctionSymbol *symbol =
+      scope->lookup_function_symbol(function->get_name(), functionType);
+  ROSE_ASSERT(symbol != nullptr);
+  ROSE_ASSERT(symbol->get_declaration() == sourceDeclaration);
   ROSE_ASSERT(isSgTypeInt(elementType(functionType->get_return_type())) !=
               nullptr);
 
@@ -491,7 +674,7 @@ void verifyStatementFunctionIdentity(SgProject *project) {
     ROSE_ASSERT(call != nullptr);
     SgFunctionDeclaration *callee = call->getAssociatedFunctionDeclaration();
     if (callee != nullptr && callee->get_name() == "rex_statement_value") {
-      ROSE_ASSERT(callee == function);
+      ROSE_ASSERT(callee == sourceDeclaration);
       ROSE_ASSERT(call->get_type() == functionType->get_return_type());
       ROSE_ASSERT(call->get_args() != nullptr);
       ROSE_ASSERT(call->get_args()->get_expressions().size() == 1);
@@ -1064,6 +1247,11 @@ void verifyLabeledDoHeaderIdentity(SgProject *project) {
               SgLabelSymbol::e_start_label_type);
   ROSE_ASSERT(headerSymbol->get_fortran_statement() == loop);
   assertExactPhysicalLocatedSource(loop);
+  SgLabelRefExp *terminalLabel = loop->get_end_numeric_label();
+  ROSE_ASSERT(terminalLabel != nullptr);
+  ROSE_ASSERT(
+      VirtualCFG::getCFGTargetOfFortranLabelRef(terminalLabel) ==
+      terminalLabel->get_symbol()->get_fortran_statement()->cfgForBeginning());
 
   std::vector<SgNode *> gotos =
       NodeQuery::querySubTree(project, V_SgGotoStatement);
@@ -1077,32 +1265,154 @@ void verifyLabeledDoHeaderIdentity(SgProject *project) {
   ROSE_ASSERT(target->get_symbol() == headerSymbol);
   ROSE_ASSERT(target->get_numeric_label_value() == 2);
   assertExactPhysicalLocatedSource(gotoStatement);
+
+  SgTreeCopy copy;
+  std::unique_ptr<SgProject> copied(isSgProject(project->copy(copy)));
+  ROSE_ASSERT(copied != nullptr && copied.get() != project);
+  std::vector<SgNode *> copiedLoops =
+      NodeQuery::querySubTree(copied.get(), V_SgFortranDo);
+  std::vector<SgNode *> copiedGotos =
+      NodeQuery::querySubTree(copied.get(), V_SgGotoStatement);
+  ROSE_ASSERT(copiedLoops.size() == 1 && copiedGotos.size() == 1);
+  SgFortranDo *copiedLoop = isSgFortranDo(copiedLoops.front());
+  SgGotoStatement *copiedGoto = isSgGotoStatement(copiedGotos.front());
+  SgLabelRefExp *copiedHeader = copiedLoop->get_numeric_label();
+  SgLabelRefExp *copiedTarget = copiedGoto->get_label_expression();
+  ROSE_ASSERT(copiedHeader != nullptr && copiedHeader != headerLabel);
+  ROSE_ASSERT(copiedTarget != nullptr && copiedTarget != target);
+  ROSE_ASSERT(copiedHeader->get_parent() == copiedLoop);
+  ROSE_ASSERT(copiedTarget->get_parent() == copiedGoto);
+  SgLabelSymbol *copiedSymbol = copiedHeader->get_symbol();
+  ROSE_ASSERT(copiedSymbol != nullptr && copiedSymbol != headerSymbol);
+  ROSE_ASSERT(copiedTarget->get_symbol() == copiedSymbol);
+  ROSE_ASSERT(copiedSymbol->get_fortran_statement() == copiedLoop);
+  SgLabelRefExp *copiedTerminal = copiedLoop->get_end_numeric_label();
+  ROSE_ASSERT(copiedTerminal != nullptr);
+  ROSE_ASSERT(
+      VirtualCFG::getCFGTargetOfFortranLabelRef(copiedTerminal) ==
+      copiedTerminal->get_symbol()->get_fortran_statement()->cfgForBeginning());
+  AstTests::runAllTests(copied.get());
+  SgProject *copiedProject = copied.release();
+  SageInterface::deleteAST(copiedProject,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(!SgNode::isLiveNode(copiedProject));
+  ROSE_ASSERT(headerLabel->get_parent() == loop);
+  ROSE_ASSERT(target->get_symbol() == headerSymbol);
+}
+
+SgStatement *findEndLabelOwner(SgProject *project, VariantT kind) {
+  std::vector<SgNode *> owners = NodeQuery::querySubTree(project, kind);
+  SgStatement *owner = nullptr;
+  for (SgNode *node : owners) {
+    SgStatement *candidate = isSgStatement(node);
+    if (candidate != nullptr && candidate->has_end_numeric_label() &&
+        candidate->get_end_numeric_label() != nullptr) {
+      ROSE_ASSERT(owner == nullptr);
+      owner = candidate;
+    }
+  }
+  ROSE_ASSERT(owner != nullptr);
+  return owner;
+}
+
+void verifyEndLabelCopy(SgProject *project, VariantT kind, int expected_label) {
+  SgStatement *owner = findEndLabelOwner(project, kind);
+  SgLabelRefExp *label = owner->get_end_numeric_label();
+  ROSE_ASSERT(label != nullptr && label->get_parent() == owner);
+  SgLabelSymbol *symbol = label->get_symbol();
+  ROSE_ASSERT(symbol != nullptr);
+  ROSE_ASSERT(symbol->get_fortran_statement() == owner);
+  ROSE_ASSERT(symbol->get_label_type() == SgLabelSymbol::e_end_label_type);
+  ROSE_ASSERT(symbol->get_numeric_label_value() == expected_label);
+  SgStatement *loopBody = nullptr;
+  if (auto *loop = isSgFortranDo(owner))
+    loopBody = loop->get_body();
+  else if (auto *loop = isSgWhileStmt(owner))
+    loopBody = loop->get_body();
+  if (loopBody != nullptr) {
+    const auto continuation = loopBody->cfgForEnd().outEdges();
+    ROSE_ASSERT(continuation.size() == 1);
+    ROSE_ASSERT(VirtualCFG::getCFGTargetOfFortranLabelRef(label) ==
+                continuation.front().target());
+  }
+  if (kind == V_SgAssociateStatement || kind == V_SgBasicBlock) {
+    std::vector<SgNode *> gotos =
+        NodeQuery::querySubTree(project, V_SgGotoStatement);
+    ROSE_ASSERT(gotos.size() == 1);
+    SgGotoStatement *gotoStatement = isSgGotoStatement(gotos.front());
+    ROSE_ASSERT(gotoStatement != nullptr);
+    SgLabelRefExp *target = gotoStatement->get_label_expression();
+    ROSE_ASSERT(target != nullptr && target->get_parent() == gotoStatement &&
+                target->get_symbol() == symbol);
+  }
+
+  SgTreeCopy copy;
+  std::unique_ptr<SgProject> copied(isSgProject(project->copy(copy)));
+  ROSE_ASSERT(copied != nullptr && copied.get() != project);
+  SgStatement *copiedOwner = findEndLabelOwner(copied.get(), kind);
+  SgLabelRefExp *copiedLabel = copiedOwner->get_end_numeric_label();
+  ROSE_ASSERT(copiedLabel != nullptr && copiedLabel != label);
+  ROSE_ASSERT(copiedLabel->get_parent() == copiedOwner);
+  SgLabelSymbol *copiedSymbol = copiedLabel->get_symbol();
+  ROSE_ASSERT(copiedSymbol != nullptr && copiedSymbol != symbol);
+  ROSE_ASSERT(copiedSymbol->get_fortran_statement() == copiedOwner);
+  if (loopBody != nullptr) {
+    const auto target = VirtualCFG::getCFGTargetOfFortranLabelRef(copiedLabel);
+    ROSE_ASSERT(target.getNode() == copiedOwner);
+    ROSE_ASSERT(target.getIndex() ==
+                loopBody->cfgForEnd().outEdges().front().target().getIndex());
+  }
+  if (kind == V_SgAssociateStatement || kind == V_SgBasicBlock) {
+    std::vector<SgNode *> copiedGotos =
+        NodeQuery::querySubTree(copied.get(), V_SgGotoStatement);
+    ROSE_ASSERT(copiedGotos.size() == 1);
+    SgGotoStatement *copiedGoto = isSgGotoStatement(copiedGotos.front());
+    ROSE_ASSERT(copiedGoto != nullptr);
+    SgLabelRefExp *copiedTarget = copiedGoto->get_label_expression();
+    ROSE_ASSERT(copiedTarget != nullptr &&
+                copiedTarget->get_parent() == copiedGoto &&
+                copiedTarget->get_symbol() == copiedSymbol);
+  }
+  AstTests::runAllTests(copied.get());
+  SgProject *copiedProject = copied.release();
+  SageInterface::deleteAST(copiedProject,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(!SgNode::isLiveNode(copiedProject));
+  ROSE_ASSERT(label->get_parent() == owner);
+  ROSE_ASSERT(label->get_symbol() == symbol);
 }
 
 void verifyComponentCharacterLengthContract(SgProject *project) {
   std::vector<SgInitializedName *> fields;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgInitializedName)) {
     SgInitializedName *initializedName = isSgInitializedName(node);
-    if (initializedName != nullptr && initializedName->get_name() == "field") {
+    if (initializedName != nullptr &&
+        (initializedName->get_name() == "field" ||
+         initializedName->get_name() == "prefix_field")) {
       fields.push_back(initializedName);
     }
   }
-  ROSE_ASSERT(fields.size() == 1);
-  SgInitializedName *field = fields.front();
-  SgType *sourceType = elementType(field->get_fortran_source_type());
-  SgType *semanticType = elementType(field->get_type());
-  SgTypeString *sourceString = isSgTypeString(sourceType);
-  ROSE_ASSERT(sourceString != nullptr);
-  ROSE_ASSERT(sourceString->get_fortran_source_syntax());
-  SgLongLongIntVal *length =
-      isSgLongLongIntVal(sourceString->get_lengthExpression());
-  ROSE_ASSERT(length != nullptr);
-  ROSE_ASSERT(length->get_value() == 7);
-  ROSE_ASSERT(length->get_valueString() == "7");
-  ROSE_ASSERT(length->get_parent() == sourceString);
-  assertExactPhysicalExpressionSource(length);
-  ROSE_ASSERT(SageInterface::fortranSourceTypeMatchesSemanticType(
-      sourceType, semanticType));
+  ROSE_ASSERT(fields.size() == 2);
+  for (SgInitializedName *field : fields) {
+    SgType *sourceType = elementType(field->get_fortran_source_type());
+    SgType *semanticType = elementType(field->get_type());
+    SgTypeString *sourceString = isSgTypeString(sourceType);
+    ROSE_ASSERT(sourceString != nullptr);
+    ROSE_ASSERT(sourceString->get_fortran_source_syntax());
+    SgLongLongIntVal *length =
+        isSgLongLongIntVal(sourceString->get_lengthExpression());
+    ROSE_ASSERT(length != nullptr);
+    ROSE_ASSERT(length->get_value() == 7);
+    ROSE_ASSERT(length->get_valueString() == "007");
+    ROSE_ASSERT(length->get_fortran_integer_constant_value_is_available());
+    ROSE_ASSERT(length->get_fortran_integer_constant_value() == 7);
+    ROSE_ASSERT(length->get_parent() == sourceString);
+    assertExactPhysicalExpressionSource(length);
+    ROSE_ASSERT(length->get_endOfConstruct()->get_col() ==
+                length->get_startOfConstruct()->get_col() + 2);
+    ROSE_ASSERT(SageInterface::fortranSourceTypeMatchesSemanticType(
+        sourceType, semanticType));
+  }
 }
 
 void verifyIntrinsicModuleTypeIdentity(SgProject *project) {
@@ -1236,6 +1546,9 @@ void verifyCoarrayImageSelectorContract(SgProject *project) {
         isSgCAFImageSelectorExp(coindexed->get_teamRank());
     ROSE_ASSERT(selector != nullptr);
     ROSE_ASSERT(selector->get_parent() == coindexed);
+    ROSE_ASSERT(
+        NodeQuery::querySubTree(coindexed, V_SgCAFImageSelectorExp).size() ==
+        1);
     assertExactPhysicalExpressionSource(selector);
 
     SgExprListExp *cosubscripts = selector->get_cosubscripts();
@@ -1365,6 +1678,75 @@ void verifyIntrinsicModuleShadowIdentity(SgProject *project) {
   ROSE_ASSERT(references.front()->get_symbol() == publishedSymbol);
 }
 
+void verifyExtendsSemanticBinding(SgProject *project) {
+  auto verify = [](SgProject *root) {
+    std::vector<SgBaseClass *> bases;
+    for (SgNode *node : NodeQuery::querySubTree(root, V_SgClassDefinition)) {
+      auto *definition = isSgClassDefinition(node);
+      auto *declaration =
+          isSgDerivedTypeStatement(definition->get_declaration());
+      if (declaration == nullptr || definition->get_inheritances().empty())
+        continue;
+      ROSE_ASSERT(definition->get_inheritances().size() == 1);
+      SgBaseClass *base = definition->get_inheritances().front();
+      ROSE_ASSERT(base != nullptr && base->get_parent() == definition);
+      SgClassDeclaration *parent = base->get_base_class();
+      ROSE_ASSERT(parent != nullptr);
+      ROSE_ASSERT(base->get_source_type() == parent->get_type());
+      SgSymbol *source = base->get_fortran_source_derived_type_symbol();
+      ROSE_ASSERT(source != nullptr);
+      const bool grandchild = declaration->get_name() == "grandchild";
+      ROSE_ASSERT(grandchild || declaration->get_name() == "child" ||
+                  declaration->get_name() == "local_child");
+      const SgName sourceName(grandchild ? "child" : "renamed_parent");
+      ROSE_ASSERT(source->get_name() == sourceName);
+      ROSE_ASSERT(source->get_parent() ==
+                  declaration->get_scope()->get_symbol_table());
+      SgSymbol *canonical = source;
+      std::set<SgAliasSymbol *> aliases;
+      while (auto *alias = isSgAliasSymbol(canonical)) {
+        ROSE_ASSERT(aliases.insert(alias).second);
+        canonical = alias->get_alias();
+        ROSE_ASSERT(canonical != nullptr);
+      }
+      auto *symbol = isSgClassSymbol(canonical);
+      ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == parent);
+      ROSE_ASSERT(parent->get_name() == (grandchild ? "child" : "parent"));
+      if (!grandchild) {
+        ROSE_ASSERT(parent->get_scope() != declaration->get_scope());
+        auto *moduleDefinition = isSgClassDefinition(parent->get_scope());
+        ROSE_ASSERT(moduleDefinition != nullptr);
+        ROSE_ASSERT(moduleDefinition->get_declaration()->get_name() ==
+                    "rex_parent_module");
+      }
+      ROSE_ASSERT(declaration->unparseToString().find(
+                      "EXTENDS(" + sourceName.getString() + ")") !=
+                  std::string::npos);
+      bases.push_back(base);
+    }
+    ROSE_ASSERT(bases.size() == 3);
+    return bases;
+  };
+  const auto original = verify(project);
+  SgTreeCopy copy;
+  auto *copied = isSgProject(project->copy(copy));
+  ROSE_ASSERT(copied != nullptr && copied != project);
+  const auto copies = verify(copied);
+  for (size_t index = 0; index < original.size(); ++index) {
+    ROSE_ASSERT(copies[index] != original[index]);
+    ROSE_ASSERT(copies[index]->get_base_class() !=
+                original[index]->get_base_class());
+    ROSE_ASSERT(copies[index]->get_fortran_source_derived_type_symbol() !=
+                original[index]->get_fortran_source_derived_type_symbol());
+  }
+  AstTests::runAllTests(copied);
+  SageInterface::deleteAST(copied,
+                          SageInterface::DeleteAstMode::kRequireIsolated);
+  for (SgBaseClass *base : copies)
+    ROSE_ASSERT(!SgNode::isLiveNode(base));
+  verify(project);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -1373,7 +1755,9 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(project != nullptr);
   project->skipfinalCompileStep(true);
 
-  if (input == "rex_flang_component_character_length_contract.f90") {
+  if (input == "rex_fortran_extends_semantic_binding.f90") {
+    verifyExtendsSemanticBinding(project);
+  } else if (input == "rex_flang_component_character_length_contract.f90") {
     verifyComponentCharacterLengthContract(project);
   } else if (input == "rex_fortran_custom_implicit_semantic_type.f90") {
     verifyCustomImplicitTypes(project);
@@ -1410,6 +1794,103 @@ int main(int argc, char **argv) {
     verifyFunctionSourceVisibleBinding(project);
   } else if (input == "rex_flang_labeled_do_header_identity.f") {
     verifyLabeledDoHeaderIdentity(project);
+  } else if (input == "rex_fortran_associate_end_label.f90") {
+    verifyEndLabelCopy(project, V_SgAssociateStatement, 10);
+  } else if (input == "rex_fortran_block_end_label.f90") {
+    verifyEndLabelCopy(project, V_SgBasicBlock, 40);
+  } else if (input == "rex_fortran_forall_end_label.f90") {
+    verifyEndLabelCopy(project, V_SgForAllStatement, 20);
+  } else if (input == "rex_flang_module_boundary_labels.f90") {
+    verifyEndLabelCopy(project, V_SgModuleStatement, 80);
+  } else if (input == "rex_flang_do_end_labels.f90") {
+    verifyEndLabelCopy(project, V_SgFortranDo, 30);
+    verifyEndLabelCopy(project, V_SgWhileStmt, 50);
+    verifyEndLabelCopy(project, V_SgForAllStatement, 70);
+  } else if (input == "rex_flang_enum_end_label.f90") {
+    auto *declaration =
+        isSgEnumDeclaration(findEndLabelOwner(project, V_SgEnumDeclaration));
+    ROSE_ASSERT(declaration->get_enumerators().size() == 1);
+    auto *initializer = isSgAssignInitializer(
+        declaration->get_enumerators().front()->get_initializer());
+    ROSE_ASSERT(initializer != nullptr);
+    auto *literal = isSgValueExp(initializer->get_operand_i());
+    ROSE_ASSERT(literal != nullptr && isSgEnumVal(literal) == nullptr);
+    ROSE_ASSERT(literal->get_literal_spelling_form() ==
+                SgValueExp::e_literal_source_spelled);
+    verifyEndLabelCopy(project, V_SgEnumDeclaration, 30);
+  } else if (input == "R832.f90") {
+    auto verify = [](SgProject *ast) {
+      const auto statements = NodeQuery::querySubTree(ast, V_SgIfStmt);
+      ROSE_ASSERT(statements.size() == 8);
+      int namedConstructs = 0;
+      int namedBranches = 0;
+      int namedElse = 0;
+      std::set<int> labels;
+      for (SgNode *node : statements) {
+        auto *statement = isSgIfStmt(node);
+        ROSE_ASSERT(statement != nullptr);
+        for (const auto &[reference, role] :
+             {std::pair{statement->get_numeric_label(),
+                        SgLabelSymbol::e_start_label_type},
+              std::pair{statement->get_else_numeric_label(),
+                        SgLabelSymbol::e_else_label_type},
+              std::pair{statement->get_end_numeric_label(),
+                        SgLabelSymbol::e_end_label_type}}) {
+          if (reference == nullptr)
+            continue;
+          ROSE_ASSERT(reference->get_parent() == statement);
+          SgLabelSymbol *symbol = reference->get_symbol();
+          ROSE_ASSERT(symbol->get_fortran_statement() == statement);
+          ROSE_ASSERT(symbol->get_label_type() == role);
+          auto *scope =
+              SageInterface::getEnclosingFunctionDefinition(statement, true);
+          ROSE_ASSERT(scope != nullptr);
+          ROSE_ASSERT(symbol->get_parent() == scope->get_symbol_table());
+          ROSE_ASSERT(scope->lookup_label_symbol(symbol->get_name()) == symbol);
+          const int value = symbol->get_numeric_label_value();
+          if (role == SgLabelSymbol::e_start_label_type)
+            ROSE_ASSERT(value == 10);
+          else if (role == SgLabelSymbol::e_end_label_type)
+            ROSE_ASSERT(value == 13);
+          else
+            ROSE_ASSERT(value == 11 || value == 12);
+          ROSE_ASSERT(labels.insert(value).second);
+        }
+        if (!statement->get_else_construct_name().empty()) {
+          ROSE_ASSERT(statement->get_else_construct_name() == "my_if");
+          ROSE_ASSERT(statement->get_string_label().empty());
+          ROSE_ASSERT(statement->get_is_else_if_statement());
+          ROSE_ASSERT(isSgBasicBlock(statement->get_false_body()) != nullptr);
+          ROSE_ASSERT(statement->unparseToString().find("ELSE my_if") !=
+                      std::string::npos);
+          ++namedElse;
+        }
+        if (statement->get_string_label().empty())
+          continue;
+        ROSE_ASSERT(statement->get_string_label() == "my_if");
+        ROSE_ASSERT(statement->get_use_then_keyword());
+        if (statement->get_is_else_if_statement()) {
+          ROSE_ASSERT(!statement->get_has_end_statement());
+          ++namedBranches;
+        } else {
+          ROSE_ASSERT(statement->get_has_end_statement());
+          ++namedConstructs;
+        }
+      }
+      ROSE_ASSERT(labels == std::set<int>({10, 11, 12, 13}));
+      ROSE_ASSERT(namedConstructs == 1 && namedBranches == 1);
+      ROSE_ASSERT(namedElse == 1);
+    };
+    verify(project);
+    SgTreeCopy copy;
+    SgProject *copied = isSgProject(project->copy(copy));
+    ROSE_ASSERT(copied != nullptr && copied != project);
+    verify(copied);
+    AstTests::runAllTests(copied);
+    SageInterface::deleteAST(copied,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    ROSE_ASSERT(!SgNode::isLiveNode(copied));
+    verify(project);
   } else {
     std::cerr << "unregistered semantic regression input: " << input << '\n';
     return 2;

@@ -54,10 +54,10 @@ void Foo(){
     class F: B{
         F(const F&) __attribute__((nothrow)){}
     };
-    // Derived type has nothrow but the base type does not
-    if(!__has_nothrow_copy(F));
-    
+    if (__has_nothrow_copy(F))
+      ;
+    static_assert(__has_nothrow_copy(F), "derived copy is nothrow");
+
     // pointers are always copy-able
     if(__has_nothrow_copy(F*));
-    
 }

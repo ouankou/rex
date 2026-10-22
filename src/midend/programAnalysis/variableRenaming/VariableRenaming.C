@@ -28,42 +28,41 @@
 
 using namespace std;
 using namespace Rose;
+using VirtualCFG::CFGEdge;
+using VirtualCFG::CFGNode;
+using VirtualCFG::FilteredCFGEdge;
+using VirtualCFG::FilteredCFGNode;
 
 namespace {
 
-// Keep this executable-capture selection rule in sync with
-// virtualCFG/memberFunctions.C:getLambdaCaptureExpression().
-// The subsystems are intentionally decoupled, so we duplicate the minimal
-// lambda-capture mapping here instead of introducing a new shared dependency.
 SgExpression *
 getVariableRenamingLambdaCaptureExpression(const SgLambdaCapture *capture) {
-  if (capture == NULL) {
-    return NULL;
-  }
-
-  if (SgExpression *source = capture->get_source_closure_variable()) {
-    return source;
-  }
-
-  return capture->get_capture_variable();
+  ROSE_ASSERT(capture != nullptr);
+  SgExpression *initializer = capture->get_capture_initializer();
+  ROSE_ASSERT(initializer != nullptr && initializer->get_parent() == capture);
+  return initializer;
 }
 
 template <class SuccessorsContainer>
 void collectVariableRenamingSuccessors(SgNode *node,
                                        SuccessorsContainer &succContainer) {
   if (SgLambdaExp *lambda = isSgLambdaExp(node)) {
-    if (SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list()) {
-      for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
-        if (SgExpression *capture_expression =
-                getVariableRenamingLambdaCaptureExpression(capture)) {
-          succContainer.push_back(capture_expression);
-        }
-      }
+    SgLambdaCaptureList *capture_list = lambda->get_lambda_capture_list();
+    ROSE_ASSERT(capture_list != nullptr &&
+                capture_list->get_parent() == lambda);
+    for (SgLambdaCapture *capture : capture_list->get_capture_list()) {
+      ROSE_ASSERT(capture != nullptr && capture->get_parent() == capture_list);
+      succContainer.push_back(
+          getVariableRenamingLambdaCaptureExpression(capture));
     }
     return;
   }
 
-  succContainer = node->get_traversalSuccessorContainer();
+  // run() analyses nested functions separately from their enclosing function.
+  for (SgNode *child : node->get_traversalSuccessorContainer()) {
+    if (!isSgFunctionDeclaration(child))
+      succContainer.push_back(child);
+  }
 }
 
 } // namespace
@@ -271,19 +270,20 @@ void VariableRenaming::printRenameEntry(const NumNodeRenameEntry &entry) {
 }
 
 VarUniqueName *VariableRenaming::getUniqueName(SgNode *node) {
-  if (!node->attributeExists(VariableRenaming::varKeyTag)) {
-    return NULL;
-  }
-  VarUniqueName *uName = dynamic_cast<VarUniqueName *>(
-      node->getAttribute(VariableRenaming::varKeyTag));
-  return uName;
+  ASSERT_not_null(node);
+  AstAttribute *attribute = node->getAttribute(VariableRenaming::varKeyTag);
+  if (attribute == nullptr)
+    return nullptr;
+  auto *name = dynamic_cast<VarUniqueName *>(attribute);
+  ROSE_ASSERT(name != nullptr);
+  return name;
 }
 
 VariableRenaming::VarName VariableRenaming::getVarName(SgNode *node) {
-  if (node == NULL || getUniqueName(node) == NULL) {
+  if (node == nullptr)
     return VariableRenaming::VarName();
-  }
-  return getUniqueName(node)->getKey();
+  VarUniqueName *name = getUniqueName(node);
+  return name != nullptr ? name->getKey() : VariableRenaming::VarName();
 }
 
 bool VariableRenaming::isFromLibrary(SgFunctionDeclaration *node) {
@@ -294,25 +294,16 @@ bool VariableRenaming::isFromLibrary(SgFunctionDeclaration *node) {
     return true;
   }
 
-  string filename = fi->get_filenameString();
-  // cout << "Filename string '" << filename << "' for " << node->class_name()
-  // << node << endl;
-  if ((filename.find("include") != std::string::npos)) {
-    // cout << "Found 'include' in string." << endl;
-    return true;
-  }
-  return false;
+  return SageInterface::insideSystemHeader(node);
 }
 
-bool VariableRenaming::isFromLibraryFile(const Sg_File_Info *info) {
-  if (info == NULL) {
-    return false;
-  }
-  if (info->isCompilerGenerated()) {
+bool VariableRenaming::isFromLibrary(SgInitializedName *name) {
+  ROSE_ASSERT(name != nullptr);
+  ROSE_ASSERT(name->get_file_info() != nullptr);
+  if (name->get_file_info()->isCompilerGenerated()) {
     return true;
   }
-  const std::string filename = info->get_filenameString();
-  return (filename.find("include") != std::string::npos);
+  return SageInterface::insideSystemHeader(name);
 }
 
 bool VariableRenaming::isBuiltinVar(const VarName &var) {
@@ -324,24 +315,9 @@ bool VariableRenaming::isBuiltinVar(const VarName &var) {
   return false;
 }
 
-bool VariableRenaming::isPrefixOfName(VarName name, VarName prefix) {
-  VarName::iterator iter;
-  // Search for the first occurance of prefix in name
-  iter = std::search(name.begin(), name.end(), prefix.begin(), prefix.end());
-
-  // If the prefix is at the beginning of the name
-  if (iter == name.begin()) {
-    return true;
-  }
-  // If the prefix is not in the name
-  else if (iter == name.end()) {
-    return false;
-  }
-  // Found the prefix, but inside the name instead of at beginning
-  else {
-    // We don't want to assert, just return false.
-    return false;
-  }
+bool VariableRenaming::isPrefixOfName(const VarName &name,
+                                      const VarName &prefix) {
+  return std::equal(prefix.begin(), prefix.end(), name.begin(), name.end());
 }
 
 // Function to perform the VariableRenaming and annotate the AST
@@ -438,7 +414,7 @@ void VariableRenaming::insertDefsForExternalVariables(
 
     SgScopeStatement *varScope = SageInterface::getScope(rootName[0]);
     SgScopeStatement *functionScope = function->get_definition();
-    const bool is_library_var = isFromLibraryFile(rootName[0]->get_file_info());
+    const bool is_library_var = isFromLibrary(rootName[0]);
 
     // If it is a local variable, there should be a def somewhere inside the
     // function
@@ -1753,7 +1729,7 @@ bool VariableRenaming::insertExpandedDefsForUse(cfgNode curNode, VarName name,
       ROSE_ASSERT(func);
 
       firstDefList[rootName] = func;
-    } else if (isFromLibraryFile(rootName[0]->get_file_info())) {
+    } else if (isFromLibrary(rootName[0])) {
       // Variables from library headers can be referenced without local defs,
       // since library functions are skipped by the def-use traversal.
       SgFunctionDefinition *func =
@@ -2609,15 +2585,6 @@ VariableRenaming::getReachingDefsAtFunctionEnd(SgFunctionDefinition *node) {
 
     return result;
   }
-
-  // DQ (12/10/2016): Added return statement, but because this was not
-  // specified, we want to make it an error to preserve the previous semantics.
-  printf("Exiting at a previously undefined function return location. \n");
-  ROSE_ABORT();
-
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=return-type.
-  return result;
 }
 
 VariableRenaming::NumNodeRenameEntry
@@ -2658,15 +2625,6 @@ VariableRenaming::getReachingDefsAtFunctionEndForName(
 
     return result;
   }
-
-  // DQ (12/10/2016): Added return statement, but because this was not
-  // specified, we want to make it an error to preserve the previous semantics.
-  printf("Exiting at a previously undefined function return location. \n");
-  ROSE_ABORT();
-
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=return-type.
-  return result;
 }
 
 VariableRenaming::NumNodeRenameTable

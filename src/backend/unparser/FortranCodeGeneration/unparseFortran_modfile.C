@@ -236,8 +236,7 @@ void generateModFile(SgFile *sfile) {
     // set the flag bit "outputFortranModFile"
     ninfo.set_outputFortranModFile();
 
-    Unparser_Opt options(false, false, false, false, true, false, false, false,
-                         false, false);
+    Unparser_Opt options(false, false, false, false, true, false, false);
     {
       Unparser unp(&moduleOutput, originalModuleFilenameWithPath, options,
                    nullptr, nullptr);

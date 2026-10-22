@@ -7,30 +7,29 @@
 #include "taintAnalysis.h"
 
 using namespace Rose;
+using namespace VirtualCFG;
 
 /******************************************************************************************************************************
  *                                      Taint Lattice
  ******************************************************************************************************************************/
 
 bool TaintLattice::set_vertex(Vertex v) {
+  ROSE_ASSERT(v == VERTEX_BOTTOM || v == VERTEX_UNTAINTED ||
+              v == VERTEX_TAINTED);
   bool retval = vertex != v;
   vertex = v;
   return retval;
 }
 
-// DQ (10/20/2015): "override" now allowed in function definitions.
-// void TaintLattice::copy(/*const*/ Lattice *other_) override
-void TaintLattice::copy(/*const*/ Lattice *other_) {
+void TaintLattice::copy(Lattice *other_) {
   TaintLattice *other = dynamic_cast<TaintLattice *>(other_);
-  assert(other != NULL);
+  ROSE_ASSERT(other != NULL);
   *this = *other;
 }
 
-// DQ (10/20/2015): "override" now allowed in function definitions.
-// bool TaintLattice::operator==(/*const*/ Lattice *other_) /*const*/ override
-bool TaintLattice::operator==(/*const*/ Lattice *other_) /*const*/ {
+bool TaintLattice::operator==(Lattice *other_) {
   TaintLattice *other = dynamic_cast<TaintLattice *>(other_);
-  assert(other != NULL);
+  ROSE_ASSERT(other != NULL);
   return vertex == other->vertex;
 }
 
@@ -43,15 +42,13 @@ std::string TaintLattice::to_string() const {
   case VERTEX_TAINTED:
     return std::string("tainted");
   default:
-    return std::string("");
+    ROSE_ABORT();
   }
 }
 
-// DQ (10/20/2015): "override" now allowed in function definitions.
-// bool TaintLattice::meetUpdate(/*const*/ Lattice *other_) override
-bool TaintLattice::meetUpdate(/*const*/ Lattice *other_) {
+bool TaintLattice::meetUpdate(Lattice *other_) {
   TaintLattice *other = dynamic_cast<TaintLattice *>(other_);
-  assert(other != NULL);
+  ROSE_ASSERT(other != NULL);
   Vertex new_vertex = std::max(vertex, other->vertex);
   bool retval = new_vertex != vertex;
   vertex = new_vertex;
@@ -85,7 +82,6 @@ void TaintAnalysis::genInitState(const Function &func, const DataflowNode &node,
   map<varID, Lattice *> emptyM;
   FiniteVarsExprsProductLattice *prodLat = new FiniteVarsExprsProductLattice(
       new TaintLattice, emptyM, (Lattice *)NULL, ldv_analysis, node, state);
-  assert(prodLat != NULL);
   initLattices.push_back(prodLat);
 }
 
@@ -105,9 +101,10 @@ bool TaintAnalysis::transfer(const Function &func, const DataflowNode &node_,
   }
 
   SgNode *node = node_.getNode();
-  assert(!dfInfo.empty());
+  ROSE_ASSERT(!dfInfo.empty());
   FiniteVarsExprsProductLattice *prodLat =
       dynamic_cast<FiniteVarsExprsProductLattice *>(dfInfo.front());
+  ROSE_ASSERT(prodLat != nullptr);
   bool modified = magic_tainted(
       node,
       prodLat); // some values are automatically tainted based on their name
@@ -174,7 +171,7 @@ bool TaintAnalysis::transfer(const Function &func, const DataflowNode &node_,
 
     if (isSgAssignOp(node)) { // copy the rhs lattice to the lhs lattice (as
                               // well as the entire '=' expression result)
-      assert(in1 && in2);
+      ROSE_ASSERT(in1 && in2);
       modified = in1->meetUpdate(in2) || modified;
     }
 
@@ -246,6 +243,7 @@ bool TaintAnalysis::magic_tainted(SgNode *node,
     }
   } else if (isSgVarRefExp(node)) {
     SgVarRefExp *vref = isSgVarRefExp(node);
+    ROSE_ASSERT(vref->get_symbol() != nullptr);
     std::string vname = vref->get_symbol()->get_name().getString();
     TaintLattice *tlat =
         dynamic_cast<TaintLattice *>(prodLat->getVarLattice(varID(vref)));
@@ -260,21 +258,22 @@ bool TaintAnalysis::magic_tainted(SgNode *node,
     }
   } else if (isSgVariableDeclaration(node)) {
     SgVariableDeclaration *vdecl = isSgVariableDeclaration(node);
-    const SgInitializedNamePtrList &inames = vdecl->get_variables();
-    for (size_t i = 0; i < inames.size(); ++i) {
-      std::string vname = inames[i]->get_name().getString();
-      TaintLattice *tlat = dynamic_cast<TaintLattice *>(
-          prodLat->getVarLattice(varID(inames[i])));
+    bool modified = false;
+    for (SgInitializedName *name : vdecl->get_variables()) {
+      std::string vname = name->get_name().getString();
+      TaintLattice *tlat =
+          dynamic_cast<TaintLattice *>(prodLat->getVarLattice(varID(name)));
       if (tlat && 0 == vname.compare(0, 7, "TAINTED")) {
-        bool modified = tlat->set_vertex(TaintLattice::VERTEX_TAINTED);
+        bool changed = tlat->set_vertex(TaintLattice::VERTEX_TAINTED);
+        modified = changed || modified;
         if (debug) {
           *debug << "TaintAnalysis::magic_tainted: lattice is magically "
                  << tlat->to_string()
-                 << (modified ? " (modified)" : " (not modified)") << "\n";
+                 << (changed ? " (modified)" : " (not modified)") << "\n";
         }
-        return modified;
       }
     }
+    return modified;
   }
 
   return false;

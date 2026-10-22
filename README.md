@@ -13,18 +13,20 @@ Preferred (default build type is RelWithDebInfo):
 ./build-rex.sh $HOME/rex-install
 ```
 
+The helper reuses the existing build directory and builds with one job by default.
+
 Manual:
 ```bash
 mkdir -p build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=$HOME/rex-install
-cmake --build build -j"$(nproc)"
+cmake --build build --parallel 1
 cmake --install build
 ```
 
 ## Tests
 
 ```bash
-ctest --test-dir build --output-on-failure
+ctest --test-dir build -j1 --output-on-failure
 ```
 
 ## Sanitizers and Valgrind memcheck
@@ -35,14 +37,14 @@ Sanitizers (ASan/LSan/UBSan):
 ```bash
 cmake -S . -B build-sanitizer -DCMAKE_BUILD_TYPE=Debug \
   -DENABLE-SANITIZER=ON -DROSE_SANITIZERS="address;leak;undefined"
-cmake --build build-sanitizer -j"$(nproc)"
+cmake --build build-sanitizer --parallel 1
 ```
 
 Valgrind/memcheck:
 ```bash
 cmake -S . -B build-valgrind -DCMAKE_BUILD_TYPE=Debug -DWITH-VALGRIND=/usr
-cmake --build build-valgrind -j"$(nproc)"
-ctest --test-dir build-valgrind -T memcheck -R "<regex>" -j"$(nproc)" --output-on-failure
+cmake --build build-valgrind --parallel 1
+ctest --test-dir build-valgrind -T memcheck -R "<regex>" -j1 --output-on-failure
 ```
 
 ## Docs

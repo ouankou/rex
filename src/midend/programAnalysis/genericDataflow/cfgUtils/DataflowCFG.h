@@ -6,8 +6,6 @@
 
 #include "genericDataflowCommon.h"
 
-#include <map>
-
 #include <string>
 
 #include <vector>
@@ -29,9 +27,6 @@ public:
   // We enforce the user codes (the framework) of DataflowNode to explicitly set
   // filter, or provide default filter on their own
   DataflowNode(CFGNode n, bool (*f)(CFGNode)) : n(n), filter(f) {}
-  // By default, the default filter function is used unless otherwise specified
-  //        DataflowNode(CFGNode n, bool (*f) (CFGNode) = defaultFilter): n(n),
-  //        filter(f) {}
   DataflowNode(const DataflowNode &dfn) : n(dfn.n), filter(dfn.filter) {}
 
   std::string toString() const { return n.toString(); }
@@ -49,15 +44,11 @@ public:
   std::string str(std::string indent = "") const;
 };
 
-typedef std::map<SgNode *, DataflowNode> m_AST2CFG;
-
 class DataflowEdge {
   CFGPath p;
   bool (*filter)(CFGNode cfgn);
 
 public:
-  //        DataflowEdge(CFGPath p, bool (*f) (CFGNode) = defaultFilter): p(p),
-  //        filter(f) {}
   DataflowEdge(CFGPath p, bool (*f)(CFGNode)) : p(p), filter(f) {}
   DataflowEdge(const DataflowEdge &dfe) : p(dfe.p), filter(dfe.filter) {}
 
@@ -77,17 +68,8 @@ public:
   }
   bool operator==(const DataflowEdge &o) const { return p == o.p; }
   bool operator!=(const DataflowEdge &o) const { return p != o.p; }
-  // bool operator<(const DataflowEdge& o) const {return p < o.p;}
 };
 
-// inline DataflowNode makeDataflowCfg(SgNode* start, bool (*f) (CFGNode) =
-// defaultFilter) {
-inline DataflowNode makeDataflowCfg(SgNode *start, bool (*f)(CFGNode)) {
-  // Returns CFG node for just before start
-  return DataflowNode(cfgBeginningOfConstruct(start), f);
-}
-
-bool isDataflowInteresting(CFGNode cn);
 } // namespace VirtualCFG
 
 #endif

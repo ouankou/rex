@@ -29,10 +29,12 @@ set(CUDA_CODES
   test_2011_13.cu
   header_test.cu
   mm_single.cu
+  launchBounds.cu
   rex_cuda_kernel_local_pointer.cu
 )
 
-set(ROSE_FLAGS -rose:skipfinalCompileStep)
+set(ROSE_FLAGS -rose:skipfinalCompileStep
+  "--cuda-path=${CUDAToolkit_LIBRARY_ROOT}")
 set(files_to_test ${CUDA_NO_BUILT_IN_CODES} ${CUDA_CODES})
 
 foreach(file_to_test ${files_to_test})
@@ -46,14 +48,14 @@ rex_add_clang_frontend_negative_test(
   rex_cuda_reject_device_local_variable.log
   "error: __constant__, __device__, and __managed__ are not allowed on non-static local variables"
   $<TARGET_FILE:${translator}>
-  -rose:skipfinalCompileStep
+  ${ROSE_FLAGS}
   -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_02.cu)
 
 add_test(
   NAME CUDA_rex_cuda_deduced_template_kernel_launch_structure
   COMMAND
     $<TARGET_FILE:rex_cuda_ast_contract_translator>
-    -rose:skipfinalCompileStep
+    ${ROSE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_cuda_deduced_template_kernel_launch.cu
 )
 set_tests_properties(
@@ -64,7 +66,7 @@ add_test(
   NAME CUDA_rex_cuda_dependent_logical_result_type_structure
   COMMAND
     $<TARGET_FILE:rex_cuda_ast_contract_translator>
-    -rose:skipfinalCompileStep
+    ${ROSE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_cuda_dependent_logical_result_type.cu
 )
 set_tests_properties(
@@ -72,8 +74,19 @@ set_tests_properties(
   PROPERTIES LABELS CUDA)
 
 add_test(
+  NAME CUDA_rex_cuda_launch_bounds_sm90_device_structure
+  COMMAND
+    $<TARGET_FILE:rex_cuda_ast_contract_translator>
+    ${ROSE_FLAGS}
+    --cuda-device-only --cuda-gpu-arch=sm_90
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_cuda_launch_bounds.cu
+)
+set_tests_properties(CUDA_rex_cuda_launch_bounds_sm90_device_structure
+  PROPERTIES LABELS CUDA)
+
+add_test(
   NAME CUDA_test_2011_01
-  COMMAND testTranslator -rose:skipfinalCompileStep
+  COMMAND testTranslator ${ROSE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
 )
 set_tests_properties(CUDA_test_2011_01 PROPERTIES LABELS CUDA)
@@ -83,7 +96,7 @@ add_test(
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
   COMMAND $<TARGET_FILE:testTranslator>
     -DSKIP_ROSE_BUILTIN_DECLARATIONS
-    -rose:skipfinalCompileStep
+    ${ROSE_FLAGS}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/test_2011_01.cu
 )
 set_tests_properties(nonsmoke_functional_CompileTests_CudaTests_test_2011_01.cu PROPERTIES LABELS CUDA)
@@ -99,7 +112,7 @@ set(_device_transform_tests
 foreach(file_to_test ${_device_transform_tests})
   add_test(
     NAME CUDATEST_deviceTranformation_${file_to_test}
-    COMMAND $<TARGET_FILE:deviceTranformation> -std=c++11 -rose:skipfinalCompileStep
+    COMMAND $<TARGET_FILE:deviceTranformation> -std=c++11 ${ROSE_FLAGS}
             -c ${CMAKE_CURRENT_SOURCE_DIR}/${file_to_test}
   )
 endforeach()

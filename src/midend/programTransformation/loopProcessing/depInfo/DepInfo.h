@@ -155,10 +155,7 @@ public:
 inline bool IsNIL(const DepInfo &info) { return info.IsTop(); }
 bool IsValidDep(const DepInfo &info, int commLevel);
 typedef IteratorImpl<DepInfo> DepInfoConstIteratorImpl;
-typedef IteratorImpl<DepInfo &> DepInfoUpdateIteratorImpl;
 typedef IteratorWrap<DepInfo, DepInfoConstIteratorImpl> DepInfoConstIterator;
-typedef IteratorWrap<DepInfo &, DepInfoUpdateIteratorImpl>
-    DepInfoUpdateIterator;
 
 DepInfo operator*(const DepInfo &d1, const DepInfo &d2);
 DepInfo operator&(const DepInfo &d1, const DepInfo &d2);

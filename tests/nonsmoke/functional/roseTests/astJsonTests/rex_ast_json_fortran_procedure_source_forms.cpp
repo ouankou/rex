@@ -8,6 +8,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -389,6 +390,17 @@ void verifyProcedureSourceForms(SgSourceFile *file) {
   ROSE_ASSERT(isSgTypeFortranUnlimitedPolymorphic(
                   typeSurface(unlimitedResult->get_type(), false).base) !=
               nullptr);
+
+  std::size_t namedArguments = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(file, V_SgActualArgumentExpression)) {
+    auto *argument = isSgActualArgumentExpression(node);
+    ROSE_ASSERT(argument->get_argument_name() == "value");
+    ROSE_ASSERT(argument->get_expression() != nullptr);
+    ROSE_ASSERT(argument->get_expression()->get_parent() == argument);
+    ++namedArguments;
+  }
+  ROSE_ASSERT(namedArguments == 1);
 }
 
 void verifyFunctionSourceVisibleBindings(SgSourceFile *file) {
@@ -585,7 +597,47 @@ void verifyCharacterSelector(SgInitializedName *name,
   }
 }
 
+void verifyProcedureComponentBindings(SgSourceFile *file) {
+  using Kind = SgInitializedName::FortranProcedurePassKind;
+  std::set<std::string> observed;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgInitializedName)) {
+    SgInitializedName *callback = isSgInitializedName(node);
+    const auto &binding = callback->get_fortran_procedure_component_binding();
+    if (!binding)
+      continue;
+    const std::string name = callback->get_name().getString();
+    ROSE_ASSERT(observed.insert(name).second);
+    ROSE_ASSERT(binding->isValidForType(callback->get_type()));
+    SgPointerType *semantic = isSgPointerType(callback->get_type());
+    SgPointerType *source =
+        isSgPointerType(callback->get_fortran_source_type());
+    ROSE_ASSERT(semantic != nullptr && source != nullptr && source != semantic);
+    ROSE_ASSERT(source->get_fortran_source_syntax());
+    ROSE_ASSERT(!semantic->get_fortran_source_syntax());
+    ROSE_ASSERT(source->get_base_type() == semantic->get_base_type());
+    if (name == "callback") {
+      ROSE_ASSERT(binding->kind == Kind::no_pass);
+      ROSE_ASSERT(!binding->passed_object_index);
+    } else if (name == "implicit_callback") {
+      ROSE_ASSERT(binding->kind == Kind::implicit_pass);
+      ROSE_ASSERT(binding->passed_object_index == 0);
+    } else if (name == "explicit_callback") {
+      ROSE_ASSERT(binding->kind == Kind::explicit_pass);
+      ROSE_ASSERT(binding->passed_object_index == 0);
+    } else {
+      ROSE_ASSERT(name == "named_callback");
+      ROSE_ASSERT(binding->kind == Kind::named_pass);
+      ROSE_ASSERT(binding->passed_object_index == 1);
+      ROSE_ASSERT(binding->written_dummy_name == "self");
+    }
+  }
+  ROSE_ASSERT(observed ==
+              std::set<std::string>({"callback", "implicit_callback",
+                                     "explicit_callback", "named_callback"}));
+}
+
 void verifyObjectSourceForms(SgSourceFile *file) {
+  verifyProcedureComponentBindings(file);
   for (SgNode *node :
        NodeQuery::querySubTree(file, V_SgFunctionParameterList)) {
     SgFunctionParameterList *parameters = isSgFunctionParameterList(node);
@@ -598,7 +650,7 @@ void verifyObjectSourceForms(SgSourceFile *file) {
                   nullptr);
       ROSE_ASSERT(parameter->get_fortran_type_spec() ==
                   SgInitializedName::e_fortran_type_spec_default);
-      ROSE_ASSERT(parameter->get_fortran_procedure_interface().is_null());
+      ROSE_ASSERT(parameter->get_fortran_procedure_interface() == nullptr);
       ROSE_ASSERT(parameter->get_fortran_separate_shape_declaration() ==
                   nullptr);
     }
@@ -621,6 +673,17 @@ void verifyObjectSourceForms(SgSourceFile *file) {
   };
   verifyParameter("source_kind");
   verifyParameter("source_len");
+  SgInitializedName *standalone = sourceName(file, "standalone_count");
+  ROSE_ASSERT(SageInterface::isConstType(standalone->get_type()));
+  ROSE_ASSERT(standalone->get_initializer() == nullptr);
+  SgInitializedName *constantShape = sourceName(file, "constant_shape");
+  ROSE_ASSERT(SageInterface::isConstType(constantShape->get_type()));
+  ROSE_ASSERT(constantShape->get_fortran_separate_shape_declaration() !=
+              nullptr);
+  ROSE_ASSERT(typeSurface(constantShape->get_type(), false).rank == 1);
+  SgInitializedName *pointerMember = sourceName(file, "pointer_member");
+  ROSE_ASSERT(typeSurface(pointerMember->get_type(), false).pointer);
+  ROSE_ASSERT(typeSurface(pointerMember->get_type(), false).rank == 1);
 
   std::size_t explicitDerivedArrayConstructors = 0;
   std::size_t explicitDerivedStructureConstructors = 0;
@@ -831,6 +894,8 @@ void verifyObjectSourceForms(SgSourceFile *file) {
     ROSE_ASSERT(copy->get_fortran_source_syntax());
     ROSE_ASSERT(copy->get_fortran_fixed_kind_value_is_available());
     ROSE_ASSERT(copy->get_fortran_fixed_kind_value() == kind);
+    SageInterface::deleteAST(copy,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
   }
 
   SgInitializedName *pointer = sourceName(file, "pointer_values");
@@ -893,6 +958,137 @@ void verifyObjectSourceForms(SgSourceFile *file) {
   SgExpression *selectorCopy = isSgExpression(
       explicitSource->get_lengthExpression()->copy(selectorCopyHelp));
   requireFoldedSelector(selectorCopy, 3);
+  SageInterface::deleteAST(selectorCopy,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+}
+
+std::map<std::string, SgInitializedName *>
+verifyInterfaceRoles(SgSourceFile *file) {
+  std::map<std::string, SgInitializedName *> entities;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgInitializedName)) {
+    auto *name = isSgInitializedName(node);
+    if (name->get_fortran_procedure_interface() != nullptr)
+      ROSE_ASSERT(entities.emplace(name->get_name().getString(), name).second);
+  }
+  for (const char *name :
+       {"abstract_proc", "callback", "implicit_callback", "explicit_callback",
+        "named_callback", "typed_proc", "renamed_proc", "pointer_interface",
+        "derived_proc"}) {
+    auto *entity = entities.at(name);
+    auto *sourceType = isSgPointerType(entity->get_fortran_source_type());
+    auto *semanticType = isSgPointerType(entity->get_type());
+    ROSE_ASSERT(sourceType != nullptr && semanticType != nullptr);
+    ROSE_ASSERT(sourceType != semanticType &&
+                sourceType->get_fortran_source_syntax());
+    ROSE_ASSERT(sourceType->get_base_type() == semanticType->get_base_type());
+    SgExpression *interface = entity->get_fortran_procedure_interface();
+    ROSE_ASSERT(interface != nullptr && interface->get_parent() == entity);
+    ROSE_ASSERT(SgInitializedName::is_valid_fortran_procedure_interface(
+        interface, entity->get_type()));
+    if (entity->get_name() == "typed_proc") {
+      auto *typeExpression = isSgTypeExpression(interface);
+      ROSE_ASSERT(typeExpression != nullptr);
+      SgType *type = typeExpression->get_represented_type();
+      ROSE_ASSERT(type->get_fortran_source_syntax());
+      ROSE_ASSERT(type->get_parent() == typeExpression);
+      ROSE_ASSERT(type->get_type_kind() != nullptr);
+    } else if (entity->get_name() == "derived_proc") {
+      auto *typeExpression = isSgTypeExpression(interface);
+      ROSE_ASSERT(typeExpression != nullptr);
+      ROSE_ASSERT(isSgClassType(typeExpression->get_represented_type()) !=
+                  nullptr);
+      ROSE_ASSERT(entity->get_fortran_type_spec() ==
+                  SgInitializedName::e_fortran_type_spec_type);
+      SgSymbol *source = entity->get_fortran_source_derived_type_symbol();
+      ROSE_ASSERT(source != nullptr && source->get_name() == "local_box");
+      ROSE_ASSERT(source->get_type() == typeExpression->get_represented_type());
+    } else if (entity->get_name() == "pointer_interface") {
+      auto *reference = isSgVarRefExp(interface);
+      ROSE_ASSERT(reference != nullptr);
+      ROSE_ASSERT(reference->get_symbol()->get_declaration() ==
+                  entities.at("abstract_proc"));
+    } else {
+      ROSE_ASSERT(isSgFunctionRefExp(interface) != nullptr);
+      if (entity->get_name() == "renamed_proc")
+        ROSE_ASSERT(
+            isSgFunctionRefExp(interface)
+                ->get_fortran_source_visible_binding_kind() ==
+            SgFunctionRefExp::e_fortran_source_visible_binding_use_rename);
+    }
+  }
+  std::set<std::string> signatures;
+  std::set<std::string> operators;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgInterfaceStatement)) {
+    auto *interface = isSgInterfaceStatement(node);
+    ROSE_ASSERT(interface != nullptr);
+    const auto &bodies = interface->get_interface_body_list();
+    const bool isAbstract =
+        interface->get_declarationModifier().get_typeModifier().isAbstract();
+    if (interface->get_generic_spec() ==
+        SgInterfaceStatement::e_operator_interface_type) {
+      const auto name = lower(interface->get_name().getString());
+      ROSE_ASSERT(operators.insert(name).second);
+      ROSE_ASSERT(!isAbstract &&
+                  bodies.size() == (name == ".rexchoice." ? 2 : 1));
+      for (auto *body : bodies) {
+        ROSE_ASSERT(body != nullptr && body->get_use_function_name());
+        ROSE_ASSERT(body->get_functionDeclaration() == nullptr);
+        ROSE_ASSERT(body->get_function_name() == "integer_choice" ||
+                    body->get_function_name() == "box_choice");
+      }
+      continue;
+    }
+    ROSE_ASSERT(interface->get_name().is_null());
+    ROSE_ASSERT(interface->get_generic_spec() ==
+                SgInterfaceStatement::e_unnamed_interface_type);
+    ROSE_ASSERT(!bodies.empty() && bodies.front() != nullptr);
+    auto *first = bodies.front()->get_functionDeclaration();
+    ROSE_ASSERT(first != nullptr);
+    if (first->get_name() == "rex_default_pass_signature") {
+      ROSE_ASSERT(isAbstract && bodies.size() == 2);
+      ROSE_ASSERT(bodies.back() != nullptr);
+      ROSE_ASSERT(bodies.back()->get_functionDeclaration() != nullptr);
+      ROSE_ASSERT(bodies.back()->get_functionDeclaration()->get_name() ==
+                  "rex_named_pass_signature");
+    } else {
+      ROSE_ASSERT(bodies.size() == 1);
+    }
+    for (auto *body : bodies) {
+      ROSE_ASSERT(body != nullptr && !body->get_use_function_name());
+      auto *procedure = body->get_functionDeclaration();
+      ROSE_ASSERT(procedure != nullptr);
+      const std::string name = procedure->get_name().getString();
+      ROSE_ASSERT(signatures.insert(name).second);
+      ROSE_ASSERT(isAbstract == (name != "unlimited_factory"));
+    }
+  }
+  ROSE_ASSERT(signatures ==
+              std::set<std::string>(
+                  {"unlimited_factory", "rex_abstract_signature",
+                   "rex_default_pass_signature", "rex_named_pass_signature"}));
+  ROSE_ASSERT(operators ==
+              std::set<std::string>({".rexchoice.", ".not.", "+", "-"}));
+  return entities;
+}
+
+void verifyUnaryOperatorBindings(SgSourceFile *file) {
+  unsigned integers = 0, arrays = 0;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgUserDefinedUnaryOp)) {
+    auto *operation = isSgUserDefinedUnaryOp(node);
+    ROSE_ASSERT(operation->get_symbol() != nullptr);
+    auto *declaration = operation->get_symbol()->get_declaration();
+    ROSE_ASSERT(declaration != nullptr);
+    TypeSurface result = typeSurface(operation->get_type(), false);
+    if (declaration->get_name() == "integer_choice") {
+      ROSE_ASSERT(result.rank == 0 && isSgTypeInt(result.base) != nullptr);
+      ++integers;
+    } else {
+      ROSE_ASSERT(declaration->get_name() == "box_choice");
+      ROSE_ASSERT(result.rank == 1 && isSgTypeFloat(result.base) != nullptr);
+      ++arrays;
+    }
+  }
+  ROSE_ASSERT(integers == 2 && arrays == 5);
 }
 
 void verifyOutput(const std::string &path) {
@@ -915,10 +1111,19 @@ void verifyOutput(const std::string &path) {
   bool sawDerivedTypeFunctionPrefix = false;
   bool sawClassFunctionPrefix = false;
   bool sawDerivedArrayConstructorType = false;
+  int abstractInterfaces = 0;
+  int ordinaryInterfaces = 0;
   std::string line;
   while (std::getline(output, line)) {
     const std::string text = lower(line);
     const std::size_t firstToken = text.find_first_not_of(" \t");
+    if (firstToken != std::string::npos &&
+        text.compare(firstToken, 18, "abstract interface") == 0) {
+      ++abstractInterfaces;
+    } else if (firstToken != std::string::npos &&
+               text.compare(firstToken, 9, "interface") == 0) {
+      ++ordinaryInterfaces;
+    }
     const bool endProcedure = firstToken != std::string::npos &&
                               text.compare(firstToken, 3, "end") == 0;
     if (text.find("m_twice") != std::string::npos &&
@@ -1003,6 +1208,7 @@ void verifyOutput(const std::string &path) {
               sawAssumedType && sawUnlimitedPolymorphic &&
               sawIntrinsicFunctionPrefix && sawDerivedTypeFunctionPrefix &&
               sawClassFunctionPrefix && sawDerivedArrayConstructorType);
+  ROSE_ASSERT(abstractInterfaces == 2 && ordinaryInterfaces == 5);
 }
 
 void verifyUnsignedSourceForms(SgSourceFile *file) {
@@ -1054,6 +1260,142 @@ SgExpression *typedProcedureSelector(SgSourceFile *file) {
   return selector;
 }
 
+void verifyAllocationAndNullifyStatements(SgSourceFile *file) {
+  const auto allocations = NodeQuery::querySubTree(file, V_SgAllocateStatement);
+  ROSE_ASSERT(allocations.size() == 2);
+  size_t withStat = 0;
+  for (SgNode *node : allocations) {
+    auto *statement = isSgAllocateStatement(node);
+    auto *list = statement->get_expr_list();
+    ROSE_ASSERT(list != nullptr && list->get_parent() == statement);
+    ROSE_ASSERT(!list->get_expressions().empty());
+    for (SgExpression *expression : list->get_expressions())
+      ROSE_ASSERT(expression != nullptr && expression->get_parent() == list);
+    if (SgExpression *stat = statement->get_stat_expression()) {
+      ROSE_ASSERT(stat->get_parent() == statement);
+      ++withStat;
+    }
+  }
+  ROSE_ASSERT(withStat == 1);
+
+  const auto deallocations =
+      NodeQuery::querySubTree(file, V_SgDeallocateStatement);
+  ROSE_ASSERT(deallocations.size() == 1);
+  auto *statement = isSgDeallocateStatement(deallocations.front());
+  auto *list = statement->get_expr_list();
+  ROSE_ASSERT(list != nullptr && list->get_parent() == statement);
+  ROSE_ASSERT(list->get_expressions().size() == 1);
+  ROSE_ASSERT(list->get_expressions().front()->get_parent() == list);
+  ROSE_ASSERT(statement->get_stat_expression() != nullptr &&
+              statement->get_stat_expression()->get_parent() == statement);
+
+  const auto nullifications =
+      NodeQuery::querySubTree(file, V_SgNullifyStatement);
+  ROSE_ASSERT(nullifications.size() == 1);
+  auto *nullify = isSgNullifyStatement(nullifications.front());
+  auto *pointers = nullify->get_pointer_list();
+  ROSE_ASSERT(pointers != nullptr && pointers->get_parent() == nullify);
+  ROSE_ASSERT(pointers->get_expressions().size() == 1);
+  ROSE_ASSERT(pointers->get_expressions().front()->get_parent() == pointers);
+}
+
+void verifyDataInitialization(SgSourceFile *file) {
+  size_t initializers = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(file, V_SgFortranDataInitializer)) {
+    auto *initializer = isSgFortranDataInitializer(node);
+    initializer->validate_initializer();
+    auto *owner = isSgInitializedName(initializer->get_parent());
+    ROSE_ASSERT(owner != nullptr &&
+                owner->get_type() == initializer->get_type());
+    const auto &values = initializer->get_values();
+    if (owner->get_name() == "slash_values") {
+      ROSE_ASSERT(values.size() == 2);
+      auto *repeat = isSgVarRefExp(values[0]->get_repeat_expression());
+      ROSE_ASSERT(repeat != nullptr &&
+                  repeat->get_symbol()->get_name() == "data_copies");
+      ROSE_ASSERT(repeat->get_fortran_integer_constant_value_is_available());
+      ROSE_ASSERT(repeat->get_fortran_integer_constant_value() == 2);
+      ROSE_ASSERT(values[1]->get_repeat_expression() == nullptr);
+    } else {
+      ROSE_ASSERT(owner->get_name() == "slash_scalar" && values.size() == 1);
+      ROSE_ASSERT(values[0]->get_repeat_expression() == nullptr);
+    }
+    ++initializers;
+  }
+  ROSE_ASSERT(initializers == 2);
+  const auto groups = NodeQuery::querySubTree(file, V_SgDataStatementGroup);
+  ROSE_ASSERT(groups.size() == 1);
+  auto *group = isSgDataStatementGroup(groups.front());
+  group->validate_group();
+  ROSE_ASSERT(group->get_object_list().size() == 1);
+  const auto &objects = group->get_object_list()[0]
+                            ->get_variableReference_list()
+                            ->get_expressions();
+  ROSE_ASSERT(objects.size() == 1);
+  auto *object = isSgVarRefExp(objects[0]);
+  ROSE_ASSERT(object != nullptr &&
+              object->get_symbol()->get_name() == "data_values");
+  ROSE_ASSERT(group->get_value_list().size() == 2);
+  auto *repeat =
+      isSgVarRefExp(group->get_value_list()[0]->get_repeat_expression());
+  ROSE_ASSERT(repeat != nullptr &&
+              repeat->get_symbol()->get_name() == "data_copies");
+  ROSE_ASSERT(repeat->get_fortran_integer_constant_value_is_available());
+  ROSE_ASSERT(repeat->get_fortran_integer_constant_value() == 2);
+  ROSE_ASSERT(group->get_value_list()[1]->get_repeat_expression() == nullptr);
+}
+
+void verifyImplicitRanges(SgSourceFile *file) {
+  size_t specifications = 0;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgImplicitStatement)) {
+    auto *statement = isSgImplicitStatement(node);
+    statement->validate_implicit_statement();
+    if (statement->get_implicit_spec() !=
+        SgImplicitStatement::e_has_implicit_spec_list)
+      continue;
+    ++specifications;
+    const auto &ranges = statement->get_ranges();
+    ROSE_ASSERT(ranges.size() == 6);
+    ROSE_ASSERT(ranges[0]->get_first_letter() == 'a');
+    ROSE_ASSERT(ranges[0]->get_last_letter() == 'a');
+    ROSE_ASSERT(ranges[1]->get_first_letter() == 'b');
+    ROSE_ASSERT(!ranges[1]->get_last_letter());
+    ROSE_ASSERT(ranges[2]->get_first_letter() == 'c');
+    ROSE_ASSERT(ranges[2]->get_last_letter() == 'd');
+    ROSE_ASSERT(ranges[3]->get_first_letter() == 'e');
+    ROSE_ASSERT(ranges[3]->get_last_letter() == 'f');
+    ROSE_ASSERT(ranges[4]->get_first_letter() == 'h');
+    ROSE_ASSERT(ranges[4]->get_last_letter() == 'h');
+    ROSE_ASSERT(ranges[5]->get_first_letter() == 'x');
+    ROSE_ASSERT(ranges[5]->get_last_letter() == 'z');
+    for (size_t index = 0; index != 5; ++index) {
+      ROSE_ASSERT(ranges[index]->get_type_spec() ==
+                  SgFortranImplicitRange::e_intrinsic);
+      ROSE_ASSERT(ranges[index]->get_type()->get_fortran_source_syntax());
+      ROSE_ASSERT(ranges[index]->get_source_derived_type_symbol() == nullptr);
+    }
+    ROSE_ASSERT(isSgTypeInt(ranges[0]->get_type()) != nullptr);
+    ROSE_ASSERT(isSgTypeInt(ranges[1]->get_type()) != nullptr);
+    ROSE_ASSERT(ranges[0]->get_type() == ranges[1]->get_type());
+    ROSE_ASSERT(isSgTypeFloat(ranges[2]->get_type()) != nullptr);
+    auto *complex = isSgTypeComplex(ranges[3]->get_type());
+    ROSE_ASSERT(complex != nullptr && ranges[4]->get_type() == complex);
+    auto *component = complex->get_base_type();
+    ROSE_ASSERT(component != nullptr && component->get_fortran_source_syntax());
+    auto *selector = component->get_type_kind();
+    ROSE_ASSERT(selector != nullptr && selector->get_parent() == component);
+    ROSE_ASSERT(selector->get_fortran_integer_constant_value_is_available());
+    ROSE_ASSERT(selector->get_fortran_integer_constant_value() == 4);
+    ROSE_ASSERT(ranges[5]->get_type_spec() == SgFortranImplicitRange::e_type);
+    ROSE_ASSERT(isSgClassType(ranges[5]->get_type()) != nullptr);
+    ROSE_ASSERT(ranges[5]->get_source_derived_type_symbol() != nullptr);
+    ROSE_ASSERT(ranges[5]->get_source_derived_type_symbol()->get_name() ==
+                "local_box");
+  }
+  ROSE_ASSERT(specifications == 1);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -1077,7 +1419,7 @@ int main(int argc, char **argv) {
         original, Rose::AstJson::Checkpoint::PreOmpConstruction, options);
     ROSE_ASSERT(restored != nullptr && restored != original);
     verifyUnsignedSourceForms(restored);
-    const std::string outputPath = original->get_unparse_output_filename();
+    const std::string outputPath = restored->get_unparse_output_filename();
     const int status = backend(project);
     if (status == 0) {
       verifyUnsignedOutput(outputPath);
@@ -1087,6 +1429,32 @@ int main(int argc, char **argv) {
   verifyProcedureSourceForms(original);
   verifyFunctionSourceVisibleBindings(original);
   verifyObjectSourceForms(original);
+  verifyAllocationAndNullifyStatements(original);
+  verifyImplicitRanges(original);
+  verifyDataInitialization(original);
+  const auto originalInterfaces = verifyInterfaceRoles(original);
+  verifyUnaryOperatorBindings(original);
+  SgProject *copy = SageInterface::deepCopy(project);
+  ROSE_ASSERT(copy != nullptr && copy != project);
+  const auto copiedInterfaces = verifyInterfaceRoles(firstSourceFile(copy));
+  verifyUnaryOperatorBindings(firstSourceFile(copy));
+  for (const char *name :
+       {"abstract_proc", "typed_proc", "renamed_proc", "pointer_interface"}) {
+    auto *originalInterface =
+        originalInterfaces.at(name)->get_fortran_procedure_interface();
+    auto *copiedInterface =
+        copiedInterfaces.at(name)->get_fortran_procedure_interface();
+    ROSE_ASSERT(copiedInterface != originalInterface);
+    if (auto *source = isSgTypeExpression(originalInterface)) {
+      auto *copied = isSgTypeExpression(copiedInterface);
+      ROSE_ASSERT(copied != nullptr);
+      ROSE_ASSERT(copied->get_represented_type() !=
+                  source->get_represented_type());
+    }
+  }
+  verifyObjectSourceForms(firstSourceFile(copy));
+  AstTests::runAllTests(copy);
+  SageInterface::deepDelete(copy);
 
   if (contractMode == "unparser-procedure-kind-mismatch") {
     typedProcedureSelector(original)->set_fortran_integer_constant_value(8);
@@ -1111,7 +1479,15 @@ int main(int argc, char **argv) {
     return backend(project);
   }
   if (contractMode == "json-procedure-kind-mismatch") {
-    typedProcedureSelector(original)->set_fortran_integer_constant_value(8);
+    auto *selector = typedProcedureSelector(original);
+    if (auto *literal = isSgIntVal(selector)) {
+      literal->set_value(8);
+    } else {
+      auto *wide_literal = isSgLongLongIntVal(selector);
+      ROSE_ASSERT(wide_literal != nullptr);
+      wide_literal->set_value(8);
+    }
+    selector->set_fortran_integer_constant_value(8);
   } else if (contractMode == "json-selector-availability-mismatch") {
     typedProcedureSelector(original)
         ->set_fortran_integer_constant_value_is_available(false);
@@ -1178,8 +1554,13 @@ int main(int argc, char **argv) {
   verifyProcedureSourceForms(restored);
   verifyFunctionSourceVisibleBindings(restored);
   verifyObjectSourceForms(restored);
+  verifyAllocationAndNullifyStatements(restored);
+  verifyImplicitRanges(restored);
+  verifyDataInitialization(restored);
+  verifyInterfaceRoles(restored);
+  verifyUnaryOperatorBindings(restored);
 
-  const std::string outputPath = original->get_unparse_output_filename();
+  const std::string outputPath = restored->get_unparse_output_filename();
   const int status = backend(project);
   if (status == 0) {
     verifyOutput(outputPath);

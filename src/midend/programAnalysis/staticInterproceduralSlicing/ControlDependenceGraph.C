@@ -1,4 +1,3 @@
-// tps : Switching from rose.h to sage3 changed size from 22,7 MB to 12,4MB
 #include "sage3basic.h"
 
 #include "DependenceGraph.h"
@@ -7,13 +6,9 @@
 
 #include <iostream>
 
-#include <set>
-
 #include "DefUseExtension.h"
 
 #include "DominanceFrontier.h"
-
-#include "DominatorTree.h"
 
 #include "filteredCFG.h"
 
@@ -21,13 +16,10 @@ using namespace DominatorTreesAndDominanceFrontiers;
 using namespace std;
 
 ControlDependenceGraph::ControlDependenceGraph(
-    SgFunctionDefinition *functionStart, InterproceduralInfo *)
+    SgFunctionDefinition *functionStart)
     : source(SliceCFGNode(functionStart->cfgForBeginning())),
       sink(SliceCFGNode(functionStart->cfgForEnd())),
-      dominatorTree(functionStart,
-                    POST_DOMINATOR), /*
-                                       dominanceFrontier(dominatorTree)*/
-      head(functionStart) {
+      dominatorTree(functionStart, POST_DOMINATOR), head(functionStart) {
   // store all function calls, they are needed often
   functionCalls = NodeQuery::querySubTree(head, V_SgFunctionCallExp);
 
@@ -35,14 +27,10 @@ ControlDependenceGraph::ControlDependenceGraph(
   buildCDG();
   createSyntacticDependencies();
   // after the construction, add the FORMAL parameters to the entry-node
-  // enty to formal out (return)
-  //            establishEdge(getNode(DependenceNode::ENTRY,functionStart),getNode(DependenceNode::FORMALRETURN,functionStart->get_declaration()),CONTROL);
   establishEdge(
       getNode(DependenceNode::ENTRY, functionStart),
       getNode(DependenceNode::FORMALRETURN, functionStart->get_declaration()),
       BELONGS_TO);
-  // and give this node an explcit name, looks nicer in the graphs
-  //            getNode(DependenceNode::FORMALRETURN,functionStart->get_declaration())->setName(std::string("RETURN"));
   // for all initialized parameters
   Rose_STL_Container<SgInitializedName *> argList =
       functionStart->get_declaration()->get_args();
@@ -62,18 +50,6 @@ ControlDependenceGraph::ControlDependenceGraph(
     establishEdge(getNode(DependenceNode::ENTRY, functionStart),
                   getNode(DependenceNode::FORMALOUT, *i), CONTROL);
   }
-  //      // create an sysntactic edge, this parameter is required to
-  //      syntactically comple the call
-  //    establishEdge(getNode(DependenceNode::FORMALIN,*i),getNode(DependenceNode::ENTRY,functionStart),SYNTACTIC);
-
-  std::ofstream f("cfg.dot");
-  cfgToDot(f, string("cfg"), source);
-  f.close();
-  dominatorTree.writeDot((char *)"dt.dot");
-
-  // set internal parameters
-  decl = functionStart->get_declaration();
-  def = functionStart;
 }
 
 void ControlDependenceGraph::createSyntacticDependencies() {
@@ -87,35 +63,15 @@ void ControlDependenceGraph::createSyntacticDependencies() {
     source = getNode(DUVariableAnalysisExt::getNextParentInterstingNode(*i));
     sink = getNode(DUVariableAnalysisExt::getNextParentInterstingNode(
         isSgGotoStatement(*i)->get_label()));
-    //    establishEdge(sink,source,SYNTACTIC);
     establishEdge(sink, source, CONTROL);
   }
-  /* break and continue can handler locally
-     list < SgNode * >breakStatemnts = NodeQuery::querySubTree(head,
-     V_SgBreakStmt); for (list < SgNode * >::iterator
-     i=breakStatemnts.begin();i!=breakStatemnts.end();i++)
-     {
-     source=getNode(DUVariableAnalysisExt::getNextParentInterstingNode(*i));
-
-     }
-     list < SgNode * >continueStatements = NodeQuery::querySubTree(head,
-     V_SgContinueStmt); for (list < SgNode * >::iterator
-     i=continueStatements.begin();i!=continueStatements.end();i++)
-     {
-     source=getNode(DUVariableAnalysisExt::getNextParentInterstingNode(*i));
-     }
-  */
-  // for each break
-  // for each continue
 }
 
-void ControlDependenceGraph::addDependence(int aID, int bID, EdgeType) {
+void ControlDependenceGraph::addDependence(int aID, int bID) {
   SgNode *a, *b;
   a = dominatorTree.getCFGNodeFromID(aID).getNode();
   b = dominatorTree.getCFGNodeFromID(bID).getNode();
   DependenceNode *depNA, *depNB;
-  //    cout <<
-  //    bID<<"("<<b->unparseToString()<<")->"<<aID<<"("<<b->unparseToString()<<")"<<endl;
   // this is probably not a good style, but this is the only place where the
   // DependenceNodes are createated by using getNode. The source node is a
   // specieal node and should be attributed as ENTRY. Sice the current graph
@@ -140,56 +96,14 @@ void ControlDependenceGraph::addDependence(int aID, int bID, EdgeType) {
 
   SgNode *depNode = depNA->getSgNode();
   if (isSgBreakStmt(depNode) || isSgContinueStmt(depNode)) {
-    if (debugme)
-      cout << "control stmt found" << endl;
     // his a explicit control changing node
     // use the SYNTACTIC EDGE to enforce a backwrad dependency
-    // establishEdge(depNA,depNB,SYNTACTIC);
     establishEdge(depNA, depNB, CONTROL);
   }
   establishEdge(depNB, depNA);
 }
 
-void ControlDependenceGraph::processDependence(int, int) {}
-
-stack<SliceCFGNode> L;
-set<SliceCFGNode> T;
-map<SliceCFGNode, int> dfsnum, low;
-int N;
-
-void dfsVisit(SliceCFGNode p) {
-  L.push(p);
-  dfsnum[p] = N;
-  N++;
-  low[p] = dfsnum[p];
-  std::vector<SliceCFGEdge> edges = p.outEdges();
-  for (unsigned int childNr = 0; childNr < edges.size(); childNr++) {
-    SliceCFGNode q = edges[childNr].target();
-    if (!T.count(q)) {
-      T.insert(q);
-      dfsVisit(q);
-      low[p] = min(low[p], low[q]);
-    } else {
-      low[p] = min(low[p], dfsnum[q]);
-    }
-  }
-  if (low[p] == dfsnum[p]) {
-    //        cout<<"component: "<<p.getNode()->unparseToString()<<endl;
-    while (L.top() != p) {
-      L.pop();
-      // cout <<"\t"<<v.getNode()->unparseToString()<<endl;
-    }
-    L.pop();
-  }
-}
-
-void articualtionPoints(SliceCFGNode) {}
-
 void ControlDependenceGraph::buildCDG() {
-  // get all strong connected regions and determine dependences from there...
-  T.insert(source);
-  dfsVisit(source);
-
   // For details about the algorithm see: J. Ferrante & K. Ottenstein: The
   // Program Dependence Graph and Its use in Opimisation
   int aID, bID;
@@ -202,7 +116,6 @@ void ControlDependenceGraph::buildCDG() {
     for (unsigned int j = 0; j < edges.size(); j++) {
       SliceCFGNode b = edges[j].target();
       bID = dominatorTree.getID(b);
-      //            processDependence(aID,bID);
       if (!dominatorTree.dominates(bID, aID)) {
         // calculate the least common dominator
         if (aID == 0)
@@ -217,10 +130,8 @@ void ControlDependenceGraph::buildCDG() {
                current = dominatorTree.getImDomID(current)) {
             // mark as dependent on A
             addDependence(current, aID);
-            //                                cout <<aID<<"->"<< current<<endl;
           }
           addDependence(aID, aID);
-          //                    cout <<aID<<"->"<<aID<<endl;
         } else {
           leastCommonDominator = dominatorTree.getImDomID(aID);
           // case 2 on page 325
@@ -228,7 +139,6 @@ void ControlDependenceGraph::buildCDG() {
                current = dominatorTree.getImDomID(current)) {
             // mark as dependent on A
             addDependence(current, aID);
-            //                                cout <<aID<<"->"<< current<<endl;
           }
         }
       }
@@ -250,7 +160,6 @@ void ControlDependenceGraph::buildCDG() {
     // mark as dependent on A
     addDependence(current, aID);
   }
-  // cout<<"Source to string" << source.getNode()->unparseToString()<<endl;
 }
 
 // adds ACTUAL-nodes to each function call
@@ -260,12 +169,6 @@ void ControlDependenceGraph::computeAdditionalFunctioncallDepencencies() {
 
     SgFunctionCallExp *call = isSgFunctionCallExp(*i);
     // get the next interesting node
-    // SgNode *
-    // interestingNode=DUVariableAnalysisExt::getNextParentInterstingNode(*i);
-    // ROSE_ASSERT(interestingNode!=NULL);
-
-    // if (isSgStatement(interestingNode->get_parent()))
-    // interestingNode=interestingNode->get_parent();
     //  add actual out (return-value)  edge
 
     establishEdge(getNode(call), getNode(DependenceNode::ACTUALRETURN, call),
@@ -291,7 +194,6 @@ void ControlDependenceGraph::computeAdditionalFunctioncallDepencencies() {
                     DependenceGraph::SYNTACTIC);
       establishEdge(getNode(DependenceNode::ACTUALIN, *j), getNode(call),
                     DependenceGraph::CONTROL);
-      //                                establishEdge(getNode(parentStmt),getNode(DependenceNode::ACTUALOUT,*j),BELONGS_TO);
     }
   }
 }
@@ -299,46 +201,12 @@ void ControlDependenceGraph::computeAdditionalFunctioncallDepencencies() {
 // ONLY compute the interprocedural information
 void ControlDependenceGraph::computeInterproceduralInformation(
     InterproceduralInfo *ii) {
-  // add all nodes pointing to the sink to the exit-node list
-  std::vector<SliceCFGEdge> inEdges = sink.inEdges();
-  for (unsigned int i = 0; i < inEdges.size(); i++) {
-    SliceCFGNode lastStmt = inEdges[i].source();
-    // add those nodes to the exit-node list
-    ii->addExitNode(lastStmt.getNode());
-  }
-
   // find all callStmts
   for (Rose_STL_Container<SgNode *>::iterator i = functionCalls.begin();
        i != functionCalls.end(); i++) {
-    if (debugme)
-      cout << "callsite found" << endl;
-    if (debugme)
-      cout << "found: " << (*i)->unparseToString() << " of type "
-           << (*i)->class_name() << endl;
     SgFunctionCallExp *call = isSgFunctionCallExp(*i);
-    // get the next interesting node
-    SgNode *interestingNode =
-        DUVariableAnalysisExt::getNextParentInterstingNode(*i);
-    ROSE_ASSERT(interestingNode != NULL);
     int id = ii->addFunctionCall(call);
-    //    establishEdge(getNode(interestingNode),getNode(DependenceNode::ACTUALOUT,call),DependenceGraph::BELONGS_TO);
-    // if the callExpression itsel is interesting (according to the filter, add
-    // it) geth the closest intersting node in the AST by traversing upwards
     ii->setActualReturn(id, call);
-    // since there is a small difference for the call and the interesting node
-    // ...
-    //    setCallInterestingNode
-
-    // store the slice imporatnt node
-    if (debugme) {
-      cout << call << endl;
-      cout << interestingNode << endl;
-      cout << interestingNode->class_name() << endl;
-      cout << interestingNode->unparseToString() << endl;
-    }
-    if (isSgExprStatement(interestingNode->get_parent()))
-      interestingNode = interestingNode->get_parent();
-    ii->setSliceImportantNode(id, interestingNode);
     // for every parameter in the calls SgExpListExpr
     Rose_STL_Container<SgExpression *> params =
         call->get_args()->get_expressions();
@@ -349,36 +217,3 @@ void ControlDependenceGraph::computeInterproceduralInformation(
     }
   }
 }
-
-// DQ (8/30/2009): This appears to be a large block of code commented out!
-
-/*
-        DependenceNode *ControlDependenceGraph::createNodeC(ControlNode * cnode)
-        {
-        DependenceNode *newNode;
-
-        if (_cnode_map.count(cnode) == 0)
-        {
-        if (cnode->getType() == ControlNode::EMPTY)
-        {
-        newNode = createNode(new DependenceNode(DependenceNode::CONTROL));
-        }
-        else
-        {
-        SgNode *tmp = cnode->getNode();
-
-        while (!isSgStatement(tmp) && !isSgExpressionRoot(tmp))
-        {
-        tmp = tmp->get_parent();
-        }
-        newNode = createNode(tmp);
-        }
-
-        _cnode_map[cnode] = newNode;
-        return newNode;
-        }
-        else
-        {
-        return _cnode_map[cnode];
-        }
-        }*/

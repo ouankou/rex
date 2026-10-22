@@ -272,7 +272,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: invalid preprocessing directive]=]
   Cxx_tests/rex_frontend_macro_missing_separator.cpp)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: non-void function 'main' should return a value]=]
+  [=[error: non-void function 'main' should return a value [-Wreturn-mismatch]]=]
   Cxx_tests/rex_test2025_cfe_error_exit_code.cpp)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: use of undeclared identifier 'foo']=]
@@ -693,7 +693,7 @@ rex_register_clang_frontend_negative_diagnostic(
   ElsaTestCases/notCompilable/t0561.cc
 )
 rex_register_clang_frontend_negative_diagnostic(
-  [==[error: non-void function 'main' should return a value]==]
+  [==[error: non-void function 'main' should return a value [-Wreturn-mismatch]]==]
   ElsaTestCases/notCompilable/t0006.cc
 )
 rex_register_clang_frontend_negative_diagnostic(
@@ -935,11 +935,17 @@ function(compile_exact_negative_test input_file label expected_diagnostic)
                "ROSE_TEST_OUTPUT_DIR=${_test_output_dir}")
 endfunction()
 
-# Prevent race conditions when multiple tests process the same input file.
-# Sets a CTest RESOURCE_LOCK so tests sharing the same base input name are serialized.
-function(rex_lock_test_for_input test_name input_file)
-  get_filename_component(lock_base ${input_file} NAME_WE)
-  set_tests_properties(${test_name} PROPERTIES RESOURCE_LOCK rose_output_${lock_base})
+# Translators emit files named after each input. Accumulate all output locks
+# for multi-input tests without replacing locks already declared by a caller.
+function(rex_lock_test_for_input test_name)
+  if(ARGC LESS 2)
+    message(FATAL_ERROR "${test_name} needs at least one input for its output lock")
+  endif()
+  foreach(input_file IN LISTS ARGN)
+    get_filename_component(lock_base "${input_file}" NAME_WE)
+    set_property(TEST ${test_name} APPEND PROPERTY
+                 RESOURCE_LOCK rose_output_${lock_base})
+  endforeach()
 endfunction()
 
 # CTest permits duplicate names, which makes selection and result attribution
@@ -1122,6 +1128,13 @@ if(ENABLE-C)
   add_subdirectory(C_subset_of_Cxx_tests)
   add_subdirectory(OpenClTests)
   add_subdirectory(Cxx_tests)
+  if(NOT CXX_TESTCODES)
+    message(FATAL_ERROR "Cxx_tests did not publish its positive specimen list")
+  endif()
+  foreach(_cxx_specimen_list IN ITEMS CXX_TESTCODES
+      CXX_TESTCODES_GNUXX03 CXX_TESTCODES_GNUXX17 CXX_TESTCODES_GNUXX20)
+    set(${_cxx_specimen_list} "${${_cxx_specimen_list}}" PARENT_SCOPE)
+  endforeach()
   add_subdirectory(Cxx03_tests)
   add_subdirectory(Cxx11_tests)
   add_subdirectory(Cxx14_tests)
@@ -1148,11 +1161,6 @@ if(ENABLE-C)
   add_subdirectory(unparse_template_from_ast)
   add_subdirectory(STL_tests)
 
-  # Legacy frontend interface tests are obsolete
-  # if(enable-legacy-frontend-interface)
-  #   add_subdirectory(LegacyFrontendInterface_C_tests)
-  # endif()
-
   add_subdirectory(UnparseHeadersTests)
   add_subdirectory(UnparseHeadersUsingTokenStream_tests)
   add_subdirectory(frontend_integration)
@@ -1166,10 +1174,11 @@ if(ENABLE-C)
 endif()
 
 if(ENABLE-C OR ENABLE-FORTRAN)
-  add_subdirectory(OpenMP_tests)
-  if(EXISTS "${CMAKE_SOURCE_DIR}/tests/external/OpenMP_VV/tests")
-    add_subdirectory(OpenMP_VV_tests)
-  else()
-    message(STATUS "Skipping OpenMP_VV_tests: tests/external/OpenMP_VV/tests not found")
+  if(NOT IS_DIRECTORY "${CMAKE_SOURCE_DIR}/tests/external/OpenMP_VV/tests")
+    message(FATAL_ERROR
+      "The OpenMP_VV test submodule is incomplete. Initialize the required "
+      "test sources with git submodule update --init --recursive before configuring.")
   endif()
+  add_subdirectory(OpenMP_tests)
+  add_subdirectory(OpenMP_VV_tests)
 endif()

@@ -1,17 +1,9 @@
 #ifndef ROSE_StringUtility_NumberToString_H
 #define ROSE_StringUtility_NumberToString_H
 
-#include "Rose/BitOps.h"
-
 #include "rosedll.h"
 
-#include <cassert>
-
 #include <cstdint>
-
-#include <iomanip>
-
-#include <sstream>
 
 #include <string>
 
@@ -35,11 +27,7 @@ ROSE_UTIL_API std::string numberToString(unsigned long);
 ROSE_UTIL_API std::string numberToString(int);
 ROSE_UTIL_API std::string numberToString(unsigned int);
 
-#if defined(BACKEND_CXX_IS_GNU_COMPILER) &&                                    \
-    ((BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER == 4 &&                        \
-      BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER > 6) ||                        \
-     BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER > 4) &&                         \
-    __WORDSIZE == 64
+#if defined(__SIZEOF_INT128__)
 ROSE_UTIL_API std::string numberToString(__int128 x);
 ROSE_UTIL_API std::string numberToString(unsigned __int128 x);
 #endif
@@ -68,10 +56,10 @@ ROSE_UTIL_API std::string intToHex(uint64_t);
  *  The returned string starts with the hexadecimal representation of the number
  * and an optional decimal representation in angle brackets.  The decimal
  * portion will contain a signed and/or unsigned value depending on whether the
- * value is interpretted as signed and whether the sign bit is set.  The
+ * value is interpreted as signed and whether the sign bit is set. The
  * signedToHex versions print the decimal value for only the signed
  * interpretation; the unsignedToHex versions print only the decimal unsigned
- * interpretation, and the toHex versions print both (but not redunantly).
+ * interpretation, and toHex2 can print both without repetition.
  *
  * @param value Input value.
  * @param nbits Bit width to display.
@@ -88,9 +76,6 @@ ROSE_UTIL_API std::string toHex2(uint64_t value, size_t nbits,
 ROSE_UTIL_API std::string signedToHex2(uint64_t value, size_t nbits);
 ROSE_UTIL_API std::string unsignedToHex2(uint64_t value, size_t nbits);
 
-template <typename T> std::string toHex(T value) {
-  return toHex2((uint64_t)value, 8 * sizeof(T));
-}
 template <typename T> std::string signedToHex(T value) {
   return signedToHex2((uint64_t)value, 8 * sizeof(T));
 }
@@ -110,40 +95,6 @@ template <typename T> std::string unsignedToHex(T value) {
  * @param nbits Minimum bit width to display.
  * @return Formatted address string. */
 ROSE_UTIL_API std::string addrToString(uint64_t value, size_t nbits = 0);
-
-/** Convert an interval of virtual addresses to a string.
- *
- *  Converts an interval to a string by converting each address to a string,
- * separating them with a comma, and enclosing the whole string in square
- * brackets.
- *
- * @param low Low address.
- * @param high High address.
- * @param nbits Minimum bit width to display.
- * @return Formatted interval string. */
-ROSE_UTIL_API std::string addrIntervalToString(uint64_t low, uint64_t high,
-                                               size_t nbits = 0);
-
-/** Convert a number to a binary string.
- *
- * @param value Input value.
- * @param nBits Bit width to display (0 means use value width).
- * @param groupSize Group size for separators.
- * @param groupSeparator Separator string between groups.
- * @return Binary string. */
-template <typename Unsigned>
-std::string toBinary(Unsigned value, size_t nBits = 0, size_t groupSize = 4,
-                     const std::string groupSeparator = "_") {
-  if (0 == nBits)
-    nBits = BitOps::nBits(value);
-  std::string retval;
-  for (size_t i = nBits; i > 0; --i) {
-    retval += BitOps::bit(value, i - 1) ? '1' : '0';
-    if (groupSize > 0 && i > 1 && (i - 1) % groupSize == 0)
-      retval += groupSeparator;
-  }
-  return retval;
-}
 
 } // namespace StringUtility
 } // namespace Rose

@@ -240,6 +240,12 @@ int main(int argc, char **argv) {
   Fixture fixture(root, tokenMode, mode == "duplicate-occurrence-positive");
   if (!fixture.complete())
     return 3;
+  for (auto *source : {fixture.sourceFile, fixture.parentSource,
+                       fixture.leafSource, fixture.copySource}) {
+    auto *include = source->get_associated_include_file();
+    ROSE_ASSERT(include != nullptr && include->get_source_file() == source);
+    include->validateIncludeOwnership();
+  }
 
   if (mode == "positive") {
     fixture.leafDeclaration->set_isModified(true);

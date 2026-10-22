@@ -5,16 +5,10 @@
 
 #include "rose_config.h"
 
-#define DEBUG__unparseAssnInit 0
-
 void Unparse_ExprStmt::unparseAssnInit(SgExpression *expr,
                                        SgUnparse_Info &info) {
   SgAssignInitializer *assn_init = isSgAssignInitializer(expr);
   ASSERT_not_null(assn_init);
-#if DEBUG__unparseAssnInit
-  printf("Enter unparseAssnInit()\n");
-  printf("  assn_init = %p = %s\n", assn_init, assn_init->class_name().c_str());
-#endif
   SgExpression *operand = assn_init->get_operand_i();
   if (operand == nullptr) {
     fprintf(stderr, "REX_UNPARSE_INVARIANT[assignment-initializer-operand]: "
@@ -109,7 +103,4 @@ void Unparse_ExprStmt::unparseAssnInit(SgExpression *expr,
   // contract: explicit casts emit their syntax and e_implicit_cast validates
   // its synthesized role before emitting only its operand.
   unparseExpression(operand, info);
-#if DEBUG__unparseAssnInit
-  printf("Leave unparseAssnInit()\n");
-#endif
 }

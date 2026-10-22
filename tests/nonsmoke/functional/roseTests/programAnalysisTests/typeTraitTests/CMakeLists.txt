@@ -9,15 +9,6 @@ target_link_libraries(typeTraitExerciseWithoutRetCode ROSE_DLL ${link_with_libra
 set(_rth ${CMAKE_SOURCE_DIR}/scripts/rth_run.pl)
 set(_exit_status ${CMAKE_SOURCE_DIR}/scripts/test_exit_status)
 
-set(_rose_include_flags)
-foreach(entry IN LISTS ROSE_INCLUDES)
-  if(entry MATCHES "^-I" OR entry MATCHES "^-isystem")
-    list(APPEND _rose_include_flags ${entry})
-  else()
-    list(APPEND _rose_include_flags -I${entry})
-  endif()
-endforeach()
-
 set(_type_trait_tests_dir ${CMAKE_CURRENT_SOURCE_DIR}/tests)
 set(_type_trait_specimens
   test1.C
@@ -54,7 +45,7 @@ endforeach()
 add_test(
   NAME type_trait_without_ret_roseHeader
   COMMAND typeTraitExerciseWithoutRetCode -w -I${CMAKE_BINARY_DIR}
-    ${_rose_include_flags}
+    ${_functional_include_flags}
     -c ${_type_trait_tests_dir}/roseHeader.C
 )
 

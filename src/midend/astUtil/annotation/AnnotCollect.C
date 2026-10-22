@@ -24,7 +24,8 @@ void ReadAnnotation::read() {
   std::vector<std::string>::const_iterator p = inst->begin();
   for (; p != inst->end(); p++) {
     if ((*p) == "-annot") {
-      p++;
+      if (++p == inst->end())
+        throw ReadError("-annot requires a filename");
       string p1 = *p;
       ifstream is(p1.c_str());
       if (!is.is_open()) {
@@ -37,9 +38,14 @@ void ReadAnnotation::read() {
 //! Read the annotation file and recognize type and operator annotation
 //! collections
 void ReadAnnotation::read(istream &in) {
-  while (in.good()) {
-    peek_ch(in);
+  for (;;) {
+    char next = peek_ch(in);
+    if (next == 0 && in.eof())
+      break;
     string buf = read_id(in);
+
+    if (buf.empty())
+      throw ReadError("expected class, operator, or variable annotation");
 
     if (buf == "class") {
       typeInfo.read(in);
@@ -47,9 +53,7 @@ void ReadAnnotation::read(istream &in) {
       opInfo.read(in);
     } else if (buf == "variable") {
       varInfo.read(in);
-    } else if (buf == "" || !in.good())
-      break;
-    else if (in.good()) {
+    } else {
       ReadError m("non-recognizable annotation: \"" + buf + "\"");
       cerr << m.msg << endl;
       throw m;

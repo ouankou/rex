@@ -45,16 +45,14 @@ void AstDOTGeneration::generate(SgNode *node, string filename, traversalType tt,
                                 string filenamePostfix) {
   init();
   traversal = tt;
+  skip_write_during_traversal = true;
   this->filenamePostfix = filenamePostfix;
   DOTInheritedAttribute ia;
   traverse(node, ia);
 
-  // DQ (9/22/2017): Fixed this to allow for an empty filenamePostfix string
-  // (and avoid output of ".." in the filename. string
-  // filename2=string("./")+filename+"."+filenamePostfix+".dot";
   string filename2 = string("./") + filename;
   if (filenamePostfix != "") {
-    filename2 += "." + filenamePostfix + ".dot";
+    filename2 += "." + filenamePostfix;
   }
   filename2 += ".dot";
 
@@ -65,13 +63,11 @@ void AstDOTGeneration::generate(SgProject *node, traversalType tt,
                                 string filenamePostfix) {
   init();
   traversal = tt;
+  skip_write_during_traversal = false;
   this->filenamePostfix = filenamePostfix;
   DOTInheritedAttribute ia;
 
   ROSE_ASSERT(node != NULL);
-  // printf ("Starting AstDOTGeneration::generate() at node = %s
-  // \n",node->class_name().c_str());
-
   traverse(node, ia);
 }
 
@@ -80,13 +76,11 @@ void AstDOTGeneration::generateInputFiles(SgProject *node, traversalType tt,
                                           bool excludeTemplateInstantiations) {
   init();
   traversal = tt;
+  skip_write_during_traversal = false;
   this->filenamePostfix = filenamePostfix;
   DOTInheritedAttribute ia;
 
   ROSE_ASSERT(node != NULL);
-  // printf ("Starting AstDOTGeneration::generateInputFiles() at node = %s
-  // \n",node->class_name().c_str());
-
   // DQ (12/20/2018): Skip the template instantiations that can make the files
   // to large for DOT visualizations.
   if (excludeTemplateInstantiations == true) {
@@ -100,112 +94,28 @@ void AstDOTGeneration::generateWithinFile(SgFile *node, traversalType tt,
                                           string filenamePostfix) {
   init();
   traversal = tt;
+  skip_write_during_traversal = false;
   this->filenamePostfix = filenamePostfix;
   DOTInheritedAttribute ia;
 
   ROSE_ASSERT(node != NULL);
-  // printf ("Starting AstDOTGeneration::generateWithinFile() at node = %s
-  // \n",node->class_name().c_str());
-
   traverseWithinFile(node, ia);
 }
 
 DOTInheritedAttribute
 AstDOTGeneration::evaluateInheritedAttribute(SgNode *node,
                                              DOTInheritedAttribute ia) {
-  // I think this may no longer be required, but I will leave it in place for
-  // now
   visitedNodes.insert(node);
 
-  // We might not want to increment the trace position information for
-  // the IR nodes from rose_required_macros_and_functions.h
-  // ia.tdbuTracePos = tdbuTrace++;
-  // ia.tdTracePos   = tdTrace++;
-
-  // DQ (5/3/2006)
-  // We put macros and functions required for GNU compatability in the file:
-  //    rose_required_macros_and_functions.h
-  // and we want to avoid generating nodes for these within visualizations of
-  // the AST. Once legacy frontend supports these functions (we have
-  // collected the onese missed by legacy frontend here) this file will not
-  // be required.  We could filter on declaration first to avoid lots of
-  // string comparision.  Or use a static pointer to save the first fileInfo
-  // from "rose_required_macros_and_functions.h" and then use the
-  // Sg_File_Info::sameFile() function (this reduces to an integer
-  // comparision internally).
   Sg_File_Info *fileInfo = node->get_file_info();
-  if (fileInfo != NULL) {
-    // Build factored versions of the rather numerous tests (we are now not
-    // able to rely on short-circuit evaluation which makes the code easier
-    // to debug using valgrind).
-    bool isCompilerGeneratedOrPartOfTransformation =
-        fileInfo->isCompilerGenerated();
-
-    // DQ (5/3/2006): All constructs from the
-    // rose_required_macros_and_functions.h file are marked as compiler
-    // generated.  These are declarations required for GNU compatability
-    // and we would like to have them be ignored because they should be
-    // considered builtin and not explicitly represented.  In a sense this
-    // file is special. Not that if we traverse the AST without constraint
-    // then we traverse these IR nodes.
-    if (isCompilerGeneratedOrPartOfTransformation == true) {
-      std::string targetFileName = "rose_required_macros_and_functions.h";
-      std::string rawFileName = node->get_file_info()->get_raw_filename();
-      std::string filenameWithoutPath =
-          StringUtility::stripPathFromFileName(rawFileName);
-      if (filenameWithoutPath == targetFileName) {
-      }
-
-      // DQ (12/20/2018): Skip template instantiations that can make the DOT
-      // files too large to generate or look at easily. DQ (12/15/2018): Use
-      // this mechanism to simplify the AST for visualization. DQ (1/6/2015):
-      // This allows us to simplify the AST visualization by reducing the number
-      // of nodes in the AST specific to template instantiations. DQ
-      // (2/14/2015): I think we need to have a mechanism to support this so
-      // that we can better handle visualization of selected portions of large
-      // files.
-      if (ia.skipTemplateInstantiations == true) {
-        // DQ (2/12/2015): Test skipping instantiated templates since this
-        // frequently makes the generated dot file too large to be visualized.
-        // Ultimately this should be some sort of optional behavior.
-        SgTemplateInstantiationDecl *templateInstantationClassDeclaration =
-            isSgTemplateInstantiationDecl(node);
-        SgTemplateInstantiationFunctionDecl
-            *templateInstantationFunctionDeclaration =
-                isSgTemplateInstantiationFunctionDecl(node);
-        SgTemplateInstantiationMemberFunctionDecl
-            *templateInstantationMemberFunctionDeclaration =
-                isSgTemplateInstantiationMemberFunctionDecl(node);
-        // SgTemplateMemberFunctionDeclaration*
-        // templateMemberFunctionDeclaration             =
-        // isSgTemplateMemberFunctionDeclaration(node);
-
-        if (templateInstantationClassDeclaration != NULL ||
-            templateInstantationFunctionDeclaration != NULL ||
-            templateInstantationMemberFunctionDeclaration != NULL ||
-            // templateMemberFunctionDeclaration != NULL ||
-            false) {
-          ia.skipSubTree = true;
-        }
-      }
-    }
-
-#define DEBUG_DSL_EXAMPLES 0
-
-#if DEBUG_DSL_EXAMPLES
-    // DQ (2/12/2015): Test skipping template member functions that are not from
-    // the current file. I think we need to have a mechanism to support this so
-    // that we can better handle visualization of selected portions of large
-    // files.
-    SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(node);
-    if (functionDeclaration != NULL) {
-    } else {
-    }
-#endif
+  if (fileInfo != NULL && fileInfo->isCompilerGenerated() &&
+      ia.skipTemplateInstantiations &&
+      (isSgTemplateInstantiationDecl(node) != NULL ||
+       isSgTemplateInstantiationFunctionDecl(node) != NULL ||
+       isSgTemplateInstantiationMemberFunctionDecl(node) != NULL)) {
+    ia.skipSubTree = true;
   }
 
-  // We might not want to increment the trace position information for
-  // the IR nodes from rose_required_macros_and_functions.h
   if (ia.skipSubTree == false) {
     ia.tdbuTracePos = tdbuTrace++;
     ia.tdTracePos = tdTrace++;
@@ -242,9 +152,6 @@ void AstDOTGeneration::addAdditionalNodesAndEdges(SgNode *node) {
         SgNode *nodePtr = i_node->nodePtr;
         string nodelabel = i_node->label;
         string nodeoption = i_node->options;
-        // dotrep.addNode(NULL,dotrep.traceFormat(ia.tdTracePos)+nodelabel,nodeoption);
-        // dotrep.addNode( nodePtr, dotrep.traceFormat(ia.tdTracePos) +
-        // nodelabel, nodeoption );
         dotrep.addNode(nodePtr, nodelabel, nodeoption);
       }
       std::vector<AstAttribute::AttributeEdgeInfo> edgeList =
@@ -271,20 +178,11 @@ void AstDOTGeneration::writeIncidenceGraphToDOTFile(
     SgGraphNode *node = it->second;
 
     if (commentOutNodeInGraph(node) == false) {
-      string nodeoption;
       string nodelabel = string("\\n") + node->get_name();
 
       nodelabel += additionalNodeInfo(node);
+      string nodeoption = additionalNodeOptions(node);
 
-      string additionalOptions = additionalNodeOptions(node);
-
-      string x;
-      string y;
-      x += additionalOptions;
-
-      nodeoption += additionalOptions;
-
-      // dotrep.addNode(node,dotrep.traceFormat(ia.tdTracePos)+nodelabel,nodeoption);
       dotrep.addNode(node, nodelabel, nodeoption);
 
       addAdditionalNodesAndEdges(node);
@@ -298,7 +196,6 @@ void AstDOTGeneration::writeIncidenceGraphToDOTFile(
   for (rose_graph_integer_edge_hash_multimap::const_iterator outEdgeIt =
            outEdges.begin();
        outEdgeIt != outEdges.end(); ++outEdgeIt) {
-    // if(debug) std::cerr << " add edge from node ... " << std::endl; // debug
     SgDirectedGraphEdge *graphEdge = isSgDirectedGraphEdge(outEdgeIt->second);
     ROSE_ASSERT(graphEdge != NULL);
 
@@ -334,10 +231,7 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
   }
 
   string nodeoption;
-  if (AstTests::isProblematic(node)) {
-    // cout << "problematic node found." << endl;
-    nodeoption = "color=\"orange\" ";
-  }
+  AstTests::validateTraversalSuccessors(node);
   string nodelabel = string("\\n") + node->class_name();
 
   // DQ (7/20/2021): Added support for handle the SgSourceFile IR nodes (I want
@@ -424,11 +318,6 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
                         ? "true "
                         : "false ");
 
-      // DQ (4/5/2015): I think this is not used and should be removed.
-      // nodelabel += string("\\n isFirstDeclarationOfDeclarationList = ") +
-      // (variableDeclaration->get_isFirstDeclarationOfDeclarationList() ? "true
-      // " : "false ");
-
       // DQ (11/21/2015): Adding output of
       // typedefBaseTypeContainsDefiningDeclaration field.
       nodelabel +=
@@ -438,10 +327,6 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
                : "false ");
     }
 
-    // DQ (11/26/2015): Adding friend specification to support
-    // debugging test2012_59.C (multiple function definitions for the
-    // same function due to legacy frontend template function
-    // normalizations).
     nodelabel +=
         string("\\n isFriend = ") +
         (genericDeclaration->get_declarationModifier().isFriend() ? "true "
@@ -509,33 +394,14 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
   SgVarRefExp *varRefExp = isSgVarRefExp(node);
   if (varRefExp != NULL) {
     SgVariableSymbol *variableSymbol = varRefExp->get_symbol();
-
-    // DQ (1/1/2014): test2014_01.c demonstrates where there is no associated
-    // SgVariableSymbol.
-    if (variableSymbol == NULL) {
-      printf("WARNING: variableSymbol == NULL: varRefExp = %p \n", varRefExp);
-    }
     ROSE_ASSERT(variableSymbol != NULL);
-
-    string name = "unknown";
-    if (variableSymbol != NULL) {
-      // printf ("Commented out call to variableSymbol->get_name() \n");
-      name = variableSymbol->get_name();
-    }
-    nodelabel += string("\\n name = ") + name;
+    nodelabel += string("\\n name = ") + variableSymbol->get_name().getString();
   }
 
   // DQ (8/28/2014): Added support for output of the name for function IR nodes.
   SgFunctionRefExp *functionRefExp = isSgFunctionRefExp(node);
   if (functionRefExp != NULL) {
     SgFunctionSymbol *functionSymbol = functionRefExp->get_symbol();
-
-    // DQ (1/1/2014): test2014_01.c demonstrates where there is no associated
-    // SgVariableSymbol.
-    if (functionSymbol == NULL) {
-      printf("WARNING: functionSymbol == NULL: functionRefExp = %p \n",
-             functionRefExp);
-    }
     ROSE_ASSERT(functionSymbol != NULL);
 
     // DQ (10/18/2020): Adding more inforamtion to the generated dot graphs.
@@ -554,11 +420,7 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
                        functionDeclaration->get_firstNondefiningDeclaration());
     }
 
-    string name = "unknown";
-    if (functionSymbol != NULL) {
-      name = functionSymbol->get_name();
-    }
-    nodelabel += string("\\n name = ") + name;
+    nodelabel += string("\\n name = ") + functionSymbol->get_name().getString();
   }
 
   // DQ (8/28/2014): Added support for output of the name for member function IR
@@ -567,21 +429,9 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
   if (memberFunctionRefExp != NULL) {
     SgMemberFunctionSymbol *memberFunctionSymbol =
         memberFunctionRefExp->get_symbol();
-
-    // DQ (1/1/2014): test2014_01.c demonstrates where there is no associated
-    // SgVariableSymbol.
-    if (memberFunctionSymbol == NULL) {
-      printf(
-          "WARNING: memberFunctionSymbol == NULL: memberFunctionRefExp = %p \n",
-          memberFunctionRefExp);
-    }
     ROSE_ASSERT(memberFunctionSymbol != NULL);
-
-    string name = "unknown";
-    if (memberFunctionSymbol != NULL) {
-      name = memberFunctionSymbol->get_name();
-    }
-    nodelabel += string("\\n name = ") + name;
+    nodelabel +=
+        string("\\n name = ") + memberFunctionSymbol->get_name().getString();
   }
 
   // DQ (10/19/2014): Added support for output of the name for
@@ -592,25 +442,17 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
     SgClassDeclaration *classDeclaration =
         constructorInitializer->get_class_decl();
 
-    // DQ (10/20/2014): This can be NULL in rare occasions.
-    // ROSE_ASSERT(classDeclaration != NULL);
-
     if (classDeclaration != NULL) {
       string name = classDeclaration->get_name();
       nodelabel += string("\\n name = ") + name;
     }
   }
 
-  // DQ (9/4/2020): Added support for output of the kind of cast in the
-  // SgCastExp IR nodes.
   SgCastExp *castExpression = isSgCastExp(node);
   if (castExpression != NULL) {
-    string name =
-        SgCastExp::cast_type_to_string(castExpression->cast_type()).c_str();
-    ;
+    string name = SgCastExp::cast_type_to_string(castExpression->cast_type());
     nodelabel += string("\\n cast kind = ") + name;
 
-    // DQ (7/7/2021): Adding information about implict casts.
     string cast_classification =
         castExpression->get_file_info()->isImplicitCast() ? "implicit cast"
                                                           : "explicit cast";
@@ -628,13 +470,7 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
   SgC_PreprocessorDirectiveStatement *preprocessorDirective =
       isSgC_PreprocessorDirectiveStatement(node);
   if (preprocessorDirective != NULL) {
-    string s = preprocessorDirective->get_directiveString();
-
-    // Change any double quotes to single quotes so that DOT will not
-    // misunderstand the generated lables.
-    while (s.find("\"") != string::npos) {
-      s.replace(s.find("\""), 1, "\'");
-    }
+    const string &s = preprocessorDirective->get_directiveString();
 
     if (s.empty() == false)
       nodelabel += string("\\n") + s;
@@ -642,34 +478,15 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
 
   nodelabel += additionalNodeInfo(node);
 
-  // DQ (11/1/2003) added mechanism to add additional options (to add color,
-  // etc.) nodeoption += additionalNodeOptions(node);
-  string additionalOptions = additionalNodeOptions(node);
-  // printf ("nodeoption = %s size() = %ld
-  // \n",nodeoption.c_str(),nodeoption.size()); printf ("additionalOptions = %s
-  // size() = %ld \n",additionalOptions.c_str(),additionalOptions.size());
-
-  string x;
-  string y;
-  x += additionalOptions;
-
-  nodeoption += additionalOptions;
-
-  DOTSynthesizedAttribute d(0);
+  nodeoption += additionalNodeOptions(node);
 
   // DQ (7/27/2008): Added mechanism to support pruning of AST
   bool commentoutNode = commentOutNodeInGraph(node);
   if (commentoutNode == true) {
-    // DQ (11/10/2008): Fixed to only output message when (verbose_level > 0);
-    // command-line option. DQ (7/27/2008): For now just return to test this
-    // mechanism, then we want to add comment "//" propoerly to generated DOT
-    // file.
     if (SgProject::get_verbose() > 0) {
       printf("Skipping the use of this IR node in the DOT Graph \n");
     }
   } else {
-
-    // **************************
 
     switch (traversal) {
     case TOPDOWNBOTTOMUP:
@@ -700,12 +517,11 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
           string(node->get_traversalSuccessorNamesContainer()[testnum]);
       string toErasePrefix = "p_";
 
-      if (AstTests::isPrefix(toErasePrefix, edgelabel)) {
+      if (edgelabel.compare(0, toErasePrefix.size(), toErasePrefix) == 0) {
         edgelabel.erase(0, toErasePrefix.size());
       }
 
       if (iter->node == NULL) {
-        // SgNode* snode=node->get_traversalSuccessorContainer()[testnum];
         AstSuccessorsSelectors::SuccessorsContainer c;
         AstSuccessorsSelectors::selectDefaultSuccessors(node, c);
         SgNode *snode = c[testnum];
@@ -714,7 +530,6 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
         // used
         if (l[testnum].isDefault() && snode &&
             (visitedNodes.find(snode) != visitedNodes.end())) {
-          // handle bugs in SAGE
           dotrep.addEdge(node, edgelabel, snode,
                          "dir=forward arrowhead=\"odot\" color=red ");
         } else {
@@ -749,8 +564,6 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
 
       testnum++;
     }
-
-    // **************************
   }
 
   // DQ (7/4/2008): Support for edges specified in AST attributes
@@ -762,12 +575,8 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
       AstAttribute *attribute = astAttributeContainer->operator[](name);
       ROSE_ASSERT(attribute != NULL);
 
-      // This can return a non-empty list in user-defined attributes (derived
-      // from AstAttribute). printf ("Calling attribute->additionalNodeInfo()
-      // \n");
       std::vector<AstAttribute::AttributeNodeInfo> nodeList =
           attribute->additionalNodeInfo();
-      // printf ("nodeList.size() = %lu \n",nodeList.size());
 
       for (std::vector<AstAttribute::AttributeNodeInfo>::iterator i_node =
                nodeList.begin();
@@ -775,27 +584,17 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
         SgNode *nodePtr = i_node->nodePtr;
         string nodelabel = i_node->label;
         string nodeoption = i_node->options;
-        // printf ("In AstDOTGeneration::evaluateSynthesizedAttribute(): Adding
-        // a node nodelabel = %s nodeoption = %s
-        // \n",nodelabel.c_str(),nodeoption.c_str());
-        // dotrep.addNode(NULL,dotrep.traceFormat(ia.tdTracePos)+nodelabel,nodeoption);
         dotrep.addNode(nodePtr, dotrep.traceFormat(ia.tdTracePos) + nodelabel,
                        nodeoption);
       }
 
-      // printf ("Calling attribute->additionalEdgeInfo() \n");
       std::vector<AstAttribute::AttributeEdgeInfo> edgeList =
           attribute->additionalEdgeInfo();
-      // printf ("edgeList.size() = %lu \n",edgeList.size());
       for (std::vector<AstAttribute::AttributeEdgeInfo>::iterator i_edge =
                edgeList.begin();
            i_edge != edgeList.end(); i_edge++) {
         string edgelabel = i_edge->label;
         string edgeoption = i_edge->options;
-        // printf ("In AstDOTGeneration::evaluateSynthesizedAttribute(): Adding
-        // an edge from i_edge->fromNode = %p to i_edge->toNode = %p edgelabel =
-        // %s edgeoption = %s
-        // \n",i_edge->fromNode,i_edge->toNode,edgelabel.c_str(),edgeoption.c_str());
         dotrep.addEdge(i_edge->fromNode, edgelabel, i_edge->toNode,
                        edgeoption + "dir=forward");
       }
@@ -804,30 +603,24 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
 
   if (!skip_write_during_traversal) {
     switch (node->variantT()) {
-      // DQ (9/1/2008): Added case for output of SgProject rooted DOT file.
-      // This allows source code and binary files to be combined into the same
-      // DOT file.
     case V_SgProject: {
       SgProject *project = dynamic_cast<SgProject *>(node);
       ROSE_ASSERT(project != NULL);
 
       string generatedProjectName = SageInterface::generateProjectName(project);
-      // printf ("generatedProjectName (from SgProject) = %s
-      // \n",generatedProjectName.c_str());
       if (generatedProjectName.length() > 40) {
-        // printf ("Warning: generatedProjectName (from SgProject) = %s
-        // \n",generatedProjectName.c_str());
         generatedProjectName = "aggregatedFileNameTooLong";
         printf("Proposed (generated) filename is too long, shortened to: %s \n",
                generatedProjectName.c_str());
       }
 
-      string filename =
-          string("./") + generatedProjectName + "." + filenamePostfix + ".dot";
+      string filename = string("./") + generatedProjectName;
+      if (!filenamePostfix.empty()) {
+        filename += "." + filenamePostfix;
+      }
+      filename += ".dot";
       filename = Rose::TestOutput::resolvePath(filename);
 
-      // printf ("generated filename for dot file (from SgProject) = %s
-      // \n",filename.c_str());
       if (SgProject::get_verbose() >= 1)
         printf("Output the DOT graph from the SgProject IR node (filename = "
                "%s) \n",
@@ -837,29 +630,16 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
       break;
     }
 
-      // case V_SgFile:
     case V_SgSourceFile: {
       SgFile *file = dynamic_cast<SgFile *>(node);
       ROSE_ASSERT(file != NULL);
 
       string original_filename = file->getFileName();
 
-      // DQ (7/4/2008): Fix filenamePostfix to go before the "."
-      // string filename = string("./") +
-      // Rose::utility_stripPathFromFileName(original_filename) +
-      // "."+filenamePostfix+"dot";
       string filename = string("./") +
                         Rose::utility_stripPathFromFileName(original_filename) +
                         filenamePostfix + ".dot";
       filename = Rose::TestOutput::resolvePath(filename);
-
-      // printf ("generated filename for dot file (from SgSourceFile) =
-      // %s file->get_parent() = %p
-      // \n",filename.c_str(),file->get_parent());
-
-      // printf ("file->get_parent() = %p \n",file->get_parent());
-      // cout << "generating DOT file (from SgSourceFile): " <<
-      // filename2 << " ... ";
 
       // DQ (9/1/2008): this effects the output of DOT files when
       // multiple files are specified on the command line.  A SgProject
@@ -899,21 +679,16 @@ DOTSynthesizedAttribute AstDOTGeneration::evaluateSynthesizedAttribute(
         }
       }
 
-      // cout << "done." << endl;
       break;
     }
 
-      // DQ (7/23/2005): Implemented default case to avoid g++ warnings
-      // about enum values not handled by this switch
     default: {
-      // nothing to do here
       break;
     }
     }
   }
 
-  d.node = node;
-  return d;
+  return DOTSynthesizedAttribute(node);
 }
 
 static std::string generateFileLineColumnString(Sg_File_Info *fileInfo) {
@@ -973,9 +748,6 @@ static std::string sourcePositionInformation(SgNode *node) {
         ss += "compiler generated\\n";
         hasSpecialMode = true;
 
-        // DQ (9/7/2016): Add output of raw source position to check
-        // on legacy frontend normalized ctor pre-initialization
-        // list in templates.
         ss += generateFileLineColumnString(locatedNode->get_startOfConstruct());
         ss += generateFileLineColumnString(locatedNode->get_endOfConstruct());
       } else {
@@ -1064,7 +836,6 @@ static size_t numberByRelativePosition(
 }
 
 static std::string commentAndCppInformation(SgNode *node) {
-  // DQ (8/31/2013): Adding source position information for DOT output.
   string ss;
 
   SgLocatedNode *locatedNode = isSgLocatedNode(node);
@@ -1072,36 +843,19 @@ static std::string commentAndCppInformation(SgNode *node) {
     AttachedPreprocessingInfoType *commentsAndCppDirectives =
         locatedNode->getAttachedPreprocessingInfo();
 
-    // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-    // -Werror=unused-but-set-variable. size_t numberofCommentsAndCppDirectives
-    // = 0;
-
     if (commentsAndCppDirectives != NULL) {
-      // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-      // -Werror=unused-but-set-variable. numberofCommentsAndCppDirectives =
-      // commentsAndCppDirectives->size();
-
-      // MS 11/12/2015: disabled this test as size_t is unsigned;
-      // this test is always true and compilers issue a
-      // warning
-      // if (numberofCommentsAndCppDirectives >= 0)
-      {
-        // ss = string("comments = ") +
-        // StringUtility::numberToString(numberofCommentsAndCppDirectives) +
-        // "\\n";
-        ss += string("comments/directives (before) = ") +
-              StringUtility::numberToString(numberByRelativePosition(
-                  commentsAndCppDirectives, PreprocessingInfo::before)) +
-              "\\n";
-        ss += string("comments/directives (inside) = ") +
-              StringUtility::numberToString(numberByRelativePosition(
-                  commentsAndCppDirectives, PreprocessingInfo::inside)) +
-              "\\n";
-        ss += string("comments/directives (after)  = ") +
-              StringUtility::numberToString(numberByRelativePosition(
-                  commentsAndCppDirectives, PreprocessingInfo::after)) +
-              "\\n";
-      }
+      ss += string("comments/directives (before) = ") +
+            StringUtility::numberToString(numberByRelativePosition(
+                commentsAndCppDirectives, PreprocessingInfo::before)) +
+            "\\n";
+      ss += string("comments/directives (inside) = ") +
+            StringUtility::numberToString(numberByRelativePosition(
+                commentsAndCppDirectives, PreprocessingInfo::inside)) +
+            "\\n";
+      ss += string("comments/directives (after)  = ") +
+            StringUtility::numberToString(numberByRelativePosition(
+                commentsAndCppDirectives, PreprocessingInfo::after)) +
+            "\\n";
     }
   }
 
@@ -1164,15 +918,7 @@ string AstDOTGeneration::additionalNodeInfo(SgNode *node) {
 }
 
 // DQ (11/1/2003) added mechanism to add additional options (to add color, etc.)
-string AstDOTGeneration::additionalEdgeInfo(SgNode *from, SgNode *to,
-                                            string label) {
-  // return an empty string for default implementation
-  return "";
-}
-
-// DQ (11/1/2003) added mechanism to add additional options (to add color, etc.)
 string AstDOTGeneration::additionalNodeOptions(SgNode *node) {
-  // return an empty string for default implementation
   ostringstream ss;
 
   // DQ (7/4/2008): Added support for output of information about attributes
@@ -1180,28 +926,17 @@ string AstDOTGeneration::additionalNodeOptions(SgNode *node) {
   if (astAttributeContainer != NULL) {
     for (const std::string &name :
          astAttributeContainer->getAttributeIdentifiers()) {
-      // std::string name = i->first;
       AstAttribute *attribute = astAttributeContainer->operator[](name);
       ROSE_ASSERT(attribute != NULL);
 
       ss << attribute->additionalNodeOptions();
     }
-  } else {
   }
 
   return ss.str();
 }
 
-// DQ (11/1/2003) added mechanism to add additional options (to add color, etc.)
-string AstDOTGeneration::additionalEdgeOptions(SgNode *from, SgNode *to,
-                                               string label) {
-  // return an empty string for default implementation, but set the parent edge
-  // to blue
-  return "";
-}
-
 bool AstDOTGeneration::commentOutNodeInGraph(SgNode *node) {
-  // return an empty string for default implementation
   bool resultValue = false;
 
   // DQ (7/4/2008): Added support for output of information about attributes
@@ -1209,7 +944,6 @@ bool AstDOTGeneration::commentOutNodeInGraph(SgNode *node) {
   if (astAttributeContainer != NULL) {
     for (const std::string &name :
          astAttributeContainer->getAttributeIdentifiers()) {
-      // std::string name = i->first;
       AstAttribute *attribute = astAttributeContainer->operator[](name);
       ROSE_ASSERT(attribute != NULL);
 

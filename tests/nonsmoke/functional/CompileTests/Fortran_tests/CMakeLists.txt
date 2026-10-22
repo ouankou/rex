@@ -11,6 +11,28 @@ add_executable(rex_flang_source_position_contract
 target_link_libraries(rex_flang_source_position_contract
   ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_flang_sync_ast rex_flang_sync_ast.cpp)
+target_link_libraries(rex_flang_sync_ast ROSE_DLL ${link_with_libraries})
+set(_rex_flang_sync_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rex_flang_sync_output)
+file(MAKE_DIRECTORY ${_rex_flang_sync_output_dir})
+foreach(_rex_sync_specimen IN ITEMS R858.f08 R859.f08 R862.f08)
+  get_filename_component(_rex_sync_mode ${_rex_sync_specimen} NAME_WE)
+  add_test(NAME rex_flang_sync_ast_${_rex_sync_mode}
+    WORKING_DIRECTORY ${_rex_flang_sync_output_dir}
+    COMMAND rex_flang_sync_ast ${_rex_sync_mode}
+      -rose:skipfinalCompileStep -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/experimental_frontend_tests/${_rex_sync_specimen})
+  set_tests_properties(rex_flang_sync_ast_${_rex_sync_mode}
+    PROPERTIES LABELS "rex;Fortran;frontend;unparser")
+endforeach()
+add_test(NAME rex_flang_sync_ast_image_control
+  WORKING_DIRECTORY ${_rex_flang_sync_output_dir}
+  COMMAND rex_flang_sync_ast image_control
+    -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_image_control_statements.f90)
+set_tests_properties(rex_flang_sync_ast_image_control
+  PROPERTIES LABELS "rex;Fortran;frontend;unparser")
+
 add_executable(rex_flang_directive_provenance_contract
   rex_flang_directive_provenance_contract.cpp)
 target_link_libraries(rex_flang_directive_provenance_contract
@@ -84,10 +106,6 @@ foreach(_rex_flang_contract_target
   rose_force_system_include_dirs(${_rex_flang_contract_target}
     ${FLANG_INCLUDE_DIRS}
     ${LLVM_INCLUDE_DIRS})
-  if(DEFINED ROSE_FLANG_ENDIAN_DEFINES)
-    target_compile_definitions(${_rex_flang_contract_target} PRIVATE
-      ${ROSE_FLANG_ENDIAN_DEFINES})
-  endif()
   target_link_libraries(${_rex_flang_contract_target} PRIVATE
     ROSE_DLL
     ${link_with_libraries}
@@ -152,6 +170,12 @@ add_rex_flang_wait_spec_death_test(
 add_test(
   NAME FORTRANTEST_rex_flang_source_position_valid
   COMMAND $<TARGET_FILE:rex_flang_source_position_contract> valid-source)
+add_test(
+  NAME FORTRANTEST_rex_flang_directive_physical_source
+  COMMAND $<TARGET_FILE:rex_flang_source_position_contract> directive-source
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_directive_physical_source.F90)
+set_tests_properties(FORTRANTEST_rex_flang_directive_physical_source
+  PROPERTIES LABELS "FORTRANTEST;rex")
 add_test(
   NAME FORTRANTEST_rex_flang_pending_source_position_valid
   COMMAND $<TARGET_FILE:rex_flang_source_position_contract>
@@ -244,6 +268,45 @@ add_test(
   NAME FORTRANTEST_rex_flang_literal_and_sign_contract_valid
   COMMAND $<TARGET_FILE:rex_flang_source_type_contract> valid-literals)
 add_test(
+  NAME FORTRANTEST_rex_flang_signed_integer_minimum_values_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract>
+          valid-signed-integer-minimum
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_signed_integer_minimum_values.f90)
+set_tests_properties(FORTRANTEST_rex_flang_signed_integer_minimum_values_valid
+  PROPERTIES LABELS "FORTRANTEST;rex")
+add_test(
+  NAME FORTRANTEST_rex_flang_native_boz_literals_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract>
+          valid-native-boz-literals
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_boz_literal_values.f90)
+set_tests_properties(FORTRANTEST_rex_flang_native_boz_literals_valid
+  PROPERTIES LABELS "FORTRANTEST;rex")
+add_test(
+  NAME FORTRANTEST_rex_flang_complex_integer_part_types_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract>
+          valid-complex-integer-parts
+          ${CMAKE_CURRENT_SOURCE_DIR}/gfortranTestSuite/gfortran.dg/complex_int_1.f90)
+set_tests_properties(FORTRANTEST_rex_flang_complex_integer_part_types_valid
+  PROPERTIES LABELS "FORTRANTEST;rex")
+add_test(
+  NAME FORTRANTEST_rex_flang_wide_complex_integer_part_types_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract>
+          valid-wide-complex-integer-parts
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_complex_integer_literal_types.f90)
+set_tests_properties(FORTRANTEST_rex_flang_wide_complex_integer_part_types_valid
+  PROPERTIES LABELS "FORTRANTEST;rex")
+add_test(
+  NAME FORTRANTEST_rex_flang_real_literal_kinds_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract> valid-real-literals
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_real_literal_kinds.f90)
+add_test(
+  NAME FORTRANTEST_rex_flang_native_unsigned_literals_valid
+  COMMAND $<TARGET_FILE:rex_flang_source_type_contract>
+          valid-native-unsigned-literals
+          ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_unsigned_literal_values.f90)
+set_tests_properties(FORTRANTEST_rex_flang_native_unsigned_literals_valid
+  PROPERTIES LABELS "FORTRANTEST;rex")
+add_test(
   NAME FORTRANTEST_rex_flang_dynamic_character_transaction_valid
   COMMAND $<TARGET_FILE:rex_flang_semantic_name_contract>
           valid-dynamic-character-transaction)
@@ -268,6 +331,7 @@ set_tests_properties(
   FORTRANTEST_rex_flang_signed_selector_boundary_valid
   FORTRANTEST_rex_flang_distinct_function_argument_identity_is_rejected
   FORTRANTEST_rex_flang_literal_and_sign_contract_valid
+  FORTRANTEST_rex_flang_real_literal_kinds_valid
   FORTRANTEST_rex_flang_dynamic_character_transaction_valid
   FORTRANTEST_rex_flang_dynamic_character_first_producer_valid
   PROPERTIES LABELS "FORTRANTEST;rex")
@@ -311,17 +375,9 @@ add_rex_flang_source_type_death_regex_test(
   mismatched-wrapper
   "^REX_FLANG_INVARIANT\\[explicit-selector-contract\\]: source KIND/LEN selectors of explicitly declared entity 'selector_probe' do not resolve to its exact Flang semantic type \\(source=SgModifierType@0x[[:xdigit:]]+, semantic=SgModifierType@0x[[:xdigit:]]+\\)$")
 add_rex_flang_source_type_death_test(
-  FORTRANTEST_rex_flang_invalid_integer_literal_is_rejected
-  invalid-integer-literal
-  "REX_FLANG_INVARIANT[integer-literal-spelling]: signed integer token '12x' is invalid")
-add_rex_flang_source_type_death_test(
-  FORTRANTEST_rex_flang_integer_literal_range_is_rejected
-  integer-literal-range
-  "REX_FLANG_INVARIANT[integer-literal-range]: signed integer '9223372036854775808' exceeds the Sage 64-bit value range")
-add_rex_flang_source_type_death_test(
-  FORTRANTEST_rex_flang_unsigned_literal_sign_is_rejected
-  unsigned-literal-sign
-  "REX_FLANG_INVARIANT[unsigned-literal-spelling]: unsigned integer token '-1' is invalid")
+  FORTRANTEST_rex_flang_literal_category_precedes_value_is_rejected
+  literal-category-before-value
+  "REX_FLANG_INVARIANT[literal-semantic-type]: literal carrier category does not match its exact Flang semantic type")
 add_rex_flang_source_type_death_test(
   FORTRANTEST_rex_flang_kind_param_range_is_rejected
   kind-param-range
@@ -489,6 +545,13 @@ add_rex_flang_source_position_death_test(
   FORTRANTEST_rex_flang_generated_source_kind_is_rejected
   wrong-generated-kind
   "REX_FLANG_INVARIANT[generated-source-kind]: SgNullStatement is incompatible with its generated semantic source anchor kind")
+foreach(_comment_owner_state IN ITEMS missing pending)
+  add_rex_flang_source_position_death_test(
+    FORTRANTEST_rex_flang_${_comment_owner_state}_comment_owner_is_rejected
+    ${_comment_owner_state}-comment-owner
+    "REX_FLANG_INVARIANT[comment-source-owner]: SgNullStatement has no exact physical source owner")
+endforeach()
+unset(_comment_owner_state)
 add_rex_flang_source_position_death_test(
   FORTRANTEST_rex_flang_missing_physical_output_owner_is_rejected
   missing-output-owner
@@ -545,8 +608,12 @@ set(_rex_flang_intrinsic_module_shadow_input
   rex_flang_intrinsic_module_shadow_identity/rex_flang_intrinsic_module_shadow_identity.f90)
 set(_rex_flang_semantic_regression_inputs
   rex_flang_component_character_length_contract.f90
+  rex_fortran_extends_semantic_binding.f90
   rex_flang_dynamic_character_pointer_signature.f90
   rex_flang_dynamic_character_result_predeclaration.f90
+  rex_flang_do_end_labels.f90
+  rex_flang_enum_end_label.f90
+  rex_flang_module_boundary_labels.f90
   rex_flang_function_source_visible_binding.f90
   rex_flang_intrinsic_module_type_identity.f90
   rex_flang_intrinsic_procedure_reexport_identity.f90
@@ -601,6 +668,7 @@ set(_fortran_iso_c_binding_module_sources
 set(_fortran_intrinsic_fixture_module_sources
     ISO_FORTRAN_ENV.f03)
 set(_fortran_f2018_frontend_only_sources
+    rex_flang_image_control_statements.f90
     rex_test2026_coarray_image_selector.f90)
 rex_register_compile_source_set(REX_FORTRAN_F2018_FRONTEND_ONLY_SOURCES
   ${_fortran_f2018_frontend_only_sources})
@@ -899,6 +967,10 @@ function(fortran_frontend_negative_diagnostic
     set(_diagnostic "expected 'END'")
   elseif(input_file STREQUAL "rex_test2026_allocate_specs.f90")
     set(_diagnostic "expected '='")
+  elseif(input_file STREQUAL "rex_flang_invalid_integer_literal.f90")
+    set(_diagnostic "expected end of statement")
+  elseif(input_file STREQUAL "rex_flang_integer_literal_out_of_range.f90")
+    set(_diagnostic "Integer literal is too large for INTEGER(KIND=8)")
   elseif(input_file STREQUAL "test2007_88.f90")
     set(_diagnostic "expected end of statement")
   elseif(input_file STREQUAL "test2007_152.f90")
@@ -995,6 +1067,82 @@ function(fortran_frontend_negative_test input_file)
     -c ${CMAKE_CURRENT_SOURCE_DIR}/${input_file})
 endfunction()
 
+foreach(_unsigned_mode IN ITEMS default disabled)
+  set(_unsigned_flags)
+  if(_unsigned_mode STREQUAL "disabled")
+    set(_unsigned_flags -funsigned -fno-unsigned)
+  endif()
+  rex_add_flang_frontend_negative_test(
+    FORTRANTEST_rex_flang_unsigned_${_unsigned_mode}_is_rejected
+    FORTRANTEST
+    ${_fortran_output_dir}
+    rex_flang_unsigned_${_unsigned_mode}.log
+    rex_fortran_unsigned_literal_values
+    "-funsigned is required to enable UNSIGNED type"
+    1
+    $<TARGET_FILE:testTranslator>
+    ${ROSE_FLAGS} ${_unsigned_flags}
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_unsigned_literal_values.f90)
+endforeach()
+
+rex_add_flang_frontend_negative_test(
+  FORTRANTEST_rex_flang_implicit_none_flag_frontend_negative
+  FORTRANTEST
+  ${_fortran_output_dir}
+  rex_flang_implicit_none_flag.frontend-negative.log
+  rex_flang_implicit_none_flag
+  "No explicit type declared for 'value'"
+  1
+  $<TARGET_FILE:testTranslator>
+  ${ROSE_FLAGS}
+  -rose:fortran_std=f90
+  -fimplicit-none
+  -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_implicit_none_flag.F90)
+
+foreach(_tool IN ITEMS
+    checkFortranInterfaces classMemberVariablesInLambdas featureVector
+    globalVariablesInLambdas moveDeclarationToInnermostScope)
+  rex_add_flang_frontend_negative_test(
+    rex_tool_${_tool}_frontend_rejection
+    "rex;tools;FORTRANTEST"
+    ${_fortran_output_dir}
+    rex_tool_${_tool}_frontend_rejection.log
+    rex_flang_implicit_none_flag
+    "No explicit type declared for 'value'"
+    1
+    $<TARGET_FILE:tools_${_tool}_exe>
+    -fimplicit-none -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_implicit_none_flag.F90)
+endforeach()
+
+rex_add_flang_frontend_negative_test(
+  FORTRANTEST_rex_flang_separated_predefinition_frontend_negative
+  FORTRANTEST
+  ${_fortran_output_dir}
+  rex_flang_separated_predefinition.frontend-negative.log
+  rex_flang_implicit_none_flag
+  "No explicit type declared for 'value'"
+  1
+  $<TARGET_FILE:testTranslator>
+  ${ROSE_FLAGS}
+  -rose:fortran_std=f90
+  -D REX_IMPLICIT_NONE_FROM_D
+  -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_implicit_none_flag.F90)
+
+add_test(
+  NAME FORTRANTEST_rex_flang_separated_undefine_frontend
+  WORKING_DIRECTORY ${_fortran_output_dir}
+  COMMAND testTranslator
+    ${ROSE_FLAGS}
+    -rose:fortran_std=f90
+    -rose:skipfinalCompileStep
+    -D REX_IMPLICIT_NONE_FROM_D
+    -U REX_IMPLICIT_NONE_FROM_D
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_implicit_none_flag.F90)
+set_tests_properties(
+  FORTRANTEST_rex_flang_separated_undefine_frontend
+  PROPERTIES LABELS FORTRANTEST)
+
 set(FORTRAN_FLAGS -rose:fortran_std=f77)
 set(_fortran_f77_frontend_negative_tests
   test1956_01.f
@@ -1020,6 +1168,8 @@ set(_fortran_cray_pointer_tests
   test2011_imperial_crayPointers.f90
 )
 set(_fortran_frontend_negative_tests
+  rex_flang_invalid_integer_literal.f90
+  rex_flang_integer_literal_out_of_range.f90
   # Standalone parser/legacy regression specimens below intentionally omit
   # declarations or violate semantic constraints.  They must hard-fail the
   # Flang semantic frontend; never route them through a syntax-skip mode.
@@ -1045,9 +1195,30 @@ set(_fortran_frontend_negative_tests
 )
 rex_register_compile_source_set(REX_FORTRAN_F90_NEGATIVE_SOURCES
   ${_fortran_frontend_negative_tests})
+set(_fortran_literal_runtime_sources
+  rex_fortran_character_literal_kinds.f90
+  rex_fortran_signed_integer_minimum_values.f90
+  rex_fortran_boz_literal_values.f90
+  rex_fortran_unsigned_literal_values.f90
+  rex_fortran_format_literal_spaces.f90)
 foreach(F90_test ${F90_TESTCODES})
   if(F90_test IN_LIST _fortran_frontend_negative_tests)
     fortran_frontend_negative_test(${F90_test})
+  elseif(F90_test IN_LIST _fortran_literal_runtime_sources)
+    rex_get_fortran_specimen_extra_flags(_literal_flags ${F90_test})
+    fortran_test(${F90_test} ${_literal_flags})
+    get_filename_component(_literal_name ${F90_test} NAME_WE)
+    set(_literal_fixture ${_literal_name}_output)
+    set_tests_properties(FORTRANTEST_${F90_test}_translation
+      PROPERTIES FIXTURES_SETUP ${_literal_fixture})
+    rex_fortran_output_dir_for_source(_literal_output_dir ${F90_test})
+    add_test(NAME FORTRANTEST_${_literal_name}_runtime
+      WORKING_DIRECTORY ${_literal_output_dir}
+      COMMAND ${BASH_EXECUTABLE} -c
+        "\"\$@\" rose_${F90_test} -o rex_literal_runtime && ./rex_literal_runtime"
+        dummy ${BACKEND_FORTRAN_COMPILER_COMMAND} ${_literal_flags})
+    set_tests_properties(FORTRANTEST_${_literal_name}_runtime
+      PROPERTIES FIXTURES_REQUIRED ${_literal_fixture} LABELS "FORTRANTEST;rex")
   elseif(F90_test IN_LIST _fortran_f2018_frontend_only_sources)
     set(_saved_fortran_flags ${FORTRAN_FLAGS})
     set(FORTRAN_FLAGS
@@ -1062,6 +1233,50 @@ foreach(F90_test ${F90_TESTCODES})
     fortran_test(${F90_test})
   endif()
 endforeach()
+
+# Flang22 has no LOCK/UNLOCK lowering even with -fcoarray. Preserve all positive
+# frontend/graph/token checks above and require the exact native rejection below.
+# https://github.com/ouankou/rex/issues/864 tracks restoring native compilation;
+# unexpected native success must fail this negative and prompt that restoration.
+rex_fortran_output_dir_for_source(
+  _image_control_output_dir rex_flang_image_control_statements.f90)
+set_tests_properties(
+  FORTRANTEST_rex_flang_image_control_statements.f90_translation
+  PROPERTIES FIXTURES_SETUP rex_flang_image_control_output)
+add_test(
+  NAME FORTRANTEST_rex_flang_image_control_native_negative
+  WORKING_DIRECTORY ${_image_control_output_dir}
+  COMMAND ${BASH_EXECUTABLE} -c [=[
+    set -eu
+    ulimit -c 0
+    compiler=$1
+    original=$2
+    translated=$3
+    index=0
+    for source in "$original" "$translated"; do
+      test -f "$source"
+      log="rex_flang_image_control.native-$index.log"
+      set +e
+      "$compiler" -fcoarray -c "$source" \
+        -o "rex_flang_image_control.native-$index.o" >"$log" 2>&1
+      status=$?
+      set -e
+      cat "$log"
+      test "$status" -eq 1
+      expected='not yet implemented: coarray: LOCK runtime'
+      test "$(grep -Fc -- "$expected" "$log")" -eq 1
+      index=$((index + 1))
+    done
+  ]=]
+    dummy
+    ${CMAKE_Fortran_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_image_control_statements.f90
+    ${_image_control_output_dir}/rose_rex_flang_image_control_statements.f90)
+set_tests_properties(
+  FORTRANTEST_rex_flang_image_control_native_negative
+  PROPERTIES FIXTURES_REQUIRED rex_flang_image_control_output
+             LABELS "FORTRANTEST;rex;negative")
+unset(_image_control_output_dir)
 
 set(_rex_flang_intrinsic_module_shadow_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/rex-flang-intrinsic-module-shadow)
@@ -1212,6 +1427,27 @@ set_tests_properties(
   PROPERTIES
     DEPENDS FORTRANTEST_rex_flang_labeled_do_header_identity.f_translation
     LABELS "FORTRANTEST;rex")
+foreach(_label_specimen IN ITEMS
+    rex_fortran_associate_end_label.f90
+    rex_fortran_block_end_label.f90
+    rex_fortran_forall_end_label.f90)
+  rex_fortran_output_dir_for_source(_label_output_dir ${_label_specimen})
+  add_test(
+    NAME FORTRANTEST_${_label_specimen}_label_copy_contract
+    WORKING_DIRECTORY ${_label_output_dir}
+    COMMAND $<TARGET_FILE:rex_flang_semantic_regression_contract>
+            ${_fortran_common_flags}
+            -I${_label_output_dir}
+            -outputdir ${_label_output_dir}
+            -rose:skipfinalCompileStep
+            -rose:fortran_std=f90 -c
+            ${CMAKE_CURRENT_SOURCE_DIR}/${_label_specimen})
+  set_tests_properties(
+    FORTRANTEST_${_label_specimen}_label_copy_contract
+    PROPERTIES
+      DEPENDS FORTRANTEST_${_label_specimen}_translation
+      LABELS "FORTRANTEST;rex")
+endforeach()
 unset(_input)
 unset(_stem)
 unset(_rex_flang_semantic_regression_inputs)
@@ -1416,6 +1652,11 @@ add_test(
     ${CMAKE_CURRENT_SOURCE_DIR}/test2010_78.f90
     ${CMAKE_CURRENT_SOURCE_DIR}/test2010_79.f90
 )
+
+add_test(
+  NAME fortran_rex_preprocess_only
+  COMMAND $<TARGET_FILE:testTranslator> -E
+    ${CMAKE_CURRENT_SOURCE_DIR}/test2007_suffixTest_07.F90)
 
 set(_fortran_reference_dir
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/referenceResults)

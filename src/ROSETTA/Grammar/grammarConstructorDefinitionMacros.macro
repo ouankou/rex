@@ -3,10 +3,6 @@
 $CLASSNAME::$CLASSNAME ( $CONSTRUCTOR_PARAMETER_LIST )
    $PRE_INITIALIZATION_LIST
    {
-#ifdef DEBUG
-  // printf ("In $CLASSNAME::$CLASSNAME ($CONSTRUCTOR_PARAMETER_LIST) sage_class_name() = %s \n",sage_class_name());
-#endif
-
 $CONSTRUCTOR_BODY
 
   // Test the variant virtual function

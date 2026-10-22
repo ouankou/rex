@@ -29,9 +29,6 @@ int main(int argc, char *argv[]) {
       function_declaration_ownership::sourceLexical(), "check_var",
       buildVoidType(), paraList, global);
 
-  // DQ (11/18/2013): This is an assertion inside of
-  // get_declaration_associated_with_symbol() which we are now failing (when
-  // called from namequalification support).
   ROSE_ASSERT(func_def->get_firstNondefiningDeclaration() != NULL);
   ROSE_ASSERT(func_def->get_firstNondefiningDeclaration() ==
               func_def->get_firstNondefiningDeclaration()
@@ -48,9 +45,6 @@ int main(int argc, char *argv[]) {
       function_declaration_ownership::sourceLexicalAtTop(global),
       SgName("check_var"), buildVoidType(), paraList2, global);
 
-  // DQ (11/18/2013): This is an assertion inside of
-  // get_declaration_associated_with_symbol() which we are now failing (when
-  // called from namequalification support).
   ROSE_ASSERT(func_decl->get_firstNondefiningDeclaration() != NULL);
   ROSE_ASSERT(func_decl->get_firstNondefiningDeclaration() ==
               func_decl->get_firstNondefiningDeclaration()
@@ -71,9 +65,6 @@ int main(int argc, char *argv[]) {
 
   popScopeStack();
 
-  // DQ (11/18/2013): This is an assertion inside of
-  // get_declaration_associated_with_symbol() which we are now failing (when
-  // called from namequalification support).
   ROSE_ASSERT(func_def->get_firstNondefiningDeclaration() ==
               func_def->get_firstNondefiningDeclaration()
                   ->get_firstNondefiningDeclaration());
@@ -81,9 +72,6 @@ int main(int argc, char *argv[]) {
               func_decl->get_firstNondefiningDeclaration()
                   ->get_firstNondefiningDeclaration());
 
-  // DQ (11/18/2013): This is an assertion inside of
-  // get_declaration_associated_with_symbol() which we are now failing (when
-  // called from namequalification support).
   ROSE_ASSERT(func_def->get_firstNondefiningDeclaration() ==
               func_def->get_firstNondefiningDeclaration()
                   ->get_firstNondefiningDeclaration());
@@ -91,9 +79,6 @@ int main(int argc, char *argv[]) {
               func_decl->get_firstNondefiningDeclaration()
                   ->get_firstNondefiningDeclaration());
 
-  // DQ (11/18/2013): This is an assertion inside of
-  // get_declaration_associated_with_symbol() which we are now failing (when
-  // called from namequalification support).
   ROSE_ASSERT(func_def->get_firstNondefiningDeclaration() ==
               func_def->get_firstNondefiningDeclaration()
                   ->get_firstNondefiningDeclaration());

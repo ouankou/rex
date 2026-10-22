@@ -1,130 +1,37 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "detectTransformations.h"
 
+#include "AstSimpleProcessing.h"
 #include "sage3basic.h"
 
-void detectTransformations(SgNode *node) {
-  // DQ (7/7/2005): Introduce tracking of performance of ROSE.
-  TimingPerformance timer("detectTransformations(): Testing declarations (no "
-                          "side-effects to AST):");
-
-  class DetectTransformationsOnMemoryPool : public ROSE_VisitTraversal {
-  public:
-    // Required traversal function
-    void visit(SgNode *node) {
-      // For now we just do this for the Sg_File_Info directly.
-      Sg_File_Info *fileInfo = isSg_File_Info(node);
-      if (fileInfo != NULL) {
-        if (fileInfo->isTransformation() == true) {
-          printf("ERROR: detected fileInfo->isTransformation() == true (using "
-                 "memory pool traversal) for fileInfo = %p \n",
-                 fileInfo);
-        }
-        // ROSE_ASSERT(fileInfo->isTransformation() == false);
-      }
-    }
-
-    // This avoids a warning by g++
-    virtual ~DetectTransformationsOnMemoryPool() {};
-  };
-
-  // This simplifies how the traversal is called!
-  DetectTransformations detectTransformationsTraversal;
-
-  // I think the default should be preorder so that the interfaces would be more
-  // uniform
-  detectTransformationsTraversal.traverse(node, preorder);
-
-  // Only Sg_File_Info nodes carry the transformation bit this visitor checks.
-  // Restrict the memory-pool validation to that node kind instead of walking
-  // every pooled AST node on large generated inputs.
-  DetectTransformationsOnMemoryPool traversal;
-  Sg_File_Info::traverseMemoryPoolNodes(traversal);
-}
-
-void detectTransformations_local(SgNode *node) {
-  // This simplifies how the traversal is called!
-  DetectTransformations detectTransformationsTraversal;
-
-  // I think the default should be preorder so that the interfaces would be more
-  // uniform
-  detectTransformationsTraversal.traverse(node, preorder);
-}
+namespace {
+class DetectTransformations : public SgSimpleProcessing {
+public:
+  void visit(SgNode *node) override;
+};
 
 void DetectTransformations::visit(SgNode *node) {
   ROSE_ASSERT(node != NULL);
 
-  SgLocatedNode *locatedNode = isSgLocatedNode(node);
-  if (locatedNode != NULL) {
-    // Tests that we expect to pass for all SgLocatedNode IR nodes.
-    // This test first checks for valid pointers at startOfConstruct and
-    // endOfConstruct then checks to make sure it is not marked as a
-    // transformation.
-
-    if (locatedNode->get_startOfConstruct() == NULL) {
-      printf("ERROR: locatedNode->get_startOfConstruct() == NULL locatedNode = "
-             "%p = %s \n",
-             locatedNode, locatedNode->class_name().c_str());
-    }
+  if (SgLocatedNode *locatedNode = isSgLocatedNode(node)) {
+    ROSE_ASSERT(locatedNode->get_file_info() != NULL);
+    ROSE_ASSERT(locatedNode->get_file_info()->isTransformation() == false);
     ROSE_ASSERT(locatedNode->get_startOfConstruct() != NULL);
-    // DQ (5/3/2012): SgInitializedName did not used to have a valid
-    // endOfConstruct, but this has been fixed to make the rules more uniform.
-    if (locatedNode->get_endOfConstruct() == NULL) {
-      printf("ERROR: locatedNode->get_endOfConstruct() == NULL locatedNode = "
-             "%p = %s \n",
-             locatedNode, locatedNode->class_name().c_str());
-    }
     ROSE_ASSERT(locatedNode->get_endOfConstruct() != NULL);
-
-    if (locatedNode->get_startOfConstruct()->isTransformation() == true) {
-      printf("ERROR: locatedNode->get_startOfConstruct()->isTransformation() "
-             "== true locatedNode = %p = %s \n",
-             locatedNode, locatedNode->class_name().c_str());
-    }
     ROSE_ASSERT(locatedNode->get_startOfConstruct()->isTransformation() ==
                 false);
-
-    // DQ (5/3/2012): SgInitializedName did not used to have a valid
-    // endOfConstruct, but this has been fixed to make the rules more uniform.
-    if (locatedNode->get_endOfConstruct()->isTransformation() == true) {
-      printf("ERROR: locatedNode->get_endOfConstruct()->isTransformation() == "
-             "true locatedNode = %p = %s \n",
-             locatedNode, locatedNode->class_name().c_str());
-    }
     ROSE_ASSERT(locatedNode->get_endOfConstruct()->isTransformation() == false);
-  } else {
-    // Handle case of SgPragma (which should be moved to be a SgLocatedNode).
-    SgPragma *pragma = isSgPragma(node);
-    // if ( (pragma != NULL) && (pragma->get_startOfConstruct() == NULL) )
-    if (pragma != NULL) {
-      // pragma->set_startOfConstruct(Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-      // pragma->get_startOfConstruct()->set_parent(pragma);
-
-      if (pragma->get_startOfConstruct() == NULL) {
-        printf("ERROR: pragma->get_startOfConstruct() == NULL pragma = %p \n",
-               pragma);
-      }
-      ROSE_ASSERT(pragma->get_startOfConstruct() != NULL);
-
-      if (pragma->get_endOfConstruct() == NULL) {
-        printf("ERROR: pragma->get_endOfConstruct() == NULL pragma = %p \n",
-               pragma);
-      }
-      ROSE_ASSERT(pragma->get_endOfConstruct() != NULL);
-
-      if (pragma->get_startOfConstruct()->isTransformation() == true) {
-        printf("ERROR: pragma->get_startOfConstruct()->isTransformation() == "
-               "true pragma = %p \n",
-               pragma);
-      }
-      ROSE_ASSERT(pragma->get_startOfConstruct()->isTransformation() == false);
-
-      if (pragma->get_endOfConstruct()->isTransformation() == true) {
-        printf("ERROR: pragma->get_endOfConstruct()->isTransformation() == "
-               "true pragma = %p \n",
-               pragma);
-      }
-      ROSE_ASSERT(pragma->get_endOfConstruct()->isTransformation() == false);
-    }
+  } else if (SgPragma *pragma = isSgPragma(node)) {
+    ROSE_ASSERT(pragma->get_startOfConstruct() != NULL);
+    ROSE_ASSERT(pragma->get_endOfConstruct() != NULL);
+    ROSE_ASSERT(pragma->get_startOfConstruct()->isTransformation() == false);
+    ROSE_ASSERT(pragma->get_endOfConstruct()->isTransformation() == false);
   }
+}
+} // namespace
+
+void detectTransformations(SgNode *node) {
+  TimingPerformance timer("detectTransformations(): Testing declarations (no "
+                          "side-effects to AST):");
+  DetectTransformations detectTransformationsTraversal;
+  detectTransformationsTraversal.traverse(node, preorder);
 }

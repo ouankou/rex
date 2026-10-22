@@ -124,15 +124,6 @@ ROSE_UTIL_API std::string trim(const std::string &str,
                                const std::string &strip = " \t\r\n",
                                bool at_beginning = true, bool at_end = true);
 
-/** Expand horizontal tab characters.
- *
- * @param str Input string.
- * @param tabstops Tab stop size.
- * @param firstcol Starting column offset.
- * @return String with expanded tabs. */
-ROSE_UTIL_API std::string untab(const std::string &str, size_t tabstops = 8,
-                                size_t firstcol = 0);
-
 /** Remove redundant and blank lines.
  *
  *  Splits the input string into substrings according to @ref listToString,
@@ -182,20 +173,6 @@ ROSE_UTIL_API std::string encode_base64(const uint8_t *data, size_t nbytes,
  * @param encoded Base-64 input string.
  * @return Decoded bytes. */
 ROSE_UTIL_API std::vector<uint8_t> decode_base64(const std::string &encoded);
-
-/** Compute a checkshum.
- *
- *  This function returns a unique checksum from the mangled name used it
- * provides a simple means to obtain a unique value for any C++  declaration. At
- * a later date was should use the MD5 Checksum  implementation (but we can do
- * that later).
- *
- *  The declaration is the same under One-time Definition Rule (ODR) if and only
- * if the checksum values for each declaration are the same.
- *
- * @param s Input string.
- * @return Checksum value. */
-ROSE_UTIL_API unsigned long generate_checksum(std::string s);
 
 } // namespace StringUtility
 } // namespace Rose

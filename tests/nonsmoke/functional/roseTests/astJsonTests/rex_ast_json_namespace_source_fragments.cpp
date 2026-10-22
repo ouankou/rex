@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iterator>
 #include <limits>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -107,6 +108,24 @@ SgNamespaceDeclarationStatement *findNamespace(SgNode *root,
   return result;
 }
 
+void verifyUsingDirective(SgGlobal *global) {
+  SgNamespaceDeclarationStatement *target =
+      findNamespace(global, "rex_json_namespace");
+  size_t count = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(global, V_SgUsingDirectiveStatement)) {
+    auto *directive = isSgUsingDirectiveStatement(node);
+    if (directive->get_parent() != global)
+      continue;
+    ROSE_ASSERT(directive->get_namespaceDeclaration() != nullptr);
+    ROSE_ASSERT(directive->get_namespaceDeclaration()
+                    ->get_firstNondefiningDeclaration() ==
+                target->get_firstNondefiningDeclaration());
+    ++count;
+  }
+  ROSE_ASSERT(count == 1);
+}
+
 void verifyNamespaceCanonicalIdentity(
     SgNamespaceDeclarationStatement *declaration) {
   ROSE_ASSERT(declaration != nullptr);
@@ -162,8 +181,7 @@ SgVariableDeclaration *findVariable(SgNode *root, const std::string &name) {
 }
 
 void verifyMixedDeclarationOrder(SgGlobal *global, unsigned int namespaceOrder,
-                                 unsigned int variableOrder,
-                                 bool requireDefaultLegacyNumbering) {
+                                 unsigned int variableOrder) {
   ROSE_ASSERT(global != nullptr);
   SgNamespaceDeclarationStatement *namespaceDeclaration =
       findNamespace(global, "rex_json_namespace");
@@ -186,8 +204,6 @@ void verifyMixedDeclarationOrder(SgGlobal *global, unsigned int namespaceOrder,
   ROSE_ASSERT(variablePosition != declarations.end());
   ROSE_ASSERT(std::distance(declarations.begin(), namespacePosition) <
               std::distance(declarations.begin(), variablePosition));
-  if (requireDefaultLegacyNumbering) {
-  }
 }
 
 } // namespace
@@ -218,18 +234,52 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(sourceFile != nullptr);
   SgGlobal *global = sourceFile->get_globalScope();
   ROSE_ASSERT(global != nullptr);
+  verifyUsingDirective(global);
   SgVariableDeclaration *afterNamespace =
       findVariable(global, "rex_json_after_namespace");
+  auto *operand =
+      SageBuilder::buildVarRefExp(afterNamespace->get_variables().front());
+  auto *type = SageBuilder::buildTypeOfType(operand, nullptr);
+  auto *transform =
+      SgUnaryTransformType::createType(type, SgUnaryTransformType::e_remove_cv);
+  auto *pointer = SgPointerType::createType(type);
+  auto *result_use = SageBuilder::buildFunctionType(
+      type, SageBuilder::buildFunctionParameterTypeList());
+  auto *argument_use = SageBuilder::buildFunctionType(
+      SageBuilder::buildVoidType(),
+      SageBuilder::buildFunctionParameterTypeList(transform));
+  auto *independent = SageBuilder::buildFunctionType(
+      SageBuilder::buildIntType(),
+      SageBuilder::buildFunctionParameterTypeList());
+  const auto &functions = SgNode::get_globalFunctionTypeTable()->get_types();
+  auto indexed = [&](SgFunctionType *candidate) {
+    return std::any_of(
+        functions.begin(), functions.end(),
+        [candidate](const auto &entry) { return entry.second == candidate; });
+  };
+  ROSE_ASSERT(indexed(result_use) && indexed(argument_use) &&
+              indexed(independent));
+  const auto originalFunctions = functions;
+  auto requireOriginalFunctionEntries = [&] {
+    for (const auto &entry : originalFunctions) {
+      const auto found = functions.find(entry.first);
+      ROSE_ASSERT(found != functions.end() && found->second == entry.second);
+    }
+  };
+  auto *type_symbols = SgNode::get_globalTypeTable()->get_type_table();
+  const auto originalTypes = *type_symbols->get_table();
+  auto requireOriginalTypeEntries = [&] {
+    for (const auto &entry : originalTypes)
+      ROSE_ASSERT(type_symbols->exists(entry.first, entry.second));
+  };
+  requireOriginalFunctionEntries();
+  requireOriginalTypeEntries();
   ROSE_ASSERT(afterNamespace->get_translation_unit_source_order().has_value());
   const unsigned int namespaceOrder =
       *namespaceDeclaration->get_translation_unit_source_order();
   const unsigned int variableOrder =
       *afterNamespace->get_translation_unit_source_order();
-  verifyMixedDeclarationOrder(global, namespaceOrder, variableOrder, false);
-
-  // Legacy statement numbering is mutable and deliberately not serialized.
-  // Mutating it must not alter the immutable declaration-order contract.
-  verifyMixedDeclarationOrder(global, namespaceOrder, variableOrder, false);
+  verifyMixedDeclarationOrder(global, namespaceOrder, variableOrder);
 
   // Deliberately construct the last lexical reopening first.  The builder must
   // re-root and sort the chain/list before AST JSON observes it.
@@ -243,13 +293,107 @@ int main(int argc, char **argv) {
   const Rose::AstJson::AstFileRecord ast = Rose::AstJson::parseAstFileJson(
       json, Rose::AstJson::checkpointName(
                 Rose::AstJson::Checkpoint::PreOmpConstruction));
+  Rose::AstJson::AstFileRecord malformedDirective = ast;
+  bool corruptedDirective = false;
+  for (Rose::AstJson::NodeRecord &record : malformedDirective.nodes) {
+    if (record.kind != "SgUsingDirectiveStatement")
+      continue;
+    record.properties.object.at("namespace_declaration") =
+        Rose::AstJson::parseJson(std::to_string(record.id));
+    for (Rose::AstJson::EdgeRecord &edge : record.edges) {
+      if (edge.field == "namespaceDeclaration") {
+        edge.target = record.id;
+        corruptedDirective = true;
+        break;
+      }
+    }
+    break;
+  }
+  ROSE_ASSERT(corruptedDirective);
+  const size_t directiveCount = SgUsingDirectiveStatement::numberOfNodes();
+  bool rejectedDirective = false;
+  try {
+    (void)Rose::AstJson::reconstructSourceFile(malformedDirective, sourceFile);
+  } catch (const std::runtime_error &) {
+    rejectedDirective = true;
+  }
+  ROSE_ASSERT(rejectedDirective);
+  ROSE_ASSERT(SgUsingDirectiveStatement::numberOfNodes() == directiveCount);
+
+  Rose::AstJson::AstFileRecord malformed = ast;
+  bool corrupted = false;
+  for (Rose::AstJson::NodeRecord &record : malformed.nodes) {
+    if (record.kind != "SgNamespaceDefinitionStatement")
+      continue;
+    for (Rose::AstJson::EdgeRecord &edge : record.edges) {
+      if (edge.field == "namespaceDeclaration") {
+        edge.target = record.id;
+        corrupted = true;
+        break;
+      }
+    }
+    if (corrupted)
+      break;
+  }
+  ROSE_ASSERT(corrupted);
+  const size_t declarations = SgNamespaceDeclarationStatement::numberOfNodes();
+  const size_t definitions = SgNamespaceDefinitionStatement::numberOfNodes();
+  bool rejected = false;
+  try {
+    (void)Rose::AstJson::reconstructSourceFile(malformed, sourceFile);
+  } catch (const std::runtime_error &) {
+    rejected = true;
+  }
+  ROSE_ASSERT(rejected);
+  ROSE_ASSERT(SgNamespaceDeclarationStatement::numberOfNodes() == declarations);
+  ROSE_ASSERT(SgNamespaceDefinitionStatement::numberOfNodes() == definitions);
+
   SgSourceFile *copy = Rose::AstJson::reconstructSourceFile(ast, sourceFile);
+  requireOriginalFunctionEntries();
+  requireOriginalTypeEntries();
+  {
+    SgFileList invalid_external;
+    SgFileList *external = copy->get_frontendExternalFileList();
+    const auto files = project->get_fileList();
+    SgNode *source_parent = sourceFile->get_parent();
+    SgNode *copy_parent = copy->get_parent();
+    copy->set_frontendExternalFileList(
+        sourceFile->get_frontendExternalFileList() == nullptr
+            ? &invalid_external
+            : nullptr);
+    bool rejected = false;
+    try {
+      Rose::AstJson::replaceFileInProject(sourceFile, copy);
+    } catch (const std::runtime_error &error) {
+      rejected = std::string(error.what()) ==
+                 "AST JSON replacement did not preserve its owned module graph";
+    }
+    copy->set_frontendExternalFileList(external);
+    ROSE_ASSERT(rejected);
+    ROSE_ASSERT(project->get_fileList() == files);
+    ROSE_ASSERT(sourceFile->get_parent() == source_parent);
+    ROSE_ASSERT(copy->get_parent() == copy_parent);
+  }
   Rose::AstJson::replaceFileInProject(sourceFile, copy);
+  requireOriginalFunctionEntries();
+  requireOriginalTypeEntries();
   SgGlobal *copyGlobal = copy->get_globalScope();
+  verifyUsingDirective(copyGlobal);
   verifyNamespaceCanonicalIdentity(
       findNamespace(copyGlobal, "rex_json_namespace"));
   verifyReversedNamespace(copyGlobal);
-  verifyMixedDeclarationOrder(copyGlobal, namespaceOrder, variableOrder, true);
+  verifyMixedDeclarationOrder(copyGlobal, namespaceOrder, variableOrder);
+
+  SageInterface::deleteAST(result_use,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(!indexed(result_use) && indexed(argument_use));
+  SageInterface::deleteAST(argument_use,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(!indexed(argument_use) && indexed(independent));
+  SageInterface::deleteAST(type,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(!SgNode::isLiveNode(pointer));
+  type_symbols->validate_exact_symbol_indexes();
 
   AstTests::runAllTests(project);
   return backend(project);

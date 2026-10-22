@@ -5,78 +5,17 @@
 
 /** @brief Writing documentation
  *
- * How to write good API and non-API documentation in ROSE.
+ * How to write API and non-API documentation in REX.
  *
- * This chapter is mainly for developers working on the ROSE library as opposed
- * to users developing software that uses the library. It specifies how we would
- * like to have the ROSE library source code documented. The style enumerated
- * here does not necessarily need to be used for projects, tests, the tutorial,
- * user-code, etc. Each item is also presented along with our motivation for
- * doing it this way.
+ * This chapter covers documentation for the REX library. Its style guidance
+ * applies to API comments and versioned project pages.
  *
- * @todo The documentation style guide has not been reviewed by rose-core yet.
- * [Robb P. Matzke 2015-05-15]
+ * REX uses MrDocs for two broad categories of documentation:
  *
- * ROSE uses MrDocs for two broad categories of documentation:
- *
- * - For documenting the ROSE API. MrDocs generates the structure of the
+ * - For documenting the REX API. MrDocs generates the structure of the
  * documentation, and authors fill in the descriptions.
  * - For documenting non-API things that are nonetheless tied to a particular
- * version of ROSE. An example is this page itself, which might change over time
- * as ROSE evolves and which must go through ROSE's continuous integration
- * testing and/or release testing.
- *
- * @section doc_quick Quick start
- *
- * Here's an example that documents a couple of closely-related class member
- * functions. Things to note:
- *
- * - Use C-style block comments for documentation.
- * - First line (up to punctuation) is a summary -- the autobrief string that
- * shows up in tables of contents.
- * - Use `&#64;ref` when referring to another class and `&#64;p` when mentioning
- * a parameter.
- * - Use `&#64;{` and `&#64;}` to give the same documentation to both member
- * functions.
- * - You can easily insert HTTP links into documentation.
- *
- * ```cpp
- * /** Most basic use of the partitioner.
- *  *
- *  *  This method does everything from parsing the command-line to generating
- * an abstract syntax tree. If all is
- *  *  successful, then an abstract syntax tree is returned. The return value is
- * a @ref SgAsmBlock node that contains all
- *  *  the detected functions. If the specimen consisted of an ELF or PE
- * container then the parent nodes of the returned
- *  *  AST will lead eventually to an @ref SgProject node.
- *  *
- *  *  The command-line can be provided as a typical @c argc and @c argv pair,
- * or as a vector of arguments. In the
- *  *  latter case, the vector should not include `argv[0]` or `argv[argc]`
- * (which is always a null pointer).
- *  *
- *  *  The command-line supports a "--help" or ("-h") switch to describe all
- * other switches and arguments, essentially
- *  *  generating output much like a Unix man(1) page.
- *  *
- *  *  The @p purpose should be a single line string that will be shown in the
- * title of the man page and should not start
- *  *  with an upper-case letter, a hyphen, white space, or the name of the
- * command. E.g., a disassembler tool might
- *  *  specify the purpose as "disassembles a binary specimen".
- *  *
- *  *  The @p description is a full, multi-line description written in the
- * standard ROSE markup language where "@"
- *  *  characters have special meaning.
- *  *
- *  *  @{ *\/
- * SgAsmBlock* frontend(int argc, char *argv[],
- *                      const std::string &purpose, const std::string
- * &description); virtual SgAsmBlock* frontend(const std::vector<std::string>
- * &args, const std::string &purpose, const std::string &description);
- * /** @} *\/
- * ```
+ * version of REX, such as this page.
  *
  * @section doc_general General style
  *
@@ -106,13 +45,11 @@
  * sections, and subsections. Namely, the first word is capitalized and all
  * other words except proper names and abbreviations are lower-case. Titles do
  * not end with punctuation.
- * - **"ROSE":** The name of this project is "ROSE", not "Rose" and not "rose".
- * However, within the documentation itself it's seldom necessary to mention
- * ROSE by name.
+ * - **"REX":** Use the project's uppercase name when needed.
  *
  * @section doc_nonapi Documentation for non-API entities
  *
- * As mentioned, one of ROSE's uses of MrDocs is for documentation not related
+ * As mentioned, one of REX's uses of MrDocs is for documentation not related
  * to any specific API element (such as this page itself). This section intends
  * to show how to document such things.
  *
@@ -138,24 +75,6 @@
  * of contents. The auto-brief sentence should fit on one line, end with a
  * period, and should not be identical to the title; it should restate the title
  * in different words or else the table of contents looks awkward.
- *
- * Example page:
- *
- * ```cpp
- * /** @brief Getting started with source analysis
- *  *  Overview showing how to write source analysis tools.
- *  *\/
- * struct source_tutorial {};
- * ```
- *
- * Example module:
- *
- * ```cpp
- * /** @brief How to install Zlib
- *  *  Instructions for installing Zlib, a ROSE software dependency.
- *  *\/
- * struct installation_dependencies_zlib {};
- * ```
  *
  * **Location of documentation source?** Regardless of whether one chooses to
  * write a page or a module, the documentation needs to be placed in a C++
@@ -225,14 +144,7 @@
  * use the `&#64;todo` tag and include a description of what needs to be fixed.
  * Also include your name (i.e., the person who thinks there's a problem) and
  * the date.
- * - **Author name:** Do not insert your own name as the author. There are a
- * number of reasons: first, we all work on all parts of ROSE to some degree and
- * most of us would not be willing to remove another author's name if we make
- * edits to the documentation even if that author is no longer with the ROSE
- * team, which leads to the name eventually becoming inaccurate and/or
- * misleading. Second, if some names are inaccurate then none of the names can
- * be trusted. Finally, the question of who wrote what is answered better by the
- * revision control system than by annotations in the source code.
+ * - **Author name:** Use revision history instead of author annotations.
  * - **Proofread:** Proofread your documentation in a web browser after MrDocs
  * runs. One common error is for MrDocs to make a link to a capitalized word
  * (like Function, at least as this is being written) that happens to also be an
@@ -248,8 +160,7 @@
  * AST nodes (e.g. `SgNode`) are a special case because they are generated by
  * ROSETTA, a code generator. So we can't document them inside the generated
  * code. Instead we maintain documentation for AST nodes in doc-only headers and
- * inject them into the doc build. The source material lives in upstream ROSE
- * and is surfaced through MrDocs via `src/docs/mrdocs/ast_node_docs.h`.
+ * inject them into the doc build through `src/docs/mrdocs/ast_node_docs.h`.
  *
  * @section doc_directives Documentation directives
  *
@@ -264,10 +175,7 @@
  * - References to other symbols, pages, and modules are indicated with
  * `&#64;ref` followed by the name or ID. The look-up for symbols is similar to
  * how the C++ compiler would look up the name, so you might need to qualify it
- * with some namespace or even place the comment inside a namespace. If you
- * don't want the qualified name cluttering the final HTML, follow the qualified
- * name with a shorter name in double quotes (e.g., `&#64;ref
- * InstructionSemantics::BaseSemantics::RiscOperators "RiscOperators"`).
+ * with some namespace or even place the comment inside a namespace.
  * - Code snippets are indicated by preceding the word with `&#64;c`. If more
  * than one word or if it contains special characters, use backticks instead.
  * - To include an entire example source file into the documentation, use the
@@ -279,14 +187,12 @@
  * characters.
  * - To document a namespace, class, function, variable, etc., place the
  * documentation immediately prior to the declaration and use a block style
- * comment that starts with two asterisks: `/**`. Alternatively, for variables
- * and enum constants it's sometimes more convenient to put the documenting
- * comment *after* the declaration, in which case the comment should start with
- * `/**<`.
+ * comment. For variables and enum constants, a trailing documentation comment
+ * can be more convenient.
  *
  * @section doc_build Build documentation
  *
- * To generate ROSE's documentation locally, run:
+ * To generate REX's documentation locally, run:
  *
  * - `scripts/generate-api-documentation` (MrDocs only)
  * - `scripts/build-docs` (MrDocs + MkDocs site)

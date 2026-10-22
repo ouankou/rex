@@ -8,6 +8,15 @@ template <typename T> struct Container {
 
 using IntContainer = Container<int>;
 
+namespace rex_alias_scope {
+extern "C++" {
+template <class T> using LinkedAlias = Container<T>;
+}
+} // namespace rex_alias_scope
+
+using LinkedIntContainer = rex_alias_scope::LinkedAlias<int>;
+static_assert(__is_same(LinkedIntContainer, IntContainer));
+
 int main() {
   IntContainer c;
   IntContainer::value_type x = 5;

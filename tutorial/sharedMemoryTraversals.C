@@ -2,7 +2,7 @@
 
 #include "rose.h"
 
-#ifdef _REENTRANT // Does user want ROSE to be thread-aware?
+#ifdef ROSE_HAVE_PTHREAD_H
 
 class NodeTypeTraversal : public AstSimpleProcessing {
 public:

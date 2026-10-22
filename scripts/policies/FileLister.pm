@@ -2,6 +2,7 @@ package FileLister;
 use strict;
 use Carp;
 use Cwd 'abs_path';
+use File::Spec;
 
 sub source_toplevel {
   my $dir = abs_path(".");
@@ -23,7 +24,12 @@ sub submodule_directories {
   open GITMODULES, "<", $gitmodules
       or croak "cannot read $gitmodules: $!";
   local($_);
-  while (<GITMODULES>) {
+  local $!;
+  while (1) {
+    $! = 0;
+    $_ = <GITMODULES>;
+    croak "cannot read $gitmodules: $!" if $!;
+    last unless defined $_;
     next unless /^\s*path\s*=\s*(.*?)\s*$/;
     my $path = $1;
     croak "$gitmodules contains an invalid absolute submodule path: $path"
@@ -50,11 +56,11 @@ sub new {
 		    recursive=>1,           # recurse into directories; -1=never; 0=only into specified dirs; 1=always
 		    pending=>\@root,        # files and directories that are pending
 		    gitdir=>git_toplevel(), # absolute name of top-level Git directory if we're inside a Git repo
-		    gitfiles=>{},	    # mapping of all Git files to hashes if we're inside a Git repo
+		    gitfiles=>{},             # current tracked/unignored source paths
 		    submodules=>{},          # exact separately-owned source trees from .gitmodules
 		   }, $cls;
 
-  $self->{gitfiles} = git_files() if $self->{gitdir};
+  $self->{gitfiles} = git_files($self->{gitdir}) if $self->{gitdir};
   my $source_dir = source_toplevel();
   if (!$self->{gitdir} ||
       (defined $source_dir && abs_path($self->{gitdir}) eq $source_dir)) {
@@ -69,7 +75,7 @@ sub new {
     $self->{$var} = $val;
     shift @root;
   }
-  shift @root if @root eq "--";
+  shift @root if @root && $root[0] eq "--";
 
   push @root, "." unless @root;
 
@@ -78,9 +84,14 @@ sub new {
     my @expanded;
     for my $dir (@root) {
       push @expanded, $dir;
-      if (opendir DIR, $dir) {
-	push @expanded, map {"$dir/$_"} sort readdir DIR;
-	closedir DIR;
+      if (-d $dir && ! -l $dir) {
+        opendir my $entries, $dir or croak "cannot inventory $dir: $!";
+        local $! = 0;
+        my @entries = readdir $entries;
+        croak "cannot inventory $dir: $!" if $!;
+        push @expanded, map {"$dir/$_"}
+            grep {$_ ne "." && $_ ne ".."} sort @entries;
+        closedir $entries or croak "cannot close $dir: $!";
       }
     }
     @root = @expanded;
@@ -90,33 +101,50 @@ sub new {
   return $self;
 }
 
-# Return the absolute path of the top of the Git repository, or false if we're not in a Git repository
+# Select worktree or source-archive mode from actual metadata. Do not mistake
+# a frozen source archive nested inside another checkout for that checkout.
 sub git_toplevel {
-    my $toplevel = `git rev-parse --show-toplevel 2>/dev/null`;
-    chomp $toplevel;
-    return $toplevel;
+  my $dir = abs_path(".");
+  while (defined $dir) {
+    return $dir if -e "$dir/.git";
+    return undef if -f "$dir/.gitmodules";
+    my($parent) = $dir =~ m{^(.*)/[^/]+$};
+    last unless defined $parent && length($parent) && $parent ne $dir;
+    $dir = $parent;
+  }
+  return undef;
 }
 
-# Return a mapping from filename to SHA1 for all known files if we're inside a git repo.
+# HEAD omits unstaged/new files and may not exist yet. Git supplies the current
+# tracked and unignored source set; errors cannot mean an empty source tree.
 sub git_files {
-    my %retval;
-    open GIT, "git ls-tree -r --full-tree HEAD |" or return;
-    local($_);
-    while (<GIT>) {
-	chomp;
-	my($mode,$type,$sha1,$name) = split /\s+/, $_, 4;
-	next unless defined $name;
-	$retval{$name} = $sha1;
+  my($root) = @_;
+  my %retval;
+  open my $git, "-|", "git", "-C", $root,
+      "ls-files", "--cached", "--others", "--exclude-standard", "-z"
+      or croak "cannot start Git source inventory: $!";
+  {
+    local $/ = "\0";
+    local $! = 0;
+    while (my $path = <$git>) {
+      chomp $path;
+      $retval{$path} = 1;
+      while ($path =~ s{/[^/]+$}{}) { $retval{$path} = 1; }
     }
-    close GIT;
-    return \%retval;
+    croak "cannot read Git source inventory: $!" if $!;
+  }
+  unless (close $git) {
+    my $status = $?;
+    $? = 0; # Git status 128 is reserved for warnings by the policy protocol.
+    croak "Git source inventory failed (status $status)";
+  }
+  return \%retval;
 }
 
 
 # Return true if the given file or directory (with path) is third-party software.
 sub is_3rdparty {
   local($_) = @_;
-  return 1 if m(/alt-mpi-headers/mpich-([\d\.]+)(p\d)?(/|$)); # in projects/compass/src/util/MPIAbstraction
   return 1 if m(/3rdPartyLibraries(/|$));
   return 0;
 }
@@ -126,20 +154,16 @@ sub is_generated {
   my $self = shift;
   local($_) = @_;
   if (my $gitdir = $self->{gitdir}) {
-    return 0 if -d $_;
-    my($filename) = abs_path($_) =~ m($gitdir/(.*));
+    my $absolute = File::Spec->canonpath(File::Spec->rel2abs($_));
+    return 0 if $absolute eq $gitdir;
+    my($filename) = $absolute =~ m{^\Q$gitdir\E/(.*)};
+    croak "source path $_ is outside $gitdir" unless defined $filename;
     return 1 unless exists $self->{gitfiles}{$filename};
   }
 
-  return 1 if m(/projects/compass/tools/compass/buildCheckers\.C$);
-  return 1 if m(/projects/compass/tools/compassVerifier/buildCheckers\.C$);
-  return 1 if m(/projects/compass/tools/sampleCompassSubset/buildCheckers\.C$);
-  return 1 if m(/src/frontend/SageIII/ompparser\.h$);
-  return 1 if m(/src/frontend/SageIII/string\.[Ch]$);
-  return 1 if m(/src/roseIndependentSupport/dot2gml/parseDotGrammar\.h$);
   return 1 if m(/\.#); # Emacs temporary file
   return 1 if m(~$); # Emacs backup file
-  return 1 if m(/\.git);
+  return 1 if m(/\.git(?:/|$));
   return 0;
 }
 
@@ -176,16 +200,19 @@ sub next_name {
       $self->is_submodule_content($retval) ||
       (!$self->{generated}  && $self->is_generated($retval)) ||
       (!$self->{install}    && is_install($retval)) ||
-      ($retval =~ /\/libltdl$/ && -d $retval) || # generated by $ROSE_SRC/build" script, we have no control over its contents
       ($retval =~ /\/\.(git|svn)$/ && -d $retval) || # no need to ever descend into Git or Subversion meta data
       ($retval =~ /~$/      && ! -d $retval) ||      # editor backup files
       ($retval =~ /\/\.#/)                           # emacs autosave files
      ) {
     return $self->next_name; # skip this name, return the next one
-  } elsif ($self->{recursive}>0 && opendir DIR, $retval) {
-    # Change 'unshift' to 'push' to get a breadth-first search
-    unshift @{$self->{pending}}, map {"$retval/$_"} grep {!/^\.\.?$/} sort readdir DIR;
-    close DIR;
+  } elsif ($self->{recursive}>0 && -d $retval && ! -l $retval) {
+    opendir my $dir, $retval or croak "cannot inventory $retval: $!";
+    local $! = 0;
+    my @entries = readdir $dir;
+    croak "cannot inventory $retval: $!" if $!;
+    closedir $dir or croak "cannot close $retval: $!";
+    unshift @{$self->{pending}}, map {"$retval/$_"}
+        grep {$_ ne "." && $_ ne ".."} sort @entries;
   }
   return $retval;
 }
@@ -195,7 +222,7 @@ sub next_file {
   my($self) = @_;
   while (1) {
     my $retval = $self->next_name;
-    return $retval unless -d $retval;
+    return $retval unless defined $retval && -d $retval;
   }
 }
 

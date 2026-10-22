@@ -1,123 +1,82 @@
-
+#include "Rose/FileSystem.h"
 #include "rose.h"
 
+#include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <iterator>
+#include <memory>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-#include "AstProcessing.h"
-
-// DQ (12/31/2005): This is OK if not declared in a header file
-using namespace std;
-
-void ReplaceAst(SgNode *parent, SgNode *orig, SgNode *n) {
-  SgStatement *s = isSgStatement(orig), *ns = isSgStatement(n);
-  if (s != 0) {
-    SgStatement *p = isSgStatement(parent);
-    assert(p != 0);
-    p->replace_statement(s, ns);
-  } else {
-    SgExpression *e = isSgExpression(orig), *ne = isSgExpression(n);
-    assert(e != 0 && ne != 0);
-    SgExpression *p = isSgExpression(parent);
-    assert(p != 0);
-    p->replace_expression(e, ne);
+namespace {
+struct DeleteProject {
+  void operator()(SgProject *project) const {
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
   }
-}
+};
+using Project = std::unique_ptr<SgProject, DeleteProject>;
 
-void InterleaveSgTree(SgNode *r1, SgNode *r2) {
-  vector<SgNode *> children1 = r1->get_traversalSuccessorContainer();
-  vector<SgNode *> children2 = r2->get_traversalSuccessorContainer();
-  assert(children1.size() == children2.size());
-  for (unsigned int i = 0; i < children1.size(); ++i) {
-    ReplaceAst(r1, children1[i], children2[i]);
-    ReplaceAst(r2, children2[i], children1[i]);
+std::vector<std::string> emit(SgProject *project,
+                              const std::filesystem::path &directory,
+                              const std::string &stage) {
+  AstTests::runAllTests(project);
+  std::vector<std::string> output;
+  for (size_t index = 0; index < project->get_fileList().size(); ++index) {
+    auto *file = isSgSourceFile(project->get_fileList()[index]);
+    ROSE_ASSERT(file != nullptr);
+    const auto path =
+        directory /
+        (stage + "-" + std::to_string(index) +
+         std::filesystem::path(file->getFileName()).extension().string());
+    file->set_unparse_output_filename(path.string());
+    file->unparse();
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream)
+      throw std::runtime_error("Cannot read unparsed output: " + path.string());
+    output.emplace_back(std::istreambuf_iterator<char>(stream),
+                        std::istreambuf_iterator<char>());
+    if (stream.bad())
+      throw std::runtime_error("Failed reading unparsed output: " +
+                               path.string());
   }
+  return output;
 }
+} // namespace
 
-bool TestCopyRepl(SgProject &proj) {
-  int filenum = proj.numberOfFiles();
-
-  for (int i = 0; i < filenum; ++i) {
-    // SgFile &file = proj.get_file(i);
-    SgSourceFile *file = isSgSourceFile(proj.get_fileList()[i]);
-    SgGlobal *root = file->get_globalScope();
-    SgTreeCopy tc;
-    SgGlobal *rootCopy = static_cast<SgGlobal *>(root->copy(tc));
-
-    file->unparse();
-
-    // DQ (101/17/2005): Changed interface to use C++ strings
-    // char *outname = file.get_unparse_output_filename();
-    // string move1 = "mv " + string(outname) + " orig_" + string(outname);
-    string outname = file->get_unparse_output_filename();
-    string move1 = "mv " + outname + " orig_" + outname;
-    bool fail = system(move1.c_str());
-    assert(!fail);
-
-    file->set_globalScope(rootCopy);
-    file->unparse();
-    // string move2 = "mv " + string(outname) + " copy_" + string(outname);
-    string move2 = "mv " + outname + " copy_" + outname;
-    fail = system(move2.c_str());
-    assert(!fail);
-
-    // string compare = "diff orig_" + string(outname) + " copy_" +
-    // string(outname) + "> diffout";
-    string compare = "diff orig_" + outname + " copy_" + outname + "> diffout";
-    fail = system(compare.c_str());
-    assert(!fail);
-
-    ifstream in("diffout");
-    char c;
-    in >> c;
-    if (!in.eof())
-      return false;
-
-    InterleaveSgTree(root, rootCopy);
-    file->unparse();
-    string move3 = "mv " + outname + " repl_" + outname;
-    fail = system(move3.c_str());
-    assert(!fail);
-
-    string compare2 =
-        "diff orig_" + outname + " repl_" + outname + "> diffout2";
-    fail = system(compare2.c_str());
-    assert(!fail);
-
-    ifstream in2("diffout2");
-    in2 >> c;
-    if (in2.eof()) {
-      string cleanup = "rm orig_" + outname + "; rm copy_" + outname +
-                       "; rm repl_" + outname + "; rm diffout; ";
-      system(cleanup.c_str());
-    } else
-      return false;
-
-    // delete root;
-  }
-  return true;
-}
-
-int main(int argc, char *argv[]) {
-  ios::sync_with_stdio(); // Syncs C++ and C I/O subsystems!
-
-  // Declare usage (if incorrect number of inputs):
+int main(int argc, char **argv) {
   if (argc == 1) {
-    // Print usage and exit with exit status == 1
     SgFile::usage();
-    exit(1);
+    return 1;
   }
+  try {
+    Project project(frontend(argc, argv));
+    ROSE_ASSERT(project != nullptr && project->numberOfFiles() > 0);
+    ROSE_ASSERT(project->get_frontendErrorCode() == 0);
+    const auto directory = Rose::FileSystem::createTemporaryDirectory();
+    std::cerr << "AST copy/replacement outputs: " << directory << '\n';
+    const auto expected = emit(project.get(), directory, "original");
 
-  SgProject sageProject(argc, argv);
-  int frontendErrorCode = sageProject.get_frontendErrorCode();
-
-  // Warnings from legacy frontend processing are OK but not errors
-  ROSE_ASSERT(frontendErrorCode <= 3);
-
-  bool succ = TestCopyRepl(sageProject);
-  if (succ)
-    cerr << "successful test \n";
-  else
-    cerr << "failed test \n";
-
-  return !succ;
+    // File metadata, tokens, declaration families and cross-file semantic edges
+    // belong to the complete project graph. Copy and replace that owner instead
+    // of interleaving declarations between unrelated global symbol tables.
+    Project copy(SageInterface::deepCopySemantic(project.get()));
+    ROSE_ASSERT(copy != nullptr && copy.get() != project.get());
+    ROSE_ASSERT(emit(copy.get(), directory, "copy") == expected);
+    SgProject *original = project.get();
+    project = std::move(copy);
+    ROSE_ASSERT(!SgNode::isLiveNode(original));
+    ROSE_ASSERT(emit(project.get(), directory, "replacement") == expected);
+    SgProject *replacement = project.get();
+    project.reset();
+    ROSE_ASSERT(!SgNode::isLiveNode(replacement));
+    std::filesystem::remove_all(directory);
+    std::cerr << "successful test\n";
+    return 0;
+  } catch (const std::exception &error) {
+    std::cerr << "AST copy/replacement failed: " << error.what() << '\n';
+    return 1;
+  }
 }

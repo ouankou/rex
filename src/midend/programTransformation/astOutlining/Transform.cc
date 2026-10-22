@@ -34,7 +34,6 @@
 
 #include "PreprocessingInfo.hh"
 
-#include "StmtRewrite.hh"
 // =====================================================================
 
 using namespace std;
@@ -53,27 +52,6 @@ bool isIncludeDirective(const PreprocessingInfo *info) {
   const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
   return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
          type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration;
-}
-
-bool isStructurallyOwnedBy(const SgNode *root, const SgNode *node) {
-  if (root == NULL || node == NULL) {
-    return false;
-  }
-  std::set<const SgNode *> visited;
-  for (const SgNode *current = node; current != NULL;
-       current = current->get_parent()) {
-    if (!visited.insert(current).second) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[copied-source-ownership]: node=%p "
-              "type=%s has a structural parent cycle\n",
-              static_cast<const void *>(node), node->class_name().c_str());
-      ROSE_ABORT();
-    }
-    if (current == root) {
-      return true;
-    }
-  }
-  return false;
 }
 
 void validateDirectIncludeSystemRole(
@@ -95,96 +73,6 @@ void validateDirectIncludeSystemRole(
             "has no exact direct include-graph role\n",
             info->getString().c_str());
     ROSE_ABORT();
-  }
-}
-
-void publishCopiedPrimaryPreprocessing(SgSourceFile *generated_source,
-                                       SgSourceFile *input_source) {
-  if (generated_source == NULL || generated_source->get_file_info() == NULL ||
-      input_source == NULL || input_source->get_file_info() == NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[copied-preprocessing-ownership]: "
-            "generated or input source has no exact file information\n");
-    ROSE_ABORT();
-  }
-
-  Sg_File_Info *generated_info = generated_source->get_file_info();
-  Sg_File_Info *input_info = input_source->get_file_info();
-  const int generated_physical_id = generated_info->get_physical_file_id();
-  const int input_physical_id = input_info->get_physical_file_id();
-  const std::string generated_filename = generated_info->get_filenameString();
-  if (generated_physical_id < 0 || input_physical_id < 0 ||
-      generated_physical_id == input_physical_id ||
-      generated_filename.empty()) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[copied-preprocessing-ownership]: "
-            "generated-file='%s' generated-physical=%d input-physical=%d "
-            "does not identify a distinct output translation unit\n",
-            generated_filename.c_str(), generated_physical_id,
-            input_physical_id);
-    ROSE_ABORT();
-  }
-
-  RoseAst ast(generated_source);
-  for (RoseAst::iterator node = ast.begin(); node != ast.end(); ++node) {
-    SgLocatedNode *located = isSgLocatedNode(*node);
-    if (located == NULL || !isStructurallyOwnedBy(generated_source, located)) {
-      continue;
-    }
-    AttachedPreprocessingInfoType *infos =
-        located->getAttachedPreprocessingInfo();
-    if (infos == NULL) {
-      continue;
-    }
-    for (PreprocessingInfo *info : *infos) {
-      if (info == NULL || info->get_file_info() == NULL) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[copied-preprocessing-ownership]: "
-                "node=%p type=%s has incomplete preprocessing ownership\n",
-                static_cast<void *>(located), located->class_name().c_str());
-        ROSE_ABORT();
-      }
-      Sg_File_Info *preprocessing_info = info->get_file_info();
-      if (preprocessing_info->get_physical_file_id() != input_physical_id) {
-        continue;
-      }
-      preprocessing_info->set_filenameString(generated_filename);
-      preprocessing_info->set_file_id(generated_physical_id);
-      preprocessing_info->set_physical_file_id(generated_physical_id);
-      if (preprocessing_info->get_file_id() != generated_physical_id ||
-          preprocessing_info->get_physical_file_id() != generated_physical_id ||
-          preprocessing_info->get_filenameString() != generated_filename) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[copied-preprocessing-ownership]: "
-                "node=%p type=%s lost generated source ownership\n",
-                static_cast<void *>(located), located->class_name().c_str());
-        ROSE_ABORT();
-      }
-    }
-  }
-
-  RoseAst verification(generated_source);
-  for (RoseAst::iterator node = verification.begin();
-       node != verification.end(); ++node) {
-    SgLocatedNode *located = isSgLocatedNode(*node);
-    AttachedPreprocessingInfoType *infos =
-        located != NULL && isStructurallyOwnedBy(generated_source, located)
-            ? located->getAttachedPreprocessingInfo()
-            : NULL;
-    if (infos == NULL) {
-      continue;
-    }
-    for (PreprocessingInfo *info : *infos) {
-      if (info == NULL || info->get_file_info() == NULL ||
-          info->get_file_info()->get_physical_file_id() == input_physical_id) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[copied-preprocessing-ownership]: "
-                "node=%p type=%s retains incomplete or input-file "
-                "preprocessing ownership\n",
-                static_cast<void *>(located), located->class_name().c_str());
-        ROSE_ABORT();
-      }
-    }
   }
 }
 
@@ -307,13 +195,6 @@ void removeExcludedSourceIncludes(SgSourceFile *generated_source,
     ROSE_ABORT();
   }
 
-  // buildSourceFile publishes the output translation unit before its
-  // preprocessing pass.  Primary-file records are therefore attached with the
-  // generated file's physical identity; included-file records retain their own
-  // physical identities.  Purge every primary-file include so none remains
-  // coupled to an AST owner that dependency reconstruction may replace.  The
-  // stable source-order snapshot later republishes system includes explicitly;
-  // application-header declarations are copied instead.
   const int input_physical_file_id =
       input_source->get_file_info()->get_physical_file_id();
   const int primary_physical_file_id =
@@ -939,9 +820,8 @@ static void validateFriendClassDeclarations(SgProject *project) {
   if (project == NULL)
     return;
 
-  RoseAst ast(project);
-  for (RoseAst::iterator it = ast.begin(); it != ast.end(); ++it) {
-    SgClassDeclaration *decl = isSgClassDeclaration(*it);
+  for (SgNode *node : NodeQuery::querySubTree(project, V_SgClassDeclaration)) {
+    SgClassDeclaration *decl = isSgClassDeclaration(node);
     if (decl == NULL)
       continue;
     if (decl->get_declarationModifier().isFriend() == false)
@@ -1084,129 +964,22 @@ static void dedupeIncludeDirectives(SgGlobal *glob_scope) {
   sourceFile->set_frontendResolvedIncludeDirectivesMap(resolved_directives);
 }
 
-static void copyIncludeFileMetadata(SgIncludeFile *target,
-                                    const SgIncludeFile *source) {
-  ROSE_ASSERT(target != NULL);
-  ROSE_ASSERT(source != NULL);
-  target->set_filename(source->get_filename());
-  target->set_first_source_sequence_number(
-      source->get_first_source_sequence_number());
-  target->set_last_source_sequence_number(
-      source->get_last_source_sequence_number());
-  target->set_isIncludedMoreThanOnce(source->get_isIncludedMoreThanOnce());
-  target->set_isPrimaryUse(source->get_isPrimaryUse());
-  target->set_file_hash(source->get_file_hash());
-  target->set_name_used_in_include_directive(
-      source->get_name_used_in_include_directive());
-  target->set_isSystemInclude(source->get_isSystemInclude());
-  target->set_isPreinclude(source->get_isPreinclude());
-  target->set_requires_explict_path_for_unparsed_headers(
-      source->get_requires_explict_path_for_unparsed_headers());
-  target->set_can_be_supported_using_token_based_unparsing(
-      source->get_can_be_supported_using_token_based_unparsing());
-  target->set_directory_prefix(source->get_directory_prefix());
-  target->set_name_without_path(source->get_name_without_path());
-  target->set_applicationRootDirectory(source->get_applicationRootDirectory());
-  target->set_will_be_unparsed(source->get_will_be_unparsed());
-  target->set_isRoseSystemInclude(source->get_isRoseSystemInclude());
-  target->set_from_system_include_dir(source->get_from_system_include_dir());
-  target->set_preinclude_macros_only(source->get_preinclude_macros_only());
-  target->set_isApplicationFile(source->get_isApplicationFile());
-  target->set_isRootSourceFile(source->get_isRootSourceFile());
-}
-
-static SgIncludeFile *cloneIncludeTreeNodeForGeneratedSource(
-    const SgIncludeFile *source_node, const SgIncludeFile *source_parent,
-    SgIncludeFile *cloned_parent, SgSourceFile *original_source,
-    SgSourceFile *generated_source, std::set<const SgIncludeFile *> &visited) {
-  if (source_node == NULL || original_source == NULL ||
-      generated_source == NULL || !visited.insert(source_node).second) {
-    fprintf(stderr, "REX_OUTLINER_INVARIANT[generated-include-tree]: null or "
-                    "multiply owned include-tree node\n");
-    ROSE_ABORT();
-  }
-  if (source_node->get_parent_include_file() != source_parent) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[generated-include-tree]: include=%s has "
-            "the wrong parent edge\n",
-            source_node->get_filename().str());
-    ROSE_ABORT();
-  }
-
-  SgIncludeFile *clone = new SgIncludeFile(source_node->get_filename());
-  copyIncludeFileMetadata(clone, source_node);
-  clone->set_parent_include_file(cloned_parent);
-  clone->set_source_file_of_translation_unit(generated_source);
-
-  SgSourceFile *source_file = source_node->get_source_file();
-  clone->set_source_file(source_file == original_source ? generated_source
-                                                        : source_file);
-  SgSourceFile *including_file = source_node->get_including_source_file();
-  clone->set_including_source_file(
-      including_file == original_source ? generated_source : including_file);
-
-  for (SgIncludeFile *source_child : source_node->get_include_file_list()) {
-    if (source_child == NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[generated-include-tree]: include=%s "
-              "contains a null child\n",
-              source_node->get_filename().str());
-      ROSE_ABORT();
-    }
-    clone->get_include_file_list().push_back(
-        cloneIncludeTreeNodeForGeneratedSource(source_child, source_node, clone,
-                                               original_source,
-                                               generated_source, visited));
-  }
-  return clone;
-}
-
-static SgIncludeFile *
-cloneIncludeTreeForGeneratedSource(SgSourceFile *original_source,
-                                   SgSourceFile *generated_source,
-                                   const std::string &generated_filename) {
-  if (original_source == NULL || generated_source == NULL ||
-      generated_filename.empty()) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[generated-include-tree]: incomplete "
-            "source-file identity\n");
-    ROSE_ABORT();
-  }
-  SgIncludeFile *source_root = original_source->get_associated_include_file();
-  if (source_root == NULL ||
-      source_root->get_source_file() != original_source ||
-      source_root->get_source_file_of_translation_unit() != original_source ||
-      source_root->get_parent_include_file() != NULL) {
-    fprintf(stderr, "REX_OUTLINER_INVARIANT[generated-include-tree]: original "
-                    "translation unit has no exact include-tree root\n");
-    ROSE_ABORT();
-  }
-
-  std::set<const SgIncludeFile *> visited;
-  SgIncludeFile *generated_root = cloneIncludeTreeNodeForGeneratedSource(
-      source_root, NULL, NULL, original_source, generated_source, visited);
-  generated_root->set_filename(generated_filename);
-  generated_root->set_name_used_in_include_directive(
-      Rose::utility_stripPathFromFileName(generated_filename));
-  generated_root->set_name_without_path(
-      Rose::utility_stripPathFromFileName(generated_filename));
-  std::string directory_prefix = Rose::getPathFromFileName(generated_filename);
-  if (directory_prefix == ".") {
-    directory_prefix.clear();
-  }
-  generated_root->set_directory_prefix(directory_prefix);
-  generated_root->set_source_file(generated_source);
-  generated_root->set_source_file_of_translation_unit(generated_source);
-  generated_root->set_including_source_file(generated_source);
-  generated_root->set_isRootSourceFile(true);
-  generated_root->set_isApplicationFile(true);
-  return generated_root;
-}
 // ! create a struct to contain data members for variables to be passed as
 // parameters A wrapper struct for variables passed to the outlined function
 // Each variable (e.g a) has two choices
 //   1. store the value of a:  the same type representation in the struct
 //   2. store the address of a:  pointer type of a
+SgType *Outliner::captureValueType(SgType *type) {
+  ROSE_ASSERT(type != nullptr);
+  SgType *unqualified =
+      type->stripType(SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
+  if (auto *reference = isSgReferenceType(unqualified))
+    return reference->get_base_type();
+  if (auto *reference = isSgRvalueReferenceType(unqualified))
+    return reference->get_base_type();
+  return type;
+}
+
 SgClassDeclaration *Outliner::generateParameterStructureDeclaration(
     SgBasicBlock *s, // the outlining target
     const std::string
@@ -1230,14 +1003,18 @@ SgClassDeclaration *Outliner::generateParameterStructureDeclaration(
   ROSE_ASSERT(isSgGlobal(func_scope) != NULL);
   string decl_name = func_name_str + "_data";
 
-  result = buildStructDeclaration(declaration_ownership::sourceLexical(),
-                                  decl_name, getGlobalScope(s));
-  //  result ->setForward(); // cannot do this!! it becomes prototype
-  //  if (result->get_firstNondefiningDeclaration()  )
-  //   ROSE_ASSERT(isSgClassDeclaration(result->get_firstNondefiningDeclaration())->isForward()
-  //   == true); cout<<"Debug Outliner::generateParameterStructureDeclaration():
-  //   struct address ="<<result <<" firstNondefining address
-  //   ="<<result->get_firstNondefiningDeclaration()<<endl;
+  SgNode *global_scoped_ancestor = getEnclosingFunctionDefinition(s, false);
+  ROSE_ASSERT(global_scoped_ancestor != NULL);
+  while (!isSgGlobal(global_scoped_ancestor->get_parent())) {
+    global_scoped_ancestor = global_scoped_ancestor->get_parent();
+    ROSE_ASSERT(global_scoped_ancestor != NULL);
+  }
+  ROSE_ASSERT(isSgStatement(global_scoped_ancestor));
+  ROSE_ASSERT(global_scoped_ancestor->get_parent() == func_scope);
+  result = buildStructDeclaration(
+      declaration_ownership::transformationDetached(), decl_name, func_scope);
+  insertStatementBefore(isSgStatement(global_scoped_ancestor), result);
+  movePreprocessingInfo(isSgStatement(global_scoped_ancestor), result);
 
   // insert member variable declarations to it
   SgClassDefinition *def = result->get_definition();
@@ -1253,81 +1030,29 @@ SgClassDeclaration *Outliner::generateParameterStructureDeclaration(
     ROSE_ASSERT(i_symbol != NULL);
     string member_name = i_name->get_name().str();
     SgType *member_type = i_name->get_type();
+    if (symsUsingAddress.find(i_symbol) == symsUsingAddress.end())
+      member_type = captureValueType(member_type);
     // use pointer type or its original type?
     SgType *non_typef_type = member_type->stripType(SgType::STRIP_TYPEDEF_TYPE);
     if (symsUsingAddress.find(i_symbol) != symsUsingAddress.end()) {
       member_name = member_name + "_p";
 
-      // member_type = buildPointerType(member_type);
-      // Liao, 10/26/2009
       // We use void* instead of type* to ease the handling of C++ class
-      // pointers wrapped into the data structure Using void* can avoid adding a
-      // forward class declaration  which is needed for classA * It also
-      // simplifies unparsing: unparsing the use of classA* has some
-      // complications. The downside is that type casting is needed for setting
-      // and using the pointer typed values
-      if (isSgArrayType(non_typef_type) != NULL) { // Sara, 05/10/2013
-        // An array type here means that the memory was statically allocated.
-        // In this case we need the array to be allocated in the struct
-        if (isSgFunctionDefinition(
-                i_symbol
-                    ->get_scope())) { // When the variable is a parameter
-                                      // (function definition scope), the first
-                                      // dimension is passed by pointer
-          member_type = buildPointerType(
-              buildPointerType(isSgArrayType(non_typef_type)->get_base_type()));
-        } else { // Otherwise, all dimensions remain
-          member_type = buildPointerType(member_type);
-        }
-      } else if (
-          isSgArrayType(non_typef_type->stripType(
-              SgType::STRIP_POINTER_TYPE))) { // Shared array which first
-                                              // dimension is expressed
-                                              // as a
-                                              // pointerbuildPointerType(
-                                              // non_typef_type->get_base_type(
-                                              // ) )
-        // int (*c1)[10] = calloc(sizeof(int), 10 * 10);
-        // #pragma omp task shared(c1)
+      // pointers wrapped into the data structure.
+      if (isSgArrayType(non_typef_type) != NULL) {
+        member_type = buildPointerType(member_type);
+      } else if (isSgArrayType(
+                     non_typef_type->stripType(SgType::STRIP_POINTER_TYPE))) {
         member_type = buildPointerType(non_typef_type);
       } else { // Scalars, Pointers, Structures
         member_type = buildPointerType(buildVoidType());
       }
-    } else if ((isSgArrayType(non_typef_type)) &&
-               (isSgFunctionDefinition(
-                   i_symbol->get_scope()))) { // First dimension is passed by
-                                              // pointer for all array symbols
-                                              // that are parameters
-      member_type =
-          buildPointerType(isSgArrayType(non_typef_type)->get_base_type());
     }
     SgVariableDeclaration *member_decl =
         buildVariableDeclaration(member_name, member_type, NULL, def_scope);
     appendStatement(member_decl, def_scope);
   }
 
-  // insert it before the s, but must be in a global scope
-  // s might be within a class, namespace, etc. we need to find its ancestor
-  // scope
-  SgNode *global_scoped_ancestor = getEnclosingFunctionDefinition(s, false);
-  while (!isSgGlobal(global_scoped_ancestor->get_parent()))
-  // use get_parent() instead of get_scope() since a function definition node's
-  // scope is global while its parent is its function declaration
-  {
-    global_scoped_ancestor = global_scoped_ancestor->get_parent();
-  }
-  //  cout<<"global_scoped_ancestor class_name:
-  //  "<<global_scoped_ancestor->class_name()<<endl;
-  ROSE_ASSERT(isSgStatement(global_scoped_ancestor));
-  insertStatementBefore(isSgStatement(global_scoped_ancestor), result);
-  movePreprocessingInfo(isSgStatement(global_scoped_ancestor), result);
-
-  if (global_scoped_ancestor->get_parent() != func_scope) { // TODO
-    cout << "Outliner::generateParameterStructureDeclaration() separated file "
-            "case is not yet handled."
-         << endl;
-    ROSE_ABORT();
-  }
   return result;
 }
 
@@ -1417,6 +1142,9 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   //---------step 1. Preparations-----------------------------------
   // new file, cut preprocessing information, collect variables
   SgSourceFile *original_source_file = SageInterface::getEnclosingSourceFile(s);
+  ASSERT_not_null(original_source_file);
+  SgProject *project = SageInterface::getProject(original_source_file);
+  ASSERT_not_null(project);
   int original_physical_file_id = -1;
   if (s != NULL && s->get_file_info() != NULL) {
     original_physical_file_id = s->get_file_info()->get_physical_file_id();
@@ -1435,6 +1163,13 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
     else
       new_file = generateNewSourceFile(s, func_name_str);
     ROSE_ASSERT(new_file);
+    if (use_dlopen) {
+      // Both copied and output-only dlopen sources are compiled separately as
+      // shared libraries. Unparse them with the project, but do not compile
+      // or link their objects into the original program. Static outlining
+      // continues to compile and link its generated source normally.
+      new_file->set_skipfinalCompileStep(true);
+    }
   }
 
   // Save some preprocessing information for later restoration.
@@ -1447,7 +1182,7 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   // Also collect symbols which must use pointer dereferencing if replaced
   // during outlining
   ASTtools::VarSymSet_t syms, pdSyms;
-  collectVars(s, syms);
+  collectVars(s, s, syms);
   for (ASTtools::VarSymSet_t::iterator it = syms.begin(); it != syms.end();
        it++)
     ROSE_ASSERT(*it != NULL);
@@ -1471,8 +1206,7 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
     // liveness analysis
     SgStatement *firstStmt = (s->get_statements())[0];
     if (isSgForStatement(firstStmt) && enable_liveness) {
-      LivenessAnalysis *liv =
-          SageInterface::call_liveness_analysis(SageInterface::getProject());
+      LivenessAnalysis *liv = SageInterface::call_liveness_analysis(project);
       SageInterface::getLiveVariables(liv, isSgForStatement(firstStmt), liveIns,
                                       liveOuts);
     }
@@ -1517,12 +1251,10 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
     }
   }
 
-  SgGlobal *src_scope = glob_scope;
-  if (Outliner::useNewFile) // change scope to the one within the new source
-                            // file
-  {
-    glob_scope = new_file->get_globalScope();
-    outlining_scope = glob_scope;
+  std::vector<SgDeclarationStatement *> dependent_declarations;
+  if (Outliner::useNewFile) {
+    dependent_declarations = SageInterface::collectDependentDeclarations(
+        s, exclude_headers, original_physical_file_id);
   }
 
   //-------Step 2. Generate outlined
@@ -1537,9 +1269,6 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   }
 
   // generate the function and its prototypes if necessary
-  //  printf ("In Outliner::Transform::outlineBlock() function name to build:
-  //  func_name_str = %s \n",func_name_str.c_str());
-
   std::set<SgInitializedName *> restoreVars;
   calculateVariableRestorationSet(syms, readOnlyVars, liveOuts, restoreVars);
 
@@ -1556,38 +1285,30 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   }
 
   OutlinedLocalTypeTemplatePlan local_type_template_plan;
-  SgFunctionDeclaration *func =
-      generateFunction(s, func_name_str, syms, pdSyms, restoreVars, struct_decl,
-                       outlining_scope, local_type_template_plan);
+  OutlinedFunctionParameterBindings parameter_bindings;
+  SgFunctionDeclaration *func = generateFunction(
+      s, func_name_str, syms, pdSyms, restoreVars, struct_decl, outlining_scope,
+      local_type_template_plan, parameter_bindings);
 
   ROSE_ASSERT(func != NULL);
   if (!Outliner::isFortranModuleDefinitionScope(outlining_scope)) {
     assertFunctionSymbolPresent(outlining_scope, func);
   }
 
-  // DQ (2/26/2009): At this point "s" has been reduced to an empty block.
   ROSE_ASSERT(s->get_statements().empty() == true);
 
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
   //-----------Step 3. Insert the outlined function -------------
-  // DQ (2/16/2009): Added (with Liao) the target block which the outlined
-  // function will replace. Insert the function and its prototype as necessary
-  // DQ (8/15/2019): Adding support to defere the transformations in header
-  // files (a performance improvement). insert (func, glob_scope, s);
-  // //Outliner::insert()
   SgFunctionDeclaration *source_call_declaration = NULL;
   DeferredTransformation headerFileTransformation = insert(
       func, outlining_scope, s, source_call_declaration); // Outliner::insert()
   assertFunctionSymbolPresent(outlining_scope, func);
 
-  // Liao 2/4/2020
   // Some comments and #include directives may be attached after the global
   // scope for an otherwise empty input file. We must move them to be attached
   // to the first prototype's before location. Otherwise, the #include directive
@@ -1646,18 +1367,6 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
-
-#ifdef ROSE_BUILD_CPP_LANGUAGE_SUPPORT
-  // reproduce the lost OpenMP pragma attached to a outlining target loop
-  // Liao, 3/12/2009
-  Rose_STL_Container<SgNode *> loops =
-      NodeQuery::querySubTree(func, V_SgForStatement);
-
-  if (loops.size() > 0) {
-    Rose_STL_Container<SgNode *>::iterator liter = loops.begin();
-    SgForStatement *firstloop = isSgForStatement(*liter);
-  }
-#endif
 
   //-----------Step 4. Replace the outlining target with a function
   // call-------------
@@ -1720,7 +1429,9 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
         SgVarRefExp *rhsvar = buildVarRefExp((*i)->get_declaration(), p_scope);
         arg_list->append_expression(buildCastExp(
             buildAddressOfOp(
-                rhsvar, ASTtools::buildAddressOfResultType(rhsvar->get_type())),
+                rhsvar,
+                SageBuilder::buildAddressOfResultType(rhsvar->get_type()),
+                SgAddressOfOp::e_address_operand_object),
             buildPointerType(buildVoidType()), SgCastExp::e_C_style_cast));
       }
 
@@ -1760,18 +1471,20 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
       if (sym_count > 0) // passing wrapper parameter only if non-zero variables
                          // are used in the outlined function
       {
-        wrapper_exp = buildVarRefExp(wrapper_name, p_scope);
-        // Check if the reference is associated to a found symbol or not, by
-        // checking its type
-        SgVariableSymbol *sym = wrapper_exp->get_symbol();
-        ROSE_ASSERT(sym != NULL);
-        SgType *stype = sym->get_declaration()->get_type();
-        if (stype == SgTypeUnknown::createType()) {
-          printf("Error: outliner builds a reference to a wrapper variable "
-                 "which cannot be found in AST!\n");
-          ROSE_ASSERT(stype != SgTypeUnknown::createType());
+        SgVariableSymbol *wrapper_symbol =
+            p_scope->lookup_variable_symbol(SgName(wrapper_name));
+        if (wrapper_symbol == nullptr ||
+            wrapper_symbol->get_parent() != p_scope->get_symbol_table() ||
+            wrapper_symbol->get_declaration() == nullptr ||
+            SageInterface::containsUnknownType(
+                wrapper_symbol->get_declaration()->get_type())) {
+          fprintf(stderr,
+                  "REX_OUTLINER_INVARIANT[wrapper-call-symbol]: name=%s "
+                  "scope=%p has no exact typed local variable symbol\n",
+                  wrapper_name.c_str(), static_cast<void *>(p_scope));
+          ROSE_ABORT();
         }
-
+        wrapper_exp = buildVarRefExp(wrapper_symbol);
         appendExpression(exp_list_exp, wrapper_exp);
       } else
         appendExpression(exp_list_exp,
@@ -1791,13 +1504,9 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   }
 
   ROSE_ASSERT(func_call != NULL);
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
-  // What is this doing (what happens to "s")
-  //  cout<<"Debug before replacement(s, func_call), s is\n "<< s<<endl;
-  //     SageInterface::insertStatementAfter(s,func_call);
   SageInterface::replaceStatement(s, func_call);
   if (use_dlopen) {
     ensureDlopenSupportHeaderInCallSite(p_scope);
@@ -1806,7 +1515,6 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
   ROSE_ASSERT(s != NULL);
   ROSE_ASSERT(s->get_statements().empty() == true);
 
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
@@ -1817,52 +1525,21 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
 
   SageInterface::rebindVariableReferencesAfterMove(p_scope);
 
-  // ROSE_ASSERT (wrapper_exp->get_symbol()->get_declaration() != NULL);
   //-----------handle dependent declarations, headers if new file is
   // generated-------------
   if (new_file) {
-    // Liao, 2019/8/14. We disable unused symbol clean up for now.
-    // Searching for all symbols then check if they are used within a new file.
-    // This will wrongfully delete symbols used in the original files.
     SageInterface::rebindVariableReferencesAfterMove(new_file);
-    // SgProject * project2= new_file->get_project();
-    // AstTests::runAllTests(project2);// turn it off for now
-    // project2->unparse();
   }
 
   if (wrapper_exp)
     ROSE_ASSERT(wrapper_exp->get_symbol()->get_declaration() != NULL);
 
-  // Retest this...
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
   ROSE_ASSERT(s != NULL);
   ROSE_ASSERT(s->get_statements().empty() == true);
-  // Every outlined function moved into another translation unit must complete
-  // the destination declaration-identity transaction.  A parsed copy of the
-  // original file already owns the required declaration surfaces, but the moved
-  // function still carries source-file type and symbol edges that must be
-  // rebound to those exact destination families.  When the destination does not
-  // already own a dependency, the same transaction copies it.
   if (useNewFile == true) {
-    // DQ (2/6/2009): I need to write this function to support the
-    // insertion of the function into the specified scope.  If the
-    // file associated with the scope is marked as compiler generated
-    // (or as a transformation) then the declarations referenced in the
-    // function must be copied as well (those not in include files)
-    // and the include files must be copies also. If the SgFile
-    // is not compiler generated (or a transformation) then we just
-    // append the function to the scope (trivial case).
-
-    // I am passing in the target_func so that I can get the location
-    // in the file from which we want to generate a matching context.
-    // It would be better if this were the location of the new function call
-    // to the outlined function (since dependent declaration in the function
-    // containing the outlined code (loop nest, for example) might contain
-    // relevant typedefs which have to be created in the new file (or the
-    // outlined function as a special case).
-
     ROSE_ASSERT(func->get_firstNondefiningDeclaration() != NULL);
     ROSE_ASSERT(SageInterface::getEnclosingSourceFile(func) ==
                 SageInterface::getEnclosingSourceFile(
@@ -1871,63 +1548,29 @@ Outliner::outlineBlock(SgBasicBlock *s, const string &func_name_str,
                 SageInterface::getEnclosingSourceFile(
                     func->get_firstNondefiningDeclaration()));
 
-    // If the outline function will be placed into it's own file then we need to
-    // reconstruct any dependent statements (and #include CPP directives).
-    SgFunctionDeclaration *func_orig = const_cast<SgFunctionDeclaration *>(
-        SageInterface::getEnclosingFunctionDeclaration(s));
-    SgStatement *dependency_context = s;
-    if (dependency_context == NULL ||
-        dependency_context->get_file_info() == NULL) {
-      dependency_context = func_orig;
-    }
+    glob_scope = new_file->get_globalScope();
     SageInterface::appendStatementWithDependentDeclaration(
-        func, glob_scope, dependency_context, source_call_declaration,
-        exclude_headers, original_directives, original_source_file,
-        original_physical_file_id);
-    // printf ("DONE: Now calling
-    // SageInterface::appendStatementWithDependentDeclaration() \n");
+        func, glob_scope, source_call_declaration, exclude_headers,
+        original_directives, dependent_declarations, original_source_file);
   }
 
   if (new_file != NULL) {
     // Dependency reconstruction can deep-copy a declaration containing the
-    // consumed marker after getLibSourceFile() purged the freshly parsed
+    // consumed marker after getLibSourceFile() purged the copied
     // translation unit.  Enforce the producer postcondition again after all
     // generated declarations have been attached.
     removeConsumedOutlineDirectives(new_file);
   }
 
-  // DQ (2/7/2020): Disable call to AstPostProcessing so that I can call it in
-  // tool_G.C as part of debugging). DQ (2/26/2009): Moved (here) to as late as
-  // possible so that all transformations are complete before running
-  // AstPostProcessing()
-
   // Run the AST fixup on the project to avoid per-file duplication.
-  SgProject *project = SageInterface::getProject();
-  if (project != NULL) {
-    AstPostProcessing(project);
-    validateFriendClassDeclarations(project);
-  } else {
-    SgSourceFile *originalSourceFile =
-        SageInterface::getEnclosingSourceFile(src_scope);
-    if (originalSourceFile != NULL) {
-      AstPostProcessing(originalSourceFile);
-      validateFriendClassDeclarations(SageInterface::getProject());
-    }
-  }
+  AstPostProcessing(project);
+  validateFriendClassDeclarations(project);
 
   dedupeIncludeDirectives(glob_scope);
 
   ROSE_ASSERT(func->get_definition()->get_body()->get_parent() ==
               func->get_definition());
 
-  // DQ (7/12/2021): Testing the AST for a specific node marked as a
-  // transformation.
-  // ROSE_ASSERT(findFirstSgCastExpMarkedAsTransformation(project,"testing end
-  // of outlineBlock()") == false);
-
-  // DQ (8/15/2019): Adding support to defere the transformations in header
-  // files (a performance improvement). return Result (func, func_call,
-  // new_file);
   return Result(func, func_call, new_file, headerFileTransformation);
 }
 
@@ -1998,7 +1641,7 @@ static SgStatement *build_array_packing_statement(SgExpression *lhs,
   // Loop test
   SgStatement *loop_test = buildExprStatement(buildLessThanOp(
       buildVarRefExp(loop_index_name, scope),
-      isSgArrayType(lhs_type)->get_index(),
+      copyExpression(isSgArrayType(lhs_type)->get_index()),
       SageInterface::is_C_language() ? static_cast<SgType *>(buildIntType())
                                      : static_cast<SgType *>(buildBoolType())));
 
@@ -2027,25 +1670,26 @@ static SgStatement *build_array_packing_statement(SgExpression *lhs,
   return buildForStatement(loop_init, loop_test, loop_increment, loop_body);
 }
 
-/* For a set of variables to be passed into the outlined function,
- * generate the following statements before the call of the outlined function
- * used when useParameterWrapper is set to true
-         void * __out_argv[2];
-        *(__out_argv +0)=(void*)(&var1);// better form:
- __out_argv[0]=(void*)(&var1);
-        *(__out_argv +1)=(void*)(&var2); //__out_argv[1]=(void*)(&var2);
- * return the name for the array parameter used to wrap all pointer parameters
- *
- * if Outliner::useStructureWrapper is true, we wrap parameters into a structure
- instead of an array.
- * In this case, we need to know the structure type's name and parameters passed
- by pointers
- *  struct OUT__1__8228___data __out_argv1__1527__;
- *  __out_argv1__1527__.i = i;
- *  __out_argv1__1527__.j = j;
- *  __out_argv1__1527__.sum_p = &sum;
- *
- */
+static SgExpression *captureInitializer(SgExpression *source, SgType *type) {
+  auto *array = isSgArrayType(type->stripType(SgType::STRIP_TYPEDEF_TYPE));
+  if (array == nullptr)
+    return source;
+  const auto extent = evaluateConstIntegerExpression(array->get_index());
+  ROSE_ASSERT(extent.hasValue_);
+  auto *elements = buildExprListExp();
+  for (size_t index = 0; index < extent.value_; ++index) {
+    auto *element = buildPntrArrRefExp(copyExpression(source),
+                                       buildUnsignedLongLongIntVal(index),
+                                       array->get_base_type());
+    appendExpression(elements,
+                     captureInitializer(element, array->get_base_type()));
+  }
+  deleteAST(source);
+  return buildAggregateInitializer(
+      elements, type,
+      SgAggregateInitializer::e_aggregate_initializer_source_braced);
+}
+
 std::string Outliner::generatePackingStatements(
     SgStatement *target, ASTtools::VarSymSet_t &syms,
     ASTtools::VarSymSet_t &pdsyms,
@@ -2071,20 +1715,58 @@ std::string Outliner::generatePackingStatements(
     SgType *pointer_type = buildPointerType(buildVoidType());
     my_type = buildArrayType(pointer_type, buildIntVal(var_count));
   }
+  if (SageInterface::containsUnknownType(my_type)) {
+    fprintf(stderr,
+            "REX_OUTLINER_INVARIANT[wrapper-type]: target=%p has no exact "
+            "typed wrapper variable\n",
+            static_cast<void *>(target));
+    ROSE_ABORT();
+  }
+
+  if (useStructureWrapper && SageInterface::is_Cxx_language() &&
+      isSgOmpTaskStatement(target)) {
+    auto *initializers = buildExprListExp();
+    auto *definition =
+        isSgClassDeclaration(struct_decl->get_definingDeclaration())
+            ->get_definition();
+    for (const SgVariableSymbol *symbol : syms) {
+      SgExpression *value =
+          buildVarRefExp(const_cast<SgVariableSymbol *>(symbol));
+      std::string field = symbol->get_name().getString();
+      if (pdsyms.count(symbol)) {
+        field += "_p";
+        value =
+            buildAddressOfOp(value, buildAddressOfResultType(value->get_type()),
+                             SgAddressOfOp::e_address_operand_object);
+      }
+      auto *member = definition->lookup_variable_symbol(field);
+      ROSE_ASSERT(member != nullptr);
+      appendExpression(initializers,
+                       captureInitializer(value, member->get_type()));
+    }
+    auto *initializer = buildAggregateInitializer(
+        initializers, my_type,
+        SgAggregateInitializer::e_aggregate_initializer_source_braced);
+    auto *allocation = buildNewExp(my_type, SgPointerType::createType(my_type),
+                                   nullptr, SgNewExp::e_no_array_bound, nullptr,
+                                   nullptr, initializer, false, nullptr, 1);
+    auto *capture = buildVariableDeclaration(
+        wrapper_name, allocation->get_type(),
+        buildAssignInitializer(allocation, allocation->get_type()), cur_scope);
+    validateGeneratedVariableDeclaration(capture, cur_scope, false);
+    insertStatementBefore(target, capture);
+    validateGeneratedVariableDeclaration(capture, cur_scope, true);
+    return wrapper_name;
+  }
 
   SgVariableDeclaration *out_argv =
       buildVariableDeclaration(wrapper_name, my_type, NULL, cur_scope);
   validateGeneratedVariableDeclaration(out_argv, cur_scope, false);
-  // Since we have moved the outlined block to be the outlined function's body,
-  // and removed it from its location in the original location where it was
-  // outlined, we can't insert new statements relative to "target".
   SageInterface::insertStatementBefore(target, out_argv);
   validateGeneratedVariableDeclaration(out_argv, cur_scope, true);
 
   SgVariableSymbol *wrapper_symbol = getFirstVarSym(out_argv);
   ROSE_ASSERT(wrapper_symbol->get_parent() != NULL);
-  //  cout<<"Inserting wrapper declaration
-  //  ...."<<wrapper_symbol->get_name().getString()<<endl;
   for (ASTtools::VarSymSet_t::reverse_iterator i = syms.rbegin();
        i != syms.rend(); ++i) {
     SgExpression *lhs = NULL;
@@ -2100,17 +1782,14 @@ std::string Outliner::generatePackingStatements(
       // When LHS is an array, we must copy each position.
       SgInitializedName *i_name = (*i)->get_declaration();
       SgVariableSymbol *i_symbol = const_cast<SgVariableSymbol *>(*i);
-      // SgType* i_type = i_symbol->get_type();
       string member_name = i_name->get_name().str();
-      //     cout<<"Debug: Outliner::generatePackingStatements() symbol to be
-      //     packed:"<<member_name<<endl;
       rhs = buildVarRefExp(i_symbol);
       if (pdsyms.find(i_symbol) != pdsyms.end()) // pointer type
       {
         member_name = member_name + "_p";
-        // member_type = buildPointerType(member_type);
         rhs = buildAddressOfOp(
-            rhs, ASTtools::buildAddressOfResultType(rhs->get_type()));
+            rhs, SageBuilder::buildAddressOfResultType(rhs->get_type()),
+            SgAddressOfOp::e_address_operand_object);
       }
       SgClassDefinition *class_def = isSgClassDefinition(
           isSgClassDeclaration(struct_decl->get_definingDeclaration())
@@ -2145,8 +1824,10 @@ std::string Outliner::generatePackingStatements(
       SgExpression *value_to_pass =
           isNonFortranGlobalArray((*i)->get_declaration())
               ? isSgExpression(rhsvar)
-              : buildAddressOfOp(rhsvar, ASTtools::buildAddressOfResultType(
-                                             rhsvar->get_type()));
+              : buildAddressOfOp(
+                    rhsvar,
+                    SageBuilder::buildAddressOfResultType(rhsvar->get_type()),
+                    SgAddressOfOp::e_address_operand_object);
       rhs = buildCastExp(value_to_pass, buildPointerType(buildVoidType()),
                          SgCastExp::e_C_style_cast);
 
@@ -2176,7 +1857,6 @@ SgSourceFile *Outliner::generateNewSourceFile(SgBasicBlock *s,
   // grab the file suffix,
   //  TODO another way is to generate suffix according to source language type
   std::string orig_file_name = cur_file->get_file_info()->get_filenameString();
-  // cout<<"debug:orig_file_name="<<orig_file_name<<endl;
   std::string file_suffix = StringUtility::fileNameSuffix(orig_file_name);
   ROSE_ASSERT(file_suffix != "");
   std::string new_file_name = file_name + "." + file_suffix;
@@ -2189,7 +1869,8 @@ SgSourceFile *Outliner::generateNewSourceFile(SgBasicBlock *s,
   remove(new_file_name.c_str());
 
   if (enable_debug)
-    printf("In Outliner::generateNewSourceFile(): Calling buildFile(): "
+    printf("In Outliner::generateNewSourceFile(): Calling "
+           "buildGeneratedSourceFile(): "
            "new_file_name = %s \n",
            new_file_name.c_str());
 
@@ -2199,11 +1880,11 @@ SgSourceFile *Outliner::generateNewSourceFile(SgBasicBlock *s,
   new_file = buildGeneratedSourceFile(new_file_name, project);
 
   if (enable_debug)
-    printf("DONE: In Outliner::generateNewSourceFile(): Calling buildFile(): "
+    printf("DONE: In Outliner::generateNewSourceFile(): Calling "
+           "buildGeneratedSourceFile(): "
            "new_file_name = %s \n",
            new_file_name.c_str());
 
-  // new_file = isSgSourceFile(buildFile(new_file_name, new_file_name));
   ROSE_ASSERT(new_file != NULL);
   return new_file;
 }
@@ -2342,6 +2023,12 @@ std::string Outliner::generateLibSourceFileName(SgBasicBlock *target) {
  * rose_input_lib.[c|cxx] by default. Or overrided by file_name.
  */
 SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
+  return getLibSourceFile(target, {});
+}
+
+SgSourceFile *Outliner::getLibSourceFile(
+    SgBasicBlock *target,
+    const std::vector<SgFunctionDeclaration *> &definitionsToMove) {
 #ifdef __linux__
   if (enable_debug) {
     cout << "Entering " << __PRETTY_FUNCTION__ << endl;
@@ -2359,9 +2046,16 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
                     "target is not owned by a source file\n");
     ROSE_ABORT();
   }
-  std::string input_file_name =
-      input_file->get_file_info()->get_filenameString();
-
+  std::set<const SgFunctionDeclaration *> moving_originals;
+  for (const SgFunctionDeclaration *declaration : definitionsToMove) {
+    ROSE_ASSERT(declaration != nullptr &&
+                declaration->get_definingDeclaration() == declaration &&
+                declaration->get_definition() != nullptr &&
+                SageInterface::getEnclosingSourceFile(declaration, true) ==
+                    input_source_file);
+    const bool unique = moving_originals.insert(declaration).second;
+    ROSE_ASSERT(unique);
+  }
   std::string new_file_name = generateLibSourceFileName(target);
 
   if (enable_debug)
@@ -2375,16 +2069,12 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
   // Search if the lib file already exists.
   SgFilePtrList file_list = project->get_files();
   SgFilePtrList::iterator iter;
-  // cout<<"debugging: getLibSourceFile(): checking current file list of count
-  // of "<<file_list.size() <<endl;
   for (iter = file_list.begin(); iter != file_list.end(); iter++) {
     SgFile *cur_file = *iter;
     SgSourceFile *sfile = isSgSourceFile(cur_file);
 
     if (sfile != NULL) {
       string cur_file_name = sfile->get_file_info()->get_filenameString();
-      // cout < <"\t Debug: compare cur vs. new file name:"<<cur_file_name <<"
-      // vs. " << new_file_name <<endl;
 
       if (cur_file_name == new_file_name) {
         new_file = sfile;
@@ -2397,74 +2087,39 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
     printf("In Outliner::getLibSourceFile(): new_file = %p \n", new_file);
 
   if (new_file == NULL) {
-    if (enable_debug)
-      printf("In Outliner::getLibSourceFile(): Calling buildSourceFile(): "
-             "input_file_name = %s \n",
-             input_file_name.c_str());
-
-    // par1: input file, par 2: output file name, par 3: the project to attach
-    // the new file to simplify the lib file generation, we copy entire original
-    // source file to it, then later append outlined functions
+    SgCopyHelp::copiedNodeMapType identities;
     new_file = isSgSourceFile(
-        buildSourceFile(input_file_name, new_file_name, project));
+        SageInterface::deepCopySemanticSubtree(input_source_file, identities));
+    ROSE_ASSERT(new_file != nullptr && new_file != input_source_file &&
+                new_file->get_parent() == nullptr);
+    std::set<SgFunctionDeclaration *> moving_copies;
+    for (const SgFunctionDeclaration *declaration : moving_originals) {
+      SgFunctionDeclaration *copy =
+          isSgFunctionDeclaration(identities.at(declaration));
+      ROSE_ASSERT(copy != nullptr && copy != declaration &&
+                  copy->get_definingDeclaration() == copy &&
+                  copy->get_definition() != nullptr);
+      const bool unique = moving_copies.insert(copy).second;
+      ROSE_ASSERT(unique);
+    }
+    identities.clear();
+    SageBuilder::rebindCopiedSourceFilePhysicalIdentity(new_file,
+                                                        new_file_name);
+    new_file->set_unparse_output_filename(new_file_name);
+    new_file->set_isCommandLineInputSource(false);
+    SgFileList *files = project->get_fileList_ptr();
+    ROSE_ASSERT(files != nullptr && files->get_parent() == project);
+    new_file->set_parent(files);
+    files->get_listOfFiles().push_back(new_file);
 
-    // The parsed copy is a producer-created output translation unit.  Outline
-    // markers are consumed transformation controls, not source that may survive
-    // into (or recursively transform) the generated library.
     removeConsumedOutlineDirectives(new_file);
     if (exclude_headers) {
-      // The generated library starts as a parsed copy of the original source.
-      // Header exclusion later reconstructs the required declarations, so a
-      // primary-file source include left in this initial copy would publish
-      // both dependency strategies and redefine those declarations.
       removeExcludedSourceIncludes(new_file, input_source_file);
       new_file->set_unparseHeaderFiles(false);
     }
 
-    if (enable_debug) {
-      printf("DONE: In Outliner::getLibSourceFile(): Calling "
-             "buildSourceFile(): input_file_name = %s \n",
-             input_file_name.c_str());
-      // generateDOTforMultipleFile(*project);   // this is too large
-      //  string filename = SageInterface::generateProjectName(project);
-      // generateWholeGraphOfAST(filename+".WholeAST");
-    }
-
-    // buildFile() will set filename to be input file name by default.
-    // we have to rename the input file to be output file name. This is used to
-    // avoid duplicated creation later on
-    new_file->get_file_info()->set_filenameString(new_file_name);
-    publishCopiedPrimaryPreprocessing(new_file, input_source_file);
-
-    if (new_file->get_associated_include_file() != NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[generated-include-tree]: newly built "
-              "outlined source unexpectedly has pre-existing include "
-              "ownership\n");
-      ROSE_ABORT();
-    }
-    if (!exclude_headers && input_source_file->get_unparseHeaderFiles()) {
-      new_file->set_associated_include_file(cloneIncludeTreeForGeneratedSource(
-          input_source_file, new_file, new_file_name));
-    } else if (!exclude_headers &&
-               input_source_file->get_associated_include_file() != NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[generated-include-tree]: input has an "
-              "include-tree root while header unparsing is disabled\n");
-      ROSE_ABORT();
-    }
-
-    // DQ (3/28/2019): The conversion of functions with definitions to function
-    // prototypes must preserve the associated comments and CPP directives (else
-    // the #includes will be missing and types will not be defined. This is an
-    // issue with the astOutliner test code jacobi.c. DQ (3/20/2019): Need to
-    // eliminate possible undefined symbols in this file when it will be
-    // compiled into a dynamic shared library.  Any undefined symbols will cause
-    // an error when loading the library using dlopen().
-    // SageInterface::replaceFunctionDefinitionsWithDeclarations(new_file);
-    // Static and inline function definitions must remain in the generated
-    // shared-library source.  Every other definition is replaced with the only
-    // legal declaration source surface at its lexical owner.
+    // Retain static/inline definitions and the exact pending transfers.
+    // Other source definitions become prototypes at their lexical owner.
     std::vector<SgFunctionDeclaration *> functionList =
         generateFunctionDefinitionsList(new_file);
     if (new_file->get_file_info() == NULL ||
@@ -2497,12 +2152,9 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
           functionDeclaration->get_functionModifier().isInline() ||
           lexical_class != NULL;
 
-      // Static definitions must remain available to the generated translation
-      // unit.  Inline definitions are likewise complete ODR-safe source
-      // definitions; replacing an in-class member with a detached prototype
-      // would discard its exact class owner before construction is complete.
       const bool retain_definition =
-          isStatic(functionDeclaration) || is_inline_definition;
+          isStatic(functionDeclaration) || is_inline_definition ||
+          moving_copies.count(functionDeclaration) != 0;
       Sg_File_Info *function_start =
           functionDeclaration->get_startOfConstruct();
       Sg_File_Info *function_end = functionDeclaration->get_endOfConstruct();
@@ -2514,10 +2166,6 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
           function_start->get_physical_file_id() >= 0 &&
           function_start->get_physical_file_id() ==
               function_end->get_physical_file_id();
-      // buildSourceFile performs one primary-file copy transaction.  A
-      // definition spelled in a header remains structurally part of that
-      // translation unit while retaining its header's physical provenance.
-      // It is not a generated primary-file node and must not be rebound.
       const bool retained_header_source =
           exact_function_range &&
           function_start->get_physical_file_id() != output_physical_file_id &&
@@ -2604,34 +2252,17 @@ SgSourceFile *Outliner::getLibSourceFile(SgBasicBlock *target) {
   }
 #endif
 
-  SgIncludeFile *generated_include_root =
-      new_file != NULL ? new_file->get_associated_include_file() : NULL;
-  if (new_file->get_unparseHeaderFiles()) {
-    if (generated_include_root == NULL ||
-        generated_include_root->get_source_file() != new_file ||
-        generated_include_root->get_source_file_of_translation_unit() !=
-            new_file ||
-        generated_include_root->get_parent_include_file() != NULL ||
-        generated_include_root->get_filename() != new_file_name) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[generated-include-tree]: outlined "
-              "source has no exact include-tree root\n");
-      ROSE_ABORT();
-    }
-  } else if (generated_include_root != NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[generated-include-tree]: outlined source "
-            "has include ownership while header unparsing is disabled\n");
-    ROSE_ABORT();
-  }
-
-  // DQ (7/13/2021): Save the dynamic library file so that we can reference it
-  // elsewhere.
-  saved_source_file_for_dynamic_library = new_file;
-  ROSE_ASSERT(saved_source_file_for_dynamic_library != NULL);
-
-  // new_file = isSgSourceFile(buildFile(new_file_name, new_file_name));
   ROSE_ASSERT(new_file != NULL);
+  SgIncludeFile *generated_include_root =
+      new_file->get_associated_include_file();
+  ROSE_ASSERT(!new_file->get_unparseHeaderFiles() ||
+              generated_include_root != nullptr);
+  if (generated_include_root != nullptr) {
+    generated_include_root->validateIncludeOwnership();
+    ROSE_ASSERT(generated_include_root->get_isRootSourceFile() &&
+                generated_include_root->get_parent() == new_file &&
+                generated_include_root->get_filename() == new_file_name);
+  }
   return new_file;
 }
 

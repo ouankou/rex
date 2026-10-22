@@ -12,6 +12,28 @@ struct rex_initializer_record {
   int count;
 };
 
+template <class T> struct rex_initializer_pair {
+  const char *name;
+  T value;
+};
+
+template <class T> int rex_initializer_nested_braces() {
+  static const rex_initializer_pair<T> values[] = {{"left", {1, 2}},
+                                                   {"right", {3, 4}}};
+  return values[0].value.wide + values[1].value.count;
+}
+
+struct rex_initializer_nested_value {
+  long wide;
+  int count;
+  rex_initializer_nested_value(long first, int second)
+      : wide(first), count(second) {}
+};
+
+int rex_initializer_nested_result() {
+  return rex_initializer_nested_braces<rex_initializer_nested_value>();
+}
+
 rex_initializer_record rex_initializer_make_record() {
   return {rex_initializer_source(), 2};
 }

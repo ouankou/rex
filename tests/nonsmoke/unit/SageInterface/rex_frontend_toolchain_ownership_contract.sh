@@ -30,7 +30,7 @@ done
 
 if ! grep -Fq '_rose_validate_backend_clang_resource(C)' "$root_cmake" ||
    ! grep -Fq '_rose_validate_backend_clang_resource(CXX)' "$root_cmake" ||
-   ! grep -Fq 'COMMAND "${CMAKE_${_rose_language}_COMPILER}" --print-resource-dir' "$root_cmake" ||
+   ! grep -Fq 'rex_require_clang_resource_directory("${CMAKE_${_rose_language}_COMPILER}"' "$root_cmake" ||
    ! grep -Fq 'backend compiler and loaded' "$root_cmake" ||
    ! grep -Fq 'must own the same resource directory' "$root_cmake"; then
   echo "root CMake does not hard-check backend/frontend resource ownership" >&2

@@ -11,7 +11,6 @@ typedef ReadAnnotCollection<OperatorDeclaration, '{', ';', '}'>
     ReadOperatorCollection;
 
 //! An interface to read into type(class) and operator(function) annotations
-// Each type of
 class ReadAnnotation {
   ReadTypeCollection typeInfo;
   ReadOperatorCollection opInfo;

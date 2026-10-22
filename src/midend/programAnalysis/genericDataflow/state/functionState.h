@@ -29,8 +29,7 @@ private:
   static bool allFuncsComputed;
 
 public:
-  FunctionState(Function &func)
-      : func(func), state(/*func.get_declaration()->cfgForBeginning()*/) {}
+  FunctionState(Function &func) : func(func), state() {}
 
   Function &getFunc();
 
@@ -56,21 +55,16 @@ public:
   static void setArgParamMap(SgFunctionCallExp *call,
                              std::map<varID, varID> &argParamMap);
 
-  // given a function call, sets argParamMap to map all the parameters of this
-  // function to their corresponding simple arguments, if those arguments are
-  // passed by reference
+  // Map each parameter to its corresponding argument.
   static void setParamArgByRefMap(SgFunctionCallExp *call,
                                   std::map<varID, varID> &paramArgByRefMap);
 };
 
-class CollectFunctions
-    : public TraverseCallGraphUnordered /*TraverseCallGraphBottomUp<int>*/
-{
+class CollectFunctions : public TraverseCallGraphUnordered {
 public:
   CollectFunctions(SgIncidenceDirectedGraph *graph)
-      : TraverseCallGraphUnordered /*TraverseCallGraphBottomUp<int>*/ (graph) {}
+      : TraverseCallGraphUnordered(graph) {}
 
-  // int visit(const CGFunction* func, list<int> fromCallees);
   void visit(const CGFunction *func);
 
   virtual ~CollectFunctions() {}

@@ -1,44 +1,15 @@
 // Author: Dan Quinlan
 
-// Example program to report use of class member variables in lambda capture
-// list. It is using the InheritedAttribute and SynthesizedAttribute to permit
-// the next version to support the required transformation to fix the problem
-// that this current version only detects.
+// Report explicit and implicit captures of this in lambda expressions.
 
 #include "rose.h"
 
-// Inherited attribute (see ROSE Tutorial (Chapter 9)).
-struct InheritedAttribute {
-  InheritedAttribute();
+class Traversal : public SgSimpleProcessing {
+public:
+  void visit(SgNode *astNode) override;
 };
 
-// Constructor (not really needed)
-InheritedAttribute::InheritedAttribute() {}
-
-// Synthesized attribute (see ROSE Tutorial (Chapter 9)).
-struct SynthesizedAttribute {
-  SynthesizedAttribute();
-};
-
-// Constructor
-SynthesizedAttribute::SynthesizedAttribute() {}
-
-struct Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,
-                                                      SynthesizedAttribute> {
-  Traversal();
-
-  // Functions required
-  InheritedAttribute
-  evaluateInheritedAttribute(SgNode *astNode,
-                             InheritedAttribute inheritedAttribute);
-  SynthesizedAttribute evaluateSynthesizedAttribute(
-      SgNode *astNode, InheritedAttribute inheritedAttribute,
-      SubTreeSynthesizedAttributes synthesizedAttributeList);
-};
-
-InheritedAttribute
-Traversal::evaluateInheritedAttribute(SgNode *astNode,
-                                      InheritedAttribute inheritedAttribute) {
+void Traversal::visit(SgNode *astNode) {
   SgLambdaCapture *lambdaCapture = isSgLambdaCapture(astNode);
   if (lambdaCapture != nullptr) {
     SgExpression *captureVariable = lambdaCapture->get_capture_variable();
@@ -58,36 +29,22 @@ Traversal::evaluateInheritedAttribute(SgNode *astNode,
       }
     }
   }
-
-  // This will call the default copy constructor for InheritedAttribute.
-  return inheritedAttribute;
 }
-
-SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
-    SgNode * /*astNode*/, InheritedAttribute /*inheritedAttribute*/,
-    SynthesizedAttributesList /*childAttributes*/) {
-  return SynthesizedAttribute{};
-}
-
-Traversal::Traversal() {}
 
 int main(int argc, char *argv[]) {
-  // Get the command line so that we can add an option.
-  std::vector<std::string> commandLine =
-      CommandlineProcessing::generateArgListFromArgcArgv(argc, argv);
-
-  SgProject *project = frontend(commandLine);
+  SgProject *project = frontend(argc, argv);
   ASSERT_not_null(project);
+  if (project->get_frontendErrorCode() != 0) {
+    const int status = frontendExitStatus(project);
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    return status;
+  }
+  Traversal traversal;
+  traversal.traverseInputFiles(project, preorder);
 
-  // Build the inherited attribute
-  InheritedAttribute inheritedAttribute;
-
-  // Define the traversal
-  Traversal astTraversal;
-
-  // Call the traversal starting at the project (root) node of the AST
-  astTraversal.traverseInputFiles(project, inheritedAttribute);
-
-  // This tool only does analysis so we can compile the original source code.
-  return backendCompilesUsingOriginalInputFile(project);
+  const int status = backendCompilesUsingOriginalInputFile(project);
+  SageInterface::deleteAST(project,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  return status;
 }

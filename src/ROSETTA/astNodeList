@@ -78,7 +78,6 @@ SgBitComplementOp
 SgBitEqvOp
 SgBitOrOp
 SgBitXorOp
-SgBlockDataStatement
 SgBoolValExp
 SgBreakStmt
 SgBracedInitializer
@@ -188,7 +187,6 @@ SgFortranCommonBlockRefExp
 SgFortranContinueStmt
 SgFortranDo
 SgFortranIncludeLine
-SgFortranNonblockedDo
 SgFuncDecl_attr
 SgFunctionCallExp
 SgFunctionDeclaration
@@ -239,7 +237,6 @@ SgIntegerDivideOp
 SgIntegerDivideAssignOp
 SgInterfaceBody
 SgHeaderFileBody
-SgHeaderFileReport
 SgInterfaceStatement
 SgInterfaceSymbol
 SgIntrinsicSymbol
@@ -559,7 +556,6 @@ SgOpenStatement
 SgOptions
 SgOrOp
 SgPackExpansionExpr
-SgParameterStatement
 SgPartialFunctionModifierType
 SgPartialFunctionType
 SgPlusAssignOp
@@ -576,8 +572,6 @@ SgProcedureHeaderStatement
 SgProgramHeaderStatement
 SgProject
 SgPseudoDestructorRefExp
-SgQualifiedName
-SgQualifiedNameType
 SgRangeExp
 SgRangeBasedForStatement
 SgReadStatement
@@ -593,7 +587,6 @@ SgRshiftOp
 SgRvalueReferenceType
 SgScopeOp
 SgScopeStatement
-SgSequenceStatement
 SgShortVal
 SgSIMDBinaryOp
 SgSIMDAddOp
@@ -613,7 +606,6 @@ SgSizeOfOp
 SgAlignOfOp
 SgSourceFile
 SgSpaceshipOp
-SgSpawnStmt
 SgSyncAllStatement
 SgSyncImagesStatement
 SgSyncMemoryStatement
@@ -626,7 +618,6 @@ SgStatement
 SgStatementAttribute
 SgStatementAttributeList
 SgStaticAssertionDeclaration
-SgStmtDeclarationStatement
 SgStatementExpression
 SgStatementFunctionStatement
 SgStopOrPauseStatement
@@ -641,7 +632,6 @@ SgSwitchStatement
 SgSymbol
 SgSymbolTable
 SgTemplateArgument
-SgTemplateArgumentList
 SgTemplateDeclaration
 SgTemplateClassDeclaration
 SgTemplateClassSymbol
@@ -720,7 +710,6 @@ SgTypeUnsignedShort
 SgTypeVoid
 SgTypeWchar
 SgTypedefDeclaration
-SgTypedefSeq
 SgTypedefSymbol
 SgTypedefType
 SgUnaryAddOp
@@ -728,7 +717,6 @@ SgUnaryOp
 SgUndefDirectiveStatement
 SgUndirectedGraphEdge
 SgUnknownArrayOrFunctionReference
-SgUnknownFile
 SgUnknownMemberFunctionType
 SgUnparse_Info
 SgUnsignedCharVal
@@ -752,7 +740,6 @@ SgVariableDeclaration
 SgVariableDefinition
 SgVariableSymbol
 SgVariantExpression
-SgVariantStatement
 SgVoidVal
 SgWaitStatement
 SgWarningDirectiveStatement
@@ -762,8 +749,6 @@ SgWhileStmt
 SgWriteStatement
 SgXorAssignOp
 Sg_File_Info
-SgTypeCAFTeam
-SgCAFWithTeamStatement
 SgCAFCoExpression
 SgCAFImageSelectorExp
 SgCallExpression
@@ -785,3 +770,25 @@ SgBFloat16Val
 SgFloat16Val
 SgFloat32Val
 SgFloat64Val
+SgFormTeamStatement
+SgCxxLiteralToken
+SgCxxLiteralTokenList
+SgInteger128Val
+SgTypeDependent
+SgUnaryTransformType
+SgAlignmentSpecifier
+SgVectorElementExp
+SgFortranImplicitRange
+SgFortranDataInitializer
+SgCxxArrayInitBinding
+SgCxxArrayInitLoop
+SgCxxArrayInitReference
+SgCxxDefaultInitExp
+SgCxxSubobjectDestruction
+SgTypeFortranBOZ
+SgFortranBOZVal
+SgOpaqueValueBinding
+SgOpaqueValueReference
+SgPseudoObjectExp
+SgNamelistSymbol
+SgCxxDecompositionRefExp

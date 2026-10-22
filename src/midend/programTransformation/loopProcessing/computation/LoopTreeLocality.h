@@ -4,14 +4,17 @@
 
 #include "LoopTreeDepComp.h"
 
+#include <functional>
+
 struct DepCompAstRef {
   AstNodePtr orig;
   LoopTreeNode *stmt;
   DepCompAstRef(const AstNodePtr &o, LoopTreeNode *s) : orig(o), stmt(s) {}
   bool operator<(const DepCompAstRef &that) const {
-    return this->ToHandle() < that.ToHandle();
+    if (stmt != that.stmt)
+      return std::less<LoopTreeNode *>{}(stmt, that.stmt);
+    return orig < that.orig;
   }
-  std::string ToHandle() const;
   std::string toString() const;
 };
 
@@ -35,10 +38,13 @@ class DepCompAstRefAnal {
     int res = (*p).second;
     return (res > 0) ? res : -res;
   }
-  void Append(LoopTreeNode *root);
+  void Append(const LoopTreeDepComp &comp, LoopTreeNode *root);
 
 public:
-  DepCompAstRefAnal(LoopTreeNode *_root) : root(_root) { Append(root); }
+  DepCompAstRefAnal(const LoopTreeDepComp &comp, LoopTreeNode *_root)
+      : root(_root) {
+    Append(comp, root);
+  }
 
   LoopTreeNode *get_tree_root() const { return root; }
   int get_stmt_size() const { return stmtmap.size(); }
@@ -71,11 +77,6 @@ class LoopTreeLocalityAnal {
   DepInfoAnal &anal;
   LoopTreeDepGraphCreate inputCreate;
 
-  void ComputeInputDep(LoopTreeDepGraph::NodeIterator iter,
-                       DepCompAstRefAnal &stmtorder);
-  void ComputeInputDep(LoopTreeDepGraph::NodeIterator src,
-                       LoopTreeDepGraph::NodeIterator snk,
-                       DepCompAstRefAnal &stmtorder);
   void ComputeInputDep(LoopTreeDepGraphNode *n1, LoopTreeDepGraphNode *n2,
                        DepCompAstRefAnal &stmtorder);
 

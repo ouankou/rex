@@ -9,9 +9,7 @@ add_subdirectory(ompLowering)
 add_subdirectory(transformationTracking)
 add_subdirectory(extractFunctionArgumentsNormalization)
 add_subdirectory(singleStatementToBlockNormalization)
-if(NOT ENABLE-INTERNALFRONTENDDEVELOPMENT)
-  add_subdirectory(loopProcessing)
-endif()
+add_subdirectory(loopProcessing)
 
 add_library(midend_pt OBJECT
   astOutlining/NameGenerator.cc
@@ -52,7 +50,6 @@ add_library(midend_pt OBJECT
   astInlining/replaceExpressionWithStatement.C
   astInlining/inliner.C
   astInlining/inlinerSupport.C
-  implicitCodeGeneration/defaultFunctionGenerator.C
   implicitCodeGeneration/destructorCallAnnotator.C
   implicitCodeGeneration/analysisUtils.C
   implicitCodeGeneration/shortCircuitingTransformation.C

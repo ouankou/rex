@@ -6,13 +6,13 @@
 
 #include "IntraProcAliasAnalysis.h"
 
-using namespace std;
-
 //! PtrAliasAnalysis computes Alias Information, which is used for
 //! Virtual Function Resolving.
 class ROSE_DLL_API PtrAliasAnalysis : public InterProcDataFlowAnalysis {
 
 protected:
+  void initializeAnalysis();
+
   //! The stored callGraph for internal processing
   SgIncidenceDirectedGraph *callGraph;
 
@@ -47,26 +47,8 @@ public:
 private:
   void SortCallGraphRecursive(
       SgFunctionDeclaration *targetFunction,
-      SgIncidenceDirectedGraph *callGraph,
-      std::unordered_map<SgFunctionDeclaration *, SgGraphNode *>
-          &graphNodeToFunction,
       std::unordered_map<SgGraphNode *, PtrAliasAnalysis::COLOR> &colors,
-      std::vector<SgFunctionDeclaration *> &processingOrder,
-      PtrAliasAnalysis::TRAVERSAL_TYPE order);
-
-  void
-  SortCallGraphNodes(SgFunctionDeclaration *targetFunction,
-                     SgIncidenceDirectedGraph *callGraph,
-                     std::unordered_map<SgFunctionDeclaration *, SgGraphNode *>
-                         &graphNodeToFunction,
-                     std::vector<SgFunctionDeclaration *> &processingOrder,
-                     PtrAliasAnalysis::TRAVERSAL_TYPE order);
-
-  void
-  computeCallGraphNodes(SgFunctionDeclaration *targetFunction,
-                        SgIncidenceDirectedGraph *callGraph,
-                        std::vector<SgFunctionDeclaration *> &processingOrder,
-                        PtrAliasAnalysis::TRAVERSAL_TYPE order);
+      std::vector<SgFunctionDeclaration *> &processingOrder);
 
   // Order of performing Dataflow Analysis
   TRAVERSAL_TYPE order;

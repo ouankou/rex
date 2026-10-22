@@ -1,83 +1,29 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
 #include "astPostProcessing.h"
 
 #include "sageBuilder.h"
 
-#include <iomanip>
-
-#include <iostream>
-
 #include "rose_config.h"
-
-#include <vector>
-
-// DQ (8/1/2005): test use of new static function to create
-// Sg_File_Info object that are marked as transformations
-#undef SgNULL_FILE
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
 #include "inlinerSupport.h"
 
 #include "replaceExpressionWithStatement.h"
 
-// DQ (12/31/2005): This is OK if not declared in a header file
-using namespace std;
 using namespace SageInterface;
-// void FixSgTree(SgNode*);
-
-// int gensym_counter = 0; // moved into sageInterface
-
-// Replace an assignment statement with the result of a statement
-// generator.
-// Assumptions: from has assignment expr at top level of statement
-//              from is not in the test of a loop or if statement
-//              not currently traversing from
-void replaceAssignmentStmtWithStatement(SgExprStatement *from,
-                                        StatementGenerator *to) {
-  assert(from);
-  assert(to);
-  // SgAssignOp* assignment =
-  // isSgAssignOp(from->get_expression_root()->get_operand_i());
-  SgAssignOp *assignment = isSgAssignOp(from->get_expression());
-  assert(assignment);
-  SgVarRefExp *var = isSgVarRefExp(assignment->get_lhs_operand());
-  assert(var);
-  SgStatement *replacement = to->generate(var);
-  // replacement->set_parent(from->get_parent());
-  myStatementInsert(from, replacement, false);
-  to->finalizeGeneratedStatement(replacement);
-  SageInterface::myRemoveStatement(from);
-}
-
-// Get the expression root of an expression.  Needs to be moved.
 SgExpression *getRootOfExpression(SgExpression *n) {
   ROSE_ASSERT(n);
 
   SgNode *parent = n->get_parent();
   while (isSgExpression(parent) != NULL) {
-    // cout << "n is " << n->sage_class_name() << ": " << n->unparseToString()
-    // << endl;
     n = isSgExpression(parent);
     parent = n->get_parent();
-    ROSE_ASSERT(n != NULL);
   }
 
   return n;
 }
 
-// Get the statement of an expression.  Somewhat smarter than the standard
-// version of this routine, but needs to be merged.
 SgStatement *getStatementOfExpression(SgNode *n) {
-  assert(n);
-  // std::cout << "Starting getStatementOfExpression on 0x" << std::hex <<
-  // (int)n << ", which has type " << n->sage_class_name() << std::endl;
-
   SgExpression *expression = isSgExpression(n);
   ROSE_ASSERT(expression != NULL);
   SgExpression *rootExpression = getRootOfExpression(expression);
@@ -89,56 +35,38 @@ SgStatement *getStatementOfExpression(SgNode *n) {
   if (initializedName != NULL)
     root = initializedName;
 
-  ROSE_ASSERT(root != NULL);
   SgStatement *statement = isSgStatement(root->get_parent());
   ROSE_ASSERT(statement != NULL);
   return statement;
 }
 
-// Get the initializer containing an expression if it is within an
-// initializer.
-SgInitializer *getInitializerOfExpression(SgExpression *n) {
-  assert(n);
-  while (!isSgInitializer(n)) {
-    n = isSgExpression(n->get_parent());
-    assert(n);
-  }
-  return isSgInitializer(n);
-}
-
 // Insert a new statement before or after a target statement.  If
 // allowForInit is true, the new statement can be inserted into the
 // initializer of a for statement.
-// Needs to be merged
 void myStatementInsert(SgStatement *target, SgStatement *newstmt, bool before,
                        bool allowForInit) {
   ROSE_ASSERT(target != NULL);
   ROSE_ASSERT(newstmt != NULL);
   SgStatement *parent = isSgStatement(target->get_parent());
-  // cerr << "1: target is a " << target->sage_class_name() << ",
-  // target->get_parent() is a " << target->get_parent()->sage_class_name() <<
-  // endl;
   if (isSgIfStmt(parent) && isSgIfStmt(parent)->get_conditional() == target) {
     target = parent;
     parent = isSgScopeStatement(target->get_parent());
   }
 
-  // printf ("allowForInit = %s \n",allowForInit ? "true" : "false");
-  if (isSgForInitStatement(target->get_parent()) && !allowForInit) {
-    target = isSgScopeStatement(target->get_parent()->get_parent());
-    parent = isSgScopeStatement(target->get_parent());
-    assert(target);
+  if (auto *forInit = isSgForInitStatement(target->get_parent());
+      forInit && !allowForInit) {
+    SgForStatement *forLoop = isSgForStatement(forInit->get_parent());
+    ROSE_ASSERT(forLoop);
+    target = forLoop;
+    parent = isSgScopeStatement(forLoop->get_parent());
   }
 
-  if (isSgSwitchStatement(target->get_parent()) &&
-      target ==
-          isSgSwitchStatement(target->get_parent())->get_item_selector()) {
-    target = isSgScopeStatement(target->get_parent()->get_parent());
-    parent = isSgScopeStatement(target->get_parent());
-    assert(target);
+  if (auto *switchStmt = isSgSwitchStatement(target->get_parent());
+      switchStmt && target == switchStmt->get_item_selector()) {
+    target = switchStmt;
+    parent = isSgScopeStatement(switchStmt->get_parent());
   }
 
-  ROSE_ASSERT(target != NULL);
   ROSE_ASSERT(parent);
   // The generic mutation boundary owns source publication, scope fixup, and
   // the exact container insertion.  Directly editing the sibling vector left
@@ -156,20 +84,19 @@ void replaceExpressionWithExpression(SgExpression *from, SgExpression *to) {
 
 // Convert something like "int a = foo();" into "int a; a = foo();"
 SgAssignOp *convertInitializerIntoAssignment(SgAssignInitializer *init) {
-#ifndef CXX_IS_ROSE_CODE_GENERATION
   using namespace SageBuilder;
-  // Liao 2020/7/23: this function is not accurate for template classes with
-  // specialization
-  // assert
-  // (SageInterface::isDefaultConstructible(init->get_operand_i()->get_type()));
+  ROSE_ASSERT(init);
   SgStatement *stmt = getStatementOfExpression(init);
-  assert(stmt);
-  SgScopeStatement *parent = isSgScopeStatement(stmt->get_parent());
-  if (!parent && isSgForInitStatement(stmt->get_parent()))
-    parent = isSgScopeStatement(stmt->get_parent()->get_parent()->get_parent());
-  assert(parent);
+  SgNode *statementOwner = stmt->get_parent();
+  SgScopeStatement *parent = isSgScopeStatement(statementOwner);
+  if (auto *forInit = isSgForInitStatement(statementOwner)) {
+    SgForStatement *forLoop = isSgForStatement(forInit->get_parent());
+    ROSE_ASSERT(forLoop);
+    parent = isSgScopeStatement(forLoop->get_parent());
+  }
+  ROSE_ASSERT(parent);
   SgNode *initparent = init->get_parent();
-  assert(initparent);
+  ROSE_ASSERT(initparent);
 
   SgInitializedName *initname = NULL;
   if (isSgInitializedName(initparent))
@@ -187,14 +114,15 @@ SgAssignOp *convertInitializerIntoAssignment(SgAssignInitializer *init) {
       }
     }
   } else {
-    std::cout << "initparent is a " << initparent->sage_class_name()
-              << std::endl;
-    assert(!"Should not happen");
+    fprintf(stderr,
+            "REX_AST_INVARIANT[initializer-owner]: owner=%p/%s is "
+            "not an initialized name or variable declaration\n",
+            static_cast<void *>(initparent), initparent->class_name().c_str());
+    ROSE_ABORT();
   }
 
-  assert(initname);
-  assert(initname->get_initializer() == init);
-  assert(parent);
+  ROSE_ASSERT(initname);
+  ROSE_ASSERT(initname->get_initializer() == init);
   SgSymbol *sym = initname->get_symbol_from_symbol_table();
   ROSE_ASSERT(isSgVariableSymbol(sym));
   SgVarRefExp *vr = buildVarRefExp(isSgVariableSymbol(sym));
@@ -205,43 +133,14 @@ SgAssignOp *convertInitializerIntoAssignment(SgAssignInitializer *init) {
   delete init;
   SgExprStatement *assign_stmt = buildAssignStatement(vr, operand);
 
-  // assignment->set_parent(assign_stmt);
-  // cout << "stmt is " << stmt->unparseToString() << endl;
-  // cout << "stmt->get_parent() is a " << stmt->get_parent()->sage_class_name()
-  // << endl;
-
   myStatementInsert(stmt, assign_stmt, false);
-  assign_stmt->set_parent(parent);
 
-  // FixSgTree(assign_stmt);
-  // FixSgTree(parent);
-
-  // AstPostProcessing(assign_stmt);
   return isSgAssignOp(assign_stmt->get_expression());
-#else
-  return NULL;
-#endif
 }
 
-// Rewrites a while or for loop so that the official test is changed to
-// "true" and what had previously been the test is now an if-break
-// combination (with an inverted condition) at the beginning of the loop
-// body
-//
-// For example, "while (a < 5) ++a;" becomes:
-// "while (true) {bool temp = (a < 5); if (!temp) break; ++a;}"
-// "for (init; test; step) body;" becomes:
-// "for (init; true; step) {bool temp = test; if (!temp) break; body;}"
-// "do body; while (test);" becomes:
-// "do {body; bool temp = test; if (!temp) break;} while (true);"
 void pushTestIntoBody(SgScopeStatement *loopStmt) {
-#ifndef CXX_IS_ROSE_CODE_GENERATION
   using namespace SageBuilder;
-  AstPostProcessing(loopStmt);
-  SgBasicBlock *new_body = buildBasicBlock();
-  SgStatement *old_body = SageInterface::getLoopBody(loopStmt);
-  SageInterface::setLoopBody(loopStmt, new_body);
-  AstPostProcessing(loopStmt);
+  ROSE_ASSERT(loopStmt != nullptr);
   SgStatement *cond = SageInterface::getLoopCondition(loopStmt);
   ROSE_ASSERT(isSgExprStatement(cond));
   SgExpression *root = isSgExprStatement(cond)->get_expression();
@@ -254,31 +153,33 @@ void pushTestIntoBody(SgScopeStatement *loopStmt) {
                             : nullptr);
     ROSE_ABORT();
   }
-  SgExpression *retainedRoot = SageInterface::copyExpression(root);
-  SageInterface::replaceExpression(root, retainedRoot, true);
-  SgCastExp *cast = buildCastExp(root, SageInterface::getBoolType(loopStmt));
-  // Name does not need to be unique, but must not be used in user code anywhere
-  AstPostProcessing(loopStmt);
+  SgType *condition_type = SageInterface::getBoolType(loopStmt);
+  SgStatement *old_body = SageInterface::getLoopBody(loopStmt);
+  SgBasicBlock *new_body = buildBasicBlock();
+  SageInterface::setLoopBody(loopStmt, new_body);
+  SageInterface::setLoopCondition(loopStmt,
+                                  buildExprStatement(buildBoolValExp(true)));
+  isSgExprStatement(cond)->set_expression(nullptr);
+  root->set_parent(nullptr);
+  SageInterface::deepDelete(cond);
+  SgCastExp *cast = buildCastExp(root, condition_type);
   SgVariableDeclaration *new_decl = buildVariableDeclaration(
-      "rose__temp", SageInterface::getBoolType(loopStmt),
-      buildAssignInitializer(cast, SageInterface::getBoolType(loopStmt)),
-      new_body);
+      SageInterface::generateUniqueVariableName(new_body, "rose_inline_test_"),
+      condition_type, buildAssignInitializer(cast, condition_type), new_body);
   SgVariableSymbol *varsym = SageInterface::getFirstVarSym(new_decl);
   SageInterface::appendStatement(new_decl, new_body);
-  AstPostProcessing(loopStmt);
   SgIfStmt *loop_break = buildIfStmt(
-      buildExprStatement(buildNotOp(buildVarRefExp(varsym),
-                                    SageInterface::getBoolType(loopStmt))),
+      buildExprStatement(buildNotOp(buildVarRefExp(varsym), condition_type)),
       buildBasicBlock(buildBreakStmt()), buildBasicBlock());
   SageInterface::appendStatement(loop_break, new_body);
-  AstPostProcessing(loopStmt);
   if (isSgDoWhileStmt(loopStmt)) {
-    SgName label = "rose_test_label__";
-    static unsigned int gensym_counter = 0;
-    label << ++gensym_counter;
+    SgFunctionDefinition *procedure =
+        SageInterface::getEnclosingProcedure(loopStmt);
+    ROSE_ASSERT(procedure);
+    SgName label = SageInterface::generateUniqueVariableName(
+        procedure, "rose_inline_test_label_");
     SgLabelStatement *ls =
-        buildLabelStatement(label, buildBasicBlock(),
-                            SageInterface::getEnclosingProcedure(loopStmt));
+        buildLabelStatement(label, buildBasicBlock(), procedure);
     SageInterface::changeContinuesToGotos(old_body, ls);
     // Note that these two insertions are backwards of the resulting statement
     // order
@@ -288,9 +189,4 @@ void pushTestIntoBody(SgScopeStatement *loopStmt) {
     SageInterface::appendStatement(old_body, new_body);
   }
   AstPostProcessing(loopStmt);
-  SageInterface::setLoopCondition(loopStmt,
-                                  buildExprStatement(buildBoolValExp(true)));
-  SageInterface::deepDelete(cond);
-  AstPostProcessing(loopStmt);
-#endif
 }

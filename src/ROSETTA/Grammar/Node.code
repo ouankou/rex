@@ -1,9 +1,45 @@
 // -*- c++ -*-
+HEADER_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION_START
+void post_construction_initialization() override;
+HEADER_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION_END
+
+SOURCE_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION_START
+void SgLambdaCapture::post_construction_initialization() {
+  if (p_capture_variable == nullptr ||
+      p_capture_variable->get_parent() != nullptr ||
+      p_capture_initializer == nullptr ||
+      p_capture_initializer->get_parent() != nullptr ||
+      p_capture_initializer == p_capture_variable ||
+      (p_closure_variable != nullptr &&
+       (p_closure_variable->get_parent() != nullptr ||
+        p_closure_variable == p_capture_variable ||
+        p_closure_variable == p_capture_initializer))) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[lambda-capture-operand]: capture requires "
+            "distinct detached typed expressions\n");
+    ROSE_ABORT();
+  }
+  p_capture_variable->set_parent(this);
+  p_capture_initializer->set_parent(this);
+  if (p_closure_variable != nullptr)
+    p_closure_variable->set_parent(this);
+}
+SOURCE_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION_END
+
+HEADER_CXX_ARRAY_INIT_BINDING_START
+public:
+static bool is_valid_source(SgExpression *source,
+                            SgCastExp::value_category_enum category);
+void validate() const;
+void replace_common_source(SgExpression *source,
+                           SgCastExp::value_category_enum category);
+void post_construction_initialization() override;
+HEADER_CXX_ARRAY_INIT_BINDING_END
+
 HEADER_NODE_PREDECLARATION_START
 
 #include "ROSE_DEPRECATED.h"
 
-#include <semaphore.h>
 
 #include <unordered_map>
 
@@ -19,110 +55,39 @@ HEADER_NODE_PREDECLARATION_START
 
 #include <type_traits>
 
-// tps (01/27/10): Added essential files..
-// #include "sage3basic.h"
+#include <variant>
 
 #include "rosePublicConfig.h"
+#include "transformationTracking.h"
 
 #include "Cxx_Grammar.h"
 class PreprocessingInfo;
-class AstRegExAttribute;
 class AstAttribute;
 class AstAttributeMechanism;
-// DQ (8/21/2008): these are from the GenericExec.h (from before we used Robb's
-// work in the new IR nodes).
-#define NELMTS(X)                                                              \
-  (sizeof(X) / sizeof((X)[0])) /* number of elements in a static-sized array   \
-                                */
-#define DUMP_FIELD_WIDTH                                                       \
-  64 /* min columns to use for member names in dump() functions */
-#include <semaphore.h>
-class mutex {
-  // This class was added by Valentin David (summer of 2007) as part of support
-  // for Stratego.
-
-private:
-  sem_t mut;
-
-public:
-  mutex() { sem_init(&mut, 1, 1); }
-
-  void lock() { sem_wait(&mut); }
-
-  void unlock() { sem_post(&mut); }
-};
-//! Declarations to be placed at the top of the header file for this grammar
-/*! The typedefs simplify the resulting generated code.  Note that the use of
-   STL for the list types requires the use of an additional typedef to a pointer
-   of that list<Type> so that the generation of the code can be done using types
-   that don't explicitly have the "*" in the type string.  This avoids the
-   automatic assumption (currently hard coded within ROSETTA) that "*"'d types
-   have a specific interface which includes set_parent and get_parent member
-   functions.  This is assumption within ROSETTA may be eliminated in the
-   future.
- */
-
-// endif for ifndef ROSE_USE_SWIG_SUPPORT
-// #endif
-
-// #include "virtualCFG.h"
-
-// Turn on internal debugging by default during development
-#define SAGE_INTERNAL_DEBUG
 
 #define ROSE_INTEGER_TYPE_MAX_BIT_LENGTH 32
 
-//! declaration of variable to control internal output of debugging information
-//! (default = 0)
-extern int SAGE_DEBUG;
-
-// Introduce a way to change from std::list to std::vector easily as a test to
-// improve performance of traversals. This is now moved to
-// ROSE/util/commandLineProcessing/setup.h so that all of ROSE will see it.
-// define Rose_STL_Container std::list
-// define Rose_STL_Container std::vector
-
 class SgInitializedName;
-// DQ (6/1/2004): Change this to be a list of pointers to SgInitializedName (to
-// fix Beata's Bug beata.C)
 typedef Rose_STL_Container<SgInitializedName *> SgInitializedNamePtrList;
-typedef SgInitializedNamePtrList *SgInitializedNamePtrListPtr;
 
 class SgDeclarationStatement;
-
-// DQ (1/28/2016): Different ways of documenting typedefs (none appear to be
-// working with the doc generator).
-/** \typedef SgDeclarationStatementPtrList
-    \brief This is socumentation for the following typedef
- */
 typedef Rose_STL_Container<SgDeclarationStatement *>
     SgDeclarationStatementPtrList;
 
-/** \typedef SgDeclarationStatementPtrListPtr
-    \brief This is socumentation for the following typedef
- */
-typedef SgDeclarationStatementPtrList *SgDeclarationStatementPtrListPtr;
-
 class SgStatement;
 typedef Rose_STL_Container<SgStatement *> SgStatementPtrList;
-typedef SgStatementPtrList *SgStatementPtrListPtr;
 
 class SgBaseClass;
-// DQ (6/21/2005): Change from list of SgBaseClass to list of SgBaseClass*
 typedef Rose_STL_Container<SgBaseClass *> SgBaseClassPtrList;
-typedef SgBaseClassPtrList *SgBaseClassPtrListPtr;
 
 class SgNode;
 typedef Rose_STL_Container<SgNode *> SgNodePtrList;
-typedef SgNodePtrList *SgNodePtrListPtr;
 
 class SgType;
 typedef Rose_STL_Container<SgType *> SgTypePtrList;
-typedef SgTypePtrList *SgTypePtrListPtr;
 
 class SgExpression;
 typedef Rose_STL_Container<SgExpression *> SgExpressionPtrList;
-typedef SgExpressionPtrList *SgExpressionPtrListPtr;
 
 // Each function-type argument needs a distinct, typed reference identity for
 // contextual name qualification.  The SgType itself can be globally shared
@@ -130,47 +95,44 @@ typedef SgExpressionPtrList *SgExpressionPtrListPtr;
 class SgFunctionTypeArgument;
 typedef Rose_STL_Container<SgFunctionTypeArgument *>
     SgFunctionTypeArgumentPtrList;
-typedef SgFunctionTypeArgumentPtrList *SgFunctionTypeArgumentPtrListPtr;
 
 class SgStatementAttribute;
 typedef Rose_STL_Container<SgStatementAttribute *> SgStatementAttributePtrList;
-typedef SgStatementAttributePtrList *SgStatementAttributePtrListPtr;
+
+class SgAlignmentSpecifier;
+typedef Rose_STL_Container<SgAlignmentSpecifier *> SgAlignmentSpecifierPtrList;
+
+class SgFortranImplicitRange;
+typedef Rose_STL_Container<SgFortranImplicitRange *>
+    SgFortranImplicitRangePtrList;
 
 class SgOmpInductionItem;
 typedef Rose_STL_Container<SgOmpInductionItem *> SgOmpInductionItemPtrList;
-typedef SgOmpInductionItemPtrList *SgOmpInductionItemPtrListPtr;
 
 class SgOmpApplyTransformation;
 typedef Rose_STL_Container<SgOmpApplyTransformation *>
     SgOmpApplyTransformationPtrList;
-typedef SgOmpApplyTransformationPtrList *SgOmpApplyTransformationPtrListPtr;
 
 class SgOmpInitModifier;
 typedef Rose_STL_Container<SgOmpInitModifier *> SgOmpInitModifierPtrList;
-typedef SgOmpInitModifierPtrList *SgOmpInitModifierPtrListPtr;
 
 class SgOmpMapDistDataPolicy;
 typedef Rose_STL_Container<SgOmpMapDistDataPolicy *>
     SgOmpMapDistDataPolicyPtrList;
-typedef SgOmpMapDistDataPolicyPtrList *SgOmpMapDistDataPolicyPtrListPtr;
 
 class SgOmpUsesAllocatorsDefination;
 typedef Rose_STL_Container<SgOmpUsesAllocatorsDefination *>
     SgOmpUsesAllocatorsDefinationPtrList;
-typedef SgOmpUsesAllocatorsDefinationPtrList
-    *SgOmpUsesAllocatorsDefinationPtrListPtr;
 
 class SgOmpIteratorDefinition;
 typedef Rose_STL_Container<SgOmpIteratorDefinition *>
     SgOmpIteratorDefinitionPtrList;
-typedef SgOmpIteratorDefinitionPtrList *SgOmpIteratorDefinitionPtrListPtr;
 
 class SgOmpInitModifierList;
 
 class SgOmpAppendArgsOperation;
 typedef Rose_STL_Container<SgOmpAppendArgsOperation *>
     SgOmpAppendArgsOperationPtrList;
-typedef SgOmpAppendArgsOperationPtrList *SgOmpAppendArgsOperationPtrListPtr;
 
 class SgOmpMapItem;
 
@@ -182,261 +144,109 @@ class SgOmpContextSelectorSet;
 
 typedef Rose_STL_Container<VariantT> VariantTList;
 
-// Liao 9/27/2010: new typedef for SgVarRefExp list
 class SgVarRefExp;
 typedef Rose_STL_Container<SgVarRefExp *> SgVarRefExpPtrList;
-typedef SgVarRefExpPtrList *SgVarRefExpPtrListPtr;
 
 class SgAttribute;
 typedef Rose_STL_Container<SgAttribute *> SgAttributePtrList;
-typedef SgAttributePtrList *SgAttributePtrListPtr;
 
-// DQ (6/14/2008): I think this should be unsigned char
-// typedef Rose_STL_Container<char*>           SgCharPtrList;
-// typedef SgCharPtrList*                      SgCharPtrListPtr;
 typedef Rose_STL_Container<unsigned char> SgCharList;
-typedef SgCharList *SgCharListPtr;
 
 typedef SgExpression *SgExpressionPtr;
 typedef SgStatement *SgStatementPtr;
 typedef SgInitializedName *SgInitializedNamePtr;
 
-// DQ (4/7/2001) Add SgFile list support for multi-file support within SgProject
 class SgFile;
 typedef std::vector<SgFile *> SgFilePtrList;
-typedef SgFilePtrList *SgFilePtrListPtr;
 
-// DQ (2/27/2019): Modified to add the line number so that we could support
-// adding comments and CPP directives to shared IR nodes to support multi-file
-// compilation. DQ (5/22/2006): Added this support so that we could have general
-// way of interpreting STL containers so that we could simplify that code used
-// to generated code for the destructors. JJW (6/21/2008): Changed to a
-// unordered vector for performance
 typedef int SgFileId;
 typedef std::vector<SgFileId> SgFileIdList;
-// typedef struct { int file_id; int line_number; } SgFileIdLineNumber;
-// typedef std::vector<SgFileIdLineNumber>          SgFileIdList;
 typedef int SgFileLineNumber;
 typedef std::vector<SgFileLineNumber> SgFileLineNumberList;
 
-// DQ (5/22/2006): Added this support so that we could have general way of
-// interpreting STL containers so that we could simplify that code used to
-// generated code for the destructors.
 typedef Rose_STL_Container<std::string> SgStringList;
-typedef SgStringList *SgStringListPtr;
 
-// DQ (3/10/2007): Added STL set of SgNode* so that we could support existence
-// tests in the symbol table without a linear search of the symbol table (where
-// we don't use the name). This test helps detect where symbols may have been
-// inserted into the symbol table using two different names, or there names
-// changed without properly unloading and reloading the associated symbol.
 typedef std::set<SgNode *> SgNodeSet;
-typedef SgNodeSet *SgNodeSetPtr;
 typedef std::unordered_set<SgNode *> SgUnorderedNodeSet;
-typedef SgUnorderedNodeSet *SgUnorderedNodeSetPtr;
 typedef std::unordered_map<SgNode *, std::string> SgUnorderedMapNodeToString;
-typedef SgUnorderedMapNodeToString *SgUnorderedMapNodeToStringPtr;
-
-class ROSEAttributesList;
-typedef ROSEAttributesList *ROSEAttributesListPtr;
 
 class ROSEAttributesListContainer;
 typedef ROSEAttributesListContainer *ROSEAttributesListContainerPtr;
 
-// I don't think these are needed
-// typedef vector<ROSEAttributesListContainer*> ROSEAttributesListContainerList;
-// typedef ROSEAttributesListContainerList* ROSEAttributesListContainerListPtr;
-
-// MK: The data member p_nodes of the SgModifierNodes class is now an
-// STL vector, therefore we define the following data types
 typedef std::vector<SgModifierType *> SgModifierTypePtrVector;
-// DQ (12/19/2005): This is not used anywhere!
-// typedef SgModifierTypePtrVector          SgModifierTypePtrVectorPtr;
 
-// DQ (12/6/2003): added bit vector typedef to support addition of more flags
-// that can be held in a long integer for the Unparse_Info object.
 typedef std::vector<bool> SgBitVector;
 
-// DQ (3/12/2004): Added for template support
 class SgTemplateParameter;
 typedef Rose_STL_Container<SgTemplateParameter *> SgTemplateParameterPtrList;
-typedef SgTemplateParameterPtrList *SgTemplateParameterPtrListPtr;
 
 class SgTemplateParameterList;
 typedef Rose_STL_Container<SgTemplateParameterList *>
     SgTemplateParameterListPtrList;
-typedef SgTemplateParameterListPtrList *SgTemplateParameterListPtrListPtr;
 
-// DQ (3/12/2004): Added for template support
 class SgTemplateArgument;
 typedef Rose_STL_Container<SgTemplateArgument *> SgTemplateArgumentPtrList;
-typedef SgTemplateArgumentPtrList *SgTemplateArgumentPtrListPtr;
 
-// DQ (9/6/2004): Added for qualified name support (e.g. A::B::C::dataMember)
-// This form of qualified name support was later removed!
-// class SgSymbol;
-// typedef list<SgSymbol*>      SgSymbolPtrList;
-// typedef SgSymbolPtrList*     SgSymbolPtrListPtr;
-
-// DQ (5/6/2005): Added support for SgDirectory IR node!
 class SgDirectory;
 typedef std::vector<SgDirectory *> SgDirectoryPtrList;
-typedef SgDirectoryPtrList *SgDirectoryPtrListPtr;
-
-// DQ (12/21/2005): Added to support explicit name qualifiers (this provides
-// only global qualifier info so far)
-class SgQualifiedName;
-typedef Rose_STL_Container<SgQualifiedName *> SgQualifiedNamePtrList;
-typedef SgQualifiedNamePtrList *SgQualifiedNamePtrListPtr;
-
-// DQ (10/4/2006): Add support for storing unique numbers with SgBasicBlock IR
-// nodes. This mechanism premits unique numbers to be computed and cached and
-// the cache to be easily invalidated. Name this as a list since the ROSETTA
-// code generation will use this information.
-class SgBasicBlock;
-typedef SgBasicBlock *SgBasicBlockPtr;
-// typedef std::map<SgBasicBlock*,int>      SgBasicBlockPtrList;
-typedef std::vector<SgBasicBlockPtr> SgBasicBlockPtrList;
-typedef SgBasicBlockPtrList *SgBasicBlockPtrListPtr;
 
 class SgDeclarationScope;
 typedef Rose_STL_Container<SgDeclarationScope *> SgDeclarationScopePtrList;
-typedef SgDeclarationScopePtrList *SgDeclarationScopePtrListPtr;
 
-// DQ (11/19/2007): Added support for Fortran namelist statement.
 typedef Rose_STL_Container<SgNameGroup *> SgNameGroupPtrList;
-typedef SgNameGroupPtrList *SgNameGroupPtrListPtr;
 
-// DQ (11/20/2007): Added support for Fortran data statement.
 typedef Rose_STL_Container<SgDataStatementGroup *> SgDataStatementGroupPtrList;
-typedef SgDataStatementGroupPtrList *SgDataStatementGroupPtrListPtr;
 
-// DQ (11/20/2007): Added support for Fortran data statement.
 typedef Rose_STL_Container<SgDataStatementObject *>
     SgDataStatementObjectPtrList;
-typedef SgDataStatementObjectPtrList *SgDataStatementObjectPtrListPtr;
 
-// DQ (11/20/2007): Added support for Fortran data statement.
 typedef Rose_STL_Container<SgDataStatementValue *> SgDataStatementValuePtrList;
-typedef SgDataStatementValuePtrList *SgDataStatementValuePtrListPtr;
 
-// DQ (11/21/2007): Added support for common block statements (which can have
-// multiple common blocks)
 typedef Rose_STL_Container<SgCommonBlockObject *> SgCommonBlockObjectPtrList;
-typedef SgCommonBlockObjectPtrList *SgCommonBlockObjectPtrListPtr;
 
-// DQ (11/21/2007): Added support for dimension statements (which can have
-// multiple entries)
 typedef Rose_STL_Container<SgDimensionObject *> SgDimensionObjectPtrList;
-typedef SgDimensionObjectPtrList *SgDimensionObjectPtrListPtr;
 
-// DQ (11/21/2007): Added support for dimension statements (which can have
-// multiple entries)
 typedef Rose_STL_Container<SgLabelSymbol *> SgLabelSymbolPtrList;
-typedef SgLabelSymbolPtrList *SgLabelSymbolPtrListPtr;
 
-// DQ (11/21/2007): Added support for format statements (which can have multiple
-// entries)
 typedef Rose_STL_Container<SgFormatItem *> SgFormatItemPtrList;
-typedef SgFormatItemPtrList *SgFormatItemPtrListPtr;
 
-typedef Rose_STL_Container<rose_addr_t> SgAddressList;
-typedef SgAddressList *SgAddressListPtr;
-
-typedef Rose_STL_Container<unsigned> SgUnsignedList;
-typedef SgUnsignedList *SgUnsignedListPtr;
-
-// DQ (8/7/2008): Added list of size_t types for binary format support.
-typedef Rose_STL_Container<size_t> SgSizeTList;
-typedef SgSizeTList *SgSizeTListPtr;
+typedef Rose_STL_Container<uint32_t> SgStringCodeUnitList;
 
 typedef Rose_STL_Container<unsigned char> SgUnsignedCharList;
-typedef SgUnsignedCharList *SgUnsignedCharListPtr;
 
-// DQ (10/1/2008): Added support for lists of SgModuleStatement where they are
-// not a part of the current translation unit.  A place for the information in
-// the *.mod files to be put.  This is just the type declaration for the list.
-typedef Rose_STL_Container<SgModuleStatement *> SgModuleStatementPtrList;
-typedef SgModuleStatementPtrList *SgModuleStatementPtrListPtr;
-
-// DQ (10/4/2008): Support for list of names or rename entries for the
-// SgUseStatement (Fortran 90 support)
 typedef Rose_STL_Container<SgRenamePair *> SgRenamePairPtrList;
-typedef SgRenamePairPtrList *SgRenamePairPtrListPtr;
 
-// DQ (10/6/2008): Added improved support for F90 interfaces using interface
-// bodies.
 typedef Rose_STL_Container<SgInterfaceBody *> SgInterfaceBodyPtrList;
-typedef SgInterfaceBodyPtrList *SgInterfaceBodyPtrListPtr;
 
-// DQ (11/28/2008): Added support for list of integers (used for flag list in
-// SgLinemarkerDirectiveStatement). typedef std::vector<int> SgIntegerList;
-// Liao, 5/30/2009 types for OpenMP support
 typedef Rose_STL_Container<SgOmpClause *> SgOmpClausePtrList;
-typedef SgOmpClausePtrList *SgOmpClausePtrListPtr;
 typedef Rose_STL_Container<SgOmpContextSelectorProperty *>
     SgOmpContextSelectorPropertyPtrList;
-typedef SgOmpContextSelectorPropertyPtrList
-    *SgOmpContextSelectorPropertyPtrListPtr;
 typedef Rose_STL_Container<SgOmpContextSelector *> SgOmpContextSelectorPtrList;
-typedef SgOmpContextSelectorPtrList *SgOmpContextSelectorPtrListPtr;
 typedef Rose_STL_Container<SgOmpContextSelectorSet *>
     SgOmpContextSelectorSetPtrList;
-typedef SgOmpContextSelectorSetPtrList *SgOmpContextSelectorSetPtrListPtr;
 // OpenACC clause list support
 typedef Rose_STL_Container<SgAccClause *> SgAccClausePtrList;
-typedef SgAccClausePtrList *SgAccClausePtrListPtr;
 
 typedef Rose_STL_Container<SgOmpSectionStatement *>
     SgOmpSectionStatementPtrList;
-typedef SgOmpSectionStatementPtrList *SgOmpSectionStatementPtrListPtr;
 
-// DQ (3/6/2014): Added support for Untyped IR nodes.
-
-// Rasmussen (08/25/2022): Removed all untyped Sage nodes.
-
-// DQ (9/3/2014): Added support for C++11 Lambda expressions.
 typedef Rose_STL_Container<SgLambdaCapture *> SgLambdaCapturePtrList;
-typedef SgLambdaCapturePtrList *SgLambdaCapturePtrListPtr;
 
-// DQ (9/15/2018) Add SgSourceFile list support for header file reporting (for
-// unparse headers option).
-class SgSourceFile;
-typedef Rose_STL_Container<SgSourceFile *> SgSourceFilePtrList;
-typedef SgSourceFilePtrList *SgSourceFilePtrListPtr;
-
-// DQ (9/18/2018) Add SgIncludeFile list support for header file reporting (for
-// unparse headers option).
 class SgIncludeFile;
 typedef Rose_STL_Container<SgIncludeFile *> SgIncludeFilePtrList;
-typedef SgIncludeFilePtrList *SgIncludeFilePtrListPtr;
 
-// DQ (10/28/2013): Forward declaration for new token unparsing support.
 class TokenStreamSequenceToNodeMapping;
 
-// DQ (11/30/2015): Added support for mapping of the AST to macro expansions.
 class MacroExpansion;
 
-// DQ (11/20/2010): Added type for SgToken list
-// Build a type for the SgToken list.
 typedef Rose_STL_Container<SgToken *> SgTokenPtrList;
-typedef SgTokenPtrList *SgTokenPtrListPtr;
+typedef Rose_STL_Container<SgCxxLiteralToken *> SgCxxLiteralTokenPtrList;
+typedef Rose_STL_Container<SgOpaqueValueBinding *> SgOpaqueValueBindingPtrList;
 
-// DQ (11/4/2009): Trying to use the hash_map support
 namespace rose_hash {
 using std::hash;
 using std::unordered_map;
 using std::unordered_multimap;
-using std::unordered_set;
-
-// DQ (4/23/2009): These should be put into this namespace so that we don't
-// contaminate the global scope. DQ (8/19/2008): This is already defined in
-// src/frontend/SageIII/astMerge/buildMangledNameMap.h
-struct eqstr_string {
-  bool operator()(const std::string &s1, const std::string &s2) const {
-    return s1 == s2;
-  }
-};
 
 /*! \brief Hash name support for symbol tables within ROSE.
  */
@@ -446,185 +256,41 @@ struct hash_integer {
 
 struct hash_integer_pair {
   size_t operator()(const std::pair<int, int> &p) const {
-    // DQ (4/30/2009): This subject should be reviewed!
-    // Since this is a hash function, it might not a problem if we have
-    // overflow (also the values should not be so large as to be a problem).
-    return p.first + p.second;
+    const std::uint64_t key =
+        (static_cast<std::uint64_t>(static_cast<std::uint32_t>(p.first))
+         << 32) |
+        static_cast<std::uint32_t>(p.second);
+    return std::hash<std::uint64_t>{}(key);
   }
 };
 
-// DQ (4/30/2009): This might already exist for std::pair<>
-struct eqstr_integer_pair {
-  bool operator()(const std::pair<int, int> &p1,
-                  const std::pair<int, int> &p2) const {
-    return (p1.first == p2.first) && (p1.second == p2.second);
-  }
-};
-
-struct eqstr_graph_node {
-  bool operator()(const SgGraphNode *p1, const SgGraphNode *p2) const {
-    return p1 == p2;
-  }
-};
-
-struct eqstr_graph_edge {
-  bool operator()(const SgGraphNode *p1, const SgGraphNode *p2) const {
-    return p1 == p2;
-  }
-};
-
-struct hash_graph_node {
-  size_t operator()(const SgGraphNode *ptr) const { return (size_t)ptr; }
-};
 } // namespace rose_hash
-
-/*! \brief Hash table support for graph IR nodes within ROSE (uses strings to
- * lookup nodes).
- */
-
-// DQ (8/19/2008): Note that "rose_hash" is a namespace defined above.
-// class rose_hash_multimap : public rose_hash::unordered_multimap<SgName,
-// SgSymbol*, hash_Name, eqstr> tps (11/18/2009) : This cannot be correct since
-// the constructor takes a string not an int.
-typedef rose_hash::unordered_multimap<std::string, SgGraphNode *>
-    rose_graph_string_node_hash_multimap_base_type;
-
-class rose_graph_string_node_hash_multimap
-    : public rose_graph_string_node_hash_multimap_base_type {
-  // Need to document why we are using hash_multimap type here.  Why a hash
-  // (obvious), then why a multimap? I think a multimap is used to support
-  // having no names on the nodes if they are unlabeled.  If the nodes are
-  // labled then operations on the labled edges are possible using the multimap.
-  // But is there a performance trade-off for these choices?
-
-protected:
-  // DQ (4/25/2009): We need to change this name since I think we just want the
-  // associated IR node in the AST, and not any concept of parent in the graph.
-  SgNode *parent;
-
-public:
-  rose_graph_string_node_hash_multimap()
-      : rose_graph_string_node_hash_multimap_base_type(), parent(nullptr) {}
-  // tps (11/18/2009) : This cannot be correct since the constructor takes a
-  // string not an int.
-  rose_graph_string_node_hash_multimap(
-      const rose_graph_string_node_hash_multimap &rhs)
-      : rose_graph_string_node_hash_multimap_base_type(rhs),
-        parent(rhs.parent) {}
-  // See note (above) about name change to the associated data member for these
-  // access functions.
-  void set_parent(SgNode *new_parent) { parent = new_parent; }
-  SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_string_node_hash_multimap() {
-    delete_elements();
-
-    parent = nullptr;
-  }
-};
-
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_string_node_hash_multimap::iterator &rhm_it);
-
-// DQ (5/1/2009): Temporary typedef to use older name for compatability.
-typedef rose_graph_string_node_hash_multimap rose_graph_hash_multimap;
-
-/*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
-   edges using nodes).
-
-    \internal This class is depricated and it's functionality will be produced
-   using two other hash maps.
- */
-
-// DQ (4/29/2009): Added to support ROSE Graph IR nodes
-// tps (11/18/2009) : This cannot be correct since the constructor takes a
-// string not an int.
-typedef rose_hash::unordered_multimap<SgGraphNode *, SgGraphEdge *,
-                                      rose_hash::hash_graph_node,
-                                      rose_hash::eqstr_graph_node>
-    rose_graph_node_edge_hash_multimap_base_type;
-class rose_graph_node_edge_hash_multimap
-    : public rose_graph_node_edge_hash_multimap_base_type {
-  // This class is used to map nodes to edges in the highest level graph class.
-  // Different graph classes derived from the SgGraph class contain additional
-  // maps that contain specific types of edges.
-
-protected:
-  SgNode *parent;
-
-public:
-  rose_graph_node_edge_hash_multimap()
-      : rose_graph_node_edge_hash_multimap_base_type() {}
-  // tps (11/18/2009) : This cannot be correct since the constructor takes a
-  // string not an int.
-  rose_graph_node_edge_hash_multimap(
-      const rose_graph_node_edge_hash_multimap &rhs)
-      // DQ (4/30/2009): This fixed a problem reported by Thomas Panas relative
-      // to seg-faults when using the copy constructor (forced his code to use
-      // references). : rose_hash::unordered_multimap<SgGraphNode*,
-      // SgGraphEdge*, rose_hash::hash_graph_node,
-      // rose_hash::eqstr_graph_node>((rose_graph_node_edge_hash_multimap)rhs)
-      : rose_graph_node_edge_hash_multimap_base_type(rhs), parent(rhs.parent) {}
-
-  void set_parent(SgNode *new_parent) { parent = new_parent; }
-  SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_node_edge_hash_multimap() { delete_elements(); }
-};
-
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_node_edge_hash_multimap::iterator &rhm_it);
 
 /*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
  * nodes using node index values).
  */
 
-// DQ (4/30/2009): Added to support more of the Graph functionality in new ROSE
-// IR nodes typedef rose_hash::unordered_map<int,SgGraphNode*,
-// rose_hash::hash_integer, rose_hash::eqstr_graph_node>
-// rose_graph_integer_node_hash_map_base_type
 typedef rose_hash::unordered_map<int, SgGraphNode *, rose_hash::hash_integer>
     rose_graph_integer_node_hash_map_base_type;
 class rose_graph_integer_node_hash_map
     : public rose_graph_integer_node_hash_map_base_type {
 protected:
-  // I think this is required by the AST file I/O support.
   SgNode *parent;
 
 public:
   rose_graph_integer_node_hash_map()
-      : rose_graph_integer_node_hash_map_base_type() {}
-  // tps (11/18/2009) : Is this constructor wrong? Should it be a pair of
-  // (int,SgGraphNode)?
+      : rose_graph_integer_node_hash_map_base_type(), parent(nullptr) {}
   rose_graph_integer_node_hash_map(const rose_graph_integer_node_hash_map &rhs)
       : rose_graph_integer_node_hash_map_base_type(rhs), parent(rhs.parent) {}
 
   void set_parent(SgNode *new_parent) { parent = new_parent; }
   SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_integer_node_hash_map() { delete_elements(); }
 };
-
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_integer_node_hash_map::iterator &rhm_it);
 
 /*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
  * edges using edge index values).
  */
 
-// DQ (4/30/2009): Added to support more of the Graph functionality in new ROSE
-// IR nodes typedef rose_hash::unordered_map<int,SgGraphEdge*,
-// rose_hash::hash_integer, rose_hash::eqstr_graph_edge>
-// rose_graph_integer_edge_hash_map_base_type;
 typedef rose_hash::unordered_map<int, SgGraphEdge *, rose_hash::hash_integer>
     rose_graph_integer_edge_hash_map_base_type;
 class rose_graph_integer_edge_hash_map
@@ -634,35 +300,21 @@ class rose_graph_integer_edge_hash_map
   // maps that contain specific types of edges.
 
 protected:
-  // I think this is required by the AST file I/O support.
   SgNode *parent;
 
 public:
   rose_graph_integer_edge_hash_map()
-      : rose_graph_integer_edge_hash_map_base_type() {}
+      : rose_graph_integer_edge_hash_map_base_type(), parent(nullptr) {}
   rose_graph_integer_edge_hash_map(const rose_graph_integer_edge_hash_map &rhs)
       : rose_graph_integer_edge_hash_map_base_type(rhs), parent(rhs.parent) {}
 
   void set_parent(SgNode *new_parent) { parent = new_parent; }
   SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_integer_edge_hash_map() { delete_elements(); }
 };
-
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_integer_edge_hash_map::iterator &rhm_it);
 
 /*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
  * edges using edge index values).
  */
-
-// DQ (4/30/2009): Added to support more of the Graph functionality in new ROSE
-// IR nodes typedef rose_hash::unordered_map<int,SgGraphEdge*,
-// rose_hash::hash_integer, rose_hash::eqstr_graph_edge>
-// rose_graph_integer_edge_hash_multimap_base_type;
 
 typedef rose_hash::unordered_multimap<int, SgGraphEdge *>
     rose_graph_integer_edge_hash_multimap_base_type;
@@ -673,12 +325,11 @@ class rose_graph_integer_edge_hash_multimap
   // maps that contain specific types of edges.
 
 protected:
-  // I think this is required by the AST file I/O support.
   SgNode *parent;
 
 public:
   rose_graph_integer_edge_hash_multimap()
-      : rose_graph_integer_edge_hash_multimap_base_type() {}
+      : rose_graph_integer_edge_hash_multimap_base_type(), parent(nullptr) {}
   rose_graph_integer_edge_hash_multimap(
       const rose_graph_integer_edge_hash_multimap &rhs)
       : rose_graph_integer_edge_hash_multimap_base_type(rhs),
@@ -686,15 +337,7 @@ public:
 
   void set_parent(SgNode *new_parent) { parent = new_parent; }
   SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_integer_edge_hash_multimap() { delete_elements(); }
 };
-
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_integer_edge_hash_multimap::iterator &rhm_it);
 
 /*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
  * edges using node index pairs).
@@ -709,12 +352,12 @@ class rose_graph_integerpair_edge_hash_multimap
   // maps that contain specific types of edges.
 
 protected:
-  // I think this is required by the AST file I/O support.
   SgNode *parent;
 
 public:
   rose_graph_integerpair_edge_hash_multimap()
-      : rose_graph_integerpair_edge_hash_multimap_base_type() {}
+      : rose_graph_integerpair_edge_hash_multimap_base_type(), parent(nullptr) {
+  }
   rose_graph_integerpair_edge_hash_multimap(
       const rose_graph_integerpair_edge_hash_multimap &rhs)
       : rose_graph_integerpair_edge_hash_multimap_base_type(rhs),
@@ -722,30 +365,14 @@ public:
 
   void set_parent(SgNode *new_parent) { parent = new_parent; }
   SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_integerpair_edge_hash_multimap() { delete_elements(); }
 };
 
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_integerpair_edge_hash_multimap::iterator &rhm_it);
-
-/*! \brief Hash table support for graph IR nodes within ROSE (used to lookup
- * nodes and edges index values from lables).
- */
-
-// DQ (5/1/2009): This is added to support lookup of indexes based on labels
-// (can be used for nodes or edges). tps (11/18/2009) : This cannot be correct
-// since the constructor takes a string not an int.
+/*! \brief Hash table support for looking up graph indices by label. */
 typedef rose_hash::unordered_multimap<std::string, int>
     rose_graph_string_integer_hash_multimap_base_type;
 class rose_graph_string_integer_hash_multimap
     : public rose_graph_string_integer_hash_multimap_base_type {
 protected:
-  // DQ (4/25/2009): We need to change this name since I think we just want the
-  // associated IR node in the AST, and not any concept of parent in the graph.
   SgNode *parent;
 
 public:
@@ -756,33 +383,13 @@ public:
       : rose_graph_string_integer_hash_multimap_base_type(rhs),
         parent(rhs.parent) {}
 
-  // See note (above) about name change to the associated data member for these
-  // access functions.
   void set_parent(SgNode *new_parent) { parent = new_parent; }
   SgNode *get_parent() { return parent; }
-
-  void delete_elements() {}
-
-  ~rose_graph_string_integer_hash_multimap() {
-    delete_elements();
-
-    parent = nullptr;
-  }
 };
 
-std::ostream &
-operator<<(std::ostream &os,
-           const rose_graph_string_integer_hash_multimap::iterator &rhm_it);
-
-// DQ (11/26/2005): Support for visitor pattern.
 class ROSE_VisitTraversal;
 class ROSE_VisitorPattern;
 
-// DQ (3/12/2007): Added mangle name map
-// typedef std::map<SgNode*,std::string>       SgMangledNameList;
-// typedef SgMangledNameList*                  SgMangledNameListPtr;
-
-// DQ (12/23/2005): support for traversal of AST using visitor pattern
 ROSE_DLL_API void traverseMemoryPoolNodes(ROSE_VisitTraversal &traversal);
 ROSE_DLL_API void
 traverseMemoryPoolVisitorPattern(ROSE_VisitorPattern &visitor);
@@ -792,12 +399,6 @@ traverseMemoryPoolVisitorPattern(ROSE_VisitorPattern &visitor);
 // functions.
 ROSE_DLL_API void traverseRepresentativeNodes(ROSE_VisitTraversal &traversal);
 
-// DQ (6/7/2010): Change the return type to size_t to support larger number of
-// IR nodes using values that overflow signed values of int. DQ (1/2/2006):
-// Support for computing the total number of IR nodes in use within an AST
-// computation is done based on the memory pools (so it is exact).
-// int numberOfNodes();
-// int memoryUsage();
 ROSE_DLL_API size_t numberOfNodes();
 ROSE_DLL_API size_t memoryUsage();
 
@@ -910,8 +511,41 @@ struct ReferenceToPointerHandler;
  */
 class SgCopyHelp {
 public:
+  enum class ProvenancePolicy {
+    TransformationOutput,
+    PreserveExactFrontendSemantic,
+  };
+
+  // Internal identity rebinding constructs a new graph; it is not a source
+  // edit to that graph. This scope applies only to exact mapped copy targets.
+  class ConstructionScope {
+    friend class SgCopyHelp;
+    SgCopyHelp *previous;
+    ConstructionScope *previousScope;
+    SgCopyHelp *owner;
+    const SgNode *original;
+
+  public:
+    explicit ConstructionScope(SgCopyHelp &help,
+                               const SgNode *original = nullptr);
+    ~ConstructionScope();
+    ConstructionScope(const ConstructionScope &) = delete;
+    ConstructionScope &operator=(const ConstructionScope &) = delete;
+  };
+  static bool isConstructingCopy(const SgNode *node);
+  bool isCopyingOriginal(const SgNode *node) const;
+
+private:
+  static SgCopyHelp *&activeConstruction();
+  static ConstructionScope *&activeScope();
+
+public:
   // STL map type
   typedef std::map<const SgNode *, SgNode *> copiedNodeMapType;
+  using copiedPreprocessingMapType =
+      std::map<const PreprocessingInfo *, PreprocessingInfo *>;
+  typedef std::set<const SgNode *> originalNodeSetType;
+  typedef std::map<const SgNode *, originalNodeSetType> originalNodeMapType;
   typedef std::set<SgNode *> supersededNodeSetType;
   typedef std::pair<const SgNode *, SgNode *> fixupNodePairType;
   struct FixupNodePairLess {
@@ -935,12 +569,24 @@ private:
   // copy mechansim.
   //! This data member records the depth of the traversal (root node == 0)
   int depth;
+  ProvenancePolicy provenancePolicy;
 
   // This is mostly used for SgSymbol IR nodes (but will likely be used for
   // other IR nodes in the future.
   //! This is internal state used to asscociate pairs of IR nodes copied instead
   //! of shared.
   copiedNodeMapType copiedNodeMap;
+  copiedPreprocessingMapType copiedPreprocessingMap;
+
+  // Multiple source identities can intentionally share a canonical target.
+  // Track every source so exact-copy consumers can reject ambiguous roles
+  // without scanning the entire transaction for each copied node.
+  originalNodeMapType originalNodeMap;
+  void removeOriginalNodePair(const SgNode *original, const SgNode *copy);
+  enum class ReferenceTargetKind { ExactNode, PlannedScope };
+  using ReferenceBinding = std::function<void(SgNode *, ReferenceTargetKind)>;
+  std::map<const SgNode *, std::vector<ReferenceBinding>> pendingReferences;
+  void bindCopyReference(const SgNode *original, ReferenceBinding binding);
 
   // When a canonical copied node replaces a provisional deep copy in the
   // copied-node map, keep the superseded node so it can be discarded once
@@ -954,11 +600,30 @@ private:
 
 public:
   // STL map iterator type
-  typedef copiedNodeMapType::iterator copiedNodeMapTypeIterator;
+  typedef copiedNodeMapType::const_iterator copiedNodeMapTypeIterator;
   typedef supersededNodeSetType::iterator supersededNodeSetTypeIterator;
   typedef fixupNodePairSetType::iterator fixupNodePairSetTypeIterator;
 
   virtual SgNode *copyAst(const SgNode *n) = 0;
+  template <class T> void bindCopiedReference(T *&edge, const T *original) {
+    edge = nullptr;
+    if (original != nullptr) {
+      bindCopyReference(original, [&edge, original](SgNode *target,
+                                                    ReferenceTargetKind kind) {
+        edge = dynamic_cast<T *>(target);
+        ASSERT_not_null(edge);
+        ROSE_ASSERT(edge->variantT() == original->variantT() ||
+                    (kind == ReferenceTargetKind::PlannedScope &&
+                     isSgScopeStatement(original) != nullptr &&
+                     isSgScopeStatement(edge) != nullptr));
+      });
+    }
+  }
+  void requireBoundCopiedReferences() const;
+  void constructClassTypeCopy(const SgClassDeclaration *declaration);
+  void constructEnumTypeCopy(const SgEnumDeclaration *declaration);
+  void constructTemplateParameterTypeCopy(const SgTemplateParameter *parameter);
+
   SgNode *copyOrLookupAst(const SgNode *n) {
     if (n == nullptr) {
       return nullptr;
@@ -967,14 +632,6 @@ public:
     copiedNodeMapTypeIterator existing = copiedNodeMap.find(n);
     if (existing != copiedNodeMap.end()) {
       return existing->second;
-    }
-
-    // Unmapped types are canonical, globally shared semantic nodes.  An exact
-    // copy transaction may nevertheless publish a copy-local type whose named
-    // declaration is also local to that transaction; honor that explicit map
-    // before applying the canonical sharing rule.
-    if (isSgType(n) != nullptr) {
-      return const_cast<SgNode *>(n);
     }
 
     return copyAst(n);
@@ -1002,7 +659,13 @@ public:
   }
 
   // Default constructor (required to initialize the depth
-  SgCopyHelp() : depth(0) {}
+  explicit SgCopyHelp(
+      ProvenancePolicy policy = ProvenancePolicy::TransformationOutput)
+      : depth(0), provenancePolicy(policy) {
+    ROSE_ASSERT(policy == ProvenancePolicy::TransformationOutput ||
+                policy == ProvenancePolicy::PreserveExactFrontendSemantic);
+  }
+  ProvenancePolicy getProvenancePolicy() const { return provenancePolicy; }
 
   // Defined the virtual destructor
   virtual ~SgCopyHelp() {}
@@ -1011,7 +674,16 @@ public:
   int get_depth() { return depth; }
   void incrementDepth() { depth++; }
   void decrementDepth() { depth--; }
-  copiedNodeMapType &get_copiedNodeMap() { return copiedNodeMap; }
+  const copiedNodeMapType &get_copiedNodeMap() const { return copiedNodeMap; }
+  const copiedPreprocessingMapType &get_copiedPreprocessingMap() const {
+    return copiedPreprocessingMap;
+  }
+  void insertCopiedPreprocessingPair(const PreprocessingInfo *original,
+                                     PreprocessingInfo *copy) {
+    ROSE_ASSERT(original != nullptr && copy != nullptr && original != copy);
+    ROSE_ASSERT(copiedPreprocessingMap.emplace(original, copy).second);
+  }
+  const originalNodeSetType &get_originalNodesForCopy(const SgNode *copy) const;
   supersededNodeSetType &get_supersededNodeCopies() {
     return supersededNodeCopies;
   }
@@ -1024,6 +696,9 @@ public:
   void clearState() {
     depth = 0;
     copiedNodeMap.clear();
+    copiedPreprocessingMap.clear();
+    originalNodeMap.clear();
+    pendingReferences.clear();
     supersededNodeCopies.clear();
     activeFixupNodePairs.clear();
     completedFixupNodePairs.clear();
@@ -1032,6 +707,8 @@ public:
   // Added things that generate symbols to the state (could be
   // SgDeclarationStatement or SgInitializedName objects).
   void insertCopiedNodePair(const SgNode *key, SgNode *value);
+  void assignCopiedNodePair(const SgNode *key, SgNode *value);
+  size_t eraseCopiedNodePair(const SgNode *key);
   void noteSupersededCopiedNode(SgNode *value);
 
   // Allow copy strategies to canonicalize the copied-node map before root
@@ -1075,6 +752,7 @@ a "deep" copy.
  */
 class ROSE_DLL_API SgTreeCopy : public SgCopyHelp {
 public:
+  using SgCopyHelp::SgCopyHelp;
   SgNode *copyAst(const SgNode *n);
   void prepareRootCopyForFixup() override;
   void finalizeRootCopy() override;
@@ -1111,31 +789,11 @@ public:
   const std::vector<SgNode *> &get_copyList() { return copyList; }
 };
 
-// DQ (12/22/2005): Jochen's support for a constant (non-NULL) valued pointer
-// to use to distinguish valid from invalid IR nodes within the memory pools.
-/*! \brief This Namespace supports the file I/O for the AST.
- */
-namespace AST_FileIO {
-/*! \brief This function returns a static pointer used with
-   SgNode::p_freepointer.
+namespace ASTMemoryPool {
+// Marker used by generated node code; it is compared but never dereferenced.
+SgNode *validNodeMarker();
+} // namespace ASTMemoryPool
 
-    This function returns
-    returns an internally held (function local data) static pointer value
-    used by SgNode::p_freepointer to identify non-NULL value representing
-    valid IR node in memory pool.  A NULL pointer represents last entry in
-    the memory pool.  This value allows us to distinguish the entries, and not
-    require additional memory storage on each IR node.
- */
-SgNode *IS_VALID_POINTER();
-
-/*! \brief Similar value as above function for reprentation of subsets of the
- * AST
- */
-SgNode *TO_BE_COPIED_POINTER();
-} // namespace AST_FileIO
-
-// DQ (12/26/2005): Simple traversal base class for use with ROSE style
-// traversals.  Need to move this to a different location later.
 class ROSE_VisitTraversal {
 public:
   virtual ~ROSE_VisitTraversal() {};
@@ -1144,46 +802,34 @@ public:
   void traverseRepresentativeIRnodes() { traverseRepresentativeNodes(*this); }
 };
 
-// DQ (3/18/2006): Forward declarations of classes used to control and tailor
-// the code generation.
 class UnparseDelegate;
 class UnparseFormatHelp;
-
-// DQ (4/19/2006): forward declaration of PreprocessingInfo so that
-// PreprocessingInfo can follow Sage III class declarations and contain
-// a Sg_File_Info object (to record the filename of the comments and
-// CPP directoves).
-// class PreprocessingInfo;
-
-// DQ (4/23/2006): The friend declaration the SgProject class is not enough this
-// must be defined outside of the class (for g++ 4.1.0).
-std::ostream &operator<<(std::ostream &os,
-                         const Rose_STL_Container<std::string> &l);
-// DQ (8/8/2008): Added support for std::multimap<rose_addr_t, rose_addr_t> used
-// in binary file format.
-std::ostream &operator<<(std::ostream &os,
-                         const std::multimap<rose_addr_t, rose_addr_t> &m);
-std::ostream &
-operator<<(std::ostream &os,
-           const std::vector<std::pair<rose_addr_t, rose_addr_t>> &l);
-// struct SgAsmGenericFormat::fileDetails;
-// std::ostream & operator<< ( std::ostream & os, const
-// SgAsmGenericFormat::fileDetails & sb );
-std::ostream &operator<<(std::ostream &os, const struct stat &sb);
-
-// DQ (5/8/2007): Added support for type elaboration lists, hidden type lists,
-// and hidden declaration lists.
-std::ostream &operator<<(std::ostream &os, const std::set<SgSymbol *> &l);
-
-// DQ (8/21/2006): Jeremiah Willcock's Virtual CFG mechanism.
-// #include "virtualCFG.h"
-// tps (8/13/2007): working on binary cfg mechanism.
-// #include "virtualBinCFG.h"
 
 HEADER_NODE_PREDECLARATION_END
 
 HEADER_START
 public:
+// Reconstruct source state without treating constructor bindings as user
+// edits. Only nodes born inside this scope participate; mutations of existing
+// nodes still record edits, and all bindings invalidate structural caches.
+class SourceStateConstruction {
+public:
+  SourceStateConstruction();
+  ~SourceStateConstruction();
+  SourceStateConstruction(const SourceStateConstruction &) = delete;
+  SourceStateConstruction &operator=(const SourceStateConstruction &) = delete;
+
+private:
+  friend class SgNode;
+  static SourceStateConstruction *&current();
+  static void recordNode(const SgNode *node);
+  static bool contains(const SgNode *node);
+  SourceStateConstruction *previous;
+  std::set<const SgNode *> nodes;
+};
+
+bool isUnderConstruction() const;
+
 /*! \brief All nodes in the AST contain a isModified flag used to track changes
    to the AST.
 
@@ -1200,6 +846,12 @@ void set_isModified(bool isModified);
    advances the global modification sequence on every call.
  */
 void markAsModified();
+// Construction flags do not describe when a value changed. This sequence
+// identifies actual setter mutations and is preserved by semantic copies.
+uint64_t get_lastMutationSequence() const { return p_lastMutationSequence; }
+// Location/provenance changes still invalidate source and structural caches,
+// but do not change the semantic value represented by an expression.
+void markSourceMetadataAsModified();
 
 /*! \brief Many nodes can hide other AST nodes and we need to track when outer
    nodes contain modified nodes even if they are not themselves modified.
@@ -1222,6 +874,10 @@ bool get_isModified() const;
  */
 bool get_containsTransformation() const;
 
+// Serialization bookkeeping does not mark the program AST as transformed.
+uint64_t get_ast_json_node_id() const { return p_ast_json_node_id; }
+void set_ast_json_node_id(uint64_t id) { p_ast_json_node_id = id; }
+
 /*! \brief Returns a process-wide sequence that advances whenever ROSE records
    an AST modification.
 
@@ -1236,43 +892,19 @@ void set_parent(SgNode *parent);
 //! Access function for parent node.
 SgNode *get_parent() const;
 
-// DQ (3/4/2022): Added access function for p_parent for debugging.
-//! Access function for direct access to uncomputed value of parent node.
-SgNode *get_raw_parent() const;
-
 //! Query function for if the input IR nodes is a child of the current IR node.
 bool isChild(SgNode *node) const;
 
-// DQ (4/4/2006): Added optional parameter to customize unparsing
 //! This function unparses the AST node (excluding comments and unnecessary
 //! white space)
-// virtual std::string unparseToString(SgUnparse_Info* info = NULL) const;
 // Jeremiah (11/9/2007): The default value is not recognized by gdb.
 virtual std::string unparseToString(SgUnparse_Info *info) const;
 
-// DQ (9/6/2010): Move this to the source file (we want to eliminate function
-// definitions in header files). The existence of this function addresses a bug
-// in gdb (see comment from Jeremiah (11/9/2007) above). inline std::string
-// unparseToString() const { return this->unparseToString(NULL); }
 std::string unparseToString() const;
 
 //! This function unparses the AST node (including comments and white space)
 std::string unparseToCompleteString();
 
-/*! \brief Command line support for this compilation
-    The command line is saved as a static variable so that it will be available
-   to support the rewrite mechanism.
-
-    \param argv - vector of strings holding command line arguments
-    \param newFileName - current file name being used (part of support for
-   multiple files on command line).
-    \return returns vector of strings.
- */
-static std::vector<std::string> buildCommandLineToSubstituteTransformationFile(
-    const std::vector<std::string> &argv, std::string newFileName);
-
-// JJW (10/16/2008): Replace variant() by variantT() and a cast (the
-// numbers are the same, but the enumerator names are different)
 int variant() const ROSE_DEPRECATED_FUNCTION { return (int)this->variantT(); }
 
 // AS (10/22/2007): build function to return class hierachy subtree of a
@@ -1280,22 +912,6 @@ int variant() const ROSE_DEPRECATED_FUNCTION { return (int)this->variantT(); }
 static std::vector<VariantT> getClassHierarchySubTreeFunction(VariantT v);
 static void getClassHierarchySubTreeFunction(VariantT v,
                                              std::vector<VariantT> &);
-
-/*! \brief DOCS IN HEADER: Access function for p_isVisited flag used previously
-   by the AST traversals.
-
-    \deprecated This function is not used and will be removed.
-    \return Returns bool; true if previously visited within current AST
-   traversal.
- */
-bool get_isVisited() const ROSE_DEPRECATED_FUNCTION;
-
-/*! \brief Access function for p_isVisited flag used previously by the AST
-   traversals.
-
-    \deprecated This function is not used and will be removed.
- */
-void set_isVisited(bool isVisited) ROSE_DEPRECATED_FUNCTION;
 
 /*! \brief Access function for performance optimizing global mangled name map.
 
@@ -1373,7 +989,6 @@ virtual AstAttributeMechanism *get_attributeMechanism() const;
 virtual void set_attributeMechanism(AstAttributeMechanism *a);
 /* */
 
-#if ALT_FIXUP_COPY
 /* name AST Copy Support Functions
 
     Support for IR node specific fixup of copy operation.
@@ -1390,9 +1005,6 @@ virtual void fixupCopy_scopes(SgNode *copy, SgCopyHelp &help) const;
 virtual void fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const;
 virtual void fixupCopy_references(SgNode *copy, SgCopyHelp &help) const;
 /* */
-#else
-virtual void fixupCopy(SgNode *copy, SgCopyHelp &help) const;
-#endif
 
 /* name Source Position Information
     \brief Support for source code position information of all IR nodes.
@@ -1429,14 +1041,11 @@ virtual Sg_File_Info *get_endOfConstruct(void) const { return nullptr; }
     around a construct. */
 /* */
 
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 /*! \brief Returns the CFG node for just before this AST node */
 VirtualCFG::CFGNode cfgForBeginning();
 /*! \brief Returns the CFG node for just after this AST node */
 VirtualCFG::CFGNode cfgForEnd();
-#endif
 
-#ifndef ROSE_USE_INTERNAL_FRONTEND_DEVELOPMENT
 /* name Control flow graph view helper functions
 
     These functions are used internally inside the control flow graph
@@ -1463,7 +1072,6 @@ cfgOutEdges(unsigned int index = false);
 
 /*! \brief Find the in edges of a CFG node -- internal version. */
 virtual std::vector<VirtualCFG::CFGEdge> cfgInEdges(unsigned int index = false);
-#endif
 /* */
 
 // DQ (1/31/2006): These must be built to be static access member functions (so
@@ -1489,7 +1097,7 @@ static void set_globalTypeTable(SgTypeTable *globalTypeTable);
 public:
 struct PoolEntry {
   unsigned char *base;
-  unsigned size;
+  size_t size;
   size_t slot_size;
   unsigned char *live_flags;
   VariantT variant;
@@ -1506,19 +1114,54 @@ template <typename NodeT> struct PoolResetter {
 };
 
 protected:
+// The generated ownership visitor uses the same DEF_DELETE fields as the
+// destructor. Ordinary C++ objects do not introduce AST-node ownership edges.
+template <class T>
+static void appendOwnedAstNode(std::vector<SgNode *> &nodes, T *object) {
+  static_assert(sizeof(T) != 0, "owned data must have a complete type");
+  if constexpr (std::is_base_of_v<SgNode, T>) {
+    if (object != nullptr) {
+      ROSE_ASSERT(isLiveNode(object));
+      nodes.push_back(object);
+    }
+  }
+}
+
+template <class T>
+static void appendOwnedAstNode(std::vector<SgNode *> &nodes,
+                               const std::vector<T *> &objects) {
+  for (T *object : objects)
+    appendOwnedAstNode(nodes, object);
+}
+
+//! ROSETTA destructor support for fields declared DEF_DELETE. Shared AST
+//! teardown can already have released a pooled node; ordinary owned objects
+//! obey C++ delete semantics and must not be discarded by a type-name filter.
+template <class T> static void destroyOwnedData(T *object) {
+  static_assert(sizeof(T) != 0, "owned data must have a complete type");
+  if constexpr (std::is_base_of_v<SgNode, T>) {
+    if (isLiveNode(object)) {
+      delete object;
+    }
+  } else {
+    delete object;
+  }
+}
+
+template <class T> static void destroyOwnedData(std::vector<T *> &objects) {
+  for (T *object : objects)
+    destroyOwnedData(object);
+  objects.clear();
+}
+
 static std::vector<PoolEntry> &allPools();
-static void releaseAllPools();
 static const PoolEntry *findPoolEntry(const unsigned char *ptr);
 
 public:
+static void clearMemoryPool();
 static void initializeAstTeardown();
 static VariantT variantFromPool(SgNode const *n);
 static bool isLiveNode(const SgNode *node);
-
-/* \brief Mangled name cache for improved performance of mangled name generation
-    This mangle name caching is implemented to support better performance.
- */
-// static std::map<SgNode*,std::string> & get_globalMangledNameMap();
 
 /*! \brief Computes the number of nodes in the defined subtree of the AST.
 
@@ -1547,228 +1190,10 @@ protected:
 virtual void post_construction_initialization();
 
 private:
-// Make the copy constructor private (to avoid it being used)
-/* We have to make the copy constructor available so that the SgUnparse_Info
-   copy constructor can access it, I'm not clear if this is a good idea.
- */
-// $CLASSNAME(const $CLASSNAME &); /* private so it can't be used. */
-
 //! Delete operator= (to avoid it being used)
 $CLASSNAME &operator=(const $CLASSNAME &) = delete;
 
-public:
-/** Allocate and return a new node after setting its parent.
- *
- *  ROSE's AST has this annoying, error-prone process for adding a node to the
- * tree. One has to not only add the downward edge from parent to child, but
- * also explicitly add the upward edge from child to parent. This two-step
- * process makes it difficult to create child nodes and link them into the
- * parent while the parent is being constructed. This function attempts to make
- *  this easier by doing everything in one step.
- *
- *  Use it like this:
- *
- * ```
- *  Parent::Parent(int foo, int bar)
- *      : p_child(createAndParent<Child>(this), p_foo(foo), p_bar(bar) {}
- * ``` */
-template <class T>
-static typename std::enable_if<std::is_base_of<SgNode, T>::value, T *>::type
-createAndParent(SgNode *parent) {
-  auto node = new T;
-  node->set_parent(parent);
-  return node;
-}
-
-/** Generated for tree edge data member initializations.
- *
- *  When initializing a data member that's an edge in the tree, this sets the
- * nodes parent pointer to this object and then returns the node. It is used in
- * generated code for constructors, like this:
- *
- * ```
- *  Foo::Foo(Bar *bar)
- *      : p_bar(adjustParent(bar, this)) {}
- * ``` */
-template <class T> T *initParentPointer(T *child, SgNode *parent) {
-  ASSERT_not_null(parent);
-  if (child) {
-#ifndef NDEBUG
-    auto toString = [](SgNode *node) {
-      if (node) {
-        std::ostringstream out;
-        out << "(" << node->class_name() << "*)" << node;
-        return out.str();
-      } else {
-        return std::string("nullptr");
-      }
-    };
-
-    ASSERT_require2(child->get_parent() == nullptr,
-                    "child " + toString(child) + " cannot be inserted into " +
-                        toString(parent) +
-                        " because it is already a child of " +
-                        toString(child->get_parent()));
-#endif
-    child->set_parent(this);
-  }
-  return child;
-}
-
-/** Set a child edge in a tree to point to a specific child.
- *
- *  Normally one has to remember to set the parent pointer when adding a child
- * to a tree, and also be careful that the result is still a tree. This helper
- * function tries to make that easier by checking some things and setting the
- * parent pointer automatically.
- *
- *  For instance, this should work:
- *
- * ```
- *  SgAsmBinaryExpression *parent = ...;
- *  SgAsmBinaryExpression *child1 = ...;
- *  SgAsmBinaryExpression *child2 = ...;
- *
- *  parent->set_lhs(child1);
- *  ASSERT_require(child1->get_parent() == parent);
- *
- *  parent->set_lhs(child2);
- *  ASSERT_require(child1->get_parent() == nullptr);
- *  ASSERT_require(child2->get_parent() == parent);
- *
- *  parent->set_lhs(nullptr);
- *  ASSERT_require(child2->get_parent() == nullptr);
- * ```
- *
- *  The following should not work when assertions are enabled:
- *
- * ```
- *  SgAsmBinaryExpression *parent = ...;
- *  SgAsmBinaryExpression *child1 = ...;
- *  SgAsmBinaryExpression *child2 = ...;
- *
- *  parent->set_lhs(child1);
- *  parent->set_rhs(child1); // no longer a tree, but still acyclic
- * ```
- *
- * @{ */
-template <class T>
-typename std::enable_if<std::is_pointer<T>::value, void>::type
-changeChildPointer(T &edge, T const &child) {
-#ifndef NDEBUG
-  auto toString = [](SgNode *node) {
-    if (node) {
-      std::ostringstream out;
-      out << "(" << node->class_name() << "*)" << node;
-      return out.str();
-    } else {
-      return std::string("nullptr");
-    }
-  };
-#endif
-
-  if (child != edge) {
-    // If there is an old child, check that it has the correct parent and then
-    // remove it.
-    if (edge) {
-#ifndef NDEBUG
-      ASSERT_require2(edge->get_parent() == this,
-                      "node " + toString(edge) + " is a child of " +
-                          toString(this) + " but has wrong parent " +
-                          toString(edge->get_parent()));
-#endif
-      edge->set_parent(nullptr);
-      edge = nullptr;
-    }
-
-    // If there is a new child, check its parent pointer and then insert it.
-    if (child) {
-#ifndef NDEBUG
-      ASSERT_require2(child->get_parent() == nullptr,
-                      "node " + toString(child) + " is to be a child of " +
-                          toString(this) + " but is already a child of " +
-                          toString(child->get_parent()));
-#endif
-      child->set_parent(this);
-      edge = child;
-    }
-  }
-}
-
-// This gets called for non-pointers, which is the situation for nodes that are
-// only lists of other nodes. We're currently not checking them because the
-// ROSETTA-generated API has too many ways to get around this check, most of
-// which make it impossible to enforce constraints regarding the parent/child
-// consistency. For example:
-//
-//    node->children().clear(); // removes a whole bunch of children but doesn't
-//    clear their parent pointers node->children()[i] = child; // changes the
-//    ith child, but doesn't clear the previous ith child's parent pointer for
-//    (auto &tmp: node->children()) tmp = nullptr; // changes each child but
-//    doesn't clear parent pointers ad nausiam...
-template <class T>
-typename std::enable_if<!std::is_pointer<T>::value, void>::type
-changeChildPointer(T &edge, T const &child) {
-  edge = child;
-}
-/** @} */
-
-private:
-// This is called by the debugSerializationBegin and debugSerializationEnd that
-// are in turn called at the beginning and end of each AST node's serialization
-// function. The implementation below uses two counters: classSerializationDepth
-// shared by all instances of this class, and objectSerializationDepth_ which is
-// a per-instance counter. The relationship of these two counters can tell us
-// how deeply nested these recursive calls are, and which of those recursion
-// levels are due to traversing through the base classes versus traversing
-// through data members. In the output, we use one character of indentation per
-// recursion level, with spaces (' ') representing recursion due to data members
-// and dots ('.') representing recursion due to base classes. Production version
-void debugSerializationHelper(const char *, bool) {}
-
 protected:
-/** This gets called by all Rosebud-generated destructors.
- *
- *  Rosebud generates a call to `destructorHelper` from every destructor
- * implementation. This gives the user a chance to do something special. There
- * are some things to be aware of when reimplementing this function, and you
- * should be well versed in the C++ rules about calling virtual functions from
- * destructors.
- *
- *  @li The implementation must not attempt to access any data members of
- * derived classes. These data members have already been destroyed by time this
- * function is called.
- *
- *  @li Any calls you make to virtual functions declared in this class will
- * dispatch only to implementations in this class or its base classes, not any
- * derived classes.
- *
- *  @li Your implementation must expect to be called multiple times for the same
- * object. This occurs when this class implements this function but its derived
- * class does not. During destruction of a derived object, the derived class's
- * Rosebud-generated destructor will call `destructorHelper,` which will
- * dispatch to the implementation in this class. Then, when the part of the
- * object corresponding to this class is being destroyed, the destructor will
- * call `destructorHelper` again, which will dispatch to this implementation
- * again. This may happen recursively mutliple times.
- *
- *  @li Your implementation should not destroy anything that a subclass might
- * need during its destruction. This follows from the rule above, but is
- * generally not a problem in practice. The reason it's not a problem is that
- * the derived classes are usually Rosebud-generated and thus their destructors
- * only call `destructorHelper.` Therefore, in order for any derived class to
- * any work, it must be done in its `destructorHelper,` which would be called
- * before the implementation of `destructorHelper` in this class is called.
- *
- *  All attempts should be made to avoid having to implement a
- * `destructorHelper` in any class but the most base class (and that one does
- * nothing). Instead, use data members whose own destructors do their cleanup.
- * For instance, if this class needs a pointer to data allocated on the stack,
- * then instead of using a raw pointer which needs to be deleted in this class's
- *  destructor, use a smart pointer whose own destructor deletes the data. If
- * you follow this advice, then you don't need to be well-versed in the details
- * of C++ object destruction. */
-virtual void destructorHelper() {}
 
 HEADER_END
 
@@ -1779,51 +1204,20 @@ HEADER_IS_CLASSNAME_START
 typedef $BASECLASS base_node_type;
 HEADER_IS_CLASSNAME_END
 
-HEADER_PARSER_START
-//! Parser from AST using parent grammar (lower level less specific grammar).
-/*! We parse from a lower level grammar into a higher level grammar
-    An element (or root of s subtree of elements) of a lower level
-    grammar is also an element (or root of) a higher level grammar
-    This text is located in parserPrototype.macro and is used only
-    for non-child terminals/nonterminals.
- */
-friend SgNode *Sgparse($PARENT_GRAMMARS_PREFIX_$CLASS_BASE_NAME *X);
-
-HEADER_PARSER_END
 
 SOURCE_START
-
-// ########################################
-// Some global variables used within SAGE 3
-// ########################################
-
-// declaration of variable to control internal output of debuging information
-int SAGE_DEBUG = 0; // default value is zero
 
 // ###############################
 // Start of source code for SgNode
 // ###############################
 
-// Support for global function type symbol table (moved to be static data
-// pointer) DQ (1/31/2006): Modified to build all types in the memory pools
-// SgFunctionTypeTable* SgNode::Sgfunc_type_table = new SgFunctionTypeTable();
-// SgFunctionTypeTable* SgNode::p_globalFunctionTypeTable = new
-// SgFunctionTypeTable();
 SgFunctionTypeTable *SgNode::p_globalFunctionTypeTable = nullptr;
 
-// DQ (7/22/2010): Added type table for non-function types (supports
-// construction of unique types).
 SgTypeTable *SgNode::p_globalTypeTable = nullptr;
 
-// Static variable used to hold language specific information for each IR node
-// long SgNode::language_classification_bit_vector;
-
-// DQ (3/12/2007): Added mangled name map to improve performance of generating
-// mangled names
 SgUnorderedMapNodeToString SgNode::p_globalMangledNameMap;
 std::map<std::string, uint64_t> SgNode::p_shortMangledNameCache;
 
-#if ALT_FIXUP_COPY
 void SgNode::fixupCopy_scopes(SgNode * /*copy*/, SgCopyHelp & /*help*/) const {
   // This is the empty default inplementation, not a problem if it is called!
 }
@@ -1836,15 +1230,6 @@ void SgNode::fixupCopy_references(SgNode * /*copy*/,
                                   SgCopyHelp & /*help*/) const {
   // This is the empty default inplementation, not a problem if it is called!
 }
-#else
-// DQ (10/5/2007): Added IR node specific function to permit copies, via AST
-// copy(), to be fixedup Usually this will correct scopes and in a few cases
-// build child IR nodes that are not traversed (and thus shared in the result
-// from the automatically generated copy function).
-void SgNode::fixupCopy(SgNode * /*copy*/, SgCopyHelp & /*help*/) const {
-  // This is the empty default inplementation, not a problem if it is called!
-}
-#endif
 
 // DQ (1/31/2006): We might want this function to be automaticaly generated
 // except that then we could not support the assertion.  Also we
@@ -1965,7 +1350,34 @@ void SgNode::set_attributeMechanism(AstAttributeMechanism * /*a*/) {
 }
 
 void SgNode::post_construction_initialization() {
-  // default implementation does nothing!
+  SourceStateConstruction::recordNode(this);
+}
+
+SgNode::SourceStateConstruction *&SgNode::SourceStateConstruction::current() {
+  static thread_local SourceStateConstruction *scope = nullptr;
+  return scope;
+}
+
+SgNode::SourceStateConstruction::SourceStateConstruction()
+    : previous(current()) {
+  current() = this;
+}
+
+SgNode::SourceStateConstruction::~SourceStateConstruction() {
+  ROSE_ASSERT(current() == this);
+  current() = previous;
+}
+
+void SgNode::SourceStateConstruction::recordNode(const SgNode *node) {
+  for (auto *scope = current(); scope != nullptr; scope = scope->previous)
+    scope->nodes.insert(node);
+}
+
+bool SgNode::SourceStateConstruction::contains(const SgNode *node) {
+  for (auto *scope = current(); scope != nullptr; scope = scope->previous)
+    if (scope->nodes.count(node) != 0)
+      return true;
+  return false;
 }
 
 namespace {
@@ -1974,9 +1386,9 @@ std::atomic<uint64_t> &globalAstModificationSequenceCounter() {
   return counter;
 }
 
-void noteAstModification() {
-  globalAstModificationSequenceCounter().fetch_add(1,
-                                                   std::memory_order_release);
+uint64_t noteAstModification() {
+  return globalAstModificationSequenceCounter().fetch_add(
+             1, std::memory_order_release) + 1;
 }
 } // namespace
 
@@ -1985,8 +1397,6 @@ uint64_t SgNode::get_globalAstModificationSequence() {
 }
 
 void SgNode::set_isModified(bool isModified) {
-  // DQ (4/14/2015): Detect if this is called from a NULL pointer.
-  ASSERT_this();
 
   const bool became_modified = isModified && p_isModified == false;
   p_isModified = isModified;
@@ -1996,25 +1406,34 @@ void SgNode::set_isModified(bool isModified) {
   }
 }
 
-void SgNode::markAsModified() {
-  ASSERT_this();
+bool SgNode::isUnderConstruction() const {
+  return SgCopyHelp::isConstructingCopy(this) ||
+         SourceStateConstruction::contains(this);
+}
 
-  p_isModified = true;
+void SgNode::markAsModified() {
+
+  // Construction preserves source edit state from typed metadata. Still
+  // advance the structural sequence: caches must observe new bindings.
+  const uint64_t sequence = noteAstModification();
+  if (!isUnderConstruction()) {
+    p_isModified = true;
+    p_lastMutationSequence = sequence;
+  }
+}
+
+void SgNode::markSourceMetadataAsModified() {
+  if (!isUnderConstruction())
+    p_isModified = true;
   noteAstModification();
 }
 
 bool SgNode::get_isModified() const {
-  // DQ (4/14/2015): Detect if this is called from a NULL pointer.
-  ASSERT_this();
 
   return p_isModified;
 }
 
-// DQ (12/3/2014): Added support to recode when an AST subtree holds an AST node
-// (or subtree) that has been modified.
 void SgNode::set_containsTransformation(bool containsTransformation) {
-  // DQ (4/14/2015): Detect if this is called from a NULL pointer.
-  ASSERT_this();
 
   const bool became_transformed =
       containsTransformation && p_containsTransformation == false;
@@ -2025,37 +1444,9 @@ void SgNode::set_containsTransformation(bool containsTransformation) {
   }
 }
 
-// DQ (12/3/2014): Added support to recode when an AST subtree holds an AST node
-// (or subtree) that has been modified.
 bool SgNode::get_containsTransformation() const {
-  ASSERT_this();
 
   return p_containsTransformation;
-}
-
-bool SgNode::get_isVisited() const {
-  // The p_isVisited flag has been removed, it is an error to call this
-  // function.
-
-  ASSERT_this();
-
-  printf("Error: The p_isVisited flag has been removed, it is an error to call "
-         "this function (get_isVisited). \n");
-  ASSERT_require(false);
-
-  return true;
-}
-
-void SgNode::set_isVisited(bool /*isVisited*/) {
-  // The p_isVisited flag has been removed, it is an error to call this
-  // function.
-  ASSERT_this();
-
-  printf("Error: The p_isVisited flag has been removed, it is an error to call "
-         "this function (set_isVisited). \n");
-  ASSERT_require(false);
-
-  markAsModified();
 }
 
 //  ! Permits specification of parent node (connects the AST tree)
@@ -2063,19 +1454,10 @@ void SgNode::set_isVisited(bool /*isVisited*/) {
  * to form the AST.
  */
 void SgNode::set_parent(SgNode *parent) {
-  // ROSE_ASSERT (parent != nullptr);  // QY: should allow setting parent to
-  // NULL when detaching SgNodes DQ (9/24/2004): Enforce this simple rule!
-  ASSERT_this();
+  // A detached node has no parent.
   ASSERT_require(this != parent);
   p_parent = parent;
 
-  // I think this should be always be true, so let's inforce it (this happends
-  // for test2005_64.C)
-  if ((variantT() == V_SgClassDeclaration) &&
-      (parent != nullptr && parent->variantT() == V_SgFunctionParameterList)) {
-    // get_file_info()->display("Warning: Found case in set_parent() where this
-    // is a SgClassDeclaration and parent is a SgFunctionParameterList");
-  }
 
   if ((variantT() == V_SgTemplateDeclaration) &&
       (parent != nullptr &&
@@ -2086,11 +1468,6 @@ void SgNode::set_parent(SgNode *parent) {
     ROSE_ABORT();
   }
 
-  if ((variantT() == V_SgClassDeclaration) &&
-      (parent != nullptr && parent->variantT() == V_SgGlobal)) {
-    // get_file_info()->display("Warning: Found case in set_parent() where this
-    // is a SgClassDeclaration and parent is a SgFunctionParameterList");
-  }
 
   if ((variantT() == V_SgTemplateInstantiationDecl) &&
       (parent != nullptr && parent->variantT() == V_SgClassType)) {
@@ -2101,44 +1478,7 @@ void SgNode::set_parent(SgNode *parent) {
   }
 }
 
-/*! \brief Get the parent node.
-    This function is called internally to connect the elements of the grammar to
-   form the AST.  This is the backward reference up the tree.
-
-    \internal We can't have ROSETTA build these access functions since we want
-   specific checking of values for NULL pointers (parent point is NULL only for
-   SgProject). In the case of a SgType this function returns NULL, because types
-   are shared by design.
- */
-SgNode *SgNode::get_parent() const {
-  ASSERT_this();
-
-  SgNode *returnNode = p_parent;
-
-  // DQ (3/3/2022): Tristan commented out the logic below that returned NULL for
-  // SgType nodes. After some discussion, I will try a different approach so
-  // that we can at least always see the value of p_parent. DQ (5/24/2006): I
-  // would like to allow SgSymbols to have a valid parent pointer since it can
-  // be used to reference the symbol table as a way to support better debugging
-  // within the AST merge mechanims. Sage II semantics: Types and Symbols always
-  // have a NULL parent (This is the way it is implemented (from Sage II))
-  //     if ( isSgType( const_cast<SgNode*>(this) ) != NULL )
-  //        returnNode = NULL;
-
-  return returnNode;
-}
-
-/*! \brief Get the parent node.
-    This function is provides access to the p_parent value directly. It is
-   provided for debugging purposes only. The existance of this function is to
-   preserve the original semantics of the get_parent() function which returns a
-   NULL value for SgType nodes.
- */
-SgNode *SgNode::get_raw_parent() const {
-  // DQ (3/4/2022): Added access function for p_parent for debugging.
-  ASSERT_this();
-  return p_parent;
-}
+SgNode *SgNode::get_parent() const { return p_parent; }
 
 //! Query whether the input node is an exact structural traversal child.
 bool SgNode::isChild(SgNode *node) const {
@@ -2151,102 +1491,178 @@ bool SgNode::isChild(SgNode *node) const {
   return false;
 }
 
-vector<string> $CLASSNAME::buildCommandLineToSubstituteTransformationFile(
-    const vector<string> &argv, std::string newFileName) {
-  int fileNameCounter = 0;
-  int fileNameLocation = 0;
-
-  // return a copy of the commandline input to this function
-  vector<string> transformation_argv(argv.size());
-
-  // printf ("In buildCommandLineToSubstituteTransformationFile(): argc = %d
-  // \n",argc);
-
-  // copy all the entries in the command line.
-  for (unsigned int i = 0; i < argv.size(); i++) {
-    // Count up the number of filenames (if it is ZERO then this is likely a
-    // link line called using the compiler (required for template processing in
-    // C++ with most compilers) if there is ONE then this is the source file.
-    // Currently their can only be ONE source file specified.
-
-    // most options appear as -<option>
-    // have to process +w2 (warnings option) on some compilers so include
-    // +<option>
-    if (argv[i].size() < 1 || (argv[i][0] != '-') || (argv[i][0] != '+')) {
-      unsigned int length = argv[i].size();
-      // printf ("Look for file names:  argv[%d] = %s length = %d
-      // \n",i,argv[i],length);
-
-      // look only for .c and .C files (source code files)
-      // The length has to be greater then 2 or else we will generate a purify
-      // error!
-      if ((length > 2) && (argv[i][length - 2] == '.') &&
-          ((argv[i][length - 1] == 'c') || (argv[i][length - 1] == 'C'))) {
-        // printf ("Found a filename = %s \n",argv[i]);
-        transformation_argv[i] = strdup(newFileName.c_str());
-
-        // record the location of the filename in the command line and the
-        // number of filenames
-        fileNameLocation = i;
-        fileNameCounter++;
-      } else {
-        transformation_argv[i] = argv[i];
-      }
-    } else {
-      transformation_argv[i] = argv[i];
-    }
-  }
-
-  // For now ets only debug the case of a single file specified on the command
-  // line
-  ASSERT_require(fileNameCounter == 1);
-  ASSERT_require(fileNameLocation > 0);
-
-  // We have found the location of the filename in the command line (now modify
-  // it)
-  return transformation_argv;
-}
-
 std::string $CLASSNAME::unparseToString(SgUnparse_Info *info) const {
-  // DQ (4/4/2006): Added optional parameter to customize unparsing
-  // Generate the string (don't pass a SgUnparse_Info object so that we can use
-  // the default settings).
   std::string outputString = globalUnparseToString(this, info);
   return outputString;
 }
 
 std::string $CLASSNAME::unparseToString() const {
-  // DQ (9/6/2010): Move this to the source file (we want to eliminate function
-  // definitions in header files).
   return this->unparseToString(nullptr);
 }
 
 std::string $CLASSNAME::unparseToCompleteString() {
-  // Generate the string (pass a SgUnparse_Info object)
-  SgUnparse_Info *inputUnparseInfoPointer = new SgUnparse_Info();
-  inputUnparseInfoPointer->unset_SkipComments(); // generate comments
-  inputUnparseInfoPointer
-      ->unset_SkipWhitespaces(); // generate all whitespaces to format the code
-  std::string outputString =
-      globalUnparseToString(this, inputUnparseInfoPointer);
-
-  // DQ (2/18/2013): Added fix to delete SgUnparse_Info built to support
-  // unparseToCompleteString().
-  delete inputUnparseInfoPointer;
-  inputUnparseInfoPointer = nullptr;
-
-  return outputString;
+  SgUnparse_Info info;
+  info.unset_SkipComments();
+  info.unset_SkipWhitespaces();
+  return globalUnparseToString(this, &info);
 }
 
 void SgCopyHelp::insertCopiedNodePair(const SgNode *key, SgNode *value) {
-  // DQ (10/8/2007): This function support the saving of state used to
-  // associated original IR nodes with the copies made of them so that symbols
-  // can be updated.
-
-  if (copiedNodeMap.find(key) == copiedNodeMap.end()) {
-    // Add the node to the map...
-    copiedNodeMap[key] = value;
+  if (copiedNodeMap.emplace(key, value).second) {
+    const bool inserted = originalNodeMap[value].insert(key).second;
+    ROSE_ASSERT(inserted);
+    const SgNode *sourceOwner = key->get_parent();
+    const auto owner = copiedNodeMap.find(sourceOwner);
+    const bool pendingParameterScope =
+        isSgFunctionParameterScope(key) != nullptr &&
+        isSgFunctionDeclaration(sourceOwner) != nullptr;
+    if (key != value && sourceOwner != nullptr && !pendingParameterScope &&
+        isCopyingOriginal(sourceOwner) && owner != copiedNodeMap.end() &&
+        owner->second != sourceOwner) {
+      ROSE_ASSERT(value->get_parent() == nullptr ||
+                  value->get_parent() == sourceOwner ||
+                  value->get_parent() == owner->second);
+      value->set_parent(owner->second);
+    }
+    const auto pending = pendingReferences.find(key);
+    if (pending != pendingReferences.end()) {
+      for (const auto &binding : pending->second)
+        binding(value, ReferenceTargetKind::ExactNode);
+      pendingReferences.erase(pending);
+    }
   }
+}
+
+void SgCopyHelp::bindCopyReference(const SgNode *original,
+                                   ReferenceBinding binding) {
+  const auto mapped = copiedNodeMap.find(original);
+  if (mapped != copiedNodeMap.end()) {
+    binding(mapped->second, ReferenceTargetKind::ExactNode);
+    return;
+  }
+
+  std::unordered_set<const SgNode *> ancestors;
+  const SgNode *semantic_owner = original;
+  if (const auto *named = isSgNamedType(original)) {
+    semantic_owner = named->get_declaration();
+    ASSERT_not_null(semantic_owner);
+  } else if (const auto *type = isSgTemplateType(original)) {
+    semantic_owner = type->get_template_parameter();
+    ASSERT_not_null(semantic_owner);
+  }
+  bool internal = false;
+  for (const SgNode *owner = semantic_owner; owner != nullptr;
+       owner = owner->get_parent()) {
+    ROSE_ASSERT(ancestors.insert(owner).second);
+    const auto mappedOwner = copiedNodeMap.find(owner);
+    if (isCopyingOriginal(owner) ||
+        (mappedOwner != copiedNodeMap.end() && mappedOwner->second != owner)) {
+      internal = true;
+      break;
+    }
+  }
+  if (internal) {
+    if (isSgDeclarationScope(original) != nullptr ||
+        (isSgFunctionParameterScope(original) != nullptr &&
+         isSgFunctionDeclaration(original->get_parent()) != nullptr)) {
+      pendingReferences[original].push_back(std::move(binding));
+      copyOrLookupOwnedAst(original);
+      return;
+    }
+    if (const auto *type = isSgTemplateType(original)) {
+      if (type->get_template_parameter()->get_type() != type) {
+        auto *copy = isSgTemplateType(type->copy(*this));
+        ROSE_ASSERT(copy != nullptr && copy != type &&
+                    copiedNodeMap.at(original) == copy);
+        binding(copy, ReferenceTargetKind::ExactNode);
+        return;
+      }
+    }
+    // Declaration-owned identities are published by their exact constructors.
+    pendingReferences[original].push_back(std::move(binding));
+    return;
+  }
+
+  SgNode *external = plannedExternalSemanticCopyEdge(original);
+  auto kind = ReferenceTargetKind::ExactNode;
+  if (external != nullptr && isSgScopeStatement(original) != nullptr &&
+      isSgScopeStatement(external) != nullptr)
+    kind = ReferenceTargetKind::PlannedScope;
+  binding(external != nullptr ? external : const_cast<SgNode *>(original),
+          kind);
+}
+
+void SgCopyHelp::requireBoundCopiedReferences() const {
+  if (!pendingReferences.empty()) {
+    const SgNode *original = pendingReferences.begin()->first;
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[unconstructed-reference]: source=%p/%s name=%s "
+            "has no exact target at the construction boundary\n",
+            static_cast<const void *>(original),
+            original->class_name().c_str(),
+            SageInterface::get_name(original).c_str());
+    if (const auto *type = isSgTemplateType(original)) {
+      const auto *parameter = type->get_template_parameter();
+      const auto mapped = copiedNodeMap.find(parameter);
+      fprintf(stderr,
+              "REX_COPY_INVARIANT[unconstructed-template-type]: "
+              "name='%s' depth=%d index=%d substitution=%d parameter=%p "
+              "declared-type=%d mapped-parameter=%p\n",
+              type->get_name().str(), type->get_template_parameter_depth(),
+              type->get_template_parameter_position(),
+              type->get_is_pack_substitution(),
+              static_cast<const void *>(parameter),
+              parameter != nullptr && parameter->get_type() == type,
+              static_cast<void *>(mapped != copiedNodeMap.end()
+                                      ? mapped->second : nullptr));
+    }
+    ROSE_ABORT();
+  }
+}
+
+const SgCopyHelp::originalNodeSetType &
+SgCopyHelp::get_originalNodesForCopy(const SgNode *copy) const {
+  static const originalNodeSetType noSources;
+  const auto found = originalNodeMap.find(copy);
+  return found != originalNodeMap.end() ? found->second : noSources;
+}
+
+void SgCopyHelp::removeOriginalNodePair(const SgNode *original,
+                                        const SgNode *copy) {
+  const auto found = originalNodeMap.find(copy);
+  if (found == originalNodeMap.end() || found->second.erase(original) != 1) {
+    fprintf(stderr,
+            "REX_COPY_INVARIANT[reverse-identity-map]: source=%p copy=%p "
+            "has no reverse transaction entry\n",
+            static_cast<const void *>(original),
+            static_cast<const void *>(copy));
+    ROSE_ABORT();
+  }
+  if (found->second.empty()) {
+    originalNodeMap.erase(found);
+  }
+}
+
+void SgCopyHelp::assignCopiedNodePair(const SgNode *key, SgNode *value) {
+  const auto existing = copiedNodeMap.find(key);
+  if (existing == copiedNodeMap.end()) {
+    insertCopiedNodePair(key, value);
+  } else if (existing->second != value) {
+    removeOriginalNodePair(key, existing->second);
+    existing->second = value;
+    const bool inserted = originalNodeMap[value].insert(key).second;
+    ROSE_ASSERT(inserted);
+  }
+}
+
+size_t SgCopyHelp::eraseCopiedNodePair(const SgNode *key) {
+  const auto existing = copiedNodeMap.find(key);
+  if (existing == copiedNodeMap.end()) {
+    return 0;
+  }
+  removeOriginalNodePair(key, existing->second);
+  copiedNodeMap.erase(existing);
+  return 1;
 }
 
 void SgCopyHelp::noteSupersededCopiedNode(SgNode *value) {
@@ -2298,23 +1714,85 @@ bool SgCopyHelp::isFixupNodePairCompleted(const SgNode *original,
          completedFixupNodePairs.end();
 }
 
-SgNode *SgTreeCopy::copyAst(const SgNode *n) {
-  // DQ (10/8/2007): I have modified this function to have a single return.
-  // This function is called by the copy mechanism to copy AST child trees.
+SgCopyHelp *&SgCopyHelp::activeConstruction() {
+  static thread_local SgCopyHelp *active = nullptr;
+  return active;
+}
 
+SgCopyHelp::ConstructionScope *&SgCopyHelp::activeScope() {
+  static thread_local ConstructionScope *scope = nullptr;
+  return scope;
+}
+
+SgCopyHelp::ConstructionScope::ConstructionScope(SgCopyHelp &help,
+                                                 const SgNode *source)
+    : previous(activeConstruction()), previousScope(activeScope()),
+      owner(&help), original(source) {
+  activeConstruction() = &help;
+  activeScope() = this;
+}
+
+SgCopyHelp::ConstructionScope::~ConstructionScope() {
+  ROSE_ASSERT(activeScope() == this);
+  activeScope() = previousScope;
+  activeConstruction() = previous;
+}
+
+bool SgCopyHelp::isCopyingOriginal(const SgNode *node) const {
+  for (ConstructionScope *scope = activeScope(); scope != nullptr;
+       scope = scope->previousScope) {
+    if (scope->owner == this && scope->original == node) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool SgCopyHelp::isConstructingCopy(const SgNode *node) {
+  SgCopyHelp *help = activeConstruction();
+  if (help == nullptr)
+    return false;
+  const auto &originals = help->get_originalNodesForCopy(node);
+  return !originals.empty() && originals.count(node) == 0;
+}
+
+SgNode *SgTreeCopy::copyAst(const SgNode *n) {
   SgNode *nCopy = nullptr;
 
-  // Semantic types are canonical and shared.  A function declaration's
-  // type_syntax is the one exception: it is an explicitly declaration-owned
-  // source-spelling tree and its ROSETTA edge is CLONE_TREE.  Treating that
-  // local syntax shell like a canonical semantic type aliases it into the
-  // copied declaration and violates both owners.
+  // Canonical semantic types are shared; owned source occurrences are copied.
   if (const SgType *type = isSgType(n)) {
     const SgFunctionType *functionType = isSgFunctionType(type);
+    if (functionType != nullptr) {
+      ASSERT_not_null(functionType->get_argument_list());
+      ROSE_ASSERT(functionType->get_argument_list()->get_parent() ==
+                  functionType);
+    }
     const SgFunctionDeclaration *syntaxOwner = isSgFunctionDeclaration(
         functionType != nullptr ? functionType->get_parent() : nullptr);
-    if (syntaxOwner != nullptr &&
-        syntaxOwner->get_type_syntax() == functionType) {
+    const SgTypedefType *alias = isSgTypedefType(type);
+    const bool copyingAliasOwner =
+        alias != nullptr && isCopyingOriginal(alias->get_declaration());
+    std::vector<SgNode *> ownedChildren;
+    const SgNode *owner = type->get_parent();
+    if (owner != nullptr && isCopyingOriginal(owner))
+      owner->appendDestructorOwnedNodes(ownedChildren);
+    const auto *typedefOwner = isSgTypedefDeclaration(owner);
+    const bool copyingTypeOwner =
+        std::find(ownedChildren.begin(), ownedChildren.end(), type) !=
+            ownedChildren.end() ||
+        (typedefOwner != nullptr && isCopyingOriginal(typedefOwner) &&
+         typedefOwner->get_base_type() == type);
+    const bool copyingDeclaredExceptionSignature =
+        syntaxOwner != nullptr &&
+        syntaxOwner->get_declared_exception_signature() == functionType;
+    if ((copyingTypeOwner &&
+         (syntaxOwner == nullptr || copyingDeclaredExceptionSignature)) ||
+        copyingAliasOwner || isSgNonrealType(type) != nullptr ||
+        isSgDeclType(type) != nullptr || isSgTypeOfType(type) != nullptr ||
+        type->has_source_prototype()) {
+      nCopy = n->copy(*this);
+    } else if (syntaxOwner != nullptr &&
+               syntaxOwner->get_type_syntax() == functionType) {
       if (!syntaxOwner->get_type_syntax_is_available() ||
           syntaxOwner->get_type() == functionType ||
           functionType->get_argument_list() == nullptr ||
@@ -2339,68 +1817,23 @@ SgNode *SgTreeCopy::copyAst(const SgNode *n) {
       nCopy = const_cast<SgNode *>(n);
     }
   } else {
-    // A class definition is a structural child of exactly its defining class
-    // declaration.  Sharing a definition reached through any other
-    // declaration used to hide that malformed ownership and, worse, the
-    // generic parent reset below then detached the original shared node.
-    if (const SgClassDefinition *classDefinition = isSgClassDefinition(n)) {
-      const SgClassDeclaration *classDeclaration =
-          isSgClassDeclaration(classDefinition->get_parent());
-      if (classDeclaration == nullptr ||
-          classDeclaration->get_definition() != classDefinition ||
-          classDeclaration->get_definingDeclaration() != classDeclaration) {
-        fprintf(
-            stderr,
-            "REX_COPY_INVARIANT[class-definition-owner]: "
-            "definition=%p parent=%p/%s parent-definition=%p "
-            "defining-declaration=%p\n",
-            static_cast<const void *>(classDefinition),
-            static_cast<const void *>(classDefinition->get_parent()),
-            classDefinition->get_parent() != nullptr
-                ? classDefinition->get_parent()->class_name().c_str()
-                : "<null>",
-            static_cast<const void *>(classDeclaration != nullptr
-                                          ? classDeclaration->get_definition()
-                                          : nullptr),
-            static_cast<const void *>(
-                classDeclaration != nullptr
-                    ? classDeclaration->get_definingDeclaration()
-                    : nullptr));
-        ROSE_ABORT();
-      }
-    }
-
     // Every non-type structural node has a distinct copy.
     nCopy = n->copy(*this);
-
-    // Set the parent to NULL, the copy mechanism we set it correctly ...
-    nCopy->set_parent(nullptr);
   }
 
+  if (get_depth() == 0)
+    requireBoundCopiedReferences();
   return nCopy;
-}
-
-// DQ (8/10/2008): Added to support binary file format.
-std::ostream &operator<<(std::ostream &os,
-                         const std::multimap<rose_addr_t, rose_addr_t> &m) {
-  return os;
-}
-
-// DQ (8/10/2008): Added to support binary file format.
-std::ostream &operator<<(std::ostream &os, const struct stat & /*sb*/) {
-  return os;
 }
 
 // DQ (4/5/2017): Moved these function definition out of the header file to
 // avoid warnings from assertion from the header file (OK if it appears once
 // from compiling the source file).
 VirtualCFG::CFGNode SgNode::cfgForBeginning() {
-  ASSERT_this();
   return VirtualCFG::CFGNode(this, 0);
 }
 
 VirtualCFG::CFGNode SgNode::cfgForEnd() {
-  ASSERT_this();
   return VirtualCFG::CFGNode(this, this->cfgIndexForEnd());
 }
 
@@ -2408,7 +1841,12 @@ namespace SageInterface {
 void registerAstTeardownAtExit();
 }
 
-void SgNode::initializeAstTeardown() { (void)allPools(); }
+void SgNode::initializeAstTeardown() {
+  (void)allPools();
+  (void)SgPointerMemberType::canonicalSemanticTypeCache();
+  (void)SgTypeComplex::canonicalSemanticTypeCache();
+  (void)SgTypeImaginary::canonicalSemanticTypeCache();
+}
 
 std::vector<SgNode::PoolEntry> &SgNode::allPools() {
   static std::vector<SgNode::PoolEntry> pools;
@@ -2418,10 +1856,6 @@ std::vector<SgNode::PoolEntry> &SgNode::allPools() {
     SageInterface::registerAstTeardownAtExit();
   }
   return pools;
-}
-
-void SgNode::releaseAllPools() {
-  std::vector<SgNode::PoolEntry>().swap(allPools());
 }
 
 const SgNode::PoolEntry *SgNode::findPoolEntry(const unsigned char *ptr) {
@@ -2451,32 +1885,33 @@ VariantT SgNode::variantFromPool(SgNode const *n) {
   }
   const unsigned char *ptr = reinterpret_cast<const unsigned char *>(n);
   const SgNode::PoolEntry *pool = findPoolEntry(ptr);
-  return pool ? pool->variant : (VariantT)0;
+  if (pool == nullptr) {
+    return (VariantT)0;
+  }
+  ROSE_ASSERT(pool->base != nullptr && pool->slot_size != 0);
+  size_t offset = reinterpret_cast<std::uintptr_t>(ptr) -
+                  reinterpret_cast<std::uintptr_t>(pool->base);
+  return offset % pool->slot_size == 0 ? pool->variant : (VariantT)0;
 }
 
 bool SgNode::isLiveNode(const SgNode *node) {
   if (node == nullptr) {
     return false;
   }
-  const unsigned char *ptr =
-      reinterpret_cast<const unsigned char *>(const_cast<SgNode *>(node));
+  const unsigned char *ptr = reinterpret_cast<const unsigned char *>(node);
   const SgNode::PoolEntry *pool = findPoolEntry(ptr);
   if (pool == nullptr) {
     return true;
   }
-  if (pool->base == nullptr || pool->size == 0 || pool->slot_size == 0 ||
-      pool->live_flags == nullptr) {
-    return true;
+  ROSE_ASSERT(pool->base != nullptr && pool->size != 0 &&
+              pool->slot_size != 0 && pool->live_flags != nullptr);
+  size_t offset = reinterpret_cast<std::uintptr_t>(ptr) -
+                  reinterpret_cast<std::uintptr_t>(pool->base);
+  if (offset % pool->slot_size != 0) {
+    return false;
   }
-  size_t offset = static_cast<size_t>(ptr - pool->base);
   size_t slot_index = offset / pool->slot_size;
   return pool->live_flags[slot_index] != 0;
 }
 
 SOURCE_END
-
-SOURCE_ROOT_NODE_ERROR_FUNCTION_START
-SOURCE_ROOT_NODE_ERROR_FUNCTION_END
-
-SOURCE_ERROR_FUNCTION_START
-SOURCE_ERROR_FUNCTION_END

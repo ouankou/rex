@@ -24,12 +24,15 @@ set(CXX_TESTCODES_GNUXX17
   rex_test2026_template_features.cpp
   rex_test2026_stl_map.cpp
   rex_test2026_stl_meta.cpp
+  rex_test2026_stl_tuple.cpp
   rex_test2026_stl_type_traits.cpp
   rex_test2026_stl_variant.cpp
   rex_test2026_deduction_guide.cpp
   rex_test2026_std_filesystem.cpp
   rex_test2026_std_variant_visit.cpp
   rex_frontend_semantic_lambda_parent.cpp
+  rex_frontend_access_label_lexical_ownership.cpp
+  rex_frontend_structured_binding_template_body.cpp
   test2010_02.C
   test2017_99.C
 )
@@ -109,6 +112,9 @@ function(rex_get_fortran_specimen_extra_flags out_var specimen)
     test2011_imperial_crayPointers.f90)
   if(_specimen_name IN_LIST _cray_pointer_specimens)
     list(APPEND _flags -rose:cray_pointer_support)
+  endif()
+  if(_specimen_name STREQUAL "rex_fortran_unsigned_literal_values.f90")
+    list(APPEND _flags -funsigned)
   endif()
   set(${out_var} "${_flags}" PARENT_SCOPE)
 endfunction()
@@ -231,11 +237,6 @@ if(ROSE_BUILD_C_LANGUAGE_SUPPORT)
 endif()
 
 set(_identity_translator_cmd $<TARGET_FILE:identityTranslator>)
-set(_identity_translator_missing FALSE)
-if(NOT TARGET identityTranslator)
-  set(_identity_translator_cmd identityTranslator)
-  set(_identity_translator_missing TRUE)
-endif()
 
 add_test(
   NAME functional_testObjectFileAnalysis
@@ -403,9 +404,6 @@ set_tests_properties(
   PROPERTIES
     RESOURCE_LOCK ${_functional_lock}
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_functional_read_file_twice_output_dir}")
-
-if(_identity_translator_missing)
-endif()
 
 add_subdirectory(CompileTests)
 add_subdirectory(testSupport)

@@ -505,21 +505,6 @@ void CreateSlice::applyPendingRemovals() {
       deletionRoots.push_back(candidate);
   }
 
-  DeletionNodeSet deletionNodes;
-  for (SgStatement *candidate : deletionRoots)
-    collectDeletionSubtree(candidate, deletionNodes);
-  closeDeletionBatchOverOwnedFunctionTypeSyntax(deletionNodes);
-  const std::vector<SgNode *> ownedScopeSupportNodes =
-      closeDeletionBatchOverOwnedScopeSupport(deletionNodes);
-  const std::vector<SgNode *> exactParentOwnedNodes =
-      closeDeletionBatchOverExactParentOwnership(deletionNodes);
-  const std::vector<SgType *> retiringSharedTypeParents =
-      RetiringSharedTypeParentCollector(deletionNodes).collect();
-  std::vector<RetiringSymbol> retiringSymbols =
-      collectRetiringSymbols(deletionNodes);
-  for (const RetiringSymbol &retiring : retiringSymbols)
-    deletionNodes.insert(retiring.symbol);
-
   // Detach the complete batch first. Declaration-family mutation is therefore
   // finished before isolation is proved, and no nested deletion can observe a
   // half-severed defining/nondefining chain.
@@ -574,6 +559,23 @@ void CreateSlice::applyPendingRemovals() {
       ROSE_ABORT();
     }
   }
+
+  // Statement removal relocates preprocessing records and their source
+  // positions. Collect deletion ownership only after those transfers finish.
+  DeletionNodeSet deletionNodes;
+  for (SgStatement *candidate : deletionRoots)
+    collectDeletionSubtree(candidate, deletionNodes);
+  closeDeletionBatchOverOwnedFunctionTypeSyntax(deletionNodes);
+  const std::vector<SgNode *> ownedScopeSupportNodes =
+      closeDeletionBatchOverOwnedScopeSupport(deletionNodes);
+  const std::vector<SgNode *> exactParentOwnedNodes =
+      closeDeletionBatchOverExactParentOwnership(deletionNodes);
+  const std::vector<SgType *> retiringSharedTypeParents =
+      RetiringSharedTypeParentCollector(deletionNodes).collect();
+  std::vector<RetiringSymbol> retiringSymbols =
+      collectRetiringSymbols(deletionNodes);
+  for (const RetiringSymbol &retiring : retiringSymbols)
+    deletionNodes.insert(retiring.symbol);
 
   // Retire exact symbol-table ownership before proving isolation.  The symbol
   // nodes remain live during the proof, so any retained reference expression
@@ -754,45 +756,18 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
   if (isSgFile(node)) {
     currentFile = NULL;
   }
-  /*
-          if (isSgStatement(node))
-                  cout << "processing statement ";
-          else
-                  cout <<"processing node ";
-
-    printSgNode(node);
-          cout <<endl;
-  */
 
   BooleanSafeKeeper partOfSlice = inherited;
-  //      partOfSlice=BooleanSafeKeeper(false);
   // calcualte the synth-val of this node
   // if any of the children of this node is in the slice, this node must also be
   // in the slice
-  int count = 0;
-  std::vector<std::pair<SgNode *, std::string>> mapping =
-      node->returnDataMemberPointers();
-  //              cout <<"\t synth-attrib count "<<atts.size()<<"\t mapping
-  //              count "<<mapping.size()<<endl;
   for (SubTreeSynthesizedAttributes::iterator i = atts.begin(); i != atts.end();
        i++) {
-    /*              if ((*i).boolean)
-                    {
-            //              cout <<"\t"<<count<<" is true"<<endl;
-//                              SgNode * first=((mapping[count]).first);
-    //                      if (first!=NULL)
-    //                      cout
-<<"\t"<<((mapping[count]).first)->class_name()<<endl;
-                    }
-                    */
-    count++;
     partOfSlice.boolean |= (*i).boolean;
   }
 
   // if this is a bb or gb check for delayed decls
   if (isSgBasicBlock(node) || isSgGlobal(node)) {
-    //              cout <<"current scope: >"<<node->unparseToString()<<"< of
-    //              class "<<node->class_name()<<endl;
     bool deleteDelayedNode;
     Rose_STL_Container<SgNode *> varUseList =
         NodeQuery::querySubTree(node, V_SgVarRefExp);
@@ -872,46 +847,24 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
           queueStatementForRemoval(group);
         }
       } else if (isSgVariableDeclaration(*cand)) {
-        //                              cout <<"delayed varDecl
-        //                              >"<<(*cand)->unparseToString()<<"<"<<endl;
         SgVariableDeclaration *decl = isSgVariableDeclaration(*cand);
         deleteDelayedNode = !variableDeclarationIsUsed(decl);
         if (deleteDelayedNode) {
-          //                      cout <<"\t*found no use, deleting"<<endl;
-          // check if the node is from the sourcefile or goes to the source
-          // file, if so kill it make shure to delete only stuff, the belongs to
-          // an unparsed file
-          //                                              if
-          //                                              ((*cand)->get_file_info
-          //                                              ()->isOutputInCodeGeneration
-          //                                              ())
           if (currentFile &&
               (*cand)->get_file_info()->isSameFile(currentFile)) {
             SgStatement *candidateStatement = isSgStatement(*cand);
             // Defer AST mutation until traversal finishes to keep successor
             // container indexing stable.
             queueStatementForRemoval(candidateStatement);
-            //                                      delete
-            //                                      (*cand);
           }
         }
-      } else if (isSgTypedefDeclaration(*cand) || isSgClassDeclaration(*cand)) {
-        //                      cout <<"delayed struct/type:
-        //                      "<<(*cand)->unparseToString()<<endl;
-        //      cerr <<"CreateSlice.C:evaluateSynthesizedAttribute does not
-        //      maintain delayed deleting for structs and typedefs, every struct
-        //      and type will remain within the slice"<<endl;
       }
     }
     delayedRemoveListStack.top().clear();
     delayedRemoveListStack.pop();
   }
 
-  // this is a statement, if any of its child-nodes is in the slice, keep it,
-  // else discard id
   if (isSgStatement(node)) {
-
-    // if any of its sythesized attributes is true, keep is, else dicard
     if (!partOfSlice.boolean) {
       if (SgClassDefinition *definition = isSgClassDefinition(node)) {
         SgClassDeclaration *declaration =
@@ -947,10 +900,8 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
         // declaration-family retention closure decides whether the complete
         // function survives; the definition is never detached independently.
       } else if (isSgVariableDefinition(node)) {
-        //                                      cout <<" is varDef"<<endl;
+        // The declaration owns the variable definition.
       } else if (isSgVariableDeclaration(node)) {
-        //                                      cout <<" is varDec"<<endl;
-        // remove initialization
         SgVariableDeclaration *declaration = isSgVariableDeclaration(node);
         ROSE_ASSERT(declaration != NULL);
         for (SgInitializedName *name : declaration->get_variables()) {
@@ -978,7 +929,6 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
             ROSE_ABORT();
           }
           name->set_initializer(NULL);
-          initializer->set_parent(NULL);
           SageInterface::deleteAST(
               initializer, SageInterface::DeleteAstMode::kRequireIsolated);
           if (SgNode::isLiveNode(initializer)) {
@@ -1011,9 +961,6 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
         group->validate();
         delayedRemoveListStack.top().push_back(group);
       } else if (isSgTypedefDeclaration(node) || isSgClassDeclaration(node)) {
-        // POSTPONE DElete
-        //                                      cout <<" is typedef or
-        //                                      struct"<<endl;
         if (SgDeclarationGroupStatement *group =
                 isSgDeclarationGroupStatement(node->get_parent())) {
           group->validate();
@@ -1057,10 +1004,6 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
           }
         }
       } else {
-        // make shure to delete only stuff, the belongs to an unparsed file
-        //                                              if (node->get_file_info
-        //                                              ()->isOutputInCodeGeneration
-        //                                              ())
         if (currentFile && node->get_file_info()->isSameFile(currentFile)) {
           SgStatement *currentStatement = isSgStatement(node);
           if (canRemoveStatementFromAst(currentStatement)) {
@@ -1074,51 +1017,9 @@ CreateSlice::evaluateSynthesizedAttribute(SgNode *node,
             // nearest removable owner decides the complete subtree outcome.
           }
         }
-        //      delete(node);
       }
     }
   }
-
-  //              cout <<"\tinherited:"<<inherited.boolean<<endl;
-  //              cout <<"\tsynthesized:"<<partOfSlice.boolean<<endl;
-  //              return BooleanSafeKeeper(false);
-  return partOfSlice;
-
-  // if set::count(node)>0
-  if (_toSave.count(
-          node)) { /*
-                                  if (isSgStatement(node))
-                                  {
-                                  SgPragmaDeclaration *pr =
-                                  new SgPragmaDeclaration(Sg_File_Info::
-                                  generateDefaultFileInfoForTransformationNode
-                                  (), new SgPragma("slice"));
-
-              ROSE_ASSERT(pr != NULL);
-              LowLevelRewrite::insert(isSgStatement(node), isSgStatement(pr));
-              _toSave.insert(pr);
-
-          }*/
-    partOfSlice = true;
-  } else {
-    for (SubTreeSynthesizedAttributes::iterator i = atts.begin();
-         i != atts.end(); i++) {
-      if ((*i).boolean == true) {
-        partOfSlice = true;
-        break;
-      }
-    }
-  }
-
-  if (!partOfSlice.boolean && isSgStatement(node)) {
-    //    LowLevelRewrite::remove(isSgStatement(node));
-  }
-  /*
-     if (isSgLocatedNode(node) && !partOfSlice) { Sg_File_Info * file_info =
-     node->get_file_info();
-
-     // file_info->unsetCompilerGeneratedNodeToBeUnparsed(); //
-     file_info->setCompilerGenerated(); } */
 
   return partOfSlice;
 }

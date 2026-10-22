@@ -3,20 +3,14 @@
 
 #include "rosedll.h"
 
-#include <list>
-
+#include <map>
 #include <string>
-
 #include <vector>
 
 #include "commandline_processing.h"
 
 namespace Rose {
 
-// [Robb P Matzke 2016-06-16]: These file utilities were all originally part of
-// StringUtility. I'm leaving them here for now just so I don't need to make so
-// many changes to projects that use these, but you should expect these to be
-// moved sometime in the future.
 namespace StringUtility {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -43,8 +37,7 @@ enum OSType {
  *  @todo What does it mean to have a non-positive line number? What line number
  * should be used for generated code when the `filename` member is empty? */
 struct StringWithLineNumber {
-  std::string
-      str; // DQ (1/23/2010): this name is difficult to trace within the code.
+  std::string str;
   std::string filename; // Empty string means generated code
   unsigned int line;
 
@@ -68,8 +61,7 @@ ROSE_UTIL_API OSType getOSType();
  * constructed by concatenating `directoryName` and `fileNameString` without any
  * intervening component separator (e.g., no "/").
  *
- *  If the file cannot be created then this function silently fails (or aborts
- * if ROSE is compiled in debug mode).
+ *  File creation, writing and close errors are fatal.
  *
  * @param outputString Contents to write.
  * @param fileNameString File name component.
@@ -104,15 +96,6 @@ ROSE_UTIL_API std::string readFile(const std::string &fileName);
  * @return File contents with line numbers. */
 ROSE_UTIL_API FileWithLineNumbers readFileWithPos(const std::string &fileName);
 
-/** Name of the home directory.
- *
- *  Returns the value of the "HOME" environment variable by copying it into the
- * `dir` argument. Throws an std::runtime_error if this environment variable is
- * not set.
- *
- * @param dir Receives the home directory path. */
-ROSE_UTIL_API void homeDir(std::string &dir);
-
 /** Returns the last component of a path in a filesystem.
  *
  *  Removes the "path" part of a "filename" (if there is one) and returns just
@@ -129,8 +112,8 @@ stripPathFromFileName(const std::string &fileNameWithPath);
 /** Returns all but the last component of a path in a filesystem.
  *
  *  This function removes the filename from the combined path and filename if it
- * includes a path and returns only the path. Make it safe to input a filename
- * without a path name (return the filename).
+ * includes a path and returns only the path. A filename without a path returns
+ * an empty string.
  *
  *  Terms are loosely defined and this function possibly doesn't work for
  * non-POSIX file systems; consider using std::filesystem instead.
@@ -151,52 +134,25 @@ getPathFromFileName(const std::string &fileNameWithPath);
 ROSE_UTIL_API std::string
 stripFileSuffixFromFileName(const std::string &fileNameWithSuffix);
 
-/** Get the absolute path from the relative path.
+/** Get the canonical absolute path of an existing filesystem entry.
  *
- *  Terms are loosely defined and this function is not likely to work on
- * non-POSIX systems. Consider using std::filesystem instead.
+ * Resolves symbolic links and requires every path component to exist.
+ * Use std::filesystem::absolute for paths that need not exist.
  *
- * @param relativePath Relative path string.
- * @param printErrorIfAny Whether to print errors.
- * @return Absolute path string. */
+ * @param relativePath Nonempty relative or absolute path without embedded NUL.
+ * @return Canonical absolute path string.
+ * @throws std::filesystem::filesystem_error if resolution fails. */
 ROSE_UTIL_API std::string
-getAbsolutePathFromRelativePath(const std::string &relativePath,
-                                bool printErrorIfAny = false);
+getAbsolutePathFromRelativePath(const std::string &relativePath);
 
 /** Get the file name suffix (extension) without the leading dot.
  *
- *  Filename could be either base name or name with full path. If no dot is
- * found in the input fileName, the function just returns the original fileName.
- *
- *  Terms are loosely defined and this function is not likely to work correctly
- * in some situations, such as when the "." is not in the last component of the
- * file name.  Consider using std::filesystem instead.
+ *  Filename can include a path. Only dots in the last path component count;
+ * without one, the original input is returned unchanged.
  *
  * @param fileName Input path or filename.
  * @return Suffix without the leading dot. */
 ROSE_UTIL_API std::string fileNameSuffix(const std::string &fileName);
-
-// [Robb Matzke 2016-05-06]: I am deprecating "findfile" because:
-//   1. It appears to not be used anywhere in ROSE, projects, tests, or
-//   documentation.
-//   2. The name is spelled wrong (should be "findFile")
-//   3. File operations should not be in StringUtility since they have nothing
-//   to do with string manipulation
-//   4. Rose::FileSystem::findNames does something similar.
-
-/** Find file names non-recursively.
- *
- *  Scans the directory named `pathString` and returns a list of files in that
- * directory which have `patternString` as a substring of their name. Note that
- * `patternString` is not a glob or regular expression.  The return value
- * strings are formed by concatenating the `pathString` and the file name with
- * an intervening slash.
- *
- *  This function does not work for non-POSIX systems. Consider using
- * std::filesystem instead, which has a directory iterator that works for
- * non-POSIX systems also. */
-// ROSE_UTIL_API std::list<std::string> findfile(std::string patternString,
-// std::string pathString)
 
 /* File name location.
  *
@@ -358,33 +314,6 @@ stripDotsFromHeaderFileName(const std::string &name);
  * @return Directory distance. */
 ROSE_UTIL_API int directoryDistance(const std::string &left,
                                     const std::string &right);
-
-/** Reads words from a file.
- *
- *  Opens the specified file for reading and reads all words from the file using
- * `std::istream` `operator>>` into `std::string`.  If the file cannot be opened
- * then an std::runtime_error is thrown with a message that includes the file
- * name.
- *
- * @param filename File to read.
- * @return List of words. */
-ROSE_UTIL_API std::vector<std::string> readWordsInFile(std::string filename);
-
-// popen_wrapper is defined in sage_support.C
-
-/** Simple wrapper for Unix popen command.
- *
- *  If there is a failure (cannot create pipes, command not found, command
- * terminated abnormally, input buffer too small, etc), then an error is printed
- * to standard error (with or without line termination) and false is returned.
- * When an error occurs the pipes that were opened to communicate with the
- * subcommand might not be closed.
- *
- * @param command Command to execute.
- * @param result Output lines collected from the command.
- * @return True on success, false on failure. */
-bool popen_wrapper(const std::string &command,
-                   std::vector<std::string> &result);
 
 /** Prints a StringWithLineNumber. */
 inline std::ostream &operator<<(std::ostream &os,

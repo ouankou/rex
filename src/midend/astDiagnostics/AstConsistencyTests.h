@@ -4,22 +4,20 @@
 #ifndef ASTTESTS_H
 #define ASTTESTS_H
 
-// DQ (12/7/2003): use platform independent macro defined in config.h
-// #include IOSTREAM_HEADER_FILE
 #include <iostream>
+#include <list>
+#include <map>
+#include <set>
+#include <string>
+#include <tuple>
 #include <unordered_map>
 #include <unordered_set>
 
 #include "AstStatistics.h"
 
 #include "rosedll.h"
-// #include "AstPDFGeneration.h"
 
-#include "AstTextAttributesHandling.h"
-
-#include "AstNodePtrs.h"
-
-#include "AstReverseProcessing.h"
+#include "AstProcessing.h"
 
 class TestAstPropertiesSA {
 public:
@@ -29,9 +27,7 @@ public:
 };
 
 class TestAstProperties : public AstBottomUpProcessing<TestAstPropertiesSA> {
-  //! this function returns true if all nodes are correct (not problematic
-  //! nodes) this function returns false if at least one node is a problematic
-  //! node
+  //! Propagate subtree consistency and validate each node.
 
 private:
   // DQ (8/3/2004): This list is used to record and report any IR nodes that
@@ -40,7 +36,8 @@ private:
   // 0)
   std::list<SgNode *> listOfNodesWithoutValidFileInfo;
   std::list<SgNode *> listOfNodesFileInfo;
-  std::unordered_map<std::string, SgDeclarationStatement *>
+  std::map<std::tuple<int, int, int, int, int, int, unsigned int, unsigned int>,
+           SgDeclarationStatement *>
       directSourceSurfaceOwners;
 
 public:
@@ -57,99 +54,13 @@ private:
 
 class ROSE_DLL_API AstTests {
 public:
-  // some handy string functions used when testing the RTI information of a
-  // SgNode
-  static bool isPrefix(std::string prefix, std::string s);
-  static unsigned int numPrefix(std::string prefix,
-                                std::vector<std::string> vs);
-
-  // properties of SgNodes
-  static unsigned int numSuccContainers(SgNode *node);
-  static unsigned int numSingleSuccs(SgNode *node);
-  static bool isProblematic(SgNode *node);
+  // Validate actual successor cardinality and identity. Dynamic containers
+  // and scalar edges may coexist; their names do not encode AST validity.
+  static void validateTraversalSuccessors(SgNode *node);
 
   //! Test codes that traverse the AST
   static void runAllTests(SgProject *sageProject);
   static bool isCorrectAst(SgProject *sageProject);
-};
-
-#ifndef SWIG
-// DQ (3/10/2013): Swig has a problem with this class (remove from visability to
-// swig).
-
-class TestAstNullPointers : public AstNodePtrs {
-public:
-  TestAstNullPointers() {}
-  virtual void visitWithAstNodePointersList(SgNode *node,
-                                            AstNodePointersList l);
-};
-#endif
-
-// these dummy classes are just to show the interfaces of the 4 kinds of
-// traversals void dummyTests(SgProject* sageProject); // traverse AST with all
-// 4 kinds of traversals
-class DI : AstInheritedAttribute {};   // Dummy inherited attribute
-class DS : AstSynthesizedAttribute {}; // Dummy synthesized attribute
-class DummyISTestQuery1 : public AstTopDownBottomUpProcessing<DI, DS> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-  DS evaluateSynthesizedAttribute(SgNode *, DI, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-class DummyITestQuery1 : public AstTopDownProcessing<DI> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-};
-class DummySTestQuery1 : public AstBottomUpProcessing<DS> {
-  DS evaluateSynthesizedAttribute(SgNode *, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-class DummyTestQuery1 : public AstSimpleProcessing {
-  void visit(SgNode *) {}
-};
-
-class DummyISTestQuery2 : public AstReversePrefixInhSynProcessing<DI, DS> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-  DS evaluateSynthesizedAttribute(SgNode *, DI, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-
-class DummyITestQuery2 : public AstReversePrefixInhProcessing<DI> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-};
-
-class DummySTestQuery2 : public AstReversePrefixSynProcessing<DS> {
-  DS evaluateSynthesizedAttribute(SgNode *, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-class DummyTestQuery2 : public AstReversePrefixSimpleProcessing {
-  void visit(SgNode *) {}
-};
-
-class DummyISTestQuery3 : public AstReverseBranchInhSynProcessing<DI, DS> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-  DS evaluateSynthesizedAttribute(SgNode *, DI, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-class DummyITestQuery3 : public AstReverseBranchInhProcessing<DI> {
-  DI evaluateInheritedAttribute(SgNode *, DI inh) { return inh; }
-};
-class DummySTestQuery3 : public AstReverseBranchSynProcessing<DS> {
-  DS evaluateSynthesizedAttribute(SgNode *, SubTreeSynthesizedAttributes) {
-    DS syn;
-    return syn;
-  }
-};
-class DummyTestQuery3 : public AstReverseBranchSimpleProcessing {
-  void visit(SgNode *) {}
 };
 
 // DQ (3/30/2004): Added tests on templates!
@@ -169,16 +80,9 @@ public:
   void visit(SgNode *node);
 };
 
-// DQ (4/2/2012): This appears to be a test that we have not got into place yet.
-// the test code: test2012_59.C demonstrates an example where a IR node is
-// shared between the global scope and a class definition scope.  This causes an
-// error in the generated code, so we want to detect this case.
+// Structural traversal edges must visit each node once. Shared semantic type
+// references are not structural children and are outside this check.
 class TestAstForUniqueNodesInAST : public AstSimpleProcessing {
-  // This class uses a traversal to test properties of AST.
-  // We look for redundent entries anywhere in the AST.
-  // This test has to save a pointer to ever AST IR node
-  // that is traversed so it is a bit expensive in memory.
-
   std::set<SgNode *> astNodeSet;
 
 public:
@@ -187,33 +91,17 @@ public:
   static void test(SgNode *node);
 };
 
-// DQ (4/3/2012): Simple globally visible function to call (used for debugging
-// elsewhee in ROSE).
+// Check structural uniqueness, including expression lists built by SageBuilder.
 void testAstForUniqueNodes(SgNode *node);
 
-class TestAstCompilerGeneratedNodes : public AstSimpleProcessing {
-  // This class uses a traversal to test properties of compiler generated IR
-  // nodes.
-
-public:
-  void visit(SgNode *node);
-};
-
 class TestAstForProperlyMangledNames : public AstSimpleProcessing {
-  // This class uses a traversal to test properties of namged names.
-
 public:
   unsigned long saved_maxMangledNameSize;
   unsigned long saved_totalMangledNameSize;
   unsigned long saved_numberOfMangledNames;
   void visit(SgNode *node);
 
-  // DQ (8/28/2006): Added constructor to permit data members to be set properly
   TestAstForProperlyMangledNames();
-
-  // DQ (2/7/2006): This is Rich's function to simplify the testing
-  // (we make it static so that it can be easily called from elsewhere).
-  static bool isValidMangledName(std::string name);
 };
 
 class TestAstForProperlySetDefiningAndNondefiningDeclarations
@@ -264,27 +152,9 @@ public:
   void visit(SgNode *node);
 };
 
-class TestLValues : public AstSimpleProcessing {
-  // This class uses a traversal to test the isLValue() and isDefinable() member
-  // functions on each SgExpression IR node. The goal is to verify that each
-  // member function, were appropriate, returns whether or not its argument is
-  // an lvalue or definable.
-
-public:
-  //! static function to do test on any IR node
-  // static void test(SgNode* node);
-
-  //! visit function required for traversal
-  void visit(SgNode *node);
-};
-
-// class TestMangledNames : public AstSimpleProcessing
 class TestMangledNames : public ROSE_VisitTraversal {
-  // This class uses a traversal to test the generation of mangled names.
-
 public:
   virtual ~TestMangledNames() {};
-  //! static function to do test on any IR node
   static void test();
 
   unsigned long saved_maxMangledNameSize;
@@ -293,10 +163,8 @@ public:
   unsigned long totalLongMangledNameSize;
   unsigned long totalNumberOfLongMangledNames;
 
-  // DQ (8/28/2006): Added constructor to permit data members to be set properly
   TestMangledNames();
 
-  //! visit function required for traversal
   void visit(SgNode *node);
 };
 
@@ -365,22 +233,6 @@ public:
   virtual void visit(SgNode *);
 };
 
-/*! \brief This traversal uses the Memory Pool traversal to test declarations
-   and if their associated symbol can be located.
-
-    This traversal uses the Memory Pool traversal to test if sysbols can be
-   found for all declarations.
- */
-class TestMappingOfDeclarationsInMemoryPoolToSymbols
-    : public ROSE_VisitTraversal {
-public:
-  virtual ~TestMappingOfDeclarationsInMemoryPoolToSymbols() {};
-  //! static function to do test on any IR node
-  static void test();
-
-  virtual void visit(SgNode *);
-};
-
 class TestLValueExpressions : public AstSimpleProcessing {
   // This class uses a traversal to test expressions that should be marked
   // as lvalues and makes sure that other expressions are not marked as lvalues.
@@ -391,58 +243,6 @@ public:
 
   //! visit function required for traversal
   void visit(SgNode *node);
-};
-
-class TestMultiFileConsistancy
-    : public ROSE_VisitTraversal // AstSimpleProcessing
-{
-  // DQ (3/7/2010): Corrected the documentation for this class.
-  // Test the declarations to make sure that defining and non-defining appear in
-  // the same file (for outlining consistency).
-
-public:
-  //! static function to do test on any IR node
-  static void test();
-
-  //! visit function required for traversal
-  void visit(SgNode *node);
-};
-
-class BuildListOfConnectedNodesInAST : public AstSimpleProcessing {
-  // DQ (3/7/2010): This class is part of a test to detect disconnected
-  // parts of the AST. These are currently a problem for the AST File I/O
-  // and need to be eliminated.
-
-public:
-  std::set<SgNode *> &nodeSet;
-  BuildListOfConnectedNodesInAST(std::set<SgNode *> &s);
-
-  //! visit function required for traversal
-  void visit(SgNode *node);
-};
-
-class BuildListOfNodesInAST : public ROSE_VisitTraversal {
-  // DQ (3/7/2010): This class Corrected the documentation for this class.
-  // Test the declarations to make sure that defining and non-defining appear in
-  // the same file (for outlining consistency).
-
-public:
-  const std::set<SgNode *> &constNodeSet;
-  std::set<SgNode *> &nodeSet;
-  BuildListOfNodesInAST(const std::set<SgNode *> &s1, std::set<SgNode *> &s2);
-
-  //! visit function required for traversal
-  void visit(SgNode *node);
-};
-
-class TestForDisconnectedAST {
-  // DQ (3/7/2010): This uses  the results form the
-  // BuildListOfConnectedNodesInAST and BuildListOfNodesInAST and identifies the
-  // differences.
-
-public:
-  //! static function to do trigger the test
-  static void test(SgNode *node);
 };
 
 class TestForProperLanguageAndSymbolTableCaseSensitivity_InheritedAttribute
@@ -513,15 +313,9 @@ public:
 };
 
 class TestForParentsMatchingASTStructure : public AstPrePostProcessing {
-  // DQ (3/19/2012): This is a test from Robb that I want to use uniformally in
-  // the AST. This has been used to catch several locations in the AST where
-  // parents were not set as they are defined to be set in the AST (based on a
-  // traversal).  So this test is an important addition to the legacy
-  // frontend 4.3 work to fix a number of the bugs in the legacy frontend 3.3
-  // work and define a cleaner representation of the AST.
-
-  // Check that all nodes have the correct parent.  This code is not thread
-  // safe.
+  // Compare structural traversal edges with each node's recorded parent.
+  // check() reports validity to its caller; test() aborts on any mismatch.
+  // The traversal path is cleared on every exit so a checker can be reused.
 
 public:
   std::vector<SgNode *> stack; // current path within the AST
@@ -559,40 +353,16 @@ public:
 };
 
 class TestForMultipleWaysToSpecifyRestrictKeyword : public AstSimpleProcessing {
-  // DQ (12/11/2012): This tests for the two different ways in which
-  // const-volitile-restrict modifiers can be specified.  It is a consiquence of
-  // the CV-modifier (SgTypeModifier) being a part of the type declaration
-  // modifier and also the SgModifierType and the SgDeclarationModifier. Both
-  // are required and as a result it can be confusing that there are two
-  // locations to set these.  Historically in the legacy frontend 3.3 version we
-  // used the SgModifierType for C-V, but the SgDeclarationModifier for the
-  // restrict keyword.  In newer ROSE versions, we now want to make this more
-  // uniform and use the SgModifierType everywhere. To address the
-  // inconsistancy, we want to check that both are always set consistanly.
-
 public:
   void visit(SgNode *node);
 };
 
-// DQ (10/27/2015): This test is part of debugging test2015_97.C which
-// is a reduced version of the 600K line ROSEExample_test_01.C file.
-// The issue is that we have previously generated a cycle in typedef types
-// and so we want to detect these as errors.
 class TestAstForCyclesInTypedefs : public ROSE_VisitTraversal {
-  // This class uses a traversal to test properties of AST.
-  // We look for redundent entries anywhere in the AST.
-  // This test has to save a pointer to ever AST IR node
-  // that is traversed so it is a bit expensive in memory.
-
-  // std::set<SgNode*> astNodeSet;
-
 public:
   virtual ~TestAstForCyclesInTypedefs() {};
 
-  // Overloaded pure virtual function.
   void visit(SgNode *node);
 
-  // Simple funtion to call to get the traversal started...
   static void test();
 };
 

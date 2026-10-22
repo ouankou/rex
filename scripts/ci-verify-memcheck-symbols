@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""Verify installed ELF debug companions for the reviewed Memcheck utilities."""
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
+
+
+def build_id(readelf, binary):
+    output = subprocess.check_output(
+        [readelf, "--notes", "--elf-output-style=JSON", str(binary)], text=True)
+    files = json.loads(output)
+    if len(files) != 1:
+        raise RuntimeError(f"Expected one ELF object for {binary}")
+    identities = [note["Build ID"]
+                  for section in files[0]["NoteSections"]
+                  for note in section["NoteSection"]["Notes"]
+                  if note.get("Owner") == "GNU" and "Build ID" in note]
+    if len(identities) != 1 or not isinstance(identities[0], str):
+        raise RuntimeError(f"Expected one GNU build ID for {binary}")
+    identity = identities[0]
+    if len(identity) < 4 or len(identity) % 2 or not re.fullmatch(r"[0-9a-f]+", identity):
+        raise RuntimeError(f"Invalid GNU build ID for {binary}: {identity!r}")
+    return identity
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--readelf", default="llvm-readelf-22")
+    parser.add_argument("--debug-root", type=Path, default=Path("/usr/lib/debug"))
+    parser.add_argument("executables", nargs="+", type=Path)
+    args = parser.parse_args()
+    records = []
+    # EXT-GREP-PATTERN-ARRAY / EXT-MAWK-BUILTIN-ARENA /
+    # EXT-COREUTILS-MKTEMP-FILENAMES / EXT-BASH-TERMINAL-COMMAND /
+    # EXT-GIT-INIT-CHDIR-LIST:
+    # docs/codebase-audit/external-exceptions.md.
+    # apt installs signed, version-matched packages. Verify their ELF identity
+    # before relying on symbol-specific Memcheck rules; missing or mismatched
+    # companions fail the job before tests start.
+    for executable in args.executables:
+        executable = executable.resolve(strict=True)
+        identity = build_id(args.readelf, executable)
+        destination = args.debug_root / ".build-id" / identity[:2] / (identity[2:] + ".debug")
+        if build_id(args.readelf, destination) != identity:
+            raise RuntimeError(f"Debug companion does not match {executable}")
+        records.append({"executable": str(executable), "build_id": identity,
+                        "debug_file": str(destination),
+                        "debug_sha256": hashlib.sha256(destination.read_bytes()).hexdigest()})
+    print(json.dumps({"debug_companions": records}, indent=2))
+
+
+if __name__ == "__main__":
+    main()

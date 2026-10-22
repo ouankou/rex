@@ -233,15 +233,15 @@ void validateAllCopies(const OpenMPOwners &owners) {
 
 void validateCheckedReplacement() {
   SgExprListExp *groupprivate_variables = SageBuilder::buildExprListExp();
-  SgOmpGroupprivateStatement *groupprivate =
-      new SgOmpGroupprivateStatement(groupprivate_variables);
+  SgOmpGroupprivateStatement *groupprivate = new SgOmpGroupprivateStatement(
+      groupprivate_variables, new SgOmpClauseList());
   groupprivate_variables->set_parent(groupprivate);
   SgOmpClauseList *replacement_clauses = new SgOmpClauseList();
   groupprivate->replace_clause_list(replacement_clauses);
   ROSE_ASSERT(groupprivate->get_clause_list() == replacement_clauses);
   validateOwner(groupprivate);
 
-  SgOmpFlushStatement *flush = new SgOmpFlushStatement();
+  SgOmpFlushStatement *flush = new SgOmpFlushStatement(new SgOmpClauseList());
   SgExprListExp *replacement_variables = SageBuilder::buildExprListExp();
   SgIntVal *variable = SageBuilder::buildIntVal(17);
   replacement_variables->get_expressions().push_back(variable);
@@ -308,11 +308,13 @@ void triggerExpectedFailure(const std::string &mode,
     owners.flush_statements.front()->replace_variable_list(
         SageBuilder::buildExprListExp());
   } else if (mode == "--replace-owned-variable-list") {
-    SgOmpFlushStatement *empty_flush = new SgOmpFlushStatement();
+    SgOmpFlushStatement *empty_flush =
+        new SgOmpFlushStatement(new SgOmpClauseList());
     empty_flush->replace_variable_list(
         owners.allocate_statements.front()->get_variable_list());
   } else if (mode == "--replace-malformed-variable-list") {
-    SgOmpFlushStatement *empty_flush = new SgOmpFlushStatement();
+    SgOmpFlushStatement *empty_flush =
+        new SgOmpFlushStatement(new SgOmpClauseList());
     SgExprListExp *malformed = SageBuilder::buildExprListExp();
     malformed->get_expressions().push_back(SageBuilder::buildIntVal(23));
     empty_flush->replace_variable_list(malformed);

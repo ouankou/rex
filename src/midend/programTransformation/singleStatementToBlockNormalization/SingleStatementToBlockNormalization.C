@@ -1,13 +1,9 @@
-// DQ (10/5/2014): This is more strict now that we include rose_config.h in the
-// sage3basic.h. #include "rose.h"
-
 #include "sage3basic.h"
 
 #include "SingleStatementToBlockNormalization.h"
 
 #include <vector>
 
-// #include <iostream>
 
 #include <stdio.h>
 
@@ -113,6 +109,7 @@ protected:
   BLOCKIFY_ONE_BODY(SgDoWhileStmt, get_body)
   BLOCKIFY_ONE_BODY(SgForAllStatement, get_body)
   BLOCKIFY_ONE_BODY(SgForStatement, get_loop_body)
+  BLOCKIFY_ONE_BODY(SgRangeBasedForStatement, get_loop_body)
   BLOCKIFY_ONE_BODY(SgSwitchStatement, get_body)
 
   // Note that these are macros that expand to implement functions.

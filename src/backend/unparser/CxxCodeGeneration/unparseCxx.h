@@ -106,18 +106,6 @@ public:
   void unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
                       SgUnparse_Info &info);
 
-  //! Support for Fortran numeric labels (can appear on any statement), this is
-  //! an empty function for C/C++.
-  //  virtual void unparseStatementNumbers ( SgStatement* stmt );
-
-  // void output(SgLocatedNode* node);
-
-  // DQ (12/21/2005): Added to support name qualification when explicitly stored
-  // in the AST (rather than generated).
-
-  //        virtual void unparseQualifiedNameList(const SgQualifiedNamePtrList &
-  //        qualifiedNameList);
-
   // DQ (8/14/2007): This is where all the langauge specific statement unparing
   // is done
   virtual void unparseLanguageSpecificStatement(SgStatement *stmt,
@@ -128,22 +116,10 @@ public:
   // DQ (9/6/2010): Mark the derived class to support debugging.
   virtual std::string languageName() const { return "C++ Unparser"; }
 
-  //! unparse expression functions implemented in unparse_expr.C
-  // DQ (4/25/2005): Made this virtual so that Gabriel could build a specialized
-  // unparser. virtual void unparseExpression      (SgExpression* expr,
-  // SgUnparse_Info& info);
-
   virtual void unparseUnaryOperator(SgExpression *expr, const char *op,
                                     SgUnparse_Info &info);
   virtual void unparseBinaryOperator(SgExpression *expr, const char *op,
                                      SgUnparse_Info &info);
-  // virtual void unparseUnaryExpr               (SgExpression* expr,
-  // SgUnparse_Info& info); virtual void unparseBinaryExpr (SgExpression* expr,
-  // SgUnparse_Info& info);
-  virtual void unparseAssnExpr(SgExpression *expr, SgUnparse_Info &info);
-  //        virtual void unparseExprRoot                (SgExpression* expr,
-  //        SgUnparse_Info& info); virtual void unparseExprList (SgExpression*
-  //        expr, SgUnparse_Info& info);
   virtual void unparseVarRef(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseClassRef(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFuncRef(SgExpression *expr, SgUnparse_Info &info);
@@ -160,6 +136,8 @@ public:
   void unparseFuncRefSupport(SgExpression *expr, SgUnparse_Info &info);
   template <class T>
   void unparseMFuncRefSupport(SgExpression *expr, SgUnparse_Info &info);
+  void unparseConversionFunctionName(SgFunctionDeclaration *declaration,
+                                     SgUnparse_Info &info);
 
   virtual void unparseStringVal(SgExpression *expr, SgUnparse_Info &info);
 
@@ -168,6 +146,12 @@ public:
   virtual void unparsePackExpansionExpression(SgExpression *expr,
                                               SgUnparse_Info &info);
   virtual void unparseRequiresExpr(SgExpression *expr, SgUnparse_Info &info);
+
+  virtual void unparseIntVal(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseShortVal(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseUShortVal(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseSCharVal(SgExpression *expr, SgUnparse_Info &info);
+  virtual void unparseUCharVal(SgExpression *expr, SgUnparse_Info &info);
 
   // JJW -- these need C-specific suffixes
   virtual void unparseUIntVal(SgExpression *expr, SgUnparse_Info &info);
@@ -182,8 +166,6 @@ public:
   virtual void unparseFloat64Val(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFloat80Val(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFloat128Val(SgExpression *expr, SgUnparse_Info &info);
-  // virtual void unparseDoubleVal               (SgExpression* expr,
-  // SgUnparse_Info& info);
   virtual void unparseLongDoubleVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseComplexVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseFuncCall(SgExpression *expr, SgUnparse_Info &info);
@@ -241,14 +223,11 @@ public:
   virtual void unparseAddrOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseMinusMinusOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparsePlusPlusOp(SgExpression *expr, SgUnparse_Info &info);
-  virtual void unparseAbstractOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseBitCompOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseRealPartOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseImagPartOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseConjugateOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseExprCond(SgExpression *expr, SgUnparse_Info &info);
-  virtual void unparseClassInitOp(SgExpression *expr, SgUnparse_Info &info);
-  virtual void unparseDyCastOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseCastOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseArrayOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseNewOp(SgExpression *expr, SgUnparse_Info &info);
@@ -284,8 +263,6 @@ public:
   virtual void unparseVarArgOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseVarArgEndOp(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseVarArgCopyOp(SgExpression *expr, SgUnparse_Info &info);
-  //        virtual void unparseNullExpression          (SgExpression* expr,
-  //        SgUnparse_Info& info);
   virtual void unparseDesignatedInitializer(SgExpression *expr,
                                             SgUnparse_Info &info);
   virtual void unparsePseudoDtorRef(SgExpression *expr, SgUnparse_Info &info);
@@ -313,21 +290,8 @@ public:
   virtual void unparseNonrealRefExpression(SgExpression *expr,
                                            SgUnparse_Info &info);
 
-  //! unparse statement functions implememted in unparse_stmt.C
-  // DQ (4/25/2005): Made this virtual so that Gabriel could build a specialized
-  // unparser. virtual void unparseStatement        (SgStatement* stmt,
-  // SgUnparse_Info& info); virtual void unparseGlobalStmt       (SgStatement*
-  // stmt, SgUnparse_Info& info); CI virtual void unparseDeclStmt (SgStatement*
-  // stmt, SgUnparse_Info& info);
-  //        virtual void unparseScopeStmt        (SgStatement* stmt,
-  //        SgUnparse_Info& info); virtual void unparseFuncTblStmt (SgStatement*
-  //        stmt, SgUnparse_Info& info);
   virtual void unparseBasicBlockStmt(SgStatement *stmt, SgUnparse_Info &info);
-  // CI
-  // virtual void unparseElseIfStmt       (SgStatement* stmt, SgUnparse_Info&
-  // info);
   virtual void unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info);
-  virtual void unparseWhereStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseForInitStmt(SgStatement *stmt, SgUnparse_Info &info);
 
   virtual void unparseForStmt(SgStatement *stmt, SgUnparse_Info &info);
@@ -366,12 +330,6 @@ public:
   virtual void unparseReturnStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseGotoStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info);
-  //        virtual void unparseSpawnStmt        (SgStatement* stmt,
-  //        SgUnparse_Info& info);
-  // CI
-  // virtual void unparseParStmt          (SgStatement* stmt, SgUnparse_Info&
-  // info); CI virtual void unparseParForStmt       (SgStatement* stmt,
-  // SgUnparse_Info& info);
   virtual void unparseTypeDefStmt(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseTemplateDeclStmt(SgStatement *stmt, SgUnparse_Info &info);
 
@@ -412,9 +370,6 @@ public:
       SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info);
   virtual void unparseMemberFunctionPostDeclaratorModifiers(
       SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info);
-  virtual void
-  unparseTrailingFunctionModifiers(SgMemberFunctionDeclaration *mfuncdecl_stmt,
-                                   SgUnparse_Info &info);
 
   // TV (3/12/18): Unparsing template headers, works the same way for class,
   // function, methods (typedef and variable ???)
@@ -428,21 +383,12 @@ public:
 
   virtual void unparseNonrealDecl(SgStatement *stmt, SgUnparse_Info &info);
 
-  // virtual void unparseNullStatement    (SgStatement* stmt, SgUnparse_Info&
-  // info);
-
   // DQ (7/21/2006): Added support for GNU statement expression extension.
   virtual void unparseStatementExpression(SgExpression *expr,
                                           SgUnparse_Info &info);
 
   // DQ (7/22/2006): Added support for asm operands.
   virtual void unparseAsmOp(SgExpression *expr, SgUnparse_Info &info);
-
-  // DQ (6/25/2011): Can we modify this to perm it to be compiler withouth
-  // seeing the enum definition? virtual void
-  // unparse_asm_operand_modifier(SgAsmOp::asm_operand_modifier_enum flags);
-  virtual void
-  unparse_asm_operand_modifier(SgAsmOp::asm_operand_modifier_enum flags);
 
   // DQ (2/29/2004): Added to support unparsing of template instantiations
   // (similar to class declarations)
@@ -494,34 +440,13 @@ public:
       SgNamespaceDefinitionStatement *&namespaceDefn, int debugSupport = 0);
 
   //! Support for exception specification for functions and member functions
-  virtual void
-  unparseExceptionSpecification(const SgTypePtrList &exceptionSpecifierList,
-                                SgUnparse_Info &info);
+  virtual void unparseExceptionSpecification(SgFunctionType *type,
+                                             SgUnparse_Info &info);
+  virtual void unparseExceptionSpecification(SgFunctionDeclaration *declaration,
+                                             SgUnparse_Info &info);
 
-#if USE_OLD_MECHANISM_OF_HANDLING_PREPROCESSING_INFO
-  void getDirectives(char *sourceFilename);
-#endif
   // Liao 5/31/2009, OpenMP nodes
   virtual void unparseOmpPrefix(SgUnparse_Info &info);
-  //       virtual void unparseOmpDefaultClause(SgOmpDefaultClause* clause,
-  //       SgUnparse_Info& info); virtual void
-  //       unparseOmpScheduleClause(SgOmpScheduleClause* clause, SgUnparse_Info&
-  //       info); virtual void unparseOmpVariablesClause(SgOmpVariablesClause*
-  //       clause, SgUnparse_Info& info); virtual void
-  //       unparseOmpExpressionClause(SgOmpExpressionClause* clause,
-  //       SgUnparse_Info& info); virtual void unparseOmpClause(SgOmpClause*
-  //       clause, SgUnparse_Info& info); virtual void
-  //       unparseOmpParallelStatement (SgStatement* stmt, SgUnparse_Info&
-  //       info); virtual void unparseOmpBodyStatement(SgOmpBodyStatement* stmt,
-  //       SgUnparse_Info& info); virtual void
-  //       unparseOmpThreadprivateStatement(SgOmpThreadprivateStatement* stmt,
-  //       SgUnparse_Info& info); virtual void
-  //       unparseOmpFlushStatement(SgOmpFlushStatement* stmt, SgUnparse_Info&
-  //       info); virtual void unparseOmpBarrierStatement(SgOmpBarrierStatement*
-  //       stmt, SgUnparse_Info& info); virtual void
-  //       unparseOmpTaskwaitStatement(SgOmpTaskwaitStatement* stmt,
-  //       SgUnparse_Info& info);
-
   virtual void unparseOmpForStatement(SgStatement *stmt, SgUnparse_Info &info);
   virtual void unparseOmpForSimdStatement(SgStatement *stmt,
                                           SgUnparse_Info &info);
@@ -531,10 +456,6 @@ public:
   virtual void unparseAccPrefix(SgUnparse_Info &info);
   virtual void unparseAccBeginDirectiveClauses(SgStatement *stmt,
                                                SgUnparse_Info &info);
-  // DQ (8/13/2007): This should go into the Unparser class
-  //! begin the unparser (unparser.C)
-  // void run_unparser();
-
   // TV (05/06/2010): SgCudaKernelCallExp
   virtual void unparseCudaKernelCall(SgExpression *expr, SgUnparse_Info &info);
 
@@ -543,12 +464,6 @@ public:
 
   // DQ (10/5/2012): Added support for GNU type attributes.
   void unparseTypeAttributes(SgDeclarationStatement *declaration);
-
-  // DQ (5/24/2013): Added to support refactoing of the code to unparse the
-  // template arguments when they are generated separately for SgFunctionRefExp
-  // and SgMemberFunctionRefExp IR nodes. void
-  // unparseGeneratedTemplateArgumentsList (SgName unqualifiedName, SgName
-  // qualifiedName, SgLocatedNode* locatedNode, SgUnparse_Info& info);
 
   // DQ (7/12/2013): Added support for type trait builtin functions.
   void unparseTypeTraitBuiltinOperator(SgExpression *expr,
@@ -574,8 +489,6 @@ public:
   void unparsePragmaAttribute(SgScopeStatement *scope_stmt);
 
 private:
-  std::string requireCompleteClassTemplateId(
-      SgTemplateInstantiationDecl *declaration) const;
   void unparseFunctionTryBlock(SgTryStmt *try_stmt, SgUnparse_Info &ninfo);
 };
 

@@ -66,7 +66,21 @@ class NonEmptyBase: A{
 class NonEmptyBase2: VirtualMember{
 };
 
+struct OrdinaryMember {
+  int value;
+};
 
+struct EmptyMember {
+  A2 value;
+};
+
+struct ZeroWidthBitfield {
+  int : 0;
+};
+
+struct NoUniqueAddressMember {
+  [[no_unique_address]] A2 value;
+};
 
 void Foo(){
     // if we have a NOT in if's conditional, then the test expects for false from the triat else expects true
@@ -120,5 +134,12 @@ void Foo(){
     if(!__is_empty(VirtualInheritance2));
     if(!__is_empty(NonEmptyBase));
     if(!__is_empty(NonEmptyBase2));
-    
+    if (!__is_empty(OrdinaryMember)) {
+    }
+    if (!__is_empty(EmptyMember)) {
+    }
+    if (__is_empty(ZeroWidthBitfield)) {
+    }
+    if (__is_empty(NoUniqueAddressMember)) {
+    }
 }

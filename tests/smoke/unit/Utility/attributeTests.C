@@ -407,9 +407,6 @@ public:
   OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
   }
-  AstAttribute *constructor() const override {
-    return new Attr6(*(new size_t(0)));
-  } // size_t is leaked
   AstAttribute *copy() const override { return new Attr6(*this); }
   std::string attribute_class_name() const override { return "Attr6"; }
 };

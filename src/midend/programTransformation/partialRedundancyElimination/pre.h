@@ -9,11 +9,7 @@
 
 #include "replaceExpressionWithStatement.h"
 
-#include <fstream>
-
-#include <queue>
-
-#include <stdint.h>
+#include <vector>
 
 namespace legacy {
 
@@ -24,23 +20,15 @@ namespace legacy {
 bool anyOfListPotentiallyModifiedIn(const std::vector<SgVariableSymbol *> &syms,
                                     SgNode *n);
 
-//! Is the expression expr computed within root?  This test is simple, and does
-//! not account for changes to the variables in expr.
+//! Is expr guaranteed to be computed when root completes normally?
+//! Changes to expr's inputs require a separate check.
 bool expressionComputedIn(SgExpression *expr, SgNode *root);
 
-//! Count how many computations of expr are within root.  Same caveats as
-//! expressionComputedIn.
+//! Count guaranteed computations, respecting conditional and unevaluated
+//! operands. Changes to expr's inputs require a separate check.
 int countComputationsOfExpressionIn(SgExpression *expr, SgNode *root);
 
-// DQ (3/21/2006): Added namespace to separate the
-// PRE specific work (and it's use of the type named
-// ControlFlowGraph which conflicts with the OTHER
-// ControlFlowGraph in:
-//    src/midend/programAnalysis/dominatorTreesAndDominanceFrontiers
 namespace PRE {
-
-//! Get the function definition containing a given node
-SgFunctionDefinition *getFunctionDefinition(SgNode *n);
 
 //! Do partial redundancy elimination, looking for copies of one expression expr
 //! within the basic block root.  A control flow graph for root must be provided
@@ -50,8 +38,12 @@ SgFunctionDefinition *getFunctionDefinition(SgNode *n);
 //! of Paleri, Srikant, and Shankar ("Partial redundancy elimination: a simple,
 //! pragmatic, and provably correct algorithm", Science of Computer Programming
 //! 48 (2003) 1--20).
-void partialRedundancyEliminationOne(SgExpression *expr, SgBasicBlock *root,
-                                     const myControlFlowGraph &cfg);
+//! Removed roots are appended to retired_expressions. The caller owns them
+//! until its expression worklist and equality scans have finished, then must
+//! delete them. Their former AST parents are cleared at replacement.
+void partialRedundancyEliminationOne(
+    SgExpression *expr, SgBasicBlock *root, const myControlFlowGraph &cfg,
+    std::vector<SgExpression *> &retired_expressions);
 
 //! Do partial redundancy for all expressions within a given function, whose
 //! definition is given in n.

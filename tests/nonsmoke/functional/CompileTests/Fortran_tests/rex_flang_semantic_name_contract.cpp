@@ -78,7 +78,7 @@ public:
     setExactFixtureSource(global_, 1);
     global_->set_parent(&sourceFile_);
     sourceFile_.set_globalScope(global_);
-    SageInterface::ensureCaseInsensitiveSymbolTable(global_, true);
+    global_->setCaseInsensitive(true);
 
     function_ = SageBuilder::buildDefiningFunctionDeclaration(
         SageBuilder::function_declaration_ownership::sourceLexical(),
@@ -97,7 +97,7 @@ public:
     semantic_.SetType(context_.globalScope().MakeNumericType(
         Fortran::common::TypeCategory::Integer,
         Fortran::semantics::KindExpr{4}));
-    SageInterface::ensureCaseInsensitiveSymbolTable(scope_, true);
+    scope_->setCaseInsensitive(true);
     SgVariableDeclaration *lengthDeclaration =
         SageBuilder::buildVariableDeclaration_nfi(
             "dynamic_length", SageBuilder::buildIntType(), nullptr, scope_);

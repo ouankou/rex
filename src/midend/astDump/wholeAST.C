@@ -1,109 +1,52 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT).
 #include "transformationTracking.h"
 
 #include "wholeAST.h"
 
 #include "rose_config.h"
 
+#include <fstream>
+#include <functional>
+#include <limits>
 #include <memory>
-
-// **********************************************************
-// **********************************************************
-//       Source code which can be more later
-// **********************************************************
-// **********************************************************
+#include <stdexcept>
 
 using namespace std;
 using namespace Rose;
 
-// DQ (4/8/2011): Moved this from the header file...
 CustomAstDOTGenerationEdgeType::CustomAstDOTGenerationEdgeType(
     SgNode *n1, SgNode *n2, std::string label, std::string options)
-    : start(n1), end(n2), labelString(label), optionString(options) {
-  // Nothing to do!
-}
+    : start(n1), end(n2), labelString(label), optionString(options) {}
 
-// DQ (4/8/2011): Moved this from the header file...
 bool CustomAstDOTGenerationEdgeType::operator!=(
     const CustomAstDOTGenerationEdgeType &edge) const {
-  // return (edge.start != start) || (edge.end != end) || (edge.labelString !=
-  // labelString);
-  bool returnValue = (edge.start != start) || (edge.end != end) ||
-                     (edge.labelString != labelString);
-
-  printf("In CustomAstDOTGenerationEdgeType::operator!=(): edge.start = %p "
-         "start = %p edge.end = %p end = %p edge.labelString = %s labelString "
-         "= %s returnValue = %s \n",
-         edge.start, start, edge.end, end, edge.labelString.c_str(),
-         labelString.c_str(), returnValue ? "true" : "false");
-
-  return returnValue;
+  return !(*this == edge);
 }
 
-// DQ (4/8/2011): Moved this from the header file...
 bool CustomAstDOTGenerationEdgeType::operator==(
     const CustomAstDOTGenerationEdgeType &edge) const {
-  // return (edge.start == start) && (edge.end == end) && (edge.labelString ==
-  // labelString);
-  bool returnValue = (edge.start == start) && (edge.end == end) &&
-                     (edge.labelString == labelString);
-
-  printf("In CustomAstDOTGenerationEdgeType::operator==(): edge.start = %p "
-         "start = %p edge.end = %p end = %p edge.labelString = %s labelString "
-         "= %s returnValue = %s \n",
-         edge.start, start, edge.end, end, edge.labelString.c_str(),
-         labelString.c_str(), returnValue ? "true" : "false");
-
-  return returnValue;
+  return start == edge.start && end == edge.end &&
+         labelString == edge.labelString;
 }
 
-// DQ (4/8/2011): Moved this from the header file... This is an issue reported
-// by Insure++.
 bool CustomAstDOTGenerationEdgeType::operator<(
     const CustomAstDOTGenerationEdgeType &edge) const {
-  // This function must only be consistant in how it implements the "<"
-  // operator. Cast pointer to size_t variables and compare the size_t type
-  // variables directly.
-  size_t edge_start_size_t = (size_t)edge.start;
-  size_t start_size_t = (size_t)start;
-  size_t edge_end_size_t = (size_t)edge.start;
-  size_t end_size_t = (size_t)start;
-
-  // DQ (11/26/2016): This is a required bug fix to permit the std::set::find()
-  // function to work properly. return (edge.start < start) || (((edge.start ==
-  // start) && (edge.labelString == labelString)) && (edge.end < end)); return
-  // (edge_start_size_t < start_size_t) || (((edge_start_size_t == start_size_t)
-  // && (edge.labelString == labelString)) && (edge_end_size_t < end_size_t));
-  // bool returnValue = (edge_start_size_t < start_size_t) ||
-  // (((edge_start_size_t == start_size_t) && (edge.labelString == labelString))
-  // && (edge_end_size_t < end_size_t));
-  bool returnValue =
-      (edge_start_size_t < start_size_t) ||
-      ((edge_start_size_t == start_size_t) && (edge_end_size_t < end_size_t)) ||
-      ((edge_start_size_t == start_size_t) && (edge_end_size_t == end_size_t) &&
-       (edge.labelString < labelString));
-
-  return returnValue;
+  if (start != edge.start)
+    return std::less<SgNode *>{}(edge.start, start);
+  if (end != edge.end)
+    return std::less<SgNode *>{}(edge.end, end);
+  return edge.labelString < labelString;
 }
 
 CustomAstDOTGeneration::~CustomAstDOTGeneration() {}
 
 void CustomAstDOTGenerationData::addNode(NodeType n) {
-  ROSE_ASSERT(this != NULL);
-  // printf ("In CustomAstDOTGenerationData::addNode(): n->target = %p = %s
-  // options = %s size_ld = %ld size_d = %d \n",
-  //      n.target,n.target->class_name().c_str(),n.optionString.c_str(),n.optionString.size(),n.optionString.size());
   ROSE_ASSERT(n.optionString.size() < 4000);
   nodeList.push_back(n);
 }
 
 void CustomAstDOTGenerationData::addEdge(EdgeType e) {
-  ROSE_ASSERT(this != NULL);
   edgeList.push_back(e);
 }
 
@@ -114,8 +57,6 @@ void CustomAstDOTGenerationData::addEdges() {
        i++) {
     ROSE_ASSERT((*i).start != NULL);
     ROSE_ASSERT((*i).end != NULL);
-    // printf ("Adding an edge from a %s to a %s with options = %s \n",
-    //      (*i).start->sage_class_name(),(*i).end->sage_class_name(),(*i).optionString.c_str());
     dotrep.addEdge((*i).start, (*i).end, (*i).optionString);
   }
 }
@@ -130,36 +71,22 @@ std::string CustomAstDOTGenerationData::additionalNodeInfo(SgNode *node) {
   i = find(nodeList.begin(), nodeList.end(), tmp);
   if (i != nodeList.end()) {
     returnString = (*i).labelString;
-    // printf ("Adding node label info (%s) to %s
-    // \n",returnString.c_str(),node->sage_class_name());
   }
 
   return returnString;
 }
 
 std::string CustomAstDOTGenerationData::additionalNodeOptions(SgNode *node) {
-  // This virtual function adds options (after the node label) in the output DOT
-  // file printf ("Called for node = %s \n",node->class_name().c_str());
 
   std::string returnString;
-  // printf ("default: returnString = %s size() = %ld nodeList.size() = %ld
-  // \n",returnString.c_str(),returnString.size(),nodeList.size());
 
   const NodeType tmp(node, "", "");
   std::list<NodeType>::iterator i = nodeList.begin();
   i = find(nodeList.begin(), nodeList.end(), tmp);
   if (i != nodeList.end()) {
-    // printf ("Before: Adding node option info (%s) to %s
-    // (*i).optionString.size() = %ld
-    // \n",returnString.c_str(),node->sage_class_name(),(*i).optionString.size());
     ROSE_ASSERT(i->target == node);
     returnString = (*i).optionString;
-    // printf ("Adding node option info (%s) to %s
-    // \n",returnString.c_str(),node->sage_class_name());
   }
-
-  // printf ("returnString = %s size() = %ld
-  // \n",returnString.c_str(),returnString.size());
 
   return returnString;
 }
@@ -167,8 +94,6 @@ std::string CustomAstDOTGenerationData::additionalNodeOptions(SgNode *node) {
 std::string CustomAstDOTGenerationData::additionalEdgeInfo(SgNode *from,
                                                            SgNode *to,
                                                            std::string label) {
-  // This virtual function only modifies the node label not the options list
-  // that would follow the node's label in the final dot output file.
   std::string returnString;
 
   const EdgeType tmp(from, to, label, "");
@@ -176,49 +101,22 @@ std::string CustomAstDOTGenerationData::additionalEdgeInfo(SgNode *from,
   i = find(edgeList.begin(), edgeList.end(), tmp);
   if (i != edgeList.end()) {
     returnString = (*i).labelString;
-    printf("Adding edge label info (%p) to (%p): returnString = %s \n", from,
-           to, returnString.c_str());
   }
 
   return returnString;
 }
 
-std::string
-CustomAstDOTGenerationData::additionalEdgeOptions(SgNode *from, SgNode *to,
-                                                  std::string label) {
-  // This virtual function adds options (after the node label) in the output DOT
-  // file printf ("CustomAstDOTGenerationData::additionalEdgeOptions from = %p =
-  // %s -> label = %s -> to = %p = %s \n",
-  //      from,from->class_name().c_str(),label.c_str(),to,to->class_name().c_str());
-
-  std::string returnString;
-  return returnString;
-}
-
 string
 CustomAstDOTGenerationData::unparseToCompleteStringForDOT(SgNode *astNode) {
-  // Generate the std::string (pass a SgUnparse_Info object)
-  SgUnparse_Info *inputUnparseInfoPointer = new SgUnparse_Info();
-  inputUnparseInfoPointer->unset_SkipComments(); // generate comments
-  inputUnparseInfoPointer
-      ->unset_SkipWhitespaces(); // generate all whitespaces to format the code
-  string outputString = globalUnparseToString(astNode, inputUnparseInfoPointer);
-
-  // DQ (12/8/2016): Implemented new function to address most of Robb's points
-  // about this depreicated function. This is part of eliminating a warning that
-  // we want to be an error: -Werror=deprecated-declarations. std::string
-  // returnString = StringUtility::escapeNewLineCharaters(outputString);
-  string returnString =
-      StringUtility::escapeNewlineAndDoubleQuoteCharacters(outputString);
-
-  delete inputUnparseInfoPointer;
-
-  return returnString;
+  SgUnparse_Info info;
+  info.unset_SkipComments();
+  info.unset_SkipWhitespaces();
+  return StringUtility::escapeNewlineAndDoubleQuoteCharacters(
+      globalUnparseToString(astNode, &info));
 }
 
 void CustomAstDOTGenerationData::internalGenerateGraph(std::string filename,
                                                        SgProject *project) {
-  // DQ (2/2/2007): Introduce tracking of performance of within AST merge
   std::string label =
       "CustomAstDOTGenerationData::internalGenerateGraph(" + filename + "):";
   TimingPerformance timer(label);
@@ -226,41 +124,29 @@ void CustomAstDOTGenerationData::internalGenerateGraph(std::string filename,
   // Required setup on base class
   init();
 
-  // Specify the traversal that will be used (I forget why this is required)
-  // DOTgraph.traversal = DOTGeneration::TOPDOWNBOTTOMUP;
   traversal = AstDOTGeneration::TOPDOWNBOTTOMUP;
 
   // Build the DOT specific inherited attribute
   DOTInheritedAttribute ia;
 
   traverse(project, ia);
-  // traverseInputFiles(project,ia);
 
-  // Put extra code here
   addEdges();
-
-  // Output the source code to a new node (we need a function to escape all the
-  // """ and "\n") std::string sourceCodeString =
-  // unparseToCompleteStringForDOT(project);
-  // dotrep.addNode(project,sourceCodeString,"shape=box");
 
   dotrep.writeToFileAsGraph(filename + ".dot");
 }
 
 void CustomAstDOTGeneration::addNode(NodeType n) {
-  ROSE_ASSERT(this != NULL);
   ROSE_ASSERT(n.optionString.size() < 4000);
   DOTgraph.addNode(n);
 }
 
 void CustomAstDOTGeneration::addEdge(EdgeType e) {
-  ROSE_ASSERT(this != NULL);
   DOTgraph.addEdge(e);
 }
 
 void CustomAstDOTGeneration::internalGenerateGraph(std::string filename,
                                                    SgProject *project) {
-  ROSE_ASSERT(this != NULL);
   DOTgraph.internalGenerateGraph(filename, project);
 }
 
@@ -268,7 +154,6 @@ CustomMemoryPoolDOTGenerationData::~CustomMemoryPoolDOTGenerationData() {}
 
 void CustomMemoryPoolDOTGenerationData::internalGenerateGraph(
     std::string dotfilename) {
-  // DQ (2/2/2007): Introduce tracking of performance of within AST merge
   std::string label =
       "CustomMemoryPoolDOTGenerationData::internalGenerateGraph(" +
       dotfilename + "):";
@@ -276,69 +161,27 @@ void CustomMemoryPoolDOTGenerationData::internalGenerateGraph(
 
   filename = dotfilename;
 
-  // printf ("skipNodeList.size() = %ld \n",(long)skipNodeList.size());
-
   traverseMemoryPool();
   dotrep.writeToFileAsGraph(filename + ".dot");
 }
 
 void CustomMemoryPoolDOTGenerationData::addNode(NodeType n) {
-  // printf ("Adding an node in CustomMemoryPoolDOTGenerationData::addNode \n");
   nodeList.push_back(n);
 }
 
 void CustomMemoryPoolDOTGenerationData::addEdge(EdgeType e) {
-  // printf ("Adding an edge in CustomMemoryPoolDOTGenerationData::addEdge \n");
   edgeList.push_back(e);
 }
 
 void CustomMemoryPoolDOTGenerationData::skipNode(SgNode *n) {
   // This is the normal (non-debugging) mode.
   skipNodeList.insert(n);
-  // visitedNodes.insert(n);
 }
 
 void CustomMemoryPoolDOTGenerationData::skipEdge(EdgeType e) {
-
-  // skipEdgeSet.insert(e);
-  if (skipEdgeSet.find(e) == skipEdgeSet.end()) {
-    skipEdgeSet.insert(e);
-  } else {
-    printf("ERROR: In CustomMemoryPoolDOTGenerationData::skipEdge(): edge is "
-           "already present in set \n");
-    ROSE_ABORT();
-  }
-
-  // DQ (11/26/2016): Adding test for find() operator on edge set.
-  EdgeType edge(e.start, e.end, e.labelString);
-  ROSE_ASSERT(skipEdgeSet.find(edge) != skipEdgeSet.end());
-  ROSE_ASSERT(!(skipEdgeSet.find(edge) == skipEdgeSet.end()));
-
-  // DQ (11/26/2016): Adding test for find() operator on edge set.
-  std::set<EdgeType>::iterator element = skipEdgeSet.find(edge);
-
-  ROSE_ASSERT(e.start == edge.start);
-  ROSE_ASSERT(e.end == edge.end);
-  ROSE_ASSERT(e.labelString == edge.labelString);
-
-  ROSE_ASSERT(e.start == element->start);
-  ROSE_ASSERT(e.end == element->end);
-  ROSE_ASSERT(e.labelString == element->labelString);
-}
-
-void CustomMemoryPoolDOTGenerationData::addEdges() {
-  // Add the local list of edges to the dot graph
-  // printf ("CustomAstDOTGenerationData::addEdges(): skipEdgeSet.size() = %ld
-  // \n",skipEdgeSet.size());
-
-  for (std::list<EdgeType>::iterator i = edgeList.begin(); i != edgeList.end();
-       i++) {
-    ROSE_ASSERT((*i).start != NULL);
-    ROSE_ASSERT((*i).end != NULL);
-    // printf ("Adding an edge from a %s to a %s with options = %s \n",
-    //      (*i).start->sage_class_name(),(*i).end->sage_class_name(),(*i).optionString.c_str());
-    //          dotrep.addEdge((*i).start,(*i).end,(*i).optionString);
-  }
+  ROSE_ASSERT(e.start != nullptr);
+  // Container entries can share the same source, target and display label.
+  skipEdgeSet.insert(e);
 }
 
 std::string
@@ -353,8 +196,6 @@ CustomMemoryPoolDOTGenerationData::additionalNodeInfo(SgNode *node) {
   i = find(nodeList.begin(), nodeList.end(), tmp);
   if (i != nodeList.end()) {
     returnString = (*i).labelString;
-    // printf ("Adding node label info (%s) to %s
-    // \n",returnString.c_str(),node->sage_class_name());
   }
 
   return returnString;
@@ -362,8 +203,6 @@ CustomMemoryPoolDOTGenerationData::additionalNodeInfo(SgNode *node) {
 
 std::string
 CustomMemoryPoolDOTGenerationData::additionalNodeOptions(SgNode *node) {
-  // This virtual function adds options (after the node label) in the output DOT
-  // file printf ("Called for node = %s \n",node->class_name().c_str());
 
   std::string returnString;
 
@@ -372,8 +211,6 @@ CustomMemoryPoolDOTGenerationData::additionalNodeOptions(SgNode *node) {
   i = find(nodeList.begin(), nodeList.end(), tmp);
   if (i != nodeList.end()) {
     returnString = (*i).optionString;
-    // printf ("Adding node option info (%s) to %s
-    // \n",returnString.c_str(),node->sage_class_name());
   }
 
   return returnString;
@@ -391,7 +228,6 @@ CustomMemoryPoolDOTGenerationData::additionalEdgeInfo(SgNode *from, SgNode *to,
   i = find(edgeList.begin(), edgeList.end(), tmp);
   if (i != edgeList.end()) {
     returnString = (*i).labelString;
-    // printf ("Adding edge label info (%p) to (%p) \n",from,to);
   }
 
   return returnString;
@@ -399,10 +235,6 @@ CustomMemoryPoolDOTGenerationData::additionalEdgeInfo(SgNode *from, SgNode *to,
 
 std::string CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(
     SgNode *from, SgNode *to, std::string label) {
-  // This virtual function adds options (after the node label) in the output DOT
-  // file printf ("CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(from
-  // = %s to %s) label = %s edgeList.size() = %ld
-  // \n",from->class_name().c_str(),to->class_name().c_str(),label.c_str(),edgeList.size());
 
   std::string returnString;
   // DQ (3/6/2007): This builds a default set of mappings of edge colors and
@@ -412,20 +244,11 @@ std::string CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(
   // edges)
   SgType *type = isSgType(to);
   if (type != NULL) {
-    // DQ (2/27/2014): removed "decorate" keyword since it is an error for
-    // latest version of zgrviewer (or maybe dot). returnString =
-    // "color=\"gold1\" decorate labelfontcolor=gold4"; returnString =
-    // "color=\"gold1\" decorate ";
     returnString = "color=\"gold1\" ";
   }
 
   // DQ (3/5/2007): color the parent edges blue
   if (from->get_parent() == to && label == "parent") {
-    // DQ (2/27/2014): removed "decorate" keyword since it is an error for
-    // latest version of zgrviewer (or maybe dot). Note that labelfontcolor does
-    // not appear to work returnString = "color=\"blue\" decorate
-    // labelfontcolor=blue4"; returnString = "color=\"blue\" decorate
-    // labelfontcolor=\"blue4\""; returnString = "color=\"blue\" decorate ";
     returnString = "color=\"blue\" ";
   }
 
@@ -435,10 +258,6 @@ std::string CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(
   if (statement != NULL) {
     if (statement->hasExplicitScope() == true && statement->get_scope() == to &&
         label == "scope") {
-      // DQ (2/27/2014): removed "decorate" keyword since it is an error for
-      // latest version of zgrviewer (or maybe dot). returnString =
-      // "color=\"green\" decorate labelfontcolor=green4"; returnString =
-      // "color=\"green\" decorate ";
       returnString = "color=\"green\" ";
     }
   }
@@ -446,150 +265,57 @@ std::string CustomMemoryPoolDOTGenerationData::additionalEdgeOptions(
   SgInitializedName *initializedName = isSgInitializedName(from);
   if (initializedName != NULL) {
     if (initializedName->get_scope() == to && label == "scope") {
-      // DQ (2/27/2014): removed "decorate" keyword since it is an error for
-      // latest version of zgrviewer (or maybe dot). returnString =
-      // "color=\"green\" decorate labelfontcolor=green4"; returnString =
-      // "color=\"green\" decorate ";
       returnString = "color=\"green\" ";
     }
   }
 
-  // returnString += "decorate labelfontcolor=red";
   return returnString;
 }
 
 void CustomMemoryPoolDOTGenerationData::visit(SgNode *node) {
-  ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(node != nullptr);
+  if (!visitedNodes.insert(node).second || skipNodeList.count(node) != 0)
+    return;
 
-  bool ignoreThisIRnode = false;
-  // bool ignoreThisIRnode = true;
+  std::string nodelabel = std::string("\\n") + node->class_name();
+  nodelabel += additionalNodeInfo(node);
+  dotrep.addNode(node, nodelabel, additionalNodeOptions(node));
 
-  // If the node is to be skipped then set: ignoreThisIRnode = true
-  if (skipNodeList.find(node) != skipNodeList.end())
-    ignoreThisIRnode = true;
-
-  if (visitedNodes.find(node) == visitedNodes.end() &&
-      ignoreThisIRnode == false) {
-    // This node has not been visited previously (and should not be ignored)
-    std::string nodeoption;
-    std::string nodelabel = std::string("\\n") + typeid(*node).name();
-
-    // These is both virtual function calls
-    nodelabel += additionalNodeInfo(node);
-    nodeoption += additionalNodeOptions(node);
-
-    // DQ (5/9/2006): Added skipNodeList to permit filtering of IR nodes
-    if (skipNodeList.find(node) == skipNodeList.end()) {
-      dotrep.addNode(node, nodelabel, nodeoption);
+  for (const auto &[target, label] : node->returnDataMemberPointers()) {
+    EdgeType edge(node, target, label);
+    auto skipped_edge = skipEdgeSet.find(edge);
+    if (target == nullptr) {
+      if (skipped_edge == skipEdgeSet.end())
+        dotrep.addNullValue(node, "", label, "");
+      continue;
+    }
+    if (skipNodeList.count(target) != 0)
+      continue;
+    if (skipped_edge != skipEdgeSet.end()) {
+      ROSE_ASSERT(label == skipped_edge->labelString);
+      continue;
     }
 
-    // Now call Andres's mechanism to get the list of ALL pointers to IR nodes
-    std::vector<std::pair<SgNode *, std::string>> listOfIRnodes =
-        node->returnDataMemberPointers();
-    std::vector<std::pair<SgNode *, std::string>>::iterator i =
-        listOfIRnodes.begin();
-    while (i != listOfIRnodes.end()) {
-      // Might we want to test if this is node previously ignored (a gnu
-      // compatability IR node) and do something like include that IR node in
-      // the AST?
-      SgNode *n = (*i).first;
-      std::string edgelabel = (*i).second;
-
-      if (n == NULL) {
-        // DQ (11/26/2016): Added to support debugging of how we ignore edges.
-        // This is the only way I have been able to eliminate these edges.
-        if (skipNodeList.find(node) == skipNodeList.end()) {
-          // dotrep.addNullValue(node,"",edgelabel,"");
-          // DQ (11/26/2016): Adding support to ignore specific edges.
-          EdgeType edge(node, n, edgelabel);
-
-          // DQ (11/26/2016): Could the logic is flipped here, should it be NOT
-          // EQUALS instead?
-          bool ignoreEdge = skipEdgeSet.find(edge) != skipEdgeSet.end();
-          if (ignoreEdge == false) {
-            dotrep.addNullValue(node, "", edgelabel, "");
-          }
-        }
-      } else {
-        // Only build the edge if the node is not on the list of IR nodes to
-        // skip We can't use the visitedNodes list since just be cause we have
-        // visited the IR node does not imply that we should skip the edge
-        // (quite the opposent!) if ( skipNodeList.find(n) == skipNodeList.end()
-        // )
-        if (skipNodeList.find(n) == skipNodeList.end()) {
-          bool ignoreEdge = false;
-
-          // DQ (11/26/2016): Adding support to ignore specific edges.
-          EdgeType edge(node, n, edgelabel);
-
-          // DQ (11/26/2016): Could the logic is flipped here, should it be NOT
-          // EQUALS instead? This appears to always be false. ignoreEdge =
-          // (skipEdgeSet.find(edge) == skipEdgeSet.end()); ignoreEdge =
-          // (skipEdgeSet.find(edge) != skipEdgeSet.end()); ignoreEdge =
-          // (std::set<EdgeType>::find(skipEdgeSet,edge) != skipEdgeSet.end());
-          ignoreEdge = skipEdgeSet.find(edge) != skipEdgeSet.end();
-          if (ignoreEdge == true) {
-            EdgeSetType::iterator example_iterator = skipEdgeSet.find(edge);
-            // DQ (11/26/2016): These should be the same.
-            ROSE_ASSERT(edgelabel == example_iterator->labelString);
-          }
-
-          if (ignoreEdge == false) {
-            // DQ (3/5/2007): Support for edge options
-            // These are both virtual function calls
-            std::string additionalEdgeOption =
-                additionalEdgeOptions(node, n, edgelabel);
-            std::string additionalEdgeLabel =
-                additionalEdgeInfo(node, n, edgelabel);
-
-            // dotrep.addEdge ( node, edgelabel + additionalEdgeLabel, n,
-            // additionalEdgeOption + "dir=forward" );
-            dotrep.addEdge(node, edgelabel + additionalEdgeLabel, n,
-                           additionalEdgeOption + "dir=forward");
-            // printf ("Added edge using %p -> label = %s -> %p option = %s
-            // \n",node, (edgelabel + additionalEdgeLabel).c_str(), n,
-            // (additionalEdgeOption + "dir=forward").c_str());
-          }
-        } else {
-          // printf ("Edge is being skipped \n");
-        }
-      }
-
-      i++;
-    }
-  } else {
-    // Ignoring this IR node which has previously been visited (or added by the
-    // user as a colored IR node)
+    std::string edge_option = additionalEdgeOptions(node, target, label);
+    std::string edge_label = additionalEdgeInfo(node, target, label);
+    dotrep.addEdge(node, label + edge_label, target,
+                   edge_option + "dir=forward");
   }
-
-  // Add this node to the list of visited nodes so that we will not traverse it
-  // again This allows for it to have been placed into this list previously as a
-  // colored IR node and thus prevents it from showing up twice.
-  visitedNodes.insert(node);
 }
 
 CustomMemoryPoolDOTGeneration::CustomMemoryPoolDOTGeneration(
     s_Filter_Flags *f /*= NULL*/) {
-  internal_init(f);
-}
-
-void CustomMemoryPoolDOTGeneration::internal_init(
-    s_Filter_Flags *f /*= NULL*/) {
-  if (f == NULL)
-    filterFlags = new s_Filter_Flags();
-  else
+  if (f == nullptr) {
+    ownedFilterFlags = std::make_unique<s_Filter_Flags>();
+    filterFlags = ownedFilterFlags.get();
+  } else {
     filterFlags = f;
+  }
 }
 
-void CustomMemoryPoolDOTGeneration::addNode(NodeType n) {
-  // printf ("Adding an node in CustomMemoryPoolDOTGeneration::addNode \n");
-  DOTgraph.addNode(n);
-}
+void CustomMemoryPoolDOTGeneration::addNode(NodeType n) { DOTgraph.addNode(n); }
 
-void CustomMemoryPoolDOTGeneration::addEdge(EdgeType e) {
-  // printf ("Adding an edge in CustomMemoryPoolDOTGeneration::addEdge \n");
-  DOTgraph.addEdge(e);
-}
+void CustomMemoryPoolDOTGeneration::addEdge(EdgeType e) { DOTgraph.addEdge(e); }
 
 void CustomMemoryPoolDOTGeneration::skipNode(SgNode *n) {
   DOTgraph.skipNode(n);
@@ -607,37 +333,15 @@ void CustomMemoryPoolDOTGeneration::internalGenerateGraph(
 void CustomMemoryPoolDOTGeneration::edgeFilter(SgNode *nodeSource,
                                                SgNode *nodeSink,
                                                std::string edgeName) {
-
-  // This function skips the representation of edges
-  if (edgeName == "parent") {
-    ROSE_ASSERT(nodeSource != NULL);
-  } else {
-    ROSE_ASSERT(nodeSource != NULL);
-    // ROSE_ASSERT(nodeSink != NULL);
-    if (nodeSink != NULL) {
-    } else {
-      // DQ (11/26/2016): Filter the null pointer edges.
-      EdgeType edge(nodeSource, nodeSink, edgeName);
-      skipEdge(edge);
-    }
+  ROSE_ASSERT(nodeSource != NULL);
+  if (edgeName != "parent" && nodeSink == NULL) {
+    EdgeType edge(nodeSource, nodeSink, edgeName);
+    skipEdge(edge);
   }
 
-  // DQ (1/24/2007): Added skipNodeList to permit filtering of IR nodes, if the
-  // source node is not present then we don't have an edge to skip, if the
-  // source node is present and the sink node is to be skipped, then skip the
-  // edge. printf ("CustomMemoryPoolDOTGeneration::edgeFilter(): testing edge
-  // from %p = %s to %p = %s
-  // \n",nodeSource,nodeSource->class_name().c_str(),nodeSink,nodeSink->class_name().c_str());
   if (DOTgraph.skipNodeList.find(nodeSource) != DOTgraph.skipNodeList.end()) {
     if (nodeSink != NULL &&
         DOTgraph.skipNodeList.find(nodeSink) != DOTgraph.skipNodeList.end()) {
-      // printf ("CustomMemoryPoolDOTGeneration::edgeFilter(): Skipping this
-      // edge since it is to a node that is skipped nodeSink = %p = %s
-      // \n",nodeSink,nodeSink->class_name().c_str());
-
-      // ROSE_ABORT();
-
-      // skipEdge(nodeSource,nodeSink,edgeName);
       EdgeType edge(nodeSource, nodeSink, edgeName);
       skipEdge(edge);
     }
@@ -652,10 +356,6 @@ void CustomMemoryPoolDOTGeneration::typeFilter(SgNode *node) {
   }
 
   if (isSgFunctionParameterTypeList(node) != NULL) {
-    skipNode(node);
-  }
-
-  if (isSgTypedefSeq(node) != NULL) {
     skipNode(node);
   }
 }
@@ -753,15 +453,12 @@ void CustomMemoryPoolDOTGeneration::commentAndDirectiveFilter(SgNode *node) {
     AttachedPreprocessingInfoType *comments =
         locatedNode->getAttachedPreprocessingInfo();
     if (comments != NULL) {
-      // printf ("Found attached comments (at %p of type: %s):
-      // \n",locatedNode,locatedNode->sage_class_name());
       AttachedPreprocessingInfoType::iterator i;
       for (i = comments->begin(); i != comments->end(); i++) {
         ROSE_ASSERT((*i) != NULL);
         ROSE_ASSERT((*i)->get_file_info() != NULL);
         skipNode((*i)->get_file_info());
       }
-    } else {
     }
   }
 }
@@ -776,22 +473,12 @@ void CustomMemoryPoolDOTGeneration::fileInfoFilter(SgNode *node) {
 }
 
 void CustomMemoryPoolDOTGeneration::frontendCompatibilityFilter(SgNode *node) {
-  // DQ (5/11/2006): This filters out the gnu compatability IR nodes (which tend
-  // to confuse everyone!)
-
   ROSE_ASSERT(node != NULL);
 
-  // Mark all SgFunctionSymbol IR nodes that are associated with the a frontend
-  // specific function
   SgFunctionSymbol *functionSymbol = isSgFunctionSymbol(node);
   if (functionSymbol != NULL) {
     SgDeclarationStatement *declaration = functionSymbol->get_declaration();
     ROSE_ASSERT(declaration != NULL);
-    if (declaration->get_file_info() == NULL) {
-      printf("Error: declaration->get_file_info() == NULL declaration = %p = "
-             "%s \n",
-             declaration, declaration->class_name().c_str());
-    }
     ROSE_ASSERT(declaration->get_file_info() != NULL);
     if (declaration != NULL &&
         declaration->get_file_info()->isFrontendSpecific() == true) {
@@ -813,8 +500,6 @@ void CustomMemoryPoolDOTGeneration::frontendCompatibilityFilter(SgNode *node) {
     ROSE_ASSERT(declaration != NULL);
     if (declaration->get_file_info()->isFrontendSpecific() == true) {
       skipNode(variableSymbol);
-      // This is redundant
-      // skipNode(declaration);
     }
 
     SgStorageModifier &storageModifier = declaration->get_storageModifier();
@@ -830,7 +515,6 @@ void CustomMemoryPoolDOTGeneration::frontendCompatibilityFilter(SgNode *node) {
       SgInitializedName *declaration = *i;
       ROSE_ASSERT(declaration != NULL);
       if (declaration->get_file_info()->isFrontendSpecific() == true) {
-        // skipNode(declaration);
         SgStorageModifier &storageModifier = declaration->get_storageModifier();
         skipNode(&storageModifier);
       }
@@ -839,57 +523,22 @@ void CustomMemoryPoolDOTGeneration::frontendCompatibilityFilter(SgNode *node) {
     }
   }
 
-  // Skip the Sg_File_Info objects that are associated with frontend specific IR
-  // nodes.
   Sg_File_Info *fileInfo = node->get_file_info();
-  if (fileInfo != NULL) {
-    if (fileInfo->isFrontendSpecific() == true) {
-      printf("skip fileInfo = %p parent is %p = %s \n", fileInfo, node,
-             node->class_name().c_str());
-      // skipNode(fileInfo);
-      skipNode(node);
-    } else {
-      // printf ("Node %p = %s has normal Sg_File_Info object with parent = %s
-      // \n",node,node->class_name().c_str(),(fileInfo->get_parent() != NULL) ?
-      // fileInfo->get_parent()->class_name().c_str() : "NULL value");
-      // fileInfo->display("extranious Sg_File_Info object");
-    }
+  if (fileInfo != NULL && fileInfo->isFrontendSpecific() == true) {
+    skipNode(node);
   }
 
-  // DQ (5/11/2006): Skip any IR nodes that are part of a gnu compatability
-  // specific subtree of the AST
   Sg_File_Info *currentNodeFileInfo = isSg_File_Info(node);
   if (currentNodeFileInfo != NULL) {
-    // skipNode(currentNodeFileInfo);
     if (currentNodeFileInfo->isFrontendSpecific() == true) {
       skipNode(currentNodeFileInfo);
     }
-  }
-
-  if (isSgModifier(node) != NULL) {
-    // skipNode(node);
-  }
-
-  if (isSgTypedefSeq(node) != NULL) {
-    // DQ (1/9/2017): If this is an empty typedef sequence, then skip the node
-    // in the AST graph (note that this was not sufficent to eliminate the
-    // nodes). skipNode(node);
-    SgTypedefSeq *typedefSeq = isSgTypedefSeq(node);
-    if (typedefSeq->get_typedefs().empty() == true) {
-      skipNode(node);
-    }
-  }
-
-  if (isSgFunctionParameterTypeList(node) != NULL) {
-    // skipNode(node);
   }
 }
 
 void CustomMemoryPoolDOTGeneration::defaultFilter(SgNode *node) {
   // Default fileter to simplify the whole AST graph
 
-  // printf ("Exiting in CustomMemoryPoolDOTGeneration::defaultFilter() \n");
-  // ROSE_ABORT();
   if (filterFlags->m_commentAndDirective == 1)
     commentAndDirectiveFilter(node);
 
@@ -909,18 +558,6 @@ void CustomMemoryPoolDOTGeneration::defaultFilter(SgNode *node) {
       edgeFilter(node, n, edgelabel);
 
       i++;
-    }
-  }
-
-  // DQ (1/9/2017): Add this here to test elimination of empty typedef
-  // sequences.
-  if (isSgTypedefSeq(node) != NULL) {
-    // DQ (1/9/2017): If this is an empty typedef sequence, then skip the node
-    // in the AST graph (note that this was not sufficent to eliminate the
-    // nodes). skipNode(node);
-    SgTypedefSeq *typedefSeq = isSgTypedefSeq(node);
-    if (typedefSeq->get_typedefs().empty() == true) {
-      skipNode(node);
     }
   }
 }
@@ -971,8 +608,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     case V_SgProgramHeaderStatement:
     case V_SgProcedureHeaderStatement:
     case V_SgMemberFunctionDeclaration:
-      // case V_SgTemplateInstantiationFunctionDecl:
-      // case V_SgTemplateInstantiationMemberFunctionDecl:
       {
         SgFunctionDeclaration *functionDeclaration =
             isSgFunctionDeclaration(node);
@@ -998,8 +633,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
             "\\n  " + forwardFlagString + "\\n  " + friendFlagString + "\\n  " +
             implicitFlagString + "\\n  " +
             StringUtility::numberToString(functionDeclaration) + "  ";
-        // printf ("########## functionDeclaration->get_name() = %s
-        // \n",functionDeclaration->get_name().str());
         break;
       }
 
@@ -1031,8 +664,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           "\\n  " + forwardFlagString + "\\n  " + friendFlagString + "\\n  " +
           implicitFlagString + "\\n  " +
           StringUtility::numberToString(functionDeclaration) + "  ";
-      // printf ("########## functionDeclaration->get_name() = %s
-      // \n",functionDeclaration->get_name().str());
       break;
     }
 
@@ -1076,7 +707,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
 
     case V_SgClassDeclaration:
     case V_SgModuleStatement:
-      // case V_SgTemplateInstantiationDecl:
       {
         SgClassDeclaration *classDeclaration = isSgClassDeclaration(node);
         additionalNodeOptions =
@@ -1094,8 +724,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
             "\\n  " + classDeclaration->get_name().getString() + "\\n  " +
             flagString + "\\n  " + flagString2 + "\\n  " +
             StringUtility::numberToString(classDeclaration) + "  ";
-        // printf ("########## classDeclaration->get_name() = %s
-        // \n",classDeclaration->get_name().str());
         break;
       }
 
@@ -1115,8 +743,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           "\\n  " + classDeclaration->get_name().getString() + "\\n  " +
           flagString + "\\n  " + flagString2 + "\\n  " +
           StringUtility::numberToString(classDeclaration) + "  ";
-      // printf ("########## classDeclaration->get_name() = %s
-      // \n",classDeclaration->get_name().str());
       break;
     }
 
@@ -1187,8 +813,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           StringUtility::numberToString(
               templateInstantiationTypedefDeclaration) +
           "  ";
-      // printf ("########## templateInstantiationTypedefDeclaration->get_name()
-      // = %s \n",classDeclaration->get_name().str());
       break;
     }
 
@@ -1209,20 +833,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       // DQ (6/15/2019): Debugging the outliner support and detection of
       // protected or private data members that trigger declarations to be
       // marked as friend declaration in the class definitions.
-
-      // printf
-      // ("decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()
-      // = %s
-      // \n",decl_stmt->get_declarationModifier().get_accessModifier().isPrivate()
-      // ? "true" : "false"); printf
-      // ("decl_stmt->get_declarationModifier().get_accessModifier().isProtected()
-      // = %s
-      // \n",decl_stmt->get_declarationModifier().get_accessModifier().isProtected()
-      // ? "true" : "false"); printf
-      // ("decl_stmt->get_declarationModifier().get_accessModifier().isPublic()
-      // = %s
-      // \n",decl_stmt->get_declarationModifier().get_accessModifier().isPublic()
-      // ? "true" : "false");
 
       string isPrivate = variableDeclaration->get_declarationModifier()
                                  .get_accessModifier()
@@ -1325,8 +935,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
           "\\N\",sides=5,peripheries=1,color=\"blue\",fillcolor=skyblue,"
           "fontname=\"7x13bold\",fontcolor=black,style=filled";
-      // labelWithSourceCode = string("\\n  ") +
-      // functionDeclaration->get_name().getString() + "  ";
       labelWithSourceCode =
           string("\\n  ") + StringUtility::numberToString(node) + "  ";
       break;
@@ -1349,9 +957,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
         "\"7x13bold\",fontcolor=black,style=filled";
     // Make this statement different in the generated dot graph
 
-    // DQ (5/14/2006): this is an error when processing stdio.h
-    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
-    // "  ";
     string labelWithSourceCode;
     labelWithSourceCode =
         string("\\n  ") + StringUtility::numberToString(node) + "  ";
@@ -1377,30 +982,26 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
         }
         SgCharVal *charVal = isSgCharVal(valueExp);
         if (charVal != NULL) {
-          printf("Error: charVal = %d \n", charVal->get_value());
+          printf("Error: charVal = %s \n",
+                 std::to_string(charVal->get_value()).c_str());
         }
       }
 
-      // DQ (8/29/2015): Make this a comment so that I can better debug this
-      // problem.
       if (valueExp->get_parent() == NULL) {
         printf("ERROR: valueExp->get_parent() == NULL in AST visualization: "
                "valueExp = %p = %s \n",
                valueExp, valueExp->class_name().c_str());
       }
-      // ROSE_ASSERT(valueExp->get_parent() != NULL);
-
-      // labelWithSourceCode = "\\n value = " + valueExp->unparseToString() +
-      // "\\n" + StringUtility::numberToString(node) + "  "; labelWithSourceCode
-      // = string("\\n value = nnn") + "\\n" +
-      // StringUtility::numberToString(node) + "  ";
 
       // DQ (9/24/2011): Added support to indicate non-printable characters.
       SgCharVal *charVal = isSgCharVal(valueExp);
       if (charVal != NULL) {
-        char value = charVal->get_value();
+        const int64_t value = charVal->get_value();
+        const bool alphanumeric =
+            value >= 0 && value <= std::numeric_limits<unsigned char>::max() &&
+            isalnum(static_cast<unsigned char>(value));
         labelWithSourceCode += string("\\n alpha/numeric value = ") +
-                               (isalnum(value) ? "true" : "false") + "  ";
+                               (alphanumeric ? "true" : "false") + "  ";
       }
 
       // DQ (8/13/2014): Added debugging output to support C++11 unicode
@@ -1500,26 +1101,10 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
         "\\N\",sides=3,peripheries=1,color=\"blue\",fillcolor=yellow,fontname="
         "\"7x13bold\",fontcolor=black,style=filled";
 
-    // Make this statement different in the generated dot graph
-    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
-    // "  ";
     string labelWithSourceCode;
-    // printf ("Graph this node (%s) \n",node->class_name().c_str());
-    if (isSgClassType(node) == NULL) {
-      // printf ("Graph this node (%s) \n",node->class_name().c_str());
-      // labelWithSourceCode = string("\\n  ") + node->unparseToString() + "  ";
-    }
-
-    SgTypeDefault *defaultType = isSgTypeDefault(node);
-    if (defaultType != NULL) {
-      // printf ("Graph this node (%s) \n",node->class_name().c_str());
-      labelWithSourceCode +=
-          string("\\n  name = ") + defaultType->get_name().str() + "  ";
-    }
 
     SgTemplateType *templateType = isSgTemplateType(node);
     if (templateType != NULL) {
-      // printf ("Graph this node (%s) \n",node->class_name().c_str());
       labelWithSourceCode +=
           string("\\n  name = ") + templateType->get_name().str() + "  " +
           "position = " +
@@ -1532,9 +1117,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     // nodes.
     SgNamedType *namedType = isSgNamedType(node);
     if (namedType != NULL) {
-      // printf ("Graph this node (%s) \n",node->class_name().c_str());
-      // labelWithSourceCode += string("\\n  name = ") +
-      // namedType->get_name().str() + "  ";
       labelWithSourceCode += string("\\n") + namedType->get_name().str();
     }
 
@@ -1543,15 +1125,8 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       SgTypeModifier tm = modifierType->get_typeModifier();
       if (tm.isRestrict())
         labelWithSourceCode += string("\\n restrict  ");
-      labelWithSourceCode +=
-          string("\\n    frontend_type_reference() = ") +
-          (modifierType->get_frontend_type_reference() != NULL ? "true"
-                                                               : "false") +
-          "    ";
     }
 
-    // labelWithSourceCode = string("\\n  ") +
-    // StringUtility::numberToString(node) + "  ";
     labelWithSourceCode +=
         string("\\n  ") + StringUtility::numberToString(node) + "  ";
 
@@ -1608,21 +1183,15 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           string("\\n  ") + project->get_outputFileName() + "  ";
       labelWithSourceCode +=
           string("\\n  ") + StringUtility::numberToString(project) + "  ";
-      // printf ("########## SgProject = %s
-      // \n",project->get_outputFileName().c_str());
       break;
     }
 
-      // case V_SgFile:
     case V_SgSourceFile: {
       SgFile *file = isSgFile(node);
       additionalNodeOptions =
           "shape=ellipse,regular=0,URL=\"\\N\",tooltip=\"more info at "
           "\\N\",sides=5,peripheries=2,color=\"blue\",fillcolor=pink,fontname="
           "\"7x13bold\",fontcolor=black,style=filled";
-      // DQ (10/18/2020): Added more information to make it clearer when using
-      // buildSourceFile(). labelWithSourceCode = string("\\n  ") +
-      // file->get_sourceFileNameWithPath() + "  ";
       labelWithSourceCode =
           string("\\n  getFileName = ") + file->getFileName() + "  ";
       labelWithSourceCode += string("\\n  sourceFileNameWithPath = ") +
@@ -1630,11 +1199,7 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
 
       labelWithSourceCode +=
           string("\\n  ") + StringUtility::numberToString(file) + "  ";
-      // printf ("########## SgFile = %s
-      // \n",file->get_sourceFileNameWithPath().c_str());
       ROSE_ASSERT(SgNode::get_globalFunctionTypeTable() != NULL);
-      // printf ("     SgNode::SgFunctionTypeTable = %p size = %ld
-      // \n",SgNode::get_globalFunctionTypeTable(),SgNode::get_globalFunctionTypeTable()->get_function_type_table()->size());
       break;
     }
 
@@ -1664,62 +1229,50 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     }
 
     case V_Sg_File_Info: {
-      // DQ (5/11/2006): Skip any IR nodes that are part of a gnu compatability
-      // specific subtree of the AST
       Sg_File_Info *currentNodeFileInfo = isSg_File_Info(node);
-      if (currentNodeFileInfo != NULL) {
-        // skipNode(currentNodeFileInfo);
-        if (currentNodeFileInfo->isFrontendSpecific() == true) {
-          // skipNode(currentNodeFileInfo);
-        } else {
-          // additionalNodeOptions =
-          // "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at
-          // \\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=cyan4,fontname=\"7x13bold\",fontcolor=black,style=filled";
-          additionalNodeOptions =
-              "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
-              "\\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=brown,"
-              "fontname=\"7x13bold\",fontcolor=black,style=filled";
-          // Make this statement different in the generated dot graph
-          labelWithSourceCode =
-              "\\n" + currentNodeFileInfo->get_filenameString() + "\\n line: " +
-              StringUtility::numberToString(currentNodeFileInfo->get_line()) +
-              " column: " +
-              StringUtility::numberToString(currentNodeFileInfo->get_col()) +
-              "  " + "\\n raw line: " +
-              StringUtility::numberToString(
-                  currentNodeFileInfo->get_raw_line()) +
-              " raw column: " +
-              StringUtility::numberToString(
-                  currentNodeFileInfo->get_raw_col()) +
-              "  " +
-              // DQ (1/16/2012): Added more information to the output of the
-              // source poisition information.
-              "\\n hasPositionInSource() = " +
-              (currentNodeFileInfo->hasPositionInSource() == true ? "T" : "F") +
-              " isTransformation() = " +
-              (currentNodeFileInfo->isTransformation() == true ? "T" : "F") +
-              "  " + " isCompilerGenerated() = " +
-              (currentNodeFileInfo->isCompilerGenerated() == true ? "T" : "F") +
-              "  " + "\\n isOutputInCodeGeneration() = " +
-              (currentNodeFileInfo->isOutputInCodeGeneration() == true ? "T"
-                                                                       : "F") +
-              "  " + " isShared() = " +
-              (currentNodeFileInfo->isShared() == true ? "T" : "F") + "  " +
-              " isFrontendSpecific() = " +
-              (currentNodeFileInfo->isFrontendSpecific() == true ? "T" : "F") +
-              "  " + "\\n isSourcePositionUnavailableInFrontend() = " +
-              (currentNodeFileInfo->isSourcePositionUnavailableInFrontend() ==
-                       true
-                   ? "T"
-                   : "F") +
-              "  " + " isCommentOrDirective() = " +
-              (currentNodeFileInfo->isCommentOrDirective() == true ? "T"
-                                                                   : "F") +
-              "  " + " isToken() = " +
-              (currentNodeFileInfo->isToken() == true ? "T" : "F") + "  " +
-              "\\n pointer value: " +
-              StringUtility::numberToString(currentNodeFileInfo) + "  ";
-        }
+      if (currentNodeFileInfo != NULL &&
+          !currentNodeFileInfo->isFrontendSpecific()) {
+        additionalNodeOptions =
+            "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
+            "\\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=brown,"
+            "fontname=\"7x13bold\",fontcolor=black,style=filled";
+        // Make this statement different in the generated dot graph
+        labelWithSourceCode =
+            "\\n" + currentNodeFileInfo->get_filenameString() + "\\n line: " +
+            StringUtility::numberToString(currentNodeFileInfo->get_line()) +
+            " column: " +
+            StringUtility::numberToString(currentNodeFileInfo->get_col()) +
+            "  " + "\\n raw line: " +
+            StringUtility::numberToString(currentNodeFileInfo->get_raw_line()) +
+            " raw column: " +
+            StringUtility::numberToString(currentNodeFileInfo->get_raw_col()) +
+            "  " +
+            // DQ (1/16/2012): Added more information to the output of the
+            // source poisition information.
+            "\\n hasPositionInSource() = " +
+            (currentNodeFileInfo->hasPositionInSource() == true ? "T" : "F") +
+            " isTransformation() = " +
+            (currentNodeFileInfo->isTransformation() == true ? "T" : "F") +
+            "  " + " isCompilerGenerated() = " +
+            (currentNodeFileInfo->isCompilerGenerated() == true ? "T" : "F") +
+            "  " + "\\n isOutputInCodeGeneration() = " +
+            (currentNodeFileInfo->isOutputInCodeGeneration() == true ? "T"
+                                                                     : "F") +
+            "  " + " isShared() = " +
+            (currentNodeFileInfo->isShared() == true ? "T" : "F") + "  " +
+            " isFrontendSpecific() = " +
+            (currentNodeFileInfo->isFrontendSpecific() == true ? "T" : "F") +
+            "  " + "\\n isSourcePositionUnavailableInFrontend() = " +
+            (currentNodeFileInfo->isSourcePositionUnavailableInFrontend() ==
+                     true
+                 ? "T"
+                 : "F") +
+            "  " + " isCommentOrDirective() = " +
+            (currentNodeFileInfo->isCommentOrDirective() == true ? "T" : "F") +
+            "  " + " isToken() = " +
+            (currentNodeFileInfo->isToken() == true ? "T" : "F") + "  " +
+            "\\n pointer value: " +
+            StringUtility::numberToString(currentNodeFileInfo) + "  ";
       }
       break;
     }
@@ -1736,21 +1289,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       labelWithSourceCode = string("\\n  ") + symbolTableName +
                             string("\\n  ") +
                             StringUtility::numberToString(symbolTable) + "  ";
-      // printf ("########## symbolTable->get_name() = %s
-      // \n",symbolTable->get_name().str());
-      break;
-    }
-
-    case V_SgTypedefSeq: {
-      SgTypedefSeq *typedefSeq = isSgTypedefSeq(node);
-      additionalNodeOptions =
-          "shape=house,regular=0,URL=\"\\N\",tooltip=\"more info at "
-          "\\N\",sides=5,peripheries=1,color=\"blue\",fillcolor=red,fontname="
-          "\"7x13bold\",fontcolor=black,style=filled";
-      labelWithSourceCode =
-          string("\\n  ") + StringUtility::numberToString(typedefSeq) + "  ";
-      // printf ("########## typedefSeq->get_name() = %s
-      // \n",typedefSeq->get_name().str());
       break;
     }
 
@@ -1900,8 +1438,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
       labelWithSourceCode +=
           string("\\n  ") +
           StringUtility::numberToString(functionParameterTypeList) + "  ";
-      // printf ("########## typedefSeq->get_name() = %s
-      // \n",typedefSeq->get_name().str());
       break;
     }
 
@@ -1910,7 +1446,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
           "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
           "\\N\",sides=4,peripheries=1,color=\"blue\",fillcolor=red,fontname="
           "\"7x13bold\",fontcolor=black,style=filled";
-      // labelWithSourceCode;
       break;
     }
     }
@@ -1925,10 +1460,7 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     addNode(graphNode);
   }
 
-  // Liao 11/5/2010, move out of SgSupport
-  if (isSgInitializedName(node) != NULL)
-  // case V_SgInitializedName:
-  {
+  if (isSgInitializedName(node) != NULL) {
     SgInitializedName *initializedName = isSgInitializedName(node);
     string additionalNodeOptions =
         "shape=house,regular=0,URL=\"\\N\",tooltip=\"more info at "
@@ -1937,14 +1469,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     string labelWithSourceCode =
         string("\\n  ") + initializedName->get_name().getString() +
         string("\\n  ") + StringUtility::numberToString(initializedName) + "  ";
-    // DQ (1/24/2016): Adding support for __device__ keyword to be used for CUDA
-    // in function calls. This implements an idea suggested by Jeff Keasler.
-    labelWithSourceCode +=
-        string("\\n  ") + "using_device_keyword = " +
-        (initializedName->get_using_device_keyword() ? "true" : "false") + "  ";
-    // printf ("########## initializedName->get_name() = %s
-    // \n",initializedName->get_name().str());
-    //           break;
 
     AST_NODE_ID id = TransformationTracking::getId(node);
     if (id != 0)
@@ -1959,9 +1483,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
         "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
         "\\N\",sides=8,peripheries=1,color=\"blue\",fillcolor=purple,fontname="
         "\"7x13bold\",fontcolor=black,style=filled";
-    // Make this statement different in the generated dot graph
-    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
-    // "  ";
     string labelWithSourceCode;
 
     SgSymbol *symbol = isSgSymbol(node);
@@ -1974,8 +1495,6 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     }
 
     labelWithSourceCode += string("\\n name: ") + symbol->get_name();
-    // labelWithSourceCode = string("\\n  ") +
-    // StringUtility::numberToString(node) + "  ";
     labelWithSourceCode +=
         string("\\n  ") + StringUtility::numberToString(node) + "  ";
 
@@ -1986,32 +1505,11 @@ void CustomMemoryPoolDOTGeneration::defaultColorFilter(SgNode *node) {
     NodeType graphNode(node, labelWithSourceCode, additionalNodeOptions);
     addNode(graphNode);
   }
-
-  // DQ (3/25/2007): Added support for graphs including SgToken IR nodes.
-  if (isSgToken(node) != NULL) {
-    SgToken *token = isSgToken(node);
-    string additionalNodeOptions =
-        "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
-        "\\N\",sides=8,peripheries=1,color=\"blue\",fillcolor=moccasin,"
-        "fontname=\"7x13bold\",fontcolor=black,style=filled";
-    // Make this statement different in the generated dot graph
-    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
-    // "  ";
-    string labelWithSourceCode;
-
-    // DQ (1/11/2015): Added assertion.
-    ROSE_ASSERT(token != NULL);
-  }
 }
 
 /* Initialize the filters for the default case */
 CustomMemoryPoolDOTGeneration::s_Filter_Flags::s_Filter_Flags() {
   setDefault();
-}
-
-// DQ (7/4/2010): This destructor does not appear to have been implemented!
-CustomMemoryPoolDOTGeneration::s_Filter_Flags::~s_Filter_Flags() {
-  // Nothing to do here!
 }
 
 void CustomMemoryPoolDOTGeneration::s_Filter_Flags::setDefault() {
@@ -2032,8 +1530,6 @@ void CustomMemoryPoolDOTGeneration::s_Filter_Flags::setDefault() {
 
   m_fileInfo = 1; /* fileInfoFilter ()*/
 
-  // DQ (7/25/2010): Temporary testing (debugging).
-  // m_frontendCompatibility = 1;/* frontendCompatibilityFilter()*/
   m_frontendCompatibility = 0; /* frontendCompatibilityFilter()*/
 
   m_symbol = 0;              /*symbolFilter ()*/
@@ -2211,7 +1707,6 @@ public:
                 const set<SgNode *> &firstAST = defaultSetOfIRnodes,
                 CustomMemoryPoolDOTGeneration::s_Filter_Flags *flags = NULL);
 
-  void markFirstAST();
   void buildExcludeList();
 
   SimpleColorMemoryPoolTraversal(
@@ -2240,57 +1735,22 @@ void SimpleColorMemoryPoolTraversal::generateGraph(
   SimpleColorMemoryPoolTraversal traversal(firstAST, flags);
   traversal.traverseMemoryPool();
 
-  // DQ (1/20/2007): We want this to be an exclude mechanism
-  // traversal.markFirstAST();
   traversal.buildExcludeList();
 
   traversal.internalGenerateGraph(filename);
 }
 
-void SimpleColorMemoryPoolTraversal::markFirstAST() {
-  // Mark the IR node that are in the first AST before the deep AST copy
-  set<SgNode *>::const_iterator i = setOfIRnodes.begin();
-  while (i != setOfIRnodes.end()) {
-    string additionalNodeOptions =
-        "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at "
-        "\\N\",sides=6,peripheries=1,color=\"blue\",fillcolor=peru,fontname="
-        "\"7x13bold\",fontcolor=black,style=filled";
-    // Make this statement different in the generated dot graph
-
-    // DQ (5/14/2006): this is an error when processing stdio.h
-    // string labelWithSourceCode = string("\\n  ") + node->unparseToString() +
-    // "  ";
-    string labelWithSourceCode =
-        "\\n" + StringUtility::numberToString(*i) + "  ";
-
-    NodeType graphNode(*i, labelWithSourceCode, additionalNodeOptions);
-    addNode(graphNode);
-    i++;
-  }
-}
-
 void SimpleColorMemoryPoolTraversal::buildExcludeList() {
-  // Mark the IR node that are in the first AST before the deep AST copy
-  set<SgNode *>::const_iterator i = setOfIRnodes.begin();
-  while (i != setOfIRnodes.end()) {
-    skipNode(*i);
-    i++;
-  }
+  for (SgNode *node : setOfIRnodes)
+    skipNode(node);
 }
 
 void SimpleColorMemoryPoolTraversal::visit(SgNode *node) {
   ROSE_ASSERT(filterFlags != NULL);
 
-  // DQ (11/26/2016): Debugging.
-  // printf ("SimpleColorMemoryPoolTraversal::visit(): filterFlags->m_noFilter =
-  // %d \n",filterFlags->m_noFilter);
-
   // DQ (3/2/2010): Test if we have turned off all filtering of the AST.
   if (filterFlags->m_noFilter == 0) {
     // We allow filitering of the AST.
-    // DQ (11/26/2016): Debugging.
-    // printf ("SimpleColorMemoryPoolTraversal::visit(): filterFlags->m_default
-    // = %d \n",filterFlags->m_default);
 
     if (filterFlags->m_default == 1) {
       defaultFilter(node);
@@ -2377,9 +1837,7 @@ public:
 
   // Default constructor
   SimpleColorFilesInheritedAttribute() : sharedSubTree(false) {
-#ifndef CXX_IS_ROSE_CODE_GENERATION
     ROSE_ASSERT(currentNodeOptions.size() < 4000);
-#endif
   }
 
   //! Specific constructors are required
@@ -2420,14 +1878,11 @@ void SimpleColorFilesInheritedAttribute::setNodeOptions(SgFile *file) {
     // Select from a small subset of optional setting strings.
     index = (file->get_file_info()->get_file_id() + 0) % maxSize;
   }
-  // printf ("SimpleColorFilesInheritedAttribute::setNodeOptions(): index = %d
-  // \n",index);
   currentNodeOptions = additionalNodeOptionsArray[index];
   ROSE_ASSERT(currentNodeOptions.size() < 4000);
 }
 
 class SimpleColorFilesTraversal
-    // : public CustomMemoryPoolDOTGeneration,
     : public CustomAstDOTGeneration,
       public SgTopDownProcessing<SimpleColorFilesInheritedAttribute> {
 public:
@@ -2462,9 +1917,6 @@ SimpleColorFilesInheritedAttribute
 SimpleColorFilesTraversal::evaluateInheritedAttribute(
     SgNode *node, SimpleColorFilesInheritedAttribute inheritedAttribute) {
   ROSE_ASSERT(node != NULL);
-  // printf ("SimpleColorFilesTraversal::evaluateInheritedAttribute(): node = %s
-  // specialNodeList.size() = %ld
-  // \n",node->class_name().c_str(),specialNodeList.size());
   ROSE_ASSERT(inheritedAttribute.currentNodeOptions.size() < 4000);
 
   SgProject *project = isSgProject(node);
@@ -2498,8 +1950,6 @@ SimpleColorFilesTraversal::evaluateInheritedAttribute(
   ROSE_ASSERT(inheritedAttribute.currentNodeOptions.size() < 4000);
 
   string additionalNodeOptions = inheritedAttribute.currentNodeOptions;
-  // string labelWithSourceCode   = "\\n" +  StringUtility::numberToString(node)
-  // + "  ";
   string labelWithSourceCode;
 
   SgClassDeclaration *classDeclaration = isSgClassDeclaration(node);
@@ -2564,7 +2014,6 @@ void generateWholeGraphOfAST(
                                                 flags);
 }
 
-// DQ (6/3/2007): Interface functions defined in wholeAST_API.h
 void generateWholeGraphOfAST(string filename, set<SgNode *> &skippedNodeSet) {
   SimpleColorMemoryPoolTraversal::generateGraph(filename, skippedNodeSet);
 }
@@ -2581,20 +2030,6 @@ void generateWholeGraphOfAST(string filename) {
 void generateWholeGraphOfAST(
     string filename,
     CustomMemoryPoolDOTGeneration::s_Filter_Flags *flags /*= NULL*/) {
-  // DQ (10/29/2009): Added code to output the default flag setting...
-  // CustomMemoryPoolDOTGeneration::print_filter_flags();
-  // CustomMemoryPoolDOTGeneration::init_filters();
-
-  // DQ: Turn these off for my sake...
-  // CustomMemoryPoolDOTGeneration::filterFlags.m_binaryExecutableFormat =
-  // 1;/*binaryExecutableFormatFilter()*/
-  // CustomMemoryPoolDOTGeneration::filterFlags.m_asmFileFormat = 1;
-  // /*asmFileFormatFilter()*/
-  // CustomMemoryPoolDOTGeneration::filterFlags.m_asmType = 1;               /*
-  // asmTypeFilter()*/
-
-  // CustomMemoryPoolDOTGeneration::print_filter_flags();
-
   // Make this the default type of graph that we produce (filtering frontend
   // specific IR nodes)
   std::unique_ptr<CustomMemoryPoolDOTGeneration::s_Filter_Flags> owned_flags;
@@ -2604,14 +2039,52 @@ void generateWholeGraphOfAST(
     flags = owned_flags.get();
   }
 
-  generateWholeGraphOfAST_filteredFrontendSpecificNodes(filename, flags);
-}
-
-void generateWholeGraphOfAST_filteredFrontendSpecificNodes(
-    string filename, CustomMemoryPoolDOTGeneration::s_Filter_Flags *flags) {
   std::set<SgNode *> skippedNodeSet = SageInterface::getFrontendSpecificNodes();
   SimpleColorMemoryPoolTraversal::generateGraph(filename, skippedNodeSet,
                                                 flags);
+}
+
+void graphNodesAfterCopy(const set<SgNode *> &oldNodes, string filename) {
+  auto skippedNodes = SageInterface::getFrontendSpecificNodes();
+  SimpleColorMemoryPoolTraversal traversal(skippedNodes);
+  traversal.traverseMemoryPool();
+  traversal.buildExcludeList();
+  traversal.DOTgraph.traverseMemoryPool();
+
+  const auto outputFilename = Rose::TestOutput::resolvePath(filename + ".dot");
+  ofstream output(outputFilename);
+  if (!output)
+    throw runtime_error("Cannot open AST copy graph: " + outputFilename);
+
+  output << "digraph copyGraph {\n";
+  traversal.DOTgraph.dotrep.writeDotoutStream(output);
+  VariantVector variants(V_SgNode);
+  const auto nodes = NodeQuery::queryMemoryPool(variants);
+  for (bool original : {true, false}) {
+    output << "subgraph " << (original ? "clusterOld" : "clusterNew")
+           << " {\nlabel=\"" << (original ? "Old nodes" : "New nodes")
+           << "\"; fillcolor=" << (original ? "lightgreen" : "lightyellow")
+           << "; style=filled; fontsize=36;\n";
+    for (SgNode *node : nodes) {
+      if (traversal.DOTgraph.skipNodeList.count(node) != 0 ||
+          (oldNodes.count(node) != 0) != original)
+        continue;
+      output << '"' << node << "\";\n";
+      for (const auto &[target, label] : node->returnDataMemberPointers()) {
+        if (target == nullptr &&
+            traversal.DOTgraph.skipEdgeSet.count(
+                CustomMemoryPoolDOTGenerationData::EdgeType(node, target,
+                                                            label)) == 0)
+          output << '"' << node << "__" << escape_double_quotes(label)
+                 << "__null\";\n";
+      }
+    }
+    output << "}\n";
+  }
+  output << "}\n";
+  output.close();
+  if (!output)
+    throw runtime_error("Cannot write AST copy graph: " + outputFilename);
 }
 
 void generateGraphOfAST(SgProject *project, string filename,

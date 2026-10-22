@@ -1,29 +1,15 @@
-//===-- src/frontend/Flang/builder/Tokens.h ---------------------------*- C++
-//-*-===//
-//
-// Reads tokens from a file into a TokenStream (vector)
-//
-//===-----------------------------------------------------------------------------===//
-
 #ifndef ROSE_FLANG_BUILDER_TOKENS_H_
 #define ROSE_FLANG_BUILDER_TOKENS_H_
 
-#include <fstream>
-
-#include <sstream>
-
+#include <cstddef>
 #include <string>
-
 #include <utility>
-
 #include <vector>
 
 namespace Rose {
 namespace builder {
 
-enum class TokenKind { unknown = 0, preprocessing = 98, comment = 99 };
-
-using TK = TokenKind;
+enum class TokenKind { preprocessing = 98, comment = 99 };
 
 // Flang's physical source stream distinguishes comments from preprocessing
 // records, but the latter still need an exact semantic kind before they can be
@@ -54,35 +40,12 @@ enum class PreprocessingDirectiveKind {
 
 class Token {
 public:
-  // Need to explore C++17 move (see
-  // SageTreeBuilder::consumePrecedingComments()) Token(Token &&) = default;
-  // Token &operator=(Token &&) = default;
-  // Token(const Token &) = delete;
-  // Token &operator=(const Token &) = delete;
-  Token() = delete;
-
-  Token(std::vector<std::string> row)
-      : type_{TK::unknown}, bLine_{0}, eLine_{0}, bCol_{0}, eCol_{0},
-        preprocessingKind_{PreprocessingDirectiveKind::none},
-        exactSpelling_{false} {
-    if (row.size() == 6) {
-      type_ = static_cast<TK>(std::stoi(row[0]));
-      bLine_ = std::stoi(row[1]);
-      eLine_ = std::stoi(row[3]);
-      bCol_ = std::stoi(row[2]);
-      eCol_ = std::stoi(row[4]);
-      lexeme_ = row[5];
-    }
-  }
-
   Token(TokenKind type, PreprocessingDirectiveKind preprocessingKind,
         std::string path, int beginLine, int beginColumn, int endLine,
         int endColumn, std::string spelling)
       : type_{type}, bLine_{beginLine}, eLine_{endLine}, bCol_{beginColumn},
         eCol_{endColumn}, lexeme_{std::move(spelling)}, path_{std::move(path)},
-        preprocessingKind_{preprocessingKind}, exactSpelling_{true} {}
-
-  friend std::ostream &operator<<(std::ostream &os, const Token &tk);
+        preprocessingKind_{preprocessingKind} {}
 
   int getStartLine() const { return bLine_; }
   int getStartCol() const { return bCol_; }
@@ -95,7 +58,6 @@ public:
   }
   const std::string &getLexeme() const { return lexeme_; }
   const std::string &getPath() const { return path_; }
-  bool hasExactSpelling() const { return exactSpelling_; }
 
 private:
   TokenKind type_;    // token type
@@ -104,14 +66,12 @@ private:
   std::string lexeme_;
   std::string path_;
   PreprocessingDirectiveKind preprocessingKind_;
-  bool exactSpelling_;
 }; // Token
 
 class TokenStream {
 public:
-  TokenStream() = delete;
-  TokenStream(std::istringstream &);
-  TokenStream(std::vector<Token> tokens);
+  explicit TokenStream(std::vector<Token> tokens)
+      : tokens_(std::move(tokens)), next_(0) {}
 
   const Token *getNextToken() const {
     if (next_ < tokens_.size()) {
@@ -128,10 +88,7 @@ public:
 
 private:
   std::vector<Token> tokens_;
-  size_t next_;
-
-  void getTokenElement(std::istream &, std::string &);
-  void getTokenComment(std::istream &, std::string &);
+  std::size_t next_;
 };
 
 } // namespace builder

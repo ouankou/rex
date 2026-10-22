@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 11 ]]; then
-  echo "usage: $0 <translator> <compiler> <input> <workdir> <mode> <omp_header_dir> <omp_runtime_dir> <lowering_inc> <case_name> <language> <openmp_version>" >&2
+if [[ $# -ne 12 ]]; then
+  echo "usage: $0 <translator> <compiler> <input> <workdir> <mode> <omp_header_dir> <omp_runtime_library> <lowering_inc> <case_name> <language> <openmp_version> <xomp_library>" >&2
   exit 2
 fi
 
@@ -12,11 +12,13 @@ input_file="$3"
 workdir="$4"
 mode="$5"
 omp_header_dir="$6"
-omp_runtime_dir="$7"
+omp_runtime_library="$7"
+omp_runtime_dir="$(dirname "$omp_runtime_library")"
 lowering_inc="$8"
 case_name="$9"
 language="${10}"
 openmp_version="${11}"
+xomp_library="${12}"
 
 if [[ "${mode}" != "exact" && "${mode}" != "sort" ]]; then
   echo "ERROR(${case_name}): invalid mode '${mode}'" >&2
@@ -48,20 +50,24 @@ source_name="${input_file##*/}"
 rose_file="${workdir}/rose_${source_name}"
 
 compile_flags=(
-  -fopenmp=libiomp5
+  -fopenmp=libomp
   -O0
   -g
   -U_OPENMP
   "-D_OPENMP=${openmp_version}"
   -idirafter
   "${omp_header_dir}"
-  "-L${omp_runtime_dir}"
+)
+link_flags=(
+  "${omp_runtime_library}"
+  -pthread
   "-Wl,-rpath,${omp_runtime_dir}"
 )
 
 if [[ -n "${ROSE_TEST_SANITIZER_FLAGS:-}" ]]; then
   read -r -a sanitizer_flags <<< "${ROSE_TEST_SANITIZER_FLAGS}"
   compile_flags+=("${sanitizer_flags[@]}")
+  link_flags+=("${sanitizer_flags[@]}")
 fi
 
 canonicalize() {
@@ -83,7 +89,8 @@ fail_with_diff() {
   exit 1
 }
 
-"${compiler}" "${compile_flags[@]}" "${input_file}" -o "${workdir}/orig.exe"
+"${compiler}" "${compile_flags[@]}" -c "${input_file}" -o "${workdir}/orig.o"
+"${compiler}" "${workdir}/orig.o" "${link_flags[@]}" -o "${workdir}/orig.exe"
 
 saved_pwd="${PWD}"
 cd "${workdir}"
@@ -109,7 +116,13 @@ for ext in c cu cpp cxx; do
   fi
 done
 
-"${compiler}" "${compile_flags[@]}" -I"${lowering_inc}" "${lowered_sources[@]}" -o "${workdir}/lowered.exe"
+lowered_objects=()
+for source in "${lowered_sources[@]}"; do
+  object="${workdir}/lowered_${#lowered_objects[@]}.o"
+  "${compiler}" "${compile_flags[@]}" -I"${lowering_inc}" -c "${source}" -o "${object}"
+  lowered_objects+=("${object}")
+done
+"${compiler}" "${lowered_objects[@]}" "${xomp_library}" "${link_flags[@]}" -o "${workdir}/lowered.exe"
 
 export LD_LIBRARY_PATH="${omp_runtime_dir}:${LD_LIBRARY_PATH:-}"
 thread_counts=(2 4)

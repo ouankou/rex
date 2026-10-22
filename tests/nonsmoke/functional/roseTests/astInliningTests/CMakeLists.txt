@@ -3,6 +3,21 @@ include_directories(${ROSE_INCLUDES})
 add_executable(inlineEverything inlineEverything.C)
 target_link_libraries(inlineEverything ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_inliner_volatile_cleanup rex_inliner_volatile_cleanup.cpp)
+target_link_libraries(rex_inliner_volatile_cleanup ROSE_DLL ${link_with_libraries})
+add_test(NAME rex_inliner_volatile_cleanup
+  COMMAND rex_inliner_volatile_cleanup -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/specimen01_1.C)
+set_tests_properties(rex_inliner_volatile_cleanup PROPERTIES LABELS "rex;CFE")
+
+add_test(
+  NAME inlineEverything_rex_inliner_primary_header
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND inlineEverything -main-only -expect-inlined-count 1 -std=c++17 -x c++
+    -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_inliner_primary_header.hpp
+    -rose:output rose_rex_inliner_primary_header.cpp
+)
+
 set(INLINE_EVERYTHING_SPECIMENS
   specimen01_1.C
   specimen02_1.C
@@ -84,10 +99,14 @@ endforeach()
 
 foreach(specimen IN LISTS INLINE_EVERYTHING_CPP11_SPECIMENS)
   string(REPLACE "." "_" _inline_name ${specimen})
+  set(_inline_count_arguments)
+  if(specimen STREQUAL "rex_inliner_copied_scope_contract.cpp")
+    set(_inline_count_arguments -expect-inlined-count 5)
+  endif()
   add_test(
     NAME inlineEverything_cpp11_v1_${_inline_name}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND inlineEverything -main-only -std=c++11
+    COMMAND inlineEverything -main-only ${_inline_count_arguments} -std=c++11
       -c ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
       -rose:output rose_cpp11_v1_${specimen}
   )
@@ -101,6 +120,7 @@ add_test(
   COMMAND ${_rth}
     srcdir=${CMAKE_CURRENT_SOURCE_DIR}
     EXE=$<TARGET_FILE:inlineEverything>
+    "CXX=${CMAKE_CXX_COMPILER}"
     ${_test1_conf}
     test1.passed
 )

@@ -80,7 +80,7 @@ public:
     setExactFixtureSource(global_, 1);
     global_->set_parent(&sourceFile_);
     sourceFile_.set_globalScope(global_);
-    SageInterface::ensureCaseInsensitiveSymbolTable(global_, true);
+    global_->setCaseInsensitive(true);
 
     function_ = SageBuilder::buildDefiningFunctionDeclaration(
         SageBuilder::function_declaration_ownership::sourceLexical(),
@@ -99,7 +99,7 @@ public:
           Fortran::semantics::KindExpr{4}));
     }
     procedure_.get<Fortran::semantics::SubprogramDetails>().set_result(result_);
-    SageInterface::ensureCaseInsensitiveSymbolTable(scope_, true);
+    scope_->setCaseInsensitive(true);
     SageBuilder::pushScopeStack(scope_);
   }
 
@@ -135,7 +135,7 @@ public:
     ROSE_ASSERT(differentScope_ != nullptr);
     setExactFixtureSource(differentScope_, 5);
     differentScope_->set_parent(function_->get_definition());
-    SageInterface::ensureCaseInsensitiveSymbolTable(differentScope_, true);
+    differentScope_->setCaseInsensitive(true);
     return publishResult(SageBuilder::buildIntType(), differentScope_);
   }
 

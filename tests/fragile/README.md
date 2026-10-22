@@ -25,5 +25,5 @@ CTest dependencies and fixtures, and then runs the exact resulting set:
 python3 scripts/run_ctest_name_set.py \
   --test-dir build \
   --manifest tests/fragile/unparser_hardening_fast.txt \
-  --jobs "$(nproc)"
+  --jobs 1
 ```

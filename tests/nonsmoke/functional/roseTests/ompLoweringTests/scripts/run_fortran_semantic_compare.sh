@@ -394,6 +394,7 @@ fail_with_diff() {
 driver_file=""
 driver_sources=()
 driver_file="${workdir}/driver_${source_name}"
+rm -f -- "${driver_file}"
 if write_subroutine_driver_if_needed "${input_file}" "${case_name}" "${driver_file}"; then
   if [[ -f "${driver_file}" ]]; then
     driver_sources+=("${driver_file}")

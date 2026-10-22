@@ -39,11 +39,22 @@ static int e_inline_limit = 99999999;
 // reachable from main().
 static bool e_inline_main = false;
 
+// Inlining retires the call; diagnostics retain values before transformation.
+struct InlinedCallLocation {
+  int line;
+  int column;
+};
+
+static InlinedCallLocation callLocation(SgFunctionCallExp *call) {
+  ROSE_ASSERT(call != nullptr && call->get_file_info() != nullptr);
+  return {call->get_file_info()->get_line(), call->get_file_info()->get_col()};
+}
+
 // Given a function with a body, inlining recursively all functions called
 // inside of the body. Return the number of call sites considered for inlining
 //   and the call sites which are actuallyed inlined.
 void inlineFromRoot(SgFunctionDeclaration *func_decl, int &callSitesConsidered,
-                    std::vector<SgFunctionCallExp *> &inlined_calls) {
+                    std::vector<InlinedCallLocation> &inlined_calls) {
   // sanity check
   ROSE_ASSERT(func_decl != NULL);
   func_decl = isSgFunctionDeclaration(func_decl->get_definingDeclaration());
@@ -68,12 +79,14 @@ void inlineFromRoot(SgFunctionDeclaration *func_decl, int &callSitesConsidered,
         std::cout << "Trying to inline the function id (starting from 1):"
                   << callSitesConsidered << std::endl;
 
+      const InlinedCallLocation location = callLocation(call);
       if (doInline(call)) {
         ASSERT_forbid2(isAstContaining(func_decl, call),
                        "Inliner says it inlined, but the call expression is "
                        "still present in the AST.");
-        inlined_calls.push_back(call);
+        inlined_calls.push_back(location);
         changed = true;
+        break; // Re-query after mutation; nested calls may also be retired.
       }
     } // end foreach()
   } while (changed);
@@ -85,6 +98,9 @@ int main(int argc, char *argv[]) {
   // and use as a handle for all processing of the AST(s) associated with one or
   // more source files.
   std::vector<std::string> argvList(argv, argv + argc);
+  int expectedInlinedCount = -1;
+  CommandlineProcessing::isOptionWithParameter(
+      argvList, "", "-expect-inlined-count", expectedInlinedCount, true);
 
   if (CommandlineProcessing::isOption(argvList, "(-h|-help|--help)", "",
                                       false)) {
@@ -136,7 +152,7 @@ int main(int argc, char *argv[]) {
   } else
     Inliner::skipHeaders = true;
 
-  if (CommandlineProcessing::isOption(argvList, "-verbose", "", false)) {
+  if (CommandlineProcessing::isOption(argvList, "-verbose", "", true)) {
     Inliner::verbose = true;
     cout << "Turning on verbose mode ...." << endl;
   } else
@@ -145,7 +161,7 @@ int main(int argc, char *argv[]) {
   SgProject *sageProject = frontend(argvList);
 
   AstTests::runAllTests(sageProject);
-  std::vector<SgFunctionCallExp *> inlined_calls;
+  std::vector<InlinedCallLocation> inlined_calls;
 
   // Inline one call at a time until all have been inlined.  Loops on recursive
   // code.
@@ -160,12 +176,6 @@ int main(int argc, char *argv[]) {
   } else // the original driver to inline everything, which is too aggressive.
     for (int count = 0; count < 10; ++count) {
       bool changed = false;
-      //    for (SgFunctionCallExp *call:
-      //    SageInterface::querySubTree<SgFunctionCallExp>(sageProject))
-      // interesting user loops are often located in the end of the source file
-      // reverse_foreach (SgFunctionCallExp *call,
-      // SageInterface::querySubTree<SgFunctionCallExp>(sageProject))
-      MLOG_WARN_C("astInliningTests", "reverse_foreach should be used.\n");
       for (SgFunctionCallExp *call :
            SageInterface::querySubTree<SgFunctionCallExp>(sageProject)) {
         call_count++;
@@ -178,12 +188,13 @@ int main(int argc, char *argv[]) {
         if (Inliner::verbose)
           std::cout << "Trying to inline the function id (starting from 1):"
                     << call_count << std::endl;
+        const InlinedCallLocation location = callLocation(call);
         if (doInline(call)) {
           ASSERT_forbid2(isAstContaining(sageProject, call),
                          "Inliner says it inlined, but the call expression is "
                          "still present in the AST.");
           ++nInlined;
-          inlined_calls.push_back(call);
+          inlined_calls.push_back(location);
           changed = true;
           break; // TODO why is there a break???
         }
@@ -194,24 +205,12 @@ int main(int argc, char *argv[]) {
 
   std::cout << "Test inlined " << nInlined << "function call(s)" << " out of "
             << call_count << " calls." << "\n";
+  if (expectedInlinedCount >= 0)
+    ROSE_ASSERT(nInlined == static_cast<size_t>(expectedInlinedCount));
   for (size_t i = 0; i < inlined_calls.size(); i++) {
-    std::cout << "call@line:col "
-              << inlined_calls[i]->get_file_info()->get_line() << ":"
-              << inlined_calls[i]->get_file_info()->get_col() << "\n";
+    std::cout << "call@line:col " << inlined_calls[i].line << ":"
+              << inlined_calls[i].column << "\n";
   }
-
-  // Post-inline AST normalizations
-
-  // DQ (6/12/2015): These functions first renames all variable (a bit heavy
-  // handed for my tastes) and then (second) removes the blocks that are
-  // otherwise added to support the inlining.  The removal of the blocks is the
-  // motivation for renaming the variables, but the variable renaming is done
-  // evarywhere instead of just where the functions are inlined.  I think the
-  // addition of the blocks is a better solution than the overly agressive
-  // renaming of variables in the whole program.  So the best solution is to
-  // comment out both of these functions.  All test codes pass (including the
-  // token-based unparsing tests). renameVariables(sageProject);
-  // flattenBlocks(sageProject);
 
   if (!e_inline_only) {
     // This can be problematic since it tries to modifies lots of things,

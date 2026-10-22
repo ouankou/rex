@@ -1,39 +1,32 @@
 #ifndef PTRMAP_H
 #define PTRMAP_H
 
-#include <iostream>
-
 #include <map>
 
-struct PointerHolder {
-  void *p;
-  PointerHolder() : p(0) {}
-  PointerHolder(void *_p) : p(_p) {}
-};
-
-class VoidPtrMap
-    : public std::map<const void *, PointerHolder, std::less<const void *>> {};
-
 template <class T1, class T2> class PtrMapWrap {
-  VoidPtrMap *impl;
-  PtrMapWrap(const PtrMapWrap<T1, T2> &that) : impl{that.impl} {}
-  void operator=(const PtrMapWrap<T1, T2> &) {}
+  using MapType = std::map<const T1 *, T2 *>;
+  MapType impl;
+  PtrMapWrap(const PtrMapWrap &) = delete;
+  PtrMapWrap &operator=(const PtrMapWrap &) = delete;
 
 public:
-  PtrMapWrap() { impl = new VoidPtrMap; }
-  ~PtrMapWrap() { delete impl; }
-  T2 *Map(const T1 *t) const { return (T2 *)(*impl)[t].p; }
-  void InsertMapping(const T1 *t1, T2 *t2) { (*impl)[t1] = PointerHolder(t2); }
-  void RemoveMapping(const T1 *t) { (*impl)[t].p = 0; }
+  PtrMapWrap() = default;
+  T2 *Map(const T1 *t) const {
+    const auto entry = impl.find(t);
+    return entry == impl.end() ? nullptr : entry->second;
+  }
+  void InsertMapping(const T1 *t1, T2 *t2) {
+    if (t2 != nullptr)
+      impl.insert_or_assign(t1, t2);
+    else
+      impl.erase(t1);
+  }
+  void RemoveMapping(const T1 *t) { impl.erase(t); }
 
   class Iterator {
-    const VoidPtrMap *impl;
-    VoidPtrMap::const_iterator p;
-    Iterator(const VoidPtrMap *_impl) : impl(_impl) { Reset(); }
-    void SetCurrent() {
-      while (p != impl->end() && (*p).second.p == 0)
-        ++p;
-    }
+    const MapType *impl;
+    typename MapType::const_iterator p;
+    Iterator(const MapType *_impl) : impl(_impl) { Reset(); }
 
   public:
     ~Iterator() {}
@@ -45,40 +38,23 @@ public:
     }
 
     const T1 *Current() const {
-      // DQ (11/3/2011): Warning about type qualifier is meaningless on cast
-      // type (caught by new legacy frontend compiling ROSE). return (p ==
-      // impl->end())? 0 : reinterpret_cast<const T1* const>((*p).first);
-      return (p == impl->end()) ? 0 : reinterpret_cast<const T1 *>((*p).first);
+      return (p == impl->end()) ? nullptr : p->first;
     }
 
-    T2 *Current2() const {
-      return (p == impl->end()) ? 0 : reinterpret_cast<T2 *>((*p).second.p);
-    }
+    T2 *Current2() const { return (p == impl->end()) ? nullptr : p->second; }
     const T1 *operator*() const { return Current(); }
-    void Reset() {
-      if (impl->empty())
-        p = impl->end();
-      else {
-        p = impl->begin();
-        SetCurrent();
-      }
-    }
+    void Reset() { p = impl->begin(); }
     void Advance() {
-      if (p != impl->end()) {
+      if (p != impl->end())
         ++p;
-        SetCurrent();
-      }
     }
     void operator++() { Advance(); }
     void operator++(int) { Advance(); }
-    bool ReachEnd() const {
-      std::cerr << "";
-      return p == impl->end();
-    }
+    bool ReachEnd() const { return p == impl->end(); }
     friend class PtrMapWrap<T1, T2>;
   };
 
-  Iterator GetIterator() const { return Iterator(impl); }
+  Iterator GetIterator() const { return Iterator(&impl); }
 };
 
 #endif

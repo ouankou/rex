@@ -1,3 +1,11 @@
+struct __attribute__((packed)) RexPackedSize {
+  char tag;
+  int value;
+};
+
+constexpr unsigned rex_packed_size = sizeof(RexPackedSize);
+static_assert(rex_packed_size == 5);
+
 void direct_loop(int *values) {
   constexpr int unroll_factor = 2;
 #pragma omp unroll partial(unroll_factor)

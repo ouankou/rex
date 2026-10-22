@@ -1,846 +1,214 @@
-
-#include <algorithm>
-
-#include <iostream>
-
-#include <memory>
-
-#include "clang-to-dot-private.hpp"
-
-#include "clang-frontend-utils.hpp"
-
-#include "clang-nns-utils.hpp"
-
+#include "clang-to-dot.hpp"
 #include "sage3basic.h"
 
-#include "clang_paths.h"
+#include <clang/AST/ASTNodeTraverser.h>
+#include <clang/AST/TextNodeDumper.h>
+#include <clang/Frontend/CompilerInstance.h>
+#include <llvm/ADT/DenseMap.h>
+#include <llvm/Support/raw_ostream.h>
 
-#include "rose_config.h"
-// DQ (11/1/2020): Added to resolve types (e.g string)
-using namespace std;
+#include <fstream>
+#include <functional>
+#include <string>
+#include <type_traits>
+#include <vector>
 
-// File for output for generated graph.
-std::ofstream CLANG_ROSE_Graph::file;
-
-// DQ (11/1/2020): Added to resolve namespace variables.
-using namespace CLANG_ROSE_Graph;
-
-// DQ (10/23/2020): We need a list to make sure that we don't add nodes twice
-// (once when traversing the source sequence lists and a second time when
-// traversing the AST). We need to show the AST plus the edges that are specific
-// to the source sequence lists (and which node's source sequence list they are
-// associated with).
-std::set<void *> graphNodeSet;
-
-// #define DEBUG_CLANG_DOT_GRAPH_SUPPORT 0
-// #define DEBUG_HEADER_GRAPH_SUPPORT 0
-
-// int clang_to_dot_main(int argc, char ** argv, SgSourceFile& sageFile)
-int clang_to_dot_main(int argc, char **argv, const char *driver_argv0) {
-  // Build a dot graph of the Clang AST.
-
-  // Build filename...
-  string filename = "clangGraph";
-
-  string dot_header = filename;
-  filename += ".dot";
-
-#if DEBUG_CLANG_DOT_GRAPH_SUPPORT
-  printf("In clang_to_dot_main(): filename = %s \n", filename.c_str());
-#endif
-
-  // Open file...(file is declared in the CLANG_ROSE_Graph namespace).
-  file.open(filename.c_str());
-
-  // 0 - Analyse Cmd Line
-
-  std::vector<std::string> inc_dirs_list;
-  std::vector<std::string> define_list;
-  std::vector<std::string> inc_list;
-  std::string input_file;
-
-  for (int i = 0; i < argc; i++) {
-    std::string current_arg(argv[i]);
-    if (current_arg.find("-I") == 0) {
-      if (current_arg.length() > 2) {
-        inc_dirs_list.push_back(current_arg.substr(2));
-      } else {
-        i++;
-        if (i < argc)
-          inc_dirs_list.push_back(current_arg);
-        else
-          break;
-      }
-    } else if (current_arg.find("-D") == 0) {
-      if (current_arg.length() > 2) {
-        define_list.push_back(current_arg.substr(2));
-      } else {
-        i++;
-        if (i < argc)
-          define_list.push_back(current_arg);
-        else
-          break;
-      }
-    } else if (current_arg.find("-c") == 0) {
-    } else if (current_arg.find("-o") == 0) {
-      if (current_arg.length() == 2) {
-        i++;
-        if (i >= argc)
-          break;
-      }
-    } else {
-      // TODO -include
-#if DEBUG_ARGS
-      std::cerr << "argv[" << i << "] = " << current_arg
-                << " is neither define or include dir. Use it as input file."
-                << std::endl;
-#endif
-      input_file = current_arg;
+namespace {
+void writeDotString(std::ostream &output, llvm::StringRef text) {
+  output << '"';
+  for (char ch : text) {
+    switch (ch) {
+    case '\\':
+      output << "\\\\";
+      break;
+    case '"':
+      output << "\\\"";
+      break;
+    case '\n':
+      output << "\\l";
+      break;
+    case '\r':
+      output << "\\r";
+      break;
+    case '\t':
+      output << "\\t";
+      break;
+    default:
+      output << ch;
+      break;
     }
   }
+  output << '"';
+}
 
-  ClangToDotTranslator::Language language = ClangToDotTranslator::unknown;
-
-  size_t last_period = input_file.find_last_of(".");
-  std::string extention(input_file.substr(last_period + 1));
-
-  if (extention == "c") {
-    language = ClangToDotTranslator::C;
-  } else if (extention == "C" || extention == "cxx" || extention == "cpp" ||
-             extention == "cc") {
-    language = ClangToDotTranslator::CPLUSPLUS;
-  } else if (extention == "objc") {
-    language = ClangToDotTranslator::OBJC;
-  } else if (extention == "cu") {
-    language = ClangToDotTranslator::CUDA;
-  } else if (extention == "ocl" || extention == "cl") {
-    language = ClangToDotTranslator::OPENCL;
-  }
-
-  ROSE_ASSERT(language != ClangToDotTranslator::unknown);
-
-  const char *cxx_config_include_dirs_array[] = CXX_INCLUDE_STRING;
-  const char *c_config_include_dirs_array[] = C_INCLUDE_STRING;
-
-  std::vector<std::string> cxx_config_include_dirs(
-      cxx_config_include_dirs_array,
-      cxx_config_include_dirs_array +
-          sizeof(cxx_config_include_dirs_array) / sizeof(const char *));
-  std::vector<std::string> c_config_include_dirs(
-      c_config_include_dirs_array,
-      c_config_include_dirs_array +
-          sizeof(c_config_include_dirs_array) / sizeof(const char *));
-
-  RoseClangPathRoots clang_paths = resolveRoseClangPaths(driver_argv0);
-  std::string builtin_include_path = clang_paths.builtin_header_root;
-
-  dropRelativeIncludeDirs(c_config_include_dirs);
-  dropRelativeIncludeDirs(cxx_config_include_dirs);
-
-  inc_dirs_list.push_back(builtin_include_path);
-
-  auto append_unique_dirs = [](std::vector<std::string> &dest,
-                               const std::vector<std::string> &src) {
-    for (const auto &entry : src) {
-      if (std::find(dest.begin(), dest.end(), entry) == dest.end()) {
-        dest.push_back(entry);
-      }
-    }
+class GraphNodeDumper {
+  const clang::ASTContext &context;
+  std::ostream &output;
+  std::function<void(clang::QualType)> visitType;
+  llvm::DenseMap<clang::QualType, size_t> typeNodes;
+  struct Frame {
+    size_t identifier;
+    bool described = false;
   };
-
-  // FIXME add ROSE path to gcc headers...
-  switch (language) {
-  case ClangToDotTranslator::C:
-    inc_dirs_list.insert(inc_dirs_list.begin(), c_config_include_dirs.begin(),
-                         c_config_include_dirs.end());
-    inc_list.push_back("clang-builtin-c.h");
-    break;
-  case ClangToDotTranslator::CPLUSPLUS:
-    inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
-    append_unique_dirs(inc_dirs_list, c_config_include_dirs);
-    inc_list.push_back("clang-builtin-cpp.hpp");
-    break;
-  case ClangToDotTranslator::CUDA:
-    inc_dirs_list.insert(inc_dirs_list.begin(), cxx_config_include_dirs.begin(),
-                         cxx_config_include_dirs.end());
-    append_unique_dirs(inc_dirs_list, c_config_include_dirs);
-    inc_list.push_back("clang-builtin-cuda.hpp");
-    break;
-  case ClangToDotTranslator::OPENCL:
-    //          inc_dirs_list.insert(inc_dirs_list.begin(),
-    //          c_config_include_dirs.begin(), c_config_include_dirs.end());
-    // FIXME get the path right
-    inc_list.push_back("clang-builtin-opencl.h");
-    break;
-  case ClangToDotTranslator::OBJC: {
-    // DQ (10/23/2020): Added error message for Objective C language not
-    // supported in ROSE.
-    printf("Objective C langauge support is not available in ROSE \n");
-    ROSE_ABORT();
-  }
-  default: {
-    printf("Default reached in switch(language) support \n");
-    ROSE_ABORT();
-  }
-  }
-
-  const size_t estimated_argc =
-      define_list.size() + inc_dirs_list.size() + inc_list.size();
-  std::vector<std::string> args_storage;
-  args_storage.reserve(estimated_argc);
-  for (const auto &define : define_list) {
-    args_storage.push_back("-D" + define);
-  }
-  for (const auto &inc_dir : inc_dirs_list) {
-    args_storage.push_back("-I" + inc_dir);
-  }
-  for (const auto &inc : inc_list) {
-    args_storage.push_back("-include" + inc);
-  }
-
-  std::vector<const char *> args;
-  args.reserve(args_storage.size());
-  for (const auto &arg : args_storage) {
-    args.push_back(arg.c_str());
-  }
-#if DEBUG_ARGS
-  for (size_t index = 0; index < args.size(); ++index) {
-    std::cerr << "args[" << index << "] = " << args[index] << std::endl;
-  }
-#endif
-
-  // 2 - Create a compiler instance
-
-  llvm::IntrusiveRefCntPtr<llvm::vfs::FileSystem> vfs =
-      llvm::vfs::createPhysicalFileSystem();
-  auto diag_opts = std::make_shared<clang::DiagnosticOptions>();
-  auto compiler_instance = std::make_unique<clang::CompilerInstance>();
-
-  // Create diagnostics with instance-specific filesystem (avoid global
-  // singleton lifetime issues).
-  auto diag_printer =
-      std::make_unique<clang::TextDiagnosticPrinter>(llvm::errs(), *diag_opts);
-  compiler_instance->setDiagnostics(clang::CompilerInstance::createDiagnostics(
-      *vfs, *diag_opts, diag_printer.release(), true));
-
-  // Parse command-line arguments to populate invocation (including
-  // FileSystemOptions like -working-directory, -sysroot)
-  llvm::ArrayRef<const char *> argsArrayRef(args.data(), args.size());
-  clang::CompilerInvocation::CreateFromArgs(
-      compiler_instance->getInvocation(), argsArrayRef,
-      compiler_instance->getDiagnostics());
-  clang::TargetOptions &target_opts =
-      compiler_instance->getInvocation().getTargetOpts();
-  ensureX86BaselineTargetFeatures(target_opts);
-
-  // Now create file manager with FileSystemOptions from the parsed invocation
-  compiler_instance->createFileManager();
-
-  clang::LangOptions &lang_opts = compiler_instance->getLangOpts();
-  llvm::Triple target_triple(target_opts.Triple);
-  std::vector<std::string> lang_specific_includes;
-  clang::LangStandard::Kind requested_std = lang_opts.LangStd;
-  clang::LangStandard std_info =
-      clang::LangStandard::getLangStandardForKind(requested_std);
-  clang::Language clang_lang = clang::Language::C;
-  bool enable_cuda = false;
-  bool enable_opencl = false;
-
-  switch (language) {
-  case ClangToDotTranslator::C:
-    if (!(std_info.isC99() || std_info.isC11() || std_info.isC17() ||
-          std_info.isC23())) {
-      requested_std = clang::LangStandard::lang_gnu17;
-    }
-    clang_lang = clang::Language::C;
-    break;
-  case ClangToDotTranslator::CPLUSPLUS:
-    if (!std_info.isCPlusPlus()) {
-      requested_std = clang::LangStandard::lang_gnucxx17;
-    }
-    clang_lang = clang::Language::CXX;
-    break;
-  case ClangToDotTranslator::CUDA:
-    if (!std_info.isCPlusPlus()) {
-      requested_std = clang::LangStandard::lang_gnucxx17;
-    }
-    clang_lang = clang::Language::CUDA;
-    enable_cuda = true;
-    break;
-  case ClangToDotTranslator::OPENCL:
-    if (!std_info.isOpenCL()) {
-      requested_std = clang::LangStandard::lang_opencl30;
-    }
-    clang_lang = clang::Language::OpenCL;
-    enable_opencl = true;
-    break;
-  case ClangToDotTranslator::OBJC:
-    ROSE_ASSERT(!"Objective-C is not supported by ROSE Compiler.");
-  default:
-    ROSE_ABORT();
-  }
-
-  clang::InputKind input_kind(clang_lang);
-  clang::FrontendOptions &fe_opts =
-      compiler_instance->getInvocation().getFrontendOpts();
-  fe_opts.Inputs.clear();
-  fe_opts.Inputs.emplace_back(input_file, input_kind);
-
-  clang::LangOptions::setLangDefaults(lang_opts, clang_lang, target_triple,
-                                      lang_specific_includes, requested_std);
-
-  if (enable_cuda) {
-    lang_opts.CUDA = 1;
-  }
-  if (enable_opencl) {
-    lang_opts.OpenCL = 1;
-  }
-
-  clang::PreprocessorOptions &pp_opts =
-      compiler_instance->getInvocation().getPreprocessorOpts();
-  if (!lang_specific_includes.empty()) {
-    pp_opts.Includes.insert(pp_opts.Includes.end(),
-                            lang_specific_includes.begin(),
-                            lang_specific_includes.end());
-  }
-
-  // LLVM requires reference
-  clang::TargetInfo *target_info = clang::TargetInfo::CreateTargetInfo(
-      compiler_instance->getDiagnostics(),
-      compiler_instance->getInvocation().getTargetOpts());
-  compiler_instance->setTarget(target_info);
-
-  compiler_instance->createSourceManager();
-
-  // getFileRef returns Expected<FileEntryRef> instead of ErrorOr
-  llvm::Expected<clang::FileEntryRef> ret =
-      compiler_instance->getFileManager().getFileRef(input_file);
-  if (!ret) {
-    llvm::errs() << "Error opening file: " << input_file << "\n";
-    ROSE_ABORT();
-  }
-  clang::FileEntryRef input_file_entry = *ret;
-  // createFileID takes FileEntryRef instead of const FileEntry*
-  clang::FileID mainFileID = compiler_instance->getSourceManager().createFileID(
-      input_file_entry, clang::SourceLocation(), clang::SrcMgr::C_User);
-
-  compiler_instance->getSourceManager().setMainFileID(mainFileID);
-
-  if (!compiler_instance->hasPreprocessor())
-    compiler_instance->createPreprocessor(clang::TU_Complete);
-
-  if (!compiler_instance->hasASTContext())
-    compiler_instance->createASTContext();
-
-  auto translator =
-      std::make_unique<ClangToDotTranslator>(compiler_instance.get(), language);
-  ClangToDotTranslator *translator_ptr = translator.get();
-  compiler_instance->setASTConsumer(std::move(translator));
-
-  if (!compiler_instance->hasSema())
-    compiler_instance->createSema(clang::TU_Complete, NULL);
-
-  ROSE_ASSERT(compiler_instance->hasDiagnostics());
-  ROSE_ASSERT(compiler_instance->hasTarget());
-  ROSE_ASSERT(compiler_instance->hasFileManager());
-  ROSE_ASSERT(compiler_instance->hasSourceManager());
-  ROSE_ASSERT(compiler_instance->hasPreprocessor());
-  ROSE_ASSERT(compiler_instance->hasASTContext());
-  ROSE_ASSERT(compiler_instance->hasSema());
-
-  // 3 - Translate
-
-  // printf ("\nCalling clang::ParseAST() (generate Dot file of Clang AST) \n");
-
-  compiler_instance->getDiagnosticClient().BeginSourceFile(
-      compiler_instance->getLangOpts(),
-      &(compiler_instance->getPreprocessor()));
-  clang::ParseAST(compiler_instance->getPreprocessor(), translator_ptr,
-                  compiler_instance->getASTContext());
-  compiler_instance->getDiagnosticClient().EndSourceFile();
-
-  // printf ("\nDONE: Calling clang::ParseAST() (generate Dot file of Clang AST)
-  // \n\n");
-
-  // 4 - Generate Graphviz
-
-  // printf ("Calling translator.toDot(out); to call the DOT graph generator
-  // \n");
-
-  translator_ptr->toDot(file);
-
-  // printf ("DONE: Calling translator.toDot(out); to call the DOT graph
-  // generator \n");
-
-  return 0;
-}
-
-// void ClangToDot::toDot(std::ostream & out) const
-void ClangToDotTranslator::toDot(std::ostream &out) const {
-  out << "digraph {" << std::endl;
-
-  std::map<std::string, NodeDescriptor>::const_iterator it_node;
-  for (it_node = p_node_desc.begin(); it_node != p_node_desc.end(); it_node++)
-    it_node->second.toDot(out);
-
-  out << "}" << std::endl;
-}
-
-ClangToDotTranslator::ClangToDotTranslator(
-    clang::CompilerInstance *compiler_instance, Language language_)
-    : clang::ASTConsumer(), p_compiler_instance(compiler_instance),
-      p_decl_translation_map(), p_stmt_translation_map(),
-      p_type_translation_map(), p_node_desc(),
-      // DQ (11/3/2020): Added data member.
-      p_sage_preprocessor_recorder(
-          std::make_unique<ClangToDotPreprocessorRecord>(
-              &(p_compiler_instance->getSourceManager()))),
-      language(language_), ident_cnt(0) {}
-
-ClangToDotTranslator::~ClangToDotTranslator() {}
-
-std::string ClangToDotTranslator::genNextIdent() {
-  std::ostringstream oss;
-  oss << "ident" << ident_cnt++;
-  return oss.str();
-}
-
-/* Overload of ASTConsumer::HandleTranslationUnit, it is the "entry point" */
-
-void ClangToDotTranslator::HandleTranslationUnit(
-    clang::ASTContext &ast_context) {
-
-  Traverse(ast_context.getTranslationUnitDecl());
-}
-
-/* Preprocessor Stack */
-
-std::pair<Sg_File_Info *, PreprocessingInfo *>
-ClangToDotTranslator::preprocessor_top() {
-  return p_sage_preprocessor_recorder->top();
-}
-bool ClangToDotTranslator::preprocessor_pop() {
-  return p_sage_preprocessor_recorder->pop();
-}
-
-// struct NextPreprocessorToInsert
-
-ClangToDotNextPreprocessorToInsert::ClangToDotNextPreprocessorToInsert(
-    ClangToDotTranslator &translator_)
-    : cursor(NULL), candidat(NULL), next_to_insert(NULL),
-      translator(translator_) {}
-
-ClangToDotNextPreprocessorToInsert *ClangToDotNextPreprocessorToInsert::next() {
-  if (!translator.preprocessor_pop())
-    return NULL;
-
-  ClangToDotNextPreprocessorToInsert *res =
-      new ClangToDotNextPreprocessorToInsert(translator);
-
-  std::pair<Sg_File_Info *, PreprocessingInfo *> next =
-      translator.preprocessor_top();
-  res->cursor = next.first;
-  res->next_to_insert = next.second;
-  res->candidat = candidat;
-  return res;
-}
-
-// class
-
-ClangToDotNextPreprocessorToInsert *
-ClangToDotPreprocessorInserter::evaluateInheritedAttribute(
-    SgNode *astNode, ClangToDotNextPreprocessorToInsert *inheritedValue) {
-  SgLocatedNode *loc_node = isSgLocatedNode(astNode);
-  if (loc_node == NULL)
-    return inheritedValue;
-
-  Sg_File_Info *current_pos = loc_node->get_startOfConstruct();
-
-  bool passed_cursor = *current_pos > *(inheritedValue->cursor);
-
-  if (passed_cursor) {
-    // TODO insert on inheritedValue->candidat
-    ClangToDotNextPreprocessorToInsert *next_value = inheritedValue->next();
-    if (next_value != NULL) {
-      owned_inherited_.emplace_back(next_value);
-    }
-    return next_value;
-  }
-  return inheritedValue;
-}
-
-// class SagePreprocessorRecord
-
-ClangToDotPreprocessorRecord::ClangToDotPreprocessorRecord(
-    clang::SourceManager *source_manager)
-    : p_source_manager(source_manager), p_preprocessor_record_list() {}
-
-void ClangToDotPreprocessorRecord::InclusionDirective(
-    clang::SourceLocation HashLoc, const clang::Token &IncludeTok,
-    llvm::StringRef FileName, bool IsAngled, const clang::FileEntry *File,
-    clang::SourceLocation EndLoc, llvm::StringRef SearchPath,
-    llvm::StringRef RelativePath) {
-  std::cerr << "InclusionDirective" << std::endl;
-
-  bool inv_begin_line;
-  bool inv_begin_col;
-
-  unsigned ls =
-      p_source_manager->getSpellingLineNumber(HashLoc, &inv_begin_line);
-  unsigned cs =
-      p_source_manager->getSpellingColumnNumber(HashLoc, &inv_begin_col);
-
-  // FileEntry uses tryGetRealPathName() instead of getName()
-  std::string file = "";
-  const clang::FileEntry *fileEntry =
-      p_source_manager->getFileEntryForID(p_source_manager->getFileID(HashLoc));
-  if (fileEntry) {
-    file = fileEntry->tryGetRealPathName().str();
-  }
-
-  std::cerr << "    In file  : " << file << std::endl;
-  std::cerr << "    From     : " << ls << ":" << cs << std::endl;
-  std::cerr << "    Included : " << FileName.str() << std::endl;
-  std::cerr << "    Is angled: " << (IsAngled ? "T" : "F") << std::endl;
-
-  Sg_File_Info *file_info = new Sg_File_Info(file, ls, cs);
-  PreprocessingInfo *preproc_info = new PreprocessingInfo(
-      PreprocessingInfo::CpreprocessorIncludeDeclaration, FileName.str(), file,
-      ls, cs, 0, PreprocessingInfo::before);
-
-  p_preprocessor_record_list.push_back(
-      std::pair<Sg_File_Info *, PreprocessingInfo *>(file_info, preproc_info));
-}
-
-void ClangToDotPreprocessorRecord::EndOfMainFile() {
-  std::cerr << "EndOfMainFile" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Ident(clang::SourceLocation Loc,
-                                         const std::string &str) {
-  std::cerr << "Ident" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::PragmaComment(
-    clang::SourceLocation Loc, const clang::IdentifierInfo *Kind,
-    const std::string &Str) {
-  std::cerr << "PragmaComment" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::PragmaMessage(clang::SourceLocation Loc,
-                                                 llvm::StringRef Str) {
-  std::cerr << "PragmaMessage" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::PragmaDiagnosticPush(
-    clang::SourceLocation Loc, llvm::StringRef Namespace) {
-  std::cerr << "PragmaDiagnosticPush" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::PragmaDiagnosticPop(
-    clang::SourceLocation Loc, llvm::StringRef Namespace) {
-  std::cerr << "PragmaDiagnosticPop" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::PragmaDiagnostic(
-    clang::SourceLocation Loc, llvm::StringRef Namespace,
-    clang::diag::Severity Severity, llvm::StringRef Str) {
-  std::cerr << "PragmaDiagnostic" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::MacroExpands(
-    const clang::Token &MacroNameTok, const clang::MacroInfo *MI,
-    clang::SourceRange Range) {
-  std::cerr << "MacroExpands" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::MacroDefined(
-    const clang::Token &MacroNameTok, const clang::MacroInfo *MI) {
-  std::cerr << "" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::MacroUndefined(
-    const clang::Token &MacroNameTok, const clang::MacroInfo *MI) {
-  std::cerr << "MacroUndefined" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Defined(const clang::Token &MacroNameTok) {
-  std::cerr << "Defined" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::SourceRangeSkipped(
-    clang::SourceRange Range) {
-  std::cerr << "SourceRangeSkipped" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::If(clang::SourceRange Range) {
-  std::cerr << "If" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Elif(clang::SourceRange Range) {
-  std::cerr << "Elif" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Ifdef(const clang::Token &MacroNameTok) {
-  std::cerr << "Ifdef" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Ifndef(const clang::Token &MacroNameTok) {
-  std::cerr << "Ifndef" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Else() {
-  std::cerr << "Else" << std::endl;
-  ROSE_ABORT();
-}
-
-void ClangToDotPreprocessorRecord::Endif() {
-  std::cerr << "Endif" << std::endl;
-  ROSE_ABORT();
-}
-
-std::pair<Sg_File_Info *, PreprocessingInfo *>
-ClangToDotPreprocessorRecord::top() {
-  return p_preprocessor_record_list.front();
-}
-
-bool ClangToDotPreprocessorRecord::pop() {
-  p_preprocessor_record_list.erase(p_preprocessor_record_list.begin());
-  return !p_preprocessor_record_list.empty();
-}
-
-ClangToDotTranslator::NodeDescriptor::NodeDescriptor(std::string ident_)
-    : ident(ident_), kind_hierarchy(), successors(), attributes() {}
-
-// DQ (11/27/2020): Adding support from Tristan's ClangToDot version.
-// void ClangToDot::NodeDescriptor::toDot(std::ostream & out) const
-void ClangToDotTranslator::NodeDescriptor::toDot(std::ostream &out) const {
-  std::vector<std::string>::const_iterator str_it;
-  std::vector<std::pair<std::string, std::string>>::const_iterator pair_str_it;
-
-  out << "\t" << ident << "[";
-  out << "label=\"";
-  out << kind_hierarchy.front() << "\\n";
-
-  // DQ  (11/27/2020): Note that if kind_hierarchy is empty, this is a runtime
-  // error.
-  for (str_it = kind_hierarchy.begin() + 1; str_it != kind_hierarchy.end();
-       str_it++)
-    out << "::" << *str_it;
-  out << "\\n\\n";
-  for (pair_str_it = attributes.begin(); pair_str_it != attributes.end();
-       pair_str_it++)
-    out << pair_str_it->first << " : " << pair_str_it->second << "\\n";
-  out << "\"";
-  // TODO color from node type (NIY)
-  out << "];" << std::endl;
-
-  for (pair_str_it = successors.begin(); pair_str_it != successors.end();
-       pair_str_it++) {
-    if (pair_str_it->second != "")
-      out << "\t\t" << ident << " -> " << pair_str_it->second << "[label=\""
-          << pair_str_it->first << "\"];" << std::endl;
-  }
-
-  out << std::endl;
-}
-
-void ClangToDotTranslator::VisitTemplateArgument(
-    const clang::TemplateArgument &template_argument,
-    ClangToDotTranslator::NodeDescriptor &node_desc, std::string prefix) {
-  std::ostringstream oss;
-  oss << prefix;
-  switch (template_argument.getKind()) {
-  case clang::TemplateArgument::Null:
-    oss << " null";
-    node_desc.attributes.push_back(
-        std::pair<std::string, std::string>(oss.str(), ""));
-    break;
-  case clang::TemplateArgument::Type:
-    oss << " type";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str(), Traverse(template_argument.getAsType().getTypePtr())));
-    break;
-  case clang::TemplateArgument::Declaration:
-    oss << " declaration";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str(), Traverse(template_argument.getAsDecl())));
-    break;
-  case clang::TemplateArgument::NullPtr:
-    oss << " null_ptr";
-    node_desc.attributes.push_back(
-        std::pair<std::string, std::string>(oss.str(), ""));
-    break;
-  case clang::TemplateArgument::Integral:
-    oss << " integral";
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateArgument::StructuralValue:
-    oss << " structural_value";
-    node_desc.attributes.push_back(
-        std::pair<std::string, std::string>(oss.str(), ""));
-    break;
-  case clang::TemplateArgument::Template:
-    oss << " template";
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateArgument::TemplateExpansion:
-    oss << " template_expansion";
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateArgument::Expression:
-    oss << " expression";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str(), Traverse(template_argument.getAsExpr())));
-    break;
-  case clang::TemplateArgument::Pack: {
-    clang::TemplateArgument::pack_iterator pack_it;
-    unsigned cnt = 0;
-    for (pack_it = template_argument.pack_begin();
-         pack_it != template_argument.pack_end(); pack_it++) {
-      oss << " pack[" << cnt++ << "]";
-      VisitTemplateArgument(*pack_it, node_desc, oss.str());
-    }
-    break;
-  }
-  }
-}
-
-void ClangToDotTranslator::VisitNestedNameSpecifier(
-    clang::NestedNameSpecifier nested_name_specifier,
-    ClangToDotTranslator::NodeDescriptor &node_desc, std::string prefix) {
-  if (!nested_name_specifier)
-    return;
-
-  ClangToDotTranslator::VisitNestedNameSpecifier(
-      nestedNameSpecifierPrefix(nested_name_specifier), node_desc,
-      prefix + " prefix");
-
-  switch (nested_name_specifier.getKind()) {
-  case clang::NestedNameSpecifier::Kind::Namespace: {
-    const clang::NamespaceBaseDecl *ns =
-        nestedNameSpecifierNamespaceBase(nested_name_specifier);
-    const char *label = llvm::isa<clang::NamespaceAliasDecl>(ns)
-                            ? "namespace_alias"
-                            : "namespace";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " " + label,
-        Traverse(const_cast<clang::NamespaceBaseDecl *>(ns))));
-    break;
-  }
-  case clang::NestedNameSpecifier::Kind::Type: {
-    const char *label =
-        nestedNameSpecifierHasTemplateKeyword(nested_name_specifier)
-            ? "type_specifier_with_template"
-            : "type_specifier";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        prefix + " " + label, Traverse(const_cast<clang::Type *>(
-                                  nested_name_specifier.getAsType()))));
-    break;
-  }
-  case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
-    node_desc.attributes.push_back(
-        std::pair<std::string, std::string>(prefix, "super"));
-    break;
-  case clang::NestedNameSpecifier::Kind::Global:
-    node_desc.attributes.push_back(
-        std::pair<std::string, std::string>(prefix, "global (::)"));
-    break;
-  case clang::NestedNameSpecifier::Kind::Null:
-    break;
-  }
-}
-
-void ClangToDotTranslator::VisitTemplateName(
-    const clang::TemplateName &template_name,
-    ClangToDotTranslator::NodeDescriptor &node_desc, std::string prefix) {
-  std::ostringstream oss;
-  oss << prefix;
-  switch (template_name.getKind()) {
-  case clang::TemplateName::Template:
-    oss << " template";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str(), Traverse(template_name.getAsTemplateDecl())));
-    break;
-  case clang::TemplateName::OverloadedTemplate: {
-    clang::OverloadedTemplateStorage *overloaded_template_storage =
-        template_name.getAsOverloadedTemplate();
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  }
-  case clang::TemplateName::AssumedTemplate:
-    oss << " assumed_template";
-    {
-      std::string name;
-      if (const clang::AssumedTemplateStorage *assumed =
-              template_name.getAsAssumedTemplateName()) {
-        name = assumed->getDeclName().getAsString();
-      }
-      node_desc.attributes.push_back(
-          std::pair<std::string, std::string>(oss.str(), name));
-    }
-    break;
-  case clang::TemplateName::QualifiedTemplate:
-    oss << " qualified_template";
-    VisitNestedNameSpecifier(
-        template_name.getAsQualifiedTemplateName()->getQualifier(), node_desc,
-        oss.str() + "nested_name_specifier");
-    // getDecl() and getTemplateDecl() were removed from
-    // QualifiedTemplateName Use getUnderlyingTemplate() instead
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str() + "declaration",
-        Traverse(template_name.getAsQualifiedTemplateName()
-                     ->getUnderlyingTemplate()
-                     .getAsTemplateDecl())));
-    break;
-  case clang::TemplateName::DependentTemplate:
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateName::SubstTemplateTemplateParm:
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateName::SubstTemplateTemplateParmPack:
-    // assert(DEBUG_TODO == 0); // TODO
-    ROSE_ASSERT(FAIL_TODO == 0); // TODO
-    break;
-  case clang::TemplateName::UsingTemplate:
-    oss << " using_template";
-    node_desc.successors.push_back(std::pair<std::string, std::string>(
-        oss.str(), Traverse(template_name.getAsUsingShadowDecl())));
-    break;
-  case clang::TemplateName::DeducedTemplate:
-    oss << " deduced_template";
-    if (const clang::DeducedTemplateStorage *deduced =
-            template_name.getAsDeducedTemplateName()) {
-      VisitTemplateName(deduced->getUnderlying(), node_desc,
-                        oss.str() + " underlying");
+  std::vector<Frame> stack;
+  size_t nextIdentifier = 0;
+
+  void attachType(clang::QualType type) {
+    auto existing = typeNodes.find(type);
+    if (existing != typeNodes.end()) {
+      output << "  ident" << stack.back().identifier << " -> ident"
+             << existing->second << " [label=\"type\"];\n";
     } else {
-      node_desc.attributes.push_back(
-          std::pair<std::string, std::string>(oss.str(), ""));
+      visitType(type);
     }
-    break;
+  }
+
+public:
+  GraphNodeDumper(const clang::ASTContext &context, std::ostream &output,
+                  std::function<void(clang::QualType)> visitType)
+      : context(context), output(output), visitType(std::move(visitType)) {}
+
+  template <class Callback> void AddChild(Callback callback) {
+    AddChild("", callback);
+  }
+
+  template <class Callback>
+  void AddChild(llvm::StringRef edgeLabel, Callback callback) {
+    const size_t identifier = nextIdentifier++;
+    if (!stack.empty()) {
+      output << "  ident" << stack.back().identifier << " -> ident"
+             << identifier << " [label=";
+      writeDotString(output, edgeLabel);
+      output << "];\n";
+    }
+    stack.push_back({identifier});
+    callback();
+    ROSE_ASSERT(stack.back().identifier == identifier &&
+                stack.back().described);
+    stack.pop_back();
+  }
+
+  template <class Describe> void describe(Describe describeNode) {
+    ROSE_ASSERT(!stack.empty() && !stack.back().described);
+    const size_t identifier = stack.back().identifier;
+    std::string label;
+    llvm::raw_string_ostream stream(label);
+    clang::TextNodeDumper description(stream, context, false);
+    description.AddChild([&] { describeNode(description); });
+    stream.flush();
+    output << "  ident" << identifier << " [label=";
+    writeDotString(output, label);
+    output << "];\n";
+    stack.back().described = true;
+  }
+
+  void ReferenceDecl(const clang::Decl *declaration) {
+    AddChild("specialization", [&] {
+      describe([&](clang::TextNodeDumper &description) {
+        description.dumpBareDeclRef(declaration);
+      });
+    });
+  }
+
+  template <class Node, class... Extra>
+  void Visit(const Node &node, const Extra &...extra) {
+    describe([&](clang::TextNodeDumper &description) {
+      description.Visit(node, extra...);
+    });
+
+    if constexpr (std::is_same_v<Node, const clang::Type *>) {
+      typeNodes.try_emplace(clang::QualType(node, 0), stack.back().identifier);
+    } else if constexpr (std::is_same_v<Node, clang::QualType>) {
+      typeNodes.try_emplace(node, stack.back().identifier);
+    }
+
+    if constexpr (std::is_same_v<Node, const clang::Decl *>) {
+      if (const auto *value = llvm::dyn_cast_or_null<clang::ValueDecl>(node)) {
+        ROSE_ASSERT(!value->getType().isNull());
+        attachType(value->getType());
+      }
+    } else if constexpr (std::is_same_v<Node, const clang::Stmt *>) {
+      if (const auto *expression = llvm::dyn_cast_or_null<clang::Expr>(node)) {
+        // Clang retains syntax-only expressions such as ParenListExpr and
+        // unevaluated strings with a null QualType. Display that typed edge.
+        attachType(expression->getType());
+      }
+    }
+  }
+};
+
+class ClangAstGraph
+    : public clang::ASTNodeTraverser<ClangAstGraph, GraphNodeDumper> {
+  GraphNodeDumper dumper;
+
+public:
+  ClangAstGraph(const clang::ASTContext &context, std::ostream &output)
+      : dumper(context, output, [this](clang::QualType type) { Visit(type); }) {
+  }
+  GraphNodeDumper &doGetNodeDelegate() { return dumper; }
+
+  // Match ASTDumper: a redeclaration references specialization identities;
+  // expanding them again follows friend redeclarations back into their owner.
+  template <class Template>
+  void VisitRedeclarableTemplate(const Template *declaration,
+                                 bool includeExplicitInstantiations) {
+    dumpTemplateParameters(declaration->getTemplateParameters());
+    Visit(declaration->getTemplatedDecl());
+    for (const auto *specialization : declaration->specializations()) {
+      if (!declaration->isCanonicalDecl()) {
+        dumper.ReferenceDecl(specialization);
+        continue;
+      }
+      using Specialization =
+          std::remove_cv_t<std::remove_pointer_t<decltype(specialization)>>;
+      for (const auto *redecl : specialization->redecls()) {
+        const auto *specific = llvm::dyn_cast<Specialization>(redecl);
+        if (specific == nullptr) {
+          dumper.ReferenceDecl(redecl);
+          continue;
+        }
+        const auto kind = specific->getTemplateSpecializationKind();
+        const bool explicitInstantiation =
+            kind == clang::TSK_ExplicitInstantiationDeclaration ||
+            kind == clang::TSK_ExplicitInstantiationDefinition;
+        if (kind == clang::TSK_ExplicitSpecialization ||
+            (explicitInstantiation && !includeExplicitInstantiations)) {
+          dumper.ReferenceDecl(specific);
+        } else {
+          Visit(specific);
+        }
+      }
+    }
+  }
+
+  void VisitClassTemplateDecl(const clang::ClassTemplateDecl *declaration) {
+    VisitRedeclarableTemplate(declaration, false);
+  }
+  void
+  VisitFunctionTemplateDecl(const clang::FunctionTemplateDecl *declaration) {
+    VisitRedeclarableTemplate(declaration, true);
+  }
+  void VisitVarTemplateDecl(const clang::VarTemplateDecl *declaration) {
+    VisitRedeclarableTemplate(declaration, false);
+  }
+};
+} // namespace
+
+void writeClangAstGraph(clang::CompilerInstance &compiler,
+                        const std::string &filename) {
+  ROSE_ASSERT(!compiler.getDiagnostics().hasErrorOccurred());
+  std::ofstream output(filename);
+  if (!output) {
+    llvm::errs() << "Cannot open Clang AST graph: " << filename << "\n";
+    ROSE_ABORT();
+  }
+  output << "digraph {\n";
+  ClangAstGraph graph(compiler.getASTContext(), output);
+  graph.Visit(compiler.getASTContext().getTranslationUnitDecl());
+  output << "}\n";
+  output.close();
+  if (!output) {
+    llvm::errs() << "Cannot write Clang AST graph: " << filename << "\n";
+    ROSE_ABORT();
   }
 }

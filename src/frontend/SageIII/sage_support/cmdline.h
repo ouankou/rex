@@ -10,11 +10,7 @@
 /*-----------------------------------------------------------------------------
  *  Dependencies
  *---------------------------------------------------------------------------*/
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage_support.h"
-// This text comes directly from the LicenseInformation/ROSE_BSD_License.txt
-// file in the source code. */
-extern const char *licenseText;
 
 namespace Rose {
 namespace Cmdline {
@@ -28,40 +24,12 @@ enum {
 
 extern ROSE_DLL_API int verbose;
 
-void makeSysIncludeList(const Rose_STL_Container<string> &dirs,
-                        Rose_STL_Container<string> &result,
-                        bool using_nostdinc_option = false);
-
 //! Convert `-I <path>` to `-I<path>`
-//
-// TOO1 (11/21/2013): Current CLI handling assumes that there is no space
-// between the -I option and its <path> option. That is,
-//
-//      +----------+------------+
-//      | Valid    |  -I<path>  |
-//      +----------+------------+
-//      | Invalid  |  -I <path> |
-//      +----------+------------+
-//
-// Note: Path argument is validated for existence.
-//
 std::vector<std::string>
 NormalizeIncludePathOptions(std::vector<std::string> &argv);
 
-/** Removes "-rose:" options, or transforms them into their associated
- *  compiler options.
- *  Whereas, this ROSE-only option is completely removed:
- *
- *      -rose:verose 3
- */
-void StripRoseOptions(std::vector<std::string> &argv);
-
 namespace Unparser {
 static const std::string option_prefix = "-rose:unparser:";
-
-/** @returns true if the Unparser option requires a user-specified argument.
- */
-bool OptionRequiresArgument(const std::string &option);
 
 void StripRoseOptions(std::vector<std::string> &argv);
 
@@ -74,14 +42,6 @@ void ProcessClobberInputFile(SgProject *project,
 } // namespace Unparser
 
 namespace Fortran {
-static const std::string option_prefix = "-rose:fortran:";
-
-/** @returns true if the Fortran option requires a user-specified argument.
- */
-bool OptionRequiresArgument(const std::string &option);
-
-void StripRoseOptions(std::vector<std::string> &argv);
-
 /** Process all Fortran commandline options.
  */
 void Process(SgProject *project, std::vector<std::string> &argv);
@@ -91,10 +51,6 @@ void ProcessFortranOnly(SgProject *project, std::vector<std::string> &argv);
 } // namespace Fortran
 
 namespace Gnu {
-/** @returns true if the GNU option requires a user-specified argument.
- */
-bool OptionRequiresArgument(const std::string &option);
-
 void Process(SgProject *project, std::vector<std::string> &argv);
 
 // --param

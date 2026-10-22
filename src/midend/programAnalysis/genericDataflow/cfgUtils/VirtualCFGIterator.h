@@ -7,7 +7,6 @@
 #include "DataflowCFG.h"
 
 #include "virtualCFG.h"
-// #include "baseCFGIterator.h"
 
 #include <list>
 
@@ -19,12 +18,9 @@ namespace VirtualCFG {
 
 // Iterates over DataflowNodes in a VirtualCFG, respecting dependences in the
 // graph. Supports both forward and backward iteration.
-class iterator /* : public virtual BaseCFG::iterator*/
-{
-  // protected:
+class iterator {
 public:
   std::list<DataflowNode> remainingNodes;
-  // map<DataflowNode, bool> visited;
   std::set<DataflowNode> visited;
   bool initialized;
 
@@ -67,8 +63,7 @@ public:
 
   // Contains the state of an iterator, allowing iterators to be
   // checkpointed and restarted.
-  class checkpoint /* : public virtual BaseCFG::iterator::checkpoint*/
-  {
+  class checkpoint {
     std::list<DataflowNode> remainingNodes;
     std::set<DataflowNode> visited;
 
@@ -92,8 +87,7 @@ public:
   std::string str(std::string indent = "");
 };
 
-class back_iterator
-    : /*public virtual BaseCFG::backiterator, */ public virtual iterator {
+class back_iterator : public virtual iterator {
 public:
   back_iterator() : iterator() {}
 
@@ -102,34 +96,21 @@ public:
   void operator++(int);
 };
 
-class dataflow
-    : /*public virtual BaseCFG::dataflow, */ public virtual iterator {
+class dataflow : public virtual iterator {
   DataflowNode terminator;
 
 public:
-  // dataflow(): iterator() {}
-
   dataflow(const DataflowNode &terminator_arg);
 
-  // dataflow(const DataflowNode &start) : iterator(start) {}
   dataflow(const DataflowNode &start, const DataflowNode &terminator_arg);
 
   void init(const DataflowNode &start_arg, const DataflowNode &terminator_arg);
 
-  // Initializes this iterator's terminator node
-  /*void setTerminator(const DataflowNode &terminator) {
-          initialized = true;
-          this->terminator = terminator;
-  }*/
-
   void add(const DataflowNode &next);
-
-  // void operator ++ (int);
 
   // Contains the state of an dataflow iterator, allowing dataflow
   // iterators to be checkpointed and restarted.
-  class checkpoint /* : public virtual BaseCFG::dataflow::checkpoint*/
-  {
+  class checkpoint {
     iterator::checkpoint iChkpt;
     DataflowNode terminator;
 
@@ -153,15 +134,10 @@ public:
   std::string str(std::string indent = "");
 };
 
-class back_dataflow
-    : /*public virtual BaseCFG::back_dataflow,*/ public virtual dataflow {
+class back_dataflow : public virtual dataflow {
 public:
-  // back_dataflow(): back_iterator() {}
-
   back_dataflow(const DataflowNode &terminator_arg)
       : dataflow(terminator_arg) {}
-
-  // back_dataflow(const DataflowNode &end) : iterator(end) {}
 
   back_dataflow(const DataflowNode &end, const DataflowNode &terminator_arg);
 

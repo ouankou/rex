@@ -4,29 +4,9 @@
 // MK: These header files contains macro definitions to be used
 // by the setDataPrototype() member function of class AstNodeClass
 
-// define HL_GRAMMARS if you want all rules added (experimental) to allow
-// X/Non_X-rules to be added to the abstract C++ grammar.
-// #define HL_GRAMMARS
-
-// ifndef USE_ROSE
-#ifndef ROSE_H
-// We don't want the legacy frontend front-end to see this (since it supports
-// bool properly) typedef int Boolean;
-#endif
-
-#ifndef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
-#define HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
-#endif
-
 #include "ROSE_ABORT.h"
 
 #include "ROSE_ASSERT.h"
-
-#define MAX_NUMBER_OF_TERMINALS 50
-#define MAX_NUMBER_OF_NONTERMINALS 50
-
-// Support for debugging a bug in Insure++
-#define INSURE_BUG false
 
 // Macro used to define terminals we want to object to be built on the heap so
 // that it will not go out of scope, but we want a reference to the object

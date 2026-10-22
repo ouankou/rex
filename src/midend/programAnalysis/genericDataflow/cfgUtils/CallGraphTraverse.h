@@ -9,33 +9,17 @@
 #include "ROSE_ASSERT.h"
 
 #include <list>
-
-#include <map>
-
 #include <set>
-
 #include <string>
-
-#include <utility>
-
-// namespace CallGraph
-//{
 
 bool call_graph_traversal_includes_function_decl(SgFunctionDeclaration *decl);
 
-/* !!! NOTE: TraverseCallGraphDataflow LIMITED TO NON-RECURSIVE PROGRAMS (I.E.
- * CONTROL FLOW GRAPHS WITH NO CYCLES) !!! */
-
 class Function {
 protected:
-  // SgFunctionDefinition* def;
-  // set<SgFunctionDeclaration*> decls;
   SgFunctionDeclaration *decl;
 
 public:
   Function();
-
-  Function(std::string name);
 
   Function(SgFunctionDeclaration *sample);
 
@@ -47,8 +31,6 @@ public:
 
 public:
   Function(const Function &that);
-
-  Function(const Function *that);
 
   // returns a unique SgFunctionDeclaration* that is the canonical AST node that
   // represents the given function A canonial declaration means a defining
@@ -78,10 +60,6 @@ public:
   // same each time get_declaration is called
   SgFunctionDeclaration *get_declaration() const;
 
-  // returns the file_info of the definition or one of the declarations if there
-  // is no definition
-  Sg_File_Info *get_file_info() const;
-
   // returns the parameters of this function
   SgInitializedNamePtrList get_params() const;
 
@@ -95,15 +73,11 @@ class CGFunction : public Function {
   SgIncidenceDirectedGraph *graph;
 
 public:
-  CGFunction(std::string name, SgIncidenceDirectedGraph *graph);
-
   CGFunction(SgFunctionDeclaration *sample, SgIncidenceDirectedGraph *graph);
 
   CGFunction(SgGraphNode *sample, SgIncidenceDirectedGraph *graph);
 
   CGFunction(const CGFunction &that);
-
-  CGFunction(const CGFunction *that);
 
 protected:
   // initializes the cgNodes set
@@ -126,15 +100,9 @@ public:
   //    level 2: iterate through all in or out edges for each node, return the
   //    source or destination node
   class iterator {
-    // direction in which the iterator is going
-    // SgIncidenceDirectedGraph::EdgeDirection iterDir;
-    // side of an edge that we're going to be following
-    // SgIncidenceDirectedGraph::EdgeDirection edgeDir;
-
     // Direction in which the iterator is going (fw: from callers to callees,
     // bw: from callees to callers)
   public:
-    // typedef enum direction {fw=0, bw=1};
     enum direction { fw = 0, bw = 1 };
 
   protected:
@@ -178,7 +146,6 @@ public:
     // that this iterator refers to, pulling the reference from the given set of
     // CGFunctions
     const CGFunction *getTarget(std::set<CGFunction> &functions) {
-      // printf("getTarget finished=%d\n", finished);
       SgGraphNode *target = (dir == fw ? (*ite)->get_to() : (*ite)->get_from());
       ROSE_ASSERT(isSgFunctionDeclaration(target->get_SgNode()));
       assert(!isSgTemplateFunctionDeclaration(target->get_SgNode()));
@@ -194,17 +161,10 @@ public:
       // Find the CGFunction in functions that matches the target SgGraphNode
       for (std::set<CGFunction>::const_iterator it = functions.begin();
            it != functions.end(); it++) {
-        // printf("    iteration. current: %s isCompilerGenerated=%d, target=%s,
-        // isCompilerGenerated=%d\n", (*it).get_name().str(),
-        // (*it).get_declaration()->get_file_info()->isCompilerGenerated(),
-        // target->functionDeclaration->get_name().str(),
-        // target->functionDeclaration->get_file_info()->isCompilerGenerated());
         //  If the target SgGraphNode can be found in the current CGFunction
         if ((&(*it))->cgNodes.find(target) != (&(*it))->cgNodes.end())
           return &(*it);
       }
-
-      // printf("getTarget returning NULL\n");
 
       // If we can't find it, return NULL
       ROSE_ASSERT(!"Error finding the target function of a call graph edge "
@@ -231,13 +191,11 @@ public:
     // nothing. otherwise, advances the <itn, ite> pair until it does refer to a
     // specific CallGraph node
     void advanceToNextValidPoint() {
-      // printf("Function::iterator::advanceToNextValidPoint()\n");
       //  Loop for as long as ite is not pointing to a valid node and hasn't
       //  reached the end of the node list
       while (1) {
         // If ite is the last incoming/outgoing edge of the current SgGraphNode
         if (ite == edges.end()) {
-          // printf("Function::iterator::advanceToNextValidPoint() while()\n");
           //  Advance to the next SgGraphNode in cgNodes
           itn++;
 
@@ -319,20 +277,9 @@ public:
 class TraverseCallGraph {
 protected:
   SgIncidenceDirectedGraph *graph;
-  // maps each SgFunctionDefinition to its associated SgGraphNodes
-  //   (there may be more than one such node for a given SgFunctionDefinition)
-  // map<SgFunctionDefinition*, std::set<SgGraphNode*> > decl2CFNode;
-
   // The set of functions in this program
   std::set<CGFunction> functions;
 
-  // The number of functions that call each given function
-  // std::map<SgFunctionDefinition*, int> numCallers;
-  std::map<const CGFunction *, int> numCallers;
-
-  // set of all the SgFunctionDefinition for all functions that are not called
-  // from other functions
-  // set<SgFunctionDefinition*> noPred;
   // Set of functions that are not called from other functions.
   // Just contains pointers to the CGFunction objects inside the functions set.
   std::set<const CGFunction *> noPred;
@@ -363,65 +310,6 @@ public:
   virtual ~TraverseCallGraphUnordered();
 };
 
-template <class InheritedAttribute>
-class TraverseCallGraphTopDown : public TraverseCallGraph {
-  class funcRecord {
-  public:
-    // the inherited attributes passed down from callers
-    std::list<InheritedAttribute> fromCallers;
-  };
-
-public:
-  TraverseCallGraphTopDown(SgIncidenceDirectedGraph *graph);
-
-  void traverse();
-
-  virtual InheritedAttribute
-  visit(const CGFunction *func, std::list<InheritedAttribute> &fromCallers) = 0;
-
-  virtual InheritedAttribute defaultAttrVal() {
-    InheritedAttribute val;
-    return val;
-  }
-
-protected:
-  void traverse_rec(
-      const CGFunction *fd,
-      std::map<const CGFunction *, funcRecord> &visitRecords,
-      std::set<std::pair<const CGFunction *, const CGFunction *>> &touchedEdges,
-      InheritedAttribute &fromCaller);
-
-public:
-  virtual ~TraverseCallGraphTopDown();
-};
-
-template <class SynthesizedAttribute>
-class TraverseCallGraphBottomUp : public TraverseCallGraph {
-public:
-  TraverseCallGraphBottomUp(SgIncidenceDirectedGraph *graph);
-
-  void traverse();
-
-  virtual SynthesizedAttribute
-  visit(const CGFunction *func,
-        std::list<SynthesizedAttribute> fromCallees) = 0;
-
-  virtual SynthesizedAttribute defaultAttrVal() {
-    SynthesizedAttribute val;
-    return val;
-  }
-
-protected:
-  SynthesizedAttribute
-  traverse_rec(const CGFunction *fd,
-               std::map<const CGFunction *, SynthesizedAttribute> &visitRecords,
-               std::set<std::pair<const CGFunction *, const CGFunction *>>
-                   &touchedEdges);
-
-public:
-  virtual ~TraverseCallGraphBottomUp();
-};
-
 // CallGraph traversal useful for inter-procedural dataflow analyses because it
 // starts at the functions that are not called by any other function and allows
 // such analyses to keep adding more nodes depending on how function dataflow
@@ -442,72 +330,6 @@ public:
 
   virtual ~TraverseCallGraphDataflow();
 };
-
-/*********************************************************
- ***               numCallersAnnotator                 ***
- *** Annotates every function's SgFunctionDefinition   ***
- *** node with a numCallersAttribute that contains the ***
- *** number of functions that call the given function. ***
- *********************************************************/
-
-// The attribute that is associated with each function's declaration to
-// record its number of callers.
-class numCallersAttribute : public AstAttribute {
-  int numCallers;
-
-public:
-  numCallersAttribute() { numCallers = 0; }
-
-  numCallersAttribute(int numCallers) { this->numCallers = numCallers; }
-
-  numCallersAttribute(numCallersAttribute &that) {
-    this->numCallers = that.numCallers;
-  }
-
-  int getNumCallers() { return numCallers; }
-};
-
-// Uses the numCallersAnnotator class to annotate every function's
-// SgFunctionDefinition node with a numCallersAttribute that contains the number
-// of functions that call the given function.
-void annotateNumCallers(SgIncidenceDirectedGraph *graph);
-
-// Returns the number of functions that call this function or 0 if the function
-// is compiler-generated.
-int getNumCallers(const Function *fDecl);
-
-/*class funcCallersAnalysis
-{
-        bool analyzed=false;
-
-        // maps each function to the list of its callers, each caller record is
-a pair, containing the SgFunctionCallExp
-        // that is the function call and the function that this call is inside
-of std::map<Function, std::list<std::pair<SgFunctionCallExp*, Function> > >
-callersMap;
-
-        void analyze()
-        {
-                if(!analyzed)
-                {
-
-                }
-                analyzed = true;
-        }
-
-        public:
-        void resetAnalysis()
-        {
-                analyzed = false;
-        }
-
-
-        std::list<pair<SgFunctionCallExp*, Function> > getFuncCallers()
-        {
-
-        }
-}*/
-//}
 
 #endif
 #endif

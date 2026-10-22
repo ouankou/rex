@@ -39,6 +39,8 @@ SgInitializedName *findInitializedName(SgProject *project, const SgName &name) {
 
 SgInitializedName *findBasePreinitializer(SgProject *project) {
   SgInitializedName *result = nullptr;
+  SgCtorInitializerList *owner = nullptr;
+  size_t implicitBases = 0;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgInitializedName)) {
     SgInitializedName *initializedName = isSgInitializedName(node);
     if (initializedName == nullptr ||
@@ -46,9 +48,22 @@ SgInitializedName *findBasePreinitializer(SgProject *project) {
             SgInitializedName::e_nonvirtual_base_class) {
       continue;
     }
-    ROSE_ASSERT(result == nullptr);
+    auto *list = isSgCtorInitializerList(initializedName->get_parent());
+    ROSE_ASSERT(list != nullptr);
+    if (owner == nullptr)
+      owner = list;
+    ROSE_ASSERT(owner == list);
+    const auto order = initializedName->get_ctor_initializer_source_order();
+    if (!order.has_value()) {
+      ROSE_ASSERT(initializedName->get_name() == "Base");
+      ROSE_ASSERT(initializedName->get_file_info()->isCompilerGenerated());
+      ++implicitBases;
+      continue;
+    }
+    ROSE_ASSERT(*order == 0 && result == nullptr);
     result = initializedName;
   }
+  ROSE_ASSERT(implicitBases == 1);
   return result;
 }
 
@@ -117,6 +132,9 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(SageInterface::isMemberFunctionMemberReference(extentReference));
   ROSE_ASSERT(!SageInterface::isAddressTaken(extentReference));
   ROSE_ASSERT(SageInterface::getEnclosingStatement(extentReference) == nullptr);
+  ROSE_ASSERT(
+      SageInterface::getClassTypeChainForMemberReference(extentReference)
+          .empty());
 
   if (rejectMissingMemberContext) {
     // Construct the exact detached type-use shape that used to be skipped:

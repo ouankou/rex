@@ -4,6 +4,7 @@
 #include "Cxx_Grammar.h"
 
 #include <algorithm>
+#include <array>
 #include <cstddef>
 #include <string>
 
@@ -13,12 +14,112 @@ namespace Detail {
 
 enum class InitModifierContext { InteropInit, DepobjInit, AppendArgs };
 
+inline bool
+validInductionItemFields(SgOmpClause::omp_induction_item_kind_enum kind,
+                         const std::string &label) {
+  switch (kind) {
+  case SgOmpClause::e_omp_induction_item_binding:
+    return !label.empty();
+  case SgOmpClause::e_omp_induction_item_step:
+  case SgOmpClause::e_omp_induction_item_expression:
+    return label.empty();
+  default:
+    return false;
+  }
+}
+
+inline bool
+validApplyTransformationFields(SgOmpClause::omp_apply_transform_kind_enum kind,
+                               const std::string &name, bool has_argument,
+                               bool has_nested) {
+  switch (kind) {
+  case SgOmpClause::e_omp_apply_transform_unroll:
+  case SgOmpClause::e_omp_apply_transform_unroll_full:
+  case SgOmpClause::e_omp_apply_transform_reverse:
+  case SgOmpClause::e_omp_apply_transform_interchange:
+  case SgOmpClause::e_omp_apply_transform_nothing:
+    return name.empty() && !has_argument && !has_nested;
+  case SgOmpClause::e_omp_apply_transform_unroll_partial:
+  case SgOmpClause::e_omp_apply_transform_tile_sizes:
+    return name.empty() && has_argument && !has_nested;
+  case SgOmpClause::e_omp_apply_transform_nested_apply:
+    return name.empty() && !has_argument && has_nested;
+  case SgOmpClause::e_omp_apply_transform_named:
+    return !name.empty() && !has_argument && !has_nested;
+  default:
+    return false;
+  }
+}
+
+inline bool
+validMapDistDataPolicyFields(SgOmpClause::omp_map_dist_data_enum kind,
+                             bool has_expression) {
+  switch (kind) {
+  case SgOmpClause::e_omp_map_dist_data_duplicate:
+    return !has_expression;
+  case SgOmpClause::e_omp_map_dist_data_block:
+  case SgOmpClause::e_omp_map_dist_data_cyclic:
+    return true;
+  default:
+    return false;
+  }
+}
+
+inline bool
+validMapDistDataPolicyPayload(const SgOmpMapDistDataPolicy *policy) {
+  if (policy == nullptr)
+    return false;
+  auto *expression = policy->get_expression();
+  return validMapDistDataPolicyFields(policy->get_policy(),
+                                      expression != nullptr) &&
+         (expression == nullptr || expression->get_parent() == policy);
+}
+
 inline bool modifierValidationFailure(std::string *detail,
                                       const std::string &message) {
   if (detail != nullptr) {
     *detail = message;
   }
   return false;
+}
+
+struct MapModifierFields {
+  bool mapper = false;
+  bool iterator = false;
+};
+
+inline bool validateMapModifiers(
+    const std::array<SgOmpClause::omp_map_modifier_enum, 3> &modifiers,
+    MapModifierFields &fields, std::string *detail) {
+  fields = {};
+  bool saw_unspecified = false;
+  for (size_t i = 0; i != modifiers.size(); ++i) {
+    const auto modifier = modifiers[i];
+    switch (modifier) {
+    case SgOmpClause::e_omp_map_modifier_unspecified:
+      saw_unspecified = true;
+      continue;
+    case SgOmpClause::e_omp_map_modifier_always:
+    case SgOmpClause::e_omp_map_modifier_close:
+    case SgOmpClause::e_omp_map_modifier_present:
+    case SgOmpClause::e_omp_map_modifier_self:
+    case SgOmpClause::e_omp_map_modifier_mapper:
+    case SgOmpClause::e_omp_map_modifier_iterator:
+      break;
+    default:
+      return modifierValidationFailure(detail,
+                                       "map clause has an invalid modifier");
+    }
+    if (saw_unspecified || std::find(modifiers.begin(), modifiers.begin() + i,
+                                     modifier) != modifiers.begin() + i)
+      return modifierValidationFailure(
+          detail, "map modifiers are not a unique contiguous sequence");
+    if (modifier == SgOmpClause::e_omp_map_modifier_mapper)
+      fields.mapper = true;
+    if (modifier == SgOmpClause::e_omp_map_modifier_iterator)
+      fields.iterator = true;
+  }
+  return true;
 }
 
 inline bool isDepinfoModifier(SgOmpClause::omp_init_modifier_kind_enum kind) {
@@ -34,51 +135,58 @@ inline bool isDepinfoModifier(SgOmpClause::omp_init_modifier_kind_enum kind) {
   }
 }
 
-inline bool validateInitModifierPayload(SgOmpInitModifier *modifier,
-                                        SgNode *expected_parent,
-                                        std::string *detail) {
-  if (modifier == nullptr) {
-    return modifierValidationFailure(detail, "modifier is null");
-  }
-  if (modifier->get_parent() != expected_parent) {
-    return modifierValidationFailure(detail,
-                                     "modifier has the wrong exact owner");
-  }
-
+inline bool
+validateInitModifierExpression(SgOmpClause::omp_init_modifier_kind_enum kind,
+                               SgExpression *expression, std::string *detail) {
   const bool expression_modifier =
-      modifier->get_kind() == SgOmpClause::e_omp_init_modifier_prefer_type ||
-      isDepinfoModifier(modifier->get_kind());
+      kind == SgOmpClause::e_omp_init_modifier_prefer_type ||
+      isDepinfoModifier(kind);
   const bool plain_modifier =
-      modifier->get_kind() == SgOmpClause::e_omp_init_modifier_depobj ||
-      modifier->get_kind() == SgOmpClause::e_omp_init_modifier_interop ||
-      modifier->get_kind() == SgOmpClause::e_omp_init_modifier_target ||
-      modifier->get_kind() == SgOmpClause::e_omp_init_modifier_targetsync;
+      kind == SgOmpClause::e_omp_init_modifier_depobj ||
+      kind == SgOmpClause::e_omp_init_modifier_interop ||
+      kind == SgOmpClause::e_omp_init_modifier_target ||
+      kind == SgOmpClause::e_omp_init_modifier_targetsync;
   if (!expression_modifier && !plain_modifier) {
     return modifierValidationFailure(detail, "modifier kind is invalid");
   }
-  if (expression_modifier &&
-      (modifier->get_expression() == nullptr ||
-       modifier->get_expression()->get_parent() != modifier)) {
+  if (expression_modifier && expression == nullptr) {
     return modifierValidationFailure(
         detail, "expression modifier has no exactly owned payload");
   }
-  if (plain_modifier && modifier->get_expression() != nullptr) {
+  if (plain_modifier && expression != nullptr) {
     return modifierValidationFailure(detail, "plain modifier has a payload");
   }
-  if (modifier->get_kind() == SgOmpClause::e_omp_init_modifier_prefer_type) {
-    SgOmpSourceExpression *source =
-        isSgOmpSourceExpression(modifier->get_expression());
+  if (kind == SgOmpClause::e_omp_init_modifier_prefer_type) {
+    SgOmpSourceExpression *source = isSgOmpSourceExpression(expression);
     if (source == nullptr || source->get_spelling().empty()) {
       return modifierValidationFailure(
           detail, "prefer_type has no exact nonempty source payload");
     }
   }
-  if (isDepinfoModifier(modifier->get_kind()) &&
-      !modifier->get_expression()->has_semantic_value_type()) {
+  if (isDepinfoModifier(kind) && !expression->has_semantic_value_type()) {
     return modifierValidationFailure(
         detail, "depinfo modifier has no semantic locator payload");
   }
   return true;
+}
+
+inline bool validateInitModifierPayload(SgOmpInitModifier *modifier,
+                                        SgNode *expected_parent,
+                                        std::string *detail) {
+  if (modifier == nullptr)
+    return modifierValidationFailure(detail, "modifier is null");
+  if (modifier->get_parent() != expected_parent)
+    return modifierValidationFailure(detail,
+                                     "modifier has the wrong exact owner");
+  auto *expression = modifier->get_expression();
+  const auto kind = modifier->get_kind();
+  if (expression != nullptr &&
+      (kind == SgOmpClause::e_omp_init_modifier_prefer_type ||
+       isDepinfoModifier(kind)) &&
+      expression->get_parent() != modifier)
+    return modifierValidationFailure(
+        detail, "expression modifier has no exactly owned payload");
+  return validateInitModifierExpression(kind, expression, detail);
 }
 
 inline bool

@@ -118,7 +118,7 @@ int main() {
   const std::vector<std::string> arguments = {
       "rex_unparser_header_snapshot",
       "-rose:verbose",
-      "0",
+      "1",
       "-rose:skipfinalCompileStep",
       "-rose:unparseHeaderFiles",
       "-rose:unparseHeaderFilesRootFolder",
@@ -176,6 +176,13 @@ int main() {
       !writeFile(untouchedHeader, "#error REX_LATE_UNTOUCHED_HEADER_READ\n")) {
     return 8;
   }
+  const auto movedHeader = inputDirectory / "rex_late_header.h";
+  const auto movedUntouchedHeader = inputDirectory / "rex_late_untouched.h";
+  std::filesystem::rename(header, movedHeader);
+  std::filesystem::rename(untouchedHeader, movedUntouchedHeader);
+  std::filesystem::create_symlink(movedHeader.filename(), header);
+  std::filesystem::create_symlink(movedUntouchedHeader.filename(),
+                                  untouchedHeader);
 
   project->unparse();
 
@@ -222,8 +229,29 @@ int main() {
     }
   }
 
-  return foundHeader && foundUntouchedHeader &&
-                 std::filesystem::is_regular_file(mainOutput)
+  if (!foundHeader || !foundUntouchedHeader ||
+      !std::filesystem::is_regular_file(mainOutput))
+    return 13;
+
+  const auto defaultOutput = root / "_rose_unparsed_headers_";
+  std::filesystem::create_directories(defaultOutput / "preserved");
+  const auto preserved = defaultOutput / "preserved" / "rex_user_data.txt";
+  if (!writeFile(preserved, "preserved user data\n"))
+    return 14;
+  const auto previousDirectory = std::filesystem::current_path();
+  project->set_unparseHeaderFilesRootFolder("");
+  std::filesystem::current_path(root);
+  project->unparse();
+  project->unparse();
+  std::filesystem::current_path(previousDirectory);
+  if (readFile(preserved) != "preserved user data\n") {
+    std::cerr << "default header output erased unrelated user data\n";
+    return 15;
+  }
+  return readFile(defaultOutput / header.filename()) ==
+                     readFile(outputDirectory / header.filename()) &&
+                 readFile(defaultOutput / untouchedHeader.filename()) ==
+                     untouchedHeaderContents
              ? 0
-             : 13;
+             : 16;
 }

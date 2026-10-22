@@ -38,7 +38,6 @@ protected:
 
 private:
   TraversalPtrList::iterator tBegin, tEnd;
-  TraversalPtrList::size_type numberOfTraversals;
 };
 
 class AstCombinedPrePostProcessing : public AstPrePostProcessing {
@@ -71,7 +70,6 @@ protected:
 
 private:
   TraversalPtrList::iterator tBegin, tEnd;
-  TraversalPtrList::size_type numberOfTraversals;
 };
 
 #endif

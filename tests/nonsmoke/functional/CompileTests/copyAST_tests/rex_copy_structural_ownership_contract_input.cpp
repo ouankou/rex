@@ -21,3 +21,25 @@ int rex_copy_catch_owner(int selector) {
 }
 
 int rex_copy_parameter_owner(int lhs, const int *rhs) { return lhs + *rhs; }
+
+template <typename T> struct rex_copy_signature_box {
+  T body;
+};
+
+template <typename T> int rex_copy_signature_apply(T body) { return body(3); }
+
+template <int Value> int rex_copy_signature_constant() { return Value; }
+
+template <typename T>
+int rex_copy_signature_apply_box(rex_copy_signature_box<T> box) {
+  return box.body(3);
+}
+
+int rex_copy_lambda_signature_owner(int offset) {
+  const int value = 4;
+  auto body = [offset](int value) { return value + offset; };
+  rex_copy_signature_box<decltype(body)> box{body};
+  return rex_copy_signature_apply<decltype(body)>(body) +
+         rex_copy_signature_apply_box(box) +
+         rex_copy_signature_constant<value>();
+}

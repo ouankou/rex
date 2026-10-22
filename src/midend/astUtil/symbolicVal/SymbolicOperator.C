@@ -75,7 +75,6 @@ SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,
                 << ") = " << r.toString() << std::endl;
     return r;
   case SYMOP_MAX:
-    return Max(v1, v2);
     r = Max(v1, v2);
     if (DebugOp())
       std::cerr << "Max( " << v1.toString() << " , " << v2.toString()
@@ -109,21 +108,13 @@ SymbolicVal ApplyBinOP(SymOpType t, const SymbolicVal &v1,
     EqualApplicator op;
     r = ApplyBinOP(op, v1, v2);
     if (DebugOp())
-      std::cerr << v1.toString() << " && " << v2.toString() << " = "
+      std::cerr << v1.toString() << " == " << v2.toString() << " = "
                 << r.toString() << std::endl;
     return r;
   }
   default:
     ROSE_ABORT();
   }
-
-  // DQ (12/10/2016): Added return statement, but because this was not
-  // specified, we want to make it an error to preserve the previous semantics.
-  // DQ (12/11/2016): It appears that printf() is not declared here on some
-  // versions of Linux (even RH).
-  std::cerr << "Exiting at a previously undefined function return location. "
-            << std::endl;
-  ROSE_ABORT();
 }
 
 SymbolicVal operator*(const SymbolicVal &v1, const SymbolicVal &v2) {
@@ -333,14 +324,16 @@ protected:
       int tmp = comparetime;
       SymbolicVal diff = v1 - v2;
       comparetime = tmp;
-      if (diff.GetValType() == VAL_CONST) {
-        int diffval = atoi(diff.toString().c_str());
-        if (diffval < 0)
-          result = REL_LT;
-        else if (diffval > 0)
-          result = REL_GT;
-        else
+      int numerator = 0;
+      int denominator = 0;
+      if (diff.isConstInt(numerator, denominator)) {
+        ROSE_ASSERT(denominator != 0);
+        if (numerator == 0)
           result = REL_EQ;
+        else if ((numerator < 0) != (denominator < 0))
+          result = REL_LT;
+        else
+          result = REL_GT;
       } else if (func != 0) {
         int tmp = comparetime;
         SymbolicBound b1 = GetValBound(v1, *func), b2 = GetValBound(v2, *func);
@@ -399,7 +392,7 @@ void ExprTermCompare(const SymbolicExpr &e1, const SymbolicExpr &e2,
   }
 }
 
-unsigned CountSrcRel(Matrix<CompareRel> r, int (*Count)(CompareRel r)) {
+unsigned CountSrcRel(const Matrix<CompareRel> &r, int (*Count)(CompareRel r)) {
   unsigned c1 = 0;
   for (size_t i1 = 0; i1 < r.rows(); ++i1) {
     for (size_t i2 = 0; i2 < r.cols(); ++i2) {
@@ -412,7 +405,7 @@ unsigned CountSrcRel(Matrix<CompareRel> r, int (*Count)(CompareRel r)) {
   return c1;
 }
 
-unsigned CountSinkRel(Matrix<CompareRel> r, int (*Count)(CompareRel r)) {
+unsigned CountSinkRel(const Matrix<CompareRel> &r, int (*Count)(CompareRel r)) {
   unsigned c1 = 0;
   for (size_t i1 = 0; i1 < r.cols(); ++i1) {
     for (size_t i2 = 0; i2 < r.rows(); ++i2) {

@@ -14,6 +14,11 @@ template <typename T> struct RexAstJsonInstantiationOwner {
   }
 };
 
+template <typename T> struct RexAstJsonExplicitOwner {
+  T value;
+};
+extern template struct RexAstJsonExplicitOwner<int>;
+
 int main() {
   RexAstJsonInstantiationOwner<int> left;
   RexAstJsonInstantiationOwner<int> right;

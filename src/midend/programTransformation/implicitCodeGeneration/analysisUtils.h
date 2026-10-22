@@ -2,28 +2,22 @@
 #include "Cxx_Grammar.h"
 #include "ROSE_ASSERT.h"
 
-#include <list>
-
 #include <utility>
+#include <vector>
 
-// typedef std::pair<SgStatementPtrList *, SgStatementPtrList::iterator>
-// stmt_pos;
 struct stmt_pos {
-  stmt_pos(SgStatementPtrList *const &first,
-           const SgStatementPtrList::iterator &second,
-           SgStatement *const &stmtParent)
-      : first(first), second(second), stmtParent(stmtParent) {}
-  SgStatementPtrList
-      *first; // these names are because this object used to be a pair.. FIXME
-  SgStatementPtrList::iterator second;
-  SgStatement *stmtParent;
+  stmt_pos(SgStatementPtrList *statements, SgStatementPtrList::size_type index,
+           SgStatement *owner)
+      : statements(statements), index(index), owner(owner) {}
+  SgStatementPtrList *statements;
+  SgStatementPtrList::size_type index;
+  SgStatement *owner;
 };
 
-typedef std::list<stmt_pos> stmt_pos_list;
+typedef std::vector<stmt_pos> stmt_pos_list;
 stmt_pos findPosition(SgNode *n);
 stmt_pos_list findFollowingPositions(SgInitializedName *in);
 stmt_pos_list findFollowingPositions(SgStatement *stmt);
-stmt_pos_list findPrecedingPositions(SgStatement *stmt);
 
 template <typename T, T *(isT)(SgNode *)>
 inline std::pair<T *, SgNode *> findNearestParentOfType(SgNode *node) {
@@ -39,17 +33,5 @@ inline std::pair<T *, SgNode *> findNearestParentOfType(SgNode *node) {
   }
 }
 
-template <typename ElemType, typename ListType>
-inline typename ListType::iterator findIterator(ListType &list,
-                                                ElemType &elem) {
-  for (typename ListType::iterator i = list.begin(); i != list.end(); ++i) {
-    if (*i == elem) {
-      return i;
-    }
-  }
-  return list.end();
-}
-
 SgStatement *findStatementForExpression(SgExpression *expr);
 std::pair<SgBasicBlock *, SgNode *> findBasicBlockForStmt(SgStatement *stmt);
-SgStatement *findIfStmtForSC(SgExpression *expr);

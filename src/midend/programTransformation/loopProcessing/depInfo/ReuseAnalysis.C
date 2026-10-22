@@ -1,96 +1,137 @@
-
-#include <stdlib.h>
+#include "sage3basic.h"
 
 #include "DepInfoAnal.h"
-
-#include "ROSE_ABORT.h"
 
 #include "ROSE_ASSERT.h"
 
 #include "ReuseAnalysis.h"
 
-int GetConstArrayBound(const AstNodePtr &array, int dim, unsigned defaultSize) {
-  int lb, ub;
-  if (LoopTransformInterface::GetArrayBound(array, dim, lb, ub)) {
-    return (ub - lb + 1);
-  }
-  return defaultSize;
-}
+#include "SymbolicBound.h"
+
+#include <cstdio>
+#include <limits>
 
 class AstRefGetAccessStride : public ProcessAstNode<AstNodePtr> {
-  std::string name;
+  AstNodePtr inductionDeclaration;
   bool Traverse(AstInterface &fa, const AstNodePtr &v,
-                AstInterface::TraversalVisitType t) {
-    std::string name1;
-    if (fa.IsVarRef(v, 0, &name1)) {
-      if (name == name1) {
-        return false;
-      }
-    }
-    return true;
+                AstInterface::TraversalVisitType) override {
+    return !fa.IsSameVarRef(v, inductionDeclaration);
+  }
+
+  int coefficient(AstInterface &fa, SgExpression *index,
+                  const SymbolicVar &induction) {
+    ASSERT_not_null(index);
+    if (ReadAstTraverse(fa, index, *this, AstInterface::PostOrder))
+      return 0;
+    SymbolicBound bound;
+    const SymbolicVal factor = UnwrapVarCond(
+        SymbolicCond(REL_LE, SymbolicValGenerator::GetSymbolicVal(fa, index),
+                     0),
+        induction, bound);
+    int value;
+    if (!factor.isConstInt(value))
+      unsupported(index, "index has no constant affine induction coefficient");
+    return value;
+  }
+
+  [[noreturn]] static void unsupported(SgExpression *expression,
+                                       const char *reason) {
+    fprintf(stderr, "REX_LOCALITY_UNSUPPORTED[physical-stride]: %s: %s\n",
+            expression->class_name().c_str(), reason);
+    ROSE_ABORT();
+  }
+
+  static void addTerm(long long &stride, long long bits, int factor) {
+    const long long magnitude =
+        factor < 0 ? -static_cast<long long>(factor) : factor;
+    const unsigned long long bitMagnitude =
+        bits < 0 ? static_cast<unsigned long long>(-(bits + 1)) + 1
+                 : static_cast<unsigned long long>(bits);
+    const bool negative = (bits < 0) != (factor < 0);
+    const unsigned long long limit =
+        static_cast<unsigned long long>(std::numeric_limits<long long>::max()) +
+        negative;
+    ROSE_ASSERT(magnitude == 0 || bitMagnitude <= limit / magnitude);
+    const long long term = bits * factor;
+    ROSE_ASSERT(term <= 0 ||
+                stride <= std::numeric_limits<long long>::max() - term);
+    ROSE_ASSERT(term >= 0 ||
+                stride >= std::numeric_limits<long long>::min() - term);
+    stride += term;
   }
 
 public:
-  bool SweepArrayDimension(const AstNodePtr &r, std::string ivar, int dim) {
-    AstInterface::AstNodeList subs;
-    if (!LoopTransformInterface::IsArrayAccess(r, 0, &subs))
-      ROSE_ABORT();
-    name = ivar;
-    AstInterface::AstNodeList::iterator listp = subs.begin();
-    for (int i = 0; listp != subs.end() && i < dim; ++listp, ++i)
-      ;
-    assert(listp != subs.end());
-    AstNodePtr sub = *listp;
-    return !ReadAstTraverse(LoopTransformInterface::getAstInterface(), sub,
-                            *this, AstInterface::PreOrder);
-  }
-  unsigned operator()(const AstNodePtr &r, std::string _name,
-                      unsigned arrayBound) {
-    AstNodePtr nameAst;
-    AstInterface::AstNodeList subs;
+  long long operator()(const AstNodePtr &r, const SymbolicVar &induction) {
+    inductionDeclaration = induction.GetVarDeclaration();
+    ASSERT_require(inductionDeclaration != AST_NULL);
     AstInterface &ai = LoopTransformInterface::getAstInterface();
-    if (LoopTransformInterface::IsArrayAccess(r, &nameAst, &subs)) {
-      name = _name;
-      AstNodeType elemtype;
-      if (!ai.IsExpression(r, &elemtype)) {
-        assert(false);
-      }
-      int typesize;
-      ai.GetTypeInfo(elemtype, 0, 0, &typesize);
-
-      unsigned size = 1, rsize = 0;
-
-      AstInterface::AstNodeList::iterator list = subs.begin();
-      for (int dim = 0; list != subs.end(); ++list, ++dim) {
-        AstNodePtr sub = *list;
-        if (!ReadAstTraverse(ai, sub, *this, AstInterface::PreOrder)) {
-          rsize = size;
-        }
-        size *= GetConstArrayBound(nameAst, dim, arrayBound);
-      }
-      return rsize * typesize;
-    } else
+    if (!LoopTransformInterface::IsArrayAccess(r))
       return 0;
+    SgExpression *expression = isSgExpression(r.get_ptr());
+    ASSERT_not_null(expression);
+    if (isSgDotExp(expression) || isSgArrowExp(expression))
+      expression = isSgBinaryOp(expression)->get_lhs_operand();
+    if (!isSgPntrArrRefExp(expression))
+      unsupported(expression, "array abstraction has no typed physical access");
+    long long stride = 0;
+    bool indirect = false;
+    while (true) {
+      ASSERT_not_null(expression);
+      if (auto *cast = isSgCastExp(expression)) {
+        cast->validate_semantic_conversion();
+        switch (cast->get_semantic_conversion_kind()) {
+        case SgCastExp::e_semantic_conversion_NoOp:
+        case SgCastExp::e_semantic_conversion_ArrayToPointerDecay:
+          break;
+        case SgCastExp::e_semantic_conversion_LValueToRValue:
+          if (isSgPointerType(cast->get_type()->stripTypedefsAndModifiers()))
+            indirect = true;
+          break;
+        default:
+          unsupported(cast, "address conversion has no exact stride model");
+        }
+        expression = cast->get_operand();
+        continue;
+      }
+      auto *access = isSgPntrArrRefExp(expression);
+      if (access == nullptr) {
+        if (!ReadAstTraverse(ai, expression, *this, AstInterface::PostOrder))
+          unsupported(expression, "base address depends on the induction");
+        break;
+      }
+      SgExpression *index = access->get_rhs_operand();
+      ASSERT_not_null(index);
+      const auto *list = isSgExprListExp(index);
+      const auto &strides = access->get_subscript_stride_bits();
+      const std::size_t count = list ? list->get_expressions().size() : 1;
+      for (std::size_t axis = 0; axis < count; ++axis) {
+        auto *subscript = list ? list->get_expressions()[axis] : index;
+        if (isSgSubscriptExpression(subscript))
+          unsupported(access, "section requires typed address-set semantics");
+        const int factor = coefficient(ai, subscript, induction);
+        if (factor != 0) {
+          if (indirect)
+            unsupported(access, "varying pointer load has no constant stride");
+          if (strides.size() != count || !strides[axis])
+            unsupported(access, "axis has no constant target bit stride");
+          addTerm(stride, *strides[axis], factor);
+        }
+      }
+      expression = access->get_lhs_operand();
+    }
+    return stride;
   }
 };
 
-bool ReferenceDimension(const AstNodePtr &r, const std::string &ivarname,
-                        int dim) {
-  return AstRefGetAccessStride()(r, ivarname, dim);
-}
-
-int ReferenceStride(const AstNodePtr &r, const std::string &ivarname,
-                    unsigned arrayBound) {
-  return AstRefGetAccessStride()(r, ivarname, arrayBound);
-}
-
-float SelfSpatialReuse(const AstNodePtr &r, const std::string &ivarname,
-                       unsigned linesize, unsigned defaultArrayBound) {
-  int size = AstRefGetAccessStride()(r, ivarname, defaultArrayBound);
-  if (size > 0 && size < (int)linesize)
-    return 1 - size * 1.0 / linesize;
-  else
-    return 0;
+float SelfSpatialReuse(const AstNodePtr &r, const SymbolicVar &induction,
+                       unsigned linesize) {
+  ROSE_ASSERT(linesize > 0);
+  const long long signed_size = AstRefGetAccessStride()(r, induction);
+  const unsigned long long size =
+      signed_size < 0 ? static_cast<unsigned long long>(-(signed_size + 1)) + 1
+                      : static_cast<unsigned long long>(signed_size);
+  const auto lineBits = static_cast<unsigned long long>(linesize) * 8;
+  return size > 0 && size < lineBits ? 1.0f - float(size) / lineBits : 0;
 }
 
 DepType TemporaryReuseRefs(DepInfoConstIterator ep,
@@ -107,9 +148,9 @@ DepType TemporaryReuseRefs(DepInfoConstIterator ep,
       continue;
     reuseType = (DepType)(reuseType | t);
     AstNodePtr src = d.SrcRef(), snk = d.SnkRef();
-    assert(src != AST_NULL && snk != AST_NULL);
+    ROSE_ASSERT(src != AST_NULL && snk != AST_NULL);
     int loop1 = loopmap(src, DEP_SRC), loop2 = loopmap(snk, DEP_SINK);
-    assert(loop1 >= 0 && loop2 >= 0);
+    ROSE_ASSERT(loop1 >= 0 && loop2 >= 0);
     DepRel r = d.Entry(loop1, loop2);
     int a = r.GetMaxAlign();
     if (a <= 0 && (dist == 0 || (*dist) < 0 || a >= -(*dist))) {
@@ -124,25 +165,4 @@ DepType TemporaryReuseRefs(DepInfoConstIterator ep,
   if (dist != 0)
     *dist = mdist;
   return reuseType;
-}
-
-class CollectArrayRef : public CollectObject<AstNodePtr> {
-  CollectObject<AstNodePtr> &collect;
-
-public:
-  bool operator()(const AstNodePtr &cur) {
-    AstNodePtr array;
-    if (LoopTransformInterface::IsArrayAccess(cur, &array)) {
-      collect(cur);
-      return true;
-    }
-    return false;
-  }
-  CollectArrayRef(CollectObject<AstNodePtr> &_collect) : collect(_collect) {}
-};
-
-void ArrayReferences(AstInterface &fa, const AstNodePtr &s,
-                     CollectObject<AstNodePtr> &refCollect) {
-  CollectArrayRef col(refCollect);
-  AnalyzeStmtRefs(fa, s, col, col);
 }

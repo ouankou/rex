@@ -17,8 +17,6 @@ target_compile_features(rex_wasm PRIVATE cxx_std_17)
 target_include_directories(rex_wasm PRIVATE
   "${ROSE_TOP_SRC_DIR}/src/frontend/SageIII/accparser/src")
 target_compile_definitions(rex_wasm PRIVATE
-  "REX_WASM_CLANG_C_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_C_DRIVER}\""
-  "REX_WASM_CLANG_CXX_DRIVER=\"${REX_WASM_VIRTUAL_CLANG_CXX_DRIVER}\""
   "REX_WASM_CLANG_RESOURCE_DIR=\"${REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR}\"")
 
 set_target_properties(rex_wasm PROPERTIES
@@ -31,8 +29,11 @@ set(REX_WASM_PRELOADS
 
 if(NOT REX_WASM_CLANG_RESOURCE_DIR OR
    NOT IS_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}" OR
+   IS_SYMLINK "${REX_WASM_CLANG_RESOURCE_DIR}" OR
    NOT EXISTS "${REX_WASM_CLANG_RESOURCE_DIR}/include/stddef.h" OR
-   NOT EXISTS "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h")
+   IS_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}/include/stddef.h" OR
+   NOT EXISTS "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h" OR
+   IS_DIRECTORY "${REX_WASM_CLANG_RESOURCE_DIR}/include/omp.h")
   message(FATAL_ERROR
     "REX WASM requires the complete staged Clang resource directory: "
     "${REX_WASM_CLANG_RESOURCE_DIR}")
@@ -40,22 +41,9 @@ endif()
 list(APPEND REX_WASM_PRELOADS
   "--preload-file=${REX_WASM_CLANG_RESOURCE_DIR}@${REX_WASM_VIRTUAL_CLANG_RESOURCE_DIR}")
 
-if(REX_WASM_PACKAGE_SYSROOT AND REX_WASM_SYSROOT)
-  set(_rex_wasm_sysroot_preload "${CMAKE_BINARY_DIR}/wasm-resource/sysroot")
-  if(NOT EXISTS "${REX_WASM_SYSROOT}/include")
-    message(FATAL_ERROR "REX_WASM_SYSROOT must contain an include directory: ${REX_WASM_SYSROOT}")
-  endif()
-  if(IS_SYMLINK "${_rex_wasm_sysroot_preload}")
-    file(REMOVE "${_rex_wasm_sysroot_preload}")
-  elseif(EXISTS "${_rex_wasm_sysroot_preload}")
-    file(REMOVE_RECURSE "${_rex_wasm_sysroot_preload}")
-  endif()
-  file(MAKE_DIRECTORY "${_rex_wasm_sysroot_preload}")
-  file(COPY "${REX_WASM_SYSROOT}/include"
-    DESTINATION "${_rex_wasm_sysroot_preload}")
+if(REX_WASM_PACKAGE_SYSROOT)
   list(APPEND REX_WASM_PRELOADS
-    "--preload-file=${_rex_wasm_sysroot_preload}@/emscripten/sysroot")
-  unset(_rex_wasm_sysroot_preload)
+    "--preload-file=${REX_WASM_SYSROOT}/include@/emscripten/sysroot/include")
   target_compile_definitions(rex_wasm PRIVATE REX_WASM_HAS_SYSROOT=1)
 endif()
 

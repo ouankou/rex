@@ -27,7 +27,7 @@ public:
 
   void prepareRootCopyForFixup() override {
     SgTreeCopy::prepareRootCopyForFixup();
-    if (get_copiedNodeMap().erase(hiddenScope_) != 1) {
+    if (eraseCopiedNodePair(hiddenScope_) != 1) {
       std::fprintf(stderr,
                    "REX_TEST_ERROR: internal scope was not copied before "
                    "fixup\n");
@@ -38,6 +38,49 @@ public:
 private:
   const SgScopeStatement *hiddenScope_;
 };
+
+void checkCopyIdentityIndex(const SgCopyHelp &help) {
+  SgCopyHelp::originalNodeMapType expected;
+  for (const auto &mapping : help.get_copiedNodeMap()) {
+    expected[mapping.second].insert(mapping.first);
+  }
+  for (const auto &mapping : expected) {
+    ROSE_ASSERT(help.get_originalNodesForCopy(mapping.first) == mapping.second);
+  }
+}
+
+void checkCopyIdentityUpdates(const SgNode *original, SgNode *other,
+                              SgNode *copy) {
+  SgTreeCopy help;
+  help.insertCopiedNodePair(original, copy);
+  // Insertion preserves a previously published identity.
+  help.insertCopiedNodePair(original, other);
+  ROSE_ASSERT(help.get_copiedNodeMap().at(original) == copy);
+  ROSE_ASSERT(help.get_originalNodesForCopy(other).empty());
+
+  // Canonicalization may merge targets, then rebind a source without changing
+  // the number of forward entries. A size-based reverse cache would go stale.
+  help.assignCopiedNodePair(other, copy);
+  ROSE_ASSERT(help.get_originalNodesForCopy(copy).size() == 2);
+  help.assignCopiedNodePair(original, other);
+  ROSE_ASSERT(help.get_originalNodesForCopy(copy).size() == 1);
+  checkCopyIdentityIndex(help);
+  const size_t erased = help.eraseCopiedNodePair(other);
+  const size_t erasedAgain = help.eraseCopiedNodePair(other);
+  ROSE_ASSERT(erased == 1);
+  ROSE_ASSERT(erasedAgain == 0);
+  ROSE_ASSERT(help.get_originalNodesForCopy(copy).empty());
+
+  // Shared identities and transaction reset must also remove obsolete values.
+  help.assignCopiedNodePair(original, const_cast<SgNode *>(original));
+  ROSE_ASSERT(help.get_originalNodesForCopy(other).empty());
+  checkCopyIdentityIndex(help);
+  help.clearState();
+  ROSE_ASSERT(help.get_copiedNodeMap().empty());
+  ROSE_ASSERT(help.get_originalNodesForCopy(original).empty());
+  help.insertCopiedNodePair(original, copy);
+  checkCopyIdentityIndex(help);
+}
 
 } // namespace
 
@@ -71,6 +114,8 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(copy != nullptr);
     ROSE_ASSERT(copy != target);
     ROSE_ASSERT(copy->get_scope() == externalScope);
+    checkCopyIdentityIndex(copyHelp);
+    checkCopyIdentityUpdates(target, owner, copy);
     return 0;
   }
 

@@ -18,14 +18,15 @@ SgSourceFile *firstSourceFile(SgProject *project) {
   return file;
 }
 
-void verifySuppressedHeaderInlineTag() {
+void verifySuppressedHeaderInlineTag(SgSourceFile *file) {
   SgInitializedName *nestedValue = nullptr;
   VariantVector initializedNameVariants;
   initializedNameVariants.push_back(V_SgInitializedName);
   for (SgNode *node : NodeQuery::queryMemoryPool(initializedNameVariants)) {
     SgInitializedName *candidate = isSgInitializedName(node);
     if (candidate == nullptr ||
-        candidate->get_name() != "rex_suppressed_nested_value") {
+        candidate->get_name() != "rex_suppressed_nested_value" ||
+        SageInterface::getEnclosingFileNode(candidate) != file) {
       continue;
     }
     if (nestedValue != nullptr) {
@@ -73,7 +74,7 @@ int main(int argc, char **argv) {
   project->skipfinalCompileStep(true);
 
   SgSourceFile *file = firstSourceFile(project);
-  verifySuppressedHeaderInlineTag();
+  verifySuppressedHeaderInlineTag(file);
 
   file = Rose::AstJson::roundTripSourceFile(
       file, Rose::AstJson::Checkpoint::PreOmpConstruction);
@@ -81,7 +82,7 @@ int main(int argc, char **argv) {
     throw std::runtime_error(
         "suppressed-header inline-tag AST JSON round trip returned no file");
   }
-  verifySuppressedHeaderInlineTag();
+  verifySuppressedHeaderInlineTag(file);
   AstTests::runAllTests(project);
 
   return backend(project);

@@ -21,106 +21,13 @@ extern "C" {
 #include <stdlib.h> // for abort()
 #include <sys/time.h>
 
-// return the current time stamp in a double floating point number
-extern double xomp_time_stamp(void);
-extern int env_region_instr_val; // save the environment variable value for
-                                 // instrumentation support
-// e.g. export XOMP_REGION_INSTR=0|1
-
-// Runtime library initialization routine
-extern void XOMP_init(int argc, char **argv);
-extern void xomp_init(void);
 extern void xomp_acc_init(void);
-
-// Runtime library termination routine
-extern void XOMP_terminate(int exitcode);
-
-// func: pointer to a function which will be run in parallel
-// data: pointer to a data segment which will be used as the arguments of func
-// ifClauseValue: set to if-clause-expression if if-clause exists, or default
-// is 1. numThreadsSpecified: set to the expression of num_threads clause if the
-// clause exists, or default is 0 file_name:line_no the start source file info
-// about this parallel region, used to pass source level info. to runtime
-extern void XOMP_parallel_start(void (*func)(void *), void *data,
-                                unsigned ifClauseValue,
-                                unsigned numThreadsSpecified, char *file_name,
-                                int line_no);
-extern void XOMP_parallel_end(char *file_name, int line_no);
-
-/* Initialize sections and return the next section id (starting from 0) to be
- * executed by the current thread */
-extern int XOMP_sections_init_next(int section_count);
-
-/* Return the next section id (starting from 0) to be executed by the current
- * thread. Return value <0 means no sections left */
-extern int XOMP_sections_next(void);
-
-/* Called after the current thread is told that all sections are executed. It
- * synchronizes all threads also. */
-extern void XOMP_sections_end(void);
-
-/* Called after the current thread is told that all sections are executed. It
- * does not synchronizes all threads. */
-extern void XOMP_sections_end_nowait(void);
 
 extern void XOMP_task(void (*)(void *), void *, void (*)(void *, void *), long,
                       long, bool, unsigned);
 extern void XOMP_taskwait(void);
 
 // Scheduler helper entry points.
-
-// Default loop scheduling, worksharing without any schedule clause, upper
-// bounds are inclusive.
-extern void XOMP_loop_default(unsigned int lower, unsigned int upper,
-                              unsigned int stride, long *n_lower,
-                              long *n_upper);
-
-//! Optional init functions.
-extern void XOMP_loop_static_init(int lower, int upper, int stride,
-                                  int chunk_size);
-extern void XOMP_loop_dynamic_init(int lower, int upper, int stride,
-                                   int chunk_size);
-extern void XOMP_loop_guided_init(int lower, int upper, int stride,
-                                  int chunk_size);
-extern void XOMP_loop_runtime_init(int lower, int upper, int stride);
-
-//  ordered case
-extern void XOMP_loop_ordered_static_init(int lower, int upper, int stride,
-                                          int chunk_size);
-extern void XOMP_loop_ordered_dynamic_init(int lower, int upper, int stride,
-                                           int chunk_size);
-extern void XOMP_loop_ordered_guided_init(int lower, int upper, int stride,
-                                          int chunk_size);
-extern void XOMP_loop_ordered_runtime_init(int lower, int upper, int stride);
-
-// if (start)
-// (long start, long end, long incr, long chunk_size,long *istart, long *iend)
-//  upper bounds are non-inclusive,
-//  bounds for inclusive loop control will need +/-1 , depending on
-//  incremental/decremental cases
-extern bool XOMP_loop_static_start(long, long, long, long, long *, long *);
-extern bool XOMP_loop_dynamic_start(long, long, long, long, long *, long *);
-extern bool XOMP_loop_guided_start(long, long, long, long, long *, long *);
-extern bool XOMP_loop_runtime_start(long, long, long, long *, long *);
-
-extern bool XOMP_loop_ordered_static_start(long, long, long, long, long *,
-                                           long *);
-extern bool XOMP_loop_ordered_dynamic_start(long, long, long, long, long *,
-                                            long *);
-extern bool XOMP_loop_ordered_guided_start(long, long, long, long, long *,
-                                           long *);
-extern bool XOMP_loop_ordered_runtime_start(long, long, long, long *, long *);
-
-// next
-extern bool XOMP_loop_static_next(long *, long *);
-extern bool XOMP_loop_dynamic_next(long *, long *);
-extern bool XOMP_loop_guided_next(long *, long *);
-extern bool XOMP_loop_runtime_next(long *, long *);
-
-extern bool XOMP_loop_ordered_static_next(long *, long *);
-extern bool XOMP_loop_ordered_dynamic_next(long *, long *);
-extern bool XOMP_loop_ordered_guided_next(long *, long *);
-extern bool XOMP_loop_ordered_runtime_next(long *, long *);
 
 // simplest static even divide a range start:size into several chunks of
 // offset:size pair This can be used to divide up loop or data (array range).
@@ -131,29 +38,7 @@ extern void XOMP_static_even_divide(long start, long orig_size, int chunk_count,
                                     int chunk_id, long *chunk_offset,
                                     long *chunk_size);
 
-//--------------end of  loop functions
-
 extern void XOMP_barrier(void);
-extern void XOMP_critical_start(void **data);
-extern void XOMP_critical_end(void **data);
-extern bool XOMP_single(void);
-extern bool XOMP_master(void);
-
-extern void XOMP_atomic_start(void);
-extern void XOMP_atomic_end(void);
-
-extern void XOMP_loop_end(void);
-extern void XOMP_loop_end_nowait(void);
-// --- end loop functions ---
-// flush without variable list
-extern void XOMP_flush_all(void);
-// omp flush with variable list, flush one by one, given each's start address
-// and size
-extern void XOMP_flush_one(char *startAddress, int nbyte);
-
-// omp ordered directive
-extern void XOMP_ordered_start(void);
-extern void XOMP_ordered_end(void);
 
 //--------------------- extensions to support OpenMP accelerator model
 // experimental implementation------
@@ -201,10 +86,6 @@ extern void *xomp_deviceMalloc(size_t size);
 
 // A host version
 extern void *xomp_hostMalloc(size_t size);
-
-// get the time stamp for now, up to microsecond resolution: 1e-6 , but maybe
-// 1e-4 in practice
-extern double xomp_time_stamp();
 
 // memory copy from src to dest, return the pointer to dest. NULL pointer if
 // anything is wrong
@@ -290,28 +171,6 @@ XOMP_BEYOND_BLOCK_REDUCTION_DECL(float)
 XOMP_BEYOND_BLOCK_REDUCTION_DECL(double)
 
 #undef XOMP_BEYOND_BLOCK_REDUCTION_DECL
-// Liao, 8/29/2013
-// Support round-robin static scheduling of loop iterations running on GPUs
-// (accelerator) Static even scheduling may cause each thread to touch too much
-// data, which stress memory channel. NOT IN USE. We use compiler to generate
-// the variables instead of using a runtime data structure.
-struct XOMP_accelerator_thread {
-  int num;         /* the thread number of this thread in team */
-  int num_thds;    /* current running thread, referenced by children */
-  int in_parallel; /* current thread executes the region in parallel */
-
-  /* used for schedule */
-  int loop_chunk_size;  //*************  this is the chunk size
-  int loop_end;         //*************  equivalent to upper limit, up
-  int loop_sched_index; //*************  lb+chunk_size*tp->num  (num is the
-                        // thread number of this thread in team)
-  int loop_stride; //*************   chunk_size * nthds     /* used for static
-                   // scheduling */
-
-  /* for 'lastprivate' */
-  int is_last;
-};
-
 #define XOMP_MAX_MAPPED_VARS                                                   \
   256 // for simplicity, we use preallocated memory for storing the mapped
       // variable list

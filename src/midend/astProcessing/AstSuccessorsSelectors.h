@@ -20,8 +20,4 @@ private:
   static SgNode *leftSibling(SgNode *node);
 };
 
-// #ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
-//   #include "AstSuccessorsSelectors.C"
-// #endif
-
 #endif

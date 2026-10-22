@@ -4,6 +4,7 @@
  *
  */
 #include "sage3basic.h"
+#include "FortranProcedureBinding.h"
 
 #include "unparser.h"
 
@@ -12,7 +13,10 @@ using namespace Rose;
 
 void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     SgExpression *expr, SgUnparse_Info &info) {
-  // This is the Fortran specific expression code generation
+  auto unparseWrittenRealLiteral = [this](const auto *literal) {
+    ROSE_ASSERT(!literal->get_valueString().empty());
+    curprint(literal->get_valueString());
+  };
 
   switch (expr->variantT()) {
   case V_SgOmpNameExpression: {
@@ -224,6 +228,12 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     break;
 
     // initializers
+  case V_SgFortranDataInitializer: {
+    auto *initializer = isSgFortranDataInitializer(expr);
+    initializer->validate_initializer();
+    unparseDataValues(initializer->get_values(), info);
+    break;
+  }
   case V_SgAggregateInitializer:
     unparseAggrInit(expr, info);
     break;
@@ -257,14 +267,23 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
     unparseNullExpression(expr, info);
     break;
 
-    // DQ (11/24/2007): Support for unparsing the IR node which must be
-    // post-processed into either an array reference or a function call.
-  case V_SgUnknownArrayOrFunctionReference:
-    unparseUnknownArrayOrFunctionReference(expr, info);
-    break;
-
   case V_SgBoolValExp:
     unparseBoolVal(expr, info);
+    break;
+  case V_SgFloat16Val:
+    unparseWrittenRealLiteral(isSgFloat16Val(expr));
+    break;
+  case V_SgBFloat16Val:
+    unparseWrittenRealLiteral(isSgBFloat16Val(expr));
+    break;
+  case V_SgFloat80Val:
+    unparseWrittenRealLiteral(isSgFloat80Val(expr));
+    break;
+  case V_SgFloat128Val:
+    unparseWrittenRealLiteral(isSgFloat128Val(expr));
+    break;
+  case V_SgFortranBOZVal:
+    unparseFortranBOZVal(expr, info);
     break;
   case V_SgLabelRefExp:
     unparseLabelRefExp(expr, info);
@@ -827,7 +846,6 @@ void FortranCodeGeneration_locatedNode::unparseArrayOp(SgExpression *expr,
   unparseExpression(arrayRefExp->get_lhs_operand(), info);
 
   SgUnparse_Info ninfo(info);
-  ninfo.set_SkipParen();
 
   curprint("(");
   unparseExpression(arrayRefExp->get_rhs_operand(), ninfo);
@@ -1011,6 +1029,25 @@ void FortranCodeGeneration_locatedNode::unparseAsteriskShapeExp(
 //----------------------------------------------------------------------------
 //  FortranCodeGeneration_locatedNode::<initializers>
 //----------------------------------------------------------------------------
+
+void FortranCodeGeneration_locatedNode::unparseDataValues(
+    const SgDataStatementValuePtrList &values, SgUnparse_Info &info) {
+  ROSE_ASSERT(SgDataStatementValue::is_valid_values(values));
+  curprint("/");
+  bool comma = false;
+  for (const auto *value : values) {
+    value->validate_value();
+    if (comma)
+      curprint(", ");
+    if (auto *repeat = value->get_repeat_expression()) {
+      unparseExpression(repeat, info);
+      curprint(" * ");
+    }
+    unparseExpression(value->get_constant_expression(), info);
+    comma = true;
+  }
+  curprint("/");
+}
 
 void FortranCodeGeneration_locatedNode::unparseInitializerList(
     SgExpression *expr, SgUnparse_Info &info) {
@@ -1262,28 +1299,9 @@ void FortranCodeGeneration_locatedNode::unparseFuncRef(SgExpression *expr,
   SgFunctionSymbol *semantic = func_ref->get_symbol();
   SgFunctionSymbol *sourceVisible =
       func_ref->get_fortran_source_visible_symbol();
-  SgScopeStatement *sourceScope =
-      sourceVisible != nullptr ? sourceVisible->get_scope() : nullptr;
-  SgSymbolTable *sourceTable =
-      sourceScope != nullptr ? sourceScope->get_symbol_table() : nullptr;
   const auto bindingKind = func_ref->get_fortran_source_visible_binding_kind();
-  const bool renamedBinding =
-      bindingKind ==
-          SgFunctionRefExp::e_fortran_source_visible_binding_use_rename ||
-      bindingKind ==
-          SgFunctionRefExp::e_fortran_source_visible_binding_generic_overload;
-  SgRenameSymbol *sourceRename =
-      renamedBinding ? isSgRenameSymbol(sourceVisible) : nullptr;
-  if (semantic == nullptr || semantic->get_declaration() == nullptr ||
-      sourceVisible == nullptr || sourceVisible->get_declaration() == nullptr ||
-      sourceScope == nullptr || sourceTable == nullptr ||
-      sourceVisible->get_parent() != sourceTable ||
-      !sourceTable->exists(sourceVisible) ||
-      bindingKind ==
-          SgFunctionRefExp::e_fortran_source_visible_binding_not_applicable ||
-      (sourceRename != nullptr &&
-       sourceRename->get_original_symbol() != semantic) ||
-      (renamedBinding && sourceRename == nullptr)) {
+  if (!SageInterface::Detail::hasExactFortranFunctionReferenceBindings(
+          semantic, sourceVisible, bindingKind)) {
     std::cerr << "REX_UNPARSE_INVARIANT[fortran-function-source-binding]: "
                  "function reference="
               << func_ref
@@ -1291,8 +1309,7 @@ void FortranCodeGeneration_locatedNode::unparseFuncRef(SgExpression *expr,
                  "identities\n";
     ROSE_ABORT();
   }
-  string func_name = sourceVisible->get_name().str();
-  curprint(func_name);
+  curprint(sourceVisible->get_name().str());
 }
 
 void FortranCodeGeneration_locatedNode::unparseMFuncRef(SgExpression *expr,
@@ -1310,7 +1327,7 @@ void FortranCodeGeneration_locatedNode::unparseClassRef(SgExpression *expr,
 }
 
 void FortranCodeGeneration_locatedNode::unparseStringVal(SgExpression *expr,
-                                                         SgUnparse_Info &) {
+                                                         SgUnparse_Info &info) {
   // Note that string unparsing is language dependent so this is not handled by
   // the language independent base class.
 
@@ -1354,7 +1371,7 @@ void FortranCodeGeneration_locatedNode::unparseStringVal(SgExpression *expr,
 
   const char delimiter = str_val->get_stringDelimiter();
   if (delimiter == 'H') {
-    const string &value = str_val->get_value();
+    const string &value = str_val->get_byte_value();
     if (value.find_first_of("\r\n") != string::npos) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[fortran-string]: Hollerith payload "
@@ -1374,7 +1391,17 @@ void FortranCodeGeneration_locatedNode::unparseStringVal(SgExpression *expr,
                     "Fortran source delimiter\n");
     ROSE_ABORT();
   }
-  unp->emitFortranCharacterLiteral(str_val->get_value(), delimiter);
+  auto *type = isSgTypeString(str_val->get_type()->stripTypedefsAndModifiers());
+  ASSERT_not_null(type);
+  SgExpression *kind = type->get_type_kind();
+  const auto *constantKind = isSgIntVal(kind);
+  // Flang's default CHARACTER kind is 1; other kinds need their selector.
+  if (kind != nullptr &&
+      (constantKind == nullptr || constantKind->get_value() != 1)) {
+    unparseExpression(kind, info);
+    curprint("_");
+  }
+  unp->emitFortranCharacterLiteral(str_val->get_byte_value(), delimiter);
 }
 
 //----------------------------------------------------------------------------
@@ -1553,15 +1580,6 @@ bool FortranCodeGeneration_locatedNode::isSubroutineCall(
 
   std::cerr << "Error: standalone Fortran call target has no resolved "
                "procedure type"
-            << std::endl;
-  ROSE_ABORT();
-}
-
-void FortranCodeGeneration_locatedNode::unparseUnknownArrayOrFunctionReference(
-    SgExpression *expr, SgUnparse_Info &) {
-  ASSERT_not_null(isSgUnknownArrayOrFunctionReference(expr));
-  std::cerr << "Error: unresolved SgUnknownArrayOrFunctionReference reached "
-               "the Fortran unparser"
             << std::endl;
   ROSE_ABORT();
 }

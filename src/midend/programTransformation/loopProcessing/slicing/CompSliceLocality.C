@@ -4,7 +4,7 @@
 
 #include "LoopTreeDepComp.h"
 
-#include "ReuseAnalysis.h"
+#include "DepInfoAnal.h"
 
 // not precise since inter-statement spatial reuses not considered
 float CompSliceLocalityAnal::SpatialReuses(const CompSlice *slice) {
@@ -37,19 +37,15 @@ int CompSliceLocalityAnal::TemporaryReuses(const CompSlice *slice1,
   return refSet.size();
 }
 
-class CollectArrayNames : public CollectObject<AstNodePtr> {
-  typedef std::set<std::string, std::less<std::string>> StringSet;
-  StringSet &result;
+class CollectArrayRefs : public CollectObject<AstNodePtr> {
+  CompSliceLocalityAnal::AstNodeSet &result;
 
 public:
-  CollectArrayNames(StringSet &r) : result(r) {}
+  CollectArrayRefs(CompSliceLocalityAnal::AstNodeSet &r) : result(r) {}
   bool operator()(const AstNodePtr &r) {
     AstNodePtr arr;
-    std::string arrname;
-    AstInterface &fa = LoopTransformInterface::getAstInterface();
-    if (LoopTransformInterface::IsArrayAccess(r, &arr) &&
-        fa.IsVarRef(arr, 0, &arrname)) {
-      result.insert(arrname);
+    if (LoopTransformInterface::IsArrayAccess(r, &arr)) {
+      result.insert(arr);
       return true;
     }
     return false;
@@ -57,21 +53,23 @@ public:
 };
 
 class CollectRegisteredArrayRefs : public CollectObject<AstNodePtr> {
-  typedef std::set<std::string, std::less<std::string>> StringSet;
-  StringSet &reg;
+  const CompSliceLocalityAnal::AstNodeSet &reg;
   CompSliceLocalityAnal::AstNodeSet &refset;
 
 public:
-  CollectRegisteredArrayRefs(StringSet &r, CompSliceLocalityAnal::AstNodeSet &s)
+  CollectRegisteredArrayRefs(const CompSliceLocalityAnal::AstNodeSet &r,
+                             CompSliceLocalityAnal::AstNodeSet &s)
       : reg(r), refset(s) {}
   bool operator()(const AstNodePtr &r) {
     AstNodePtr arr;
-    std::string arrname;
     AstInterface &fa = LoopTransformInterface::getAstInterface();
-    if (LoopTransformInterface::IsArrayAccess(r, &arr) &&
-        fa.IsVarRef(arr, 0, &arrname) && reg.find(arrname) != reg.end()) {
-      refset.insert(r);
-      return true;
+    if (LoopTransformInterface::IsArrayAccess(r, &arr)) {
+      for (const AstNodePtr &registered : reg) {
+        if (fa.IsSameVarRef(arr, registered)) {
+          refset.insert(r);
+          return true;
+        }
+      }
     }
     return false;
   }
@@ -81,19 +79,20 @@ int CompSliceLocalityAnal::SpatialReuses(const CompSlice *slice1,
                                          const CompSlice *slice2,
                                          AstNodeSet &refSet) {
   AstInterface &fa = LoopTransformInterface::getAstInterface();
-  typedef std::set<std::string, std::less<std::string>> StringSet;
-  StringSet arrnames;
+  AstNodeSet arrays;
   CompSlice::ConstStmtIterator stmtIter1 = slice1->GetConstStmtIterator();
-  CollectArrayNames op(arrnames);
+  CollectArrayRefs op(arrays);
   for (LoopTreeNode *n1; (n1 = stmtIter1.Current()); stmtIter1++) {
-    AstNodePtr s1 = stmtIter1.Current()->GetOrigStmt();
-    ArrayReferences(fa, s1, op);
+    AstNodePtr s1 = n1->GetRuntimeAst();
+    if (s1 != AST_NULL)
+      AnalyzeConditionRefs(fa, s1, op, op);
   }
-  CollectRegisteredArrayRefs op2(arrnames, refSet);
+  CollectRegisteredArrayRefs op2(arrays, refSet);
   CompSlice::ConstStmtIterator stmtIter2 = slice2->GetConstStmtIterator();
   for (LoopTreeNode *n2; (n2 = stmtIter2.Current()); stmtIter2++) {
-    AstNodePtr s2 = stmtIter2.Current()->GetOrigStmt();
-    ArrayReferences(fa, s2, op2);
+    AstNodePtr s2 = n2->GetRuntimeAst();
+    if (s2 != AST_NULL)
+      AnalyzeConditionRefs(fa, s2, op2, op2);
   }
   return refSet.size();
 }

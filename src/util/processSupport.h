@@ -2,18 +2,13 @@
 #define ROSE_PROCESSSUPPORT_H
 
 #include "rosedll.h"
-
-#include <cstdio>
-
-#include <exception>
-
 #include <string>
-
 #include <vector>
 
+// Executes literal arguments without a shell and waits for that exact child.
+// Returns its exit code, 128 + signal on signal termination, or 127 if exec
+// fails. Process creation/wait failures are fatal. This is an exit code, not
+// the packed POSIX wait status returned by system(3).
 ROSE_UTIL_API int systemFromVector(const std::vector<std::string> &argv);
-FILE *popenReadFromVector(const std::vector<std::string> &argv);
-// Assumes there is only one child process
-int pcloseFromVector(FILE *f);
 
 #endif // ROSE_PROCESSSUPPORT_H

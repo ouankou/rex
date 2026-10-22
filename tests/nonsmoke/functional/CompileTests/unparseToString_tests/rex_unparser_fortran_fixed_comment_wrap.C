@@ -78,7 +78,10 @@ int main(int argc, char **argv) {
   if (!isFixedFormatCommentLine("C fixed comment") ||
       !isFixedFormatCommentLine("* fixed comment") ||
       !isFixedFormatCommentLine("  ! fixed comment") ||
-      isFixedFormatCommentLine("!$omp parallel") ||
+      !isFixedFormatCommentLine("!$omp parallel") ||
+      !isFixedFormatCommentLine("!$rose_outline") ||
+      !isFixedFormatCommentLine("c$rose_outline") ||
+      !isFixedFormatCommentLine("*$rose_outline") ||
       isFixedFormatCommentLine("      value = 1")) {
     return 1;
   }

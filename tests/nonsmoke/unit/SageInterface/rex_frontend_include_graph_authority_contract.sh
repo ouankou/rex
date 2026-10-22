@@ -39,7 +39,7 @@ if grep -Fq 'CompilerOutputParser' "$include_cmake" "$sage_support" ||
 fi
 
 for required in get_frontendResolvedIncludeDirectivesMap \
-                getNormalizedContainingFileName getIncludedFilesMap; do
+                get_physical_filename getIncludedFilesMap; do
   if ! grep -Fq "$required" "$collector_c" "$collector_h"; then
     echo "frontend include-graph collector lacks exact authority operation: $required" >&2
     exit 1
@@ -53,9 +53,9 @@ if ! grep -Fq 'includingPreprocessingInfosCollector.getIncludedFilesMap()' \
 fi
 
 for retired_api in quotedIncludesSearchPaths bracketedIncludesSearchPaths \
-                   findIncludedFile; do
+                   findIncludedFile getNormalizedContainingFileName; do
   if grep -Fq "$retired_api" "$rosetta_support" "$support_code" \
-       "$sage_support"; then
+       "$sage_support" "$collector_c"; then
     echo "retired include re-resolution API remains generated: $retired_api" >&2
     exit 1
   fi

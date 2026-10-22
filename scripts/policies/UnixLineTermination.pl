@@ -27,11 +27,18 @@ while (my $filename = $files->next_file) {
   next if $filename =~ /\.(pdf|rtf|vimsession)$/;
   next if is_disabled($filename);
 
-  if (-T $filename && open FILE, "<", $filename) {
-    my @content = <FILE>;
-    close FILE;
-    my $n_lines = @content;
-    my $n_crlf = grep {/\r\n/} @content;
+  my $is_text = -T $filename;
+  die "$filename: cannot classify: $!\n" unless defined $is_text;
+  if ($is_text) {
+    open my $source, "<", $filename or die "$filename: cannot open: $!\n";
+    my ($n_lines, $n_crlf) = (0, 0);
+    local $! = 0;
+    while (<$source>) {
+      ++$n_lines;
+      ++$n_crlf if /\r\n/;
+    }
+    die "$filename: cannot read: $!\n" if $!;
+    close $source or die "$filename: cannot close: $!\n";
     if ($n_crlf) {
       print $desc unless $nfail++;
       printf "  %6d (%4d%%) lines in %1s\n", $n_crlf, 100*($n_crlf/$n_lines), $filename;

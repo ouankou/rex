@@ -3,8 +3,6 @@
 
 #include <limits>
 
-#include <iostream>
-
 #include <optional>
 
 #include <unordered_map>
@@ -497,11 +495,9 @@ void replaceExactTilingIncrementInitializer(SgInitializedName *name,
   }
 
   name->set_initializer(nullptr);
-  old_initializer->set_parent(nullptr);
   SageInterface::deleteAST(old_initializer);
 
   name->set_initializer(replacement);
-  replacement->set_parent(name);
   if (name->get_initializer() != replacement ||
       replacement->get_parent() != name) {
     fprintf(stderr,
@@ -715,8 +711,6 @@ requireExactIntelLaneWidth(const Rose_STL_Container<SgNode *> &ir_block,
 
 } // namespace
 
-// If half_type is true, select the exact next-smaller vector width used by
-// scalar stores.
 SgType *intel_simd_type(const IntelSimdEmissionTransaction &transaction,
                         SgType *type, SgScopeStatement *new_block,
                         bool half_type = false) {
@@ -773,13 +767,10 @@ SgType *intel_simd_type(const IntelSimdEmissionTransaction &transaction,
 }
 
 std::string intel_simd_func(const IntelSimdEmissionTransaction &transaction,
-                            OpType op_type, SgType *type,
-                            bool half_type = false) {
+                            OpType op_type, SgType *type) {
   unsigned int len = transaction.vectorWidth();
-  if (half_type)
-    len /= 2;
 
-  if (len != 2 && len != 4 && len != 8 && len != 16) {
+  if (len != 4 && len != 8 && len != 16) {
     fprintf(stderr,
             "REX_OMP_LOWERING_INVARIANT[intel-simd-length]: internal "
             "width=%u has no exact Intel intrinsic family\n",
@@ -806,7 +797,6 @@ std::string intel_simd_func(const IntelSimdEmissionTransaction &transaction,
     instr += "i32gather_";
     break;
 
-  case ScalarStore:
   case Store:
     instr += "storeu_";
     break;
@@ -814,9 +804,6 @@ std::string intel_simd_func(const IntelSimdEmissionTransaction &transaction,
     instr += "i32scatter_";
     break;
 
-  case HAdd:
-    instr += "hadd_";
-    break;
   case Add:
     instr += "add_";
     break;
@@ -834,22 +821,6 @@ std::string intel_simd_func(const IntelSimdEmissionTransaction &transaction,
       instr += "mul_";
   } break;
 
-  case Extract: {
-    switch (type->variantT()) {
-    case V_SgTypeInt:
-      instr += "extracti32x8_";
-      break;
-    case V_SgTypeFloat:
-      instr += "extractf32x8_";
-      break;
-    case V_SgTypeDouble:
-      instr += "extractf64x4_";
-      break;
-    default: {
-    }
-    }
-  } break;
-
   default: {
   }
   }
@@ -858,7 +829,7 @@ std::string intel_simd_func(const IntelSimdEmissionTransaction &transaction,
   case V_SgTypeInt: {
     if (op_type == BroadcastZero) {
       instr += len == 16 ? "si512" : len == 8 ? "si256" : "si128";
-    } else if (op_type == Load || op_type == Store || op_type == ScalarStore) {
+    } else if (op_type == Load || op_type == Store) {
       if (len == 16)
         instr += "si512";
       else if (len == 8)
@@ -935,14 +906,16 @@ intel_write_load(const IntelSimdEmissionTransaction &transaction,
   if (va->get_type()->variantT() == V_SgTypeInt) {
     SgExpression *addressed_array = copyExpression(array);
     SgAddressOfOp *addr = buildAddressOfOp(
-        addressed_array, buildPointerType(addressed_array->get_type()));
+        addressed_array, buildPointerType(addressed_array->get_type()),
+        SgAddressOfOp::e_address_operand_object);
     SgPointerType *ptr_type = buildPointerType(vector_type);
     SgCastExp *cast = buildCastExp(addr, ptr_type);
     parameters = buildExprListExp(cast);
   } else {
     SgExpression *addressed_array = copyExpression(array);
     SgAddressOfOp *addr = buildAddressOfOp(
-        addressed_array, buildPointerType(addressed_array->get_type()));
+        addressed_array, buildPointerType(addressed_array->get_type()),
+        SgAddressOfOp::e_address_operand_object);
     parameters = buildExprListExp(addr);
   }
 
@@ -1061,7 +1034,8 @@ intel_write_exp_gather(IntelSimdEmissionTransaction &transaction,
   index_pntr = buildPntrArrRefExp(buildVarRefExp(name, new_block),
                                   buildIntVal(0), loop_index_type);
   SgAddressOfOp *addr =
-      buildAddressOfOp(index_pntr, buildPointerType(loop_index_type));
+      buildAddressOfOp(index_pntr, buildPointerType(loop_index_type),
+                       SgAddressOfOp::e_address_operand_object);
   SgPointerType *ptr_type = buildPointerType(mask_type);
   SgCastExp *cast = buildCastExp(addr, ptr_type);
 
@@ -1094,8 +1068,6 @@ intel_write_exp_gather(IntelSimdEmissionTransaction &transaction,
   ld = buildFunctionCallExp(func_name, vector_type, parameters,
                             target->get_scope());
   return buildAssignInitializer(ld, vector_type);
-
-  // return nullptr;
 }
 
 // ===========================================================================================================
@@ -1121,7 +1093,8 @@ intel_write_gather(IntelSimdEmissionTransaction &transaction, SgBinaryOp *op,
 
   SgExpression *addressed_mask = copyExpression(mask_pntr);
   SgAddressOfOp *addr = buildAddressOfOp(
-      addressed_mask, buildPointerType(addressed_mask->get_type()));
+      addressed_mask, buildPointerType(addressed_mask->get_type()),
+      SgAddressOfOp::e_address_operand_object);
   SgPointerType *ptr_type = buildPointerType(mask_type);
   SgCastExp *cast = buildCastExp(addr, ptr_type);
 
@@ -1242,7 +1215,8 @@ void intel_write_store(const IntelSimdEmissionTransaction &transaction,
   // Function call parameters
   SgExpression *addressed_lvalue = copyExpression(lval);
   SgAddressOfOp *addr = buildAddressOfOp(
-      addressed_lvalue, buildPointerType(addressed_lvalue->get_type()));
+      addressed_lvalue, buildPointerType(addressed_lvalue->get_type()),
+      SgAddressOfOp::e_address_operand_object);
   SgExprListExp *parameters =
       buildExprListExp(addr, copyIntelIrOperand(transaction, v_src,
                                                 "intel-simd-store-ownership"));
@@ -1279,7 +1253,8 @@ void intel_write_scatter(IntelSimdEmissionTransaction &transaction,
 
   SgExpression *addressed_mask = copyExpression(mask_pntr);
   SgAddressOfOp *addr = buildAddressOfOp(
-      addressed_mask, buildPointerType(addressed_mask->get_type()));
+      addressed_mask, buildPointerType(addressed_mask->get_type()),
+      SgAddressOfOp::e_address_operand_object);
   SgPointerType *ptr_type = buildPointerType(mask_type);
   SgCastExp *cast = buildCastExp(addr, ptr_type);
 
@@ -1343,7 +1318,8 @@ void intel_write_scatter(IntelSimdEmissionTransaction &transaction,
 // Generates an Intel partial-store statement
 //
 void ensureIntelPartialBroadcast(IntelSimdEmissionTransaction &transaction,
-                                 SgVarRefExp *var, SgOmpSimdStatement *target) {
+                                 SgVarRefExp *var, SgOmpSimdStatement *target,
+                                 const OmpSimdCompiler &compiler) {
   if (var == nullptr || var->get_symbol() == nullptr) {
     fprintf(stderr, "REX_OMP_LOWERING_INVARIANT[intel-simd-reduction]: partial "
                     "broadcast has no exact variable identity\n");
@@ -1357,11 +1333,28 @@ void ensureIntelPartialBroadcast(IntelSimdEmissionTransaction &transaction,
 
   SgType *vector_type =
       intel_simd_type(transaction, var->get_type(), target->get_scope());
-  std::string func_name =
-      intel_simd_func(transaction, BroadcastZero, var->get_type());
-  SgExpression *zero = buildFunctionCallExp(func_name, vector_type, nullptr,
-                                            target->get_scope());
-  SgAssignInitializer *initializer = buildAssignInitializer(zero, vector_type);
+  SgExprListExp *parameters = nullptr;
+  OpType broadcast = BroadcastZero;
+  if (compiler.isProductReduction(original_symbol)) {
+    SgExpression *one = nullptr;
+    if (isSgTypeInt(var->get_type()))
+      one = buildIntVal(1);
+    else if (isSgTypeFloat(var->get_type()))
+      one = buildFloatVal(1.0f);
+    else if (isSgTypeDouble(var->get_type()))
+      one = buildDoubleVal(1.0);
+    else
+      failIntelSimdEmission("intel-simd-reduction", var,
+                            "has no exact scalar multiplicative identity");
+    parameters = buildExprListExp(one);
+    broadcast = Broadcast;
+  }
+  const std::string func_name =
+      intel_simd_func(transaction, broadcast, var->get_type());
+  SgExpression *identity = buildFunctionCallExp(
+      func_name, vector_type, parameters, target->get_scope());
+  SgAssignInitializer *initializer =
+      buildAssignInitializer(identity, vector_type);
   SgVariableDeclaration *declaration = buildVariableDeclaration(
       name, vector_type, initializer, transaction.outputScope());
   transaction.emitBeforeRegion(declaration);
@@ -1373,7 +1366,7 @@ void ensureIntelPartialBroadcast(IntelSimdEmissionTransaction &transaction,
 SgAssignInitializer *
 intel_write_partial_store(IntelSimdEmissionTransaction &transaction,
                           SgBinaryOp *op, SgOmpSimdStatement *target,
-                          SgBasicBlock *new_block) {
+                          const OmpSimdCompiler &compiler) {
   SgVarRefExp *var = isSgVarRefExp(op->get_lhs_operand());
   SgVarRefExp *src_var = isSgVarRefExp(op->get_rhs_operand());
   if (var == nullptr || var->get_symbol() == nullptr || src_var == nullptr ||
@@ -1384,176 +1377,62 @@ intel_write_partial_store(IntelSimdEmissionTransaction &transaction,
     ROSE_ABORT();
   }
 
-  ensureIntelPartialBroadcast(transaction, var, target);
+  ensureIntelPartialBroadcast(transaction, var, target, compiler);
 
-  // Now set the local variable
-  /*SgVarRefExp *varRef = buildVarRefExp(name, new_block);
-  return buildAssignInitializer(varRef);*/
   return buildAssignInitializer(
       copyIntelIrOperand(transaction, src_var,
                          "intel-simd-partial-store-ownership"),
       intel_simd_type(transaction, var->get_type(), target->get_scope()));
 }
 
-// ============================================================================================
-// Generates an Intel scalar-store statement
-//
-// Scalar store:
-//
-//__m256 __sub1 = _mm512_extractf32x8_ps(__vec6, 0);
-//__m256 __sub2 = _mm512_extractf32x8_ps(__vec6, 1);
-//__sub2 = _mm256_add_ps(__sub1, __sub2);
-//__sub2 = _mm256_hadd_ps(__sub2,__sub2);
-//__sub2 = _mm256_hadd_ps(__sub2,__sub2);
-// float __buf0[8];
-//_mm256_storeu_ps(&__buf0,__sub2);
-// temp = __buf0[1] + __buf0[5];
-//
 void intel_write_scalar_store(IntelSimdEmissionTransaction &transaction,
-                              SgBinaryOp *op, SgOmpSimdStatement *target) {
-  SgExpression *lval = op->get_lhs_operand();
-  SgExpression *rval = op->get_rhs_operand();
+                              SgBinaryOp *op, SgOmpSimdStatement *target,
+                              const OmpSimdCompiler &compiler) {
+  SgVarRefExp *scalar = isSgVarRefExp(op->get_lhs_operand());
+  SgVarRefExp *vec = isSgVarRefExp(op->get_rhs_operand());
+  if (scalar == nullptr || scalar->get_symbol() == nullptr || vec == nullptr ||
+      vec->get_symbol() == nullptr)
+    failIntelSimdEmission("intel-simd-scalar-store", op,
+                          "does not own two exact variable operands");
 
-  SgVarRefExp *scalar = static_cast<SgVarRefExp *>(lval);
-  SgVarRefExp *vec = static_cast<SgVarRefExp *>(rval);
-  std::vector<SgStatement *> to_insert;
-  SgBasicBlock *epilogue_scope = transaction.outputScope();
-
-  // Create the types
-  SgType *vector_type = intel_simd_type(transaction, scalar->get_type(),
-                                        target->get_scope(), true);
-
-  SgAssignInitializer *local_init;
-  std::string vec1 = transaction.nextBufferName();
-  std::string vec2 = transaction.nextBufferName();
-
-  // Extract
-  if (transaction.vectorWidth() == 16) {
-    std::string extract_name =
-        intel_simd_func(transaction, Extract, vec->get_type());
-
-    SgIntVal *val = buildIntVal(0);
-    SgExprListExp *parameters = buildExprListExp(
-        copyIntelIrOperand(transaction, vec,
-                           "intel-simd-scalar-store-ownership"),
-        val);
-    SgExpression *fc1 = buildFunctionCallExp(extract_name, vector_type,
-                                             parameters, target->get_scope());
-
-    local_init = buildAssignInitializer(fc1, vector_type);
-    SgVariableDeclaration *vd1 =
-        buildVariableDeclaration(vec1, vector_type, local_init, epilogue_scope);
-    to_insert.push_back(vd1);
-
-    val = buildIntVal(1);
-    parameters = buildExprListExp(
-        copyIntelIrOperand(transaction, vec,
-                           "intel-simd-scalar-store-ownership"),
-        val);
-    SgExpression *fc2 = buildFunctionCallExp(extract_name, vector_type,
-                                             parameters, target->get_scope());
-
-    local_init = buildAssignInitializer(fc2, vector_type);
-    SgVariableDeclaration *vd2 =
-        buildVariableDeclaration(vec2, vector_type, local_init, epilogue_scope);
-    to_insert.push_back(vd2);
-
-    // Add the two sub vectors
-    parameters = buildExprListExp(buildVarRefExp(vec1, epilogue_scope),
-                                  buildVarRefExp(vec2, epilogue_scope));
-    std::string func_name =
-        intel_simd_func(transaction, Add, vec->get_type(), true);
-    SgExpression *fc3 = buildFunctionCallExp(func_name, vector_type, parameters,
-                                             target->get_scope());
-    SgExprStatement *expr =
-        buildAssignStatement(buildVarRefExp(vec2, epilogue_scope), fc3);
-    to_insert.push_back(expr);
-  } else if (transaction.vectorWidth() == 8) {
-    local_init = buildAssignInitializer(
-        copyIntelIrOperand(transaction, vec,
-                           "intel-simd-scalar-store-ownership"),
-        vector_type);
-
-    SgVariableDeclaration *vd2 =
-        buildVariableDeclaration(vec2, vector_type, local_init, epilogue_scope);
-    to_insert.push_back(vd2);
-  }
-
-  // Perform two horizontal adds
-  std::string func_name =
-      intel_simd_func(transaction, HAdd, vec->get_type(), true);
-  auto build_horizontal_add = [&]() {
-    SgExprListExp *parameters =
-        buildExprListExp(buildVarRefExp(vec2, epilogue_scope),
-                         buildVarRefExp(vec2, epilogue_scope));
-    SgExpression *call = buildFunctionCallExp(func_name, vector_type,
-                                              parameters, target->get_scope());
-    return buildAssignStatement(buildVarRefExp(vec2, epilogue_scope), call);
-  };
-  SgExprStatement *expr = build_horizontal_add();
-  to_insert.push_back(expr);
-
-  if (vec->get_type()->variantT() != V_SgTypeDouble) {
-    expr = build_horizontal_add();
-    to_insert.push_back(expr);
-  }
-
-  // Create the buffer
-  std::string name = transaction.nextBufferName();
-
-  int buf_length = 8;
-  int pos2 = 6;
-  if (vec->get_type()->variantT() == V_SgTypeDouble) {
-    buf_length = 4;
-    pos2 = 2;
-  }
-
-  SgIntVal *length = buildIntVal(buf_length);
-  SgType *type = buildArrayType(scalar->get_type(), length);
-
-  SgVariableDeclaration *vd =
-      buildVariableDeclaration(name, type, NULL, epilogue_scope);
-  to_insert.push_back(vd);
-
-  SgExprListExp *parameters;
-
-  // Store
-  if (vec->get_type()->variantT() == V_SgTypeInt) {
-    SgVarRefExp *buffer = buildVarRefExp(name, epilogue_scope);
-    SgAddressOfOp *addr =
-        buildAddressOfOp(buffer, buildPointerType(buffer->get_type()));
-    SgPointerType *ptr_type = buildPointerType(vector_type);
-    SgCastExp *cast = buildCastExp(addr, ptr_type);
-    parameters = buildExprListExp(cast, buildVarRefExp(vec2, epilogue_scope));
-  } else {
-    SgVarRefExp *buffer = buildVarRefExp(name, epilogue_scope);
-    SgAddressOfOp *addr =
-        buildAddressOfOp(buffer, buildPointerType(buffer->get_type()));
-    parameters = buildExprListExp(addr, buildVarRefExp(vec2, epilogue_scope));
-  }
-
-  func_name = intel_simd_func(transaction, Store, vec->get_type(), true);
-  SgExprStatement *fc = buildFunctionCallStmt(func_name, buildVoidType(),
-                                              parameters, target->get_scope());
-  to_insert.push_back(fc);
-
-  // Scalar store
-  // temp = __buf0[1] + __buf0[6];
+  const bool product = compiler.isProductReduction(vec->get_symbol());
   SgType *scalar_type = scalar->get_type();
-  SgPntrArrRefExp *pntr1 = buildPntrArrRefExp(
-      buildVarRefExp(name, epilogue_scope), buildIntVal(0), scalar_type);
-  SgPntrArrRefExp *pntr2 = buildPntrArrRefExp(
-      buildVarRefExp(name, epilogue_scope), buildIntVal(pos2), scalar_type);
-  SgAddOp *add = buildAddOp(pntr1, pntr2, scalar_type);
-  SgPlusAssignOp *assign =
-      buildPlusAssignOp(copyExpression(scalar), add, scalar_type);
+  SgBasicBlock *epilogue_scope = transaction.outputScope();
+  SgType *buffer_type =
+      buildArrayType(scalar_type, buildIntVal(transaction.loopIncrement()));
+  SgVariableDeclaration *buffer = buildVariableDeclaration(
+      transaction.nextBufferName(), buffer_type, nullptr, epilogue_scope);
+  SgVariableSymbol *buffer_symbol = requireExactDeclaredVariableSymbol(
+      buffer, "intel-simd-scalar-store-buffer");
+  transaction.emitAfterRegion(buffer);
 
-  expr = buildExprStatement(assign);
-  to_insert.push_back(expr);
+  SgExpression *first_lane = buildPntrArrRefExp(buildVarRefExp(buffer_symbol),
+                                                buildIntVal(0), scalar_type);
+  SgExpression *address =
+      buildAddressOfOp(first_lane, buildPointerType(scalar_type),
+                       SgAddressOfOp::e_address_operand_object);
+  if (isSgTypeInt(scalar_type)) {
+    SgType *vector_type =
+        intel_simd_type(transaction, scalar_type, target->get_scope());
+    address = buildCastExp(address, buildPointerType(vector_type));
+  }
+  SgExprListExp *parameters = buildExprListExp(
+      address, copyIntelIrOperand(transaction, vec,
+                                  "intel-simd-scalar-store-ownership"));
+  transaction.emitAfterRegion(
+      buildFunctionCallStmt(intel_simd_func(transaction, Store, scalar_type),
+                            buildVoidType(), parameters, target->get_scope()));
 
-  // Now, add it all to the end of the loop
-  for (SgStatement *statement : to_insert)
-    transaction.emitAfterRegion(statement);
+  for (unsigned int lane = 0; lane < transaction.loopIncrement(); ++lane) {
+    SgExpression *value = buildPntrArrRefExp(buildVarRefExp(buffer_symbol),
+                                             buildIntVal(lane), scalar_type);
+    SgExpression *combine =
+        product ? static_cast<SgExpression *>(buildMultAssignOp(
+                      copyExpression(scalar), value, scalar_type))
+                : static_cast<SgExpression *>(buildPlusAssignOp(
+                      copyExpression(scalar), value, scalar_type));
+    transaction.emitAfterRegion(buildExprStatement(combine));
+  }
 }
 
 // ===========================================================================================================
@@ -1616,7 +1495,8 @@ intel_write_math(const IntelSimdEmissionTransaction &transaction,
 // Write the Intel intrinsics
 void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
                           Rose_STL_Container<SgNode *> *ir_block,
-                          unsigned int simd_length) {
+                          unsigned int simd_length,
+                          const OmpSimdCompiler &compiler) {
   if (target == nullptr || for_loop == nullptr || ir_block == nullptr ||
       ir_block->empty() || target->get_body() == nullptr ||
       target->get_body()->get_parent() != target ||
@@ -1644,7 +1524,7 @@ void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
           transaction,
           partial != nullptr ? isSgVarRefExp(partial->get_lhs_operand())
                              : nullptr,
-          target);
+          target, compiler);
     }
   }
 
@@ -1698,11 +1578,11 @@ void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
     } break;
 
     case V_SgSIMDPartialStore: {
-      init = intel_write_partial_store(transaction, op, target, new_block);
+      init = intel_write_partial_store(transaction, op, target, compiler);
     } break;
 
     case V_SgSIMDScalarStore: {
-      intel_write_scalar_store(transaction, op, target);
+      intel_write_scalar_store(transaction, op, target, compiler);
     } break;
 
     case V_SgSIMDAddOp:
@@ -1722,8 +1602,7 @@ void omp_simd_write_intel(SgOmpSimdStatement *target, SgForStatement *for_loop,
     }
 
     // The variable declaration
-    if ((*i)->variantT() !=
-        V_SgSIMDScalarStore /*&& (*i)->variantT() != V_SgSIMDPartialStore*/) {
+    if ((*i)->variantT() != V_SgSIMDScalarStore) {
       if (isSgVarRefExp(lval)) {
         SgVarRefExp *var = static_cast<SgVarRefExp *>(lval);
 

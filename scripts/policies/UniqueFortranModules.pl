@@ -36,22 +36,23 @@ while (my $filename = $files->next_file) {
 
   my($dir) = $filename =~ /(.*)\//;
 
-  if (open FILE, "<", $filename) {
-    my $line_num = 0;
-    while (<FILE>) {
-      $line_num++;
-      if (/^\s*module\s+([_a-zA-Z]\w*)/i && lc($1) ne "procedure") {
-	my $key = lc "$1\000$dir";
-	$decls{$key} ||= [];
-	push @{$decls{$key}}, "$filename:$line_num";
-      } elsif (/^\s*use\s+([_a-zA-Z]\w*)/i) {
-	my $key = lc "$1\000$dir";
-	$uses{$key} ||= [];
-	push @{$uses{$key}}, "$filename:$line_num";
-      }
+  open my $source, "<", $filename or die "$filename: cannot open: $!\n";
+  my $line_num = 0;
+  local $! = 0;
+  while (<$source>) {
+    $line_num++;
+    if (/^\s*module\s+([_a-zA-Z]\w*)/i && lc($1) ne "procedure") {
+      my $key = lc "$1\000$dir";
+      $decls{$key} ||= [];
+      push @{$decls{$key}}, "$filename:$line_num";
+    } elsif (/^\s*use\s+([_a-zA-Z]\w*)/i) {
+      my $key = lc "$1\000$dir";
+      $uses{$key} ||= [];
+      push @{$uses{$key}}, "$filename:$line_num";
     }
   }
-  close FILE;
+  die "$filename: cannot read: $!\n" if $!;
+  close $source or die "$filename: cannot close: $!\n";
 }
 
 # Show results sorted by module name

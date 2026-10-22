@@ -1,5 +1,8 @@
 // Example ROSE Translator reads input program and tests AST and WholeAST graph generation.
 #include "rose.h"
+#include "wholeAST.h"
+
+#include <set>
 
 // Options to generate graphs with and without filering of
 // IR nodes can be use to tailor the generated graph output.
@@ -26,6 +29,17 @@ int main( int argc, char * argv[] )
 
      SgFile* file = project->get_files()[0];
      ROSE_ASSERT(file != NULL);
+
+     const CustomAstDOTGenerationEdgeType first(project, project, "edge");
+     const CustomAstDOTGenerationEdgeType second(project, file, "edge");
+     const CustomAstDOTGenerationEdgeType labeled(project, file, "other");
+     const std::set<CustomAstDOTGenerationEdgeType> edges{first, second, labeled};
+     ROSE_ASSERT(edges.size() == 3);
+     for (const auto &edge : {first, second, labeled}) {
+       const auto found = edges.find(edge);
+       ROSE_ASSERT(found != edges.end() && *found == edge);
+       ROSE_ASSERT(!(*found != edge));
+     }
 
   // DQ (6/1/2019): Commented out to debug multiple file support.
      astdotgen.generateWithinFile(

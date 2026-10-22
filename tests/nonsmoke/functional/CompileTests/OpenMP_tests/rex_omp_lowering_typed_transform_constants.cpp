@@ -29,6 +29,16 @@ long long typed_transform_constants(long long *values) {
   for (int i = 7; i >= 0; --i)
     result += values[i];
 
+  constexpr char character_factor = 2;
+#pragma omp unroll partial(character_factor)
+  for (int i = 0; i < 8; ++i)
+    result += values[i];
+
+  constexpr wchar_t wide_factor = 2;
+#pragma omp unroll partial(wide_factor)
+  for (int i = 7; i >= 0; --i)
+    result += values[i];
+
   return result;
 }
 

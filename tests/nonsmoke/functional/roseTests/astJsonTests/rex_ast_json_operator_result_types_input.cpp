@@ -37,3 +37,8 @@ unsigned rex_json_checked_builtin_bit_cast(float value) {
 }
 
 int rex_json_checked_functional_cast(double value) { return int(value); }
+
+void rex_json_delete_forms(int *scalar, int *array) {
+  delete scalar;
+  ::delete[] array;
+}

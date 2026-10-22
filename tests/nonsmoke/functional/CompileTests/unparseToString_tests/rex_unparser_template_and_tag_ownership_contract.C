@@ -444,26 +444,29 @@ int checkForInitializerContracts() {
   return 0;
 }
 
-SgTemplateInstantiationDecl *
-buildTemplateInstantiation(const std::string &template_name,
-                           const std::string &template_id, bool with_argument) {
+SgTemplateInstantiationDecl *buildTemplateInstantiation() {
+  SgGlobal *scope = new SgGlobal();
+  SgTemplateClassDeclaration *primary = new SgTemplateClassDeclaration(
+      SgName("rex_bad"), SgClassDeclaration::e_class, nullptr, nullptr);
+  primary->set_scope(scope);
+  primary->set_firstNondefiningDeclaration(primary);
   SgTemplateArgumentPtrList arguments;
   SgTemplateArgumentPtrList semantic_arguments;
-  if (with_argument) {
-    SgTemplateArgument *argument =
-        SageBuilder::buildTemplateArgument(SageBuilder::buildIntType());
-    argument->set_explicitlySpecified(true);
-    arguments.push_back(argument);
-    SgTemplateArgument *semantic_argument =
-        SageBuilder::buildTemplateArgument(SageBuilder::buildIntType());
-    semantic_argument->set_explicitlySpecified(false);
-    semantic_arguments.push_back(semantic_argument);
-  }
+  SgTemplateArgument *argument =
+      SageBuilder::buildTemplateArgument(SageBuilder::buildIntType());
+  argument->set_explicitlySpecified(true);
+  arguments.push_back(argument);
+  SgTemplateArgument *semantic_argument =
+      SageBuilder::buildTemplateArgument(SageBuilder::buildIntType());
+  semantic_argument->set_explicitlySpecified(false);
+  semantic_arguments.push_back(semantic_argument);
   SgTemplateInstantiationDecl *declaration = new SgTemplateInstantiationDecl(
-      SgName(template_id), SgClassDeclaration::e_class, nullptr, nullptr,
-      nullptr, arguments, semantic_arguments);
+      SgName("rex_bad<int>"), SgClassDeclaration::e_class, nullptr, nullptr,
+      primary, arguments, semantic_arguments, false,
+      SgTemplateArgumentPtrList());
   SageInterface::setSourcePositionForTransformation(declaration);
-  declaration->set_templateName(SgName(template_name));
+  declaration->set_templateName(SgName("rex_bad"));
+  declaration->set_scope(scope);
   declaration->set_firstNondefiningDeclaration(declaration);
   declaration->set_definingDeclaration(nullptr);
   return declaration;
@@ -476,24 +479,20 @@ int runDeathMode(const std::string &mode) {
   SgUnparse_Info info;
   info.set_language(SgFile::e_Cxx_language);
 
-  if (mode == "empty-template-name") {
-    unparser.u_exprStmt->unparseTemplateName(
-        buildTemplateInstantiation("", "rex_bad<int>", true), info);
-    return 0;
-  }
-  if (mode == "empty-template-id") {
-    unparser.u_exprStmt->unparseTemplateName(
-        buildTemplateInstantiation("rex_bad", "", true), info);
-    return 0;
-  }
-  if (mode == "malformed-template-id") {
-    unparser.u_exprStmt->unparseTemplateName(
-        buildTemplateInstantiation("rex_bad", "rex_bad", true), info);
-    return 0;
-  }
-  if (mode == "mismatched-template-payload") {
-    unparser.u_exprStmt->unparseTemplateName(
-        buildTemplateInstantiation("rex_bad", "rex_bad<>", true), info);
+  if (mode == "missing-template-primary" || mode == "missing-template-name" ||
+      mode == "missing-template-scope" ||
+      mode == "injected-with-written-arguments") {
+    SgTemplateInstantiationDecl *declaration = buildTemplateInstantiation();
+    if (mode == "missing-template-primary") {
+      declaration->set_templateDeclaration(nullptr);
+    } else if (mode == "missing-template-name") {
+      declaration->set_templateName(SgName());
+    } else if (mode == "missing-template-scope") {
+      declaration->set_scope(nullptr);
+    } else {
+      declaration->set_sourceSpellsInjectedClassName(true);
+    }
+    unparser.u_exprStmt->unparseTemplateName(declaration, info);
     return 0;
   }
   if (mode == "for-init-foreign-owner") {
@@ -516,9 +515,9 @@ int runDeathMode(const std::string &mode) {
 int main(int argc, char **argv) {
   if (argc == 2) {
     const std::string mode = argv[1];
-    if (mode == "empty-template-name" || mode == "empty-template-id" ||
-        mode == "malformed-template-id" ||
-        mode == "mismatched-template-payload" ||
+    if (mode == "missing-template-primary" || mode == "missing-template-name" ||
+        mode == "missing-template-scope" ||
+        mode == "injected-with-written-arguments" ||
         mode == "for-init-foreign-owner" || mode == "for-init-empty-list") {
       return runDeathMode(mode);
     }

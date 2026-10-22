@@ -1,5 +1,6 @@
 # Support functions for all policies.
 use strict;
+use Errno qw(ENOENT);
 
 # A policy checker can be disabled by adding a line containing the following text near the
 # beginning (first 10 lines) of the file.
@@ -12,12 +13,13 @@ use strict;
 sub is_disabled_in_file {
   my($filename,$policy) = @_;
 
-  open TEXT, "<", $filename or return undef;
+  open my $text, "<", $filename or die "$filename: cannot open: $!\n";
 
   local($_);
   my($linenum, $retval) = (1, undef);
 
-  while (<TEXT>) {
+  local $! = 0;
+  while (<$text>) {
     if (my($policy_list) = /\b[Ss]kip [Pp]olic(?:ies|y):\s+(.*)/) {
       for my $skip (split /[,\s]+/, $policy_list) {
 	$skip =~ s/\.pl$//;
@@ -29,7 +31,8 @@ sub is_disabled_in_file {
     }
     last if $linenum++ >= 10;
   }
-  close TEXT;
+  die "$filename: cannot read: $!\n" if $!;
+  close $text or die "$filename: cannot close: $!\n";
   return $retval;
 }
 
@@ -55,9 +58,17 @@ sub parse_policy_control {
   my($dir,$specs) = @_;
   die unless 'HASH' eq ref $specs;
   my($policy_file,$linenum) = ($dir||".") . "/PolicyControl.txt";
-  $specs->{$dir} = 0;
-  open PC, "<", $policy_file or return;
-  while (<PC>) {
+  my $control;
+  unless (open $control, "<", $policy_file) {
+    if ($! == ENOENT) {
+      $specs->{$dir} = 0;
+      return;
+    }
+    die "$policy_file: cannot open: $!\n";
+  }
+  my %parsed;
+  local $! = 0;
+  while (<$control>) {
     $linenum++;
     next unless /\S/; # blank lines
     next if /^\s*#/; # comments
@@ -65,13 +76,15 @@ sub parse_policy_control {
     if (my($filename,$disabled_list) = /\s*(\S+?):\s*disable\s+(.*?)\s*$/) {
       die "$policy_file:$linenum: error: file name must not include path components\n" if $filename =~ /\//;
       $filename = "$dir/$filename";
-      $specs->{$filename} ||= {disabled=>[]};
-      push @{$specs->{$filename}{disabled}}, split /[,\s]+/, $disabled_list;
+      $parsed{$filename} ||= {disabled=>[]};
+      push @{$parsed{$filename}{disabled}}, split /[,\s]+/, $disabled_list;
     } else {
       die "$policy_file:$linenum: error: unknown policy specification\n";
     }
   }
-  close PC;
+  die "$policy_file: cannot read: $!\n" if $!;
+  close $control or die "$policy_file: cannot close: $!\n";
+  @{$specs}{keys %parsed} = values %parsed;
   $specs->{$dir} = 1;
   return 1;
 }

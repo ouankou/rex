@@ -6,7 +6,60 @@ import hashlib
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+import xml.etree.ElementTree as ET
+
+
+def require_fresh_memcheck_dashboard(test_dir: Path) -> None:
+    testing = test_dir / "Testing"
+    if (testing / "TAG").exists() or any(testing.glob("*/DynamicAnalysis.xml")):
+        raise ValueError(
+            "Memcheck inventory requires a fresh dashboard directory; "
+            f"existing evidence in {testing} must be preserved"
+        )
+
+
+def verify_results(registry: dict, junit_files: list[Path]) -> list[str]:
+    tests = {test["name"]: test for test in registry["tests"]}
+    if len(tests) != len(registry["tests"]) or not tests:
+        raise ValueError("CTest selection has duplicate or no registered tests")
+    seen, problems = set(), []
+    for path in junit_files:
+        root = ET.parse(path).getroot()
+        for suite in root.iter():
+            if suite.tag not in {"testsuite", "testsuites"}:
+                continue
+            for field in ("failures", "errors", "skipped", "disabled"):
+                value = suite.get(field)
+                if value is None:
+                    continue
+                try:
+                    count = int(value)
+                except ValueError:
+                    count = -1
+                if count < 0:
+                    problems.append(f"Invalid JUnit {field} count in {path}: {value}")
+                elif count:
+                    problems.append(f"Unsuccessful JUnit suite in {path}: {field}={count}")
+        cases = list(root.iter("testcase"))
+        if not cases:
+            problems.append(f"No test results in {path}")
+        report_names = set()
+        for case in cases:
+            name = case.get("name")
+            if name not in tests:
+                problems.append(f"Unregistered result: {name}")
+            if name in report_names:
+                problems.append(f"Duplicate result in {path}: {name}")
+            report_names.add(name)
+            seen.add(name)
+            if case.get("status") != "run" or any(
+                case.find(tag) is not None for tag in ("failure", "error", "skipped")
+            ):
+                problems.append(f"Unsuccessful test in {path}: {name}")
+    problems.extend(f"Missing result: {name}" for name in sorted(tests.keys() - seen))
+    return problems
 
 
 def ctest_records(ctest: str, test_dir: Path, options: list[str]) -> list[dict]:
@@ -86,8 +139,12 @@ def main() -> int:
     parser.add_argument("--timeout", type=int)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    if args.jobs < 1 or not 1 <= args.shard_index <= args.shard_count:
+        parser.error("jobs and shard count must be positive; shard index must be in range")
 
     test_dir = args.test_dir.resolve()
+    if args.memcheck:
+        require_fresh_memcheck_dashboard(test_dir)
     inventory_options = ["-T", "memcheck"] if args.memcheck else []
     registry = ctest_records(args.ctest, test_dir, inventory_options)
 
@@ -115,6 +172,8 @@ def main() -> int:
 
     selected = dependency_closure(registry, direct)
     print(f"Selected {len(selected)} CTest tests", flush=True)
+    if not selected:
+        raise SystemExit("No CTest tests selected")
     if args.dry_run:
         return 0
 
@@ -122,7 +181,14 @@ def main() -> int:
     selector = "0,0,1," + ",".join(
         str(indices[name]) for name in sorted(selected, key=indices.get)
     ) + "\n"
-    with tempfile.NamedTemporaryFile(mode="w", prefix="rex-ctest-set-") as handle:
+    reports = test_dir / "Testing"
+    reports.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(prefix="rex-name-set-", dir=reports))
+    selected_registry = {"tests": [test for test in registry if test["name"] in selected]}
+    (run_dir / "registry.json").write_text(json.dumps(selected_registry, indent=2) + "\n")
+    junit = run_dir / "results.junit.xml"
+    print(f"CTest selection and results: {run_dir}", flush=True)
+    with (run_dir / "indices.txt").open("w") as handle:
         handle.write(selector)
         handle.flush()
         command = [args.ctest, "--test-dir", str(test_dir)]
@@ -134,12 +200,25 @@ def main() -> int:
                 handle.name,
                 "--no-tests=error",
                 "--output-on-failure",
+                "--output-junit", str(junit),
                 f"-j{args.jobs}",
             ]
         )
         if args.timeout:
             command.extend(["--timeout", str(args.timeout)])
-        return subprocess.run(command).returncode
+        (run_dir / "command.json").write_text(json.dumps(command, indent=2) + "\n")
+        status = subprocess.run(command).returncode
+    (run_dir / "ctest-exit-code.txt").write_text(str(status) + "\n")
+    try:
+        problems = verify_results(selected_registry, [junit])
+    except (OSError, ET.ParseError) as error:
+        problems = [f"Cannot read completed CTest results: {error}"]
+    if problems:
+        print("CTest selection did not complete successfully:\n  "
+              + "\n  ".join(problems), file=sys.stderr)
+    if status < 0:
+        return 128 - status
+    return status if status != 0 else (1 if problems else 0)
 
 
 if __name__ == "__main__":

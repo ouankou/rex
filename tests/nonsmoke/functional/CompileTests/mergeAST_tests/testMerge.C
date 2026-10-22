@@ -1,7 +1,5 @@
 #include "rose.h"
 
-// #include "colorTraversal.h"
-
 #define MAX_NUMBER_OF_IR_NODES_TO_GRAPH 8000
 #define DISPLAY_INTERNAL_DATA 0
 

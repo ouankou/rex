@@ -6,8 +6,6 @@
 
 #include <filesystem>
 
-#include <map>
-
 #include <optional>
 
 #include <sstream>
@@ -257,31 +255,6 @@ bool is_within_tree(const path &root, const path &candidate) {
   return root_it == canonical_root.end();
 }
 
-bool is_same_path(const path &left, const path &right) {
-  if (left.empty() || right.empty()) {
-    return false;
-  }
-  std::error_code ec;
-  path canonical_left = std::filesystem::weakly_canonical(left, ec);
-  if (ec) {
-    std::fprintf(stderr,
-                 "ROSE fatal: weakly_canonical failed for path '%s': %s\n",
-                 left.string().c_str(), ec.message().c_str());
-    ROSE_ASSERT(!ec);
-    return false;
-  }
-  ec.clear();
-  path canonical_right = std::filesystem::weakly_canonical(right, ec);
-  if (ec) {
-    std::fprintf(stderr,
-                 "ROSE fatal: weakly_canonical failed for path '%s': %s\n",
-                 right.string().c_str(), ec.message().c_str());
-    ROSE_ASSERT(!ec);
-    return false;
-  }
-  return canonical_left == canonical_right;
-}
-
 RosePathRoots make_build_tree_roots(const path &build_root) {
   RosePathRoots roots;
   roots.in_install_tree = false;
@@ -323,21 +296,6 @@ RosePathRoots resolveRosePaths(const char *argv0) {
   }
   auto build_root = find_build_root(build_candidates);
 
-  bool allow_build_tree_fallback = false;
-  const path build_tree_root(ROSE_BUILD_TREE);
-  if (library_prefix && is_same_path(build_tree_root, *library_prefix)) {
-    allow_build_tree_fallback = true;
-  } else if (argv_prefix && is_same_path(build_tree_root, *argv_prefix)) {
-    allow_build_tree_fallback = true;
-  }
-
-  if (!build_root && allow_build_tree_fallback) {
-    path build_staging(ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
-    if (dir_exists(build_staging)) {
-      build_root = build_staging.parent_path();
-    }
-  }
-
   if (build_root) {
     return make_build_tree_roots(*build_root);
   }
@@ -374,18 +332,5 @@ bool rosePathIsWithinTree(const std::string &root,
   if (root.empty() || candidate.empty()) {
     return false;
   }
-
-  using CacheKey = std::pair<std::string, std::string>;
-  static std::map<CacheKey, bool> within_tree_cache;
-
-  const CacheKey cache_key(root, candidate);
-  std::map<CacheKey, bool>::const_iterator found =
-      within_tree_cache.find(cache_key);
-  if (found != within_tree_cache.end()) {
-    return found->second;
-  }
-
-  const bool result = is_within_tree(path(root), path(candidate));
-  within_tree_cache[cache_key] = result;
-  return result;
+  return is_within_tree(path(root), path(candidate));
 }

@@ -205,13 +205,12 @@ SgFunctionCallExp *buildImplicitConversion(std::string *expected = nullptr) {
 SgCastExp *buildCast(SgCastExp::cast_type_enum kind, bool implicit_role) {
   SgIntVal *operand = SageBuilder::buildIntVal_nfi(7, "7");
   markSemanticNode(operand);
-  SgCastExp *cast =
-      SageBuilder::buildCastExp_nfi(operand, SageBuilder::buildIntType(), kind,
-                                    SgCastExp::e_semantic_conversion_NoOp,
-                                    SgCastExp::e_value_category_prvalue, {});
-  if (kind != SgCastExp::e_implicit_cast) {
-    cast->set_source_type(SageBuilder::buildIntType());
-  }
+  SgType *type = SageBuilder::buildIntType();
+  SgType *source_type =
+      kind == SgCastExp::e_implicit_cast ? nullptr : type;
+  SgCastExp *cast = SageBuilder::buildCastExp_nfi(
+      operand, type, kind, SgCastExp::e_semantic_conversion_NoOp,
+      SgCastExp::e_value_category_prvalue, {}, source_type);
   markSemanticNode(cast, implicit_role);
   return cast;
 }
@@ -278,7 +277,7 @@ int main(int argc, char **argv) {
     (void)SageBuilder::buildCastExp_nfi(
         operand, SageBuilder::buildIntType(), SgCastExp::e_implicit_cast,
         SgCastExp::e_semantic_conversion_unclassified,
-        SgCastExp::e_value_category_prvalue, {});
+        SgCastExp::e_value_category_prvalue, {}, nullptr);
     return 0;
   }
   if (mode == "cast-value-category") {

@@ -1,8 +1,6 @@
 #ifndef FILTEREDCFGVIEW_H
 #define FILTEREDCFGVIEW_H
 
-// #include "rose.h"
-
 #include "virtualCFG.h"
 
 #include <string>
@@ -19,19 +17,22 @@ template <typename FilterFunction> class FilteredCFGNode {
   FilterFunction filter;
 
 public:
-  FilteredCFGNode(const CFGNode &n) : n(n) {}
+  FilteredCFGNode(const CFGNode &n,
+                  const FilterFunction &filter = FilterFunction{})
+      : n(n), filter(filter) {}
 
   /**  Need a default constructor to use with graph wrappers. Underlying
    * node will be invalid. */
-  FilteredCFGNode() : n() {}
+  FilteredCFGNode() : n(), filter() {}
 
   void setFilter(const FilterFunction &f) { filter = f; }
 
   const CFGNode &toNode() const { return n; }
   std::string toString() const {
     std::string nToString = n.toString();
-    if (nToString.find('>', 0) > 0)
-      nToString.insert(nToString.find('>', 0) + 1, "\n");
+    const std::size_t close = nToString.find('>');
+    if (close != std::string::npos)
+      nToString.insert(close + 1, "\n");
     return nToString;
   }
   std::string toStringForDebugging() const { return n.toStringForDebugging(); }
@@ -51,11 +52,12 @@ template <typename FilterFunction> class FilteredCFGEdge {
   FilterFunction filter;
 
 public:
-  FilteredCFGEdge(CFGPath p) : p(p) {}
+  FilteredCFGEdge(CFGPath p, const FilterFunction &filter = FilterFunction{})
+      : p(p), filter(filter) {}
 
   /**  Need a default constructor to use with graph wrappers. Underlying
    * path will be invalid. */
-  FilteredCFGEdge() {}
+  FilteredCFGEdge() : filter() {}
 
   void setFilter(const FilterFunction &f) { filter = f; }
 
@@ -63,10 +65,10 @@ public:
   std::string toStringForDebugging() const { return p.toStringForDebugging(); }
   std::string id() const { return p.id(); }
   FilteredCFGNode<FilterFunction> source() const {
-    return FilteredCFGNode<FilterFunction>(p.source());
+    return FilteredCFGNode<FilterFunction>(p.source(), filter);
   }
   FilteredCFGNode<FilterFunction> target() const {
-    return FilteredCFGNode<FilterFunction>(p.target());
+    return FilteredCFGNode<FilterFunction>(p.target(), filter);
   }
   EdgeConditionKind condition() const { return p.condition(); }
   SgExpression *caseLabel() const { return p.caseLabel(); }
@@ -97,4 +99,4 @@ std::ostream &cfgToDot(std::ostream &o, std::string graphName,
 } // namespace VirtualCFG
 
 #include "filteredCFGImpl.h"
-#endif // XCFGVIEW_H
+#endif // FILTEREDCFGVIEW_H

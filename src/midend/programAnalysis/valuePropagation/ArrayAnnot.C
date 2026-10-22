@@ -182,7 +182,6 @@ void ArrayAnnotation::release_inst() {
 
 void ArrayAnnotation::register_annot() {
   OperatorSideEffectAnnotation::get_inst()->register_annot();
-  OperatorInlineAnnotation::get_inst()->register_annot();
   OperatorAliasAnnotation::get_inst()->register_annot();
 
   ValueAnnotation::get_inst()->register_annot();

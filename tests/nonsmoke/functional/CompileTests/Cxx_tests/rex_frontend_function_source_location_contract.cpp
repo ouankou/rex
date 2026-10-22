@@ -3,14 +3,31 @@
 #include <clang/AST/ASTContext.h>
 #include <clang/AST/Attr.h>
 #include <clang/AST/Decl.h>
+#include <clang/AST/Expr.h>
 #include <clang/Basic/Builtins.h>
+#include <clang/Frontend/CompilerInstance.h>
 #include <clang/Tooling/Tooling.h>
-#include <llvm/ADT/ScopeExit.h>
 
 #include <cstring>
 #include <memory>
 
 namespace {
+
+class OpaqueSourceProbe : public ClangToSageTranslator {
+public:
+  using ClangToSageTranslator::ClangToSageTranslator;
+  using ClangToSageTranslator::Traverse;
+  clang::Expr *expected_source = nullptr;
+  SgExpression *source = nullptr;
+  unsigned visits = 0;
+
+  SgNode *Traverse(clang::Stmt *statement) override {
+    ROSE_ASSERT(statement == expected_source);
+    ++visits;
+    return source;
+  }
+  bool VisitExpr(clang::Expr *, SgNode **) override { return true; }
+};
 
 clang::FunctionDecl *makeFunctionDecl(clang::ASTContext &context,
                                       const char *name) {
@@ -27,16 +44,43 @@ clang::FunctionDecl *makeFunctionDecl(clang::ASTContext &context,
 } // namespace
 
 int main(int argc, char **argv) {
-  beginClangFrontendValgrindPublicationSession();
-  llvm::scope_exit publication_scope(
-      [] { endClangFrontendValgrindPublicationSession(); });
   std::unique_ptr<clang::ASTUnit> ast = clang::tooling::buildASTFromCode(
-      "", "rex_frontend_function_source_location_contract.cpp");
+      "int rex_opaque_source = 7;",
+      "rex_frontend_function_source_location_contract.cpp");
   if (ast == nullptr) {
     return 3;
   }
 
   clang::ASTContext &context = ast->getASTContext();
+  if (argc == 2 && (std::strcmp(argv[1], "opaque-unique") == 0 ||
+                    std::strcmp(argv[1], "opaque-nonunique") == 0)) {
+    clang::Expr *source = nullptr;
+    for (clang::Decl *declaration : context.getTranslationUnitDecl()->decls()) {
+      if (auto *variable = llvm::dyn_cast<clang::VarDecl>(declaration)) {
+        ROSE_ASSERT(source == nullptr);
+        source = variable->getInit();
+      }
+    }
+    ROSE_ASSERT(source != nullptr);
+    clang::OpaqueValueExpr opaque(source->getExprLoc(), source->getType(),
+                                  source->getValueKind(),
+                                  source->getObjectKind(), source);
+    opaque.setIsUnique(std::strcmp(argv[1], "opaque-unique") == 0);
+    clang::CompilerInstance compiler;
+    compiler.setASTContext(ast->getASTContextPtr());
+    SgSourceFile file;
+    SagePreprocessorRecord recorder(&ast->getSourceManager(),
+                                    &ast->getPreprocessor(), false);
+    auto value = std::make_unique<SgIntVal>(7, "7");
+    OpaqueSourceProbe translator(&compiler, ClangToSageTranslator::CPLUSPLUS,
+                                 &file, &recorder);
+    translator.expected_source = source;
+    translator.source = value.get();
+    SgNode *result = nullptr;
+    ROSE_ASSERT(translator.VisitOpaqueValueExpr(&opaque, &result));
+    ROSE_ASSERT(result == value.get() && translator.visits == 1);
+    return 0;
+  }
   clang::FunctionDecl *explicit_invalid =
       makeFunctionDecl(context, "rex_explicit_invalid");
 
@@ -81,7 +125,7 @@ int main(int argc, char **argv) {
   builtin_attr_invalid->addAttr(clang::BuiltinAttr::CreateImplicit(
       context, clang::Builtin::BI__builtin_counted_by_ref));
   if (builtin_attr_invalid->getBuiltinID() != clang::Builtin::NotBuiltin ||
-      !clangDeclHasBuiltinAttrDefinedForFrontend(builtin_attr_invalid) ||
+      !clangDeclHasBuiltinAttr(builtin_attr_invalid) ||
       !clangFunctionDeclIsBuiltinSupportForFrontend(builtin_attr_invalid,
                                                     nullptr, nullptr)) {
     return 1;

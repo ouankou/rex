@@ -5,5 +5,8 @@ namespace rex_split_fragment {
 namespace rex_nested_split_fragment {
 
 int split_value;
+struct RexSplitRecord {
+  int value;
+};
 
 #endif

@@ -1,205 +1,17 @@
-// These functions have been separated from Support.code as a way of
-// both simplifying the development and also permitting more specialized
-// optimizations (file specific compiler flags).
-
-// tps (01/14/2010) : Switching from rose.h to sage3.
+#include "rose_config.h"
 #include "sage3basic.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT).
-#include "rose_config.h"
-using namespace std;
+#include <algorithm>
 
-// DQ (5/3/2009): We might want a version of this function expressed in terms of
-// the node_index and edge_index (integer) values. This might not be possible
-// since the rose_graph_integer_edge_hash_multimap is (node index -->
-// SgGraphEdge*).
-
-//! Generate a set of SgGraphEdge pointers associated with a given SgGraphNode.
-std::set<SgGraphEdge *> SgGraph::computeEdgeSet(SgGraphNode *node) {
-  ROSE_ASSERT(this != NULL);
-  ROSE_ASSERT(node != NULL);
-
-  std::set<SgGraphEdge *> returnSet;
-
-  // printf ("In SgGraph::computeEdgeSet(node=%p=%d)
-  // p_node_index_to_edge_multimap.size() = %" PRIuPTR "
-  // \n",node,node->get_index(),p_node_index_to_edge_multimap.size());
-
-  typedef std::pair<rose_graph_integer_edge_hash_multimap::const_iterator,
-                    rose_graph_integer_edge_hash_multimap::const_iterator>
-      equal_range_type;
-  equal_range_type equal_range_pair =
-      p_node_index_to_edge_multimap.equal_range(node->get_index());
-
-  for (rose_graph_integer_edge_hash_multimap::const_iterator i =
-           equal_range_pair.first;
-       i != equal_range_pair.second; i++) {
-    // int edge_index = i->second;
-    // SgGraphEdge* edge = p_node_index_to_edge_multimap[edge_index];
-    SgGraphEdge *edge = i->second;
-
-    int edge_node_first = edge->get_node_A()->get_index();
-    int edge_node_second = edge->get_node_B()->get_index();
-
-    ROSE_ASSERT(edge_node_first == node->get_index() ||
-                edge_node_second == node->get_index());
-
-    // printf ("Building set with edge = %d between nodes (%d,%d)
-    // \n",edge->get_index(),edge_node_first,edge_node_second);
-
-    returnSet.insert(edge);
-  }
-
-  return returnSet;
-}
-
-std::set<int> SgGraph::computeEdgeSet(int node_index) {
-  ROSE_ASSERT(this != NULL);
-
-  std::set<int> returnSet;
-
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  std::set<SgGraphEdge *> edgeSet =
-      computeEdgeSet(p_node_index_to_node_map[node_index]);
-
-  std::set<SgGraphEdge *>::iterator i = edgeSet.begin();
-  while (i != edgeSet.end()) {
-    returnSet.insert((*i)->get_index());
-    i++;
-  }
-  // #endif
-
-  return returnSet;
-}
-
-//! Generate a set of SgGraphEdge pointers associated with a given SgGraphNode.
-std::set<std::pair<int, int>> SgGraph::computeNodeIndexPairSet(int node_index) {
-  ROSE_ASSERT(this != NULL);
-
-  std::set<std::pair<int, int>> returnSet;
-
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  typedef std::pair<rose_graph_integer_edge_hash_multimap::const_iterator,
-                    rose_graph_integer_edge_hash_multimap::const_iterator>
-      equal_range_type;
-  equal_range_type equal_range_pair =
-      p_node_index_to_edge_multimap.equal_range(node_index);
-
-  for (rose_graph_integer_edge_hash_multimap::const_iterator i =
-           equal_range_pair.first;
-       i != equal_range_pair.second; i++) {
-    SgGraphEdge *edge = i->second;
-
-    ROSE_ASSERT(edge != NULL);
-
-    int edge_node_first = edge->get_node_A()->get_index();
-    int edge_node_second = edge->get_node_B()->get_index();
-
-    ROSE_ASSERT(edge_node_first == node_index ||
-                edge_node_second == node_index);
-
-    // printf ("Building set with edge = %d between nodes (%d,%d)
-    // \n",edge->get_index(),edge_node_first,edge_node_second);
-
-    returnSet.insert(std::pair<int, int>(edge_node_first, edge_node_second));
-  }
-  // #endif
-
-  return returnSet;
-}
-
-//! Generate a set of SgGraphNode pointers associated with a given string label.
+//! Generate a set of all graph nodes.
 std::set<SgGraphNode *> SgGraph::computeNodeSet() {
-  ROSE_ASSERT(this != NULL);
   std::set<SgGraphNode *> returnSet;
-
-  rose_graph_integer_node_hash_map::iterator i =
-      p_node_index_to_node_map.begin();
-  while (i != p_node_index_to_node_map.end()) {
-    returnSet.insert(i->second);
-    i++;
-  }
-
+  for (const auto &entry : p_node_index_to_node_map)
+    returnSet.insert(entry.second);
   return returnSet;
-}
-
-//! Generate a set of SgGraphNode pointers associated with a given string label.
-std::set<SgGraphNode *> SgGraph::computeNodeSet(const string &label) {
-  ROSE_ASSERT(this != NULL);
-  std::set<SgGraphNode *> returnSet;
-
-  std::set<int> nodeIndexSet = computeNodeIndexSet(label);
-
-  std::set<int>::iterator i = nodeIndexSet.begin();
-  while (i != nodeIndexSet.end()) {
-    returnSet.insert(p_node_index_to_node_map[*i]);
-    i++;
-  }
-
-  return returnSet;
-}
-
-//! Generate a set of node index values associated with a given string label.
-std::set<int> SgGraph::computeNodeIndexSet(const string &label) {
-  ROSE_ASSERT(this != NULL);
-
-  std::set<int> returnSet;
-
-  typedef std::pair<rose_graph_string_integer_hash_multimap::const_iterator,
-                    rose_graph_string_integer_hash_multimap::const_iterator>
-      equal_range_type;
-  equal_range_type equal_range_pair =
-      p_string_to_node_index_multimap.equal_range(label);
-
-  // DQ (3/25/2017): Eliminated Clange warning about unused variables.
-  // rose_graph_string_integer_hash_multimap::const_iterator lower_bound =
-  // equal_range_pair.first;
-  // rose_graph_string_integer_hash_multimap::const_iterator upper_bound =
-  // equal_range_pair.second;
-
-  // DQ (8/18/2009): This CAN be an empty set so we have to allow this.
-  // ROSE_ASSERT(lower_bound != upper_bound);
-
-  for (rose_graph_string_integer_hash_multimap::const_iterator i =
-           equal_range_pair.first;
-       i != equal_range_pair.second; i++) {
-    int node_index = i->second;
-    // printf ("Found node %d associated with label = %s
-    // \n",node_index,label.c_str());
-    returnSet.insert(node_index);
-  }
-
-  return returnSet;
-}
-
-size_t SgGraph::numberOfGraphNodes() const {
-  // Number of nodes in graph.
-  // Note that there is a static function SgNode::numberOfNodes() which can't be
-  // overloaded!
-
-  // DQ (8/18/2009): Commented out consitional compilation
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  return p_node_index_to_node_map.size();
-  // #else
-  //      return 0;
-  // #endif
-}
-
-size_t SgGraph::numberOfGraphEdges() const {
-  // Number of edges in graph.
-
-  // DQ (8/18/2009): Commented out consitional compilation
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  return p_edge_index_to_edge_map.size();
-  // #else
-  //      return 0;
-  // #endif
 }
 
 bool SgGraph::exists(SgGraphNode *node) {
-  ROSE_ASSERT(this != NULL);
   ROSE_ASSERT(node != NULL);
 
   return (p_node_index_to_node_map.find(node->get_index()) !=
@@ -207,490 +19,201 @@ bool SgGraph::exists(SgGraphNode *node) {
 }
 
 bool SgGraph::exists(SgGraphEdge *edge) {
-  ROSE_ASSERT(this != NULL);
   ROSE_ASSERT(edge != NULL);
 
   return (p_edge_index_to_edge_map.find(edge->get_index()) !=
           p_edge_index_to_edge_map.end());
 }
 
-// DQ (4/28/2009): Added support to build node (automaticly added to SgGraph).
 SgGraphNode *SgGraph::addNode(const std::string &name, SgNode *internal_node) {
-  ROSE_ASSERT(this != NULL);
-
   SgGraphNode *node = new SgGraphNode(name);
-  ROSE_ASSERT(node != NULL);
-
-  // Set the reference to the associated AST node
   node->set_SgNode(internal_node);
-  node->set_name(name);
   return addNode(node);
 }
 
 SgGraphNode *SgGraph::addNode(SgGraphNode *node) {
-  ROSE_ASSERT(this != NULL);
   ROSE_ASSERT(node != NULL);
-
-  node->set_parent(this);
-
-  if (exists(node) == false) {
-    int node_index = node->get_index();
-    p_node_index_to_node_map[node_index] = node;
-
-    // This fails for test_graph_5.C
-    // ROSE_ASSERT(p_string_to_node_index_multimap.find(node->get_name()) ==
-    // p_string_to_node_index_multimap.end());
-
-    // Adding the label to the label map (we might decide to not put empty
-    // labels into the map). p_string_to_node_index_multimap[node->get_name()] =
-    // node_index;
-    if (node->get_name().empty() == false)
-      p_string_to_node_index_multimap.insert(
-          std::pair<std::string, int>(node->get_name(), node_index));
-  } else {
+  ROSE_ASSERT(node->get_parent() == nullptr);
+  if (exists(node)) {
     printf("This node already exists in this graph \n");
     ROSE_ABORT();
   }
+
+  node->set_parent(this);
+  int node_index = node->get_index();
+  p_node_index_to_node_map[node_index] = node;
+
   return node;
 }
 
 SgGraphEdge *SgGraph::addEdge(SgGraphNode *a, SgGraphNode *b,
                               const std::string &name) {
-  ROSE_ASSERT(this != NULL);
-
-  SgGraphEdge *edge = NULL;
-
-  edge = new SgGraphEdge(a, b, name);
-  ROSE_ASSERT(edge != NULL);
-  return addEdge(edge);
+  ROSE_ASSERT(a != NULL && b != NULL);
+  return addEdge(new SgGraphEdge(a, b, name));
 }
 
-// DQ (4/28/2009): Added support to build node (automaticly added to SgGraph).
 SgGraphEdge *SgGraph::addEdge(SgGraphEdge *edge) {
-  ROSE_ASSERT(this != NULL);
-
-  edge->set_parent(this);
-
-  if (exists(edge) == false) {
-    int edge_index = edge->get_index();
-    p_edge_index_to_edge_map[edge_index] = edge;
-
-    ROSE_ASSERT(edge->get_node_A() != NULL);
-    ROSE_ASSERT(edge->get_node_B() != NULL);
-
-    int node_index_first = edge->get_node_A()->get_index();
-    int node_index_second = edge->get_node_B()->get_index();
-
-    // Note that this significantly slows down the performance of the new graph
-    // support (appears to be about a factor of 10X). Is there a better (faster)
-    // way to build the p_node_index_pair_to_edge_multimap?
-
-    // DQ (5/2/2009): Note that operator[] is not available for the multimap
-    // container.
-    // p_node_index_pair_to_edge_multimap[std::pair<int,int>(edge->get_node_A(),edge->get_node_B())]
-    // = edge;
-    // p_node_index_pair_to_edge_multimap.insert(std::pair<std::pair<int,int>,SgGraphEdge*>(std::pair<int,int>(edge->get_node_A()->get_index(),edge->get_node_B()->get_index()),edge));
-    //
-    // #ifdef _MSCx_VER
-    p_node_index_pair_to_edge_multimap.insert(
-        std::pair<std::pair<int, int>, SgGraphEdge *>(
-            std::pair<int, int>(node_index_first, node_index_second), edge));
-
-    // Initialize the node index --> SgGraphEdge* multimap.
-    // printf ("In SgGraph::addEdge(): Insert edge (%d,%d) on node %d
-    // \n",node_index_first,node_index_second,node_index_first);
-    p_node_index_to_edge_multimap.insert(
-        std::pair<int, SgGraphEdge *>(node_index_first, edge));
-  } else {
-    printf("This node already exists in this graph \n");
+  ROSE_ASSERT(edge != NULL);
+  ROSE_ASSERT(edge->get_node_A() != NULL);
+  ROSE_ASSERT(edge->get_node_B() != NULL);
+  ROSE_ASSERT(edge->get_parent() == nullptr);
+  auto source_it =
+      p_node_index_to_node_map.find(edge->get_node_A()->get_index());
+  auto target_it =
+      p_node_index_to_node_map.find(edge->get_node_B()->get_index());
+  ROSE_ASSERT(source_it != p_node_index_to_node_map.end() &&
+              source_it->second == edge->get_node_A());
+  ROSE_ASSERT(target_it != p_node_index_to_node_map.end() &&
+              target_it->second == edge->get_node_B());
+  if (exists(edge)) {
+    printf("This edge already exists in this graph \n");
     ROSE_ABORT();
   }
 
+  edge->set_parent(this);
+  int edge_index = edge->get_index();
+  p_edge_index_to_edge_map[edge_index] = edge;
+
+  int node_index_first = edge->get_node_A()->get_index();
+  int node_index_second = edge->get_node_B()->get_index();
+
+  p_node_index_pair_to_edge_multimap.emplace(
+      std::make_pair(node_index_first, node_index_second), edge);
+
+  if (!edge->get_name().empty())
+    p_string_to_edge_index_multimap.emplace(edge->get_name(), edge_index);
   return edge;
 }
 
 SgDirectedGraphEdge *
 SgIncidenceDirectedGraph::addDirectedEdge(SgGraphNode *a, SgGraphNode *b,
                                           const std::string &name) {
-  ROSE_ASSERT(this != NULL);
-
   ROSE_ASSERT(a != NULL && b != NULL);
-
-  SgDirectedGraphEdge *edge = NULL;
-
-  edge = new SgDirectedGraphEdge(a, b, name);
-
-  ROSE_ASSERT(edge != NULL);
-
-  return addDirectedEdge(edge);
+  return addDirectedEdge(new SgDirectedGraphEdge(a, b, name));
 }
 
-// DQ (4/28/2009): Added support to build node (automaticly added to SgGraph).
 SgDirectedGraphEdge *
 SgIncidenceDirectedGraph::addDirectedEdge(SgDirectedGraphEdge *edge) {
-  ROSE_ASSERT(this != NULL);
-
-  edge->set_parent(this);
-
-  // This is using the new Graph IR node API.
-  if (exists(edge) == false) {
-    //      std::cerr << " >>>>>>>>>> Edge does not exist .. adding edge : " <<
-    //      edge->get_node_A()->get_name() <<
-    //  " - " << edge->get_node_B()->get_name() << std::endl;
-    int edge_index = edge->get_index();
-    p_edge_index_to_edge_map[edge_index] = edge;
-
-    ROSE_ASSERT(edge->get_node_A() != NULL);
-    ROSE_ASSERT(edge->get_node_B() != NULL);
-
-    int node_index_first = edge->get_node_A()->get_index();
-    int node_index_second = edge->get_node_B()->get_index();
-
-    // Note that this significantly slows down the performance of the new
-    // graph support (appears to be about a factor of 10X). Is there a
-    // better (faster) way to build the
-    // p_node_index_pair_to_edge_multimap? Yes, increase the size of the
-    // hash table (DONE).
-    p_node_index_pair_to_edge_multimap.insert(
-        std::pair<std::pair<int, int>, SgGraphEdge *>(
-            std::pair<int, int>(node_index_first, node_index_second), edge));
-
-    // Initialize the node index --> SgGraphEdge* multimap.
-    // printf ("In SgGraph::addEdge(): Insert edge %p = (%d,%d) on node %d
-    // (p_node_index_to_edge_multimap size = %" PRIuPTR ")
-    // \n",edge,node_index_first,node_index_second,node_index_first,p_node_index_to_edge_multimap.size());
-
-    // p_node_index_to_edge_multimap.insert(std::pair<int,SgGraphEdge*>(node_index_first,edge));
-    //   p_node_index_to_edge_multimap.insert(rose_graph_integer_edge_hash_multimap::value_type(node_index_first,edge));
-    get_node_index_to_edge_multimap_edgesOut().insert(
-        pair<int, SgDirectedGraphEdge *>(node_index_first, edge));
-    get_node_index_to_edge_multimap_edgesIn().insert(
-        pair<int, SgDirectedGraphEdge *>(node_index_second, edge));
-
-    // printf ("    After adding edge (p_node_index_to_edge_multimap size = %"
-    // PRIuPTR ") bucket_count() = %" PRIuPTR "
-    // \n",p_node_index_to_edge_multimap.size(),p_node_index_to_edge_multimap.bucket_count());
-
-    // Adding the label to the label map (we might decide to not put empty
-    // labels into the map).
-    if (edge->get_name().empty() == false)
-      p_string_to_edge_index_multimap.insert(
-          std::pair<std::string, int>(edge->get_name(), edge_index));
-
-    // Debugging code
-    // display_node_index_to_edge_multimap();
-  } else {
+  ROSE_ASSERT(edge != NULL);
+  ROSE_ASSERT(edge->get_node_A() != NULL);
+  ROSE_ASSERT(edge->get_node_B() != NULL);
+  ROSE_ASSERT(edge->get_parent() == nullptr);
+  auto source_it =
+      p_node_index_to_node_map.find(edge->get_node_A()->get_index());
+  auto target_it =
+      p_node_index_to_node_map.find(edge->get_node_B()->get_index());
+  ROSE_ASSERT(source_it != p_node_index_to_node_map.end() &&
+              source_it->second == edge->get_node_A());
+  ROSE_ASSERT(target_it != p_node_index_to_node_map.end() &&
+              target_it->second == edge->get_node_B());
+  if (exists(edge)) {
     printf("This edge already exists in this graph \n");
     ROSE_ABORT();
   }
+
+  edge->set_parent(this);
+  int edge_index = edge->get_index();
+  p_edge_index_to_edge_map[edge_index] = edge;
+
+  int node_index_first = edge->get_node_A()->get_index();
+  int node_index_second = edge->get_node_B()->get_index();
+
+  p_node_index_pair_to_edge_multimap.emplace(
+      std::make_pair(node_index_first, node_index_second), edge);
+
+  get_node_index_to_edge_multimap_edgesOut().emplace(node_index_first, edge);
+  get_node_index_to_edge_multimap_edgesIn().emplace(node_index_second, edge);
+
+  if (!edge->get_name().empty())
+    p_string_to_edge_index_multimap.emplace(edge->get_name(), edge_index);
   return edge;
 }
 
 bool SgIncidenceDirectedGraph::removeDirectedEdge(SgDirectedGraphEdge *edge) {
+  if (!exists(edge))
+    return false;
 
-  if (exists(edge)) {
+  ROSE_ASSERT(edge->get_parent() == this);
+  ROSE_ASSERT(edge->get_node_A() != nullptr);
+  ROSE_ASSERT(edge->get_node_B() != nullptr);
+  const int edge_index = edge->get_index();
+  const int source_index = edge->get_node_A()->get_index();
+  const int target_index = edge->get_node_B()->get_index();
 
-    int edge_index = edge->get_index();
-    p_edge_index_to_edge_map.erase(edge_index);
+  auto edge_it = p_edge_index_to_edge_map.find(edge_index);
+  ROSE_ASSERT(edge_it != p_edge_index_to_edge_map.end() &&
+              edge_it->second == edge);
 
-    int node_index_first = edge->get_node_A()->get_index();
+  auto pair_range = p_node_index_pair_to_edge_multimap.equal_range(
+      std::make_pair(source_index, target_index));
+  auto pair_it =
+      std::find_if(pair_range.first, pair_range.second,
+                   [edge](const auto &entry) { return entry.second == edge; });
+  ROSE_ASSERT(pair_it != pair_range.second);
 
-    // DQ (3/25/2017): Eliminated Clange warning about unused variables.
-    // int node_index_second = edge->get_node_B()->get_index();
+  auto &out_edges = get_node_index_to_edge_multimap_edgesOut();
+  auto out_range = out_edges.equal_range(source_index);
+  auto out_it =
+      std::find_if(out_range.first, out_range.second,
+                   [edge](const auto &entry) { return entry.second == edge; });
+  ROSE_ASSERT(out_it != out_range.second);
 
-    for (rose_graph_integerpair_edge_hash_multimap::const_iterator it =
-             p_node_index_pair_to_edge_multimap.begin();
-         it != p_node_index_pair_to_edge_multimap.end(); it++) {
-      if (it->second == edge) {
-        p_node_index_pair_to_edge_multimap.erase(it);
-        break;
-      }
-    }
+  auto &in_edges = get_node_index_to_edge_multimap_edgesIn();
+  auto in_range = in_edges.equal_range(target_index);
+  auto in_it =
+      std::find_if(in_range.first, in_range.second,
+                   [edge](const auto &entry) { return entry.second == edge; });
+  ROSE_ASSERT(in_it != in_range.second);
 
-    for (rose_graph_integer_edge_hash_multimap::const_iterator it =
-             get_node_index_to_edge_multimap_edgesOut().begin();
-         it != get_node_index_to_edge_multimap_edgesOut().end(); it++) {
-      if (it->first == node_index_first && it->second == edge) {
-        get_node_index_to_edge_multimap_edgesOut().erase(it);
-        break;
-      }
-    }
-
-    for (rose_graph_integer_edge_hash_multimap::const_iterator it =
-             get_node_index_to_edge_multimap_edgesIn().begin();
-         it != get_node_index_to_edge_multimap_edgesIn().end(); it++) {
-      if (it->first == node_index_first && it->second == edge) {
-        get_node_index_to_edge_multimap_edgesIn().erase(it);
-        break;
-      }
-    }
-
-    if (edge->get_name().empty() == false)
-      p_string_to_edge_index_multimap.erase(edge->get_name());
-
-    edge->set_parent(NULL);
-
-    delete edge;
-    return true;
+  if (!edge->get_name().empty()) {
+    auto label_range =
+        p_string_to_edge_index_multimap.equal_range(edge->get_name());
+    auto label_it = std::find_if(
+        label_range.first, label_range.second,
+        [edge_index](const auto &entry) { return entry.second == edge_index; });
+    ROSE_ASSERT(label_it != label_range.second);
+    p_string_to_edge_index_multimap.erase(label_it);
   }
 
-  return false;
+  p_edge_index_to_edge_map.erase(edge_it);
+  p_node_index_pair_to_edge_multimap.erase(pair_it);
+  out_edges.erase(out_it);
+  in_edges.erase(in_it);
+  edge->set_parent(nullptr);
+  delete edge;
+  return true;
 }
 
-void SgGraph::display_node_index_to_node_map() const {
-  printf("Inside of SgGraph::display_node_index_to_node_multimap(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_integer_node_hash_map::const_iterator i =
-      p_node_index_to_node_map.begin();
-  while (i != p_node_index_to_node_map.end()) {
-    printf("   node index: i->first = %d SgGraphNode: i->second = %p = %d \n",
-           i->first, i->second, i->second->get_index());
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::display_edge_index_to_edge_map() const {
-  printf("Inside of SgGraph::display_edge_index_to_edge_map(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_integer_edge_hash_map::const_iterator i =
-      p_edge_index_to_edge_map.begin();
-  while (i != p_edge_index_to_edge_map.end()) {
-    printf("   edge index: i->first = %d SgGraphEdge: i->second = %p = %d \n",
-           i->first, i->second, i->second->get_index());
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::display_node_index_pair_to_edge_multimap() const {
-  printf("Inside of SgGraph::display_node_index_pair_to_edge_multimap(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_integerpair_edge_hash_multimap::const_iterator i =
-      p_node_index_pair_to_edge_multimap.begin();
-  while (i != p_node_index_pair_to_edge_multimap.end()) {
-    printf("   node pair: (i->first.first = %d,i->first.second = %d) "
-           "SgGraphEdge: i->second = %p = %d \n",
-           i->first.first, i->first.second, i->second, i->second->get_index());
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::display_string_to_node_index_multimap() const {
-  printf("Inside of SgGraph::display_string_to_node_index_multimap(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_string_integer_hash_multimap::const_iterator i =
-      p_string_to_node_index_multimap.begin();
-  while (i != p_string_to_node_index_multimap.end()) {
-    printf("   string: i->first = %s node: i->second = %d \n", i->first.c_str(),
-           i->second);
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::display_string_to_edge_index_multimap() const {
-  printf("Inside of SgGraph::display_string_to_edge_index_multimap(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_string_integer_hash_multimap::const_iterator i =
-      p_string_to_edge_index_multimap.begin();
-  while (i != p_string_to_edge_index_multimap.end()) {
-    printf("   string: i->first = %s edge: i->second = %d \n", i->first.c_str(),
-           i->second);
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::display_node_index_to_edge_multimap() const {
-  printf("Inside of SgGraph::display_node_index_to_edge_multimap(): \n");
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  rose_graph_integer_edge_hash_multimap::const_iterator i =
-      p_node_index_to_edge_multimap.begin();
-  while (i != p_node_index_to_edge_multimap.end()) {
-    printf("   node index: i->first = %d SgGraphEdge: i->second = %p = %d "
-           "count(i->first) = %" PRIuPTR " \n",
-           i->first, i->second, i->second->get_index(),
-           p_node_index_to_edge_multimap.count(i->first));
-    i++;
-  }
-  // #endif
-}
-
-void SgGraph::resize_hash_maps(size_t numberOfNodes, size_t numberOfEdges) {
-  // This function makes the hash_maps and hash_multimaps internal hash table
-  // be set to an explicit size (the largest prime number greater than the
-  // input specified size is used (I think)).  The reduces the hash collisions
-  // and improves the performance of usign the hash table.
-
-  // printf ("Inside of SgGraph::resize_hash_maps(numberOfNodes = %" PRIuPTR "
-  // numberOfEdges = %" PRIuPTR "): \n",numberOfNodes,numberOfEdges);
-
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  // For maps and multimaps which deal with edges, make those hash
-  // tables larger by the expected average degree of the nodes.
-  // Note that the next larger prime number will be used by the
-  // hash_map and hash_multimap for the internal table size.
-
-  p_node_index_to_node_map.rehash(numberOfNodes);
-  p_edge_index_to_edge_map.rehash(numberOfEdges);
-
-  p_node_index_to_edge_multimap.rehash(numberOfEdges);
-  p_node_index_pair_to_edge_multimap.rehash(numberOfEdges);
-
-  p_string_to_node_index_multimap.rehash(numberOfNodes);
-  p_string_to_edge_index_multimap.rehash(numberOfEdges);
-  // #endif
-}
-
-size_t SgGraph::memory_usage() {
-  // This function makes the hash_maps and hash_multimaps internal hash table
-  // be set to an explicit size (the largest prime number greater than the
-  // input specified size is used (I think)).  The reduces the hash collisions
-  // and improves the performance of using the hash table.
-
-  // printf ("Inside of SgGraph::memory_usage(): \n");
-
-  // For maps and multimaps which deal with edges, make those hash
-  // tables larger by the expected average degree of the nodes.
-  // Note that the next larger prime number will be used by the
-  // hash_map and hash_multimap for the internal table size.
-  size_t memory_usage = 0;
-
-  // #ifdef ROSE_USE_NEW_GRAPH_NODES
-  memory_usage += p_node_index_to_node_map.size() *
-                  sizeof(rose_graph_integer_node_hash_map::value_type);
-  memory_usage += p_edge_index_to_edge_map.size() *
-                  sizeof(rose_graph_integer_edge_hash_map::value_type);
-
-  memory_usage += p_node_index_to_edge_multimap.size() *
-                  sizeof(rose_graph_integer_edge_hash_multimap::value_type);
-  memory_usage += p_node_index_pair_to_edge_multimap.size() *
-                  sizeof(rose_graph_integerpair_edge_hash_multimap::value_type);
-
-  memory_usage += p_string_to_edge_index_multimap.size() *
-                  sizeof(rose_graph_string_integer_hash_multimap::value_type);
-  memory_usage += p_string_to_node_index_multimap.size() *
-                  sizeof(rose_graph_string_integer_hash_multimap::value_type);
-  // #endif
-
-  printf("Inside of SgGraph::memory_usage(): memory_usage = %" PRIuPTR " \n",
-         memory_usage);
-
-  return memory_usage;
-}
-
-//! Generate a set of SgGraphEdge pointers associated with a given SgGraphNode.
+//! Generate the directed edges entering a node.
 std::set<SgDirectedGraphEdge *>
 SgIncidenceDirectedGraph::computeEdgeSetIn(SgGraphNode *node) {
-  ROSE_ASSERT(this != NULL);
-  ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(node != nullptr);
 
   std::set<SgDirectedGraphEdge *> returnSet;
-
-  // printf ("In SgIncidenceDirectedGraph::computeEdgeSetIn(node=%p=%d)
-  // p_node_index_to_edge_multimap_edgesIn.size() = %" PRIuPTR "
-  // \n",node,node->get_index(),p_node_index_to_edge_multimap_edgesIn.size());
-
-  typedef std::pair<rose_graph_integer_edge_hash_multimap::const_iterator,
-                    rose_graph_integer_edge_hash_multimap::const_iterator>
-      equal_range_type;
-  equal_range_type equal_range_pair =
+  auto range =
       p_node_index_to_edge_multimap_edgesIn.equal_range(node->get_index());
-
-  for (rose_graph_integer_edge_hash_multimap::const_iterator i =
-           equal_range_pair.first;
-       i != equal_range_pair.second; i++) {
-    // int edge_index = i->second;
-    // SgGraphEdge* edge = p_node_index_to_edge_multimap[edge_index];
-    SgDirectedGraphEdge *edge = (SgDirectedGraphEdge *)i->second;
-
-    int edge_node_first = edge->get_node_A()->get_index();
-    int edge_node_second = edge->get_node_B()->get_index();
-
-    ROSE_ASSERT(edge_node_first == node->get_index() ||
-                edge_node_second == node->get_index());
-
-    // printf ("Building set with edge = %d between nodes (%d,%d)
-    // \n",edge->get_index(),edge_node_first,edge_node_second);
-
+  for (auto it = range.first; it != range.second; ++it) {
+    SgDirectedGraphEdge *edge = isSgDirectedGraphEdge(it->second);
+    ROSE_ASSERT(edge != nullptr);
+    ROSE_ASSERT(edge->get_to() == node);
     returnSet.insert(edge);
   }
-
   return returnSet;
 }
 
-std::set<int> SgIncidenceDirectedGraph::computeEdgeSetIn(int node_index) {
-  ROSE_ASSERT(this != NULL);
-
-  std::set<int> returnSet;
-
-  std::set<SgDirectedGraphEdge *> edgeSet =
-      computeEdgeSetIn(p_node_index_to_node_map[node_index]);
-
-  std::set<SgDirectedGraphEdge *>::iterator i = edgeSet.begin();
-  while (i != edgeSet.end()) {
-    returnSet.insert((*i)->get_index());
-    i++;
-  }
-
-  return returnSet;
-}
-
-//! Generate a set of SgGraphEdge pointers associated with a given SgGraphNode.
+//! Generate the directed edges leaving a node.
 std::set<SgDirectedGraphEdge *>
 SgIncidenceDirectedGraph::computeEdgeSetOut(SgGraphNode *node) {
-  ROSE_ASSERT(this != NULL);
-  ROSE_ASSERT(node != NULL);
+  ROSE_ASSERT(node != nullptr);
 
   std::set<SgDirectedGraphEdge *> returnSet;
-
-  // printf ("In SgIncidenceDirectedGraph::computeEdgeSetOut(node=%p=%d)
-  // p_node_index_to_edge_multimap_edgesOut.size() = %" PRIuPTR "
-  // \n",node,node->get_index(),p_node_index_to_edge_multimap_edgesOut.size());
-
-  typedef std::pair<rose_graph_integer_edge_hash_multimap::const_iterator,
-                    rose_graph_integer_edge_hash_multimap::const_iterator>
-      equal_range_type;
-  equal_range_type equal_range_pair =
+  auto range =
       p_node_index_to_edge_multimap_edgesOut.equal_range(node->get_index());
-
-  for (rose_graph_integer_edge_hash_multimap::const_iterator i =
-           equal_range_pair.first;
-       i != equal_range_pair.second; i++) {
-    // int edge_index = i->second;
-    // SgGraphEdge* edge = p_node_index_to_edge_multimap[edge_index];
-    SgDirectedGraphEdge *edge = (SgDirectedGraphEdge *)i->second;
-
-    int edge_node_first = edge->get_node_A()->get_index();
-    int edge_node_second = edge->get_node_B()->get_index();
-
-    ROSE_ASSERT(edge_node_first == node->get_index() ||
-                edge_node_second == node->get_index());
-
-    // printf ("Building set with edge = %d between nodes (%d,%d)
-    // \n",edge->get_index(),edge_node_first,edge_node_second);
-
+  for (auto it = range.first; it != range.second; ++it) {
+    SgDirectedGraphEdge *edge = isSgDirectedGraphEdge(it->second);
+    ROSE_ASSERT(edge != nullptr);
+    ROSE_ASSERT(edge->get_from() == node);
     returnSet.insert(edge);
   }
-
-  return returnSet;
-}
-
-std::set<int> SgIncidenceDirectedGraph::computeEdgeSetOut(int node_index) {
-  ROSE_ASSERT(this != NULL);
-
-  std::set<int> returnSet;
-
-  std::set<SgDirectedGraphEdge *> edgeSet =
-      computeEdgeSetOut(p_node_index_to_node_map[node_index]);
-
-  std::set<SgDirectedGraphEdge *>::iterator i = edgeSet.begin();
-  while (i != edgeSet.end()) {
-    returnSet.insert((*i)->get_index());
-    i++;
-  }
-
   return returnSet;
 }

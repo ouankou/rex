@@ -44,10 +44,13 @@ void Foo(){
     
     if(__is_polymorphic(A2));
     if(__is_polymorphic(B2));
-    if(__is_polymorphic(C2));
+    if (__is_polymorphic(C2))
+      ;
 
-    
-    if(__is_polymorphic(A2[]));
-    if(__is_polymorphic(B2[]));
-    if(__is_polymorphic(C2[]));
+    if (!__is_polymorphic(A2[]))
+      ;
+    if (!__is_polymorphic(B2[]))
+      ;
+    if (!__is_polymorphic(C2[]))
+      ;
 }

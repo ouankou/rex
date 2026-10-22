@@ -1,19 +1,3 @@
-/* unparse_stmt.C
- * Contains functions that unparse statements
- *
- * FORMATTING WILL BE DONE IN TWO WAYS:
- * 1. using the file_info object to get information from line and column number
- *    (for original source code)
- * 2. following a specified format that I have specified with indentations of
- *    length TABINDENT (for transformations)
- *
- * REMEMBER: For types and symbols, we still call the original unparse function
- * defined in sage since they dont have file_info. For expressions,
- * Unparse_ExprStmt::unparse is called, and for statements,
- * Unparse_ExprStmt::unparseStatement is called.
- *
- */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include "nameQualificationSupport.h"
@@ -28,38 +12,53 @@
 #include <unordered_set>
 #include <vector>
 
-// DQ (8/31/2013):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
 #include "rose_config.h"
-// DQ (12/6/2014): Adding support for unparsing from the token stream.
 #include "tokenStreamMapping.h"
 
-#define ROSE_TRACK_PROGRESS_OF_ROSE_COMPILING_ROSE 0
-
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 using namespace Rose;
 
-#define OUTPUT_DEBUGGING_FUNCTION_BOUNDARIES 0
-#define OUTPUT_DEBUGGING_FUNCTION_INTERNALS 0
-
-#define OUTPUT_DEBUGGING_UNPARSE_INFO 0
-
-// Output the class name and function names as we unparse (for debugging)
-#define OUTPUT_DEBUGGING_CLASS_NAME 0
-#define OUTPUT_DEBUGGING_FUNCTION_NAME 0
-#define OUTPUT_HIDDEN_LIST_DATA 0
-
-// DQ (2/5/2021): Adding debugging support for token-based unparsing.
-#define DEBUG_USING_CURPRINT 0
-
-#define DEBUG_TOKEN_STREAM_UNPARSING 0
-
-#define ENABLE_unparsedPartiallyUsingTokenStream 1
-
 namespace {
+void unparseTemplateClassName(Unparse_ExprStmt *unparser,
+                              SgTemplateClassDeclaration *declaration,
+                              SgUnparse_Info &info) {
+  const bool specialization = declaration->get_specialization() !=
+                              SgDeclarationStatement::e_no_specialization;
+  const SgName name = specialization ? declaration->get_templateName()
+                                     : declaration->get_name();
+  ROSE_ASSERT(!name.is_null() && !name.getString().empty());
+  unparser->curprint(name);
+  if (specialization) {
+    SgUnparse_Info argument_info(info);
+    argument_info.set_SkipClassDefinition();
+    argument_info.set_SkipEnumDefinition();
+    argument_info.set_SkipClassSpecifier();
+    argument_info.set_declstatement_ptr(nullptr);
+    unparser->unparseTemplateArgumentList(
+        declaration->get_templateSpecializationArguments(), argument_info,
+        TemplateArgumentEmission::explicit_source_prefix);
+  }
+}
+
+SgInitializedNamePtrList
+writtenCtorInitializers(SgMemberFunctionDeclaration *constructor) {
+  SgInitializedNamePtrList written;
+  for (auto *entry : constructor->get_ctors()) {
+    ASSERT_not_null(entry);
+    ROSE_ASSERT(entry->get_parent() == constructor->get_CtorInitializerList());
+    if (entry->get_ctor_initializer_source_order().has_value())
+      written.push_back(entry);
+  }
+  std::sort(written.begin(), written.end(), [](auto *left, auto *right) {
+    return *left->get_ctor_initializer_source_order() <
+           *right->get_ctor_initializer_source_order();
+  });
+  for (size_t i = 1; i < written.size(); ++i)
+    ROSE_ASSERT(written[i - 1]->get_ctor_initializer_source_order() !=
+                written[i]->get_ctor_initializer_source_order());
+  return written;
+}
+
 std::string cxxSourceFileName(const SgSourceFile *source_file) {
   return source_file != nullptr ? source_file->getFileName() : "<null>";
 }
@@ -247,7 +246,6 @@ bool cxxSourceGroupTypeUsesDeclaratorSyntax(SgType *type) {
          isSgReferenceType(type) != nullptr ||
          isSgRvalueReferenceType(type) != nullptr ||
          isSgArrayType(type) != nullptr || isSgFunctionType(type) != nullptr ||
-         isSgPartialFunctionType(type) != nullptr ||
          isSgMemberFunctionType(type) != nullptr;
 }
 
@@ -364,10 +362,17 @@ bool cxxSourceGroupDeclarationSpecifierTypesMatch(SgType *lhs, SgType *rhs) {
   SgAutoType *lhsAuto = isSgAutoType(lhs);
   SgAutoType *rhsAuto = isSgAutoType(rhs);
   if (lhsAuto != nullptr || rhsAuto != nullptr) {
-    return lhsAuto != nullptr && rhsAuto != nullptr &&
-           lhsAuto->get_is_constrained() == rhsAuto->get_is_constrained() &&
-           lhsAuto->get_source_constraint_spelling() ==
-               rhsAuto->get_source_constraint_spelling();
+    if (lhsAuto == nullptr || rhsAuto == nullptr ||
+        lhsAuto->get_is_constrained() != rhsAuto->get_is_constrained())
+      return false;
+    SgNonrealRefExp *lhsConstraint = lhsAuto->get_type_constraint();
+    SgNonrealRefExp *rhsConstraint = rhsAuto->get_type_constraint();
+    if (lhsConstraint == nullptr || rhsConstraint == nullptr)
+      return lhsConstraint == rhsConstraint;
+    return lhsConstraint->get_symbol() == rhsConstraint->get_symbol() &&
+           SageInterface::templateArgumentListEquivalence(
+               lhsConstraint->get_templateArguments(),
+               rhsConstraint->get_templateArguments());
   }
   return SageInterface::isEquivalentType(lhs, rhs);
 }
@@ -382,13 +387,12 @@ void validateCxxSourceDeclarationGroupContract(
   const SgDeclarationModifier &firstModifier = first->get_declarationModifier();
   if (!cxxSourceGroupDeclarationModifiersMatch(
           group.owner->get_declarationModifier(), firstModifier) ||
-      group.owner->get_decl_attributes() != first->get_decl_attributes() ||
       group.owner->get_linkage() != first->get_linkage() ||
       group.owner->isExternBrace() != first->isExternBrace()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[source-declaration-group]: group=%p does "
             "not publish its first member=%p/%s name=%s common declaration "
-            "contract (modifiers=%d attributes=%u/%u linkage='%s'/'%s' "
+            "contract (modifiers=%d linkage='%s'/'%s' "
             "extern-brace=%d/%d)\n",
             static_cast<void *>(group.owner), static_cast<void *>(first),
             first->class_name().c_str(), SageInterface::get_name(first).c_str(),
@@ -396,19 +400,19 @@ void validateCxxSourceDeclarationGroupContract(
                 group.owner->get_declarationModifier(), firstModifier)
                 ? 1
                 : 0,
-            group.owner->get_decl_attributes(), first->get_decl_attributes(),
             group.owner->get_linkage().c_str(), first->get_linkage().c_str(),
             group.owner->isExternBrace() ? 1 : 0,
             first->isExternBrace() ? 1 : 0);
     ROSE_ABORT();
   }
   SgFunctionDeclaration *firstFunction = isSgFunctionDeclaration(first);
-  const bool firstConstexpr =
+  const auto firstConstexpr =
       firstFunction != nullptr
-          ? firstFunction->get_is_constexpr()
-          : (isSgVariableDeclaration(first) != nullptr
-                 ? isSgVariableDeclaration(first)->get_is_constexpr()
-                 : false);
+          ? firstFunction->get_constexpr_specifier()
+          : (isSgVariableDeclaration(first) != nullptr &&
+                     isSgVariableDeclaration(first)->get_is_constexpr()
+                 ? SgFunctionDeclaration::e_constexpr
+                 : SgFunctionDeclaration::e_constexpr_unspecified);
 
   SgFunctionDeclaration *functionContract = firstFunction;
   for (size_t index = 1; index < group.members.size(); ++index) {
@@ -416,12 +420,13 @@ void validateCxxSourceDeclarationGroupContract(
     ASSERT_not_null(member);
     SgType *memberBase = cxxSourceGroupDeclarationSpecifierType(member);
     SgFunctionDeclaration *memberFunction = isSgFunctionDeclaration(member);
-    const bool memberConstexpr =
+    const auto memberConstexpr =
         memberFunction != nullptr
-            ? memberFunction->get_is_constexpr()
-            : (isSgVariableDeclaration(member) != nullptr
-                   ? isSgVariableDeclaration(member)->get_is_constexpr()
-                   : false);
+            ? memberFunction->get_constexpr_specifier()
+            : (isSgVariableDeclaration(member) != nullptr &&
+                       isSgVariableDeclaration(member)->get_is_constexpr()
+                   ? SgFunctionDeclaration::e_constexpr
+                   : SgFunctionDeclaration::e_constexpr_unspecified);
     const bool commonContractMatches =
         memberBase != nullptr &&
         cxxSourceGroupDeclarationSpecifierTypesMatch(firstBase, memberBase) &&
@@ -899,20 +904,6 @@ void requireDirectSourceSurfaceOwnership(SgDeclarationStatement *declaration,
   }
 }
 
-bool locatedNodesOriginallySeparatedByLineBreak(const SgLocatedNode *previous,
-                                                const SgLocatedNode *current) {
-  if (previous == nullptr || current == nullptr) {
-    return false;
-  }
-
-  const Sg_File_Info *previous_start = previous->get_startOfConstruct();
-  const Sg_File_Info *current_start = current->get_startOfConstruct();
-  return hasConcreteFileLocation(previous_start) &&
-         hasConcreteFileLocation(current_start) &&
-         previous_start->isSameFile(*current_start) &&
-         current_start->get_line() > previous_start->get_line();
-}
-
 bool locatedNodeHasAttachedPreprocessingInfo(const SgLocatedNode *node) {
   if (node == nullptr) {
     return false;
@@ -962,21 +953,6 @@ bool locatedNodeHasInsidePreprocessingInfo(const SgLocatedNode *node) {
   }
 
   return false;
-}
-
-bool isConditionalPreprocessingDirective(
-    PreprocessingInfo::DirectiveType type) {
-  switch (type) {
-  case PreprocessingInfo::CpreprocessorIfdefDeclaration:
-  case PreprocessingInfo::CpreprocessorIfndefDeclaration:
-  case PreprocessingInfo::CpreprocessorIfDeclaration:
-  case PreprocessingInfo::CpreprocessorElseDeclaration:
-  case PreprocessingInfo::CpreprocessorElifDeclaration:
-  case PreprocessingInfo::CpreprocessorEndifDeclaration:
-    return true;
-  default:
-    return false;
-  }
 }
 
 SgLocatedNode *
@@ -1294,7 +1270,8 @@ bool declarationNeedsLeadingBlankLine(const SgStatement *stmt) {
 }
 
 bool statementUsesCompactFunctionBodyLayout(const SgStatement *statement) {
-  if (statement == nullptr || statement->isTransformation() ||
+  if (statement == nullptr || statement->get_isModified() ||
+      statement->isTransformation() ||
       statement->get_containsTransformation() ||
       statement->get_containsTransformationToSurroundingWhitespace() ||
       locatedNodeHasAttachedPreprocessingInfo(
@@ -1510,8 +1487,7 @@ bool shouldRenderClassDefinitionInline(const SgClassDefinition *class_defn,
   }
 
   if (!class_defn->get_members().empty() ||
-      classDefinitionHasInsidePreprocessingInfo(class_defn) ||
-      class_defn->get_packingAlignment() != 0) {
+      classDefinitionHasInsidePreprocessingInfo(class_defn)) {
     return false;
   }
 
@@ -1578,6 +1554,7 @@ void initializeClassAccessState(const SgClassDefinition *class_defn,
   ASSERT_not_null(class_defn->get_declaration());
   switch (class_defn->get_declaration()->get_class_type()) {
   case SgClassDeclaration::e_class:
+  case SgClassDeclaration::e_lambda_closure:
     info.set_isPrivateAccess();
     break;
   case SgClassDeclaration::e_struct:
@@ -2061,67 +2038,6 @@ collectTemplateClassChain(SgDeclarationStatement *associated_decl) {
   return chain;
 }
 
-SgDeclarationStatement *
-exactTemplateClassHeaderOwner(SgTemplateClassDeclaration *declaration,
-                              SgDeclarationStatement *semantic_owner) {
-  ASSERT_not_null(declaration);
-  SgClassDeclaration *source_owner =
-      declaration->get_sourceSpelledTemplateClassOwner();
-  switch (declaration->get_templateClassOwnerScopeKind()) {
-  case SgTemplateClassDeclaration::e_template_class_owner_scope_semantic:
-    if (source_owner != nullptr) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[template-class-header-owner]: "
-              "declaration=%p name=%s selects its semantic owner but also "
-              "publishes source owner=%p\n",
-              static_cast<void *>(declaration),
-              declaration->get_name().getString().c_str(),
-              static_cast<void *>(source_owner));
-      ROSE_ABORT();
-    }
-    return semantic_owner;
-
-  case SgTemplateClassDeclaration::
-      e_template_class_owner_scope_source_spelled: {
-    SgScopeStatement *owner_scope =
-        source_owner != nullptr ? source_owner->get_scope() : nullptr;
-    SgClassDefinition *owner_definition =
-        source_owner != nullptr ? source_owner->get_definition() : nullptr;
-    if (source_owner == nullptr || source_owner == declaration ||
-        owner_scope == nullptr || source_owner->get_parent() != nullptr ||
-        owner_definition == nullptr ||
-        owner_definition->get_declaration() != source_owner ||
-        owner_definition->get_parent() != source_owner ||
-        source_owner->get_file_info() == nullptr ||
-        !source_owner->get_file_info()->isCompilerGenerated() ||
-        !source_owner->get_file_info()->isFrontendSpecific()) {
-      fprintf(
-          stderr,
-          "REX_UNPARSE_INVARIANT[template-class-header-owner]: "
-          "declaration=%p name=%s has malformed source-spelled owner=%p "
-          "scope=%p parent=%p definition=%p\n",
-          static_cast<void *>(declaration),
-          declaration->get_name().getString().c_str(),
-          static_cast<void *>(source_owner), static_cast<void *>(owner_scope),
-          static_cast<void *>(
-              source_owner != nullptr ? source_owner->get_parent() : nullptr),
-          static_cast<void *>(owner_definition));
-      ROSE_ABORT();
-    }
-    return source_owner;
-  }
-
-  default:
-    fprintf(stderr,
-            "REX_UNPARSE_INVARIANT[template-class-header-owner]: "
-            "declaration=%p name=%s has invalid owner kind=%d\n",
-            static_cast<void *>(declaration),
-            declaration->get_name().getString().c_str(),
-            static_cast<int>(declaration->get_templateClassOwnerScopeKind()));
-    ROSE_ABORT();
-  }
-}
-
 void unparseTrailingRequiresClauseIfPresent(
     Unparse_ExprStmt *expr_unparser, SgFunctionDeclaration *funcdecl_stmt,
     SgUnparse_Info &info) {
@@ -2295,8 +2211,6 @@ string UnparseLanguageIndependentConstructs::token_sequence_position_name(
     s = "e_trailing_whitespace_end";
     break;
 
-    // DQ (12/31/2014): Added to support the middle subsequence of tokens in the
-    // SgIfStmt as a special case.
   case e_else_whitespace_start:
     s = "e_else_whitespace_start";
     break;
@@ -2331,70 +2245,12 @@ void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     UnparseLanguageIndependentConstructs::token_sequence_position_enum_type
         e_token_sequence_position_end,
     SgUnparse_Info &info, int start_offset, int end_offset) {
-#if DEBUG_TOKEN_STREAM_UNPARSING
-  printf("unparseStatementFromTokenStream(stmt = %p = %s): \n", stmt,
-         stmt->class_name().c_str());
-  printf("   --- stmt: filename = %s \n", stmt->getFilenameString().c_str());
-  printf("   --- e_token_sequence_position_start = %d = %s \n",
-         e_token_sequence_position_start,
-         token_sequence_position_name(e_token_sequence_position_start).c_str());
-  printf("   --- e_token_sequence_position_end   = %d = %s \n",
-         e_token_sequence_position_end,
-         token_sequence_position_name(e_token_sequence_position_end).c_str());
-#endif
-#if DEBUG_USING_CURPRINT
-  curprint(
-      string("\n/* In unparseStatementFromTokenStream(stmt,start,end,info): "
-             "stmt = ") +
-      stmt->class_name() +
-      " get_containsTransformationToSurroundingWhitespace = " +
-      string(stmt->get_containsTransformationToSurroundingWhitespace()
-                 ? "true"
-                 : "false") +
-      " */\n");
-#endif
 
-#if DEBUG_USING_CURPRINT
-  if (SgProject::get_verbose() > 0) {
-    string s = "\n/* Unparse a partial token sequence: 1 stmt: stmt = " +
-               stmt->class_name() + " */\n";
-    curprint(s);
-  }
-#endif
-
-  // DQ (6/6/2021): Adding the support to provide offsets to modify the starting
-  // and ending token sequence to unparse. DQ (5/30/2021): We do want to
-  // uniformally call this function (no exception for SgGlobal. The exception
-  // here is that if the last token of the file is C/C++ syntax (e.g. "}") then
-  // we don't want to output anything.
-  // unparseStatementFromTokenStream(stmt,stmt,e_token_sequence_position_start,e_token_sequence_position_end,info);
   unparseStatementFromTokenStream(stmt, stmt, e_token_sequence_position_start,
                                   e_token_sequence_position_end, info,
                                   start_offset, end_offset);
-
-#if DEBUG_TOKEN_STREAM_UNPARSING
-  printf("Leaving unparseStatementFromTokenStream(stmt,start,end,info) \n");
-#endif
-#if DEBUG_USING_CURPRINT
-  // curprint("\n/* Leaving
-  // unparseStatementFromTokenStream(stmt,start,end,info): */ \n");
-  string s =
-      string("\n/* Leaving "
-             "unparseStatementFromTokenStream(stmt,start,end,info): stmt = ") +
-      stmt->class_name() + " */ \n";
-  curprint(s);
-#endif
 }
 
-// DQ (6/6/2021): Adding the support to provide offsets to modify the starting
-// and ending token sequence to unparse. void
-// UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream (
-// // SgStatement* stmt_1, SgStatement* stmt_2,
-//    SgLocatedNode* stmt_1, SgLocatedNode* stmt_2,
-//    UnparseLanguageIndependentConstructs::token_sequence_position_enum_type
-//    e_token_sequence_position_start,
-//    UnparseLanguageIndependentConstructs::token_sequence_position_enum_type
-//    e_token_sequence_position_end, bool unparseOnlyWhitespace )
 void UnparseLanguageIndependentConstructs::unparseStatementFromTokenStream(
     SgLocatedNode *stmt_1, SgLocatedNode *stmt_2,
     UnparseLanguageIndependentConstructs::token_sequence_position_enum_type
@@ -2643,49 +2499,27 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
     ROSE_ABORT();
   }
 
-  // DQ (9/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
-  // DQ (8/9/2013): refactored to support additional refactoring to separate out
-  // code to unparse SgInitializedName.
   bool oldStyleDefinition =
       funcdecl_stmt->get_oldStyleDefinition() && !funcdecl_stmt->isForward();
 
-  // printf ("In unparseFunctionParameterDeclaration(): Argument name = %s \n",
-  //      (tmp_name.str() != NULL) ? tmp_name.str() : "NULL NAME");
-
-  // initializedName.get_storageModifier().display("New storage modifiers in
-  // unparseFunctionParameterDeclaration()");
+  SgStatement *qualificationContext =
+      SageInterface::isLambdaFunction(funcdecl_stmt)
+          ? info.get_template_argument_qualification_context()
+          : parameter_list;
+  ASSERT_not_null(qualificationContext);
 
   SgStorageModifier &storage = initializedName->get_storageModifier();
   if (storage.isExtern()) {
     curprint("extern ");
   }
 
-  // DQ (7/202/2006): The isStatic() function in the SgStorageModifier held by
-  // the SgInitializedName object should always be false. This is because the
-  // static-ness of a variable is held by the SgVariableDeclaration (and the
-  // SgStorageModified help in the SgDeclarationModifier). printf ("In
-  // initializedName = %p test the return value of storage.isStatic() = %d = %d
-  // (should be boolean value)
-  // \n",initializedName,storage.isStatic(),storage.get_modifier());
   ROSE_ASSERT(storage.isStatic() == false);
 
-  // This was a bug mistakenly reported by Isaac
   ROSE_ASSERT(storage.get_modifier() >= 0);
 
-  if (storage.isStatic()) {
-    curprint("static ");
-  }
-
-  if (storage.isAuto()) {
-    // DQ (4/30/2004): Auto is a default which is to be supressed
-    // in C old-style parameters and not really ever needed anyway?
-    // curprint( "auto ");
-  }
-
   if (storage.isRegister()) {
-    // curprint( "register ");
     if ((oldStyleDefinition == false) || (outputParameterDeclaration == true)) {
       curprint("register ");
     }
@@ -2700,8 +2534,6 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   }
 
   if (storage.isAsm()) {
-    // DQ (2/6/2014): Fix to support GNU gcc.
-    // curprint("asm ");
     curprint("__asm__ ");
   }
 
@@ -2725,14 +2557,14 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
   // Error checking, if we are using old style C function parameters, then I
   // must not be C++ code.
   if (oldStyleDefinition == true) {
-    ROSE_ASSERT(SageInterface::is_Cxx_language() == false);
+    ROSE_ASSERT(info.get_language() != SgFile::e_Cxx_language);
   }
 
   if ((oldStyleDefinition == false) || (outputParameterDeclaration == true)) {
     // output the type name for each argument
     if (tmp_type != NULL) {
       SgUnparse_Info ninfo(info);
-      ninfo.set_template_argument_qualification_context(parameter_list);
+      ninfo.set_template_argument_qualification_context(qualificationContext);
       // DQ (2/3/2019): In the case of function parameters, the member pointer
       // types need an extra parenthesis. This might just apply to arrays of
       // SgMemberPointerType.
@@ -2784,18 +2616,9 @@ void Unparse_ExprStmt::unparseFunctionParameterDeclaration(
 
   SgUnparse_Info ninfo3(info);
   ninfo3.unset_inArgList();
-  ninfo3.set_template_argument_qualification_context(parameter_list);
+  ninfo3.set_template_argument_qualification_context(qualificationContext);
 
-  // DQ (4/27/2013): We now have better support in ROSE to know when to output
-  // the default arguments, so we don't want to use this mechanism above.  So
-  // now we always output the default arguments for function parameters in a
-  // function declaration if they are defined in the AST. It is up to the
-  // specification in the AST to have them in the correct locations, consistant
-  // with the source code.
-  bool outputInitializer = true;
-
-  // Add an initializer if it exists
-  if (outputInitializer == true && tmp_init != NULL) {
+  if (tmp_init != NULL) {
     // Cong (6/28/2011): When unparsing an initializer for a function parameter,
     // we should add a space before '='. Or else, foo(const int& = 1) will be
     // unparsed to foo(const int&=1) which contains an operator '&=", which is
@@ -2816,16 +2639,15 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
                                            SgUnparse_Info &info) {
   ASSERT_not_null(funcdecl_stmt);
 
-  // DQ (9/7/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
-  SgFunctionParameterList *source_parameter_list =
+  SgFunctionParameterList *source_declaration_list =
       funcdecl_stmt->get_parameterList_syntax();
-  if (source_parameter_list == nullptr) {
-    source_parameter_list = funcdecl_stmt->get_parameterList();
+  if (source_declaration_list == nullptr) {
+    source_declaration_list = funcdecl_stmt->get_parameterList();
   }
-  ASSERT_not_null(source_parameter_list);
-  unparseAttachedPreprocessingInfo(source_parameter_list, info,
+  ASSERT_not_null(source_declaration_list);
+  unparseAttachedPreprocessingInfo(source_declaration_list, info,
                                    PreprocessingInfo::inside);
 
   // DQ (1/18/2014): This is a better implementation than setting the source
@@ -2834,25 +2656,18 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
   if (funcdecl_stmt->get_prototypeIsWithoutParameters() == true) {
     return;
   }
-
-  bool outputFunctionParameters = true;
+  if (funcdecl_stmt->get_args().empty() &&
+      funcdecl_stmt->get_type()->get_has_prototype() &&
+      info.get_language() == SgFile::e_C_language) {
+    curprint("void");
+    return;
+  }
 
   SgInitializedNamePtrList::iterator p = funcdecl_stmt->get_args().begin();
 
-  // DQ (4/13/2018): I want to initialize this iterator, but it is not clear
-  // what to initialize it to...
   SgInitializedNamePtrList::iterator p_syntax =
       funcdecl_stmt->get_args().begin();
   bool use_param_syntax = false;
-  // PP (9/19/25): * get_type_syntax_is_available() is not tied to
-  // get_parameterList_syntax()
-  //                 in some parse_secondary_declaration flows
-  //                 get_type_syntax_is_available() only implies
-  //                 get_type_syntax() and not get_parameterList_syntax().
-  //               * For recording auto types in returns, only type_syntax is
-  //               used,
-  //                 but not parameterList_syntax.
-  //               => check for get_parameterList_syntax() directly.
   if (SgFunctionParameterList *paramSyntax =
           funcdecl_stmt->get_parameterList_syntax()) {
     use_param_syntax = true;
@@ -2868,39 +2683,22 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     // unparsing the arguments which are outside of the parameter list are
     // outside of the parameter list See example code:
     // tests/nonsmoke/functional/CompileTests/C_tests/test2010_10.c
-    SgInitializedName *source_parameter = use_param_syntax ? *p_syntax : *p;
-    ASSERT_not_null(source_parameter);
+    SgInitializedName *source_declaration = use_param_syntax ? *p_syntax : *p;
+    ASSERT_not_null(source_declaration);
     if (funcdecl_stmt->get_oldStyleDefinition() == false) {
-      unparseAttachedPreprocessingInfo(source_parameter, info,
+      unparseAttachedPreprocessingInfo(source_declaration, info,
                                        PreprocessingInfo::before);
     }
     if (separatorBelongsToCurrentParameter) {
       curprint(", ");
       separatorBelongsToCurrentParameter = false;
     }
-    // DQ (1/17/2014): Adding support in C to output function prototypes without
-    // function parameters. unparseFunctionParameterDeclaration
-    // (funcdecl_stmt,*p,false,info); if (outputFunctionParameters == true)
-    if ((outputFunctionParameters == true) ||
-        (funcdecl_stmt->get_oldStyleDefinition() == true)) {
-      // DQ (4/13/2018): If we have saved the original syntax then use it, else
-      // use the default (which is matching the defining function declaration).
-      // unparseFunctionParameterDeclaration (funcdecl_stmt,*p,false,info);
-      if (use_param_syntax) {
-        // DQ (4/13/2018): One question would be are we using the correct name
-        // qualification for any type referenced.
-        unparseFunctionParameterDeclaration(funcdecl_stmt, *p_syntax, false,
-                                            info);
-
-      } else {
-        unparseFunctionParameterDeclaration(funcdecl_stmt, *p, false, info);
-      }
-    }
+    unparseFunctionParameterDeclaration(funcdecl_stmt, source_declaration,
+                                        false, info);
 
     // Move to the next argument
     p++;
 
-    // DQ (4/13/2018): Increment the type syntax iterator in unison.
     if (use_param_syntax) {
       p_syntax++;
     }
@@ -2912,7 +2710,7 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
     // conditionally present leading parameter instead owns its trailing comma.
     if (p != funcdecl_stmt->get_args().end()) {
       if (use_param_syntax &&
-          p_syntax == source_parameter_list->get_args().end()) {
+          p_syntax == source_declaration_list->get_args().end()) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[function-parameter-syntax]: "
                 "function=%p semantic parameters outnumber syntax "
@@ -2920,12 +2718,12 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
                 static_cast<void *>(funcdecl_stmt));
         ROSE_ABORT();
       }
-      SgInitializedName *next_source_parameter =
+      SgInitializedName *next_source_declaration =
           use_param_syntax ? *p_syntax : *p;
-      ASSERT_not_null(next_source_parameter);
+      ASSERT_not_null(next_source_declaration);
       separatorBelongsToCurrentParameter =
           funcdecl_stmt->get_oldStyleDefinition() == false &&
-          locatedNodeHasConditionalRegionOpening(next_source_parameter,
+          locatedNodeHasConditionalRegionOpening(next_source_declaration,
                                                  PreprocessingInfo::before);
     }
     if (p != funcdecl_stmt->get_args().end() &&
@@ -2933,9 +2731,9 @@ void Unparse_ExprStmt::unparseFunctionArgs(SgFunctionDeclaration *funcdecl_stmt,
       curprint(", ");
     }
     if (funcdecl_stmt->get_oldStyleDefinition() == false) {
-      unparseAttachedPreprocessingInfo(source_parameter, info,
+      unparseAttachedPreprocessingInfo(source_declaration, info,
                                        PreprocessingInfo::after);
-      unparseAttachedPreprocessingInfo(source_parameter, info,
+      unparseAttachedPreprocessingInfo(source_declaration, info,
                                        PreprocessingInfo::after_syntax);
     }
   }
@@ -2970,27 +2768,12 @@ void Unparse_ExprStmt::unparseOldStyleFunctionParameterDeclarations(
   }
 }
 
-#define DEBUG_unparse_helper 0
-
 //!  prints out the function parameters in a function declaration or function
 //  call. For now, all parameters are printed on one line since there is no
 //!  file information for each parameter.
 void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
                                       SgUnparse_Info &info) {
   ASSERT_not_null(funcdecl_stmt);
-#if DEBUG_unparse_helper
-  printf("In unparse_helper():\n");
-  printf("  funcdecl_stmt = %p = %s \n", funcdecl_stmt,
-         funcdecl_stmt->class_name().c_str());
-  printf("    ->get_name() = %s\n", funcdecl_stmt->get_name().str());
-  printf("    ->get_firstNondefiningDeclaration() = %p \n",
-         funcdecl_stmt->get_firstNondefiningDeclaration());
-  printf("    ->get_definingDeclaration()         = %p \n",
-         funcdecl_stmt->get_definingDeclaration());
-  printf("    ->decl_mod.isFriend() = %s\n",
-         funcdecl_stmt->get_declarationModifier().isFriend() ? "true"
-                                                             : "false");
-#endif
   bool is_friend = funcdecl_stmt->get_declarationModifier().isFriend();
   bool is_1st_decl =
       funcdecl_stmt == funcdecl_stmt->get_firstNondefiningDeclaration();
@@ -3006,9 +2789,6 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
                             : (!(is_friend && is_1st_decl) || has_qualifier);
   if (need_qualifier) {
     std::string nameQualifier = functionNameQualification.qualifier;
-#if DEBUG_unparse_helper
-    printf("  nameQualifier = %s\n", nameQualifier.c_str());
-#endif
     curprint(nameQualifier);
   }
 
@@ -3045,11 +2825,9 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
               funcdecl_stmt->get_name().str());
       ROSE_ABORT();
     }
-#if DEBUG_unparse_helper
-    printf("  tpl_fdecl->get_templateName() = %s \n",
-           tpl_fdecl->get_templateName().str());
-#endif
     unp->u_exprStmt->unparseTemplateFunctionName(tpl_fdecl, info);
+  } else if (funcdecl_stmt->get_specialFunctionModifier().isConversion()) {
+    unparseConversionFunctionName(funcdecl_stmt, info);
   } else {
     curprint(has_omp_declare_variant_source_name
                  ? funcdecl_stmt->get_omp_declare_variant_source_name().str()
@@ -3077,10 +2855,6 @@ void Unparse_ExprStmt::unparse_helper(SgFunctionDeclaration *funcdecl_stmt,
     unparseFunctionArgs(funcdecl_stmt, ninfo2);
     curprint(")");
   }
-
-#if DEBUG_unparse_helper
-  printf("Leaving unparse_helper()\n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
@@ -3098,65 +2872,13 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
         requireCxxSourceDeclarationGroup(isSgDeclarationGroupStatement(stmt));
   }
 
-  // curprint("In unparseLanguageSpecificStatement()");
-
-#if DEBUG_USING_CURPRINT
-  curprint(
-      string(
-          "\n/* Top of unparseLanguageSpecificStatement (Unparse_ExprStmt) ") +
-      stmt->class_name() + " */\n");
-#endif
-
-#if DEBUG_USING_CURPRINT && 0
-  ASSERT_not_null(stmt->get_startOfConstruct());
-  // ASSERT_not_null(stmt->getAttachedPreprocessingInfo());
-  int numberOfComments = -1;
-  if (stmt->getAttachedPreprocessingInfo() != NULL)
-    numberOfComments = stmt->getAttachedPreprocessingInfo()->size();
-  curprint(string("/* startOfConstruct: file = ") +
-           stmt->get_startOfConstruct()->get_filenameString() +
-           " raw filename = " +
-           stmt->get_startOfConstruct()->get_raw_filename() + " raw line = " +
-           StringUtility::numberToString(
-               stmt->get_startOfConstruct()->get_raw_line()) +
-           " raw column = " +
-           StringUtility::numberToString(
-               stmt->get_startOfConstruct()->get_raw_col()) +
-           " #comments = " + StringUtility::numberToString(numberOfComments) +
-           " */\n");
-#endif
-
-  // DQ (1/9/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
-#if ROSE_TRACK_PROGRESS_OF_ROSE_COMPILING_ROSE || 0
-  printf("In unparseLanguageSpecificStatement(): file = %s line = %d \n",
-         stmt->get_startOfConstruct()->get_filenameString().c_str(),
-         stmt->get_startOfConstruct()->get_line());
-#endif
-
-  // DQ (12/16/2008): Added support for unparsing statements around C++ specific
-  // statements unparseAttachedPreprocessingInfo(stmt, info,
-  // PreprocessingInfo::before);
-
-  // DQ (12/26/2007): Moved from language independent handling to C/C++ specific
-  // handling because we don't want it to appear in the Fortran code generation.
-  // DQ (added comments) this is where the new lines are introduced before
-  // statements. unp->cur.format(stmt, info, FORMAT_BEFORE_STMT); if
-  // (info.unparsedPartiallyUsingTokenStream() == false)
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   if (saved_unparsedPartiallyUsingTokenStream == false &&
       !info.SkipFormatting()) {
-    // DQ (11/14/2015): If we are unparsing statements in a SgBasicBlock, then
-    // we want to know if the SgBasicBlock is being unparsed using the
-    // partial_token_sequence so that we can supress the formatting that adds a
-    // CR to the start of the current statement being unparsed.
-    bool parentStatementListBeingUnparsedUsingPartialTokenSequence =
-        info.parentStatementListBeingUnparsedUsingPartialTokenSequence();
-    if (parentStatementListBeingUnparsedUsingPartialTokenSequence == true) {
-      // ROSE_ASSERT(false);
-    } else {
+    if (!info.parentStatementListBeingUnparsedUsingPartialTokenSequence()) {
       const bool access_specifier = isClassAccessLabelStatement(stmt);
       if (access_specifier) {
         const int indent = std::max(unp->cur.statement_indent() - TABINDENT, 0);
@@ -3172,11 +2894,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
       }
     }
   }
-
-#if DEBUG_USING_CURPRINT
-  curprint("/* In Unparse_ExprStmt::unparseLanguageSpecificStatement(): "
-           "Selecting an unparse function */");
-#endif
 
   if (emitSourceDeclarationGroup) {
     SgUnparse_Info groupInfo(info);
@@ -3251,46 +2968,18 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   }
 
   switch (stmt->variantT()) {
-    // DQ (8/14/2007): Need to move the C and C++ specific unparse member
-    // functions from the base class to this function.
-
-    // scope
-    // case V_SgGlobal:                 unparseGlobalStmt(stmt, info); break;
-    // case V_SgScopeStatement:         unparseScopeStmt(stmt, info); break;
-
-    // pragmas
-    // case V_SgPragmaDeclaration:      unparsePragmaDeclStmt(stmt, info);
-    // break; scope case V_SgGlobal:                 unparseGlobalStmt(stmt,
-    // info); break;
-    //        case V_SgScopeStatement:         unparseScopeStmt (stmt, info);
-    //        break;
-
-    // program units
-    // case V_SgModuleStatement:          unparseModuleStmt (stmt, info); break;
-    // case V_SgProgramHeaderStatement:   unparseProgHdrStmt(stmt, info); break;
-    // case V_SgProcedureHeaderStatement: unparseProcHdrStmt(stmt, info); break;
-
-    // declarations
-    // case V_SgInterfaceStatement:     unparseInterfaceStmt(stmt, info); break;
-    // case V_SgCommonBlock:            unparseCommonBlock  (stmt, info); break;
   case V_SgVariableDeclaration:
     unparseVarDeclStmt(stmt, info);
     break;
   case V_SgVariableDefinition:
     unparseVarDefnStmt(stmt, info);
     break;
-    // case V_SgParameterStatement:     unparseParamDeclStmt(stmt, info); break;
-    // case V_SgUseStatement:           unparseUseStmt      (stmt, info); break;
-
-    // executable statements, control flow
   case V_SgBasicBlock:
     unparseBasicBlockStmt(stmt, info);
     break;
   case V_SgIfStmt:
     unparseIfStmt(stmt, info);
     break;
-    // case V_SgFortranDo:              unparseDoStmt         (stmt, info);
-    // break;
   case V_SgWhileStmt:
     unparseWhileStmt(stmt, info);
     break;
@@ -3312,17 +3001,9 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   case V_SgGotoStatement:
     unparseGotoStmt(stmt, info);
     break;
-    // case V_SgStopOrPauseStatement:   unparseStopOrPauseStmt(stmt, info);
-    // break;
   case V_SgReturnStmt:
     unparseReturnStmt(stmt, info);
     break;
-
-    // executable statements, IO
-    // case V_SgIOStatement:            unparseIOStmt    (stmt, info); break;
-    // case V_SgIOControlStatement:     unparseIOCtrlStmt(stmt, info); break;
-
-    // pragmas
   case V_SgPragmaDeclaration:
     unparsePragmaDeclStmt(stmt, info);
     break;
@@ -3342,15 +3023,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   case V_SgAccessLabelStatement:
     unparseAccessLabelStatement(stmt, info);
     break;
-
-    // case DECL_STMT:          unparseDeclStmt(stmt, info);         break;
-    // case SCOPE_STMT:         unparseScopeStmt(stmt, info);        break;
-    //        case V_SgFunctionTypeTable:      unparseFuncTblStmt(stmt, info);
-    //        break;
-    // case GLOBAL_STMT:        unparseGlobalStmt(stmt, info);       break;
-    // case V_SgBasicBlock:             unparseBasicBlockStmt(stmt, info);
-    // break; case IF_STMT:            unparseIfStmt(stmt, info); break;
-
   case V_SgForStatement:
     unparseForStmt(stmt, info);
     break;
@@ -3372,8 +3044,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   case V_SgMemberFunctionDeclaration:
     unparseMFuncDeclStmt(stmt, info);
     break;
-    // case VAR_DECL_STMT:      unparseVarDeclStmt(stmt, info);      break;
-    // case VAR_DEFN_STMT:      unparseVarDefnStmt(stmt, info);      break;
   case V_SgClassDeclaration:
     unparseClassDeclStmt(stmt, info);
     break;
@@ -3389,47 +3059,27 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   case V_SgAttributedStatement:
     unparseAttributedStatement(stmt, info);
     break;
-    // case LABEL_STMT:         unparseLabelStmt(stmt, info);        break;
-    // case WHILE_STMT:         unparseWhileStmt(stmt, info);        break;
   case V_SgDoWhileStmt:
     unparseDoWhileStmt(stmt, info);
     break;
-    // case SWITCH_STMT:        unparseSwitchStmt(stmt, info);       break;
-    // case CASE_STMT:          unparseCaseStmt(stmt, info);         break;
   case V_SgTryStmt:
     unparseTryStmt(stmt, info);
     break;
   case V_SgCatchOptionStmt:
     unparseCatchStmt(stmt, info);
     break;
-    // case DEFAULT_STMT:       unparseDefaultStmt(stmt, info);      break;
-    // case BREAK_STMT:         unparseBreakStmt(stmt, info);        break;
   case V_SgContinueStmt:
     unparseContinueStmt(stmt, info);
     break;
-    // case RETURN_STMT:        unparseReturnStmt(stmt, info);       break;
-    // case GOTO_STMT:          unparseGotoStmt(stmt, info);         break;
   case V_SgAsmStmt:
     unparseAsmStmt(stmt, info);
     break;
-    // case SPAWN_STMT:         unparseSpawnStmt(stmt, info);        break;
   case V_SgTypedefDeclaration:
     unparseTypeDefStmt(stmt, info);
     break;
   case V_SgTemplateDeclaration:
     unparseTemplateDeclStmt(stmt, info);
     break;
-
-    // DQ (6/11/2011): Added support for new template IR nodes.
-    // case V_SgTemplateClassDeclaration: unparseTemplateDeclStmt(stmt, info);
-    // break; case V_SgTemplateFunctionDeclaration:
-    // unparseTemplateDeclStmt(stmt, info); break; case
-    // V_SgTemplateMemberFunctionDeclaration: unparseTemplateDeclStmt(stmt,
-    // info); break; case V_SgTemplateVariableDeclaration:
-    // unparseTemplateDeclStmt(stmt, info); break;
-
-    // DQ (12/26/2011): New design for template declarations (no longer derived
-    // from StTemplateDeclaration).
   case V_SgTemplateClassDeclaration:
     unparseTemplateClassDeclStmt(stmt, info);
     break;
@@ -3499,14 +3149,9 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparseUsingDeclarationStatement(stmt, info);
     break;
 
-    // DQ (3/2/2005): Added support for unparsing template class definitions.
-    // This is the case: TEMPLATE_INST_DEFN_STMT
   case V_SgTemplateInstantiationDefn:
     unparseClassDefnStmt(stmt, info);
     break;
-
-    // case V_SgNullStatement:                      unparseNullStatement(stmt,
-    // info); break;
 
     // Liao, 5/31/2009, add OpenMP support, TODO refactor some code to language
     // independent part
@@ -3517,7 +3162,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparseOmpForSimdStatement(stmt, info);
     break;
 
-    // DQ (7/25/2014): Adding support for C11 static assertions.
   case V_SgStaticAssertionDeclaration:
     unparseStaticAssertionDeclaration(stmt, info);
     break;
@@ -3526,7 +3170,6 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
     unparseFriendTypeDeclaration(stmt, info);
     break;
 
-    // DQ 11/3/2014): Adding C++11 templated typedef declaration support.
   case V_SgTemplateTypedefDeclaration:
     unparseTemplateTypedefDeclaration(stmt, info);
     break;
@@ -3551,21 +3194,8 @@ void Unparse_ExprStmt::unparseLanguageSpecificStatement(SgStatement *stmt,
   // statements unparseAttachedPreprocessingInfo(stmt, info,
   // PreprocessingInfo::after);
 
-#if DEBUG_USING_CURPRINT
-  curprint(
-      string("\n/* Leaving of unparseLanguageSpecificStatement() stmt = ") +
-      stmt->class_name() + " */ \n");
-#endif
-
   // DQ (1/9/2014): These should have been setup to be the same.
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
-
-#if DEBUG_USING_CURPRINT
-  curprint(
-      string(
-          "\n/* Leaving unparseLanguageSpecificStatement (Unparse_ExprStmt) ") +
-      stmt->class_name() + " */\n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseNamespaceDeclarationStatement(
@@ -3675,20 +3305,9 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
       isSgNamespaceDefinitionStatement(stmt);
   ASSERT_not_null(namespaceDefinition);
 
-#if OUTPUT_HIDDEN_LIST_DATA
-  outputHiddenListData(namespaceDefinition);
-#endif
-
   SgUnparse_Info ninfo(info);
 
-  // DQ (11/6/2004): Added support for saving current namespace!
   ASSERT_not_null(namespaceDefinition->get_namespaceDeclaration());
-  SgNamespaceDeclarationStatement *saved_namespace =
-      ninfo.get_current_namespace();
-
-  // DQ (6/13/2007): Set to null before resetting to non-null value
-  ninfo.set_current_namespace(NULL);
-  ninfo.set_current_namespace(namespaceDefinition->get_namespaceDeclaration());
 
   const namespace_source_fragment_state_enum fragment_state =
       namespaceSourceFragmentState(
@@ -3778,8 +3397,6 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
     unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
 
-    // unparseStatementFromTokenStream (stmt, e_token_subsequence_end,
-    // e_token_subsequence_end);
     if (last_stmt != NULL) {
       // Unparse the trailing white space of the last statement.
       unparseStatementFromTokenStream(last_stmt, stmt,
@@ -3793,12 +3410,6 @@ void Unparse_ExprStmt::unparseNamespaceDefinitionStatement(
                                       e_token_subsequence_end, info);
     }
   }
-
-  // DQ (11/3/2007): Since "ninfo" will go out of scope shortly, this is not
-  // significant. DQ (6/13/2007): Set to null before resetting to non-null value
-  // DQ (11/6/2004): Added support for saving current namespace!
-  ninfo.set_current_namespace(NULL);
-  ninfo.set_current_namespace(saved_namespace);
 }
 
 void Unparse_ExprStmt::unparseNamespaceAliasDeclarationStatement(
@@ -3822,9 +3433,6 @@ void Unparse_ExprStmt::unparseNamespaceAliasDeclarationStatement(
 
   curprint(nameQualifier);
 
-  // DQ (4/9/2018): Added support for aliases of namespace alias namespaces.
-  // curprint (
-  // namespaceAliasDeclaration->get_namespaceDeclaration()->get_name().str());
   if (namespaceAliasDeclaration->get_is_alias_for_another_namespace_alias() ==
       false) {
     curprint(namespaceAliasDeclaration->get_namespaceDeclaration()
@@ -3853,27 +3461,11 @@ void Unparse_ExprStmt::unparseUsingDirectiveStatement(SgStatement *stmt,
     return;
   }
 
-  // DQ (8/26/2004): This should be "using namespace" instead of just "using"
   curprint(string("\nusing namespace "));
 
-  // DQ (6/7/2007): Compute the name qualification separately.
-  // curprint ( usingDirective->get_namespaceDeclaration()->get_name().str();
-  // curprint (
-  // usingDirective->get_namespaceDeclaration()->get_qualified_name().str();
-
-  // DQ (5/12/2011): We store the information about the name qualification in
-  // the reference to the namespace, and not in the namespace.  This is so that
-  // multiple references to the namespace can be supported using different
-  // levels of qualification. SgName nameQualifier =
-  // unp->u_name->generateNameQualifier(
-  // usingDirective->get_namespaceDeclaration() , info ); SgName nameQualifier =
-  // unp->u_name->generateNameQualifier(
-  // usingDirective->get_namespaceDeclaration() , tmp_info );
   SgName nameQualifier(
       exactStatementNameQualification(unp, usingDirective, info).qualifier);
 
-  // printf ("In unparseUsingDirectiveStatement(): nameQualifier = %s
-  // \n",nameQualifier.str());
   curprint(nameQualifier);
 
   curprint(usingDirective->get_namespaceDeclaration()->get_name().str());
@@ -3887,34 +3479,7 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
       isSgUsingDeclarationStatement(stmt);
   ASSERT_not_null(usingDeclaration);
 
-  // DQ (1/30/2019): This code is required for the output of the access
-  // specifier (public, protected, private) and applies only within classes. Use
-  // get_parent() instead of get_scope() since we are looking for the structural
-  // position of the declaration (is it is a class).
-  SgClassDefinition *classDefinition =
-      isSgClassDefinition(usingDeclaration->get_parent());
-  if (classDefinition != NULL) {
-    // Don't output an access specifier in this is a struct or union!
-    // printf ("Don't output an access specifier in this is a struct or union!
-    // \n");
-
-    // DQ and PC (6/1/2006): Added Peter's suggested fixes to support unparsing
-    // fully qualified names (supporting auto-documentation). if
-    // (classDefinition->get_declaration()->get_class_type() ==
-    // SgClassDeclaration::e_class)
-    if (classDefinition->get_declaration()->get_class_type() ==
-            SgClassDeclaration::e_class &&
-        !info.skipCheckAccess())
-      info.set_CheckAccess();
-    // inClass = true;
-    // inCname =
-    // isSgClassDefinition(vardecl_stmt->get_parent())->get_declaration()->get_name();
-  }
-
-  // DQ (1/30/2019): Adding support to output the access specifier when we are
-  // in a class definition. info.set_CheckAccess();
   unp->u_sage->printSpecifier(usingDeclaration, info);
-  info.unset_CheckAccess();
 
   curprint(string("\nusing "));
   if (usingDeclaration->get_source_has_typename()) {
@@ -3953,8 +3518,6 @@ void Unparse_ExprStmt::unparseUsingDeclarationStatement(SgStatement *stmt,
 
 void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
-  // DQ (4/16/2005): Added support for explicit template instatination
-  // directives
   SgTemplateInstantiationDirectiveStatement *templateInstantiationDirective =
       isSgTemplateInstantiationDirectiveStatement(stmt);
   ASSERT_not_null(templateInstantiationDirective);
@@ -3980,20 +3543,11 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
   declarationInfo.set_template_argument_qualification_context(
       templateInstantiationDirective);
 
-  // curprint ( string("template ";
-
-  // DQ (8/2/2014): Added support for C++ directive to surpress template
-  // instantiation.
   if (templateInstantiationDirective->get_do_not_instantiate() == true) {
-    // syntax for C++11 "do not instantiate" directive.
     curprint("extern ");
   }
 
   ASSERT_not_null(declarationStatement->get_file_info());
-  // declarationStatement->get_file_info()->display("Location of
-  // SgTemplateInstantiationDirectiveStatement \n");
-
-  // unparseStatement(declaration,info);
   switch (declarationStatement->variantT()) {
   case V_SgTemplateInstantiationDecl: {
     SgClassDeclaration *classDeclaration =
@@ -4011,14 +3565,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
   }
 
   case V_SgTemplateInstantiationFunctionDecl: {
-    // printf ("Unparsing of SgTemplateInstantiationFunctionDecl in
-    // unparseTemplateInstantiationDirectiveStmt ... \n"); ROSE_ASSERT(false);
     SgFunctionDeclaration *functionDeclaration =
         isSgFunctionDeclaration(declarationStatement);
     ASSERT_not_null(functionDeclaration);
-    // DQ (8/29/2005): "template" keyword now output by
-    // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() curprint (
-    // string("template ";
     SgUnparse_Info ninfo(declarationInfo);
     ninfo.unset_unparsedPartiallyUsingTokenStream();
     ninfo.set_SkipFunctionDefinition();
@@ -4110,9 +3659,9 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDirectiveStmt(
             : nullptr;
     const bool exact_instantiated_member_scope =
         instantiated_class_declaration != nullptr &&
-        canonical_primary_class != nullptr &&
-        instantiated_class_declaration->get_templateDeclaration() ==
-            canonical_primary_class;
+        templateClassMatchesPattern(
+            instantiated_class_declaration->get_templateDeclaration(),
+            canonical_primary_class);
     const bool exact_instantiation_surface =
         templateInstantiationDirective->get_declaration() ==
             template_member_inst &&
@@ -4244,51 +3793,14 @@ void Unparse_ExprStmt::unparseTemplateInstantiationDeclStmt(
       isSgClassDeclaration(templateInstantiationDeclaration);
   ASSERT_not_null(classDeclaration);
 
-#if OUTPUT_DEBUGGING_CLASS_NAME || 0
-  printf(
-      "Inside of unparseTemplateInstantiationDeclStmt() stmt = %p/%p name = %s "
-      " templateName = %s transformed = %s/%s prototype = %s "
-      "compiler-generated = %s compiler-generated and marked for output = %s "
-      "\n",
-      classDeclaration, templateInstantiationDeclaration,
-      templateInstantiationDeclaration->get_name().str(),
-      templateInstantiationDeclaration->get_templateName().str(),
-      isTransformed(templateInstantiationDeclaration) ? "true" : "false",
-      (templateInstantiationDeclaration->get_file_info()->isTransformation() ==
-       true)
-          ? "true"
-          : "false",
-      (templateInstantiationDeclaration->get_definition() == NULL) ? "true"
-                                                                   : "false",
-      (templateInstantiationDeclaration->get_file_info()
-           ->isCompilerGenerated() == true)
-          ? "true"
-          : "false",
-      (templateInstantiationDeclaration->get_file_info()
-           ->isCompilerGeneratedNodeToBeUnparsed() == true)
-          ? "true"
-          : "false");
-#endif
-
-  // A type emitter requests only the template-id spelling.  A statement
-  // emitter has already selected this declaration through exact lexical or
-  // explicit-instantiation ownership and therefore must emit it.  File-info
-  // output bits are not an ownership channel and must never make a selected
-  // declaration disappear here.
   if (info.outputClassTemplateName()) {
-    const std::string template_id =
-        requireCompleteClassTemplateId(templateInstantiationDeclaration);
-    const std::string qualified_name =
-        templateInstantiationDeclaration->get_qualified_name().str();
-    if (qualified_name.size() < template_id.size() ||
-        qualified_name.compare(qualified_name.size() - template_id.size(),
-                               template_id.size(), template_id) != 0) {
-      fprintf(stderr, "REX_UNPARSE_INVARIANT[template-instantiation-identity]: "
-                      "qualified declaration name does not end in the stored "
-                      "template-id\n");
-      ROSE_ABORT();
+    SgScopeStatement *scope = templateInstantiationDeclaration->get_scope();
+    ASSERT_not_null(scope);
+    curprint(scope->get_qualified_name().str());
+    if (isSgGlobal(scope) == nullptr) {
+      curprint("::");
     }
-    curprint(qualified_name);
+    unparseTemplateName(templateInstantiationDeclaration, info);
     return;
   }
 
@@ -4311,41 +3823,6 @@ void Unparse_ExprStmt::unparseTemplateInstantiationFunctionDeclStmt(
       isSgFunctionDeclaration(templateInstantiationFunctionDeclaration);
 
   ASSERT_not_null(functionDeclaration);
-
-#if OUTPUT_DEBUGGING_FUNCTION_NAME || 0
-  printf("In unparseTemplateInstantiationFunctionDeclStmt() name = %s "
-         "(qualified_name = %s)  transformed = %s prototype = %s static = %s "
-         "friend = %s compiler generated = %s transformed = %s output = %s \n",
-         // templateInstantiationFunctionDeclaration->get_name().str(),
-         templateInstantiationFunctionDeclaration->get_name().str(),
-         templateInstantiationFunctionDeclaration->get_qualified_name().str(),
-         isTransformed(templateInstantiationFunctionDeclaration) ? "true"
-                                                                 : "false",
-         (templateInstantiationFunctionDeclaration->get_definition() == NULL)
-             ? "true"
-             : "false",
-         (templateInstantiationFunctionDeclaration->get_declarationModifier()
-              .get_storageModifier()
-              .isStatic() == true)
-             ? "true"
-             : "false",
-         (templateInstantiationFunctionDeclaration->get_declarationModifier()
-              .isFriend() == true)
-             ? "true"
-             : "false",
-         (templateInstantiationFunctionDeclaration->get_file_info()
-              ->isCompilerGenerated() == true)
-             ? "true"
-             : "false",
-         (templateInstantiationFunctionDeclaration->get_file_info()
-              ->isTransformation() == true)
-             ? "true"
-             : "false",
-         (templateInstantiationFunctionDeclaration->get_file_info()
-              ->isOutputInCodeGeneration() == true)
-             ? "true"
-             : "false");
-#endif
 
   // Reaching this language-specific emitter is itself the exact emission
   // decision.  Implicit semantic instantiations belong to auxiliary owners and
@@ -4377,52 +3854,6 @@ void Unparse_ExprStmt::unparseTemplateInstantiationMemberFunctionDeclStmt(
           templateInstantiationMemberFunctionDeclaration);
   ASSERT_not_null(memberFunctionDeclaration);
 
-  // DQ (3/3/2005): Commented out since it was a problem in test2004_36.C
-  // DQ (5/8/2004): Make this an explicit specialization (using the newer C++
-  // syntax to support this) curprint ( string("template <> \n";
-  // ASSERT_not_null(templateInstantiationMemberFunctionDeclaration->get_templateArguments());
-  // if
-  // (templateInstantiationMemberFunctionDeclaration->get_templateArguments()->size()
-  // > 0)
-  if (templateInstantiationMemberFunctionDeclaration->isSpecialization() ==
-      true) {
-    if ((templateInstantiationMemberFunctionDeclaration->get_file_info()
-             ->isCompilerGenerated() == true) &&
-        (templateInstantiationMemberFunctionDeclaration->isForward() == true)) {
-      // This is a ROSE generated forward declaration of a ROSE specialized
-      // member function (required). It is built in
-      // ROSE/src/roseSupport/templateSupport.C void
-      // fixupInstantiatedTemplates ( SgProject* project ). The forward
-      // declaration is placed directly after the template declaration so that
-      // no uses of the function can exist prior to its declaration.  Output a
-      // message into the gnerated source code identifying this
-      // transformation.
-#if PRINT_DEVELOPER_WARNINGS || 0
-      curprint(string("\n/* ROSE generated forward declaration of the ROSE "
-                      "generated member template specialization */"));
-#endif
-    } else {
-      // This is the ROSE generated template specialization for the template
-      // member function (required to be defined since the function is used
-      // (called)).  This function is defined at the end of file and may be
-      // defined there because a forward declaration for the specialization
-      // was output directly after the template declaration (before any use of
-      // the function could have been made ???).
-#if PRINT_DEVELOPER_WARNINGS || 0
-      curprint(string("\n/* ROSE generated member template specialization */"));
-#endif
-    }
-
-    // DQ (8/27/2005): This might be required for g++ 3.4.x and optional for
-    // g++ 3.3.x DQ (8/19/2005): It is incorrect when used for non-template
-    // member functions on templated classes defined in the class Output the
-    // syntax for template specialization (appears to be largely optional (at
-    // least with GNU g++) curprint ( string("\ntemplate <> ";
-  }
-
-  // DQ (8/29/2005): This is now output by the
-  // Unparse_ExprStmt::outputTemplateSpecializationSpecifier() member function
-  // curprint ( string("\ntemplate <> ";
   // As for free-function instantiations, lexical/auxiliary ownership has
   // already decided whether this node owns source syntax.  Once selected, a
   // forward declaration is still real syntax and definition presence is not a
@@ -4440,6 +3871,12 @@ void Unparse_ExprStmt::unparsePragmaDeclStmt(SgStatement *stmt,
 
   const std::string &source_text = pragmaDeclaration->get_cxx_source_text();
   const std::string semantic_text = pragma->get_pragma();
+  if (pragmaDeclaration->get_cxx_pragma_payload_kind() ==
+      SgPragmaDeclaration::e_cxx_pragma_source_attribute) {
+    ROSE_ASSERT(!source_text.empty());
+    curprint(source_text);
+    return;
+  }
   const std::string *pragma_text = nullptr;
   switch (pragmaDeclaration->get_cxx_pragma_payload_kind()) {
   case SgPragmaDeclaration::e_cxx_pragma_source_spelled:
@@ -4482,21 +3919,8 @@ void Unparse_ExprStmt::unparsePragmaDeclStmt(SgStatement *stmt,
     return;
   }
 
-  // Request from Boyanna at ANL:
-  // DQ (6/22/2006): Start all pragmas at the start of the line.  Since these
-  // are handled as IR nodes (#pragma is part of the C and C++ grammar
-  // afterall)they are indented for as any other sort of statements.  I have
-  // added a CR to put the pragma at the start of the next line.  A better
-  // solution might be to have the indent mechanism look ahead to see any
-  // upcoming SgPragmaDeclarations so that the indentation (insertion of extra
-  // spaces) could be skipped.  This would avoid the insertion of empty lines in
-  // the generated code. curprint ( string("#pragma " + pragma->get_pragma() +
-  // "\n";
-
   curprint(string("\n#pragma ") + *pragma_text + "\n");
 
-  // printf ("Output the pragma = %s \n",pragma->get_pragma());
-  // ROSE_ASSERT (0);
 }
 
 void Unparse_ExprStmt::unparseImportStatement(SgStatement *stmt,
@@ -4505,6 +3929,7 @@ void Unparse_ExprStmt::unparseImportStatement(SgStatement *stmt,
   SgImportStatement *import_stmt = isSgImportStatement(stmt);
   ASSERT_not_null(import_stmt);
   ROSE_ASSERT(import_stmt->get_is_cxx_module_import());
+  import_stmt->validate_import_state();
 
   const std::string module_name = import_stmt->get_module_name().getString();
   ROSE_ASSERT(!module_name.empty());
@@ -4619,25 +4044,7 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
     return;
   }
 
-#define DEBUG_BASIC_BLOCK 0
-
-  // unparseAttachedPreprocessingInfo(basic_stmt, info,
-  // PreprocessingInfo::before);
-
-#if DEBUG_BASIC_BLOCK || 0
-  printf("In unparseBasicBlock (stmt = %p) \n", stmt);
-  curprint("/* In unparseBasicBlock */");
-#endif
-
-  // DQ (12/15/2014): Debugging, support to detect where this is changed between
-  // the top of the block and the bottom of the block.
-  bool saved_top_unparsedPartiallyUsingTokenStream =
-      info.unparsedPartiallyUsingTokenStream();
-
-  // DQ (12/16/2014): The value of info.unparsedPartiallyUsingTokenStream() is
-  // used as a sort of global state, we want it to be consistant within the
-  // processing of this function. SgUnparse_Info ninfo(info);
-  bool saved_unparsedPartiallyUsingTokenStream =
+  const bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   const bool invalid_function_body_partial_token_boundary =
       saved_unparsedPartiallyUsingTokenStream == true &&
@@ -4653,16 +4060,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
   }
   bool ast_block_indentation_applied = false;
 
-#if DEBUG_BASIC_BLOCK
-  printf("In unparseBasicBlock (stmt = %p) "
-         "saved_unparsedPartiallyUsingTokenStream = %s \n",
-         basic_stmt,
-         saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-#endif
-
-  // DQ (12/5/2014): Test for if we have unparsed partially using the token
-  // stream. If so then we don't want to unparse this syntax, if not then we
-  // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     const bool use_compact_body_layout =
         basicBlockUsesCompactFunctionBodyLayout(basic_stmt, info);
@@ -4720,11 +4117,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
     const bool statement_already_formatted =
         prefer_same_line_open_brace == false &&
         useStatementFormattingForStandaloneBasicBlock(basic_stmt);
-#if DEBUG_USING_CURPRINT
-    curprint("\n/* unparse start of SgBasicBlock: "
-             "saved_unparsedPartiallyUsingTokenStream == false: output opening "
-             "{ */");
-#endif
 
     if (prefer_same_line_open_brace && unp->cur.current_col() > 0) {
       if (SgProject::get_verbose() > 0) {
@@ -4758,125 +4150,34 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
     unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK1);
     ast_block_indentation_applied = true;
   } else {
-#if DEBUG_USING_CURPRINT
-    curprint(
-        "\n/* unparse start of SgBasicBlock: "
-        "saved_unparsedPartiallyUsingTokenStream == true: output opening { */");
-#endif
-    // Unparse the tokens from the end of the basic block "{".
-    // DQ (6/2/2021): Comment out the opening "{".
-    // DQ (1/14/2015): We need to unparse syntax instead of the initial token,
-    // because this can be a macro expansion (see
-    // tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_57.C).
-    // unparseStatementFromTokenStream (stmt, e_leading_whitespace_start,
-    // e_token_subsequence_start); unparseStatementFromTokenStream (stmt,
-    // e_token_subsequence_start, e_token_subsequence_start); curprint("{");
     unparseStatementFromTokenStream(stmt, e_token_subsequence_start,
                                     e_token_subsequence_start, info);
-#if DEBUG_BASIC_BLOCK
-    curprint("/* unparse start of SgBasicBlock */");
-#endif
   }
 
-  // DQ (1/9/2007): This is useful for understanding which blocks are marked as
-  // compiler generated. curprint ( string(" /* block compiler generated = " +
-  // (basic_stmt->get_startOfConstruct()->isCompilerGenerated() ? "true" :
-  // "false") + " */ \n ";
-
-  // curprint ( string(" /* block size = " + basic_stmt->get_statements().size()
-  // + " */ \n ";
-
-  // printf ("block scope = %p = %s
-  // \n",basic_stmt,basic_stmt->class_name().c_str());
-  // basic_stmt->get_file_info()->display("basic_stmt block scope: debug");
-
-#if OUTPUT_HIDDEN_LIST_DATA
-  outputHiddenListData(basic_stmt);
-#endif
-
-#if DEBUG_BASIC_BLOCK
-  // DQ (1/7/2015): The funcationality to output the trailing tokens of the last
-  // statement is implemented in the unparseStatementFromTokenStream() function.
-  SgStatement *last_stmt = NULL;
-#endif
-
-  // DQ (10/31/2018): We need to get the current source file from the
-  // SgUnparseInfo object instead of computing it through the chain of parent
-  // pointers in the translation unit.  This is essential for header file
-  // processing since the header file will have a copy of the trnslation unit's
-  // global scope. DQ (9/28/2018): We need to get the SgSourceFile so that we
-  // can use the correct map from the map of maps in the modified implementation
-  // that supports multiple files for token based unparsing. SgSourceFile*
-  // sourceFile = TransformationSupport::getSourceFile(basic_stmt);
-  // DQ (10/31/2018): This is not always non-null (e.g. when used with the
-  // unparseToString() function). ASSERT_not_null(sourceFile);
-
-  // DQ (9/28/2018): Older code.
-  // SgStatementPtrList::iterator representativeStatementForWhitespace =
-  // sourceFile->get_representativeWhitespaceStatementMap()[basic_stmt];
-
-  // DQ (9/28/2018): We need to get the SgSourceFile so that we can use the
-  // correct map from the map of maps in the modified implementation that
-  // supports multiple files for token based unparsing.
   SgSourceFile *sourceFile = info.get_current_source_file();
 
-  // DQ (11/15/2015): if this is on because it is from an inherited SgBasicBlock
-  // then turn off the flag to control formatting. I don't like this method of
-  // handling the inherited attribute, and perhaps this poitn to why this
-  // formatting should be controled using a different mechanism (though other
-  // mechanisms had there problems in thinking them through).
   info.unset_parentStatementListBeingUnparsedUsingPartialTokenSequence();
 
   SgStatementPtrList::iterator p = basic_stmt->get_statements().begin();
   while (p != basic_stmt->get_statements().end()) {
     ASSERT_not_null((*p));
 
-#if DEBUG_BASIC_BLOCK
-    printf("In unparseBasicBlock (block = %p) statement = %p = %s "
-           "saved_unparsedPartiallyUsingTokenStream = %s \n",
-           basic_stmt, *p, (*p)->class_name().c_str(),
-           saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-#endif
-#if DEBUG_BASIC_BLOCK && 0
-    curprint("/* LOOP: START unparse statement in SgBasicBlock */");
-#endif
-
     SgUnparse_Info local_info(info);
     const bool childParticipatesInCurrentFile =
         sourceFile == NULL || statementFromFile(*p, getFileName(), local_info);
 
-    // DQ (11/4/2015): Adding in the leading white space of the first statement
-    // (whatever statement is first).
     if (saved_unparsedPartiallyUsingTokenStream == true &&
         childParticipatesInCurrentFile) {
-      // DQ (11/12/2015): We don't want to do this for just the first statement.
-      // if (p == basic_stmt->get_statements().begin())
       {
-        // We want to output the whitespace of the first statement, but the
-        // first statement may have been moved. But we can at least output the
-        // leading white space for whateve is currently the first statement.
-        // Unfortunately this can cause problems if this is more than just
-        // whitespace (e.g. "#if 1"). So we need to check if this is only
-        // whitespace and then we can unparse it.  This would be best handled by
-        // adding this feature to the unparseStatementFromTokenStream() function
-        // (I think).
-
         local_info
             .set_parentStatementListBeingUnparsedUsingPartialTokenSequence();
 
-        // curprint("\n");
         const bool statement_is_transformation =
             sourceFile != NULL
                 ? canBeUnparsedFromTokenStream(sourceFile, *p) == false
                 : ((*p)->isTransformation() ||
                    (*p)->get_containsTransformation() ||
                    (*p)->get_containsTransformationToSurroundingWhitespace());
-#if DEBUG_BASIC_BLOCK || 0
-        printf("statement is: %p = %s isTransformation() = %s \n", (*p),
-               (*p)->class_name().c_str(),
-               (*p)->isTransformation() ? "true" : "false");
-        string s = statement_is_transformation ? "true" : "false";
-#endif
         if (statement_is_transformation == true) {
           // A transformed child has no physical token surface.  Its AST
           // emission owns a canonical statement boundary; borrowing the
@@ -4884,9 +4185,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
           // depend on a stale alias after declaration movement.
           curprint("\n");
         }
-#if DEBUG_BASIC_BLOCK || 0
-        curprint("/* unparse leading white space of first statement: END */");
-#endif
       }
     }
 
@@ -4917,94 +4215,21 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
       unp->cur.insert_newline(unp->cur.current_col() > 0 ? 2 : 3);
     }
 
-#if DEBUG_BASIC_BLOCK || 0
-    curprint("/* calling unparseStatement(): START */");
-#endif
-    // unparseStatement((*p), info);
     unparseStatement((*p), local_info);
-
-#if DEBUG_BASIC_BLOCK || 0
-    curprint("/* calling unparseStatement(): END */");
-#endif
-
-#if DEBUG_BASIC_BLOCK || 0
-    curprint("/* LOOP: END unparse statement in SgBasicBlock */");
-#endif
-    // DQ (12/6/2014): Save the last statement so that we can use the trailing
-    // token stream if using the token-based unparsing. last_stmt = *p;
 
     p++;
   }
 
-#if DEBUG_BASIC_BLOCK || 0
-  printf(
-      "Inside of Unparse_ExprStmt::unparseBasicBlockStmt: output comment \n");
-  curprint("/* Inside of Unparse_ExprStmt::unparseBasicBlockStmt: output "
-           "comment */");
-#endif
-
-#if DEBUG_BASIC_BLOCK
-  printf("Inside of Unparse_ExprStmt::unparseBasicBlockStmt: "
-         "saved_unparsedPartiallyUsingTokenStream = %s \n",
-         saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-#endif
-
-  // DQ (12/16/2014): This should be controled by the
-  // saved_unparsedPartiallyUsingTokenStream value. DQ (3/17/2005): This helps
-  // handle cases such as void foo () { #include "constant_code.h" }
-  // unparseAttachedPreprocessingInfo(basic_stmt, info,
-  // PreprocessingInfo::inside);
-
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-    // DQ (3/17/2005): This helps handle cases such as void foo () { #include
-    // "constant_code.h" }
-
-#if DEBUG_BASIC_BLOCK || 0
-    printf("Calling unparseAttachedPreprocessingInfo(): INSIDE: basic_stmt = "
-           "%p = %s \n",
-           basic_stmt, basic_stmt->class_name().c_str());
-    printOutComments(basic_stmt);
-    printf("In unparseBasicBlockStmt(): info.SkipFunctionDefinition() = %s \n",
-           info.SkipFunctionDefinition() ? "true" : "false");
-#endif
-
     unparseAttachedPreprocessingInfo(basic_stmt, info,
                                      PreprocessingInfo::inside);
   }
 
-#if DEBUG_BASIC_BLOCK
-  printf("DONE: Inside of Unparse_ExprStmt::unparseBasicBlockStmt: output "
-         "comment \n");
-  curprint("/* DONE: Inside of Unparse_ExprStmt::unparseBasicBlockStmt: output "
-           "comment */");
-#endif
-
-#if DEBUG_BASIC_BLOCK
-  printf("unparse end of SgBasicBlock: "
-         "info.unparsedPartiallyUsingTokenStream() = %s last_stmt = %p \n",
-         info.unparsedPartiallyUsingTokenStream() ? "true" : "false",
-         last_stmt);
-  if (last_stmt != NULL) {
-    printf("   --- last_stmt = %p = %s \n", last_stmt,
-           last_stmt->class_name().c_str());
-  }
-#endif
-
   // A child can use a copied context to cross an AST/token frontier, but must
   // not leak that choice through the enclosing block's shared context.
-  ROSE_ASSERT(saved_top_unparsedPartiallyUsingTokenStream ==
+  ROSE_ASSERT(saved_unparsedPartiallyUsingTokenStream ==
               info.unparsedPartiallyUsingTokenStream());
 
-#if DEBUG_BASIC_BLOCK
-  curprint("/* unparse end of SgBasicBlock */");
-#endif
-#if DEBUG_USING_CURPRINT
-  curprint("\n/* unparse end of SgBasicBlock: output closing } */");
-#endif
-
-  // DQ (12/5/2014): Test for if we have unparsed partially using the token
-  // stream. If so then we don't want to unparse this syntax, if not then we
-  // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     if (ast_block_indentation_applied) {
       unp->cur.format(basic_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
@@ -5019,12 +4244,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
       }
     }
 
-#if DEBUG_USING_CURPRINT
-    curprint("\n/* unparse end of SgBasicBlock: "
-             "saved_unparsedPartiallyUsingTokenStream == false: output closing "
-             "} */");
-#endif
-    // curprint ( string("}"));
     if (SgProject::get_verbose() > 0)
       curprint("/* syntax from AST */ }");
     else
@@ -5032,32 +4251,11 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
 
     unp->cur.format(basic_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
-#if DEBUG_BASIC_BLOCK
-    printf("unparse last token in SgBasicBlock \n");
-    curprint("/* unparse last token in SgBasicBlock */");
-#endif
 
-#if DEBUG_USING_CURPRINT
-    curprint(
-        "\n/* unparse end of SgBasicBlock: "
-        "saved_unparsedPartiallyUsingTokenStream == true: output closing } */");
-#endif
     // DQ (1/14/2015): We need to unparse syntax instead of the initial token,
     // because this can be a macro expansion (see
     // tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_57.C).
-    // unparseStatementFromTokenStream (stmt, e_token_subsequence_end,
-    // e_token_subsequence_end);
 
-#if DEBUG_BASIC_BLOCK
-    // DQ (5/25/2021): I think this might be a mistake to output anything here,
-    // since the token stream's closing brace should be output.
-    printf("Should we be skipping output of closing } in "
-           "unparseBasicBlockStmt() \n");
-#endif
-
-#if DEBUG_USING_CURPRINT || 0
-    curprint("\n/* unparseBasicBlock(): unparse closing } (skipping) */\n");
-#endif
     // Unparse the tokens from the end of the basic block "{".
     // unparseStatementFromTokenStream (stmt, function_body,
     // e_token_subsequence_start, e_token_subsequence_start, info);
@@ -5140,14 +4338,6 @@ void Unparse_ExprStmt::unparseBasicBlockStmt(SgStatement *stmt,
           e_token_subsequence_end, info, false, 1, 0);
     }
   }
-
-#if DEBUG_USING_CURPRINT
-  curprint("\n/* Leaving unparseBasicBlock */");
-#endif
-#if DEBUG_BASIC_BLOCK || 0
-  printf("Leaving unparseBasicBlock (stmt = %p) \n", stmt);
-  curprint("/* Leaving unparseBasicBlock */");
-#endif
 }
 
 // True when emitting `statement` as an unbraced controlled statement would
@@ -5203,8 +4393,6 @@ static bool statementCanCaptureFollowingElse(SgStatement *statement) {
 }
 
 void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
-  // DQ (12/13/2005): I don't like this implementation with the while loop...
-
   SgIfStmt *if_stmt = isSgIfStmt(stmt);
   ASSERT_not_null(if_stmt);
 
@@ -5240,70 +4428,63 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       ROSE_ABORT();
     }
 
-    // DQ (12/6/2014): Test for if we have unparsed partially using the token
-    // stream. If so then we don't want to unparse this syntax, if not then we
-    // require this syntax. curprint ( string("if (")); if
-    // (info.unparsedPartiallyUsingTokenStream() == false)
     if (saved_unparsedPartiallyUsingTokenStream == false) {
-      curprint("if (");
-
-      SgUnparse_Info testInfo(info);
-      testInfo.set_SkipSemiColon();
-      testInfo.set_inConditional();
-      // info.set_inConditional();
-      tmp_stmt = if_stmt->get_conditional();
-      if (tmp_stmt == nullptr) {
-        std::cerr << "REX_UNPARSER_INVARIANT[if-condition]: SgIfStmt has no "
-                     "condition\n";
-        ROSE_ABORT();
-      }
-      testInfo.set_template_argument_qualification_context(tmp_stmt);
-      // A condition is embedded syntax, not an independent statement.
-      // Statement-level dispatch may replay the original `if (` boundary
-      // beside the AST-emitted header and duplicate or drop parentheses.
-      // It also means that preprocessing information lexically owned by the
-      // embedded condition must be emitted here. In particular, Clang attaches
-      // a conditional branch's closing #endif to the active condition as
-      // `after` when #if/#else select between complete `if` headers.
-      unparseAttachedPreprocessingInfo(tmp_stmt, testInfo,
-                                       PreprocessingInfo::before);
-      if (isSgExprStatement(tmp_stmt) != nullptr) {
-        unparseExprStmt(tmp_stmt, testInfo);
-      } else if (isSgVariableDeclaration(tmp_stmt) != nullptr) {
-        unparseVarDeclStmt(tmp_stmt, testInfo);
+      if (if_stmt->get_is_if_consteval_statement()) {
+        ROSE_ASSERT(if_stmt->get_conditional() == nullptr);
+        ROSE_ASSERT(isSgBasicBlock(true_body) != nullptr);
+        ROSE_ASSERT(false_body == nullptr ||
+                    isSgBasicBlock(false_body) != nullptr);
+        curprint(if_stmt->get_if_statement_kind() == SgIfStmt::e_if_consteval
+                     ? "if consteval "
+                     : "if !consteval ");
       } else {
-        std::cerr << "REX_UNPARSER_INVARIANT[if-condition]: unsupported "
-                     "embedded condition statement kind "
-                  << tmp_stmt->class_name() << "\n";
-        ROSE_ABORT();
+        curprint(if_stmt->get_is_if_constexpr_statement() ? "if constexpr ("
+                                                          : "if (");
+
+        SgUnparse_Info testInfo(info);
+        testInfo.set_SkipSemiColon();
+        testInfo.set_inConditional();
+        tmp_stmt = if_stmt->get_conditional();
+        if (tmp_stmt == nullptr) {
+          std::cerr << "REX_UNPARSER_INVARIANT[if-condition]: SgIfStmt has no "
+                       "condition\n";
+          ROSE_ABORT();
+        }
+        testInfo.set_template_argument_qualification_context(tmp_stmt);
+        // A condition is embedded syntax, not an independent statement.
+        // Statement-level dispatch may replay the original `if (` boundary
+        // beside the AST-emitted header and duplicate or drop parentheses.
+        // It also means that preprocessing information lexically owned by the
+        // embedded condition must be emitted here. In particular, Clang
+        // attaches a conditional branch's closing #endif to the active
+        // condition as `after` when #if/#else select between complete `if`
+        // headers.
+        unparseAttachedPreprocessingInfo(tmp_stmt, testInfo,
+                                         PreprocessingInfo::before);
+        if (isSgExprStatement(tmp_stmt) != nullptr) {
+          unparseExprStmt(tmp_stmt, testInfo);
+        } else if (isSgVariableDeclaration(tmp_stmt) != nullptr) {
+          unparseVarDeclStmt(tmp_stmt, testInfo);
+        } else {
+          std::cerr << "REX_UNPARSER_INVARIANT[if-condition]: unsupported "
+                       "embedded condition statement kind "
+                    << tmp_stmt->class_name() << "\n";
+          ROSE_ABORT();
+        }
+        testInfo.unset_inConditional();
+        if (SgProject::get_verbose() > 0)
+          curprint("/* syntax from AST */ ) ");
+        else
+          curprint(")");
+
+        unparseAttachedPreprocessingInfo(tmp_stmt, testInfo,
+                                         PreprocessingInfo::after);
       }
-      testInfo.unset_inConditional();
-      // curprint ( string(") "));
-      if (SgProject::get_verbose() > 0)
-        curprint("/* syntax from AST */ ) ");
-      else if (isSgBasicBlock(if_stmt->get_true_body()) != nullptr)
-        curprint(")");
-      else
-        curprint(")");
 
-      unparseAttachedPreprocessingInfo(tmp_stmt, testInfo,
-                                       PreprocessingInfo::after);
-
-      // DQ (9/24/2020): Adding support to unparse attached pragmas.
       unparsePragmaAttribute(if_stmt);
     } else {
-      // DQ (12/9/2014): Adding more support for unparsing using the token
-      // stream.
       SgStatement *true_body = if_stmt->get_true_body();
       if (true_body != NULL) {
-        // DQ (1/18/2015): With the denormalization of SgBasicBlock in the
-        // SgIfStmt false body we have to use the computed if_stmt and not the
-        // outer stmt. unparseStatementFromTokenStream (stmt, true_body,
-        // e_leading_whitespace_start, e_token_subsequence_start);
-        // unparseStatementFromTokenStream (stmt, true_body,
-        // e_token_subsequence_start, e_token_subsequence_start);
-        // unparseStatementFromTokenStream (stmt, true_body,
-        // e_token_subsequence_start, e_leading_whitespace_start);
         unparseStatementFromTokenStream(if_stmt, true_body,
                                         e_token_subsequence_start,
                                         e_leading_whitespace_start, info);
@@ -5311,11 +4492,6 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
     }
 
     if ((tmp_stmt = true_body)) {
-      // DQ (12/6/2014): Test for if we have unparsed partially using the token
-      // stream. If so then we don't want to unparse this syntax, if not then we
-      // require this syntax. unp->cur.format(tmp_stmt, info,
-      // FORMAT_BEFORE_NESTED_STATEMENT); if
-      // (info.unparsedPartiallyUsingTokenStream() == false)
       if (saved_unparsedPartiallyUsingTokenStream == false) {
         unp->cur.format(tmp_stmt, info, FORMAT_BEFORE_NESTED_STATEMENT);
         if (brace_true_body_for_outer_else) {
@@ -5323,8 +4499,7 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
         }
       }
 
-      // Unparse using base class function so we get any required comments and
-      // CPP directives. unparseStatement(tmp_stmt, info);
+      // Use base dispatch for attached comments and directives.
       SgUnparse_Info nestedInfo(info);
       nestedInfo.unset_SkipSemiColon();
       UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt,
@@ -5334,69 +4509,32 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
         curprint(" }");
       }
 
-      // DQ (12/6/2014): Test for if we have unparsed partially using the token
-      // stream. If so then we don't want to unparse this syntax, if not then we
-      // require this syntax. unp->cur.format(tmp_stmt, info,
-      // FORMAT_AFTER_NESTED_STATEMENT); if
-      // (info.unparsedPartiallyUsingTokenStream() == false)
       if (saved_unparsedPartiallyUsingTokenStream == false) {
         unp->cur.format(tmp_stmt, info, FORMAT_AFTER_NESTED_STATEMENT);
       }
     }
 
     if ((tmp_stmt = false_body)) {
-      // unp->cur.format(if_stmt, info, FORMAT_BEFORE_STMT);
-      // curprint ( string("else "));
-      // if (info.unparsedPartiallyUsingTokenStream() == false)
       if (saved_unparsedPartiallyUsingTokenStream == false) {
         if (!shouldEmitElseOnSameLine(if_stmt)) {
           unp->cur.format(if_stmt, info, FORMAT_BEFORE_STMT);
         }
-        // curprint ( string("else "));
         if (SgProject::get_verbose() > 0) {
           curprint("/* syntax from AST (part 1) */ else ");
         } else {
-          // DQ (1/4/2015): Remove trailing space to avoid redundant output of
-          // whitespace in token unparsing. We actually need to extra space to
-          // avoid unparsing "elseif" by mistake (likely we can address this
-          // detail later). curprint(" else ");
-          curprint(isSgBasicBlock(tmp_stmt) != nullptr ? " else" : " else ");
+          curprint(" else ");
         }
       } else {
-        // DQ (12/9/2014): Adding more support for unparsing using the token
-        // stream.
         SgStatement *true_body = if_stmt->get_true_body();
         SgStatement *false_body = if_stmt->get_false_body();
         if (true_body != NULL && false_body != NULL) {
-          // DQ (1/4/2015): If the false body is a transformation then the token
-          // sequence will not exist and the unparseStatementFromTokenStream()
-          // function will not output any token sequence.
-          // unparseStatementFromTokenStream (true_body, false_body,
-          // e_trailing_whitespace_start, e_token_subsequence_start);
           if (SgProject::get_verbose() > 0) {
             curprint("/* syntax from AST (part 2) */ else ");
           } else {
-            // curprint(" else ");
-            // printf ("In unparseIfStmt(): Output the else part between the
-            // true and false cases of the if statement \n");
-            // unparseStatementFromTokenStream (true_body, false_body,
-            // e_trailing_whitespace_start, e_token_subsequence_start);
-            // unparseStatementFromTokenStream (true_body, true_body,
-            // e_trailing_whitespace_start, e_trailing_whitespace_end);
-
-            // We might need to check that there are whitespace tokens assocated
-            // with the trailing whitespace before the else. Also if the false
-            // block is a transformation then we need to output a CR or a space.
             if (true_body->isTransformation() == true ||
                 false_body->isTransformation() == true) {
               curprint(" else ");
             } else {
-              // unparseStatementFromTokenStream (false_body, false_body,
-              // e_leading_whitespace_start, e_leading_whitespace_end);
-              // unparseStatementFromTokenStream (true_body, false_body,
-              // e_trailing_whitespace_start, e_leading_whitespace_start);
-              // unparseStatementFromTokenStream (true_body, false_body,
-              // e_trailing_whitespace_start, e_leading_whitespace_start);
               unparseStatementFromTokenStream(true_body, false_body,
                                               e_trailing_whitespace_start,
                                               e_leading_whitespace_start, info);
@@ -5406,18 +4544,14 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       }
       if_stmt = isSgIfStmt(tmp_stmt);
       if (if_stmt == NULL) {
-        // unp->cur.format(tmp_stmt, info, FORMAT_BEFORE_NESTED_STATEMENT);
-        // if (info.unparsedPartiallyUsingTokenStream() == false)
         if (saved_unparsedPartiallyUsingTokenStream == false) {
           unp->cur.format(tmp_stmt, info, FORMAT_BEFORE_NESTED_STATEMENT);
         }
-        // Unparse using base class function so we get any required comments and
-        // CPP directives. unparseStatement(tmp_stmt, info);
+        // Use base dispatch for attached comments and directives.
         SgUnparse_Info nestedInfo(info);
         nestedInfo.unset_SkipSemiColon();
         UnparseLanguageIndependentConstructs::unparseStatement(tmp_stmt,
                                                                nestedInfo);
-        // if (info.unparsedPartiallyUsingTokenStream() == false)
         if (saved_unparsedPartiallyUsingTokenStream == false) {
           unp->cur.format(tmp_stmt, info, FORMAT_AFTER_NESTED_STATEMENT);
         }
@@ -5426,103 +4560,14 @@ void Unparse_ExprStmt::unparseIfStmt(SgStatement *stmt, SgUnparse_Info &info) {
       if_stmt = NULL;
     }
 
-    // DQ (12/16/2008): Need to process any associated CPP directives and
-    // comments
-    if (if_stmt != NULL) {
-      // At this point if_stmt is a nested if statement in the true and false
-      // branch of the original if statement.
-      if (saved_unparsedPartiallyUsingTokenStream == true) {
-        // DQ (7/2/2021): I think this should be unparsed via the
-        // unparseStatement called fro the false body. New code where we unparse
-        // the whitespace between the else and the nested if statement.
-        // unparseStatementFromTokenStream (false_body, false_body,
-        // e_leading_whitespace_start, e_token_subsequence_start);
-        // unparseStatementFromTokenStream (if_stmt, e_leading_whitespace_start,
-        // e_token_subsequence_start, info); unparseStatementFromTokenStream
-        // (if_stmt, e_leading_whitespace_start, e_leading_whitespace_end,
-        // info);
-      } else {
-        // original code if we are not unparsing from the token stream.
-        unparseAttachedPreprocessingInfo(if_stmt, info,
-                                         PreprocessingInfo::before);
-      }
-    }
-  }
-}
-
-// DQ (8/13/2007): This is no longer used, I think, however it might be required
-// for the legacy array optimizer.
-
-//--------------------------------------------------------------------------------
-//  void Unparse_ExprStmt::unparseWhereStmt
-//
-//  This special function unparses where and elsewhere statements. Where
-//  statements are actually represented as for statements in the Sage program
-//  tree. Thus, the type of the where_stmt is SgForStatement. The part that
-//  we are interested in unparsing is in the initializer statement of the
-//  for statement. In particular, we want to unparse the arguments of the
-//  rhs of the initializer. The rhs should be a function call expression.
-//  The same applies for elsewhere statements.
-//--------------------------------------------------------------------------------
-void Unparse_ExprStmt::unparseWhereStmt(SgStatement *stmt,
-                                        SgUnparse_Info &info) {
-  SgForStatement *where_stmt = isSgForStatement(stmt);
-  ASSERT_not_null(where_stmt);
-
-  printf("In Unparse_ExprStmt::unparseWhereStmt() \n");
-
-  SgStatement *tmp_stmt;
-  // DQ (4/7/2001) we don't want the unparser to depend on the array grammar
-  // (so comment this out and introduce the array "where" statment in some other
-  // way)
-  curprint(string("elsewhere ("));
-
-  SgUnparse_Info newinfo(info);
-  newinfo.set_SkipSemiColon();
-  // if(where_stmt->get_init_stmt() != NULL ) {
-  if (where_stmt->get_init_stmt().size() > 0) {
-    SgStatementPtrList::iterator i = where_stmt->get_init_stmt().begin();
-    if ((*i) != NULL && (*i)->variant() == EXPR_STMT) {
-      SgExprStatement *pExprStmt = isSgExprStatement(*i);
-      // SgAssignOp* pAssignOp = isSgAssignOp(pExprStmt->get_the_expr());
-      SgAssignOp *pAssignOp = isSgAssignOp(pExprStmt->get_expression());
-      if (pAssignOp != NULL) {
-        SgFunctionCallExp *pFunctionCallExp =
-            isSgFunctionCallExp(pAssignOp->get_rhs_operand());
-        if (pFunctionCallExp != NULL) {
-          if (pFunctionCallExp->get_args()) {
-            SgExpressionPtrList &list =
-                pFunctionCallExp->get_args()->get_expressions();
-            SgExpressionPtrList::iterator arg = list.begin();
-            while (arg != list.end()) {
-              unparseExpression((*arg), newinfo);
-              arg++;
-              if (arg != list.end()) {
-                curprint(string(","));
-              }
-            }
-          }
-        } // pFunctionCallExp != NULL
-      } // pAssignOp != NULL
-    } //(*i).irep() != NULL && (*i).irep()->variant() == EXPR_STMT
-  } // where_stmt->get_init_stmt() != NULL
-
-  curprint(string(")"));
-
-  if ((tmp_stmt = where_stmt->get_loop_body())) {
-    unparseStatement(tmp_stmt, info);
-  } else {
-    if (!info.SkipSemiColon()) {
-      curprint(string(";"));
-    }
+    if (if_stmt != NULL && !saved_unparsedPartiallyUsingTokenStream)
+      unparseAttachedPreprocessingInfo(if_stmt, info,
+                                       PreprocessingInfo::before);
   }
 }
 
 void Unparse_ExprStmt::unparseForInitStmt(SgStatement *stmt,
                                           SgUnparse_Info &info) {
-  // DQ (7/11/2004): Added to simplify debugging for everyone (requested by
-  // Willcock)
-
   SgForInitStatement *forInitStmt = isSgForInitStatement(stmt);
   ASSERT_not_null(forInitStmt);
 
@@ -5550,15 +4595,10 @@ void Unparse_ExprStmt::unparseForInitStmt(SgStatement *stmt,
     }
   }
 
-  // DQ (11/4/2015): Change the unparsing semantics to for loop initializer
-  // statement to exclude the " " after the ";" so that we can more faithfully
-  // represent the unparsed code when using the token-based unparsing.
-  // curprint("; ");
   curprint(";");
 }
 
 void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
-  // printf ("Unparse for loop \n");
   SgForStatement *for_stmt = isSgForStatement(stmt);
   ASSERT_not_null(for_stmt);
   SgForInitStatement *for_init_stmt = requireExactForInitializer(for_stmt);
@@ -5572,54 +4612,17 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       info.unparsedPartiallyUsingTokenStream() &&
       !for_stmt->get_containsTransformation() && !for_stmt->get_isModified();
 
-#define DEBUG_FOR_STMT 0
-
-#if DEBUG_FOR_STMT
-  printf("In unparseForStmt(): saved_unparsedPartiallyUsingTokenStream = %s \n",
-         saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-  curprint("/* Top of unparseForStmt */");
-#endif
-
-  // curprint ( string("for ("));
-  // DQ (12/5/2014): Test for if we have unparsed partially using the token
-  // stream. If so then we don't want to unparse this syntax, if not then we
-  // require this syntax. if (info.unparsedPartiallyUsingTokenStream() == false)
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-#if DEBUG_FOR_STMT
-    printf("In unparseForStmt(): unparse the \"for (\" directly (not using the "
-           "token stream) \n");
-#endif
     curprint("for (");
   } else {
-    // unparseStatementFromTokenStream (stmt, e_leading_whitespace_start,
-    // e_token_subsequence_start);
-
-#if DEBUG_FOR_STMT
-    curprint("/* unparse start of SgForStatement */");
-    printf("In unparseForStmt(): unparse from token stream from start of "
-           "SgForStatement to for loop initializer \n");
-#endif
-
-    // DQ (6/5/2021): The problem here is that if the for_init_stmt does not
-    // have any leading whitespace the call to unparseStatementFromTokenStream()
-    // will not output anything. However, I have now modified the
-    // unparseStatementFromTokenStream() function to use
-    // e_token_subsequence_start - 1 when e_leading_whitespace_start is note
-    // defined (value == -1). More of these sorts of modifications should be
-    // possible. unparseStatementFromTokenStream (for_stmt, for_init_stmt,
-    // e_token_subsequence_start, e_token_subsequence_start);
     // The initializer's leading-whitespace range belongs to the initializer,
     // not to the `for (` header.  Replaying it here can inject a newline before
     // an AST-emitted transformed initializer, producing `for (\nint ...`.
     unparseStatementFromTokenStream(
         for_stmt, for_init_stmt, e_token_subsequence_start,
         e_leading_whitespace_start, info, false, 0, -1);
-#if DEBUG_FOR_STMT
-    curprint("/* DONE: unparse start of SgForStatement */");
-#endif
   }
 
-  // if (saved_unparsedPartiallyUsingTokenStream == false)
   {
     SgUnparse_Info newinfo(info);
     if (!saved_unparsedPartiallyUsingTokenStream) {
@@ -5629,10 +4632,6 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
     newinfo.set_inConditional(); // set to prevent printing line and file
                                  // information
     newinfo.set_SkipFormatting();
-
-#if DEBUG_FOR_STMT
-    printf("In unparseForStmt(): unparse the for loop initializer \n");
-#endif
 
     SgStatementPtrList &init_stmts = for_init_stmt->get_init_stmt();
     if (init_stmts.size() == 1) {
@@ -5659,27 +4658,10 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       curprint(" ");
     }
 
-#if DEBUG_FOR_STMT
-    curprint("/* DONE: Unparse the for_init_stmt */\n ");
-#endif
     newinfo.unset_inConditional();
 
-#if DEBUG_FOR_STMT
-    printf("In unparseForStmt(): unparse the for loop test expression (can be "
-           "simple declaration statement) \n");
-#endif
-
-    // DQ (12/13/2005): New code for handling the test (which could be a
-    // declaration!)
-#if DEBUG_FOR_STMT
-    printf("Output the test in the for statement format "
-           "newinfo.inConditional() = %s \n",
-           newinfo.inConditional() ? "true" : "false");
-    curprint(" /* test */ ");
-#endif
     SgStatement *test_stmt = for_stmt->get_test();
     ASSERT_not_null(test_stmt);
-    // if ( test_stmt != NULL )
     SgUnparse_Info testinfo(info);
     if (!saved_unparsedPartiallyUsingTokenStream) {
       testinfo.unset_unparsedPartiallyUsingTokenStream();
@@ -5689,30 +4671,12 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       testinfo.set_SkipFormatting();
     }
 
-    // DQ (11/2/2015): Change the unparsing semantics to treat the test as a
-    // statement instead of a conditional.  This should make it processing more
-    // uniform and independent of if the test statement is unparsed using either
-    // the AST or the token stream. testinfo.set_SkipSemiColon();
-    // testinfo.set_inConditional();
-
-    // DQ (11/2/2015): With the new change to not set SkipSemiColon and
-    // inConditional unparse info fields, we have to explicitly specify that we
-    // want to skip class elaboration as well (SkipClassSpecifier).  See
-    // test2015_110.C and other older test codes.  Additionally, we need to make
-    // this as a conditional so that it will be unparsed as "type var = value"
-    // instead of "type var(value)" in the case of a class constructor
-    // initialization call. This is because the syntax required for C++ in a
-    // condition is that of a simple declaration which is a part of C++ syntax
-    // not directly supported in ROSE for simplicity.
+    // A declaration in the test uses conditional syntax rather than a
+    // constructor-style initializer.
     testinfo.set_SkipClassSpecifier();
     testinfo.set_inConditional();
     testinfo.set_template_argument_qualification_context(test_stmt);
 
-#if DEBUG_FOR_STMT
-    printf("Output the test in the for statement format "
-           "testinfo.inConditional() = %s \n",
-           testinfo.inConditional() ? "true" : "false");
-#endif
     if (!saved_unparsedPartiallyUsingTokenStream) {
       // A for-test is embedded syntax, not an independent statement.  Calling
       // the statement wrapper here would replay statement-boundary source text
@@ -5732,69 +4696,8 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
     } else {
       unparseStatement(test_stmt, testinfo);
     }
-#if DEBUG_FOR_STMT
-    printf("In unparseForStatement(): saved_unparsedPartiallyUsingTokenStream "
-           "= %s \n",
-           saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-    printf("In unparseForStatement(): test_stmt->isTransformation()           "
-           "= %s \n",
-           test_stmt->isTransformation() ? "true" : "false");
-#endif
-    // DQ (4/6/2015): If the test is a transformation, then we have to output
-    // the semi-colon directly (see inliner tutorial test).
-    if (saved_unparsedPartiallyUsingTokenStream == true &&
-        test_stmt->isTransformation() == true) {
-      // ROSE_ASSERT(test_stmt->isTransformation() == true);
-      // curprint (" /* output semi-colon at end of test */ ");
-
-      // DQ (11/2/2015): Change the unparsing semantics to treat the test as a
-      // statement instead of a conditional.  This should make it processing
-      // more uniform and independe of if the test statement is unparsed using
-      // either the AST or the token stream. curprint (";");
-    }
-
     if (saved_unparsedPartiallyUsingTokenStream == false) {
-      // DQ (11/2/2015): Change the unparsing semantics to treat the test as a
-      // statement instead of a conditional.  This should make it processing
-      // more uniform and independe of if the test statement is unparsed using
-      // either the AST or the token stream.  However, we want to add a space
-      // after the test and before the increment to make the generated code
-      // better looking.
       curprint(" ");
-    }
-
-#if DEBUG_FOR_STMT
-    printf("In unparseForStmt(): unparse the for loop increment expression \n");
-#endif
-
-    // DQ (10/14/2015): If the test was unparsed from the AST then we need to
-    // unparse the increment from the AST, but it the test was unparsed as parrt
-    // of a partial token stream unparse of the SgForStatement, then we can
-    // unparse the increment from the token stream (as a continuation of the use
-    // of the token stream in the test). DQ (12/5/2014): Test for if we have
-    // unparsed partially using the token stream. If so then we don't want to
-    // unparse this syntax, if not then we require this syntax. if
-    // (info.unparsedPartiallyUsingTokenStream() == false) if
-    // (saved_unparsedPartiallyUsingTokenStream == false) if
-    // (saved_unparsedPartiallyUsingTokenStream == false &&
-    // test_stmt->isTransformation() == true) if (test_stmt->isTransformation()
-    // == true) if (saved_unparsedPartiallyUsingTokenStream == false ||
-    // test_stmt->isTransformation() == false)
-    // if (saved_unparsedPartiallyUsingTokenStream == false)
-    // if (saved_unparsedPartiallyUsingTokenStream == false ||
-    // test_stmt->isTransformation() == false) if (test_stmt->isTransformation()
-    // == true) if (saved_unparsedPartiallyUsingTokenStream == false &&
-    // test_stmt->isTransformation() == true) if (test_stmt->isTransformation()
-    // == true) if (saved_unparsedPartiallyUsingTokenStream == false) if (
-    // (saved_unparsedPartiallyUsingTokenStream == false ||
-    // test_stmt->isTransformation() == false) )
-    if (saved_unparsedPartiallyUsingTokenStream == false) {
-      // curprint (" /* output semi-colon before increment */ ");
-
-      // DQ (11/2/2015): Change the unparsing semantics to treat the test as a
-      // statement instead of a conditional.  This should make it processing
-      // more uniform and independe of if the test statement is unparsed using
-      // either the AST or the token stream. curprint("; ");
     }
 
     if (saved_unparsedPartiallyUsingTokenStream == false) {
@@ -5807,18 +4710,10 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       }
       curprint(isSgBasicBlock(for_stmt->get_loop_body()) != NULL ? ")" : ") ");
 
-      // DQ (9/24/2020): Adding support to unparse attached pragmas.
       unparsePragmaAttribute(for_stmt);
     } else {
-      // DQ (12/15/2014): Note that the increment expression is not a Statement,
-      // so it will be unparsed in the token stream of the body (assuming it is
-      // unparsed via the token stream).  Note clear how to look ahead to check
-      // this or make the unparsing of the increment expression conditional upon
-      // this.
-      // SgStatement *tmp_stmt = for_stmt->get_for_init_stmt();
       SgStatement *body = for_stmt->get_loop_body();
 
-      // Not yet clear how to handle case where tmp_stmt == NULL.
       ASSERT_not_null(test_stmt);
       ASSERT_not_null(body);
 
@@ -5826,26 +4721,6 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
       // the SgIfStmt with compiler generated body.
       ROSE_ASSERT(body->isCompilerGenerated() == false);
 
-#if DEBUG_FOR_STMT
-      curprint("/* unparse increment expression in SgForStatement header */");
-#endif
-      // DQ (12/16/2014): When a SgBasicBlock has been substituted for the
-      // loop_body then there is not associated token stream (see
-      // test2014_14.C). In this case it is better to use the start and end of
-      // the trailing whitespace subsequence. unparseStatementFromTokenStream
-      // (test_stmt, body, e_trailing_whitespace_start,
-      // e_token_subsequence_start); unparseStatementFromTokenStream (test_stmt,
-      // e_trailing_whitespace_start, e_trailing_whitespace_end, info);
-      // curprint("/* syntax from partial token unparse */ )");
-      // SgStatement* loopBody = for_stmt->get_loop_body();
-      // unparseStatementFromTokenStream (test_stmt, loopBody,
-      // e_trailing_whitespace_end, e_leading_whitespace_start);
-
-      // DQ (6/6/2021): Note that this will unparse the original expression
-      // using the token stream, if there was a transformation then it should be
-      // unparsed from the AST (as an expression).
-      // unparseStatementFromTokenStream (test_stmt, body,
-      // e_trailing_whitespace_start, e_leading_whitespace_start, info);
       bool unparseOnlyWhitespace = false;
       int start_offset = 0;
       int end_offset = -1;
@@ -5853,39 +4728,16 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
           test_stmt, body, e_trailing_whitespace_start,
           e_leading_whitespace_start, info, unparseOnlyWhitespace, start_offset,
           end_offset);
-      // DQ (6/6/2021): This is no longer needed (and causes an error in the
-      // generated code). curprint(")");
     }
-
-    // Added support to output the header without the body to support the
-    // addition of more context in the prefix used with the AST Rewrite
-    // Mechanism. if ( (tmp_stmt = for_stmt->get_loop_body()) )
 
     SgStatement *loopBody = for_stmt->get_loop_body();
     ASSERT_not_null(loopBody);
-    // printf ("loopBody = %p         = %s
-    // \n",loopBody,loopBody->class_name().c_str()); printf
-    // ("info.SkipBasicBlock() = %s \n",info.SkipBasicBlock() ? "true" :
-    // "false");
-
-    // if ( (tmp_stmt = for_stmt->get_loop_body()) && !info.SkipBasicBlock())
     if ((loopBody != NULL) && !info.SkipBasicBlock()) {
-#if DEBUG_FOR_STMT
-      printf("Unparse the for loop body \n");
-      curprint("/* Unparse the for loop body */ ");
-#endif
-      // unparseStatement(tmp_stmt, info);
-
       SgUnparse_Info bodyInfo = nestedStatementInfo(info);
       unp->cur.format(loopBody, info, FORMAT_BEFORE_NESTED_STATEMENT);
       unparseStatement(loopBody, bodyInfo);
       unp->cur.format(loopBody, info, FORMAT_AFTER_NESTED_STATEMENT);
-#if DEBUG_FOR_STMT
-      curprint("/* DONE: Unparse the for loop body */ ");
-#endif
     } else {
-      // printf ("No for loop body to unparse! \n");
-      // curprint ( string("\n/* No for loop body to unparse! */ \n";
       if (!info.SkipSemiColon()) {
         curprint(string(";"));
       }
@@ -5895,24 +4747,8 @@ void Unparse_ExprStmt::unparseForStmt(SgStatement *stmt, SgUnparse_Info &info) {
 
 void Unparse_ExprStmt::unparseRangeBasedForStmt(SgStatement *stmt,
                                                 SgUnparse_Info &info) {
-  // printf ("Unparse range-based for loop \n");
   SgRangeBasedForStatement *for_stmt = isSgRangeBasedForStatement(stmt);
   ASSERT_not_null(for_stmt);
-
-#define DEBUG_RANGE_BASED_FOR_STMT 0
-
-#if DEBUG_RANGE_BASED_FOR_STMT
-  bool saved_unparsedPartiallyUsingTokenStream =
-      info.unparsedPartiallyUsingTokenStream();
-
-  printf("In unparseRangeBasedForStmt(): "
-         "saved_unparsedPartiallyUsingTokenStream = %s \n",
-         saved_unparsedPartiallyUsingTokenStream ? "true" : "false");
-  curprint("/* Top of unparseForStmt */");
-#endif
-
-  // printf ("ERROR: Range-based For statement unparseRangeBasedForStmt() not
-  // implemented \n");
 
   curprint("for ( ");
 
@@ -5931,8 +4767,6 @@ void Unparse_ExprStmt::unparseRangeBasedForStmt(SgStatement *stmt,
 
   curprint(" : ");
 
-  // SgVarRefExp* range_variable = for_stmt->range_variable_reference();
-  // ASSERT_not_null(range_variable);
   SgExpression *range_expression = for_stmt->range_expression();
   ASSERT_not_null(range_expression);
 
@@ -5942,64 +4776,95 @@ void Unparse_ExprStmt::unparseRangeBasedForStmt(SgStatement *stmt,
 
   SgStatement *loopBody = for_stmt->get_loop_body();
   ASSERT_not_null(loopBody);
-  // printf ("loopBody = %p         = %s
-  // \n",loopBody,loopBody->class_name().c_str()); printf
-  // ("info.SkipBasicBlock() = %s \n",info.SkipBasicBlock() ? "true" : "false");
 
   if ((loopBody != NULL) && !info.SkipBasicBlock()) {
-#if DEBUG_RANGE_BASED_FOR_STMT
-    printf("Unparse the for loop body \n");
-    curprint("/* Unparse the for loop body */ ");
-#endif
     SgUnparse_Info bodyInfo = nestedStatementInfo(info);
     unp->cur.format(loopBody, info, FORMAT_BEFORE_NESTED_STATEMENT);
     unparseStatement(loopBody, bodyInfo);
     unp->cur.format(loopBody, info, FORMAT_AFTER_NESTED_STATEMENT);
 
-#if DEBUG_RANGE_BASED_FOR_STMT
-    curprint("/* DONE: Unparse the range-based for loop body */ ");
-#endif
   } else {
-    // printf ("No range-based for loop body to unparse! \n");
-    // curprint ( string("\n/* No range-based for loop body to unparse! */ \n";
     if (!info.SkipSemiColon()) {
       curprint(string(";"));
     }
   }
 }
 
-void Unparse_ExprStmt::unparseExceptionSpecification(
-    const SgTypePtrList &exceptionSpecifierList, SgUnparse_Info &info) {
-  // DQ (6/27/2006): Added support for throw modifier and its exception
-  // specification lists
-
-  curprint(string(" throw("));
-  if (!exceptionSpecifierList.empty()) {
-    SgTypePtrList::const_iterator i = exceptionSpecifierList.begin();
-    while (i != exceptionSpecifierList.end()) {
-      // Handle class type as a special case to make sure the names are always
-      // output (see test2004_91.C). unparseType(*i,info); printf ("Note: Type
-      // found in function throw specifier type = %p = %s
-      // \n",*i,i->class_name().c_str());
-
-      ASSERT_not_null(*i);
-      // DQ (6/2/2011): Added support for name qualification.
-      info.set_reference_node_for_qualification(*i);
-      ASSERT_not_null(info.get_reference_node_for_qualification());
-
-      unp->u_type->unparseType(*i, info);
-
-      // DQ (6/2/2011): Since we are not using a new SgUnparse_Info object,
-      // clear the reference node for name qualification after it has been used.
-      info.set_reference_node_for_qualification(NULL);
-      i++;
-      if (i != exceptionSpecifierList.end())
-        curprint(string(","));
+void Unparse_ExprStmt::unparseExceptionSpecification(SgFunctionType *type,
+                                                     SgUnparse_Info &info) {
+  ASSERT_not_null(type);
+  switch (type->get_exception_specification_kind()) {
+  case SgFunctionType::e_exception_none:
+    return;
+  case SgFunctionType::e_exception_nothrow:
+    ROSE_ASSERT(!type->get_exception_specification_is_written());
+    return;
+  case SgFunctionType::e_exception_dynamic_none:
+    curprint(" throw()");
+    return;
+  case SgFunctionType::e_exception_dynamic: {
+    const auto &types = type->get_exception_specification_types();
+    const auto &packs =
+        type->get_exception_specification_type_pack_expansions();
+    ROSE_ASSERT(!types.empty() && types.size() == packs.size());
+    curprint(" throw(");
+    for (size_t index = 0; index < types.size(); ++index) {
+      SgUnparse_Info typeInfo(info);
+      typeInfo.unset_isTypeFirstPart();
+      typeInfo.unset_isTypeSecondPart();
+      typeInfo.set_SkipClassDefinition();
+      typeInfo.set_SkipEnumDefinition();
+      typeInfo.set_reference_node_for_qualification(types[index]);
+      unp->u_type->unparseType(types[index], typeInfo);
+      if (packs[index])
+        curprint("...");
+      if (index + 1 < types.size())
+        curprint(", ");
     }
-  } else {
-    // There was no exception specification list of types
+    curprint(")");
+    return;
   }
-  curprint(string(")"));
+  case SgFunctionType::e_exception_ms_any:
+    curprint(" throw(...)");
+    return;
+  case SgFunctionType::e_exception_noexcept:
+    curprint(" noexcept");
+    return;
+  case SgFunctionType::e_exception_noexcept_dependent:
+  case SgFunctionType::e_exception_noexcept_false:
+  case SgFunctionType::e_exception_noexcept_true: {
+    SgExpression *expression = type->get_exception_specification_expression();
+    ASSERT_not_null(expression);
+    ROSE_ASSERT(expression->get_parent() == type);
+    SgUnparse_Info expressionInfo(info);
+    expressionInfo.unset_isTypeFirstPart();
+    expressionInfo.unset_isTypeSecondPart();
+    curprint(" noexcept(");
+    unparseExpression(expression, expressionInfo);
+    curprint(")");
+    return;
+  }
+  case SgFunctionType::e_exception_unevaluated:
+  case SgFunctionType::e_exception_uninstantiated:
+    if (!type->get_exception_specification_is_written())
+      return;
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[written-exception-specification]: "
+                    "written specification has no prepared source operands\n");
+    ROSE_ABORT();
+  default:
+    ROSE_ABORT();
+  }
+}
+
+void Unparse_ExprStmt::unparseExceptionSpecification(
+    SgFunctionDeclaration *declaration, SgUnparse_Info &info) {
+  ASSERT_not_null(declaration);
+  if (declaration->get_source_declarator_uses_wrapped_function_type())
+    return;
+  SgFunctionType *signature = declaration->get_declared_exception_signature();
+  if (signature != nullptr &&
+      signature->get_exception_specification_is_written())
+    unparseExceptionSpecification(signature, info);
 }
 
 void requireDeclarationSemanticScope(
@@ -6013,8 +4878,6 @@ void requireDeclarationSemanticScope(
   }
 }
 
-#define DEBUG_unparseFuncDeclStmt 0
-
 void Unparse_ExprStmt::unparseCudaLaunchBounds(
     SgFunctionDeclaration *declaration, SgUnparse_Info &info) {
   ASSERT_not_null(declaration);
@@ -6022,14 +4885,7 @@ void Unparse_ExprStmt::unparseCudaLaunchBounds(
   if (expression == nullptr) {
     return;
   }
-  SgType *type = expression->get_type();
-  if (expression->get_parent() != declaration || type == nullptr ||
-      isSgTypeUnknown(type) != nullptr || isSgTypeDefault(type) != nullptr) {
-    fprintf(stderr,
-            "REX_UNPARSE_INVARIANT[cuda-launch-bounds]: expression has no "
-            "exact function owner and semantic type\n");
-    ROSE_ABORT();
-  }
+  declaration->validate_cuda_launch_bounds_expression();
   curprint("__launch_bounds__(");
   unparseExpression(expression, info);
   curprint(") ");
@@ -6037,10 +4893,6 @@ void Unparse_ExprStmt::unparseCudaLaunchBounds(
 
 void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
                                            SgUnparse_Info &info) {
-#if DEBUG_unparseFuncDeclStmt
-  printf("Enter Unparse_ExprStmt::unparseFuncDeclStmt\n");
-  printf("  stmt = %p = %s\n", stmt, stmt->class_name().c_str());
-#endif
   SgFunctionDeclaration *funcdecl_stmt = isSgFunctionDeclaration(stmt);
   ASSERT_not_null(funcdecl_stmt);
   SgSourceFile *source_file = info.get_current_source_file();
@@ -6051,19 +4903,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     requireExactCxxMacroDirectiveList(source_file);
   }
 
-#if DEBUG_unparseFuncDeclStmt
-  printf("  ->isFriend         = %s \n",
-         funcdecl_stmt->get_declarationModifier().isFriend() ? "true"
-                                                             : "false");
-  printf("  ->isForward()      = %s \n",
-         funcdecl_stmt->isForward() ? "true" : "false");
-  printf("  ->get_definition() = %s \n",
-         funcdecl_stmt->get_definition() ? "true" : "false");
-  printf("info.SkipFunctionDefinition()   = %s \n",
-         info.SkipFunctionDefinition() ? "true" : "false");
-#endif
-
-#if ENABLE_unparsedPartiallyUsingTokenStream
   // DQ (10/26/2018): We might not need this code now that I have fixed a cut
   // and paste error in the latest debugging of the
   // unparseStatementFromTokenStream() function. DQ (10/25/2018): Test for if we
@@ -6100,13 +4939,11 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
 
     return;
   }
-#endif
 
   // DQ (1/19/2014): Adding support for attributes that must be prefixed to the
   // function declarations (e.g. "__attribute__((regnum(3)))"). It is output
   // here for non-defining declarations, but in unparseFuncDefnStmt() function
   // for the attribute to be associated with the defining declaration.
-  // unp->u_sage->printPrefixAttributes(funcdecl_stmt,info);
   if (funcdecl_stmt->isForward() == true && !headerInfo.SkipBaseType()) {
     unp->u_sage->printPrefixAttributes(funcdecl_stmt, headerInfo);
   }
@@ -6121,13 +4958,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
       (headerInfo.SkipFunctionDefinition() == false)) {
     unparseStatement(funcdecl_stmt->get_definition(), headerInfo);
   } else {
-    SgClassDefinition *cdefn =
-        isSgClassDefinition(cxxLexicalDeclarationParent(funcdecl_stmt));
-    if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                     SgClassDeclaration::e_class) {
-      ninfo.set_CheckAccess();
-    }
-
     ninfo.set_SkipClassDefinition();
     ninfo.set_SkipEnumDefinition();
 
@@ -6142,7 +4972,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     }
 
     unparseAttachedPreprocessingInfo(stmt, info, PreprocessingInfo::inside);
-    ninfo.unset_CheckAccess();
     info.set_access_attribute(ninfo.get_access_attribute());
 
     // get_orig_return_type queries return type from type_syntax(), if
@@ -6180,7 +5009,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     if (funcdecl_stmt->isForward() == false) {
       unp->u_sage->printAttributes(funcdecl_stmt, info);
     }
-    ninfo.set_declstatement_ptr(NULL);
     ninfo.set_declstatement_ptr(funcdecl_stmt);
 
     if (funcdecl_stmt->get_firstNondefiningDeclaration() != NULL) {
@@ -6196,6 +5024,7 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
     }
 
     unparse_helper(funcdecl_stmt, ninfo);
+    unparseExceptionSpecification(funcdecl_stmt, ninfo);
 
     ninfo.set_declstatement_ptr(NULL);
     if (is_deduction_guide || use_trailing_return_type_syntax) {
@@ -6213,15 +5042,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
       unp->u_type->unparseType(rtype, second_type_info);
     }
     unparseOldStyleFunctionParameterDeclarations(funcdecl_stmt, ninfo);
-
-    if (!funcdecl_stmt->get_source_declarator_uses_wrapped_function_type() &&
-        funcdecl_stmt->get_declarationModifier().isThrow()) {
-      const SgTypePtrList &exceptionSpecifierList =
-          funcdecl_stmt->get_exceptionSpecification();
-      info.set_reference_node_for_qualification(funcdecl_stmt);
-      unparseExceptionSpecification(exceptionSpecifierList, info);
-      info.set_reference_node_for_qualification(NULL);
-    }
 
     if (funcdecl_stmt->get_asm_name().empty() == false) {
       curprint(" __asm__ (\"");
@@ -6251,10 +5071,6 @@ void Unparse_ExprStmt::unparseFuncDeclStmt(SgStatement *stmt,
   if (info.AddSemiColonAfterDeclaration()) {
     curprint(";");
   }
-
-#if DEBUG_unparseFuncDeclStmt
-  printf("Leave Unparse_ExprStmt::unparseFuncDeclStmt\n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
@@ -6262,26 +5078,12 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
   SgTemplateFunctionDefinition *stmt = isSgTemplateFunctionDefinition(stmt_);
   assert(stmt != NULL);
 
-  // DQ (10/27/2020): This can't be commented out since it is required for the
-  // conditional below.
-  // #ifndef NDEBUG
-  // SgStatement *declstmt =
-  // isSgTemplateFunctionDeclaration(stmt->get_declaration());
-  // SgDeclarationStatement *declstmt =
-  // isSgTemplateFunctionDeclaration(stmt->get_declaration());
   SgFunctionDeclaration *declstmt =
       isSgTemplateFunctionDeclaration(stmt->get_declaration());
   assert(declstmt != NULL);
-  // #endif
-
-  // unparseTemplateFunctionDeclStmt(declstmt, info); // we should not go back
-  // to parent declaration and unparse it. bad logic and cause recursion.
 
   SgSourceFile *sourcefile =
       requireExactCxxSourceFile(unp, info, "template-function-definition");
-  // DQ (10/27/2020): Added support to activate unparsing from the AST on a
-  // declaration by declaration basis. if (sourcefile != NULL &&
-  // sourcefile->get_unparse_template_ast() == true)
   if ((sourcefile != NULL && sourcefile->get_unparse_template_ast() == true) ||
       (declstmt->get_unparse_template_ast() == true)) {
     // Liao, 12/15/2016
@@ -6289,10 +5091,6 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
     //  unparse the entire declaration including the header.
     SgFunctionDefinition *funcdefn_stmt = stmt;
     ASSERT_not_null(funcdefn_stmt);
-
-#if OUTPUT_HIDDEN_LIST_DATA
-    outputHiddenListData(funcdefn_stmt);
-#endif
 
     // Unparse any comments of directives attached to the
     // SgFunctionParameterList
@@ -6304,44 +5102,19 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
     }
 
     info.set_SkipFunctionDefinition();
-    //     SgStatement *declstmt = funcdefn_stmt->get_declaration();
-
-    // DQ (1/19/2014): Adding gnu attribute prefix support.
     ASSERT_not_null(funcdefn_stmt->get_declaration());
 
     unp->u_sage->printPrefixAttributes(funcdefn_stmt->get_declaration(), info);
-
-    // DQ (3/24/2004): Need to permit SgMemberFunctionDecl and
-    // SgTemplateInstantiationMemberFunctionDecl if (declstmt->variant() ==
-    // MFUNC_DECL_STMT)
-
-    // DQ (5/8/2004): Any generated specialization needed to use the
-    // C++ syntax for explicit specification of specializations.
-    // if (isSgTemplateInstantiationMemberFunctionDecl(declstmt) != NULL)
-    //      curprint ( string("template<> ";
-
-    // DQ (10/11/2006): As part of new implementation of qualified names we now
-    // default to the generation of all qualified names unless they are skipped.
-    // info.set_SkipQualifiedNames();
 
     // DQ (10/15/2006): Mark that we are unparsing a function declaration (or
     // member function declaration) this will help us know when to trim the "::"
     // prefix from the name qualiciation.  The "::" global scope qualifier is
     // not used in function declarations, but is used for function calls.
-    info.set_declstatement_ptr(NULL);
     info.set_declstatement_ptr(funcdefn_stmt->get_declaration());
-
-    // curprint ("/* Inside of
-    // Unparse_ExprStmt::unparseTemplateFunctionDefnStmt: DONE calling
-    // unparseMFuncDeclStmt or unparseFuncDeclStmt */ ");
 
     // DQ (10/15/2006): Also un-mark that we are unparsing a function
     // declaration (or member function declaration)
     info.set_declstatement_ptr(NULL);
-
-    // DQ (10/11/2006): As part of new implementation of qualified names we now
-    // default to the generation of all qualified names unless they are skipped.
-    // info.unset_SkipQualifiedNames();
 
     info.unset_SkipFunctionDefinition();
     SgUnparse_Info ninfo(info);
@@ -6383,16 +5156,11 @@ void Unparse_ExprStmt::unparseTemplateFunctionDefnStmt(SgStatement *stmt_,
   }
 }
 
-// NOTE: Bug in Sage: No file information provided for FuncDeclStmt.
 void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
                                            SgUnparse_Info &info) {
 
   SgFunctionDefinition *funcdefn_stmt = isSgFunctionDefinition(stmt);
   ASSERT_not_null(funcdefn_stmt);
-
-#if OUTPUT_HIDDEN_LIST_DATA
-  outputHiddenListData(funcdefn_stmt);
-#endif
 
   // Unparse any comments of directives attached to the SgFunctionParameterList
   ASSERT_not_null(funcdefn_stmt->get_declaration());
@@ -6404,29 +5172,14 @@ void Unparse_ExprStmt::unparseFuncDefnStmt(SgStatement *stmt,
 
   info.set_SkipFunctionDefinition();
   SgStatement *declstmt = funcdefn_stmt->get_declaration();
-  // DQ (1/19/2014): Adding gnu attribute prefix support.
   ASSERT_not_null(funcdefn_stmt->get_declaration());
 
   unp->u_sage->printPrefixAttributes(funcdefn_stmt->get_declaration(), info);
-
-  // DQ (3/24/2004): Need to permit SgMemberFunctionDecl and
-  // SgTemplateInstantiationMemberFunctionDecl if (declstmt->variant() ==
-  // MFUNC_DECL_STMT)
-
-  // DQ (5/8/2004): Any generated specialization needed to use the
-  // C++ syntax for explicit specification of specializations.
-  // if (isSgTemplateInstantiationMemberFunctionDecl(declstmt) != NULL)
-  //      curprint ( string("template<> ";
-
-  // DQ (10/11/2006): As part of new implementation of qualified names we now
-  // default to the generation of all qualified names unless they are skipped.
-  // info.set_SkipQualifiedNames();
 
   // DQ (10/15/2006): Mark that we are unparsing a function declaration (or
   // member function declaration) this will help us know when to trim the "::"
   // prefix from the name qualiciation.  The "::" global scope qualifier is not
   // used in function declarations, but is used for function calls.
-  info.set_declstatement_ptr(NULL);
   info.set_declstatement_ptr(funcdefn_stmt->get_declaration());
 
   // DQ (12/5/2014): Test for if we have unparsed partially using the token
@@ -6535,12 +5288,7 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
     // JJW 10-23-2007 This member function is declared inside the
     // class, so its name should never be qualified
 
-    // printf ("mfuncdecl_stmt->get_declarationModifier().isFriend() = %s
-    // \n",mfuncdecl_stmt->get_declarationModifier().isFriend() ? "true" :
-    // "false");
     if (funcdecl_stmt->get_declarationModifier().isFriend() == false) {
-      // printf ("Setting SkipQualifiedNames (this is a member function located
-      // in its own class) \n");
       ninfo.set_SkipQualifiedNames();
     }
   }
@@ -6551,11 +5299,8 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
   // DQ (6/10/2007): set the declaration pointer so that the name qualification
   // can see if this is the declaration (so that exceptions to qualification can
   // be tracked).
-  ninfo.set_declstatement_ptr(NULL);
   ninfo.set_declstatement_ptr(funcdecl_stmt);
 
-  // if (!(mfuncdecl_stmt->isConstructor() || mfuncdecl_stmt->isDestructor() ||
-  // mfuncdecl_stmt->isConversion()))
   if (!(funcdecl_stmt->get_specialFunctionModifier().isConstructor() ||
         funcdecl_stmt->get_specialFunctionModifier().isDestructor() ||
         funcdecl_stmt->get_specialFunctionModifier().isConversion())) {
@@ -6583,14 +5328,11 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
                                                           rtype);
       configureExactFunctionReturnTypeInfo(unp, funcdecl_stmt, ninfo_for_type);
 
-      // unp->u_type->unparseType(rtype, ninfo);
       unp->u_type->unparseType(rtype, ninfo_for_type);
 
       ninfo.unset_SkipClassSpecifier();
     }
 
-    // printf ("In unparser: DONE with NOT a constructor, destructor or
-    // conversion operator \n");
   } else {
     // DQ (9/17/2004): What can we assume about the return type of a
     // constructor, destructor, or conversion operator?
@@ -6606,20 +5348,12 @@ void Unparse_ExprStmt::unparseReturnType(SgFunctionDeclaration *funcdecl_stmt,
   }
 }
 
-#define DEBUG_unparseMFuncDeclStmt 0
-
 void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
                                             SgUnparse_Info &info) {
   SgMemberFunctionDeclaration *mfuncdecl_stmt =
       isSgMemberFunctionDeclaration(stmt);
   ASSERT_not_null(mfuncdecl_stmt);
 
-#if DEBUG_unparseMFuncDeclStmt
-  printf("Enter Unparse_ExprStmt::unparseMFuncDeclStmt\n");
-  printf("  stmt = %p = %s\n", stmt, stmt->class_name().c_str());
-#endif
-
-#if ENABLE_unparsedPartiallyUsingTokenStream
   // DQ (10/26/2018): We might not need this code now that I have fixed a cut
   // and paste error in the latest debugging of the
   // unparseStatementFromTokenStream() function. DQ (10/25/2018): Test for if we
@@ -6661,7 +5395,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     }
     return;
   }
-#endif
 
   // DQ (12/3/2007): This causes a bug in the output of access level (public,
   // protected, private) because the inforamtion change in ninfo is not
@@ -6687,48 +5420,20 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
   bool isDefaultedOrDeletedMemberFunction =
       mfuncdecl_mod.isMarkedDefault() || mfuncdecl_mod.isMarkedDelete();
   SgFunctionDefinition *mfuncdefn = mfuncdecl_stmt->get_definition();
-#if DEBUG_unparseMFuncDeclStmt
-  printf("  mfuncdecl_stmt->isForward()        = %s\n",
-         mfuncdecl_stmt->isForward() ? "true" : "false");
-  printf("  info.SkipFunctionDefinition()      = %s\n",
-         info.SkipFunctionDefinition() ? "true" : "false");
-  printf("  isDefaultedOrDeletedMemberFunction = %s\n",
-         isDefaultedOrDeletedMemberFunction ? "true" : "false");
-  printf("  mfuncdecl_stmt->get_definition()   = %p = %s\n", mfuncdefn,
-         mfuncdefn ? mfuncdefn->class_name().c_str() : "");
-#endif
 
   // DQ (4/13/2019): If this is a defaulted constructor, then we don't want to
   // unparse the body, so we want to treat it the same as a forward declaration.
   if (!mfuncdecl_stmt->isForward() && mfuncdefn &&
       !ninfo.SkipFunctionDefinition() &&
       isDefaultedOrDeletedMemberFunction == false) {
-    // Class-member access control applies to the declaration itself, not to
-    // local declarations nested inside the function body.
     SgUnparse_Info body_info(info);
-    body_info.unset_CheckAccess();
     unparseStatement(mfuncdecl_stmt->get_definition(), body_info);
   } else {
     ASSERT_not_null(cxxLexicalDeclarationParent(mfuncdecl_stmt));
-    // Access-specifier emission must be recomputed for each declaration.
-    // Otherwise a prior in-class declaration can leak `CheckAccess` into
-    // out-of-class member declarations and print invalid `public:`/`private:`.
-    info.unset_CheckAccess();
-    SgClassDefinition *parent_class =
-        isSgClassDefinition(cxxLexicalDeclarationParent(mfuncdecl_stmt));
-    if (parent_class &&
-        parent_class->get_declaration()->get_class_type() ==
-            SgClassDeclaration::e_class &&
-        !info.skipCheckAccess()) {
-      info.set_CheckAccess();
-    }
-
     if (!ninfo.SkipBaseType()) {
       unparse_enclosing_template_headers();
-      unp->u_sage->printSpecifier1(mfuncdecl_stmt, info);
       unp->u_sage->printSpecifier2(mfuncdecl_stmt, info);
     }
-    info.unset_CheckAccess();
 
     SgType *rtype = NULL;
     unparseReturnType(mfuncdecl_stmt, rtype, ninfo);
@@ -6748,6 +5453,8 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     if (isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt) != NULL) {
       unp->u_exprStmt->unparseTemplateMemberFunctionName(
           isSgTemplateInstantiationMemberFunctionDecl(mfuncdecl_stmt), ninfo);
+    } else if (mfuncdecl_stmt->get_specialFunctionModifier().isConversion()) {
+      unparseConversionFunctionName(mfuncdecl_stmt, ninfo);
     } else {
       curprint(mfuncdecl_stmt->get_name().str());
     }
@@ -6759,7 +5466,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     ninfo2.set_SkipClassDefinition();
     ninfo2.set_SkipEnumDefinition();
     ninfo2.set_inArgList();
-    ninfo2.set_declstatement_ptr(NULL);
     ninfo2.set_declstatement_ptr(mfuncdecl_stmt);
 
     const bool uses_wrapped_function_type =
@@ -6781,7 +5487,7 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
               static_cast<void *>(mfuncdecl_stmt));
       ROSE_ABORT();
     }
-    if (use_trailing_return_type_syntax) {
+    if (!uses_wrapped_function_type) {
       unparseMemberFunctionParametersAndQualifiers(mfuncdecl_stmt, info);
     }
 
@@ -6806,13 +5512,7 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       }
     }
 
-    if (use_trailing_return_type_syntax) {
-      unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
-    } else if (uses_wrapped_function_type) {
-      unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
-    } else {
-      unparseTrailingFunctionModifiers(mfuncdecl_stmt, info);
-    }
+    unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
 
     const bool is_function_try_block =
         info.SkipFunctionDefinition() && !mfuncdecl_stmt->isForward() &&
@@ -6821,11 +5521,11 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
       curprint(" try");
     }
 
-    auto const &ctor_inits = mfuncdecl_stmt->get_ctors();
+    const auto ctor_inits = writtenCtorInitializers(mfuncdecl_stmt);
     SgMemberFunctionDeclaration *defining_declaration =
         isSgMemberFunctionDeclaration(
             mfuncdecl_stmt->get_definingDeclaration());
-    if (!mfuncdecl_stmt->isForward() && ctor_inits.empty() &&
+    if (!mfuncdecl_stmt->isForward() && mfuncdecl_stmt->get_ctors().empty() &&
         defining_declaration != nullptr &&
         defining_declaration != mfuncdecl_stmt &&
         !defining_declaration->get_ctors().empty()) {
@@ -6842,9 +5542,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
 
     } else if (!ctor_inits.empty()) {
       auto it_ctor_init = ctor_inits.begin();
-#if DEBUG_unparseMFuncDeclStmt
-      printf("  Preinitialization list:\n");
-#endif
       curprint(" : ");
       bool separatorBelongsToCurrentInitializer = false;
       while (it_ctor_init != ctor_inits.end()) {
@@ -6878,11 +5575,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
         SgName nameQualifier(
             exactStatementNameQualification(unp, ctor_init, initializer_info)
                 .qualifier);
-#if DEBUG_unparseMFuncDeclStmt
-        printf("   - element name = %s nameQualifier = %s \n",
-               ctor_init->get_name().str(),
-               nameQualifier.is_null() ? "NULL" : nameQualifier.str());
-#endif
         unparseCtorPreinitializerDesignator(this, unp, ctor_init,
                                             initializer_info);
 
@@ -6894,22 +5586,10 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
                   static_cast<void *>(ctor_init));
           ROSE_ABORT();
         }
-        // not used: SgAggregateInitializer   * aggr_init =
-        // isSgAggregateInitializer(initializer);
         SgConstructorInitializer *ctor_initializer =
             isSgConstructorInitializer(initializer);
         bool output_parenthesis = ctor_initializer == nullptr;
 
-#if DEBUG_unparseMFuncDeclStmt
-        bool compiler_generated =
-            initializer->get_startOfConstruct()->isCompilerGenerated();
-        printf("     initializer = %p = %s\n", initializer,
-               initializer->class_name().c_str());
-        printf("     output_parenthesis = %s\n",
-               output_parenthesis ? "true" : "false");
-        printf("     compiler_generated = %s\n",
-               compiler_generated ? "true" : "false");
-#endif
         if (output_parenthesis)
           curprint(string("("));
 
@@ -6958,11 +5638,6 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
     unparseAttachedPreprocessingInfo(mfuncdecl_stmt->get_CtorInitializerList(),
                                      info, PreprocessingInfo::after);
   }
-
-#if DEBUG_unparseMFuncDeclStmt
-  printf("Leaving Unparse_ExprStmt::unparseMFuncDeclStmt(stmt = %p = %s) \n",
-         stmt, stmt->class_name().c_str());
-#endif
 }
 
 void Unparse_ExprStmt::unparseMemberFunctionParametersAndQualifiers(
@@ -6987,8 +5662,6 @@ void Unparse_ExprStmt::unparseMemberFunctionParametersAndQualifiers(
     ROSE_ABORT();
   }
 
-  // DQ (9/9/2014): Note this was using info where it was refactored from and
-  // ninfo is passed to this function.
   if (!info.SkipFunctionQualifier()) {
     if (mftype->isConstFunc()) {
       curprint(" const");
@@ -7001,31 +5674,16 @@ void Unparse_ExprStmt::unparseMemberFunctionParametersAndQualifiers(
       curprint(Unparse_Type::unparseRestrictKeyword());
     }
 
-    // DQ (1/11/2020): Adding support for lvalue reference member function
-    // modifiers.
     if (mftype->isLvalueReferenceFunc()) {
       curprint(" &");
     }
 
-    // DQ (1/11/2020): Adding support for rvalue reference member function
-    // modifiers.
     if (mftype->isRvalueReferenceFunc()) {
       curprint(" &&");
     }
   }
 
-  // DQ (4/28/2004): Added support for throw modifier
-  if (mfuncdecl_stmt->get_declarationModifier().isThrow()) {
-    // Unparse SgThrow
-    // unparseThrowExp(mfuncdecl_stmt->get_throwExpression,info);
-    // printf ("Incomplete implementation of throw specifier on function \n");
-    // curprint ( string(" throw( /* from unparseTrailingFunctionModifiers()
-    // type list output not implemented */ )";
-    const SgTypePtrList &exceptionSpecifierList =
-        mfuncdecl_stmt->get_exceptionSpecification();
-    // unparseExceptionSpecification(exceptionSpecifierList,ninfo);
-    unparseExceptionSpecification(exceptionSpecifierList, info);
-  }
+  unparseExceptionSpecification(mfuncdecl_stmt, info);
 }
 
 void Unparse_ExprStmt::unparseMemberFunctionPostDeclaratorModifiers(
@@ -7039,7 +5697,6 @@ void Unparse_ExprStmt::unparseMemberFunctionPostDeclaratorModifiers(
     unparseRequiresClauseExpression(this, requires_clause, rinfo);
   }
 
-  // if (mfuncdecl_stmt->isPure())
   if (mfuncdecl_stmt->get_functionModifier().isPureVirtual()) {
     // DQ (1/22/2013): Supress the output of the pure virtual syntax if this is
     // the defining declaration (see test2013_26.C). curprint ( string(" = 0"));
@@ -7052,9 +5709,6 @@ void Unparse_ExprStmt::unparseMemberFunctionPostDeclaratorModifiers(
   // defined in the class. DQ (8/11/2014): Added support for final keyword
   // unparsing.
   if (mfuncdecl_stmt->get_declarationModifier().isFinal() == true) {
-    // DQ (2/12/2019): Testing, final can't be used on prototypes (I think).
-    // curprint(" /* output from test 1 */ ");
-    // curprint(" final");
     // DQ (7/10/2022): "final" is not a keyword, but it can only be used like a
     // keyword with member function declarations inside of the associated class
     // definition. curprint(" override");
@@ -7081,46 +5735,19 @@ void Unparse_ExprStmt::unparseMemberFunctionPostDeclaratorModifiers(
     }
   }
 
-  // DQ (4/13/2019): Added support for default keyword unparsing.
   if (mfuncdecl_stmt->get_functionModifier().isMarkedDefault() == true) {
     curprint(" = default");
   }
 
-  // DQ (4/13/2019): Added support for delete keyword unparsing.
   if (mfuncdecl_stmt->get_functionModifier().isMarkedDelete() == true) {
     curprint(" = delete");
   }
-}
-
-void Unparse_ExprStmt::unparseTrailingFunctionModifiers(
-    SgMemberFunctionDeclaration *mfuncdecl_stmt, SgUnparse_Info &info) {
-  // DQ (9/9/2014): Refactored support for function modifiers.
-  unparseMemberFunctionParametersAndQualifiers(mfuncdecl_stmt, info);
-  unparseMemberFunctionPostDeclaratorModifiers(mfuncdecl_stmt, info);
 }
 
 void Unparse_ExprStmt::unparseVarDefnStmt(SgStatement *stmt,
                                           SgUnparse_Info &info) {
   SgVariableDefinition *vardefn_stmt = isSgVariableDefinition(stmt);
   ASSERT_not_null(vardefn_stmt);
-
-  // DQ: (9/17/2003)
-  // Although I have not seen it in any of our tests of ROSE the
-  // SgVariableDefinition does appear to be used in the declaration of bit
-  // fields!  Note the comment at the end of the unparseVarDeclStmt() function
-  // where the bit field is unparsed! Though it appears that the
-  // unparseVarDefnStmt is not required to the unparsing of the bit field, so
-  // this function is never called!
-
-  // DQ (2/3/2007): However, for the ODR check in the AST merge we require
-  // something to be generated for everything that could be shared.  So we
-  // should unparse something, perhaps the variable declaration?
-
-  // DQ (1/20/2014): This has been changed to be a SgValueExp (required).  Plus
-  // as a generated value expression we include the expression from which the
-  // value was generated.  This is important where this is a constant expression
-  // generated from sizes of machine dependent types. SgUnsignedLongVal
-  // *bitfield = vardefn_stmt->get_bitfield();
   SgExpression *bitfield = vardefn_stmt->get_bitfield();
   if (bitfield != NULL) {
     curprint(string(":"));
@@ -7158,26 +5785,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
     ROSE_ABORT();
   }
 
-#define DEBUG_UNPARSE_CLASS_DECLARATION 0
-
-#if DEBUG_USING_CURPRINT
-  curprint("/* Inside of Unparse_ExprStmt::unparseClassDeclStmt() */ \n");
-#endif
-
-  // info.display("Inside of unparseClassDeclStmt");
-
-#if DEBUG_UNPARSE_CLASS_DECLARATION
-  printf("At top of unparseClassDeclStmt name = %s \n",
-         classdecl_stmt->get_name().str());
-#endif
-#if DEBUG_UNPARSE_CLASS_DECLARATION
-  printf("In Unparse_ExprStmt::unparseClassDeclStmt(): classdecl_stmt = %p "
-         "isForward() = %s info.SkipClassDefinition() = %s name = %s \n",
-         classdecl_stmt,
-         (classdecl_stmt->isForward() == true) ? "true" : "false",
-         (info.SkipClassDefinition() == true) ? "true" : "false",
-         classdecl_stmt->get_name().str());
-#endif
   requireDirectSourceSurfaceOwnership(classdecl_stmt, "class-declaration");
 
   // DQ (6/2/2021): Adding support for partial token sequence unparsing.
@@ -7241,14 +5848,11 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // e_token_subsequence_start, e_leading_whitespace_end, info);
       // I think that we may need to tigger the output of the opening "{" here,
       // and then loop over the declarations in the class definition explicitly.
-      // unparseStatementFromTokenStream (stmt, class_definition,
-      // e_token_subsequence_start, e_leading_whitespace_end, info);
       unparseStatementFromTokenStream(stmt, class_definition,
                                       e_token_subsequence_start,
                                       e_token_subsequence_start, info);
 
       SgUnparse_Info ninfo(info);
-      // unparseStatement(class_definition, info);
 
       SgStatement *last_member_statement = NULL;
       SgStatement *previous_member_statement = NULL;
@@ -7349,8 +5953,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         ninfox.unset_unparsedPartiallyUsingTokenStream();
       }
 
-      // DQ (6/13/2007): Set to null before resetting to non-null value
-      ninfox.set_declstatement_ptr(NULL);
       ninfox.set_declstatement_ptr(classdecl_stmt);
 
       // printf ("Calling unparseStatement(classdecl_stmt->get_definition(),
@@ -7381,21 +5983,6 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
               "In Unparse_ExprStmt::unparseClassDeclStmt(): "
               "classdecl_stmt->get_parent() == NULL");
         }
-        // ASSERT_not_null(classdecl_stmt->get_parent());
-        SgClassDefinition *cdefn =
-            isSgClassDefinition(classdecl_stmt->get_parent());
-
-        if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                         SgClassDeclaration::e_class) {
-          ninfo.set_CheckAccess();
-        }
-
-        // DQ (8/19/2004): Removed functions using old attribute mechanism (old
-        // CC++ mechanism) printf ("Commented out
-        // get_suppress_global(classdecl_stmt) \n"); if
-        // (get_suppress_global(classdecl_stmt))
-        //      ninfo.set_SkipGlobal(); //attributes.h
-        // printDebugInfo("entering unp->u_sage->printSpecifier", true);
         unp->u_sage->printSpecifier(classdecl_stmt, ninfo);
         info.set_access_attribute(ninfo.get_access_attribute());
       }
@@ -7439,12 +6026,15 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         // valid for both forward declarations and definitions and is the one
         // source-emission owner for SgClassDeclaration alignment; the generic
         // post-name and post-body paths deliberately exclude class alignment.
-        const short alignmentValue = classdecl_stmt->get_declarationModifier()
-                                         .get_typeModifier()
-                                         .get_gnu_attribute_alignment();
-        if (alignmentValue >= 0) {
+        const int alignmentValue = classdecl_stmt->get_declarationModifier()
+                                       .get_typeModifier()
+                                       .get_gnu_attribute_alignment();
+        unp->u_sage->printAlignmentSpecifiers(
+            classdecl_stmt, info, Unparse_MOD_SAGE::AlignmentPosition::TagHead);
+        if (alignmentValue >= 0 &&
+            classdecl_stmt->get_alignment_specifiers().empty()) {
           curprint("__attribute__((aligned(");
-          curprint(StringUtility::numberToString((int)alignmentValue));
+          curprint(StringUtility::numberToString(alignmentValue));
           curprint("))) ");
         }
       }
@@ -7461,14 +6051,10 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
         nm = templateInstantiation->get_name();
       }
 
-      // DQ (7/20/2011): Test compilation without these functions.
-
-      // DQ (7/28/2012): This is the original code (I think it is what we really
-      // want, but we need to test this. DQ (6/5/2011): Newest refactored
-      // support for name qualification.
       SgName nameQualifier;
-      if (classdecl_stmt->isForward() ||
-          classdecl_stmt->get_parent() != classdecl_stmt->get_scope()) {
+      if (!classdecl_stmt->get_isUnNamed() &&
+          (classdecl_stmt->isForward() ||
+           classdecl_stmt->get_parent() != classdecl_stmt->get_scope())) {
         nameQualifier =
             SgName(exactStatementNameQualification(unp, classdecl_stmt, info)
                        .qualifier);
@@ -7500,40 +6086,11 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
           curprint(" ");
         }
       } else {
-        // DQ (11/21/2021): I think we can skip the name of the enum here for
-        // where this is used in the typedef as a anonymous type.
-        // curprint(enum_stmt->get_name() + " ");
-        // printf ("We could skip the name of the enum here ... \n");
-        // if (info.PrintName() == true)
-        // if (isAnonymousName == false && classdecl_stmt->get_isUnNamed() ==
-        // false) if (isAnonymousName == false &&
-        // classdecl_stmt->get_isUnNamed() == false && info.PrintName() == true)
         if (classdecl_stmt->get_isUnNamed() == false) {
           curprint(nameQualifier.str());
           if (SgTemplateClassDeclaration *template_class_decl =
                   isSgTemplateClassDeclaration(classdecl_stmt)) {
-            SgName template_name = template_class_decl->get_templateName();
-            if (template_name.is_null() || template_name.getString().empty()) {
-              template_name = classdecl_stmt->get_name();
-            }
-            curprint(template_name);
-
-            const SgTemplateArgumentPtrList &specialization_args =
-                template_class_decl->get_templateSpecializationArguments();
-            if (!specialization_args.empty() &&
-                template_class_decl->get_specialization() !=
-                    SgDeclarationStatement::e_no_specialization) {
-              SgTemplateArgumentPtrList explicit_args = specialization_args;
-              SgUnparse_Info template_arg_info(info);
-              template_arg_info.set_SkipClassDefinition();
-              template_arg_info.set_SkipEnumDefinition();
-              template_arg_info.set_SkipClassSpecifier();
-              template_arg_info.set_declstatement_ptr(NULL);
-              template_arg_info.set_current_context(NULL);
-              unp->u_exprStmt->unparseTemplateArgumentList(
-                  explicit_args, template_arg_info,
-                  TemplateArgumentEmission::explicit_source_prefix);
-            }
+            unparseTemplateClassName(this, template_class_decl, info);
           } else {
             curprint(classdecl_stmt->get_name());
           }
@@ -7551,43 +6108,21 @@ void Unparse_ExprStmt::unparseClassDeclStmt(SgStatement *stmt,
       // (classdecl_stmt->get_declarationModifier().isFinal() == true)
       if ((classdecl_stmt->isForward() == false) &&
           (classdecl_stmt->get_declarationModifier().isFinal() == true)) {
-        // DQ (2/12/2019): Testing, final can't be used on prototypes (I think).
-        // curprint(" /* output from test 2 */ ");
         curprint(" final");
       }
 
       unp->u_sage->printAttributes(classdecl_stmt, info);
 
-      {
-        // DQ (6/2/2021): Original code.
-        if (classdecl_stmt->isForward() && !info.SkipSemiColon()) {
-          curprint(";");
-
-          if (classdecl_stmt->isExternBrace()) {
-          }
-        }
+      if (classdecl_stmt->isForward() && !info.SkipSemiColon()) {
+        curprint(";");
       }
     }
-
-    // DQ (6/3/2021): Closing brace for if
-    // (saved_unparsedPartiallyUsingTokenStream == false) above.
   }
-
-#if DEBUG_USING_CURPRINT
-  curprint("/* Leaving unparseClassDeclStmt */ \n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseClassInheritanceList(
     SgClassDefinition *classdefn_stmt, SgUnparse_Info &ninfo) {
   // print out the class inheritance
-
-#define DEBUG_UNPARSE_CLASS_INHERITANCE 0
-
-#if DEBUG_UNPARSE_CLASS_INHERITANCE
-  printf("Inside of unparseClassInheritanceList \n");
-  curprint("/* Inside of unparseClassInheritanceList */ \n");
-#endif
 
   SgBaseClassPtrList::iterator p = classdefn_stmt->get_inheritances().begin();
   if (p != classdefn_stmt->get_inheritances().end()) {
@@ -7778,147 +6313,45 @@ SgStatement *Unparse_ExprStmt::unparseClassMembersWithSourceRoles(
 void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
                                             SgUnparse_Info &info) {
 
-#define DEBUG_UNPARSE_CLASS_DEFINITION 0
-
-#if DEBUG_UNPARSE_CLASS_DEFINITION
-  printf("In unparseClassDefnStmt() \n");
-  curprint("/* In unparseClassDefnStmt() */ \n");
-#endif
-
   SgClassDefinition *classdefn_stmt = isSgClassDefinition(stmt);
   ASSERT_not_null(classdefn_stmt);
   const bool body_needs_leading_space =
       classDefinitionBodyNeedsLeadingSpace(classdefn_stmt);
 
-  // DQ (5/28/2021): Adding support for partial token sequence unparsing.
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
-  if (saved_unparsedPartiallyUsingTokenStream == true) {
-    // SgStatement* body = while_stmt->get_body();
-    // curprint("/* partial token sequence SgWhileStmt */ ");
-    // SgStatement* condition = while_stmt->get_condition();
-    // unparseStatementFromTokenStream (stmt, condition,
-    // e_token_subsequence_start, e_token_subsequence_start, info);
-  } else {
-    // unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK2);
-    // curprint("/* from AST SgWhileStmt */ while(");
-    // curprint("while(");
-    // unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
-  }
-
-#if OUTPUT_HIDDEN_LIST_DATA
-  outputHiddenListData(classdefn_stmt);
-#endif
 
   SgUnparse_Info ninfo(info);
   ninfo.unset_SkipFormatting();
   ninfo.set_template_argument_qualification_context(
       classdefn_stmt->get_declaration());
 
-  // curprint ( string("/* Print out class declaration */ \n";
-
   ninfo.set_SkipClassDefinition();
 
-  // DQ (9/9/2016): Added to conform to unifor testing that these are always
-  // equal.
   ninfo.set_SkipEnumDefinition();
 
-  // DQ (10/13/2006): test2004_133.C demonstrates where we need to unparse
-  // qualified names for class definitions (defining declaration). DQ
-  // (10/11/2006): Don't generate qualified names for the class name of a
-  // defining declaration ninfo.set_SkipQualifiedNames();
-
-  // DQ (7/19/2003) skip the output of the semicolon
   ninfo.set_SkipSemiColon();
 
-#if DEBUG_USING_CURPRINT
-  curprint(
-      "\n/* In unparseClassDefnStmt(): calling unparseClassDeclStmt() */ \n");
-#endif
-
-  // printf ("Calling unparseClassDeclStmt = %p isForward = %s from
-  // unparseClassDefnStmt = %p \n",
-  //      classdefn_stmt->get_declaration(),(classdefn_stmt->get_declaration()->isForward()
-  //      == true) ? "true" : "false",classdefn_stmt);
   ASSERT_not_null(classdefn_stmt->get_declaration());
   unparseClassDeclStmt(classdefn_stmt->get_declaration(), ninfo);
 
-#if DEBUG_USING_CURPRINT
-  curprint("\n/* In unparseClassDefnStmt(): DONE: calling "
-           "unparseClassDeclStmt() */ \n");
-#endif
-
-  // DQ (7/19/2003) unset the specification to skip the output of the semicolon
   ninfo.unset_SkipSemiColon();
-
-  // DQ (10/11/2006): Don't generate qualified names for the class name of a
-  // defining declaration ninfo.unset_SkipQualifiedNames();
 
   ninfo.unset_SkipClassDefinition();
 
-  // DQ (9/9/2016): Added to conform to unifor testing that these are always
-  // equal.
   ninfo.unset_SkipEnumDefinition();
 
-  // curprint("/* END: Print out class declaration */ \n");
-
-  SgNamedType *saved_context = ninfo.get_current_context();
-
-  // DQ (11/29/2004): The use of a primary and secondary declaration casue two
-  // SgClassType nodes to be generated (which should be fixed) since this is
-  // compared to another SgClassType within the generateQualifiedName() function
-  // we have to get the the type from the non-defining declaration uniformally.
-  // Same way each time so that the pointer test will be meaningful.
-  // ninfo.set_current_context(classdefn_stmt->get_declaration()->get_type());
   ASSERT_not_null(
       classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
   SgClassDeclaration *classDeclaration = isSgClassDeclaration(
       classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
   ASSERT_not_null(classDeclaration->get_type());
 
-  // DQ (6/13/2007): Set to null before resetting to non-null value
-  // ninfo.set_current_context(classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration()->get_type());
-  ninfo.set_current_context(NULL);
-  ninfo.set_current_context(classDeclaration->get_type());
-
-#if DEBUG_UNPARSE_CLASS_DEFINITION
-  printf("In unparseClassDefnStmt(): Print out inheritance \n");
-  curprint("/* Print out inheritance */ \n");
-#endif
-
   // DQ (1/8/2020): Refactors the output of base classes so that it can be
   // supported in the unparseClassDefnStmt() and unparseClassType() functions.
   unparseClassInheritanceList(classdefn_stmt, ninfo);
 
-#if DEBUG_UNPARSE_CLASS_DEFINITION
-  // curprint ( string("\n/* After specification of base classes unparse the
-  // declaration body */ \n";
-  printf("After specification of base classes unparse the declaration body  "
-         "info.SkipBasicBlock() = %s \n",
-         (info.SkipBasicBlock() == true) ? "true" : "false");
-#endif
-
-  // DQ (9/28/2004): Turn this back on as the only way to prevent this from
-  // being unparsed! DQ (11/22/2003): Control unparsing of the {} part of the
-  // definition if ( !info.SkipBasicBlock() )
   if (info.SkipBasicBlock() == false) {
-    // curprint ( string("\n/* Unparsing class definition within
-    // unparseClassDefnStmt */ \n";
-
-    // DQ (6/14/2006): Add packing pragma support (explicitly set the packing
-    // alignment to the default, part of packing pragma normalization).
-    unsigned int packingAlignment = classdefn_stmt->get_packingAlignment();
-    if (packingAlignment != 0) {
-      const std::string packDirective =
-          std::string("#pragma pack(") +
-          StringUtility::numberToString(packingAlignment) + ")";
-      if (unp->cur.get_compact_output()) {
-        unp->cur.emit_compact_directive(packDirective);
-      } else {
-        curprint("\n" + packDirective + "\n");
-      }
-    }
-
     const bool render_empty_inline = shouldRenderClassDefinitionInline(
         classdefn_stmt, saved_unparsedPartiallyUsingTokenStream);
     const bool inline_body_needs_leading_space =
@@ -7943,14 +6376,7 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
       unparseAttachedPreprocessingInfo(classdefn_stmt, info,
                                        PreprocessingInfo::inside);
 
-      // DQ (5/28/2021): Fixing the unparseClassDefnStmt() function to support
-      // partial unparsing from the token stream.
-      // unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
-      // curprint ( string("}"));
       if (saved_unparsedPartiallyUsingTokenStream == false) {
-#if DEBUG_USING_CURPRINT
-        curprint("\n/* saved_unparsedPartiallyUsingTokenStream == false */\n");
-#endif
         unp->cur.format(classdefn_stmt, info, FORMAT_BEFORE_BASIC_BLOCK2);
         curprint(string("}"));
       } else {
@@ -7972,35 +6398,16 @@ void Unparse_ExprStmt::unparseClassDefnStmt(SgStatement *stmt,
       }
     }
 
-    // DQ (6/14/2006): Add packing pragma support (reset the packing
-    // alignment to the default, part of packing pragma normalization).
-    if (packingAlignment != 0) {
-      if (unp->cur.get_compact_output()) {
-        unp->cur.emit_compact_directive("#pragma pack()");
-      } else {
-        curprint("\n#pragma pack()\n");
-      }
-    }
-
     if (render_empty_inline == false && info.SkipSemiColon()) {
       unp->cur.format(classdefn_stmt, info, FORMAT_AFTER_BASIC_BLOCK2);
     }
   }
 
-  // DQ (6/13/2007): Set to null before resetting to non-null value
-  ninfo.set_current_context(NULL);
-  ninfo.set_current_context(saved_context);
-
   unparseTypeAttributes(classdefn_stmt->get_declaration());
-
-#if DEBUG_USING_CURPRINT
-  curprint("/* Leaving unparseClassDefnStmt */ \n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseTypeAttributes(
     SgDeclarationStatement *declaration) {
-  // DQ (10/4/2012): Added support for transparent unions.
   ASSERT_not_null(declaration);
 
   bool isGnuAttributeTransparentUnion = declaration->get_declarationModifier()
@@ -8025,12 +6432,9 @@ void Unparse_ExprStmt::unparseTypeAttributes(
     curprint(" __attribute__((__transparent_union__))");
   }
 
-  // DQ (1/3/2014): Added support for packing attribute.
   if (declaration->get_declarationModifier()
           .get_typeModifier()
           .isGnuAttributePacked() == true) {
-    // curprint(" /* from unparseTypeAttributes(SgDeclarationStatement*) */
-    // __attribute__((packed))");
     curprint(" __attribute__((packed))");
   }
 
@@ -8084,16 +6488,8 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
     }
   }
 
-  // info.display("Called inside of unparseEnumDeclStmt()");
-
-#if DEBUG_USING_CURPRINT
-  curprint("\n/* Inside of Unparse_ExprStmt::unparseEnumDeclStmt() */ \n");
-#endif
-
   string enum_string = "enum ";
 
-  // DQ (8/12/2014): Adding support for C++11 scoped enums (syntax is "enum
-  // class ").
   if (enum_stmt->get_isScopedEnum() == true) {
     enum_string += "class ";
   }
@@ -8102,29 +6498,17 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
   if (!info.inEmbeddedDecl()) {
     // This is the more common declaration of an enum with the definition
     // attached.
-    // If this is part of a class definition then get the access information
-    SgClassDefinition *cdefn = isSgClassDefinition(enum_stmt->get_parent());
-    if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                     SgClassDeclaration::e_class) {
-      info.set_CheckAccess();
-    }
-    // printDebugInfo("entering unp->u_sage->printSpecifier", true);
     unp->u_sage->printSpecifier(enum_stmt, info);
-    info.unset_CheckAccess();
 
-    // DQ (2/14/2019): Adding name qualification support.
-    // curprint(enum_string + enum_stmt->get_name().str() + " ");
     curprint(enum_string);
+    unp->u_sage->printAlignmentSpecifiers(
+        enum_stmt, info, Unparse_MOD_SAGE::AlignmentPosition::TagHead);
 
     ASSERT_not_null(enum_stmt);
 
     SgName nameQualifier(
         exactStatementNameQualification(unp, enum_stmt, info).qualifier);
 
-    // DQ (11/21/2021): I think we can skip the name of the enum here for where
-    // this is used in the typedef as a anonymous type.
-    // curprint(enum_stmt->get_name() + " ");
-    // printf ("We could skip the name of the enum here ... \n");
     const bool isAnonymousName = enum_stmt->get_isUnNamed();
     if (isAnonymousName == false) {
       curprint(nameQualifier.str());
@@ -8144,7 +6528,6 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
 
   unp->u_sage->printAttributes(enum_stmt, info);
 
-  // DQ (8/12/2014): Adding support for C++11 base type specification syntax.
   if (enum_stmt->get_underlying_type_source_spelled()) {
     if (enum_stmt->get_field_type() == nullptr) {
       fprintf(stderr,
@@ -8158,15 +6541,15 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
 
     // Make a new SgUnparse_Info object.
     SgUnparse_Info ninfo(info);
+    ninfo.set_reference_node_for_qualification(enum_stmt->get_field_type());
+    ninfo.set_template_argument_qualification_context(enum_stmt);
     unp->u_type->unparseType(enum_stmt->get_field_type(), ninfo);
   }
 
-  // DQ (6/26/2005): Support for empty enum declarations!
   if (enum_stmt == enum_stmt->get_definingDeclaration()) {
     curprint(source_enumerators.empty() ? "{" : "{ ");
   }
 
-  // if (!info.SkipDefinition()
   if (!info.SkipEnumDefinition()
       /* [BRN] 4/19/2002 --  part of the fix in unparsing var decl including
          enum definition */
@@ -8175,11 +6558,6 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
     ninfo.set_inEnumDecl();
     SgInitializer *tmp_init = NULL;
     SgName tmp_name;
-
-#if DEBUG_USING_CURPRINT
-    curprint("\n/* In Unparse_ExprStmt::unparseEnumDeclStmt(): output the "
-             "enumerators */ \n");
-#endif
 
     for (size_t index = 0; index < source_enumerators.size(); ++index) {
       SgInitializedName *field = source_enumerators[index].field;
@@ -8191,10 +6569,6 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
                 enum_stmt->get_name().getString().c_str(), index);
         ROSE_ABORT();
       }
-#if DEBUG_USING_CURPRINT
-      curprint("\n/* In Unparse_ExprStmt::unparseEnumDeclStmt(): output "
-               "enumerator */ \n");
-#endif
       unparseAttachedPreprocessingInfo(field, info, PreprocessingInfo::before);
       tmp_name = field->get_name();
       tmp_init = field->get_initializer();
@@ -8232,17 +6606,9 @@ void Unparse_ExprStmt::unparseEnumDeclStmt(SgStatement *stmt,
     curprint(source_enumerators.empty() ? "}" : " }");
   }
 
-  // DQ (6/26/2005): Moved to location after output of closing "}" from enum
-  // definition
   if (!info.SkipSemiColon()) {
     curprint(";");
-    if (enum_stmt->isExternBrace()) {
-    }
   }
-
-#if DEBUG_USING_CURPRINT
-  curprint("\n/* Leaving unparseEnumDeclStmt() */ \n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseExprStmt(SgStatement *stmt,
@@ -8251,7 +6617,6 @@ void Unparse_ExprStmt::unparseExprStmt(SgStatement *stmt,
   ASSERT_not_null(expr_stmt);
   SgUnparse_Info newinfo(info);
 
-  // DQ (5/9/2015): Added assertion.
   ASSERT_not_null(expr_stmt->get_expression());
 
   // Expressions are another place where a class definition should NEVER be
@@ -8266,10 +6631,7 @@ void Unparse_ExprStmt::unparseExprStmt(SgStatement *stmt,
   // DQ (1/9/2014): These should have been setup to be the same.
   ROSE_ASSERT(newinfo.SkipClassDefinition() == newinfo.SkipEnumDefinition());
 
-  // if (expr_stmt->get_the_expr())
   if (expr_stmt->get_expression()) {
-    // printDebugInfo(getSgVariant(expr_stmt->get_the_expr()->variant()), true);
-    // unparseExpression(expr_stmt->get_the_expr(), newinfo);
     unparseExpression(expr_stmt->get_expression(), newinfo);
   } else {
     ROSE_ABORT();
@@ -8601,40 +6963,21 @@ void Unparse_ExprStmt::unparseWhileStmt(SgStatement *stmt,
   SgWhileStmt *while_stmt = isSgWhileStmt(stmt);
   ASSERT_not_null(while_stmt);
 
-  // DQ (12/17/2014): Test for if we have unparsed partially using the token
-  // stream. If so then we don't want to unparse this syntax, if not then we
-  // require this syntax. curprint("while(");
   bool saved_unparsedPartiallyUsingTokenStream =
       info.unparsedPartiallyUsingTokenStream();
   if (saved_unparsedPartiallyUsingTokenStream == false) {
-    // unp->cur.format(namespaceDefinition, info, FORMAT_BEFORE_BASIC_BLOCK2);
-    // curprint("/* from AST SgWhileStmt */ while(");
     curprint("while (");
-    // unp->cur.format(namespaceDefinition, info, FORMAT_AFTER_BASIC_BLOCK2);
   } else {
-    // SgStatement* body = while_stmt->get_body();
-    // curprint("/* partial token sequence SgWhileStmt */ ");
     SgStatement *condition = while_stmt->get_condition();
     unparseStatementFromTokenStream(stmt, condition, e_token_subsequence_start,
                                     e_leading_whitespace_start, info);
   }
-
-  // DQ (10/19/2012): We now want to have more control over where ";" is output.
-  // See test2012_47.c for an example of there this can't be explicitly handled
-  // for all parts of a conditional. In this case we call unset_SkipSemiColon()
-  // in SgClassDefinition so that they will be output properly there.
-  // Build a specific SgUnparse_Info to support the conditional.
-  // info.set_inConditional();
-  // info.set_inConditional();
-  // unparseStatement(while_stmt->get_condition(), info);
-  // info.unset_inConditional();
 
   SgUnparse_Info ninfo(info);
   ninfo.set_inConditional();
   ninfo.set_SkipSemiColon();
   unparseStatement(while_stmt->get_condition(), ninfo);
 
-  // curprint(")");
   if (saved_unparsedPartiallyUsingTokenStream == false) {
     curprint(")");
     unparsePragmaAttribute(while_stmt);
@@ -8687,7 +7030,6 @@ void Unparse_ExprStmt::unparseDoWhileStmt(SgStatement *stmt,
   unp->cur.format(dowhile_stmt->get_body(), info,
                   FORMAT_AFTER_NESTED_STATEMENT);
 
-  // curprint( string("while " ) + "(");
   curprint("while (");
 
   SgUnparse_Info ninfo(info);
@@ -8753,15 +7095,7 @@ void Unparse_ExprStmt::unparseSwitchStmt(SgStatement *stmt,
     curprint("switch (");
   } else {
 
-    // SgStatement* item_selector = switch_stmt->get_item_selector();
-    // unparseStatementFromTokenStream (stmt, item_selector,
-    // e_token_subsequence_start, e_leading_whitespace_start, info);
-    // unparseStatementFromTokenStream (stmt, item_selector,
-    // e_token_subsequence_start, e_leading_whitespace_start, info);
-
     SgStatement *item_selector = switch_stmt->get_item_selector();
-    // unparseStatementFromTokenStream (stmt, item_selector,
-    // e_token_subsequence_start, e_trailing_whitespace_end, info);
     unparseStatementFromTokenStream(stmt, item_selector,
                                     e_token_subsequence_start,
                                     e_token_subsequence_end, info);
@@ -8773,12 +7107,6 @@ void Unparse_ExprStmt::unparseSwitchStmt(SgStatement *stmt,
     // DQ (6/4/2021): Note that we need to output a single token of syntax,
     // since there is no reference to this in the token stream mapping.
     curprint(")");
-
-    // SgStatement* switch_body = switch_stmt->get_body();
-
-    // DQ (6/4/2021): The leading whitespace will be output with the body.
-    // unparseStatementFromTokenStream (stmt, switch_body,
-    // e_token_subsequence_start, e_leading_whitespace_end, info);
 
     unparseStatement(switch_stmt->get_body(), info);
   }
@@ -8805,7 +7133,6 @@ void Unparse_ExprStmt::unparseSwitchStmt(SgStatement *stmt,
 
     // DQ (11/5/2003): Support for skipping basic block added to support
     //                 prefix generation for AST Rewrite Mechanism
-    // if(switch_stmt->get_body())
     if (!info.SkipBasicBlock()) {
       SgUnparse_Info bodyInfo = nestedStatementInfo(info);
       unparseStatement(switch_body, bodyInfo);
@@ -8881,14 +7208,6 @@ void Unparse_ExprStmt::unparseCaseStmt(SgStatement *stmt,
     statementsWithTokenEmittedLeadingPreprocessing.insert(case_body);
   }
 
-  // DQ (1/3/2018): Put back this original behavior, because the case option
-  // statment must be a compound statement (just like a label statement, see
-  // test2017_20.c). DQ (12/20/2017): Comment this out to experiment with
-  // alternative support for switch (part of new duff's device support). At the
-  // very least, commenting this out permis the cases to be adjusted to have
-  // defined bodies later (if that ultimately makes sense).
-  // if(case_stmt->get_body())
-  // if ( (case_stmt->get_body() != NULL) && !info.SkipBasicBlock())
   if (!info.SkipBasicBlock()) {
     SgUnparse_Info bodyInfo = nestedStatementInfo(info);
     unparseStatement(case_body, bodyInfo);
@@ -9013,7 +7332,6 @@ void Unparse_ExprStmt::unparseCatchStmt(SgStatement *stmt,
     }
 
     curprint(")");
-    // if (catch_statement->get_condition() == NULL) prevnode = catch_statement;
 
     unp->cur.format(catch_body, info, FORMAT_BEFORE_NESTED_STATEMENT);
     unparseStatement(catch_body, info);
@@ -9100,13 +7418,6 @@ void Unparse_ExprStmt::unparseDefaultStmt(SgStatement *stmt,
     statementsWithTokenEmittedLeadingPreprocessing.insert(default_body);
   }
 
-  // DQ (1/3/2018): Put back this original behavior, because the case option
-  // statment must be a compound statement (just like a label statement, see
-  // test2017_20.c). DQ (12/20/2017): Comment this out to experiment with
-  // alternative support for switch (part of new duff's device support). At the
-  // very least, commenting this out permis the cases to be adjusted to have
-  // defined bodies later (if that ultimately makes sense).
-  // if(default_stmt->get_body())
   if (!info.SkipBasicBlock()) {
     SgUnparse_Info bodyInfo = nestedStatementInfo(info);
     unparseStatement(default_body, bodyInfo);
@@ -9202,18 +7513,7 @@ void Unparse_ExprStmt::unparseGotoStmt(SgStatement *stmt,
 }
 
 static bool isOutputAsmOperand(SgAsmOp *asmOp) {
-  // There are two way of evaluating if an SgAsmOp is an output operand,
-  // depending of if we are using the specific mechanism that knows
-  // records register details or the more general mechanism that records
-  // the registers as strings.  The string based mechanism lack precision
-  // and would require parsing to retrive the instruction details, but it
-  // is instruction set independent.  The more precise mechanism records
-  // the specific register codes and could in the future be interpreted
-  // by tooling that understands ISA-specific register details.
-
-  return (asmOp->get_recordRawAsmOperandDescriptions() == true)
-             ? (asmOp->get_isOutputOperand() == true)
-             : (asmOp->get_modifiers() & SgAsmOp::e_output);
+  return asmOp->get_isOutputOperand();
 }
 
 static std::string asm_escapeString(const std::string &s) {
@@ -9263,57 +7563,21 @@ static std::string asm_escapeString(const std::string &s) {
 }
 
 void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
-  // This function is called as part of the handling of the C "asm"
-  // statement.  The "asm" statement supports inline assembly in C.
-  // These sorts of statements are not common in most user code
-  // (except embedded code), but are common in many system header files.
-
   SgAsmStmt *asm_stmt = isSgAsmStmt(stmt);
   ASSERT_not_null(asm_stmt);
-
-#define ASM_DEBUGGING 0
-
-#if ASM_DEBUGGING
-  printf("In unparseAsmStmt(): stmt = %p = %s \n", stmt,
-         stmt->class_name().c_str());
-#endif
 
   // REX targets Clang's GNU-compatible C/C++ frontend. The underscored spelling
   // is accepted in both language modes and does not depend on the host build
   // compiler.
   curprint("__asm__ ");
+  if (asm_stmt->get_isVolatile())
+    curprint("volatile ");
 
   curprint("(");
 
-  // DQ (7/22/2006): This IR node has been changed to have a list of SgAsmOp IR
-  // nodes unparseExpression(asm_stmt->get_expr(), info);
-
-  // printf ("unparsing asm statement = %ld
-  // \n",asm_stmt->get_operands().size()); Process the asm template (always the
-  // first operand)
   string asmTemplate = asm_stmt->get_assemblyCode();
 
-#if ASM_DEBUGGING
-  printf("In unparseAsmStmt(): asmTemplate.length()      = %" PRIuPTR " \n",
-         (size_t)asmTemplate.length());
-#endif
-
-#if ASM_DEBUGGING
-  printf("In unparseAsmStmt(): asmTemplate               = %s \n",
-         asmTemplate.c_str());
-  printf("In unparseAsmStmt(): escapeString(asmTemplate) = %s \n",
-         asm_escapeString(asmTemplate).c_str());
-#endif
-
-  // DQ (2/4/2014): We don't want to escape this string (see test2014_83.c,
-  // test2014_84.c, and test2014_85.c).
   curprint("\"" + asm_escapeString(asmTemplate) + "\"");
-  // curprint("\"" + asmTemplate + "\"");
-
-#if ASM_DEBUGGING
-  printf("In unparseAsmStmt(): asm_stmt->get_useGnuExtendedFormat() = %s \n",
-         asm_stmt->get_useGnuExtendedFormat() ? "true" : "false");
-#endif
 
   if (asm_stmt->get_useGnuExtendedFormat()) {
     size_t numOutputOperands = 0;
@@ -9325,50 +7589,17 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
          i != asm_stmt->get_operands().end(); ++i) {
       SgAsmOp *asmOp = isSgAsmOp(*i);
       ROSE_ASSERT(asmOp);
-#if ASM_DEBUGGING
-      printf("asmOp->get_modifiers() = %d SgAsmOp::e_output = %d "
-             "asmOp->get_isOutputOperand() = %s \n",
-             (int)asmOp->get_modifiers(), (int)SgAsmOp::e_output,
-             asmOp->get_isOutputOperand() ? "true" : "false");
-      printf("asmOp->get_recordRawAsmOperandDescriptions() = %s \n",
-             asmOp->get_recordRawAsmOperandDescriptions() ? "true" : "false");
-#endif
-      // if (asmOp->get_modifiers() & SgAsmOp::e_output)
-      // if ( (asmOp->get_modifiers() & SgAsmOp::e_output) ||
-      // (asmOp->get_isOutputOperand() == true) )
       if (isOutputAsmOperand(asmOp) == true) {
         ++numOutputOperands;
-#if ASM_DEBUGGING
-        printf("Marking as an output operand! \n");
-#endif
       } else {
         ++numInputOperands;
-#if ASM_DEBUGGING
-        printf("Marking as an input operand! \n");
-#endif
       }
     }
 
     size_t numClobbers = asm_stmt->get_clobberRegisterList().size();
 
-#if ASM_DEBUGGING
-    printf("In unparseAsmStmt(): numClobbers = %" PRIuPTR " \n", numClobbers);
-#endif
-
-#if ASM_DEBUGGING
-    printf("In unparseAsmStmt(): numOutputOperands = %" PRIuPTR
-           " numInputOperands = %" PRIuPTR " numClobbers = %" PRIuPTR " \n",
-           numOutputOperands, numInputOperands, numClobbers);
-#endif
-
-    // DQ (2/4/2014): Adding initializer (to make me feel better about this
-    // code).
     bool first = false;
     if (numInputOperands == 0 && numOutputOperands == 0 && numClobbers == 0) {
-#if ASM_DEBUGGING
-      printf("In unparseAsmStmt(): (numInputOperands == 0 && numOutputOperands "
-             "== 0 && numClobbers == 0): goto donePrintingConstraints \n");
-#endif
       // DQ (9/14/2013): Output required if we branch to label (see
       // test2013_72.c).
       curprint(" :: "); // Start of output operands
@@ -9377,10 +7608,6 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
     }
     curprint(" : "); // Start of output operands
 
-#if ASM_DEBUGGING
-    curprint(" /* asm output operands */ "); // Debugging output
-#endif
-
     // Record if this is the first operand so that we can surpress the ","
     first = true;
     for (SgExpressionPtrList::const_iterator i =
@@ -9388,9 +7615,6 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
          i != asm_stmt->get_operands().end(); ++i) {
       SgAsmOp *asmOp = isSgAsmOp(*i);
       ASSERT_not_null(asmOp);
-      // if (asmOp->get_modifiers() & SgAsmOp::e_output)
-      // if ( (asmOp->get_modifiers() & SgAsmOp::e_output) ||
-      // (asmOp->get_isOutputOperand() == true) )
       if (isOutputAsmOperand(asmOp) == true) {
         if (!first)
           curprint(", ");
@@ -9400,27 +7624,15 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
     }
 
     if (numInputOperands == 0 && numClobbers == 0) {
-#if ASM_DEBUGGING
-      printf("In unparseAsmStmt(): (numInputOperands == 0 && numClobbers == "
-             "0): goto donePrintingConstraints \n");
-#endif
-      // DQ (9/14/2013): Output required if we branch to label (see
-      // test2013_72.c, but this is not a good example). curprint(" : "); //
-      // Start of output operands
-
       goto donePrintingConstraints;
     }
     curprint(" : "); // Start of input operands
-#if ASM_DEBUGGING
-    curprint(" /* asm input operands */ "); // Debugging output
-#endif
     first = true;
     for (SgExpressionPtrList::const_iterator i =
              asm_stmt->get_operands().begin();
          i != asm_stmt->get_operands().end(); ++i) {
       SgAsmOp *asmOp = isSgAsmOp(*i);
       ASSERT_not_null(asmOp);
-      // if (!(asmOp->get_modifiers() & SgAsmOp::e_output))
       if (isOutputAsmOperand(asmOp) == false) {
         if (!first)
           curprint(", ");
@@ -9430,22 +7642,11 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
     }
 
     if (numClobbers == 0) {
-#if ASM_DEBUGGING
-      printf("In unparseAsmStmt(): (numClobbers == 0): goto "
-             "donePrintingConstraints \n");
-#endif
-      // DQ (9/14/2013): Output required if we branch to label (see
-      // test2013_72.c, but this is not a good example). curprint(" : "); //
-      // Start of output operands
-
       goto donePrintingConstraints;
     }
 
     curprint(" : "); // Start of clobbers
 
-#if ASM_DEBUGGING
-    curprint(" /* asm clobbers */ "); // Debugging output
-#endif
     first = true;
     for (SgAsmStmt::AsmRegisterNameList::const_iterator i =
              asm_stmt->get_clobberRegisterList().begin();
@@ -9457,12 +7658,6 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
     }
 
   donePrintingConstraints: {}
-
-#if ASM_DEBUGGING
-    printf("In unparseAsmStmt(): base of conditional block: "
-           "asm_stmt->get_useGnuExtendedFormat() = %s \n",
-           asm_stmt->get_useGnuExtendedFormat() ? "true" : "false");
-#endif
   }
 
   curprint(string(")"));
@@ -9470,49 +7665,18 @@ void Unparse_ExprStmt::unparseAsmStmt(SgStatement *stmt, SgUnparse_Info &info) {
   if (!info.SkipSemiColon()) {
     curprint(string(";"));
   }
-
-#if ASM_DEBUGGING
-  printf("Leaving unparseAsmStmt(): stmt = %p = %s \n", stmt,
-         stmt->class_name().c_str());
-#endif
 }
 
-// DQ 11/3/2014): Adding C++11 templated typedef declaration support.
 void Unparse_ExprStmt::unparseTemplateTypedefDeclaration(SgStatement *stmt,
                                                          SgUnparse_Info &info) {
   SgTemplateTypedefDeclaration *templateTypedef_stmt =
       isSgTemplateTypedefDeclaration(stmt);
   ASSERT_not_null(templateTypedef_stmt);
 
-#define DEBUG_TEMPLATE_TYPEDEF 0
-
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("In unparseTemplateTypeDefStmt() = %p \n", templateTypedef_stmt);
-#endif
-#if DEBUG_TEMPLATE_TYPEDEF
-  curprint(" /* Calling "
-           "unparseTemplateDeclarationStatment_support<"
-           "SgTemplateTypedefDeclaration>() */ ");
-#endif
-
-  // DQ (2/19/2019): The support for unparsing a SgTemplateTypedefDeclaration is
-  // different enough that we always use the specialized path here.
-
-  // Unparse_ExprStmt::unparseTemplateParameterList( const
-  // SgTemplateParameterPtrList & templateParameterList, SgUnparse_Info& info,
-  // bool is_template_header) bool is_template_header = false;
-  // unparseTemplateParameterList(templateTypedef_stmt->get_templateParameters(),info,is_template_header);
   unparseTemplateHeader<SgTemplateTypedefDeclaration>(templateTypedef_stmt,
                                                       info);
 
-  // DQ (2/19/2019): Not clear that I want the extra "\n".
   curprint("\nusing ");
-
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("In unparseTemplateTypeDefStmt(): templateTypedef_stmt->get_name() = "
-         "%s \n",
-         templateTypedef_stmt->get_name().str());
-#endif
 
   curprint(templateTypedef_stmt->get_name().str());
 
@@ -9521,28 +7685,12 @@ void Unparse_ExprStmt::unparseTemplateTypedefDeclaration(SgStatement *stmt,
   SgType *base_type = templateTypedef_stmt->get_base_type();
   ASSERT_not_null(base_type);
 
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("In unparseTemplateTypeDefStmt(): base_type = %p = %s \n", base_type,
-         base_type->class_name().c_str());
-#endif
-
   SgUnparse_Info ninfo(info);
 
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("In unparseTemplateTypeDefStmt(): "
-         "templateTypedef_stmt->get_declaration() = %p \n",
-         templateTypedef_stmt->get_declaration());
-#endif
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("In unparseTemplateTypeDefStmt(): set "
-         "reference_node_for_qualification: templateTypedef_stmt = %p = %s \n",
-         templateTypedef_stmt, templateTypedef_stmt->class_name().c_str());
-#endif
   ninfo.set_reference_node_for_qualification(templateTypedef_stmt);
 
   // DQ (2/19/2019): Cxx_tests/test2019_153.C demonstrates that a class
   // declaration can be define in the C++11 SgTemplateTypedefDeclaration.
-  // ROSE_ASSERT(templateTypedef_stmt->get_declaration() == NULL);
 
   if (templateTypedef_stmt->get_declaration() == NULL) {
     ninfo.set_SkipClassDefinition();
@@ -9552,10 +7700,6 @@ void Unparse_ExprStmt::unparseTemplateTypedefDeclaration(SgStatement *stmt,
   unp->u_type->unparseType(base_type, ninfo);
 
   curprint(";");
-
-#if DEBUG_TEMPLATE_TYPEDEF
-  printf("Leaving unparseTemplateTypeDefStmt() = %p \n", templateTypedef_stmt);
-#endif
 }
 
 void Unparse_ExprStmt::unparseNonrealDecl(SgStatement *stmt,
@@ -9568,7 +7712,6 @@ void Unparse_ExprStmt::unparseNonrealDecl(SgStatement *stmt,
     if (!params.empty()) {
       curprint("template ");
       SgUnparse_Info tinfo(info);
-      tinfo.set_declstatement_ptr(NULL);
       tinfo.set_declstatement_ptr(nrdecl);
       Unparse_ExprStmt::unparseTemplateParameterList(params, tinfo, true);
       curprint("\n");
@@ -9618,17 +7761,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     ROSE_ABORT();
   }
 
-#define DEBUG_TYPEDEF_DECLARATIONS 0
-
-#if DEBUG_TYPEDEF_DECLARATIONS
-  printf("TOP of unp->u_type->unparseTypeDefStmt() = %p \n", typedef_stmt);
-  typedef_stmt->get_file_info()->display(
-      "In unp->u_type->unparseTypeDefStmt(): debug");
-#endif
-#if DEBUG_TYPEDEF_DECLARATIONS
-  curprint("\n /* In unp->u_type->unparseTypeDefStmt() */ \n");
-#endif
-
   // DQ (10/5/2004): This is the explicitly set boolean value which indicates
   // that a class declaration is buried inside the current variable declaration
   // (e.g. struct A { int x; } a;).  In this case we have to output the base
@@ -9641,28 +7773,9 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     outputTypeDefinition = false;
   }
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-  printf(
-      "In unparseTypeDefStmt(): typedef_stmt = %p outputTypeDefinition = %s \n",
-      typedef_stmt, (outputTypeDefinition == true) ? "true" : "false");
-#endif
-
   if (!info.inEmbeddedDecl() && !info.SkipBaseType()) {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || 0
-    curprint("\n/* NOT an embeddedDeclaration */ \n");
-#endif
-    SgClassDefinition *cdefn =
-        isSgClassDefinition(cxxLexicalDeclarationParent(typedef_stmt));
-    if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                     SgClassDeclaration::e_class)
-      info.set_CheckAccess();
     // printDebugInfo("entering unp->u_sage->printSpecifier", true);
     unp->u_sage->printSpecifier(typedef_stmt, info);
-    info.unset_CheckAccess();
-  } else {
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || 0
-    curprint("\n/* Found an embeddedDeclaration */ \n");
-#endif
   }
 
   SgUnparse_Info ninfo(info);
@@ -9877,42 +7990,16 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     SgEnumDeclaration *definingEnumDeclaration =
         isSgEnumDeclaration(enumDeclaration->get_definingDeclaration());
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-    printf("enumDeclaration->get_name() = %s \n",
-           enumDeclaration->get_name().str());
-#endif
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint(string("\n/* In unparseTypeDefStmt: enum name                     "
-                    "             = ") +
-             enumDeclaration->get_name().str() + " */ \n ");
-    curprint(string("\n/* In unparseTypeDefStmt: enumDeclaration != "
-                    "definingEnumDeclaration = ") +
-             ((enumDeclaration != definingEnumDeclaration) ? "true" : "false") +
-             " */ \n ");
-#endif
     // DQ (2/20/2019): If this is not the defining declaration referenced
     // through the declarationReference then use the usual method for name
     // qualification via the base type.
     if (enumDeclaration != definingEnumDeclaration) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("internal declarationReference != definingEnumDeclaration: so use "
-             "the name qualification via the base type \n");
-#endif
       enumType = NULL;
     } else {
       // If this is the defining declaration, then if it is an anonymous class
       // then output as a type.
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("enumDeclaration->get_name() = %s \n",
-             enumDeclaration->get_name().str());
-#endif
       const bool isAnonymousName = enumDeclaration->get_isUnNamed();
       if (isAnonymousName == true) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-        printf("internal declarationReference == definingEnumDeclaration: "
-               "isAnonymousName == true: so output enum declaration via the "
-               "base type \n");
-#endif
         enumType = NULL;
       }
     }
@@ -9931,60 +8018,20 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     SgClassDeclaration *definingClassDeclaration =
         isSgClassDeclaration(classDeclaration->get_definingDeclaration());
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-    printf("classDeclaration->get_name() = %s \n",
-           classDeclaration->get_name().str());
-#endif
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint(string("\n/* In unparseTypeDefStmt: class name                    "
-                    "               = ") +
-             classDeclaration->get_name().str() + " */ \n ");
-    curprint(
-        string("\n/* In unparseTypeDefStmt: classDeclaration != "
-               "definingClassDeclaration = ") +
-        ((classDeclaration != definingClassDeclaration) ? "true" : "false") +
-        " */ \n ");
-#endif
     // DQ (2/20/2019): If this is not the defining declaration referenced
     // through the declarationReference then use the usual method for name
     // qualification via the base type.
     if (classDeclaration != definingClassDeclaration) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("internal declarationReference != definingClassDeclaration: so "
-             "use the name qualification via the base type \n");
-#endif
       classType = NULL;
     } else {
       // If this is the defining declaration, then if it is an anonymous class
       // then output as a type.
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("classDeclaration->get_name() = %s \n",
-             classDeclaration->get_name().str());
-#endif
       const bool isAnonymousName = classDeclaration->get_isUnNamed();
       if (isAnonymousName == true) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-        printf("internal declarationReference == definingClassDeclaration: "
-               "isAnonymousName == true: so output class declaration via the "
-               "base type \n");
-#endif
         classType = NULL;
       }
     }
   }
-
-#if DEBUG_TYPEDEF_DECLARATIONS
-  printf("In unp->u_type->unparseTypedef: functionType                = %p \n",
-         functionType);
-  printf("In unp->u_type->unparseTypedef: pointerToMemberType         = %p \n",
-         pointerToMemberType);
-  printf("In unp->u_type->unparseTypedef: pointerToMemberFunctionType = %p \n",
-         pointerToMemberFunctionType);
-  printf("In unp->u_type->unparseTypedef: enumType                    = %p \n",
-         enumType);
-  printf("In unp->u_type->unparseTypedef: classType                   = %p \n",
-         classType);
-#endif
 
   // DQ (9/22/2004): It is not clear why we need to handle this case with
   // special code. We are only putting out the return type of the function type
@@ -10018,14 +8065,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
       (enumType != NULL) || (classType != NULL)) {
     // Newly implemented case of typedefs for function and member function
     // pointers
-#if DEBUG_TYPEDEF_DECLARATIONS
-    printf("In unparseTypeDefStmt(): case of typedefs for function and member "
-           "function pointers \n");
-#endif
-#if OUTPUT_DEBUGGING_FUNCTION_INTERNALS || 0
-    curprint("\n/* Case of typedefs for function and member function pointers "
-             "*/ \n");
-#endif
     ninfo.set_SkipFunctionQualifier();
     if (!ninfo.SkipBaseType()) {
       curprint("typedef ");
@@ -10036,26 +8075,8 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // function pointer declaration)
     ninfo.set_isTypeFirstPart();
 
-#if OUTPUT_DEBUGGING_UNPARSE_INFO || 0
-    curprint(string("\n/* ") +
-             ninfo.displayString("After return Type now output the base type "
-                                 "(first part then second part)") +
-             " */ \n");
-#endif
-
     // The base type contains the function po9inter type
     SgType *btype = typedef_stmt->get_base_type();
-
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output base type (first part) (for functionType or "
-             "pointerToMemberFunctionType) */ \n");
-#endif
-
-#if DEBUG_TYPEDEF_DECLARATIONS
-    printf("In unparseTypeDefStmt(): btype = %p = %s \n", btype,
-           btype->class_name().c_str());
-#endif
 
     // DQ (1/10/2007): Set the current declaration statement so that if required
     // we can do context dependent searches of the AST to determine if name
@@ -10075,10 +8096,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
         ((isSgEnumDeclaration(declaration) != NULL &&
           isSgTemplateInstantiationDecl(declaration) == NULL) ||
          isSgClassDeclaration(declaration) != NULL)) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("Found class/enum declaration in typedef declaration; using it "
-             "as reference node for qualification.\n");
-#endif
       ninfo_for_type.set_reference_node_for_qualification(declaration);
       if (outputTypeDefinition) {
         if (SgEnumDeclaration *enumDeclaration =
@@ -10110,24 +8127,13 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
       ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
     }
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output base type (first part) */ \n");
-#endif
     // Only pass the ninfo_for_type to support name qualification of the base
     // type. unp->u_type->unparseType(btype, ninfo);
     unp->u_type->unparseType(btype, ninfo_for_type);
 
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Done: Output base type (first part) */ \n");
-#endif
     curprint(typedef_stmt->get_name().str());
 
     // Now unparse the second part of the typedef
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output base type (second part) */ \n");
-#endif
 
     ninfo.set_isTypeSecondPart();
 
@@ -10145,17 +8151,9 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
 
     unp->u_type->unparseType(btype, ninfo_for_type);
 
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Done: Output base type (second part) */ \n");
-#endif
-
   } else {
     // previously implemented case of unparsing the typedef does not handle
     // function pointers properly (so they are handled explicitly above!)
-#if DEBUG_TYPEDEF_DECLARATIONS
-    printf("Not a typedef for a function type or member function type \n");
-#endif
 
     ninfo.set_SkipFunctionQualifier();
     if (!ninfo.SkipBaseType()) {
@@ -10189,27 +8187,15 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // DQ (1/10/2007): Set the current declaration statement so that if required
     // we can do context dependent searches of the AST to determine if name
     // qualification is required.
-    ninfo_for_type.set_declstatement_ptr(NULL);
     ninfo_for_type.set_declstatement_ptr(typedef_stmt);
 
     if (typedef_stmt->get_requiresGlobalNameQualificationOnType() == true) {
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("In Unparse_ExprStmt::unp->u_type->unparseTypedefStmt(): This "
-             "base type requires a global qualifier \n");
-      curprint("\n/* This base type requires a global qualifier, calling "
-               "set_requiresGlobalNameQualification() */ \n");
-#endif
       // ninfo_for_type.set_forceQualifiedNames();
       ninfo_for_type.set_requiresGlobalNameQualification();
     }
 
     // curprint ( string("\n/* unp->u_type->unparseTypeDefStmt: Before first
     // part of type */ \n";
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output base type (first part) (Not a typedef for a function "
-             "type or member function type) */ \n");
-#endif
 
     // DQ (5/30/2011): Added support for name qualification.
     ninfo_for_type.set_reference_node_for_qualification(typedef_stmt);
@@ -10246,10 +8232,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
       // detail is a requirement for the support of multiple source files
       // specified on the command line only.
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("Adding support for outputTypeDefinition == true for multiple "
-             "files \n");
-#endif
       SgDeclarationStatement *declaration = typedef_stmt->get_declaration();
       ROSE_ASSERT(declaration != NULL);
       // SgScopeStatement* scope = NULL;
@@ -10273,12 +8255,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
       // is a declaration associated with a declaration list from a previous
       // (the last statement) typedef then output the name if that declaration
       // had an un-named type (class or enum).
-#if DEBUG_TYPEDEF_DECLARATIONS
-      printf("In unparseTypedefStmt(): "
-             "typedef_stmt->get_isAssociatedWithDeclarationList() = %s \n",
-             typedef_stmt->get_isAssociatedWithDeclarationList() ? "true"
-                                                                 : "false");
-#endif
       if (typedef_stmt->get_isAssociatedWithDeclarationList() == true) {
         // DQ (8/2/2012): Make this consistant with the design for the variable
         // declarations. This is an alternative to permit the unparsing of the
@@ -10291,15 +8267,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
         // DQ (7/28/2012): Output the type if this is not associated with a
         // declaration list from a previous declaration.
         // unp->u_type->unparseType(btype, ninfo);
-#if DEBUG_TYPEDEF_DECLARATIONS
-        printf("In unparseTypedefStmt(): (first part): btype = %p = %s \n",
-               btype, btype->class_name().c_str());
-#endif
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-        curprint("\n/* Output a non function pointer typedef (Not a typedef "
-                 "for a function type or member function type) */ \n");
-#endif
 
         // DQ (5/7/2013): Using ninfo allows test2013_156.C to work.
         // unp->u_type->unparseType(btype, ninfo_for_type);
@@ -10307,11 +8274,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
         unp->u_type->unparseType(btype, ninfo_for_type);
       }
     }
-
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Done: Output base type (first part) */ \n");
-#endif
 
     // curprint ( string("\n/* unp->u_type->unparseTypeDefStmt: After first part
     // of type */ \n"; printf ("After first part of type \n");
@@ -10324,24 +8286,11 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // second part of the type to handle the case of "typedef A* A_Type[10];"
     // (see test2004_104.C).
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output typedef name */ \n");
-#endif
     // The name of the type (X, in the following example) has to appear after
     // the declaration. Example: struct { int a; } X;
     curprint(typedef_stmt->get_name().str());
-    // curprint(string("/* before 2nd part */ ") +
-    // typedef_stmt->get_name().str());
 
     ninfo.set_isTypeSecondPart();
-
-    // printf ("Before 2nd part of type \n");
-    // curprint ( string("\n/* unp->u_type->unparseTypeDefStmt: Before second
-    // part of type */ \n";
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Output base type (second part) */ \n");
-#endif
 
     // DQ (1/2/2020): This is required since it is used in unparsing the first
     // part of the type and causes the "(" to be unparsed, and we require this
@@ -10354,10 +8303,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     // unp->u_type->unparseType(btype, ninfo_for_type);
     // unp->u_type->unparseType(btype, ninfo_for_type);
 
-// #if OUTPUT_DEBUGGING_FUNCTION_INTERNALS
-#if DEBUG_TYPEDEF_DECLARATIONS
-    curprint("\n/* Done: Output base type (second part) */ \n");
-#endif
     // curprint ( string("\n/* unp->u_type->unparseTypeDefStmt: After second
     // part of type */ \n"; printf ("After 2nd part of type \n");
 
@@ -10365,10 +8310,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
     ninfo.unset_inTypedefDecl();
   }
 
-#if DEBUG_TYPEDEF_DECLARATIONS
-  printf("In unparseTypedefStmt(): outputTypeDefinition = %s \n",
-         outputTypeDefinition ? "true" : "false");
-#endif
   if (outputTypeDefinition == true) {
     unparseTypeAttributes(typedef_stmt);
   }
@@ -10381,10 +8322,6 @@ void Unparse_ExprStmt::unparseTypeDefStmt(SgStatement *stmt,
   }
 
   // info.display ("At base of unp->u_type->unparseTypeDefStmt()");
-#if DEBUG_TYPEDEF_DECLARATIONS
-  printf("Leaving unparseTypedefStmt() \n");
-  curprint("/* Leaving unparseTypedefStmt */ \n");
-#endif
 }
 
 void Unparse_ExprStmt::unparseTemplateDeclStmt(SgStatement *stmt,
@@ -10416,13 +8353,6 @@ void Unparse_ExprStmt::unparseTemplateClassDeclStmt(SgStatement *stmt,
 
 void Unparse_ExprStmt::unparseTemplateFunctionDeclStmt(SgStatement *stmt,
                                                        SgUnparse_Info &info) {
-  // DQ (8/6/2012): Unparse the associated comments.
-  // We can't unparse comments in the templae declarations until we stop using
-  // saved string form of the template declaration.  This will be done in a
-  // later version of the release of the new template support.  In the mean time
-  // we have to supress attaching CPP directives to the inside of template
-  // declarations.
-
   unparseTemplateDeclarationStatment_support<SgTemplateFunctionDeclaration>(
       stmt, info);
 }
@@ -10432,10 +8362,6 @@ void Unparse_ExprStmt::unparseTemplateMemberFunctionDeclStmt(
 
   unparseTemplateDeclarationStatment_support<
       SgTemplateMemberFunctionDeclaration>(stmt, info);
-
-  // DQ (5/28/2019): If there are any attached CPP directives then unparse them.
-  // This will cause then to be output twice.
-  // unparseAttachedPreprocessingInfo(stmt, info, PreprocessingInfo::after);
 }
 
 void Unparse_ExprStmt::unparseTemplateVariableDeclStmt(SgStatement *stmt,
@@ -10448,8 +8374,6 @@ void Unparse_ExprStmt::unparseTemplateVariableDeclStmt(SgStatement *stmt,
   unparseTemplateDeclarationStatment_support<SgTemplateVariableDeclaration>(
       stmt, info);
 }
-
-#define DEBUG_unparseTemplateHeader 0
 
 void Unparse_ExprStmt::unparseSourceSpelledTemplateHeaders(
     const SgTemplateParameterListPtrList &headers,
@@ -10499,10 +8423,6 @@ void Unparse_ExprStmt::unparseSourceSpelledTemplateHeaders(
 
 template <class T>
 void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
-#if DEBUG_unparseTemplateHeader
-  printf("In unparseTemplateHeader(decl = %p = %s) \n", decl,
-         decl->class_name().c_str());
-#endif
   SgTemplateParameterPtrList tlist;
   for (SgTemplateParameter *param : decl->get_templateParameters()) {
     if (!SageInterface::isAbbreviatedFunctionTemplateParameter(param)) {
@@ -10514,7 +8434,6 @@ void Unparse_ExprStmt::unparseTemplateHeader(T *decl, SgUnparse_Info &info) {
     curprint("template ");
     const int template_header_start_line = unp->cur.current_line();
     SgUnparse_Info tinfo(info);
-    tinfo.set_declstatement_ptr(NULL);
     tinfo.set_declstatement_ptr(decl);
     Unparse_ExprStmt::unparseTemplateParameterList(tlist, tinfo, true, decl);
     if (SgExpression *requires_clause = decl->get_requiresClause()) {
@@ -10629,25 +8548,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
   unparseAttachedPreprocessingInfo(template_stmt, info,
                                    PreprocessingInfo::inside);
 
-  // Check to see if this is an object defined within a class
   ASSERT_not_null(template_stmt->get_parent());
-  SgClassDefinition *cdefn = isSgClassDefinition(template_stmt->get_parent());
-  if (cdefn != NULL && cdefn->get_declaration()->get_class_type() ==
-                           SgClassDeclaration::e_class) {
-    info.set_CheckAccess();
-  }
-
-  // Output access modifiers
-  unp->u_sage->printSpecifier1(template_stmt, info);
 
   // DQ (4/29/2004): Added support for "export" keyword (not supported by g++
   // yet)
   if (template_stmt->get_declarationModifier().isExport()) {
     curprint(string("export "));
   }
-
-  // Five cases to consider: TODO this a template function, don't we already
-  // know that?
 
   // Unparsing template from the AST can be controlled at the sourcefile or
   // declaration level. The declaration-level flag is set on the shared
@@ -10691,8 +8598,8 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           return;
         }
 
-        auto const &ctor_inits = member_function->get_ctors();
-        if (ctor_inits.empty()) {
+        const auto ctor_inits = writtenCtorInitializers(member_function);
+        if (member_function->get_ctors().empty()) {
           if (SgMemberFunctionDeclaration *def_decl =
                   isSgMemberFunctionDeclaration(
                       member_function->get_definingDeclaration())) {
@@ -10709,12 +8616,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           }
           return;
         }
+        if (ctor_inits.empty())
+          return;
 
         SgUnparse_Info init_info(decl_info);
         init_info.set_SkipClassDefinition();
         init_info.set_SkipEnumDefinition();
         init_info.set_inArgList();
-        init_info.set_declstatement_ptr(NULL);
         init_info.set_declstatement_ptr(member_function);
         SgCtorInitializerList *ctor_initializer_list =
             member_function->get_CtorInitializerList();
@@ -10823,12 +8731,10 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
   };
 
   if (unparse_template_from_ast) {
-    SgTemplateClassDeclaration *assoc_tpl_class_decl = nullptr;
     SgDeclarationStatement *associated_decl = nullptr;
     if (templateMemberFunctionDeclaration) {
       associated_decl =
           templateMemberFunctionDeclaration->get_associatedClassDeclaration();
-      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     } else if (templateVariableDeclaration) {
       ROSE_ASSERT(templateVariableDeclaration->get_variables().size() == 1);
       auto *iname = templateVariableDeclaration->get_variables()[0];
@@ -10836,22 +8742,12 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           iname->get_scope()
               ? isSgDeclarationStatement(iname->get_scope()->get_parent())
               : nullptr;
-      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     } else if (templateClassDeclaration || templateTypedefDeclaration) {
       associated_decl = template_stmt->get_scope()
                             ? isSgDeclarationStatement(
                                   template_stmt->get_scope()->get_parent())
                             : nullptr;
-      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
     }
-    if (templateClassDeclaration != nullptr) {
-      associated_decl = exactTemplateClassHeaderOwner(templateClassDeclaration,
-                                                      associated_decl);
-      assoc_tpl_class_decl = isSgTemplateClassDeclaration(associated_decl);
-    }
-    //     std::cout << "assoc_tpl_class_decl = " << std::hex <<
-    //     assoc_tpl_class_decl << " : " << (assoc_tpl_class_decl ?
-    //     assoc_tpl_class_decl->class_name() : "") << std::endl;
 
     SgNode *parent = stmt->get_parent();
     const bool parent_is_class_like_definition =
@@ -10894,20 +8790,6 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       } else {
         std::vector<SgTemplateClassDeclaration *> assoc_tpl_chain =
             collectTemplateClassChain(associated_decl);
-        if (templateClassDeclaration != nullptr &&
-            templateClassDeclaration->get_templateClassOwnerScopeKind() ==
-                SgTemplateClassDeclaration::
-                    e_template_class_owner_scope_source_spelled &&
-            assoc_tpl_chain.empty()) {
-          fprintf(stderr,
-                  "REX_UNPARSE_INVARIANT[template-class-header-owner]: "
-                  "declaration=%p name=%s source-spelled owner=%p has no "
-                  "template class header chain\n",
-                  static_cast<void *>(templateClassDeclaration),
-                  templateClassDeclaration->get_name().getString().c_str(),
-                  static_cast<void *>(associated_decl));
-          ROSE_ABORT();
-        }
         for (auto it = assoc_tpl_chain.rbegin(); it != assoc_tpl_chain.rend();
              ++it) {
           unparseTemplateHeader(*it, info);
@@ -10927,7 +8809,6 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
 
     if (templateClassDeclaration != NULL) {
       ninfo.unset_SkipSemiColon();
-      ninfo.set_declstatement_ptr(NULL);
       ninfo.set_declstatement_ptr(templateClassDeclaration);
 
       // Match non-template class declaration output so friend/specifier
@@ -10960,8 +8841,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         }
         }
 
-        SgName class_name = templateClassDeclaration->get_name();
-        curprint(class_name.getString().c_str());
+        unp->u_sage->printAlignmentSpecifiers(
+            templateClassDeclaration, ninfo,
+            Unparse_MOD_SAGE::AlignmentPosition::TagHead);
+        curprint(exactStatementNameQualification(unp, templateClassDeclaration,
+                                                 ninfo)
+                     .qualifier);
+        unparseTemplateClassName(this, templateClassDeclaration, ninfo);
         unp->u_sage->printAttributes(templateClassDeclaration, ninfo);
       }
 
@@ -10985,9 +8871,9 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       if (!is_deduction_guide) {
         unparseReturnType(functionDeclaration, rtype, ninfo);
       }
+      unparseCudaLaunchBounds(functionDeclaration, ninfo);
 
       ninfo.unset_SkipSemiColon();
-      ninfo.set_declstatement_ptr(NULL);
       ninfo.set_declstatement_ptr(functionDeclaration);
 
       unparse_helper(functionDeclaration, ninfo);
@@ -10998,10 +8884,13 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
           rtype != NULL &&
           (is_deduction_guide ||
            functionUsesTrailingReturnTypeSyntax(functionDeclaration));
-      if (use_trailing_return_type_syntax &&
+      if (!functionDeclaration
+               ->get_source_declarator_uses_wrapped_function_type() &&
           templateMemberFunctionDeclaration != NULL) {
         unparseMemberFunctionParametersAndQualifiers(
             templateMemberFunctionDeclaration, ninfo);
+      } else if (templateMemberFunctionDeclaration == nullptr) {
+        unparseExceptionSpecification(functionDeclaration, ninfo);
       }
 
       if (rtype != NULL) {
@@ -11031,27 +8920,11 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
         functionDeclaration->validate_source_declarator_form();
       }
       if (templateMemberFunctionDeclaration != NULL) {
-        if (use_trailing_return_type_syntax) {
-          unparseMemberFunctionPostDeclaratorModifiers(
-              templateMemberFunctionDeclaration, ninfo);
-        } else if (uses_wrapped_function_type) {
-          unparseMemberFunctionPostDeclaratorModifiers(
-              templateMemberFunctionDeclaration, ninfo);
-        } else {
-          unparseTrailingFunctionModifiers(templateMemberFunctionDeclaration,
-                                           ninfo);
-        }
+        unparseMemberFunctionPostDeclaratorModifiers(
+            templateMemberFunctionDeclaration, ninfo);
         unparse_member_function_ctor_initializers(
             templateMemberFunctionDeclaration, ninfo);
       } else {
-        if (!uses_wrapped_function_type &&
-            functionDeclaration->get_declarationModifier().isThrow()) {
-          const SgTypePtrList &exceptionSpecifierList =
-              functionDeclaration->get_exceptionSpecification();
-          ninfo.set_reference_node_for_qualification(functionDeclaration);
-          unparseExceptionSpecification(exceptionSpecifierList, ninfo);
-          ninfo.set_reference_node_for_qualification(NULL);
-        }
         if (functionDeclaration->get_asm_name().empty() == false) {
           curprint(" __asm__ (\"");
           curprint(functionDeclaration->get_asm_name());
@@ -11066,7 +8939,6 @@ void Unparse_ExprStmt::unparseTemplateDeclarationStatment_support(
       if (functionDefn != NULL) {
         SgBasicBlock *body = functionDefn->get_body();
         SgUnparse_Info body_info(info);
-        body_info.unset_CheckAccess();
         // Conditional signature branches and comments that occur between a
         // template function declarator and its body are owned by the exact
         // function-definition node.  The structural template path emits the
@@ -11114,54 +8986,14 @@ void Unparse_ExprStmt::unparseAccPrefix(SgUnparse_Info &) {
 
 void Unparse_ExprStmt::unparseOmpForStatement(SgStatement *stmt,
                                               SgUnparse_Info &info) {
-  ASSERT_not_null(stmt);
-  SgOmpForStatement *f_stmt = isSgOmpForStatement(stmt);
-  ASSERT_not_null(f_stmt);
-  const std::optional<int> saved_linewrap = unp->cur.get_linewrap();
-  unp->cur.disable_linewrap();
-
-  unparseOmpDirectivePrefixAndName(stmt, info);
-
-  unparseOmpBeginDirectiveClauses(stmt, info);
-  // TODO a better way to new line? and add indentation
-  curprint(string("\n"));
-
-  SgUnparse_Info ninfo(info);
-  if (f_stmt->get_body()) {
-    unparseStatement(f_stmt->get_body(), ninfo);
-  } else {
-    cerr << "Error: empty body for:" << stmt->class_name() << " is not allowed!"
-         << endl;
-    ROSE_ABORT();
-  }
-
-  unp->cur.set_linewrap(saved_linewrap);
+  ASSERT_not_null(isSgOmpForStatement(stmt));
+  unparseOmpGenericStatement(stmt, info);
 }
 
 void Unparse_ExprStmt::unparseOmpForSimdStatement(SgStatement *stmt,
                                                   SgUnparse_Info &info) {
-  ASSERT_not_null(stmt);
-  SgOmpForSimdStatement *f_stmt = isSgOmpForSimdStatement(stmt);
-  ASSERT_not_null(f_stmt);
-  const std::optional<int> saved_linewrap = unp->cur.get_linewrap();
-  unp->cur.disable_linewrap();
-
-  unparseOmpDirectivePrefixAndName(stmt, info);
-
-  unparseOmpBeginDirectiveClauses(stmt, info);
-  // TODO a better way to new line? and add indentation
-  curprint(string("\n"));
-
-  SgUnparse_Info ninfo(info);
-  if (f_stmt->get_body()) {
-    unparseStatement(f_stmt->get_body(), ninfo);
-  } else {
-    cerr << "Error: empty body for:" << stmt->class_name() << " is not allowed!"
-         << endl;
-    ROSE_ABORT();
-  }
-
-  unp->cur.set_linewrap(saved_linewrap);
+  ASSERT_not_null(isSgOmpForSimdStatement(stmt));
+  unparseOmpGenericStatement(stmt, info);
 }
 
 void Unparse_ExprStmt::unparseOmpBeginDirectiveClauses(SgStatement *stmt,
@@ -11314,10 +9146,6 @@ void Unparse_ExprStmt::unparseAccBeginDirectiveClauses(SgStatement *stmt,
 
 void Unparse_ExprStmt::unparseStaticAssertionDeclaration(SgStatement *stmt,
                                                          SgUnparse_Info &info) {
-  // DQ (7/25/2014): Adding support for C11 static assertions.
-
-  // For C11 this whould be unparsed as "_Static_assert", but for C++ it should
-  // be unparsed as "static_assert".
   SgStaticAssertionDeclaration *staticAssertionDeclaration =
       isSgStaticAssertionDeclaration(stmt);
   ASSERT_not_null(staticAssertionDeclaration);
@@ -11326,13 +9154,9 @@ void Unparse_ExprStmt::unparseStaticAssertionDeclaration(SgStatement *stmt,
   SgExpression *condition = staticAssertionDeclaration->get_condition();
   SgExpression *message = staticAssertionDeclaration->get_message();
 
-  // DQ (4/29/2017): This is the C11 syntax, and for C++11 we need the
-  // alternative syntax ("static_assert"). curprint("_Static_assert(");
-  if (SageInterface::is_Cxx_language() == true) {
-    // This must be C++11 (or later).
+  if (info.get_language() == SgFile::e_Cxx_language) {
     curprint("static_assert(");
   } else {
-    // This must be C11 (or later).
     curprint("_Static_assert(");
   }
 

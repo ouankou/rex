@@ -6,56 +6,27 @@ namespace AstJson {
 void writeNodeJson(std::ostream &out, SgNode *node,
                    const std::unordered_map<const SgNode *, uint64_t> &ids,
                    bool comma) {
+  if (isSgIfStmt(node) != nullptr || isSgWhileStmt(node) != nullptr ||
+      isSgForStatement(node) != nullptr || isSgSwitchStatement(node) != nullptr)
+    (void)SageInterface::getConditionValue(isSgScopeStatement(node));
   if (SgAuxiliaryDeclarationList *container =
           isSgAuxiliaryDeclarationList(node)) {
     SgScopeStatement *owner = isSgScopeStatement(container->get_parent());
     if (owner == nullptr || owner->get_auxiliary_declarations() != container ||
         container->get_declarations().empty()) {
-      fprintf(stderr,
-              "REX_AST_JSON_INVARIANT[auxiliary-ownership]: container=%p "
-              "owner=%p/%s published=%p declarations=%zu\n",
-              static_cast<void *>(container), static_cast<void *>(owner),
-              owner != nullptr ? owner->sage_class_name() : "<null>",
-              static_cast<void *>(owner != nullptr
-                                      ? owner->get_auxiliary_declarations()
-                                      : nullptr),
-              container->get_declarations().size());
-      if (owner != nullptr) {
-        size_t depth = 0;
-        for (SgNode *cursor = owner; cursor != nullptr && depth != 12;
-             cursor = cursor->get_parent(), ++depth) {
-          SgFunctionDeclaration *function = isSgFunctionDeclaration(cursor);
-          fprintf(stderr,
-                  "REX_AST_JSON_INVARIANT[auxiliary-ownership-owner]: "
-                  "depth=%zu node=%p/%s parent=%p function=%s\n",
-                  depth, static_cast<void *>(cursor), cursor->sage_class_name(),
-                  static_cast<void *>(cursor->get_parent()),
-                  function != nullptr ? function->get_name().getString().c_str()
-                                      : "<none>");
-          if (SgBasicBlock *block = isSgBasicBlock(cursor)) {
-            fprintf(stderr,
-                    "REX_AST_JSON_INVARIANT[auxiliary-ownership-block]: "
-                    "depth=%zu statements=%zu",
-                    depth, block->get_statements().size());
-            for (SgStatement *statement : block->get_statements()) {
-              fprintf(stderr, " %p/%s", static_cast<void *>(statement),
-                      statement != nullptr ? statement->sage_class_name()
-                                           : "<null>");
-            }
-            fprintf(stderr, "\n");
-          }
-        }
-      }
       throw std::runtime_error(
           "AST JSON cannot serialize malformed auxiliary declaration "
           "ownership");
     }
+    const SgNodePtrList sourceChildren =
+        owner->get_traversalSuccessorContainer();
     for (SgDeclarationStatement *declaration : container->get_declarations()) {
       if (declaration == nullptr || declaration->get_parent() != container ||
           declaration->get_scope() != owner ||
           std::count(container->get_declarations().begin(),
                      container->get_declarations().end(), declaration) != 1 ||
-          owner->statementExistsInScope(declaration)) {
+          std::find(sourceChildren.begin(), sourceChildren.end(),
+                    declaration) != sourceChildren.end()) {
         throw std::runtime_error(
             "AST JSON cannot serialize an auxiliary declaration with "
             "inconsistent semantic or source-emission ownership");
@@ -69,25 +40,7 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   writeStringField(out, 6, "kind", node->sage_class_name());
   writeIntegerField(out, 6, "variant", node->variantT());
   indent(out, 6);
-  out << jsonString("flags") << ": {\n";
-  writeBoolField(out, 8, "contains_transformation",
-                 node->get_containsTransformation());
-  const SgLocatedNode *located_for_flags = isSgLocatedNode(node);
-  writeBoolField(out, 8, "contains_transformation_to_surrounding_whitespace",
-                 located_for_flags != nullptr &&
-                     located_for_flags
-                         ->get_containsTransformationToSurroundingWhitespace());
-  writeBoolField(
-      out, 8, "source_range_ends_in_macro_expansion",
-      located_for_flags != nullptr &&
-          located_for_flags->get_source_range_ends_in_macro_expansion());
-  writeBoolField(
-      out, 8, "source_range_is_macro_expansion_fragment",
-      located_for_flags != nullptr &&
-          located_for_flags->get_source_range_is_macro_expansion_fragment(),
-      false);
-  indent(out, 6);
-  out << "},\n";
+  out << jsonString("flags") << ": " << rawNodeFlagsJson(node) << ",\n";
 
   indent(out, 6);
   out << jsonString("location") << ": {\n";
@@ -212,14 +165,6 @@ void writeNodeJson(std::ostream &out, SgNode *node,
             "edge");
       }
     }
-    if (decl->get_template_instantiation_pattern_is_unpublished() ==
-        (decl->get_templateInstantiationPattern() != nullptr)) {
-      if (decl->get_template_instantiation_pattern_is_unpublished()) {
-        throw std::runtime_error(
-            "AST JSON function has both exact and unpublished instantiation "
-            "patterns");
-      }
-    }
     append_manual_edge(decl->get_templateInstantiationPattern(),
                        "template_instantiation_pattern");
   }
@@ -234,9 +179,6 @@ void writeNodeJson(std::ostream &out, SgNode *node,
       append_manual_edge(parameter_list, "source_spelled_template_headers");
     }
   }
-  if (SgStatement *stmt = isSgStatement(node)) {
-    append_manual_edge(stmt->get_numeric_label(), "numeric_label");
-  }
   if (SgLabelStatement *stmt = isSgLabelStatement(node)) {
     append_manual_edge(stmt->get_scope(), "scope");
   }
@@ -247,19 +189,15 @@ void writeNodeJson(std::ostream &out, SgNode *node,
     append_manual_edge(stmt->get_fortran_block_end_numeric_label(),
                        "end_numeric_label");
   }
-  if (SgIfStmt *stmt = isSgIfStmt(node)) {
-    append_manual_edge(stmt->get_else_numeric_label(), "else_numeric_label");
-    append_manual_edge(stmt->get_end_numeric_label(), "end_numeric_label");
-  }
-  if (SgWhileStmt *stmt = isSgWhileStmt(node)) {
-    append_manual_edge(stmt->get_end_numeric_label(), "end_numeric_label");
-  }
-  if (SgFortranNonblockedDo *stmt = isSgFortranNonblockedDo(node)) {
-    append_manual_edge(stmt->get_end_statement(), "end_statement");
+  if (SgAssociateStatement *stmt = isSgAssociateStatement(node)) {
+    SgLabelRefExp *label = stmt->get_end_numeric_label();
+    if (label != nullptr && label->get_parent() != stmt) {
+      throw std::runtime_error(
+          "AST JSON ASSOCIATE end label has no exact owner");
+    }
   }
   if (SgGotoStatement *stmt = isSgGotoStatement(node)) {
     append_manual_edge(stmt->get_label(), "label");
-    append_manual_edge(stmt->get_label_expression(), "label_expression");
     append_manual_edge(stmt->get_selector_expression(), "selector_expression");
   }
   std::stable_sort(pointers.begin(), pointers.end(),
@@ -275,13 +213,6 @@ void writeNodeJson(std::ostream &out, SgNode *node,
       continue;
     }
     if (node == collectionBoundaryRoot && entry.second == "parent") {
-      continue;
-    }
-    if (isSgSourceFile(node) != nullptr &&
-        entry.second == "associated_include_file") {
-      // SgIncludeFile is parser planning metadata outside the Sage AST
-      // ownership graph.  Physical include syntax is serialized on its exact
-      // located owner as preprocessing information.
       continue;
     }
     if (collectionBoundaryRoot != nullptr && isSgSourceFile(node) != nullptr &&
@@ -306,10 +237,18 @@ void writeNodeJson(std::ostream &out, SgNode *node,
       }
       std::unordered_set<SgFile *> unique_external_files;
       for (SgFile *external_file : external_files->get_listOfFiles()) {
+        SgSourceFile *source = isSgSourceFile(external_file);
+        SgIncludeFile *include =
+            source != nullptr ? source->get_associated_include_file() : nullptr;
+        const bool header = source != nullptr && source->get_isHeaderFile() &&
+                            include != nullptr &&
+                            include->get_source_file() == source &&
+                            include->get_source_file_of_translation_unit() ==
+                                source_file;
         if (external_file == nullptr ||
             external_file->get_parent() != external_files ||
-            !external_file->get_skip_unparse() ||
-            !external_file->get_skipfinalCompileStep() ||
+            (!header && (!external_file->get_skip_unparse() ||
+                         !external_file->get_skipfinalCompileStep())) ||
             std::find(project_files->get_listOfFiles().begin(),
                       project_files->get_listOfFiles().end(), external_file) !=
                 project_files->get_listOfFiles().end() ||
@@ -318,11 +257,8 @@ void writeNodeJson(std::ostream &out, SgNode *node,
               "AST JSON found malformed frontend-external source file");
         }
       }
-      // Imported module source files are frontend-only semantic context, not
-      // part of this source file's checkpoint boundary.  The external
-      // declaration records and ownership-path metadata carry every semantic
-      // dependency used by the checkpoint.
-      continue;
+      // Preserve the exact non-lexical ownership edge. Summary records cannot
+      // represent component identities or the complete imported type graph.
     }
     if (entry.second == "scope") {
       if (const SgStatement *stmt = isSgStatement(node)) {
@@ -345,6 +281,9 @@ void writeNodeJson(std::ostream &out, SgNode *node,
     if (isSgType(entry.first) != nullptr) {
       continue;
     }
+    if (isSgFunctionTypeArgument(entry.first) != nullptr &&
+        isSgFunctionParameterTypeList(node) != nullptr)
+      continue;
     if (entry.second == "storageModifier" &&
         isSgStorageModifier(entry.first) != nullptr) {
       continue;
@@ -384,7 +323,10 @@ void writeNodeJson(std::ostream &out, SgNode *node,
     }
     auto target = ids.find(entry.first);
     if (target == ids.end()) {
-      if (entry.second == "parent" && isSgSourceFile(node) != nullptr &&
+      if (entry.second == "parent" &&
+          (isSgSourceFile(node) != nullptr ||
+           (isSgFileList(node) != nullptr &&
+            isSgProject(entry.first) != nullptr)) &&
           (isSgFileList(entry.first) != nullptr ||
            isSgProject(entry.first) != nullptr)) {
         continue;
@@ -474,92 +416,31 @@ void writeNodeJson(std::ostream &out, SgNode *node,
   out << '\n';
 }
 
-void writeStringArrayField(std::ostream &out, int level, const char *name,
-                           const std::vector<std::string> &values,
-                           bool comma = true) {
-  indent(out, level);
-  out << jsonString(name) << ": [";
-  if (!values.empty()) {
-    out << '\n';
-    for (size_t i = 0; i < values.size(); ++i) {
-      indent(out, level + 2);
-      out << jsonString(values[i]);
-      if (i + 1 != values.size()) {
-        out << ',';
-      }
-      out << '\n';
-    }
-    indent(out, level);
-  }
-  out << ']';
-  if (comma) {
-    out << ',';
-  }
-  out << '\n';
-}
-
 void writeMetadataJson(std::ostream &out, SgSourceFile *file,
                        Checkpoint checkpoint) {
   indent(out, 2);
   out << jsonString("metadata") << ": {\n";
   writeStringField(out, 4, "checkpoint", checkpointName(checkpoint));
-  if (file == nullptr) {
-    writeStringField(out, 4, "source_file", "");
-    writeStringField(out, 4, "output_file", "");
-    writeStringArrayField(out, 4, "command_line", {});
-    writeStringArrayField(out, 4, "frontend_include_ownership_paths", {});
-    writeStringArrayField(out, 4, "frontend_system_include_ownership_paths",
-                          {});
-    writeStringArrayField(out, 4, "frontend_external_ownership_paths", {});
-    writeFileIdMapJson(out, 4, false);
-  } else {
-    writeStringField(out, 4, "source_file", file->get_sourceFileNameWithPath());
-    writeStringField(out, 4, "output_file",
-                     file->get_unparse_output_filename());
-    writeStringArrayField(out, 4, "command_line", commandLine(file));
-    const SgStringList &include_ownership_paths =
-        file->get_frontendIncludeOwnershipPathList();
-    writeStringArrayField(
-        out, 4, "frontend_include_ownership_paths",
-        std::vector<std::string>(include_ownership_paths.begin(),
-                                 include_ownership_paths.end()));
-    const SgStringList &system_include_ownership_paths =
-        file->get_frontendSystemIncludeOwnershipPathList();
-    writeStringArrayField(
-        out, 4, "frontend_system_include_ownership_paths",
-        std::vector<std::string>(system_include_ownership_paths.begin(),
-                                 system_include_ownership_paths.end()));
-    const SgStringList &external_ownership_paths =
-        file->get_frontendExternalOwnershipPathList();
-    writeStringArrayField(
-        out, 4, "frontend_external_ownership_paths",
-        std::vector<std::string>(external_ownership_paths.begin(),
-                                 external_ownership_paths.end()));
-    writeBoolField(out, 4, "openmp", file->get_openmp());
-    writeBoolField(out, 4, "openmp_parse_only", file->get_openmp_parse_only());
-    writeBoolField(out, 4, "openmp_ast_only", file->get_openmp_ast_only());
-    writeBoolField(out, 4, "openmp_analyzing", file->get_openmp_analyzing());
-    writeBoolField(out, 4, "openmp_lowering", file->get_openmp_lowering());
-    writeBoolField(out, 4, "openmp_processed", file->get_openmp_processed());
-    writeBoolField(out, 4, "openacc", file->get_openacc());
-    writeBoolField(out, 4, "skipfinalCompileStep",
-                   file->get_skipfinalCompileStep());
-    writeBoolField(out, 4, "unparse_tokens", file->get_unparse_tokens());
-    writeFileIdMapJson(out, 4, false);
-  }
+  writeStringField(out, 4, "source_file",
+                   file != nullptr ? file->get_sourceFileNameWithPath() : "");
+  writeStringField(out, 4, "output_file",
+                   file != nullptr ? file->get_unparse_output_filename() : "");
+  writeFileIdMapJson(out, 4, false);
   indent(out, 2);
   out << "},\n";
 }
 
-std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file) {
+std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
+                      SgFileList *project_files, NodeMap *serialized_nodes) {
   ROSE_ASSERT(root != nullptr);
 
-  CollectionBoundaryGuard boundary(file != nullptr ? file
-                                                   : isSgSourceFile(root));
+  CollectionBoundaryGuard boundary(
+      file != nullptr ? file : isSgSourceFile(root), project_files);
   SubtreeBoundaryGuard subtreeBoundary(root != file ? root : nullptr);
-  ArrayTypeSerializationIdentityGuard array_type_identity_guard;
+  FullTypeSerializationIdentityGuard full_type_identity_guard;
   PointerMemberTypeSerializationIdentityGuard type_identity_guard;
-  std::vector<SgNode *> nodes = collectNodes(root, file);
+  std::vector<SgNode *> nodes =
+      collectNodes(project_files != nullptr ? project_files : root);
   std::unordered_map<const SgNode *, uint64_t> ids;
   ids.reserve(nodes.size());
   std::unordered_set<uint64_t> used_ids;
@@ -602,6 +483,8 @@ std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file) {
   writeStringField(out, 2, "format", kFormat);
   writeIntegerField(out, 2, "schema_version", kSchemaVersion);
   writeIntegerField(out, 2, "root_id", ids.at(root));
+  writeIntegerField(out, 2, "project_files_id",
+                    project_files != nullptr ? ids.at(project_files) : 0);
   writeStringField(out, 2, "root_kind", root->sage_class_name());
   writeIntegerField(out, 2, "node_count", nodes.size());
   writeMetadataJson(out, file, checkpoint);
@@ -613,6 +496,13 @@ std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file) {
   indent(out, 2);
   out << "]\n";
   out << "}\n";
+  if (serialized_nodes != nullptr) {
+    serialized_nodes->clear();
+    for (const auto &entry : ids) {
+      serialized_nodes->emplace(entry.second,
+                                const_cast<SgNode *>(entry.first));
+    }
+  }
   return out.str();
 }
 

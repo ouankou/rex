@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -ne 10 ]]; then
-  echo "usage: $0 <parseOmp> <compiler> <input.c> <workdir> <mode> <omp_header_dir> <omp_runtime_dir> <lowering_inc> <case_name> <openmp_version>" >&2
+  echo "usage: $0 <parseOmp> <compiler> <input.c> <workdir> <mode> <omp_header_dir> <omp_runtime_library> <lowering_inc> <case_name> <openmp_version>" >&2
   exit 2
 fi
 
@@ -12,7 +12,8 @@ input_file="$3"
 workdir="$4"
 mode="$5"
 omp_header_dir="$6"
-omp_runtime_dir="$7"
+omp_runtime_library="$7"
+omp_runtime_dir="$(dirname "$omp_runtime_library")"
 lowering_inc="$8"
 case_name="$9"
 openmp_version="${10}"
@@ -31,19 +32,23 @@ rose_file="$workdir/rose_${source_name}"
 rex_lib_file="$workdir/rex_lib_${source_name}"
 
 compile_flags=(
-  -fopenmp=libiomp5
+  -fopenmp=libomp
   -O0
   -g
   -U_OPENMP
   "-D_OPENMP=${openmp_version}"
   "-I${omp_header_dir}"
-  "-L${omp_runtime_dir}"
+)
+link_flags=(
+  "$omp_runtime_library"
+  -pthread
   "-Wl,-rpath,${omp_runtime_dir}"
 )
 
 if [[ -n "${ROSE_TEST_SANITIZER_FLAGS:-}" ]]; then
   read -r -a sanitizer_flags <<< "${ROSE_TEST_SANITIZER_FLAGS}"
   compile_flags+=("${sanitizer_flags[@]}")
+  link_flags+=("${sanitizer_flags[@]}")
 fi
 
 canonicalize() {
@@ -71,7 +76,8 @@ fail_with_diff() {
 }
 
 # Build original source with LLVM OpenMP runtime.
-"$compiler" "${compile_flags[@]}" "$input_file" -o "$workdir/orig.exe"
+"$compiler" "${compile_flags[@]}" -c "$input_file" -o "$workdir/orig.o"
+"$compiler" "$workdir/orig.o" "${link_flags[@]}" -o "$workdir/orig.exe"
 
 # Lower and build transformed source.
 (
@@ -94,7 +100,13 @@ if [[ -f "$rex_lib_file" ]]; then
   lowered_sources+=("$rex_lib_file")
 fi
 
-"$compiler" "${compile_flags[@]}" -I"$lowering_inc" "${lowered_sources[@]}" -o "$workdir/lowered.exe"
+lowered_objects=()
+for source in "${lowered_sources[@]}"; do
+  object="$workdir/lowered_${#lowered_objects[@]}.o"
+  "$compiler" "${compile_flags[@]}" -I"$lowering_inc" -c "$source" -o "$object"
+  lowered_objects+=("$object")
+done
+"$compiler" "${lowered_objects[@]}" "${link_flags[@]}" -o "$workdir/lowered.exe"
 
 # Repeat execution to reduce chance of false positives from schedule luck.
 export LD_LIBRARY_PATH="${omp_runtime_dir}:${LD_LIBRARY_PATH:-}"

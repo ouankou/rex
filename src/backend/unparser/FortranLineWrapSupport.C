@@ -27,8 +27,7 @@ bool isFixedFormatCommentLine(const std::string &text) {
   const bool is_comment_marker =
       marker == '!' ||
       (first == 0 && (marker == 'c' || marker == 'C' || marker == '*'));
-  return is_comment_marker &&
-         (first + 1 >= text.size() || text[first + 1] != '$');
+  return is_comment_marker;
 }
 
 std::vector<size_t> stringLiteralLexicalBoundaries(const std::string &literal,
@@ -93,8 +92,7 @@ std::vector<std::string> wrapFreeFormatComment(const std::string &text,
       wrapped_lines.emplace_back();
     } else {
       const size_t marker = line.find_first_not_of(' ');
-      if (marker == std::string::npos || line[marker] != '!' ||
-          (marker + 1 < line.size() && line[marker + 1] == '$')) {
+      if (marker == std::string::npos || line[marker] != '!') {
         std::fprintf(stderr,
                      "REX_UNPARSE_INVARIANT[fortran-comment-wrap]: input is "
                      "not a free-format comment\n");

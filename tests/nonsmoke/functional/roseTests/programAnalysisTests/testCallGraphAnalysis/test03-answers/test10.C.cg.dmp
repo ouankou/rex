@@ -1,5 +1,6 @@
 A < int > ::A -> a_init < int >
-C < int > ::C ->
+B < int > ::B -> A < int > ::A
+C < int > ::C -> B < int > ::B
 a_init < int >  ->
 main -> user_sysinit
-user_sysinit -> A < int > ::A C < int > ::C
+user_sysinit -> C < int > ::C

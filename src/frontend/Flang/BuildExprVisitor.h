@@ -1,7 +1,11 @@
 #pragma once
 
+#include "Cxx_Grammar.h"
+#include "sage-build.h"
+
 #include <flang/Parser/tools.h>
 
+#include <iostream>
 #include <type_traits>
 
 namespace Rose::builder {
@@ -25,10 +29,15 @@ void WalkExprWithExpectedLiteralType(const T &root, SgType *expectedLiteralType,
 
 class BuildExprVisitor {
 public:
-  BuildExprVisitor(SgExpression *expr, SgType *expectedLiteralType = nullptr)
-      : pre_{expr}, post_{nullptr}, semantic_expr_{nullptr},
-        semantic_variable_{nullptr},
-        expected_literal_type_{expectedLiteralType} {}
+  explicit BuildExprVisitor(SgType *expectedLiteralType = nullptr)
+      : post_{nullptr}, semantic_expr_{nullptr}, semantic_variable_{nullptr},
+        expected_literal_type_{expectedLiteralType},
+        semantic_literal_{nullptr} {}
+
+  explicit BuildExprVisitor(const Fortran::parser::TypedExpr &literal)
+      : BuildExprVisitor() {
+    semantic_literal_ = &literal;
+  }
 
   // In nearly all cases, this code avoids defining Boolean-valued Pre()
   // callbacks for the parse tree walking framework in favor of two void
@@ -36,7 +45,8 @@ public:
   // values for Pre() respectively.
   template <typename T> void Before(const T &) {}
   void Before(const Fortran::parser::Expr &expr) {
-    if (semantic_expr_ != nullptr || semantic_variable_ != nullptr) {
+    if (semantic_expr_ != nullptr || semantic_variable_ != nullptr ||
+        semantic_literal_ != nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[expression-semantics]: nested "
                    "semantic expression context in one builder traversal\n";
       ROSE_ABORT();
@@ -44,7 +54,8 @@ public:
     semantic_expr_ = &expr;
   }
   void Before(const Fortran::parser::Variable &variable) {
-    if (semantic_expr_ != nullptr || semantic_variable_ != nullptr) {
+    if (semantic_expr_ != nullptr || semantic_variable_ != nullptr ||
+        semantic_literal_ != nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[expression-semantics]: nested "
                    "semantic variable context in one builder traversal\n";
       ROSE_ABORT();
@@ -76,13 +87,9 @@ public:
     Fortran::parser::Walk(x, *this);
   }
 
-  // Replace is hard for most types and needs testing (don't do it by default)
-  template <typename T> void Replace(const T &, SgExpression *) {}
-
-  template <typename T> void BuildReplace(const T &x) {
+  template <typename T> void BuildAndSet(const T &x) {
     SgExpression *sg{nullptr};
     BuildImpl(x, sg);
-    Replace(x, sg);
     this->set(sg);
   }
 
@@ -116,14 +123,14 @@ public:
   void Build(const Fortran::parser::SignedRealLiteralConstant &);
   void Build(const Fortran::parser::ComplexLiteralConstant &x);
   void Build(const Fortran::parser::SignedComplexLiteralConstant &x);
-  void Build(const Fortran::parser::BOZLiteralConstant &x) { BuildReplace(x); }
+  void Build(const Fortran::parser::BOZLiteralConstant &);
   void Build(const Fortran::parser::HollerithLiteralConstant &x);
   void Build(const Fortran::parser::LogicalLiteralConstant &);
   void Build(const Fortran::parser::KindSelector::StarSize &x) {
-    BuildReplace(x);
+    BuildAndSet(x);
   }
-  void Build(const Fortran::parser::CharLength &x) { BuildReplace(x); }
-  void Build(const Fortran::parser::TypeParamValue &x) { BuildReplace(x); }
+  void Build(const Fortran::parser::CharLength &x) { BuildAndSet(x); }
+  void Build(const Fortran::parser::TypeParamValue &x) { BuildAndSet(x); }
 
   void Build(const Fortran::parser::Designator &x);
   void Build(const Fortran::parser::Substring &x);
@@ -142,18 +149,12 @@ public:
   // CommonBlockObject owns the completed object source range.  Its producer
   // leaves an unshaped name reference fresh and classifies only the nested
   // name child of a shaped array reference.
-  void Build(const Fortran::parser::CommonBlockObject &x) { BuildReplace(x); }
+  void Build(const Fortran::parser::CommonBlockObject &x) { BuildAndSet(x); }
 
   // ArraySpec ...
-  void Build(const Fortran::parser::AssumedImpliedSpec &x) { BuildReplace(x); }
-  void Build(const Fortran::parser::ExplicitShapeSpec &x) { BuildReplace(x); }
-  void Build(const Fortran::parser::AssumedShapeSpec &x) { BuildReplace(x); }
-
-  void Build(const Fortran::parser::CharBlock &x) {
-    // For future use with token-based unparsing?
-  }
-
-  void Done() const {}
+  void Build(const Fortran::parser::AssumedImpliedSpec &x) { BuildAndSet(x); }
+  void Build(const Fortran::parser::ExplicitShapeSpec &x) { BuildAndSet(x); }
+  void Build(const Fortran::parser::AssumedShapeSpec &x) { BuildAndSet(x); }
 
   // Build expressions for binary operators
   template <typename T>
@@ -180,7 +181,7 @@ public:
     if (semantic_variable_ != nullptr) {
       return &semantic_variable_->typedExpr;
     }
-    return nullptr;
+    return semantic_literal_;
   }
 
   SgType *expectedLiteralType() const { return expected_literal_type_; }
@@ -204,14 +205,11 @@ public:
   }
 
 private:
-  SgExpression *pre_;  // expression attribute (probably not needed)
   SgExpression *post_; // synthesized expression attribute
   const Fortran::parser::Expr *semantic_expr_;
   const Fortran::parser::Variable *semantic_variable_;
   SgType *expected_literal_type_;
-  const char
-      *startSource_;  // start of Fortran::common::Interal expression source
-  size_t sizeSource_; // size of Fortran::common::Interal expression source
+  const Fortran::parser::TypedExpr *semantic_literal_;
 }; // BuildExprVisitor
 
 template <typename T>
@@ -224,9 +222,8 @@ template <typename T>
 void BuildExprTreeWithExpectedLiteralType(const T &root,
                                           SgType *expectedLiteralType,
                                           SgExpression *&expr) {
-  BuildExprVisitor visitor{expr, expectedLiteralType};
+  BuildExprVisitor visitor{expectedLiteralType};
   Walk(root, visitor);
-  visitor.Done();
   visitor.get(expr); // synthesized expression attribute
   if (expr == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[expression-producer]: parse-tree "
@@ -238,9 +235,7 @@ void BuildExprTreeWithExpectedLiteralType(const T &root,
 template <typename T>
 void WalkExprWithExpectedLiteralType(const T &root, SgType *expectedLiteralType,
                                      SgExpression *&expr) {
-  if (expectedLiteralType == nullptr ||
-      isSgTypeUnknown(expectedLiteralType) != nullptr ||
-      isSgTypeDefault(expectedLiteralType) != nullptr) {
+  if (SageInterface::containsUnknownType(expectedLiteralType)) {
     std::cerr << "REX_FLANG_INVARIANT[expected-literal-type]: nested "
                  "expression has no exact producer-published literal type\n";
     ROSE_ABORT();

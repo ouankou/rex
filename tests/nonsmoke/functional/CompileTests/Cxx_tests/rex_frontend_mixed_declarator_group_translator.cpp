@@ -414,11 +414,45 @@ int main(int argc, char **argv) {
       {"rex_mixed_repeat_second_object", "rex_mixed_repeat_second_function"},
       false);
   ROSE_ASSERT(firstRepeatGroup != secondRepeatGroup);
-  // The included function body belongs to a suppressed header surface.  Its
-  // local declarations must not leak into the primary translation unit as
-  // detached semantic nodes or partially published declaration groups.
-  ROSE_ASSERT(declarations.count("rex_mixed_suppressed_header_first") == 0);
-  ROSE_ASSERT(declarations.count("rex_mixed_suppressed_header_second") == 0);
+  // Header suppression excludes emission, but analysis retains the complete
+  // written body and its locals beneath the auxiliary function declaration.
+  SgDeclarationGroupStatement *headerGroup =
+      checkGroup(source, declarations,
+                 {"rex_mixed_suppressed_header_first",
+                  "rex_mixed_suppressed_header_second"},
+                 false);
+  SgBasicBlock *headerBody = isSgBasicBlock(headerGroup->get_parent());
+  ROSE_ASSERT(headerBody != nullptr);
+  ROSE_ASSERT(headerGroup->get_scope() == headerBody);
+  ROSE_ASSERT(std::count(headerBody->get_statements().begin(),
+                         headerBody->get_statements().end(), headerGroup) == 1);
+  SgFunctionDefinition *headerDefinition =
+      isSgFunctionDefinition(headerBody->get_parent());
+  ROSE_ASSERT(headerDefinition != nullptr);
+  ROSE_ASSERT(headerDefinition->get_body() == headerBody);
+  SgFunctionDeclaration *headerFunction = headerDefinition->get_declaration();
+  ROSE_ASSERT(headerFunction != nullptr);
+  ROSE_ASSERT(headerFunction->get_definition() == headerDefinition);
+  ROSE_ASSERT(headerFunction->get_name() ==
+              "rex_mixed_suppressed_header_driver");
+  SgGlobal *global = source->get_globalScope();
+  ROSE_ASSERT(global != nullptr);
+  SgAuxiliaryDeclarationList *headerOwner =
+      isSgAuxiliaryDeclarationList(headerFunction->get_parent());
+  ROSE_ASSERT(headerOwner != nullptr);
+  ROSE_ASSERT(headerOwner == global->get_auxiliary_declarations());
+  headerOwner->validate_semantic_non_output_role();
+  ROSE_ASSERT(std::count(headerOwner->get_declarations().begin(),
+                         headerOwner->get_declarations().end(),
+                         headerFunction) == 1);
+  ROSE_ASSERT(std::count(global->get_declarations().begin(),
+                         global->get_declarations().end(),
+                         headerFunction) == 0);
+  ROSE_ASSERT(headerBody->get_startOfConstruct() != nullptr);
+  ROSE_ASSERT(headerGroup->get_startOfConstruct()->get_physical_file_id() ==
+              headerBody->get_startOfConstruct()->get_physical_file_id());
+  ROSE_ASSERT(headerGroup->get_startOfConstruct()->get_physical_file_id() !=
+              global->get_startOfConstruct()->get_physical_file_id());
 
   if (const char *corruption =
           std::getenv("REX_TEST_SOURCE_GROUP_CORRUPTION")) {

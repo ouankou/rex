@@ -14,4 +14,14 @@ void foo(int a, int w, int x, int y, int z)
   varFunc(a) = fooA(bar1(w), bar2(x)) + fooB(bar3(y), bar4(z));
 }
 
+void rex_nested_comma_insertion(int a, int x) {
+  for (int index = 0; index < 1; ++index)
+    if (bar2(x))
+      ++a;
 
+  for (int index = 0; index < 1; ++index)
+    bar2(x);
+
+  if (x)
+    int value = bar2(x);
+}

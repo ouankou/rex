@@ -5,6 +5,26 @@
 
 namespace {
 
+void validateDependentFieldIdentity(SgProject *project) {
+  size_t references = 0;
+  for (SgNode *node : RoseAst(project)) {
+    auto *function = isSgTemplateFunctionDeclaration(node);
+    if (function == nullptr || function->get_name() != "rex_dependent_field" ||
+        function->get_definition() == nullptr) {
+      continue;
+    }
+    for (SgNode *child : RoseAst(function->get_definition())) {
+      if (auto *member = isSgDotExp(child)) {
+        auto *reference = isSgNonrealRefExp(member->get_rhs_operand());
+        ROSE_ASSERT(reference != nullptr);
+        ROSE_ASSERT(reference->get_symbol()->get_name() == "field");
+        ++references;
+      }
+    }
+  }
+  ROSE_ASSERT(references == 1);
+}
+
 void validateDependentMemberTypedefIdentity(SgProject *project) {
   SgTypedefDeclaration *typedef_declaration = nullptr;
   SgInitializedName *callback_parameter = nullptr;
@@ -38,11 +58,28 @@ void validateDependentMemberTypedefIdentity(SgProject *project) {
   ROSE_ASSERT(callback_parameter != nullptr);
   ROSE_ASSERT(matching_nonreal_declarations == 0);
 
-  SgTypedefType *parameter_type =
-      isSgTypedefType(callback_parameter->get_type());
+  auto *function = isSgFunctionDeclaration(callback_parameter->get_declptr());
+  ROSE_ASSERT(function != nullptr);
+  ROSE_ASSERT(function->get_parameterList() ==
+              callback_parameter->get_parent());
+  ROSE_ASSERT(function->get_args().front() == callback_parameter);
+  ROSE_ASSERT(callback_parameter->get_type() ==
+              function->get_type()->get_arguments().front());
+  auto *syntax = function->get_parameterList_syntax();
+  ROSE_ASSERT(syntax != nullptr && syntax != function->get_parameterList());
+  ROSE_ASSERT(syntax->get_parent() == function);
+  ROSE_ASSERT(syntax->get_args().size() == function->get_args().size());
+  auto *written = syntax->get_args().front();
+  ROSE_ASSERT(written != nullptr && written != callback_parameter);
+  ROSE_ASSERT(written->get_parent() == syntax &&
+              written->get_declptr() == function);
+  ROSE_ASSERT(written->get_name() == callback_parameter->get_name());
+  SgTypedefType *parameter_type = isSgTypedefType(written->get_type());
   ROSE_ASSERT(parameter_type != nullptr);
   ROSE_ASSERT(parameter_type->get_declaration() == typedef_declaration);
   ROSE_ASSERT(typedef_declaration->get_type() == parameter_type);
+  ROSE_ASSERT(SageInterface::isEquivalentType(parameter_type->get_base_type(),
+                                              callback_parameter->get_type()));
   ROSE_ASSERT(callback_parameter->get_declptr() != nullptr);
   ROSE_ASSERT(callback_parameter->get_scope() != nullptr);
 }
@@ -169,6 +206,7 @@ int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != nullptr);
   ROSE_ASSERT(frontendExitStatus(project) == 0);
+  validateDependentFieldIdentity(project);
   validateDependentMemberTypedefIdentity(project);
   validateSemanticInstantiationPopulation(project);
   return backend(project);

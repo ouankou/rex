@@ -4,15 +4,12 @@ DATA_ACCESS_FUNCTION_START
 $DATA_TYPE
 $CLASSNAME::get_$DATA() const
    {
-     ASSERT_this();
      return p_$DATA;
    }
 
 void
 $CLASSNAME::set_$DATA($DATA_TYPE $DATA)
    {
-     ASSERT_this();
-     $TEST_DATA_POINTER
      p_$DATA = $DATA;
      markAsModified();
    }

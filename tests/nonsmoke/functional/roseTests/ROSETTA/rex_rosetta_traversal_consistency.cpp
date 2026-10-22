@@ -1,3 +1,4 @@
+#include "AstConsistencyTests.h"
 #include "sage3basic.h"
 #include "sageBuilder.h"
 #include "sageInterface.h"
@@ -28,6 +29,7 @@ class TraversalConsistencyVisitor final : public ROSE_VisitTraversal {
 public:
   void visit(SgNode *node) override {
     ROSE_ASSERT(node != nullptr);
+    AstTests::validateTraversalSuccessors(node);
 
     const SgNodePtrList successors = node->get_traversalSuccessorContainer();
     const std::vector<std::string> names =
@@ -91,9 +93,25 @@ private:
 };
 
 void buildTraversalFixtures() {
-  // Materialize a builtin type whose former static builtin_type edge exposed
-  // the successor-container/count disagreement.
   (void)SageBuilder::buildIntType();
+
+  // ASSOCIATE traverses its dynamic declarations before the scalar body.
+  // Verify both zero-length and populated lists through every traversal API.
+  for (size_t associations : {size_t{0}, size_t{2}}) {
+    auto *statement = new SgAssociateStatement();
+    auto *body = SageBuilder::buildBasicBlock();
+    statement->set_body(body);
+    body->set_parent(statement);
+    for (size_t i = 0; i < associations; ++i) {
+      auto *declaration = new SgVariableDeclaration(
+          SgName("rex_association_" + std::to_string(i)),
+          SageBuilder::buildIntType(), nullptr);
+      statement->append_associate(declaration);
+    }
+    const auto successors = statement->get_traversalSuccessorContainer();
+    ROSE_ASSERT(successors.size() == associations + 1);
+    ROSE_ASSERT(successors.back() == body);
+  }
 
   SgOmpContextSelector *selector =
       new SgOmpContextSelector(SgOmpClause::e_omp_context_trait_construct);
@@ -121,7 +139,8 @@ void buildTraversalFixtures() {
 
   SgTemplateVariableDeclaration *declaration =
       new SgTemplateVariableDeclaration(SgName("rex_traversal_consistency"),
-                                        SageBuilder::buildIntType(), nullptr);
+                                        SageBuilder::buildIntType(), nullptr,
+                                        {});
   SgTemplateParameter *firstParameter = new SgTemplateParameter();
   SgTemplateParameter *secondParameter = new SgTemplateParameter();
   declaration->get_templateParameters().push_back(firstParameter);
@@ -276,7 +295,8 @@ int verifyTemplateArgumentSemanticDeclarationCopy() {
 
 [[noreturn]] void rejectAlignofMissingTypedOperand() {
   SgAlignOfOp *const malformed =
-      new SgAlignOfOp(nullptr, nullptr, SageBuilder::buildUnsignedLongType());
+      new SgAlignOfOp(nullptr, nullptr, SageBuilder::buildUnsignedLongType(),
+                      SgExpression::e_preferred_alignof, std::nullopt);
   (void)malformed->get_type();
   ROSE_ABORT();
 }
@@ -285,7 +305,8 @@ int verifyTemplateArgumentSemanticDeclarationCopy() {
   SgIntVal *const expressionOperand = SageBuilder::buildIntVal(1);
   SgAlignOfOp *const malformed =
       new SgAlignOfOp(expressionOperand, SageBuilder::buildIntType(),
-                      SageBuilder::buildUnsignedLongType());
+                      SageBuilder::buildUnsignedLongType(),
+                      SgExpression::e_preferred_alignof, std::nullopt);
   expressionOperand->set_parent(malformed);
   (void)malformed->get_type();
   ROSE_ABORT();

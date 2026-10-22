@@ -38,27 +38,25 @@ void UnparseHeadersTransformVisitor::visit(SgNode *node) {
   // put this support into the SageInterface::set_name() function (which we
   // could do later).
 
-  SgVarRefExp *varRefExp = isSgVarRefExp(node);
-  if (varRefExp != NULL) {
-    const string originalName = varRefExp->get_symbol()->get_name().getString();
-    if (originalName.find(rewriteAssignmentMarker) != string::npos) {
-      SgAssignOp *assignOp = isSgAssignOp(varRefExp->get_parent());
-      if (assignOp != NULL && assignOp->get_lhs_operand() == varRefExp) {
-        SgIntVal *intVal = isSgIntVal(assignOp->get_rhs_operand());
-        if (intVal != NULL) {
-          SgIntVal *replacement = SageBuilder::buildIntVal(2);
-          ROSE_ASSERT(replacement != NULL);
-          SageInterface::publishGeneratedSubtreeOutputOwner(replacement,
-                                                            intVal);
-          SageInterface::replaceExpression(intVal, replacement, false);
-        }
-
-        SgStatement *enclosingStatement =
-            SageInterface::getEnclosingStatement(varRefExp);
-        if (enclosingStatement != NULL) {
-          enclosingStatement->set_isModified(true);
-        }
-      }
-    }
+  // Rewrite at the owning assignment's preorder visit, before traversal
+  // enumerates its children. A visit to the left-hand reference is too late:
+  // the right-hand operand is already scheduled and replacement retires it.
+  SgAssignOp *assignOp = isSgAssignOp(node);
+  if (assignOp == nullptr)
+    return;
+  SgVarRefExp *varRefExp = isSgVarRefExp(assignOp->get_lhs_operand());
+  if (varRefExp == nullptr)
+    return;
+  const string originalName = varRefExp->get_symbol()->get_name().getString();
+  if (originalName.find(rewriteAssignmentMarker) == string::npos)
+    return;
+  if (SgIntVal *intVal = isSgIntVal(assignOp->get_rhs_operand())) {
+    SgIntVal *replacement = SageBuilder::buildIntVal(2);
+    SageInterface::publishGeneratedSubtreeOutputOwner(replacement, intVal);
+    SageInterface::replaceExpression(intVal, replacement, false);
   }
+  SgStatement *enclosingStatement =
+      SageInterface::getEnclosingStatement(assignOp);
+  ROSE_ASSERT(enclosingStatement != nullptr);
+  enclosingStatement->set_isModified(true);
 }

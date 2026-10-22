@@ -2,7 +2,13 @@
 
 #include "abiStuff.h"
 
-void SgCastExp::post_construction_initialization() {}
+void SgCastExp::post_construction_initialization() {
+  if (p_source_type != nullptr && p_source_type->has_source_prototype()) {
+    ROSE_ASSERT(p_source_type->get_parent() == nullptr ||
+                p_source_type->get_parent() == this);
+    p_source_type->set_parent(this);
+  }
+}
 
 namespace {
 
@@ -22,9 +28,7 @@ bool semanticConversionMayOwnBasePath(
 }
 
 bool isExactCastType(SgType *type) {
-  return type != nullptr && isSgTypeUnknown(type) == nullptr &&
-         isSgTypeDefault(type) == nullptr &&
-         !SageInterface::containsUnknownType(type);
+  return !SageInterface::containsUnknownType(type);
 }
 
 } // namespace
@@ -41,19 +45,24 @@ void SgCastExp::validate_semantic_conversion() const {
   SgExpression *operand = get_operand();
   if (!valid_surface || !valid_conversion || !valid_category ||
       operand == nullptr || operand->get_parent() != this ||
-      !isExactCastType(p_expression_type)) {
+      !isExactCastType(p_expression_type) ||
+      ((get_cast_type() != e_implicit_cast) != (p_source_type != nullptr)) ||
+      (p_source_type != nullptr && (!isExactCastType(p_source_type) ||
+                                    (p_source_type->has_source_prototype() &&
+                                     p_source_type->get_parent() != this)))) {
     fprintf(stderr, "REX_AST_INVARIANT[checked-cast]\n");
     fprintf(stderr,
             "REX_AST_DETAIL[checked-cast]: cast=%p surface=%d "
             "conversion=%d category=%d operand=%p operand-parent=%p "
-            "result-type=%p does not describe one exact cast\n",
+            "result-type=%p source-type=%p does not describe one exact cast\n",
             static_cast<const void *>(this), static_cast<int>(get_cast_type()),
             static_cast<int>(get_semantic_conversion_kind()),
             static_cast<int>(get_value_category()),
             static_cast<void *>(operand),
             operand != nullptr ? static_cast<void *>(operand->get_parent())
                                : nullptr,
-            static_cast<void *>(p_expression_type));
+            static_cast<void *>(p_expression_type),
+            static_cast<void *>(p_source_type));
     ROSE_ABORT();
   }
 
@@ -288,21 +297,11 @@ void SgCastExp::set_conversion_base_path(const SgTypePtrList &path) {
   p_conversion_base_path = path;
 }
 
-// DQ (6/14/2005): Modified to make enum name consistant with elsewhere in ROSE
-// (Sage III) SgCastExp::Sg_e_cast_type
 SgCastExp::cast_type_enum SgCastExp::cast_type() const { return p_cast_type; }
 
-// DQ (1/17/2008): Added set_type function since this is one of a few IR nodes
-// that require the type to be held explicitly, for all other IR nodes the type
-// is computed dynamicly.
 void SgCastExp::set_type(SgType *type) { p_expression_type = type; }
 
 SgType *SgCastExp::get_type() const {
-  // DQ (1/16/2006): In this function we want to return the stored
-  // p_expression_type. This IR node has to store the type explicitly since
-  // there is no other way to recover what the cast is TO (since the operand
-  // stored what the cast in FROM).
-
   ROSE_ASSERT(p_expression_type != NULL);
   return p_expression_type;
 }
@@ -318,53 +317,23 @@ bool SgCastExp::cast_loses_precision() const {
     type = type != nullptr ? type->stripTypedefsAndModifiers() : nullptr;
     if (type == nullptr)
       return false;
-    switch (type->variantT()) {
-    case V_SgTypeSignedChar:
-    case V_SgTypeShort:
-    case V_SgTypeSignedShort:
-    case V_SgTypeInt:
-    case V_SgTypeSignedInt:
-    case V_SgTypeLong:
-    case V_SgTypeSignedLong:
-    case V_SgTypeLongLong:
-    case V_SgTypeSignedLongLong:
-      domain.is_unsigned = false;
-      break;
-    case V_SgTypeUnsignedChar:
-    case V_SgTypeUnsignedShort:
-    case V_SgTypeUnsignedInt:
-    case V_SgTypeUnsignedLong:
-    case V_SgTypeUnsignedLongLong:
-      domain.is_unsigned = true;
-      break;
-    default:
+    if (!isSgIntegralType(type) && !isSgEnumType(type))
       return false;
-    }
-    SgProject *project = SageInterface::getProject(this);
-    if (project == nullptr)
-      return false;
-    StructLayoutInfo layout;
-    if (project->get_mode_32_bit()) {
-      I386PrimitiveTypeLayoutGenerator primitive(nullptr);
-      NonpackedTypeLayoutGenerator generator(&primitive);
-      layout = generator.layoutType(type);
-    } else {
-      X86_64PrimitiveTypeLayoutGenerator primitive(nullptr);
-      NonpackedTypeLayoutGenerator generator(&primitive);
-      layout = generator.layoutType(type);
-    }
-    if (layout.size == 0 || layout.size > 8)
-      return false;
-    domain.width = static_cast<unsigned>(layout.size * 8);
+    SageInterface::requireTargetIntegerDomain(type, this, domain.is_unsigned,
+                                              domain.width);
     return true;
   };
-  auto floating_digits = [](SgType *type) -> unsigned {
+  struct FloatingDomain {
+    unsigned precision = 0;
+    int max_exponent = 0;
+  };
+  auto floating_domain = [this](SgType *type, FloatingDomain &domain) -> bool {
     type = type != nullptr ? type->stripTypedefsAndModifiers() : nullptr;
-    if (isSgTypeFloat(type) != nullptr)
-      return 24;
-    if (isSgTypeDouble(type) != nullptr)
-      return 53;
-    return 0;
+    if (!isSgFloatingPointType(type))
+      return false;
+    SageInterface::requireTargetFloatingDomain(type, this, domain.precision,
+                                               domain.max_exponent);
+    return true;
   };
   auto unsupported = [this]() -> bool {
     fprintf(stderr,
@@ -404,21 +373,23 @@ bool SgCastExp::cast_loses_precision() const {
 
   case e_semantic_conversion_IntegralToFloating: {
     IntegralDomain source;
-    const unsigned target_digits = floating_digits(get_type());
+    FloatingDomain target;
     if (!integral_domain(get_operand()->get_type(), source) ||
-        target_digits == 0)
+        !floating_domain(get_type(), target))
       return unsupported();
     const unsigned source_digits =
         source.width - static_cast<unsigned>(!source.is_unsigned);
-    return target_digits < source_digits;
+    return target.precision < source_digits;
   }
 
   case e_semantic_conversion_FloatingCast: {
-    const unsigned source_digits = floating_digits(get_operand()->get_type());
-    const unsigned target_digits = floating_digits(get_type());
-    if (source_digits == 0 || target_digits == 0)
+    FloatingDomain source;
+    FloatingDomain target;
+    if (!floating_domain(get_operand()->get_type(), source) ||
+        !floating_domain(get_type(), target))
       return unsupported();
-    return target_digits < source_digits;
+    return target.precision < source.precision ||
+           target.max_exponent < source.max_exponent;
   }
 
   default:
@@ -431,12 +402,10 @@ bool SgCastExp::cast_loses_precision() const {
 // which is a problem in the name qualification support for C++ (interfering
 // with the token-based unparsing).
 int SgCastExp::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length;
 }
 
 void SgCastExp::set_name_qualification_length(int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);
 
@@ -444,12 +413,10 @@ void SgCastExp::set_name_qualification_length(int name_qualification_length) {
 }
 
 bool SgCastExp::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_required;
 }
 
 void SgCastExp::set_type_elaboration_required(bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);
 
@@ -457,13 +424,11 @@ void SgCastExp::set_type_elaboration_required(bool type_elaboration_required) {
 }
 
 bool SgCastExp::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required;
 }
 
 void SgCastExp::set_global_qualification_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
 
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);
@@ -522,13 +487,11 @@ std::string SgCastExp::cast_type_to_string(enum cast_type_enum cast_type) {
 // unparsing).
 int SgCastExp::get_name_qualification_for_pointer_to_member_class_length()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_for_pointer_to_member_class_length;
 }
 
 void SgCastExp::set_name_qualification_for_pointer_to_member_class_length(
     int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);
 
@@ -538,13 +501,11 @@ void SgCastExp::set_name_qualification_for_pointer_to_member_class_length(
 
 bool SgCastExp::get_type_elaboration_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_for_pointer_to_member_class_required;
 }
 
 void SgCastExp::set_type_elaboration_for_pointer_to_member_class_required(
     bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);
 
@@ -554,13 +515,11 @@ void SgCastExp::set_type_elaboration_for_pointer_to_member_class_required(
 
 bool SgCastExp::get_global_qualification_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_for_pointer_to_member_class_required;
 }
 
 void SgCastExp::set_global_qualification_for_pointer_to_member_class_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
 
   // This can't be called by the name qualification API (see test2015_26.C).
   // set_isModified(true);

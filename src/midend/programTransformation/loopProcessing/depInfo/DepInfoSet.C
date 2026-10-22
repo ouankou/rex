@@ -1,5 +1,3 @@
-#include <stdlib.h>
-
 #include "DepInfoSet.h"
 
 #include "DepRel.h"
@@ -14,20 +12,8 @@ DepInfoConstIterator DepInfoSet ::GetConstIterator() const {
         DepInfoSetIterator(ConstRef()));
 }
 
-DepInfoUpdateIterator DepInfoSet ::GetUpdateIterator() {
-  if (ConstPtr() == 0)
-    return DepInfoUpdateIterator();
-  else
-    return new IteratorImplTemplate<DepInfo &, DepInfoSetIterator>(
-        DepInfoSetIterator(UpdateRef()));
-}
-
 DepInfoSet::DepInfoSet()
     : CountRefHandle<DepInfoSetImpl>(new DepInfoSetImpl()) {}
-
-void DepInfoSet ::UpdateDepInfo(bool (*Update)(DepInfo &info)) {
-  UpdateRef().UpdateElem(Update);
-}
 
 int DepInfoSet ::NumOfDeps() const { return ConstRef().NumberOfEntries(); }
 

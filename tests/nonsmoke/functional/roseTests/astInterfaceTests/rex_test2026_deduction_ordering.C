@@ -1,42 +1,5 @@
 #include "rose.h"
 
-static bool has_two_type_args(const SgTemplateArgumentPtrList &args,
-                              const std::string &first,
-                              const std::string &second) {
-  if (args.size() != 2) {
-    return false;
-  }
-  auto *first_arg = args[0];
-  auto *second_arg = args[1];
-  if (first_arg == nullptr || second_arg == nullptr) {
-    return false;
-  }
-  if (first_arg->get_argumentType() != SgTemplateArgument::type_argument ||
-      second_arg->get_argumentType() != SgTemplateArgument::type_argument) {
-    return false;
-  }
-  std::string first_type = first_arg->get_type()->unparseToString();
-  std::string second_type = second_arg->get_type()->unparseToString();
-  return first_type.find(first) != std::string::npos &&
-         second_type.find(second) != std::string::npos;
-}
-
-static bool has_one_type_arg(const SgTemplateArgumentPtrList &args,
-                             const std::string &expected) {
-  if (args.size() != 1) {
-    return false;
-  }
-  auto *arg = args[0];
-  if (arg == nullptr) {
-    return false;
-  }
-  if (arg->get_argumentType() != SgTemplateArgument::type_argument) {
-    return false;
-  }
-  std::string type_str = arg->get_type()->unparseToString();
-  return type_str.find(expected) != std::string::npos;
-}
-
 int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   project->skipfinalCompileStep(true);
@@ -56,7 +19,13 @@ int main(int argc, char *argv[]) {
     if (tmpl_name != "Box") {
       continue;
     }
-    if (!has_two_type_args(inst->get_templateArguments(), "double", "int")) {
+    const auto &arguments = inst->get_semanticTemplateArguments();
+    if (arguments.size() != 2 || arguments[0] == nullptr ||
+        arguments[1] == nullptr ||
+        arguments[0]->get_argumentType() != SgTemplateArgument::type_argument ||
+        arguments[1]->get_argumentType() != SgTemplateArgument::type_argument ||
+        isSgTypeDouble(arguments[0]->get_type()) == nullptr ||
+        isSgTypeInt(arguments[1]->get_type()) == nullptr) {
       continue;
     }
     SgDeclarationStatement *spec = inst->get_specializedTemplateDeclaration();
@@ -73,9 +42,16 @@ int main(int argc, char *argv[]) {
   }
 
   ROSE_ASSERT(partial_inst != nullptr);
-  ROSE_ASSERT(!partial_inst->get_deducedTemplateArguments().empty());
-  ROSE_ASSERT(
-      has_one_type_arg(partial_inst->get_deducedTemplateArguments(), "double"));
+  ROSE_ASSERT(partial_inst->get_templateArguments().empty());
+  for (SgTemplateArgument *argument :
+       partial_inst->get_semanticTemplateArguments())
+    ROSE_ASSERT(argument->get_parent() == partial_inst);
+  const auto &deduced = partial_inst->get_deducedTemplateArguments();
+  ROSE_ASSERT(deduced.size() == 1 && deduced[0] != nullptr);
+  ROSE_ASSERT(deduced[0]->get_parent() == partial_inst);
+  ROSE_ASSERT(deduced[0]->get_argumentType() ==
+              SgTemplateArgument::type_argument);
+  ROSE_ASSERT(isSgTypeDouble(deduced[0]->get_type()) != nullptr);
 
   AstTests::runAllTests(project);
   return backend(project);

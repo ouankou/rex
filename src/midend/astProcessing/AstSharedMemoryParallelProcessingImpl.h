@@ -3,21 +3,8 @@
 #define ASTSHAREDMEMORYPARALLELPROCESSING_C
 
 #include "rosePublicConfig.h"
-#ifdef _REENTRANT // Does user want multi-thread support? (e.g., g++ -pthread)
-#ifdef ROSE_HAVE_PTHREAD_H // POSIX threads are available?
-#include <pthread.h>
-#else
-// This should all be switched to a portable threading abstraction instead.
-#warning "POSIX threads are unavailable on this platform."
-#endif
-#endif
 
-// Perhaps this code should be fixed so it works on a single thread when
-// multi-thread support is disabled by the user. Until then, I am commenting out
-// this entire file when multi-threading support is not configured. [Robb P.
-// Matzke 2015-03-14]
-#ifdef _REENTRANT // Does the user want multi-threaded support? (e.g., g++
-                  // -pthread)
+#ifdef ROSE_HAVE_PTHREAD_H
 
 #include "AstSharedMemoryParallelProcessing.h"
 
@@ -68,7 +55,6 @@ void AstSharedMemoryParallelizableTopDownBottomUpProcessing<
 
   // signal that we are done
   if (runningParallelTraversal) {
-    signalFinish();
     // clear the flag so subsequent traversals can be non-parallel
     runningParallelTraversal = false;
   }
@@ -141,9 +127,8 @@ AstSharedMemoryParallelTopDownBottomUpProcessing<I, S>::traverseInParallel(
       numberOfThreads);
   size_t begin = 0, end;
   for (i = 0; i < numberOfThreads; i++) {
-    end = begin + numberOfTraversals / numberOfThreads;
-    if (end > numberOfTraversals)
-      end = numberOfTraversals;
+    end = begin + numberOfTraversals / numberOfThreads +
+          (i < numberOfTraversals % numberOfThreads);
 
     parallelTraversals[i] =
         new AstSharedMemoryParallelizableTopDownBottomUpProcessing<I, S>(
@@ -154,40 +139,37 @@ AstSharedMemoryParallelTopDownBottomUpProcessing<I, S>::traverseInParallel(
     begin = end;
   }
 
-#if defined(_REENTRANT) &&                                                     \
-    defined(ROSE_HAVE_PTHREAD_H) // user wants multi-thread support and POSIX
-                                 // threads are available?
   // Start a thread for each of the parallelizable traversals with its share
   // of the initial inherited attributes.
   pthread_t *threads = new pthread_t[numberOfThreads];
   for (i = 0; i < numberOfThreads; i++) {
-    pthread_create(
+    const int status = pthread_create(
         &threads[i], NULL, parallelTopDownBottomUpProcessingThread<I, S>,
         new AstSharedMemoryParallelTopDownBottomUpThreadArgs<I, S>(
             parallelTraversals[i], basenode, parallelInheritedValues[i]));
+    ROSE_ASSERT(status == 0);
   }
-
-  // Main "event loop" for the "master" thread: Simply wait for the
-  // condition that is signalled when a thread is completely done with its
-  // traversal. The counter tells us when we are finished.
-  pthread_mutex_lock(syncInfo.mutex);
-  while (*syncInfo.finishedThreads < numberOfThreads)
-    pthread_cond_wait(syncInfo.threadFinishedEvent, syncInfo.mutex);
-  pthread_mutex_unlock(syncInfo.mutex);
 
   // Grab the results from each traversal.
   std::vector<SynthesizedAttributeTypeList *> finalResults(numberOfThreads);
-  for (i = 0; i < numberOfThreads; i++)
-    pthread_join(threads[i], (void **)&finalResults[i]);
+  for (i = 0; i < numberOfThreads; i++) {
+    void *result = nullptr;
+    const int status = pthread_join(threads[i], &result);
+    ROSE_ASSERT(status == 0);
+    finalResults[i] = static_cast<SynthesizedAttributeTypeList *>(result);
+  }
   delete[] threads;
-#endif
 
   // Flatten the nested list of traversal results.
   SynthesizedAttributeTypeList *flatFinalResults =
       new SynthesizedAttributeTypeList;
-  for (i = 0; i < numberOfThreads; i++)
+  for (i = 0; i < numberOfThreads; i++) {
     std::copy(finalResults[i]->begin(), finalResults[i]->end(),
               std::back_inserter(*flatFinalResults));
+    delete finalResults[i];
+    delete parallelInheritedValues[i];
+    delete parallelTraversals[i];
+  }
 
   // Done! Return the final results.
   return flatFinalResults;
@@ -209,27 +191,14 @@ AstSharedMemoryParallelTopDownBottomUpProcessing<I, S>::
 template <class I, class S>
 void AstSharedMemoryParallelTopDownBottomUpProcessing<
     I, S>::set_numberOfThreads(size_t threads) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
+  ROSE_ASSERT(threads > 0);
   numberOfThreads = threads;
-#endif
 }
 
 template <class I, class S>
 void AstSharedMemoryParallelTopDownBottomUpProcessing<
     I, S>::set_synchronizationWindowSize(size_t windowSize) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
   synchronizationWindowSize = windowSize;
-#endif
 }
 
 // parallel TOP DOWN implementation
@@ -273,7 +242,6 @@ void AstSharedMemoryParallelizableTopDownProcessing<I>::atTraversalEnd() {
 
   // signal that we are done
   if (runningParallelTraversal) {
-    signalFinish();
     // clear the flag so subsequent traversals can be non-parallel
     runningParallelTraversal = false;
   }
@@ -343,9 +311,8 @@ void AstSharedMemoryParallelTopDownProcessing<I>::traverseInParallel(
       numberOfThreads);
   size_t begin = 0, end;
   for (i = 0; i < numberOfThreads; i++) {
-    end = begin + numberOfTraversals / numberOfThreads;
-    if (end > numberOfTraversals)
-      end = numberOfTraversals;
+    end = begin + numberOfTraversals / numberOfThreads +
+          (i < numberOfTraversals % numberOfThreads);
 
     parallelTraversals[i] =
         new AstSharedMemoryParallelizableTopDownProcessing<I>(
@@ -360,25 +327,23 @@ void AstSharedMemoryParallelTopDownProcessing<I>::traverseInParallel(
   // of the initial inherited attributes.
   pthread_t *threads = new pthread_t[numberOfThreads];
   for (i = 0; i < numberOfThreads; i++) {
-    pthread_create(
+    const int status = pthread_create(
         &threads[i], NULL, parallelTopDownProcessingThread<I>,
         new AstSharedMemoryParallelTopDownThreadArgs<I>(
             parallelTraversals[i], basenode, parallelInheritedValues[i]));
+    ROSE_ASSERT(status == 0);
   }
 
-  // Main "event loop" for the "master" thread: Simply wait for the
-  // condition that is signalled when a thread is completely done with its
-  // traversal. The counter tells us when we are finished.
-  pthread_mutex_lock(syncInfo.mutex);
-  while (*syncInfo.finishedThreads < numberOfThreads)
-    pthread_cond_wait(syncInfo.threadFinishedEvent, syncInfo.mutex);
-  pthread_mutex_unlock(syncInfo.mutex);
-
-  // Grab the results from each traversal.
-  std::vector<void *> finalResults(numberOfThreads);
-  for (i = 0; i < numberOfThreads; i++)
-    pthread_join(threads[i], &finalResults[i]);
+  for (i = 0; i < numberOfThreads; i++) {
+    const int status = pthread_join(threads[i], nullptr);
+    ROSE_ASSERT(status == 0);
+  }
   delete[] threads;
+
+  for (i = 0; i < numberOfThreads; i++) {
+    delete parallelInheritedValues[i];
+    delete parallelTraversals[i];
+  }
 
   // Done!
 }
@@ -399,27 +364,14 @@ AstSharedMemoryParallelTopDownProcessing<I>::
 template <class I>
 void AstSharedMemoryParallelTopDownProcessing<I>::set_numberOfThreads(
     size_t threads) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
+  ROSE_ASSERT(threads > 0);
   numberOfThreads = threads;
-#endif
 }
 
 template <class I>
 void AstSharedMemoryParallelTopDownProcessing<I>::set_synchronizationWindowSize(
     size_t windowSize) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
   synchronizationWindowSize = windowSize;
-#endif
 }
 
 // parallel BOTTOM UP implementation
@@ -466,7 +418,6 @@ void AstSharedMemoryParallelizableBottomUpProcessing<S>::atTraversalEnd() {
 
   // signal that we are done
   if (runningParallelTraversal) {
-    signalFinish();
     // clear the flag so subsequent traversals can be non-parallel
     runningParallelTraversal = false;
   }
@@ -524,9 +475,8 @@ AstSharedMemoryParallelBottomUpProcessing<S>::traverseInParallel(
   ParallelizableTraversalPtrList parallelTraversals(numberOfThreads);
   size_t begin = 0, end;
   for (i = 0; i < numberOfThreads; i++) {
-    end = begin + numberOfTraversals / numberOfThreads;
-    if (end > numberOfTraversals)
-      end = numberOfTraversals;
+    end = begin + numberOfTraversals / numberOfThreads +
+          (i < numberOfTraversals % numberOfThreads);
 
     parallelTraversals[i] =
         new AstSharedMemoryParallelizableBottomUpProcessing<S>(
@@ -538,31 +488,32 @@ AstSharedMemoryParallelBottomUpProcessing<S>::traverseInParallel(
   // Start a thread for each of the parallelizable traversals.
   pthread_t *threads = new pthread_t[numberOfThreads];
   for (i = 0; i < numberOfThreads; i++) {
-    pthread_create(&threads[i], NULL, parallelBottomUpProcessingThread<S>,
-                   new AstSharedMemoryParallelBottomUpThreadArgs<S>(
-                       parallelTraversals[i], basenode));
+    const int status =
+        pthread_create(&threads[i], NULL, parallelBottomUpProcessingThread<S>,
+                       new AstSharedMemoryParallelBottomUpThreadArgs<S>(
+                           parallelTraversals[i], basenode));
+    ROSE_ASSERT(status == 0);
   }
-
-  // Main "event loop" for the "master" thread: Simply wait for the
-  // condition that is signalled when a thread is completely done with its
-  // traversal. The counter tells us when we are finished.
-  pthread_mutex_lock(syncInfo.mutex);
-  while (*syncInfo.finishedThreads < numberOfThreads)
-    pthread_cond_wait(syncInfo.threadFinishedEvent, syncInfo.mutex);
-  pthread_mutex_unlock(syncInfo.mutex);
 
   // Grab the results from each traversal.
   std::vector<SynthesizedAttributeTypeList *> finalResults(numberOfThreads);
-  for (i = 0; i < numberOfThreads; i++)
-    pthread_join(threads[i], (void **)&finalResults[i]);
+  for (i = 0; i < numberOfThreads; i++) {
+    void *result = nullptr;
+    const int status = pthread_join(threads[i], &result);
+    ROSE_ASSERT(status == 0);
+    finalResults[i] = static_cast<SynthesizedAttributeTypeList *>(result);
+  }
   delete[] threads;
 
   // Flatten the nested list of traversal results.
   SynthesizedAttributeTypeList *flatFinalResults =
       new SynthesizedAttributeTypeList;
-  for (i = 0; i < numberOfThreads; i++)
+  for (i = 0; i < numberOfThreads; i++) {
     std::copy(finalResults[i]->begin(), finalResults[i]->end(),
               std::back_inserter(*flatFinalResults));
+    delete finalResults[i];
+    delete parallelTraversals[i];
+  }
 
   // Done! Return the final results.
   return flatFinalResults;
@@ -584,27 +535,14 @@ AstSharedMemoryParallelBottomUpProcessing<S>::
 template <class S>
 void AstSharedMemoryParallelBottomUpProcessing<S>::set_numberOfThreads(
     size_t threads) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
+  ROSE_ASSERT(threads > 0);
   numberOfThreads = threads;
-#endif
 }
 
 template <class S>
 void AstSharedMemoryParallelBottomUpProcessing<
     S>::set_synchronizationWindowSize(size_t windowSize) {
-#if !USE_ROSE
-  // DQ (11/3/2011): legacy frontend compilains about this (but GNU allowed it,
-  // I think that legacy frontend might be correct since it is a private
-  // variable.  But since we are only trying to compile ROSE with ROSE (using
-  // the new legacy frontend 4.3 front-end as a tests) we can just skip this
-  // case for now.
   synchronizationWindowSize = windowSize;
-#endif
 }
 
 #endif

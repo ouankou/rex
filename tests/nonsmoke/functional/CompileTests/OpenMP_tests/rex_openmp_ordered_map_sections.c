@@ -22,6 +22,19 @@ int rex_openmp_multidimensional_map_sections(void) {
   return values[1][0] + values[3][9];
 }
 
+int rex_openmp_typedef_multidimensional_map_sections(void) {
+  typedef int RexRow[10];
+  RexRow values[8] = {{0}};
+
+#pragma omp target map(tofrom : values[1 : 2][ : ])
+  {
+    values[1][0] = 19;
+    values[2][9] = 43;
+  }
+
+  return values[1][0] + values[2][9];
+}
+
 int rex_openmp_pointer_to_array_map_section(int (*values)[10]) {
 #pragma omp target map(tofrom : values[0 : 2][0 : ])
   {

@@ -141,8 +141,9 @@ std::string PtrAnal::Get_VarName(AstInterface &fa, const AstNodePtr &rhs) {
       res = readname;
     } else
       res = Local_GetConstName(fa, readname);
-  } else if (fa.IsUnaryOp(rhs) || fa.IsBinaryOp(rhs) ||
-             fa.IsFunctionCall(rhs)) {
+  } else if (isSgSizeOfOp(rhs.get_ptr()) != nullptr ||
+             isSgCommaOpExp(rhs.get_ptr()) != nullptr || fa.IsUnaryOp(rhs) ||
+             fa.IsBinaryOp(rhs) || fa.IsFunctionCall(rhs)) {
     readname = Local_GetVarName(fa, rhs);
     ProcessExpression(fa, readname, rhs);
     res = readname;
@@ -201,7 +202,25 @@ void PtrAnal::ProcessExpression(AstInterface &fa, const std::string &_modname,
       return;
     }
   }
-  if (fa.IsFunctionCall(rhs, &p, &args, &out)) {
+  if (auto *comma = isSgCommaOpExp(rhs.get_ptr())) {
+    ROSE_ASSERT(comma->get_lhs_operand() != nullptr &&
+                comma->get_rhs_operand() != nullptr);
+    (void)Get_VarName(fa, comma->get_lhs_operand());
+    const std::string result = Get_VarName(fa, comma->get_rhs_operand());
+    if (modname.empty())
+      modname = Local_GetVarName(fa, rhs);
+    Stmt statement = x_eq_y(modname, result);
+    stmts_pushback(stmts, statement);
+    namemap[rhs.get_ptr()] = VarRef(statement, modname);
+  } else if (auto *operation = isSgSizeOfOp(rhs.get_ptr())) {
+    if (modname.empty())
+      modname = Local_GetVarName(fa, rhs);
+    if (operation->expression_operand_is_evaluated())
+      (void)Get_VarName(fa, operation->get_operand_expr());
+    Stmt statement = x_eq_op_y(OTHER, modname, {});
+    stmts_pushback(stmts, statement);
+    namemap[rhs.get_ptr()] = VarRef(statement, modname);
+  } else if (fa.IsFunctionCall(rhs, &p, &args, &out)) {
     typedef std::pair<AstNodePtr, std::string> RefRec;
     std::list<RefRec> refs;
     std::string fname = Get_VarName(fa, p);

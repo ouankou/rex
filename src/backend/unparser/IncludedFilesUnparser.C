@@ -7,7 +7,6 @@
 #include <sstream>
 #include <tuple>
 
-#include "CollectionHelper.h"
 #include "astJson/sageAstJson.h"
 
 #include "FileHelper.h"
@@ -75,8 +74,7 @@ bool isExactPrimaryPhysicalFile(const SgProject *project, int physicalFileId,
     if (sourceInfo->get_physical_file_id() != physicalFileId) {
       continue;
     }
-    const string sourcePhysicalFile = FileHelper::normalizePathIfPossible(
-        sourceInfo->get_physical_filename());
+    const string sourcePhysicalFile = sourceInfo->get_physical_filename();
     if (sourcePhysicalFile != normalizedFileName) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[%s]: physical=%d maps to both %s and "
@@ -156,6 +154,15 @@ bool isExactlyAuxiliaryOwned(SgNode *node, const char *contract) {
       ROSE_ABORT();
     }
     return declarationOwner->get_nonreal_decl_scope() == declarationScope;
+  }
+
+  if (SgFunctionParameterScope *parameterScope =
+          isSgFunctionParameterScope(node)) {
+    ROSE_ASSERT(
+        parameterScope->get_parent() != nullptr &&
+        parameterScope->get_scope() != nullptr &&
+        SageInterface::hasSemanticOnlyFrontendSourcePosition(parameterScope));
+    return true;
   }
 
   set<SgNode *> visited;
@@ -732,12 +739,21 @@ vector<SgLocatedNode *> queryLocatedNodesWithFileInfo(SgScopeStatement *scope,
   return locatedNodes;
 }
 
-void insertMaterializedSourceFile(map<string, SgSourceFile *> &sourceFiles,
+bool insertMaterializedSourceFile(map<string, SgSourceFile *> &sourceFiles,
                                   SgSourceFile *sourceFile,
                                   const char *inventory) {
   ASSERT_not_null(sourceFile);
-  const string normalizedFileName =
-      FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+  if (sourceFile->get_isHeaderFile()) {
+    auto *include = sourceFile->get_associated_include_file();
+    ROSE_ASSERT(include != nullptr && !include->get_isRootSourceFile() &&
+                include->get_source_file() == sourceFile);
+    include->validateIncludeOwnership();
+    auto *unit = include->get_source_file_of_translation_unit();
+    ROSE_ASSERT(unit != nullptr && !unit->get_isHeaderFile());
+    if (unit->get_skip_unparse() || !unit->get_unparseHeaderFiles())
+      return false;
+  }
+  const string normalizedFileName = sourceFile->getFileName();
   if (normalizedFileName.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[header-source]: inventory=%s source=%p "
@@ -755,6 +771,7 @@ void insertMaterializedSourceFile(map<string, SgSourceFile *> &sourceFiles,
             static_cast<void *>(sourceFile));
     ROSE_ABORT();
   }
+  return true;
 }
 
 bool scopeContainsPhysicalFileOutput(SgScopeStatement *scope,
@@ -795,8 +812,7 @@ bool scopeContainsPhysicalFileOutput(SgScopeStatement *scope,
               static_cast<void *>(statement), statement->class_name().c_str());
       ROSE_ABORT();
     }
-    const string nodeFileName = FileHelper::normalizePathIfPossible(
-        fileInfo->getFilenameFromID(fileInfo->get_physical_file_id()));
+    const string nodeFileName = fileInfo->get_physical_filename();
     if (nodeFileName == normalizedFileName) {
       return true;
     }
@@ -847,8 +863,7 @@ bool locatedNodeOwnsPhysicalFilePreprocessing(
               static_cast<void *>(located), located->class_name().c_str());
       ROSE_ABORT();
     }
-    const string recordFileName = FileHelper::normalizePathIfPossible(
-        recordInfo->getFilenameFromID(recordInfo->get_physical_file_id()));
+    const string recordFileName = recordInfo->get_physical_filename();
     if (recordFileName == normalizedFileName) {
       return true;
     }
@@ -900,8 +915,7 @@ HeaderOccurrenceContract buildHeaderOccurrenceContract(
         info->get_physical_file_occurrence_id() != occurrence) {
       return false;
     }
-    return FileHelper::normalizePathIfPossible(info->getFilenameFromID(
-               info->get_physical_file_id())) == normalizedFileName;
+    return info->get_physical_filename() == normalizedFileName;
   };
 
   HeaderOccurrenceContract contract;
@@ -963,8 +977,7 @@ HeaderOccurrenceContract buildHeaderOccurrenceContract(
       if (recordInfo == nullptr ||
           recordInfo->get_physical_file_occurrence_id() != occurrence ||
           recordInfo->get_physical_file_id() < 0 ||
-          FileHelper::normalizePathIfPossible(recordInfo->getFilenameFromID(
-              recordInfo->get_physical_file_id())) != normalizedFileName) {
+          recordInfo->get_physical_filename() != normalizedFileName) {
         continue;
       }
       const auto rewrite = includeRewrites.find(record);
@@ -1010,8 +1023,7 @@ void collectIncludeTreeFiles(SgIncludeFile *includeTreeRoot,
     if (!visited.insert(includeFile).second)
       continue;
 
-    const string includeFileName =
-        FileHelper::normalizePathIfPossible(includeFile->get_filename());
+    const string includeFileName = includeFile->get_filename();
     if (includeFileName.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[include-tree]: include-file node %p has "
@@ -1023,8 +1035,7 @@ void collectIncludeTreeFiles(SgIncludeFile *includeTreeRoot,
 
     SgSourceFile *includedSourceFile = includeFile->get_source_file();
     if (includedSourceFile != nullptr) {
-      const string sourceFileName = FileHelper::normalizePathIfPossible(
-          includedSourceFile->getFileName());
+      const string sourceFileName = includedSourceFile->getFileName();
       if (sourceFileName.empty()) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[include-tree]: source-file node %p "
@@ -1070,8 +1081,7 @@ void buildIncludeTreeParentMap(
     if (!visited.insert(includingFile).second)
       continue;
 
-    const string includingFileName =
-        FileHelper::normalizePathIfPossible(includingFile->get_filename());
+    const string includingFileName = includingFile->get_filename();
     if (includingFileName.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[include-tree]: including-file node %p "
@@ -1094,8 +1104,7 @@ void buildIncludeTreeParentMap(
 
       worklist.push_back(includedFile);
 
-      const string includedFileName =
-          FileHelper::normalizePathIfPossible(includedFile->get_filename());
+      const string includedFileName = includedFile->get_filename();
       if (includedFileName.empty()) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[include-tree]: included-file node %p "
@@ -1122,8 +1131,7 @@ bool isParentRelativeToRoot(const std::filesystem::path &relativePath) {
 
 bool isProjectInputFile(SgProject *project, const string &absoluteFileName) {
   ASSERT_not_null(project);
-  const string normalizedFileName =
-      FileHelper::normalizePathIfPossible(absoluteFileName);
+  const string &normalizedFileName = absoluteFileName;
   if (normalizedFileName.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[input-path]: cannot classify an empty "
@@ -1142,8 +1150,7 @@ bool isProjectInputFile(SgProject *project, const string &absoluteFileName) {
               index);
       ROSE_ABORT();
     }
-    const string inputFileName =
-        FileHelper::normalizePathIfPossible(file->getFileName());
+    const string inputFileName = file->getFileName();
     if (inputFileName.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[header-project]: project input %zu has "
@@ -1171,10 +1178,9 @@ bool isProjectInputFile(SgProject *project, const string &absoluteFileName) {
 string projectInputRelativeOutputPath(SgProject *project,
                                       const string &absoluteFileName) {
   ASSERT_not_null(project);
-  const string normalizedInput =
-      FileHelper::normalizePathIfPossible(absoluteFileName);
-  const string normalizedApplicationRoot = FileHelper::normalizePathIfPossible(
-      project->get_applicationRootDirectory());
+  const string &normalizedInput = absoluteFileName;
+  const string &normalizedApplicationRoot =
+      project->get_applicationRootDirectory();
   if (normalizedInput.empty() || normalizedApplicationRoot.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[input-path]: input=%s application-root=%s "
@@ -1213,8 +1219,7 @@ requireExactIncludedHeaderEdge(const string &absoluteFileName,
                                const map<string, SgSourceFile *> &sourceFiles,
                                const char *operation) {
   ASSERT_not_null(operation);
-  const string normalizedFileName =
-      FileHelper::normalizePathIfPossible(absoluteFileName);
+  const string &normalizedFileName = absoluteFileName;
   if (normalizedFileName.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[header-include-graph]: operation=%s "
@@ -1232,8 +1237,7 @@ requireExactIncludedHeaderEdge(const string &absoluteFileName,
     ROSE_ABORT();
   }
   SgSourceFile *sourceFile = sourceEntry->second;
-  const string sourceFileName =
-      FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+  const string sourceFileName = sourceFile->getFileName();
   if (sourceFileName != normalizedFileName) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[header-include-graph]: operation=%s "
@@ -1252,8 +1256,7 @@ requireExactIncludedHeaderEdge(const string &absoluteFileName,
             static_cast<void *>(sourceFile));
     ROSE_ABORT();
   }
-  const string includeFileName =
-      FileHelper::normalizePathIfPossible(includeFile->get_filename());
+  const string includeFileName = includeFile->get_filename();
   if (includeFileName != normalizedFileName ||
       includeFile->get_source_file() != sourceFile) {
     fprintf(stderr,
@@ -1324,8 +1327,7 @@ requireExactIncludedHeaderEdge(const string &absoluteFileName,
   // populateUnparseMap() and getCopiedFileOutputPath() normalize the complete
   // include chain and hard-fail if it escapes the configured output root.
 
-  const string parentFileName =
-      FileHelper::normalizePathIfPossible(parentIncludeFile->get_filename());
+  const string parentFileName = parentIncludeFile->get_filename();
   if (parentFileName.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[header-include-graph]: operation=%s "
@@ -1357,11 +1359,7 @@ string makeRelativeOutputPath(const string &directory, const string &fileName) {
 const string IncludedFilesUnparser::defaultUnparseFolderName =
     "_rose_unparsed_headers_";
 
-// It is needed because otherwise, the default destructor breaks something.
-
-IncludedFilesUnparser::~IncludedFilesUnparser() {
-  // do nothing
-}
+IncludedFilesUnparser::~IncludedFilesUnparser() = default;
 
 IncludedFilesUnparser::IncludedFilesUnparser(SgProject *projectNode) {
   ASSERT_not_null(projectNode);
@@ -1383,15 +1381,10 @@ map<string, unsigned int> IncludedFilesUnparser::getUnparseOccurrenceMap() {
 }
 
 map<string, SgSourceFile *> IncludedFilesUnparser::getUnparseSourceFileMap() {
-  // DQ (9/7/2018): Added to support retrival of SgSourceFile built in the
-  // frontend.
   return unparseSourceFileMap;
 }
 
-set<string> IncludedFilesUnparser::getFilesToCopy() {
-  // DQ (11/19/2018): Added access function.
-  return filesToCopy;
-}
+set<string> IncludedFilesUnparser::getFilesToCopy() { return filesToCopy; }
 
 const set<string> &
 IncludedFilesUnparser::getFilesWithMarkedTransformations() const {
@@ -1418,13 +1411,11 @@ list<string> IncludedFilesUnparser::getIncludeCompilerOptions() {
   return includeCompilerOptions;
 }
 
-// void IncludedFilesUnparser::unparse()
 void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
   // This function does not unparse any files, but identified which included
   // files will require unparsing (in addition to the original input source
   // file).
 
-  // DQ (4/6/2020): Added assertion.
   ASSERT_not_null(projectNode);
   SgSourceFile *planningSource =
       requireHeaderPlanningSource(projectNode, "header-project");
@@ -1435,16 +1426,6 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     IncludingPreprocessingInfosCollector collector(projectNode);
     includingPreprocessingInfos = collector.collect();
   }
-
-#define DEBUG_FIGURE_OUT 0
-
-#if DEBUG_FIGURE_OUT
-  printf("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
-  printf("In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): \n");
-  printf(" --- projectNode->usingDeferredTransformations = %s \n",
-         projectNode->get_usingDeferredTransformations() ? "true" : "false");
-  printf("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
-#endif
 
   workingDirectory =
       FileHelper::normalizePath(planningSource->getWorkingDirectory());
@@ -1463,11 +1444,7 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
           workingDirectory, userSpecifiedUnparseRootFolder);
     }
 
-    // Check that the specified location does not exist or is empty. This is
-    // necessary to avoid data loss since this folder will be erased.
     if (FileHelper::isNotEmptyFolder(unparseRootPath)) {
-      // DQ (1/29/2018): This case happens when running ROSE from the command
-      // line and maybe we should automate the removal of this directory.
       cout << "Please make sure that the root folder for header files "
               "unparsing does not exist or is empty:"
            << unparseRootPath << endl;
@@ -1475,15 +1452,11 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     }
   }
 
-  // Should be erased completely at every run to avoid name collisions with
-  // previous runs.
-  FileHelper::eraseFolder(unparseRootPath);
   filesWithMarkedTransformations.clear();
   filesWithUpdatedIncludePaths.clear();
 
   // collect immediately affected files as well as all traversed files
 
-  // DQ (4/6/2020): Added header file unparsing feature specific debug level.
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("unparseAllHeaderFiles == false: calling traversal to determine "
            "modified header files \n");
@@ -1512,8 +1485,7 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
       continue;
     }
 
-    string normalizedFileName =
-        FileHelper::normalizePathIfPossible(sourceFile->getFileName());
+    string normalizedFileName = sourceFile->getFileName();
     if (normalizedFileName.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[header-path]: source-file node %p has "
@@ -1522,8 +1494,10 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
       ROSE_ABORT();
     }
 
+    if (!insertMaterializedSourceFile(unparseSourceFileMap, sourceFile,
+                                      "token-map"))
+      continue;
     allFiles.insert(normalizedFileName);
-    insertMaterializedSourceFile(unparseSourceFileMap, sourceFile, "token-map");
 
     SgScopeStatement *globalScope = sourceFile->get_globalScope();
     if (globalScope != NULL && globalScope->get_parent() == sourceFile &&
@@ -1545,7 +1519,6 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     }
   }
 
-  // DQ (4/6/2020): Added header file unparsing feature specific debug level.
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("List allFiles list: processing parent include files chain: (size = "
            "%zu): \n",
@@ -1581,13 +1554,8 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
         printf("   --- allFiles entry = %s \n", filename.c_str());
       }
 
-      const string normalizedFilename =
-          FileHelper::normalizePathIfPossible(filename);
-
       map<string, set<string>>::const_iterator includeTreeEntry =
-          includedToIncludingFiles.find(normalizedFilename);
-      if (includeTreeEntry == includedToIncludingFiles.end())
-        includeTreeEntry = includedToIncludingFiles.find(filename);
+          includedToIncludingFiles.find(filename);
       if (includeTreeEntry != includedToIncludingFiles.end()) {
         for (const string &includingFileName : includeTreeEntry->second) {
           if (includingFileName.empty()) {
@@ -1602,9 +1570,7 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
       }
 
       map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
-          includingPreprocessingInfosMap.find(normalizedFilename);
-      if (mapEntry == includingPreprocessingInfosMap.end())
-        mapEntry = includingPreprocessingInfosMap.find(filename);
+          includingPreprocessingInfosMap.find(filename);
       if (mapEntry != includingPreprocessingInfosMap.end()) {
         const set<PreprocessingInfo *> &includingPreprocessingInfos =
             mapEntry->second;
@@ -1613,9 +1579,9 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
                      includingPreprocessingInfos.begin();
              includingPreprocessingInfoPtr != includingPreprocessingInfos.end();
              includingPreprocessingInfoPtr++) {
-          string normalizedIncludingFileName =
-              FileHelper::getNormalizedContainingFileName(
-                  *includingPreprocessingInfoPtr);
+          string normalizedIncludingFileName = (*includingPreprocessingInfoPtr)
+                                                   ->get_file_info()
+                                                   ->get_physical_filename();
           if (allFiles.insert(normalizedIncludingFileName).second)
             newParents.insert(normalizedIncludingFileName);
         }
@@ -1625,8 +1591,7 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     for (map<string, set<PreprocessingInfo *>>::const_iterator mapEntry =
              includingPreprocessingInfosMap.begin();
          mapEntry != includingPreprocessingInfosMap.end(); ++mapEntry) {
-      string normalizedIncludedFileName =
-          FileHelper::normalizePathIfPossible(mapEntry->first);
+      const string &normalizedIncludedFileName = mapEntry->first;
       if (normalizedIncludedFileName.empty()) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[header-path]: preprocessing include "
@@ -1650,9 +1615,9 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
                 false)
           continue;
 
-        string normalizedIncludingFileName =
-            FileHelper::getNormalizedContainingFileName(
-                *includingPreprocessingInfoPtr);
+        string normalizedIncludingFileName = (*includingPreprocessingInfoPtr)
+                                                 ->get_file_info()
+                                                 ->get_physical_filename();
         if (allFiles.find(normalizedIncludingFileName) == allFiles.end())
           continue;
 
@@ -1664,29 +1629,12 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     workSet.swap(newParents);
   }
 
-  // DQ (4/6/2020): Added header file unparsing feature specific debug level.
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("List allFiles list (size = %zu): \n", allFiles.size());
     for (set<string>::iterator i = allFiles.begin(); i != allFiles.end(); i++) {
       printf("   --- allFiles = %s \n", (*i).c_str());
     }
   }
-
-#if DEBUG_FIGURE_OUT
-  // DQ (4/6/2020): Added header file unparsing feature specific debug level.
-  if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
-    printf("List modifiedFiles list (size = %zu): \n", modifiedFiles.size());
-    set<string>::iterator j = modifiedFiles.begin();
-    size_t modified_file_counter = 0;
-    while (j != modifiedFiles.end()) {
-      printf("   --- modifiedFiles[%zu] = %s \n", modified_file_counter,
-             (*j).c_str());
-
-      j++;
-      modified_file_counter++;
-    }
-  }
-#endif
 
   // A transformed physical header requires its frontend-owned SgSourceFile
   // before output-path planning can consult the include graph.  Diagnose that
@@ -1723,7 +1671,6 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
     collectAdditionalFilesToUnparse();
     collectAdditionalListOfHeaderFilesToCopy();
 
-    // DQ (4/14/2020): Added header file unparsing feature specific debug level.
     if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
       printf(
           "In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): calling "
@@ -1738,26 +1685,22 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
 
     collectIncludeCompilerPaths();
 
-    // DQ (4/14/2020): Added header file unparsing feature specific debug level.
     if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
       printf("In IncludedFilesUnparser::figureOutWhichFilesToUnparse(): "
              "calling applyFunctionToIncludingPreprocessingInfos(allFiles) \n");
     }
 
-    // DQ (4/15/2020): I don't think this is the cause.
-    // DQ (4/14/2020): This causes a problem for the test8 regression test.
     applyFunctionToIncludingPreprocessingInfos(
         allFiles, &IncludedFilesUnparser::collectNotUnparsedPreprocessingInfos);
 
     collectNotUnparsedFilesThatRequireUnparsingToAvoidFileNameCollisions();
 
     if (SgProject::get_verbose() > 0) {
-      CollectionHelper::printSet(
-          newFilesToUnparse,
-          "\nAdditional files to unparse due to path conflicts:", "");
+      cout << "\nAdditional files to unparse due to path conflicts:" << endl;
+      for (const auto &file : newFilesToUnparse)
+        cout << file << endl;
       cout << endl << endl;
     }
-    // DQ (4/13/2020): Added header file unparsing feature specific debug level.
     if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
       printf("At bottom of DO WHILE loop: newFilesToUnparse.size() = %zu \n",
              newFilesToUnparse.size());
@@ -1774,54 +1717,6 @@ void IncludedFilesUnparser::figureOutWhichFilesToUnparse() {
            includeCompilerPaths.begin();
        it != includeCompilerPaths.end(); it++) {
     FileHelper::ensureFolderExists(it->second);
-  }
-
-#if DEBUG_FIGURE_OUT
-  // DQ (4/13/2020): Added header file unparsing feature specific debug level.
-  if (SgProject::get_unparseHeaderFilesDebug() > 0) {
-    printf("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
-    printf("Leaving IncludedFilesUnparser::figureOutWhichFilesToUnparse(): \n");
-    printf("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF \n");
-  }
-#endif
-
-  // DQ (4/5/2020): Exit as part of debugging.
-}
-
-void IncludedFilesUnparser::printDiagnosticOutput() {
-  if (SgProject::get_verbose() > 0) {
-    printf("In IncludedFilesUnparser::printDiagnosticOutput(): Output internal "
-           "data \n");
-    CollectionHelper::printSet(allFiles, "\nAll files:", "");
-    CollectionHelper::printSet(modifiedFiles, "\nModified files:", "");
-
-    // DQ (10/9/2019): Added debugging support, this is not one of the lists we
-    // support. CollectionHelper::printSet(modifiedIncludeFiles, "\nModified
-    // files:", "");
-
-    CollectionHelper::printSet(filesToUnparse, "\nFiles to unparse:", "");
-
-    CollectionHelper::printSet(filesToCopy, "\nCopy files:", "");
-
-    CollectionHelper::printMapOfSets(
-        includingPathsMap,
-        "\nIncluding paths map:", "Included file:", "Including path:");
-
-    for (map<string, string>::const_iterator it = unparseMap.begin();
-         it != unparseMap.end(); it++) {
-      cout << "Unparsed file:" << it->first << "\nDestination:" << it->second
-           << endl
-           << endl;
-    }
-
-    cout << "\nInclude compiler paths:" << endl;
-    for (list<pair<int, string>>::const_iterator it =
-             includeCompilerPaths.begin();
-         it != includeCompilerPaths.end(); it++) {
-      cout << it->first << ":" << it->second << endl;
-    }
-
-    cout << endl << endl;
   }
 }
 
@@ -1846,8 +1741,7 @@ bool IncludedFilesUnparser::isInputFile(const string &absoluteFileName) {
 
 string IncludedFilesUnparser::getCopiedFileOutputPath(
     const string &absoluteFileName) const {
-  const string normalizedFileName =
-      FileHelper::normalizePathIfPossible(absoluteFileName);
+  const string &normalizedFileName = absoluteFileName;
   if (normalizedFileName.empty()) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[header-output]: copied input=%s has no "
@@ -1945,7 +1839,7 @@ void IncludedFilesUnparser::
     const string &includePath = includeDirective.getIncludedPath();
     if (isConflictingIncludePath(includePath)) {
       newFilesToUnparse.insert(
-          FileHelper::getNormalizedContainingFileName(*preprocessingInfoPtr));
+          (*preprocessingInfoPtr)->get_file_info()->get_physical_filename());
     }
   }
 }
@@ -1981,7 +1875,6 @@ bool IncludedFilesUnparser::isConflictingIncludePath(
 //  <../A.h> and thus, "subdir" would not be created and the file would not be
 //  found by the preprocessor. Check and fix, if needed.
 void IncludedFilesUnparser::collectIncludeCompilerPaths() {
-  // DQ (4/13/2020): Added header file unparsing feature specific debug level.
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("In IncludedFilesUnparser::collectIncludeCompilerPaths(): "
            "includingPathsMap.size() = %zu \n",
@@ -1992,7 +1885,6 @@ void IncludedFilesUnparser::collectIncludeCompilerPaths() {
            includingPathsMap.begin();
        mapEntry != includingPathsMap.end(); mapEntry++) {
     string fileToUnparse = mapEntry->first;
-    // DQ (4/13/2020): Added header file unparsing feature specific debug level.
     if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
       printf(" --- In loop over includingPathsMap: fileToUnparse = %s \n",
              fileToUnparse.c_str());
@@ -2023,7 +1915,6 @@ void IncludedFilesUnparser::collectIncludeCompilerPaths() {
     }
   }
 
-  // DQ (4/13/2020): Added header file unparsing feature specific debug level.
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("Leaving IncludedFilesUnparser::collectIncludeCompilerPaths(): "
            "includingPathsMap.size() = %zu \n",
@@ -2085,7 +1976,7 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
   }
 
   string normalizedIncludingFileName =
-      FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
+      includingPreprocessingInfo->get_file_info()->get_physical_filename();
 
   if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
     printf("In updatePreprocessingInfoPaths(): normalizedIncludingFileName = "
@@ -2126,14 +2017,12 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
       auto requireProjectInputOutput = [&](const string &inputPath) {
         for (SgFile *projectFile : projectNode->get_fileList()) {
           SgSourceFile *sourceFile = isSgSourceFile(projectFile);
-          if (sourceFile == nullptr ||
-              FileHelper::normalizePathIfPossible(sourceFile->getFileName()) !=
-                  inputPath) {
+          if (sourceFile == nullptr || sourceFile->getFileName() != inputPath) {
             continue;
           }
           const string configuredOutput =
               sourceFile->get_unparse_output_filename();
-          const string outputPath = FileHelper::normalizePathIfPossible(
+          const string outputPath = FileHelper::normalizePath(
               FileHelper::isAbsolutePath(configuredOutput)
                   ? configuredOutput
                   : FileHelper::concatenatePaths(workingDirectory,
@@ -2166,9 +2055,8 @@ void IncludedFilesUnparser::updatePreprocessingInfoPaths(
                       inputPath.c_str());
               ROSE_ABORT();
             }
-            return FileHelper::normalizePathIfPossible(
-                FileHelper::concatenatePaths(unparseRootPath,
-                                             outputPlan->second));
+            return FileHelper::normalizePath(FileHelper::concatenatePaths(
+                unparseRootPath, outputPlan->second));
           };
 
       const auto includingFileUnparseMapEntry =
@@ -2353,7 +2241,7 @@ void IncludedFilesUnparser::populateUnparseMap() {
 void IncludedFilesUnparser::collectNotUnparsedPreprocessingInfos(
     const string &includedFile, PreprocessingInfo *includingPreprocessingInfo) {
   string normalizedIncludingFileName =
-      FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
+      includingPreprocessingInfo->get_file_info()->get_physical_filename();
   if (filesToUnparse.find(includedFile) == filesToUnparse.end() &&
       filesToUnparse.find(normalizedIncludingFileName) ==
           filesToUnparse.end()) {
@@ -2366,7 +2254,7 @@ void IncludedFilesUnparser::collectNotUnparsedPreprocessingInfos(
 void IncludedFilesUnparser::collectIncludingPathsFromUnaffectedFiles(
     const string &includedFile, PreprocessingInfo *includingPreprocessingInfo) {
   string normalizedIncludingFileName =
-      FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
+      includingPreprocessingInfo->get_file_info()->get_physical_filename();
   if (filesToUnparse.find(normalizedIncludingFileName) ==
       filesToUnparse.end()) {
     IncludeDirective includeDirective(includingPreprocessingInfo->getString());
@@ -2384,153 +2272,40 @@ void IncludedFilesUnparser::collectIncludingPathsFromUnaffectedFiles(
 }
 
 void IncludedFilesUnparser::initializeFilesToUnparse() {
-
-#define DEBUG_INITIALIZER_FILES_TO_UNPARSE 0
-
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-  printf("In initializeFilesToUnparse(): filesToUnparse.size() = %zu \n",
-         filesToUnparse.size());
-  printf(" --- modifiedFiles.size()                           = %zu \n",
-         modifiedFiles.size());
-#endif
-
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-  if (modifiedFiles.size() > 0) {
-    printf("List of modifiedFiles: \n");
-    std::set<std::string>::iterator i = modifiedFiles.begin();
-    while (i != modifiedFiles.end()) {
-      string filename = *i;
-      printf(" --- modifiedFiles: %s \n", filename.c_str());
-      i++;
-    }
-  }
-#endif
-
-  // DQ (8/20/2019): Collect the comments and CPP directives of the modified
-  // header files so that they can be unparsed. SgSourceFile* file = NULL;
   ASSERT_not_null(projectNode);
   SgSourceFile *file =
       requireHeaderPlanningSource(projectNode, "header-project");
 
   {
-    // DQ (4/24/2021): Debugging header file optimization.
-    // file->set_header_file_unparsing_optimization_header_file(true);
-
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-    printf("Perform collection of comments and CPP directives only on the "
-           "header files \n");
-    printf("####################################################### \n");
-    printf("Processing comments and CPP directives for header files \n");
-    printf("####################################################### \n");
-#endif
-
     // Iterate over the modified files and collect comments and CPP directives
     // for any header files.
     std::set<SgIncludeFile *> modifiedIncludeFiles;
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-    printf("modifiedFiles.size() = %zu \n", modifiedFiles.size());
-    printf("Initializing modifiedIncludeFiles.size() = %zu \n",
-           modifiedIncludeFiles.size());
-#endif
-    // std::map<std::string, SgSourceFile*> unparseSourceFileMap;
-    // std::set<std::string> modifiedFiles;
-    std::set<std::string>::iterator i = modifiedFiles.begin();
+    std::set<std::string>::iterator i = filesWithMarkedTransformations.begin();
 
-    while (i != modifiedFiles.end()) {
+    while (i != filesWithMarkedTransformations.end()) {
       string filename = *i;
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-      printf("Iterating over modifiedFiles: Calling function to collect "
-             "comments and CPP directives from filename = %s \n",
-             filename.c_str());
-#endif
       if (unparseScopesMap.find(filename) != unparseScopesMap.end()) {
         SgScopeStatement *scope = unparseScopesMap[filename];
         ASSERT_not_null(scope);
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("Found entry in unparseScopesMap: scope = %p = %s \n", scope,
-               scope->class_name().c_str());
-#endif
-      } else {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("Entry not found in unparseScopesMap \n");
-#endif
       }
 
       SgSourceFile *sourceFile = NULL;
       if (unparseSourceFileMap.find(filename) != unparseSourceFileMap.end()) {
-        // SgSourceFile* sourceFile = unparseSourceFileMap[filename];
         sourceFile = unparseSourceFileMap[filename];
         ASSERT_not_null(sourceFile);
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("Found entry in unparseSourceFileMap: sourceFile = %p = %s \n",
-               sourceFile, sourceFile->class_name().c_str());
-#endif
-      } else {
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("Entry not found in unparseSourceFileMap \n");
-#endif
       }
 
-      // ASSERT_not_null(sourceFile);
-
       if (sourceFile != NULL) {
-        ASSERT_not_null(sourceFile);
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("sourceFile->getFileName()      = %s \n",
-               sourceFile->getFileName().c_str());
-        printf("sourceFile->get_isHeaderFile() = %s \n",
-               sourceFile->get_isHeaderFile() ? "true" : "false");
-
-        printf("Check if this is a header file: if so add it to the "
-               "modifiedIncludeFiles list \n");
-#endif
         if (sourceFile->get_isHeaderFile() == true) {
           const ExactIncludedHeaderEdge edge = requireExactIncludedHeaderEdge(
               filename, unparseSourceFileMap, "unparse-output");
           modifiedIncludeFiles.insert(edge.includeFile);
         }
-
-      } else {
-        // DQ (10/14/2019): This should be the case of a non-header file
-        // (sometimes this is another generated file source file that was
-        // modified).
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("sourceFile == NULL \n");
-#endif
       }
 
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-      printf("modifiedIncludeFiles.size() = %zu \n",
-             modifiedIncludeFiles.size());
-#endif
       i++;
     }
 
-    // DQ (11/16/2019): We only want to unparse header files if they were
-    // modified, and if they were modified then they should have had their CPP
-    // directives and comments attached before being transformed. So this is too
-    // late in the process.  In some cases (such as the transformations in the
-    // regression tests) the transforamtions only change the name of a variable,
-    // and so attaching teh comments this late is not an issue.  However, in
-    // order to know when we will have to unparse a header file we either alwasy
-    // unparse them (which is too slow) or we only unparse the header files that
-    // will be transformed and then we have to attached the CPP directives and
-    // comments before the transformation.  This is the concept of deferred
-    // transformations (an option for the outliner).
-
-    // DQ (10/9/2019): We only want to process the header files identified as
-    // having been modified.
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-    printf(
-        "######################################################################"
-        "############################################################### \n");
-    printf("Iterate over the modified header files and process them to attach "
-           "comments and CPP directives: modifiedIncludeFiles.size() = %zu \n",
-           modifiedIncludeFiles.size());
-    printf(
-        "######################################################################"
-        "############################################################### \n");
-#endif
     {
       std::set<SgIncludeFile *>::iterator includeFileIterator =
           modifiedIncludeFiles.begin();
@@ -2540,11 +2315,6 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
         ASSERT_not_null(includeFile);
 
         string filename = includeFile->get_filename();
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-        printf("Iterating over modifiedIncludeFiles: Calling function to "
-               "collect comments and CPP directives from filename = %s \n",
-               filename.c_str());
-#endif
         SgSourceFile *sourceFile =
             isSgSourceFile(includeFile->get_source_file());
         ASSERT_not_null(sourceFile);
@@ -2574,33 +2344,22 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
         includeFileIterator++;
       }
     }
-
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-    printf("In initializeFilesToUnparse(): file = %p = %s name = %s Calling "
-           "file->set_header_file_unparsing_optimization_header_file(false) \n",
-           file, file->class_name().c_str(), file->getFileName().c_str());
-#endif
-    // DQ (4/24/2021): Debugging header file optimization.
-    // DQ (9/19/2019): Unclear to me why we want to set this to false, or if we
-    // are doing so for the correct file.
-    // file->set_header_file_unparsing_optimization_header_file(false);
   }
 
   // All modified frontend inputs and included files have to be planned here.
   // Output-only generated translation units own their independent absolute
   // output path and are emitted by the ordinary project-file unparser; they
   // are not roots of the included-header output tree.
-  filesToUnparse = modifiedFiles;
+  filesToUnparse = filesWithMarkedTransformations;
   for (SgFile *projectFile : projectNode->get_fileList()) {
     SgSourceFile *sourceFile = isSgSourceFile(projectFile);
     if (sourceFile == nullptr || sourceFile->get_skip_unparse() ||
         sourceFile->get_isCommandLineInputSource()) {
       continue;
     }
-    const string outputSourceInput =
-        FileHelper::normalizePathIfPossible(sourceFile->getFileName());
-    const string outputSourceDestination = FileHelper::normalizePathIfPossible(
-        sourceFile->get_unparse_output_filename());
+    const string outputSourceInput = sourceFile->getFileName();
+    const string outputSourceDestination =
+        FileHelper::normalizePath(sourceFile->get_unparse_output_filename());
     if (outputSourceInput.empty() || outputSourceDestination.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[generated-source-output]: source=%p "
@@ -2622,12 +2381,6 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
     filesToUnparse.erase(outputSourceInput);
   }
 
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-  printf("In initializeFilesToUnparse(): initialized with modifiedFiles: "
-         "filesToUnparse.size() = %zu \n",
-         filesToUnparse.size());
-#endif
-
   // All input files are also unparsed by default.
   SgFilePtrList inputFilesList = projectNode->get_fileList();
   for (SgFile *inputFile : inputFilesList) {
@@ -2642,16 +2395,9 @@ void IncludedFilesUnparser::initializeFilesToUnparse() {
     if (!sourceFile->get_skip_unparse() &&
         sourceFile->get_unparseHeaderFiles() &&
         sourceFile->get_isCommandLineInputSource()) {
-      filesToUnparse.insert(FileHelper::normalizePath(
-          sourceFile->getFileName())); // normalize just in case it is not
-                                       // normalized by default as expected
+      filesToUnparse.insert(sourceFile->getFileName());
     }
   }
-
-#if DEBUG_INITIALIZER_FILES_TO_UNPARSE
-  printf("Leaving initializeFilesToUnparse(): filesToUnparse.size() = %zu \n",
-         filesToUnparse.size());
-#endif
 }
 
 void IncludedFilesUnparser::collectAdditionalFilesToUnparse() {
@@ -2663,7 +2409,6 @@ void IncludedFilesUnparser::collectAdditionalFilesToUnparse() {
   while (!workingSet.empty()) {
     newFilesToUnparse.clear();
 
-    // DQ (4/14/2020): Added header file unparsing feature specific debug level.
     if (SgProject::get_unparseHeaderFilesDebug() >= 4) {
       printf("In IncludedFilesUnparser::collectAdditionalFilesToUnparse(): "
              "calling applyFunctionToIncludingPreprocessingInfos(workingSet) "
@@ -2703,7 +2448,7 @@ void IncludedFilesUnparser::collectNewFilesToUnparse(
   if (includeDirective.isQuotedInclude() ||
       FileHelper::isAbsolutePath(includeDirective.getIncludedPath())) {
     string normalizedIncludingFileName =
-        FileHelper::getNormalizedContainingFileName(includingPreprocessingInfo);
+        includingPreprocessingInfo->get_file_info()->get_physical_filename();
     if (filesToUnparse.find(normalizedIncludingFileName) ==
         filesToUnparse.end()) {
       filesToUnparse.insert(normalizedIncludingFileName);
@@ -2772,8 +2517,7 @@ void IncludedFilesUnparser::collectAdditionalListOfHeaderFilesToCopy() {
       if (!includedFile->get_isApplicationFile())
         continue;
 
-      const string includedFileName =
-          FileHelper::normalizePathIfPossible(includedFile->get_filename());
+      const string includedFileName = includedFile->get_filename();
       if (includedFileName.empty()) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[header-include-graph]: copy child=%p "
@@ -2781,9 +2525,6 @@ void IncludedFilesUnparser::collectAdditionalListOfHeaderFilesToCopy() {
                 static_cast<void *>(includedFile));
         ROSE_ABORT();
       }
-      if (FileHelper::getFileName(includedFileName) ==
-          "rose_required_macros_and_functions.h")
-        continue;
       if (filesToUnparse.find(includedFileName) == filesToUnparse.end())
         filesToCopy.insert(includedFileName);
     }
@@ -2946,7 +2687,8 @@ void IncludedFilesUnparser::validateUnparseScopeCandidates() {
     const unsigned int canonicalOccurrence = *occurrenceIds.begin();
     SgScopeStatement *canonicalScope = exactEmissionScope(canonicalOccurrence);
     ASSERT_not_null(canonicalScope);
-    if (modifiedFiles.count(fileName) != 0 && occurrenceIds.size() > 1) {
+    if (filesWithMarkedTransformations.count(fileName) != 0 &&
+        occurrenceIds.size() > 1) {
       const HeaderOccurrenceContract canonicalContract =
           buildHeaderOccurrenceContract(canonicalScope, fileName,
                                         canonicalOccurrence, includeRewrites);
@@ -3051,8 +2793,7 @@ void IncludedFilesUnparser::addToUnparseScopesMap(const string &fileName,
               fileName.c_str(), enclosingScope->class_name().c_str());
       ROSE_ABORT();
     }
-    if (fileName.compare(
-            FileHelper::normalizePath(scopeInfo->get_filenameString())) != 0 ||
+    if (fileName != scopeInfo->get_physical_filename() ||
         scopeInfo->get_physical_file_occurrence_id() != occurrence) {
       break;
     }
@@ -3092,32 +2833,8 @@ void IncludedFilesUnparser::addToUnparseScopesMap(const string &fileName,
 
 void IncludedFilesUnparser::visit(SgNode *node) {
 
-#define DEBUG_INCLUDE_FILE_UNPARSER_VISIT 0
 
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-  printf("In IncludedFilesUnparser::visit(): node = %p = %s = %s isModified = "
-         "%s \n",
-         node, node->class_name().c_str(),
-         SageInterface::get_name(node).c_str(),
-         node->get_isModified() ? "true" : "false");
-  SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(node);
-  if (functionDeclaration != NULL) {
-    printf(" --- functionDeclaration name = %s \n",
-           functionDeclaration->get_name().str());
-    printf(" --- functionDeclaration->get_definition() = %p \n",
-           functionDeclaration->get_definition());
-  }
-#endif
 
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-  if (isSgGlobal(node) != NULL) {
-    printf("In IncludedFilesUnparser::visit(): (SgGlobal): node = %p = %s = %s "
-           "isModified = %s \n",
-           node, node->class_name().c_str(),
-           SageInterface::get_name(node).c_str(),
-           node->get_isModified() ? "true" : "false");
-  }
-#endif
 
   SgStatement *statement = isSgStatement(node);
   const bool isTypedZeroWidth =
@@ -3129,25 +2846,8 @@ void IncludedFilesUnparser::visit(SgNode *node) {
 
   SgSourceFile *sourceFile = isSgSourceFile(node);
   if (sourceFile != NULL) {
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-    printf("Building unparseSgSourceFileMap: sourceFile = %p "
-           "sourceFile->getFileName() = %s \n",
-           sourceFile, sourceFile->getFileName().c_str());
-#endif
     insertMaterializedSourceFile(unparseSourceFileMap, sourceFile,
                                  "project-traversal");
-
-    // Save the header file report.
-    SgHeaderFileReport *reportData = sourceFile->get_headerFileReport();
-
-    if (reportData != NULL) {
-      printf("####################################################### \n");
-      printf("####################################################### \n");
-      reportData->display("headerFileReport in IncludedFilesUnparser::visit()");
-      printf("####################################################### \n");
-      printf("####################################################### \n");
-    } else {
-    }
 
     // The translation-unit source is emitted by unparseFileList and is not an
     // included-file scope. Header wrappers are indexed above through their
@@ -3164,30 +2864,16 @@ void IncludedFilesUnparser::visit(SgNode *node) {
     }
   }
 
-  // DQ (9/7/2018): Looking for connections to the SgSourceFile in the
-  // SgIncludeDirectiveStatement. We could just build up a map of filenames to
-  // SgSourceFile IR nodes and then use it with the modifiedFiles set.
   SgIncludeDirectiveStatement *includeDirectiveStatement =
       isSgIncludeDirectiveStatement(node);
   if (includeDirectiveStatement != NULL) {
     SgHeaderFileBody *headerFileBody =
         includeDirectiveStatement->get_headerFileBody();
 
-    // DQ (5/19/2020): In the new design, allow the headerFileBody to be NULL.
-    // Include directives are now added uniformally to the AST, as part of
-    // supporting unparsing of arbitrary subsets of header files.
-    // ROSE_ASSERT(headerFileBody != NULL);
     if (headerFileBody != NULL) {
       SgSourceFile *headerFile = headerFileBody->get_include_file();
 
-      // DQ (11/22/2018): We only build associated SgSourceFile for application
-      // header files. ROSE_ASSERT(headerFile != NULL);
       if (headerFile != NULL) {
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-        printf("Building unparseSgSourceFileMap: headerFile = %p "
-               "headerFile->getFileName() = %s \n",
-               headerFile, headerFile->getFileName().c_str());
-#endif
         insertMaterializedSourceFile(unparseSourceFileMap, headerFile,
                                      "header-body");
       } else {
@@ -3221,12 +2907,6 @@ void IncludedFilesUnparser::visit(SgNode *node) {
   }
 
   if (fileInfo != NULL) {
-    // DQ (11/28/2018): Need to use the full filename (perhaps resolved of
-    // symbolic links) because filename that match can represent files in
-    // different directories.  Though this is more of an issue for system header
-    // file. string normalizedFileName = FileHelper::normalizePath(fileInfo ->
-    // get_filenameString()); string normalizedFileName =
-    // FileHelper::normalizePath(fileInfo->get_physical_filename());
     int physical_file_id = fileInfo->get_physical_file_id();
     SgSourceFile *owningSourceFile =
         SageInterface::getEnclosingSourceFile(node, true);
@@ -3284,8 +2964,7 @@ void IncludedFilesUnparser::visit(SgNode *node) {
                   locatedNode->class_name().c_str());
           ROSE_ABORT();
         }
-        const string recordFileName = FileHelper::normalizePathIfPossible(
-            recordInfo->getFilenameFromID(recordInfo->get_physical_file_id()));
+        const string recordFileName = recordInfo->get_physical_filename();
         const unsigned int recordOccurrence =
             recordInfo->get_physical_file_occurrence_id();
         const bool recordFromPrimaryInput = isExactPrimaryPhysicalFile(
@@ -3317,6 +2996,12 @@ void IncludedFilesUnparser::visit(SgNode *node) {
                   fileInfo->get_physical_filename().c_str(), physical_file_id,
                   fileInfo->get_physical_file_occurrence_id());
           ROSE_ABORT();
+        }
+        if (owningSourceFile != nullptr &&
+            !owningSourceFile->get_unparseHeaderFiles() &&
+            recordInfo->get_physical_file_id() !=
+                owningSourceInfo->get_physical_file_id()) {
+          continue;
         }
         allFiles.insert(recordFileName);
         if (!recordFromPrimaryInput) {
@@ -3373,13 +3058,9 @@ void IncludedFilesUnparser::visit(SgNode *node) {
       ROSE_ABORT();
     }
 
-    // string normalizedFileName =
-    // FileHelper::normalizePath(fileInfo->getFilenameFromID(physical_file_id));
-    string normalizedFileName = FileHelper::normalizePathIfPossible(
-        fileInfo->getFilenameFromID(physical_file_id));
+    string normalizedFileName = fileInfo->getFilenameFromID(physical_file_id);
 
-    if (physical_file_id >= 0 &&
-        (normalizedFileName.empty() || normalizedFileName == "NULL_FILE")) {
+    if (normalizedFileName.empty()) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[physical-file]: node=%s address=%p "
               "physical-file-id=%d has no registered filename\n",
@@ -3388,207 +3069,30 @@ void IncludedFilesUnparser::visit(SgNode *node) {
       ROSE_ABORT();
     }
 
-    // DQ (10/14/2019): Trap cases where the normalizedFileName is not a valid
-    // filename.
-    if (normalizedFileName == "transformation") {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[physical-file]: node=%s address=%p "
-              "uses the synthetic transformation filename instead of an "
-              "explicit source owner\n",
-              node->class_name().c_str(), static_cast<void *>(node));
-      ROSE_ABORT();
-    }
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-    bool isShared = fileInfo->isShared();
-    if (isStatement == true) {
-      printf("In IncludedFilesUnparser::visit(): physical_file_id             "
-             "= %d \n",
-             physical_file_id);
-      printf("In IncludedFilesUnparser::visit(): physical fileName (computed) "
-             "= %s \n",
-             fileInfo->get_physical_filename().c_str());
-      printf("In IncludedFilesUnparser::visit(): physical fileName (raw)      "
-             "= %s \n",
-             fileInfo->getFilenameFromID(physical_file_id).c_str());
-      printf("In IncludedFilesUnparser::visit(): normalizedFileName           "
-             "= %s \n",
-             normalizedFileName.c_str());
-      printf("In IncludedFilesUnparser::visit(): isTransformation             "
-             "= %s \n",
-             isTransformation ? "true" : "false");
-      printf("In IncludedFilesUnparser::visit(): isCompilerGenerated          "
-             "= %s \n",
-             isCompilerGenerated ? "true" : "false");
-      printf("In IncludedFilesUnparser::visit(): isModified                   "
-             "= %s \n",
-             isModified ? "true" : "false");
-      printf("In IncludedFilesUnparser::visit(): isShared                     "
-             "= %s \n",
-             isShared ? "true" : "false");
-    }
-#endif
-
     const bool isPreprocessingSurface =
         locatedNode != nullptr && locatedNodeOwnsPhysicalFilePreprocessing(
                                       locatedNode, normalizedFileName);
     if (isOutputSurface || isPreprocessingSurface) {
-      // avoid infos that do not have real file names
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-      if (isStatement == true) {
-        printf("fileInfo->get_file_id() = %d \n", fileInfo->get_file_id());
-        printf("fileInfo->get_physical_file_id() = %d \n",
-               fileInfo->get_physical_file_id());
-      }
-#endif
-      ROSE_ASSERT(physical_file_id >= 0);
-      {
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-        if (isStatement == true) {
-          printf(
-              "In IncludedFilesUnparser::visit(): !isTransformation && "
-              "!isCompilerGenerated: node = %p = %s normalizedFileName = %s \n",
-              node, node->class_name().c_str(), normalizedFileName.c_str());
-        }
-#endif
-        set<string>::const_iterator setEntry =
-            allFiles.find(normalizedFileName);
-        ASSERT_not_null(projectNode);
-        const bool isPrimaryInputFile = isExactPrimaryPhysicalFile(
-            projectNode, physical_file_id, normalizedFileName,
-            "header-plan-primary");
-        if (setEntry == allFiles.end()) {
-          // This is a new file, process it.
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-          printf("In IncludedFilesUnparser::visit(): !isTransformation && "
-                 "!isCompilerGenerated: This is a new file, process it: file = "
-                 "%s \n",
-                 normalizedFileName.c_str());
-#endif
-          allFiles.insert(normalizedFileName);
-
-          // DQ (9/5/2018): Comment added.
-          // We can't just set or use this on the SgSourceFile, since there is
-          // only one file object for a translation unit. We need to add a file
-          // name to use in the selection of statements to be unparsed, and then
-          // the unparsing needs to be directed to that file (and back again,
-          // changing whatever is defined to be the current file). This might
-          // cause a large number of files to be open at the same time, in the
-          // worst case, but that will be fine for now. get_unparse_tokens()
-
-        } else {
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-          printf("This is NOT a new file: normalizedFileName = %s \n",
-                 normalizedFileName.c_str());
-#endif
-        }
-        if (!isPrimaryInputFile) {
-          const unsigned int occurrence =
-              fileInfo->get_physical_file_occurrence_id();
-          addToUnparseScopesMap(normalizedFileName, node, occurrence, false);
-        }
+      ASSERT_not_null(projectNode);
+      const bool isPrimaryInputFile =
+          isExactPrimaryPhysicalFile(projectNode, physical_file_id,
+                                     normalizedFileName, "header-plan-primary");
+      allFiles.insert(normalizedFileName);
+      if (!isPrimaryInputFile) {
+        const unsigned int occurrence =
+            fileInfo->get_physical_file_occurrence_id();
+        addToUnparseScopesMap(normalizedFileName, node, occurrence, false);
       }
     }
 
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-    if (isStatement == true) {
-      printf("List allFiles list (size = %zu): \n", allFiles.size());
-      set<string>::iterator i = allFiles.begin();
-      size_t counter = 0;
-      while (i != allFiles.end()) {
-        printf("   --- allFiles[%zu] = %s \n", counter, (*i).c_str());
-
-        i++;
-        counter++;
-      }
-    }
-#endif
-
-    // DQ (6/8/2019): Ignore SgSourceFile and SgProject IR nodes.
-    // DQ (6/6/2019): I think that we want to handle statements that are either
-    // marked isModified or isTransformation. NOTE: to support the header file
-    // unparsing the associated physical file where the target transformation is
-    // considered to live must be specified. if (node -> get_isModified()) if
-    // (isModified == true) if (isModified == true || ( (isTransformation ==
-    // true) && (normalizedFileName != "transformation") ) )
-    if (isModified == true || ((isTransformation == true) &&
-                               (normalizedFileName != "transformation"))) {
-      // DQ (6/6/2019): Modified statements are important for the token-based
-      // unparsing, since they trigger the switch from using the token stream
-      // for unparsing to using the AST for the unparsing.  However, the
-      // modified flag is not important if we are not using the token based
-      // unparsing.  When we are not using the token-based unparsing (or when we
-      // are unparsing directly from the AST) the status of the isTransformation
-      // flag is all that is important.
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-      printf("In IncludedFilesUnparser::visit(): node -> get_isModified(): "
-             "node = %p = %s  \n",
-             node, node->class_name().c_str());
-#endif
+    if (isModified || isTransformation) {
       if (SgProject::get_verbose() > 2) {
         cout << "Found a modified node: " << node->class_name() << endl;
         cout << "   In file: " << normalizedFileName << endl;
         cout << "   Is transformation: " << isTransformation << endl;
         cout << "   Is compiler generated: " << isCompilerGenerated << endl;
       }
-      if (isModified || isTransformation) {
-        // avoid infos that do not have real file names
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-        // printf ("In IncludedFilesUnparser::visit(): node -> get_isModified():
-        // !isTransformation && !isCompilerGenerated: normalizedFileName = %s
-        // \n",normalizedFileName.c_str());
-        printf("In IncludedFilesUnparser::visit(): node -> get_isModified(): "
-               "(isTransformation == true && isCompilerGenerated == false): "
-               "normalizedFileName = %s \n",
-               normalizedFileName.c_str());
-#endif
-        modifiedFiles.insert(normalizedFileName);
-        filesWithMarkedTransformations.insert(normalizedFileName);
-
-        // DQ (10/14/2019): Trap cases where the normalizedFileName is not a
-        // valid filename.
-        if (normalizedFileName == "transformation") {
-          fprintf(
-              stderr,
-              "REX_AST_INVARIANT[modified-file-origin]: transformed node "
-              "selected for include-file unparsing has no source filename\n");
-          ROSE_ABORT();
-        }
-      }
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-      printf("In IncludedFilesUnparser::visit(): node -> get_isModified(): "
-             "output endl \n");
-#endif
-      // cout << endl << endl;
+      filesWithMarkedTransformations.insert(normalizedFileName);
     }
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-    if (isStatement == true) {
-      printf("List modifiedFiles list (size = %zu): \n", modifiedFiles.size());
-      set<string>::iterator j = modifiedFiles.begin();
-      size_t modified_file_counter = 0;
-      while (j != modifiedFiles.end()) {
-        printf("   --- modifiedFiles[%zu] = %s \n", modified_file_counter,
-               (*j).c_str());
-
-        j++;
-        modified_file_counter++;
-      }
-    }
-#endif
   }
-
-#if DEBUG_INCLUDE_FILE_UNPARSER_VISIT
-  if (isStatement == true) {
-    // printf ("Leaving IncludedFilesUnparser::visit(): node = %p = %s
-    // modifiedFiles.size() = %zu
-    // \n",node,SageInterface::get_name(node).c_str(),modifiedFiles.size());
-    printf("Leaving IncludedFilesUnparser::visit(): node = %p = %s "
-           "modifiedFiles.size() = %zu \n\n",
-           node, node->class_name().c_str(), modifiedFiles.size());
-  }
-#endif
 }

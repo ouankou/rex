@@ -3,34 +3,13 @@
 
 # Number of failures allowed
 # ONLY DECREASE THIS VALUE!
-#my $limit = 1480; # 2010-10-18 Robb Matzke
-#my $limit = 1481; # 2012-05-30 Tristan Vanderbruggen
-#my $limit = 1454; # 2013-03-12 Robb Matzke
-#my $limit = 1435; # 2015-02-05 Robb Matzke
-#my $limit = 1540; # 2015-03-07 Dan Quinlan
 my $limit = 383; # 2023-03-31 Robb Matzke
 
 my $desc = <<EOF;
-All source files should be mentioned in the build system (makefiles).
-A source file that is not mentioned is probably not used (in which case
-it should be removed) or not distributed (in which case the makefile
-may need to be fixed).  This policy checker allows $limit failures
-only because we have not yet had time to fix all of them, and you have
-introduced new failures beyond the limit.  Please scan the following
-list for any files you own and fix the build system in one of three
-ways:
-   (1) Fix the build system by adding a target that uses the file.
-   (2) Add the file to EXTRA_DIST or similar so it is distributed.
-   (3) Mention the file in some rule or variable to indicate your
-       acknowlegement that you intentionally do not use the file.
-
-After fixing your files (and perhaps some others if you are feeling
-generous), rerun this policy checker (e.g., "make check-policies"
-in the "src" build directory), look at how many failures are still
-present, and adjust the limit downward at the top of the
-src/policies/UnusedSources.pl perl script. We want the limit to
-eventually reach zero, which will make future failures much easier
-to spot.  Sorry for any inconvenience.
+Source files should be referenced by CMake targets or installation rules.
+Review the following candidates for removal or missing build integration.
+This checker matches filenames, so its results require source review.
+The current allowance is $limit; reduce it as unused sources are removed.
 EOF
 
 BEGIN {push @INC, $1 if $0 =~ /(.*)\//}
@@ -51,19 +30,19 @@ for my $file (FileLister->new(@ARGV)->all_files()) {
     push @{$index{$key}}, $file;
 }
 
-# Look for file names in build metadata files (Makefile_variables, CMakeLists.txt, etc.) and remove those that we find
-# from the %index.
+# Remove filenames referenced by CMake from the candidate index.
 my $files = FileLister->new(@ARGV);
 while (my $file = $files->next_file) {
-  next unless $file =~ /\/(Makefile_variables|CMakeLists\.txt|make_rule\.inc|Makefile-.*\.inc)$/;
+  next unless $file =~ /\/CMakeLists\.txt$/;
   next if $file =~ /\b(tests|projects|src\/AstNodes)\//; # skip test and project directories
-  if (open FILE, "<", $file) {
-    while (<FILE>) {
-      s/#.*//;
-      s/([-a-zA-Z_0-9\.]+)/delete $index{lc $1}/ge;
-    }
-    close FILE;
+  open my $source, "<", $file or die "$file: cannot open: $!\n";
+  local $! = 0;
+  while (<$source>) {
+    s/#.*//;
+    s/([-+a-zA-Z_0-9\.]+)/delete $index{lc $1}/ge;
   }
+  die "$file: cannot read: $!\n" if $!;
+  close $source or die "$file: cannot close: $!\n";
 }
 
 # Report failures

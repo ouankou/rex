@@ -1,9 +1,16 @@
-set(CTEST_CUSTOM_ERROR_EXCEPTION
-  "previous definition is here"
-  "unbalanced braces"
-)
+if(NOT "@ROSE_CTEST_MEMCHECK_COMMAND@" STREQUAL "")
+  # PASS_REGULAR_EXPRESSION can override a failing command's exit status.
+  # Check the completed dashboard's reported defect counts independently.
+  list(APPEND CTEST_CUSTOM_POST_MEMCHECK
+    "\"@REX_TEST_PYTHON_EXECUTABLE@\" \"@ROSE_TOP_SRC_DIR@/scripts/check_memcheck_results.py\" \"@CMAKE_BINARY_DIR@\"")
+endif()
 
 set(CTEST_CUSTOM_MEMCHECK_IGNORE
+  # Valgrind replaces global new/delete and bypasses this probe's fault counter.
+  # rex_symbol_table_ownership runs the same operations with the normal allocator
+  # under Memcheck. Keep allocation-failure assertions in native CTest.
+  rex_symbol_table_allocation_failure
+
   # Standalone compiler baseline; normal CTest still runs it, but Memcheck is
   # reserved for REX executables instead of LLVM's driver.
   compiler_options_include_order_sys_include_cc

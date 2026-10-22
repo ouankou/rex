@@ -31,42 +31,30 @@ SgType *SgDesignatedInitializer::get_type() const {
 
 int SgDesignatedInitializer::replace_expression(SgExpression *o,
                                                 SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
+  if (get_memberInit() != o && get_designatorList() != o)
+    return 0;
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
+  ROSE_ASSERT(n->get_parent() == nullptr);
 
   if (get_memberInit() == o) {
     ROSE_ASSERT(isSgInitializer(n));
     set_memberInit(isSgInitializer(n));
-    n->set_parent(this);
-
-    // Return 1 to indicate sucess.
-    return 1;
   } else if (get_designatorList() == o) {
-    ROSE_ASSERT(isSgExprListExp(n));
-    set_designatorList(isSgExprListExp(n));
-    // set_designator(n);
-    n->set_parent(this);
-
-    // Return 1 to indicate sucess.
-    return 1;
-  } else {
-    // Return 0 to indicate failure to match original expression ("o").
-    return 0;
+    auto *designators = isSgExprListExp(n);
+    ROSE_ASSERT(designators != nullptr);
+    ROSE_ASSERT(!designators->get_expressions().empty());
+    set_designatorList(designators);
   }
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 SgExpression *SgDesignatedInitializer::get_next(int &) const {
-  // DQ (7/21/2013): This function should not be called and should be removed at
-  // some point.
-
-  printf("This function should not be called and should be removed at some "
-         "point \n");
   ROSE_ABORT();
-
-  // tps (12/9/2009) : MSC requires a return value
-  return NULL;
+  return nullptr;
 }

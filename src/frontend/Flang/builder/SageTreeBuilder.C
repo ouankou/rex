@@ -2,20 +2,16 @@
 
 #include "rose_config.h"
 
-#include "ModuleBuilder.h"
-
 #include "SageTreeBuilder.h"
 
 #include <algorithm>
-#include <charconv>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 
-#include <set>
-#include <sstream>
+#include <tuple>
 #include <utility>
-
-constexpr bool TRACE_ATTACH_COMMENT = false;
+#include <vector>
 
 namespace Rose {
 namespace builder {
@@ -26,158 +22,6 @@ namespace SB = SageBuilder;
 namespace SI = SageInterface;
 
 namespace {
-PreprocessingInfo::DirectiveType
-GetFortranCommentStyle(const SgSourceFile *source);
-
-SgProcedureHeaderStatement::fortran_procedure_source_form_enum
-FortranProcedureHeaderSourceForm(const SourcePositions &sources) {
-  const std::string &path = std::get<0>(sources).path;
-  std::string extension = std::filesystem::path(path).extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 [](unsigned char ch) { return std::tolower(ch); });
-  if (extension == ".mod" || extension == ".rmod" || extension == ".rcmp") {
-    return SgProcedureHeaderStatement::
-        e_fortran_procedure_source_form_compiler_module_header;
-  }
-  return SgProcedureHeaderStatement::e_fortran_procedure_source_form_header;
-}
-
-bool IsCommentInfo(const PreprocessingInfo *info) {
-  if (info == nullptr) {
-    return false;
-  }
-  const auto type = info->getTypeOfDirective();
-  return type == PreprocessingInfo::FortranStyleComment ||
-         type == PreprocessingInfo::F90StyleComment ||
-         type == PreprocessingInfo::C_StyleComment ||
-         type == PreprocessingInfo::CplusplusStyleComment;
-}
-
-std::string BuildCommentKey(const PreprocessingInfo *info) {
-  if (info == nullptr) {
-    return {};
-  }
-  std::string key =
-      std::to_string(static_cast<int>(info->getTypeOfDirective())) + ":" +
-      std::to_string(static_cast<int>(info->getRelativePosition())) + ":" +
-      info->getString();
-  if (info->getLineNumber() > 0) {
-    key = std::to_string(info->getLineNumber()) + ":" + key;
-  }
-  return key;
-}
-
-void DedupAttachedPreprocessingInfo(SgLocatedNode *node) {
-  if (node == nullptr) {
-    return;
-  }
-  AttachedPreprocessingInfoType *info_list =
-      node->getAttachedPreprocessingInfo();
-  if (info_list == nullptr || info_list->empty()) {
-    return;
-  }
-
-  std::set<std::string> seen_keys;
-  std::set<PreprocessingInfo *> retained_infos;
-  std::set<PreprocessingInfo *> deleted_infos;
-  for (auto it = info_list->begin(); it != info_list->end();) {
-    PreprocessingInfo *info = *it;
-    if (info != nullptr && deleted_infos.count(info) > 0) {
-      it = info_list->erase(it);
-      continue;
-    }
-    if (!IsCommentInfo(info)) {
-      if (info != nullptr) {
-        retained_infos.insert(info);
-      }
-      ++it;
-      continue;
-    }
-    const std::string key = BuildCommentKey(info);
-    if (seen_keys.count(key) > 0) {
-      it = info_list->erase(it);
-      if (retained_infos.count(info) == 0 &&
-          deleted_infos.insert(info).second) {
-        delete info;
-      }
-      continue;
-    }
-    seen_keys.insert(key);
-    retained_infos.insert(info);
-    ++it;
-  }
-}
-
-void RemoveDuplicateComments(SgLocatedNode *target, SgLocatedNode *reference) {
-  if (target == nullptr || reference == nullptr) {
-    return;
-  }
-  AttachedPreprocessingInfoType *target_list =
-      target->getAttachedPreprocessingInfo();
-  if (target_list == nullptr || target_list->empty()) {
-    return;
-  }
-  const AttachedPreprocessingInfoType *ref_list =
-      reference->getAttachedPreprocessingInfo();
-  if (ref_list == nullptr || ref_list->empty()) {
-    return;
-  }
-
-  std::set<std::string> ref_keys;
-  for (const PreprocessingInfo *info : *ref_list) {
-    if (!IsCommentInfo(info)) {
-      continue;
-    }
-    ref_keys.insert(BuildCommentKey(info));
-  }
-
-  std::set<PreprocessingInfo *> deleted_infos;
-  for (auto it = target_list->begin(); it != target_list->end();) {
-    PreprocessingInfo *info = *it;
-    if (info != nullptr && deleted_infos.count(info) > 0) {
-      it = target_list->erase(it);
-      continue;
-    }
-    if (!IsCommentInfo(info)) {
-      ++it;
-      continue;
-    }
-    const std::string key = BuildCommentKey(info);
-    if (ref_keys.count(key) > 0) {
-      it = target_list->erase(it);
-      if (std::find(ref_list->begin(), ref_list->end(), info) ==
-              ref_list->end() &&
-          deleted_infos.insert(info).second) {
-        delete info;
-      }
-      continue;
-    }
-    ++it;
-  }
-}
-
-std::string formatLocatedNode(const SgLocatedNode *node) {
-  if (node == nullptr) {
-    return {};
-  }
-  const Sg_File_Info *info = node->get_startOfConstruct();
-  if (info == nullptr) {
-    return {};
-  }
-  std::ostringstream out;
-  const std::string &file = info->get_filenameString();
-  if (!file.empty()) {
-    out << file;
-  }
-  if (info->get_line() > 0) {
-    out << ":" << info->get_line();
-    if (info->get_col() > 0) {
-      out << ":" << info->get_col();
-    }
-  }
-  return out.str();
-}
-
 void requireFreshUnclassifiedSource(SgLocatedNode *node, const char *producer) {
   ASSERT_not_null(node);
   ASSERT_not_null(producer);
@@ -209,46 +53,38 @@ void publishTransformationSourceOnce(SgLocatedNode *node,
   }
 }
 
-std::string resolvePrimarySourceFilename(const SgSourceFile *source) {
-  if (source == nullptr) {
-    return {};
-  }
-  std::string filename = source->get_sourceFileNameWithPath();
-  if (filename.empty()) {
-    filename = source->getFileName();
-  }
-  if (filename.empty()) {
-    return {};
-  }
-  return StringUtility::getAbsolutePathFromRelativePath(filename);
+bool isRecordedPhysicalSourcePath(const std::string &path) {
+  return !path.empty() && path.find('\0') == std::string::npos &&
+         std::filesystem::path(path).is_absolute();
 }
 
 bool isPrimaryFortranSourceRange(const SgSourceFile *source,
                                  const SourcePosition &start,
                                  const SourcePosition &end) {
-  const std::string primaryPath = resolvePrimarySourceFilename(source);
-  if (primaryPath.empty()) {
-    return true;
-  }
-  return StringUtility::getAbsolutePathFromRelativePath(start.path) ==
-             primaryPath &&
-         StringUtility::getAbsolutePathFromRelativePath(end.path) ==
-             primaryPath;
+  ASSERT_not_null(source);
+  const auto *info = source->get_file_info();
+  ASSERT_not_null(info);
+  const std::string primaryPath = info->get_physical_filename();
+  ROSE_ASSERT(isRecordedPhysicalSourcePath(primaryPath));
+  return start.path == primaryPath && end.path == primaryPath;
 }
 
 bool isInSourceFileForComments(const SgLocatedNode *node,
                                const SgSourceFile *source) {
-  if (node == nullptr || source == nullptr) {
-    return true;
-  }
+  ASSERT_not_null(node);
+  ASSERT_not_null(source);
   const Sg_File_Info *node_info = node->get_file_info();
   const Sg_File_Info *source_info = source->get_file_info();
-  if (node_info == nullptr || source_info == nullptr) {
-    return true;
+  ASSERT_not_null(source_info);
+  ASSERT_require(source_info->get_physical_file_id() >= 0);
+  if (node_info != nullptr &&
+      (node_info->isCompilerGenerated() || node_info->isTransformation())) {
+    return false;
   }
-  if (node_info->get_physical_file_id() == Sg_File_Info::NULL_FILE_ID ||
-      node_info->get_physical_file_id() == Sg_File_Info::COPY_FILE_ID) {
-    return true;
+  if (node_info == nullptr || node_info->get_physical_file_id() < 0) {
+    std::cerr << "REX_FLANG_INVARIANT[comment-source-owner]: "
+              << node->class_name() << " has no exact physical source owner\n";
+    ROSE_ABORT();
   }
   return node_info->get_physical_file_id() ==
          source_info->get_physical_file_id();
@@ -325,20 +161,15 @@ void attachCommentFromToken(SgLocatedNode *node, const Token &token,
                    "token carries a preprocessing directive kind\n";
       ROSE_ABORT();
     }
-    if (!token.hasExactSpelling()) {
-      std::cerr << "REX_FLANG_INVARIANT[source-token-spelling]: comment token "
-                   "has no exact Flang spelling\n";
-      ROSE_ABORT();
-    }
-    style = GetFortranCommentStyle(source);
+    style =
+        source->get_inputFormat() == SgFile::e_fixed_form_output_format ||
+                (source->get_inputFormat() == SgFile::e_unknown_output_format &&
+                 source->get_F77_only())
+            ? PreprocessingInfo::FortranStyleComment
+            : PreprocessingInfo::F90StyleComment;
     spelling = token.getLexeme();
     break;
   case TokenKind::preprocessing:
-    if (!token.hasExactSpelling()) {
-      std::cerr << "REX_FLANG_INVARIANT[source-token-spelling]: "
-                   "preprocessing token has no exact Flang spelling\n";
-      ROSE_ABORT();
-    }
     style =
         ToSagePreprocessingDirectiveType(token.getPreprocessingDirectiveKind());
     spelling = token.getLexeme();
@@ -371,22 +202,11 @@ void attachCommentFromToken(SgLocatedNode *node, const Token &token,
       style, spelling, filename, token.getStartLine(), token.getStartCol(),
       numberOfLines, adjusted_position);
   ROSE_ASSERT(info != nullptr);
+  if (position == PreprocessingInfo::after_syntax &&
+      token.getTokenType() == TokenKind::comment) {
+    info->setOutputPlacement(PreprocessingInfo::attached_output_trailing_line);
+  }
   node->addToAttachedPreprocessingInfo(info);
-}
-
-PreprocessingInfo::DirectiveType
-GetFortranCommentStyle(const SgSourceFile *source) {
-  if (source == nullptr) {
-    return PreprocessingInfo::FortranStyleComment;
-  }
-  if (source->get_inputFormat() == SgFile::e_fixed_form_output_format) {
-    return PreprocessingInfo::FortranStyleComment;
-  }
-  if (source->get_inputFormat() == SgFile::e_unknown_output_format &&
-      source->get_F77_only()) {
-    return PreprocessingInfo::FortranStyleComment;
-  }
-  return PreprocessingInfo::F90StyleComment;
 }
 
 bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
@@ -395,63 +215,6 @@ bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
   }
   return StringUtility::convertToLowerCase(left.str()) ==
          StringUtility::convertToLowerCase(right.str());
-}
-
-SgInitializedName *findInitializedNameInStatements(SgScopeStatement *scope,
-                                                   const std::string &name,
-                                                   bool caseInsensitive) {
-  SgBasicBlock *block = isSgBasicBlock(scope);
-  if (block == nullptr) {
-    return nullptr;
-  }
-
-  const SgName target(name);
-  const SgStatementPtrList &stmts = block->get_statements();
-  for (SgStatement *stmt : stmts) {
-    SgVariableDeclaration *var_decl = isSgVariableDeclaration(stmt);
-    if (var_decl == nullptr) {
-      continue;
-    }
-    for (SgInitializedName *init_name : var_decl->get_variables()) {
-      if (init_name == nullptr) {
-        continue;
-      }
-      if (namesMatch(init_name->get_name(), target, caseInsensitive)) {
-        return init_name;
-      }
-    }
-  }
-  return nullptr;
-}
-
-SgInitializedName *findInitializedNameInScope(SgScopeStatement *scope,
-                                              const std::string &name,
-                                              bool caseInsensitive) {
-  if (scope == nullptr) {
-    return nullptr;
-  }
-
-  if (SgInitializedName *init_name =
-          findInitializedNameInStatements(scope, name, caseInsensitive)) {
-    return init_name;
-  }
-
-  const SgName target(name);
-  for (SgStatement *stmt : scope->generateStatementList()) {
-    SgVariableDeclaration *var_decl = isSgVariableDeclaration(stmt);
-    if (var_decl == nullptr) {
-      continue;
-    }
-    for (SgInitializedName *init_name : var_decl->get_variables()) {
-      if (init_name == nullptr) {
-        continue;
-      }
-      if (namesMatch(init_name->get_name(), target, caseInsensitive)) {
-        return init_name;
-      }
-    }
-  }
-  return nullptr;
 }
 
 void ValidateResolvedFortranLabelSymbols(SgScopeStatement *labelScope,
@@ -481,21 +244,6 @@ void ValidateResolvedFortranLabelSymbols(SgScopeStatement *labelScope,
       ROSE_ABORT();
     }
   }
-}
-
-int ParseFortranNumericLabel(const std::string &label, const char *context) {
-  ASSERT_not_null(context);
-  int value = 0;
-  const char *begin = label.data();
-  const char *end = begin + label.size();
-  const std::from_chars_result parsed = std::from_chars(begin, end, value);
-  if (label.empty() || parsed.ec != std::errc() || parsed.ptr != end ||
-      value <= 0 || value > 99999) {
-    std::cerr << "REX_FLANG_INVARIANT[numeric-label]: " << context
-              << " has invalid Fortran label '" << label << "'\n";
-    ROSE_ABORT();
-  }
-  return value;
 }
 
 } // namespace
@@ -550,29 +298,28 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, bool at_end) {
   attachComments(node, pos, at_end);
 }
 
-void SageTreeBuilder::attachComments(SgExpressionPtrList const &list) {
-  for (auto expr : list) {
-    PosInfo exprPos{expr};
-    auto commentToken = tokens_->getNextToken();
-
-    // May have problems with multi-line expressions, currently biased to
-    // comments following the expression
-    if (commentToken && exprPos.getEndLine() == commentToken->getStartLine()) {
-      auto commentPosition = PreprocessingInfo::after;
-      if (exprPos.getStartCol() >= commentToken->getEndCol()) {
-        commentPosition = PreprocessingInfo::before;
-      }
-      attachCommentFromToken(expr, *commentToken, commentPosition, source_);
-      tokens_->consumeNextToken();
-    }
-  }
-}
-
 SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
-    const std::string &name, SgType *type, SgExpression *init_expr,
-    SgScopeStatement *scope) {
+    const std::string &name, SgType *type, SgType *source_type,
+    SgExpression *init_expr, SgScopeStatement *scope,
+    const std::optional<SgInitializedName::FortranProcedureComponentBinding>
+        &binding = std::nullopt,
+    const EntityDeclInfo *entity = nullptr) {
+  SgExpression *procedure_interface =
+      entity != nullptr ? entity->procedure_interface : nullptr;
+  SgInitializedName *prior =
+      entity != nullptr ? entity->prior_declaration : nullptr;
   ASSERT_not_null(type);
+  ASSERT_not_null(source_type);
   ASSERT_not_null(scope);
+  ROSE_ASSERT(SgInitializedName::is_valid_fortran_procedure_interface(
+      procedure_interface, type));
+  ROSE_ASSERT(prior == nullptr ||
+              (prior->get_scope() == scope &&
+               SageInterface::isEquivalentType(prior->get_type(), type)));
+  if (binding) {
+    ROSE_ASSERT(isSgClassDefinition(scope) != nullptr);
+    ROSE_ASSERT(binding->isValidForType(type));
+  }
 
   SgInitializer *initializer = nullptr;
   if (init_expr != nullptr) {
@@ -580,8 +327,8 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
   }
 
   SgVariableDeclaration *declaration =
-      SageBuilder::buildVariableDeclaration_nfi(SgName(name), type, initializer,
-                                                scope);
+      SageBuilder::buildUnpublishedVariableDeclarationWithEmbeddedTag_nfi(
+          SgName(name), type, initializer, scope, nullptr);
   ASSERT_not_null(declaration);
   if (declaration->get_definingDeclaration() == nullptr) {
     declaration->set_definingDeclaration(declaration);
@@ -592,6 +339,20 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
   }
 
   SgInitializedName *initialized = declaration->get_decl_item(SgName(name));
+  ASSERT_not_null(initialized);
+  initialized->set_fortran_source_type(source_type);
+  initialized->set_fortran_procedure_component_binding(binding);
+  initialized->set_fortran_procedure_interface(procedure_interface);
+  initialized->set_prev_decl_item(prior);
+  if (entity != nullptr) {
+    initialized->set_fortran_type_spec(entity->type_spec);
+    initialized->set_fortran_source_derived_type_symbol(
+        entity->source_derived_type_symbol);
+  }
+  if (prior == nullptr) {
+    SgVariableSymbol *published = new SgVariableSymbol(initialized);
+    scope->insert_symbol(SgName(name), published);
+  }
   SgDeclarationStatement *semanticOwner =
       initialized != nullptr ? initialized->get_declptr() : nullptr;
   SgVariableDefinition *variableDefinition =
@@ -599,7 +360,8 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
   const bool functionValued = isSgFunctionType(type) != nullptr;
   SgVariableSymbol *symbol =
       initialized != nullptr
-          ? isSgVariableSymbol(scope->find_symbol_from_declaration(initialized))
+          ? isSgVariableSymbol(scope->find_symbol_from_declaration(
+                prior != nullptr ? prior : initialized))
           : nullptr;
   if (initialized == nullptr || semanticOwner != declaration ||
       (functionValued ? variableDefinition != nullptr
@@ -607,7 +369,7 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
                             variableDefinition->get_vardefn() != initialized ||
                             variableDefinition->get_parent() != initialized) ||
       declaration->get_parent() != nullptr || symbol == nullptr ||
-      symbol->get_declaration() != initialized ||
+      symbol->get_declaration() != (prior != nullptr ? prior : initialized) ||
       symbol->get_scope() != scope ||
       initialized->get_parent() != declaration ||
       initialized->get_scope() != scope) {
@@ -621,191 +383,122 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
 
 void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
                                      bool at_end) {
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+  if (!isInSourceFileForComments(node, source_)) {
     return;
   }
   // Attach comments at end of a statement or expression
   if (at_end && (isSgStatement(node) || isSgExpression(node))) {
+    ASSERT_require(pos.getStartLine() > 0 &&
+                   pos.getEndLine() >= pos.getStartLine());
     const Token *token = nullptr;
 
     // If a scope, some comments should be attached to last statement in scope
     SgStatement *last{nullptr};
     SgStatement *first{nullptr};
-    if (auto scope = isSgScopeStatement(node)) {
-      last = scope->lastStatement();
-      first = scope->firstStatement();
-      if (!is_fortran_language && last == nullptr &&
-          isSgBasicBlock(scope) != nullptr) {
-        if (auto parent_stmt = isSgStatement(scope->get_parent())) {
-          last = parent_stmt;
-        }
-      }
-    }
-
     int first_start_line = pos.getStartLine();
-    if (is_fortran_language) {
-      if (auto scope = isSgScopeStatement(node)) {
-        int best_line = -1;
-        SgStatement *best_stmt = nullptr;
-        auto consider_stmt = [&](SgStatement *stmt) {
-          if (stmt == nullptr) {
-            return;
-          }
-          if (!isInSourceFileForComments(stmt, source_)) {
-            return;
-          }
-          PosInfo stmt_pos{stmt};
-          int line = stmt_pos.getStartLine();
-          if (line > 0 && (best_line < 0 || line < best_line)) {
-            best_line = line;
-            best_stmt = stmt;
-          }
-        };
-        const SgStatementPtrList stmts = scope->generateStatementList();
-        for (SgStatement *stmt : stmts) {
-          consider_stmt(stmt);
+    if (auto scope = isSgScopeStatement(node)) {
+      first = scope->firstStatement();
+      int best_line = -1;
+      int last_end_line = -1;
+      SgStatement *best_stmt = nullptr;
+      auto consider_stmt = [&](SgStatement *stmt) {
+        if (stmt == nullptr) {
+          return;
         }
-        if (best_stmt != nullptr) {
-          first = best_stmt;
-          first_start_line = best_line;
+        if (!isInSourceFileForComments(stmt, source_)) {
+          return;
         }
+        PosInfo stmt_pos{stmt};
+        int line = stmt_pos.getStartLine();
+        ASSERT_require(line > 0 && stmt_pos.getEndLine() >= line);
+        if (best_line < 0 || line < best_line) {
+          best_line = line;
+          best_stmt = stmt;
+        }
+        if (stmt_pos.getEndLine() >= last_end_line) {
+          last_end_line = stmt_pos.getEndLine();
+          last = stmt;
+        }
+      };
+      const SgStatementPtrList stmts = scope->generateStatementList();
+      for (SgStatement *stmt : stmts) {
+        consider_stmt(stmt);
+      }
+      if (best_stmt != nullptr) {
+        first = best_stmt;
+        first_start_line = best_line;
       }
     }
-    if (first != nullptr && first_start_line <= 0) {
-      PosInfo first_pos{first};
-      if (first_pos.getStartLine() > 0) {
-        first_start_line = first_pos.getStartLine();
-      }
-    }
+    const int leading_line = first_start_line;
 
-    int leading_line = first_start_line;
-    if (pos.getStartLine() > leading_line) {
-      leading_line = pos.getStartLine();
-    }
+    const int end_line = pos.getEndLine();
 
-    int end_line = pos.getEndLine();
-    if (end_line <= 0 && last != nullptr) {
-      PosInfo last_pos{last};
-      if (last_pos.getEndLine() > 0) {
-        end_line = last_pos.getEndLine();
-      }
-    }
-    if (end_line <= 0 && first != nullptr) {
-      PosInfo first_pos{first};
-      if (first_pos.getEndLine() > 0) {
-        end_line = first_pos.getEndLine();
-      }
-    }
-    if (end_line <= 0) {
-      end_line = pos.getStartLine();
-    }
-
-    while ((token = tokens_->getNextToken()) &&
+    while ((token = tokens_.getNextToken()) &&
            token->getStartLine() <= end_line) {
-      if (is_fortran_language && first &&
-          token->getStartLine() <= leading_line) {
-        if (TRACE_ATTACH_COMMENT) {
-          MLOG_TRACE_CXX(MLOG_FRONTEND)
-              << "attach leading comment to first stmt: " << first->class_name()
-              << ": " << *token;
-        }
+      if (first && token->getStartLine() <= leading_line) {
         if (!isInSourceFileForComments(first, source_)) {
           break;
         }
         attachCommentFromToken(first, *token, PreprocessingInfo::before,
                                source_);
-      } else if (last &&
-                 (token->getEndLine() < end_line ||
-                  (is_fortran_language && token->getEndLine() == end_line))) {
-        if (TRACE_ATTACH_COMMENT) {
-          MLOG_TRACE_CXX(MLOG_FRONTEND)
-              << "attach end comment to last stmt: " << last->class_name()
-              << ": " << *token;
-        }
+      } else if (last && token->getEndLine() <= end_line) {
         if (!isInSourceFileForComments(last, source_)) {
           break;
         }
         attachCommentFromToken(last, *token, PreprocessingInfo::after, source_);
       } else {
-        if (TRACE_ATTACH_COMMENT)
-          MLOG_TRACE_CXX(MLOG_FRONTEND)
-              << "---> attach end comment to: " << node->class_name() << ": "
-              << *token;
-        if (!isInSourceFileForComments(node, source_)) {
-          break;
-        }
         attachCommentFromToken(node, *token, PreprocessingInfo::after, source_);
       }
-      tokens_->consumeNextToken();
+      tokens_.consumeNextToken();
     }
     return;
   }
 
-  if (isSgScopeStatement(node)) {
+  if (auto scope = isSgScopeStatement(node)) {
     const Token *token = nullptr;
     SgStatement *first_stmt = nullptr;
-    if (is_fortran_language) {
-      if (auto scope = isSgScopeStatement(node)) {
-        int best_line = -1;
-        SgStatement *best_stmt = nullptr;
-        auto consider_stmt = [&](SgStatement *stmt) {
-          if (stmt == nullptr) {
-            return;
-          }
-          if (!isInSourceFileForComments(stmt, source_)) {
-            return;
-          }
-          PosInfo stmt_pos{stmt};
-          int line = stmt_pos.getStartLine();
-          if (line > 0 && (best_line < 0 || line < best_line)) {
-            best_line = line;
-            best_stmt = stmt;
-          }
-        };
-        const SgStatementPtrList stmts = scope->generateStatementList();
-        for (SgStatement *stmt : stmts) {
-          consider_stmt(stmt);
-        }
-        if (best_stmt != nullptr) {
-          first_stmt = best_stmt;
-        }
+    int best_line = -1;
+    auto consider_stmt = [&](SgStatement *stmt) {
+      if (stmt == nullptr || !isInSourceFileForComments(stmt, source_)) {
+        return;
       }
+      const int line = PosInfo{stmt}.getStartLine();
+      ASSERT_require(line > 0);
+      if (best_line < 0 || line < best_line) {
+        best_line = line;
+        first_stmt = stmt;
+      }
+    };
+    const SgStatementPtrList stmts = scope->generateStatementList();
+    for (SgStatement *stmt : stmts) {
+      consider_stmt(stmt);
     }
     // Comments before scoping unit
-    while ((token = tokens_->getNextToken()) &&
+    while ((token = tokens_.getNextToken()) &&
            token->getStartLine() < pos.getStartLine()) {
-      if (TRACE_ATTACH_COMMENT) {
-        MLOG_TRACE_CXX(MLOG_FRONTEND)
-            << "attach comment before scoping unit: " << *token;
-      }
-      if (is_fortran_language && first_stmt != nullptr) {
-        if (!isInSourceFileForComments(first_stmt, source_)) {
-          break;
-        }
+      if (first_stmt != nullptr) {
         attachCommentFromToken(first_stmt, *token, PreprocessingInfo::before,
                                source_);
       } else {
-        if (!isInSourceFileForComments(node, source_)) {
-          break;
-        }
         attachCommentFromToken(node, *token, PreprocessingInfo::before,
                                source_);
       }
-      tokens_->consumeNextToken();
+      tokens_.consumeNextToken();
     }
     return;
   }
 
   if (SgStatement *stmt = isSgStatement(node)) {
     const Token *token = nullptr;
-    while ((token = tokens_->getNextToken()) &&
+    while ((token = tokens_.getNextToken()) &&
            token->getStartLine() <= pos.getStartLine()) {
       SgLocatedNode *commentNode{stmt};
       auto commentPosition = PreprocessingInfo::before;
       if (token->getStartLine() == pos.getStartLine()) {
         commentPosition = PreprocessingInfo::after;
+        if (isSgFunctionDeclaration(stmt) != nullptr) {
+          commentPosition = PreprocessingInfo::after_syntax;
+        }
         // check for a source token following a variable initializer
         if (SgVariableDeclaration *varDecl = isSgVariableDeclaration(stmt)) {
           for (SgInitializedName *name : varDecl->get_variables()) {
@@ -819,167 +512,67 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
           }
         }
       }
-      if (TRACE_ATTACH_COMMENT) {
-        MLOG_TRACE_CXX(MLOG_FRONTEND)
-            << "attach source token for: " << commentNode->class_name() << ": "
-            << *token << ": " << commentPosition;
-      }
       attachCommentFromToken(commentNode, *token, commentPosition, source_);
-      tokens_->consumeNextToken();
+      tokens_.consumeNextToken();
     }
   } else if (auto expr = isSgEnumVal(node)) {
     const Token *token = nullptr;
     auto commentPosition = PreprocessingInfo::before;
     // try only attaching comments from same line (what about multi-line
     // comments)
-    while ((token = tokens_->getNextToken()) &&
+    while ((token = tokens_.getNextToken()) &&
            token->getStartLine() == pos.getStartLine()) {
       if (token->getEndCol() == pos.getStartCol()) {
         commentPosition = PreprocessingInfo::after;
       }
-      if (TRACE_ATTACH_COMMENT) {
-        MLOG_TRACE_CXX(MLOG_FRONTEND)
-            << "attach source token for: " << expr->class_name() << ": "
-            << *token;
-      }
       attachCommentFromToken(expr, *token, commentPosition, source_);
-      tokens_->consumeNextToken();
-    }
-  }
-
-  else {
-    // Additional expressions?
-    if (TRACE_ATTACH_COMMENT) {
-      MLOG_WARN_CXX(MLOG_FRONTEND)
-          << "SageTreeBuilder::attachComment: not adding node "
-          << node->class_name() << "\n";
+      tokens_.consumeNextToken();
     }
   }
 }
 
-/** Attach comments from a vector */
+/** Attach captured declaration-header tokens. */
 void SageTreeBuilder::attachComments(SgLocatedNode *node,
-                                     const std::vector<Token> &tokens,
-                                     bool at_end) {
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
-    return;
+                                     HeaderComments &comments) {
+  ASSERT_not_null(node);
+  ASSERT_require(comments.tokens.empty() ||
+                 isInSourceFileForComments(node, source_));
+  ASSERT_require(comments.range.has_value() || comments.tokens.empty());
+  for (const Token &token : comments.tokens) {
+    ASSERT_require(token.getEndLine() <= comments.range->getEndLine());
+    const auto placement =
+        token.getStartLine() >= comments.range->getStartLine()
+            ? PreprocessingInfo::after_syntax
+            : PreprocessingInfo::before;
+    attachCommentFromToken(node, token, placement, source_);
   }
-  auto commentPosition{PreprocessingInfo::before};
-  if (at_end) {
-    commentPosition = PreprocessingInfo::after;
-  }
-
-  for (auto token : tokens) {
-    if (TRACE_ATTACH_COMMENT) {
-      MLOG_TRACE_CXX(MLOG_FRONTEND)
-          << "attach comment to: " << node->class_name() << ": " << token
-          << ": pos: " << commentPosition;
-    }
-    attachCommentFromToken(node, token, commentPosition, source_);
-  }
-}
-
-/** Conditionally attach comments from a vector */
-void SageTreeBuilder::attachComments(SgLocatedNode *node,
-                                     std::vector<Token> &tokens,
-                                     const PosInfo &pos) {
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
-    return;
-  }
-  SgStatement *first_stmt{nullptr};
-  int first_stmt_line = pos.getStartLine();
-  if (is_fortran_language) {
-    if (auto scope = isSgScopeStatement(node)) {
-      int best_line = -1;
-      SgStatement *best_stmt = nullptr;
-      auto consider_stmt = [&](SgStatement *stmt) {
-        if (stmt == nullptr) {
-          return;
-        }
-        if (!isInSourceFileForComments(stmt, source_)) {
-          return;
-        }
-        PosInfo stmt_pos{stmt};
-        int line = stmt_pos.getStartLine();
-        if (line > 0 && (best_line < 0 || line < best_line)) {
-          best_line = line;
-          best_stmt = stmt;
-        }
-      };
-      const SgStatementPtrList stmts = scope->generateStatementList();
-      for (SgStatement *stmt : stmts) {
-        consider_stmt(stmt);
-      }
-      if (best_stmt != nullptr) {
-        first_stmt = best_stmt;
-        first_stmt_line = best_line;
-      }
-    }
-  }
-  if (first_stmt != nullptr && first_stmt_line <= 0) {
-    PosInfo first_pos{first_stmt};
-    if (first_pos.getStartLine() > 0) {
-      first_stmt_line = first_pos.getStartLine();
-    }
-  }
-
-  int count{0};
-  for (auto token : tokens) {
-    if (token.getStartLine() <= pos.getStartLine()) {
-      if (TRACE_ATTACH_COMMENT) {
-        MLOG_TRACE_CXX(MLOG_FRONTEND)
-            << "attach comment for: " << node->class_name() << ": " << token;
-      }
-      if (is_fortran_language && first_stmt &&
-          token.getStartLine() <= first_stmt_line) {
-        if (!isInSourceFileForComments(first_stmt, source_)) {
-          break;
-        }
-        attachCommentFromToken(first_stmt, token, PreprocessingInfo::before,
-                               source_);
-      } else {
-        if (!isInSourceFileForComments(node, source_)) {
-          break;
-        }
-        attachCommentFromToken(node, token, PreprocessingInfo::before, source_);
-      }
-      count += 1;
-    }
-  }
-  if (count > 0)
-    tokens.erase(tokens.begin(), tokens.begin() + count);
+  comments.tokens.clear();
 }
 
 /** Attach any left over comments to end of node */
 void SageTreeBuilder::attachRemainingComments(SgLocatedNode *node) {
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  if (is_fortran_language && !isInSourceFileForComments(node, source_)) {
+  if (!isInSourceFileForComments(node, source_)) {
     return;
   }
   const Token *token = nullptr;
-  while ((token = tokens_->getNextToken())) {
-    if (TRACE_ATTACH_COMMENT) {
-      MLOG_TRACE_CXX(MLOG_FRONTEND)
-          << "attach comment for: " << node->class_name() << ": " << *token;
-    }
+  while ((token = tokens_.getNextToken())) {
     attachCommentFromToken(node, *token, PreprocessingInfo::after, source_);
-    tokens_->consumeNextToken();
+    tokens_.consumeNextToken();
   }
 }
 
-/** Move comments preceding @pos to a vector */
-void SageTreeBuilder::consumePrecedingComments(std::vector<Token> &tokens,
-                                               const PosInfo &pos) {
+/** Capture header tokens before constructing dependent declarations. */
+void SageTreeBuilder::captureHeaderComments(HeaderComments &comments,
+                                            const PosInfo &range) {
+  ASSERT_require(!comments.range.has_value() && comments.tokens.empty());
+  ASSERT_require(range.getStartLine() > 0 &&
+                 range.getEndLine() >= range.getStartLine());
+  comments.range = range;
   const Token *token = nullptr;
-  while ((token = tokens_->getNextToken()) &&
-         token->getStartLine() <= pos.getStartLine()) {
-    tokens.push_back(*token);
-    tokens_->consumeNextToken();
+  while ((token = tokens_.getNextToken()) &&
+         token->getEndLine() <= range.getEndLine()) {
+    comments.tokens.push_back(*token);
+    tokens_.consumeNextToken();
   }
 }
 
@@ -1030,12 +623,9 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
     ROSE_ABORT();
   }
 
-  const std::string normalizedStartPath =
-      StringUtility::getAbsolutePathFromRelativePath(start.path);
-  const std::string normalizedEndPath =
-      StringUtility::getAbsolutePathFromRelativePath(end.path);
-  if (normalizedStartPath.empty() || normalizedEndPath.empty() ||
-      normalizedStartPath != normalizedEndPath) {
+  const auto &startPath = start.path;
+  const auto &endPath = end.path;
+  if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath) {
     std::cerr << "REX_FLANG_INVARIANT[source-position-file]: "
               << node->class_name()
               << " source range does not belong to one exact physical file\n";
@@ -1049,6 +639,33 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
               << node->class_name()
               << " source range is not a non-empty ordered half-open "
                  "interval\n";
+    ROSE_ABORT();
+  }
+
+  const Sg_File_Info *sourceInfo =
+      source_ != nullptr ? source_->get_file_info() : nullptr;
+  if (source_ != nullptr &&
+      (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
+       sourceInfo->isShared() ||
+       !isRecordedPhysicalSourcePath(sourceInfo->get_physical_filename()))) {
+    std::cerr << "REX_FLANG_INVARIANT[physical-output-owner]: active "
+                 "Fortran source file has missing or ambiguous physical "
+                 "output ownership\n";
+    ROSE_ABORT();
+  }
+  const bool primarySource =
+      source_ != nullptr && isPrimaryFortranSourceRange(source_, start, end);
+
+  SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
+  const bool parsedDeclaration =
+      declaration != nullptr && input == ExactSourceInput::source_spelled;
+  if (parsedDeclaration &&
+      (!start.cooked_source_order ||
+       *start.cooked_source_order >= std::numeric_limits<unsigned int>::max() ||
+       declaration->get_translation_unit_source_order().has_value())) {
+    std::cerr << "REX_FLANG_INVARIANT[declaration-source-order]: "
+              << node->class_name()
+              << " requires one fresh exact cooked-source producer\n";
     ROSE_ABORT();
   }
 
@@ -1163,15 +780,19 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
   }
 
   Sg_File_Info *startInfo =
-      new Sg_File_Info(normalizedStartPath, start.line, start.column);
-  Sg_File_Info *endInfo =
-      new Sg_File_Info(normalizedEndPath, end.line, end.column - 1);
+      new Sg_File_Info(startPath, start.line, start.column);
+  Sg_File_Info *endInfo = new Sg_File_Info(endPath, end.line, end.column - 1);
   ASSERT_not_null(startInfo);
   ASSERT_not_null(endInfo);
   node->set_startOfConstruct(startInfo);
   node->set_endOfConstruct(endInfo);
   startInfo->set_parent(node);
   endInfo->set_parent(node);
+  if (parsedDeclaration) {
+    const unsigned int order = *start.cooked_source_order + 1;
+    startInfo->set_source_sequence_number(order);
+    declaration->initialize_translation_unit_source_order(order);
+  }
   Sg_File_Info *operatorInfo = nullptr;
   if (expression != nullptr) {
     operatorInfo = new Sg_File_Info(*startInfo);
@@ -1214,28 +835,16 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
     ROSE_ABORT();
   }
 
-  if (language_ == LanguageEnum::Fortran && source_ != nullptr) {
-    const Sg_File_Info *sourceInfo = source_->get_file_info();
-    if (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
-        sourceInfo->isShared()) {
-      std::cerr << "REX_FLANG_INVARIANT[physical-output-owner]: active "
-                   "Fortran source file has missing or ambiguous physical "
-                   "output ownership\n";
-      ROSE_ABORT();
-    }
-    if (isPrimaryFortranSourceRange(source_, start, end) &&
-        nodePhysicalFileId != sourceInfo->get_physical_file_id()) {
-      std::cerr << "REX_FLANG_INVARIANT[physical-output-owner]: "
-                << node->class_name()
-                << " belongs to the primary Fortran source path but not its "
-                   "exact physical output file\n";
-      ROSE_ABORT();
-    }
+  if (primarySource &&
+      nodePhysicalFileId != sourceInfo->get_physical_file_id()) {
+    std::cerr << "REX_FLANG_INVARIANT[physical-output-owner]: "
+              << node->class_name()
+              << " belongs to the primary Fortran source path but not its "
+                 "exact physical output file\n";
+    ROSE_ABORT();
   }
 
-  if (language_ == LanguageEnum::Fortran && source_ != nullptr &&
-      input == ExactSourceInput::source_spelled &&
-      isPrimaryFortranSourceRange(source_, start, end)) {
+  if (input == ExactSourceInput::source_spelled && primarySource) {
     for (Sg_File_Info *info :
          {node->get_file_info(), node->get_startOfConstruct(),
           node->get_endOfConstruct(), operatorInfo}) {
@@ -1247,12 +856,16 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
 
   // Source-backed nodes own comment attachment. Generated semantic nodes may
   // share the exact source anchor, but must never consume source tokens.
-  if (attach_comments && isSgFunctionDefinition(node) == nullptr) {
-    if (language_ == LanguageEnum::Fortran) {
-      if (SgBasicBlock *block = isSgBasicBlock(node)) {
-        if (block->get_statements().empty()) {
-          return;
-        }
+  auto *program = isSgProgramHeaderStatement(node);
+  const bool implicitProgram =
+      program != nullptr &&
+      program->get_program_statement_kind() ==
+          SgProgramHeaderStatement::e_implicit_program_statement;
+  if (attach_comments && tokens_.getNextToken() != nullptr &&
+      isSgFunctionDefinition(node) == nullptr && !implicitProgram) {
+    if (SgBasicBlock *block = isSgBasicBlock(node)) {
+      if (block->get_statements().empty()) {
+        return;
       }
     }
     PosInfo pinfo{start.line, start.column, end.line, end.column};
@@ -1306,11 +919,9 @@ void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
                  "an incomplete, invalid, or unordered source interval\n";
     ROSE_ABORT();
   }
-  const std::string startPath =
-      StringUtility::getAbsolutePathFromRelativePath(start.path);
-  const std::string endPath =
-      StringUtility::getAbsolutePathFromRelativePath(end.path);
-  if (startPath.empty() || startPath != endPath ||
+  const auto &startPath = start.path;
+  const auto &endPath = end.path;
+  if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath ||
       pragma->get_startOfConstruct() != nullptr ||
       pragma->get_endOfConstruct() != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[pragma-source-position]: SgPragma "
@@ -1337,7 +948,7 @@ void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
     ROSE_ABORT();
   }
 
-  if (language_ == LanguageEnum::Fortran && source_ != nullptr &&
+  if (source_ != nullptr &&
       isPrimaryFortranSourceRange(source_, start, end)) {
     const Sg_File_Info *sourceInfo = source_->get_file_info();
     if (sourceInfo == nullptr || sourceInfo->get_physical_file_id() < 0 ||
@@ -1430,8 +1041,9 @@ void SageTreeBuilder::setGeneratedSourcePosition(
 
 namespace {
 bool hasConcreteSourceLocation(const Sg_File_Info *info) {
-  return info != nullptr && !info->get_filenameString().empty() &&
-         info->get_filenameString() != "NULL_FILE" && info->get_line() > 0 &&
+  return info != nullptr && info->get_file_id() >= 0 &&
+         info->get_physical_file_id() >= 0 &&
+         !info->get_filenameString().empty() && info->get_line() > 0 &&
          info->get_col() > 0 && !info->isSourcePositionUnavailableInFrontend();
 }
 
@@ -1446,12 +1058,11 @@ void setLocatedNodeSourceAnchor(SgLocatedNode *node,
     ROSE_ABORT();
   }
 
-  const std::string normalized_anchor_path =
-      StringUtility::getAbsolutePathFromRelativePath(anchor.path);
-  if (normalized_anchor_path.empty()) {
+  const auto &anchorPath = anchor.path;
+  if (!isRecordedPhysicalSourcePath(anchorPath)) {
     std::cerr << "REX_FLANG_INVARIANT[source-anchor-file]: "
               << node->class_name()
-              << " has no exact normalized physical source identity\n";
+              << " has no exact recorded physical source identity\n";
     ROSE_ABORT();
   }
 
@@ -1470,9 +1081,9 @@ void setLocatedNodeSourceAnchor(SgLocatedNode *node,
   }
 
   Sg_File_Info *start_info =
-      new Sg_File_Info(normalized_anchor_path, anchor.line, anchor.column);
+      new Sg_File_Info(anchorPath, anchor.line, anchor.column);
   Sg_File_Info *end_info =
-      new Sg_File_Info(normalized_anchor_path, anchor.line, anchor.column);
+      new Sg_File_Info(anchorPath, anchor.line, anchor.column);
   ASSERT_not_null(start_info);
   ASSERT_not_null(end_info);
 
@@ -1492,14 +1103,14 @@ void setLocatedNodeSourceAnchor(SgLocatedNode *node,
       node->get_startOfConstruct() != start_info ||
       node->get_endOfConstruct() != end_info ||
       start_info->get_parent() != node || end_info->get_parent() != node ||
-      start_info->get_raw_filename() != normalized_anchor_path ||
-      end_info->get_raw_filename() != normalized_anchor_path ||
-      start_info->get_physical_filename() != normalized_anchor_path ||
-      end_info->get_physical_filename() != normalized_anchor_path ||
+      start_info->get_raw_filename() != anchorPath ||
+      end_info->get_raw_filename() != anchorPath ||
+      start_info->get_physical_filename() != anchorPath ||
+      end_info->get_physical_filename() != anchorPath ||
       (operator_info != nullptr &&
        (operator_info->get_parent() != node ||
-        operator_info->get_raw_filename() != normalized_anchor_path ||
-        operator_info->get_physical_filename() != normalized_anchor_path))) {
+        operator_info->get_raw_filename() != anchorPath ||
+        operator_info->get_physical_filename() != anchorPath))) {
     std::cerr << "REX_FLANG_INVARIANT[source-anchor-owner]: "
               << node->class_name()
               << " did not retain its exact shared physical source anchor\n";
@@ -1588,7 +1199,7 @@ void requireFortranParameterSemanticSurface(const SgInitializedName *parameter,
       parameter->get_fortran_source_derived_type_symbol() != nullptr ||
       parameter->get_fortran_type_spec() !=
           SgInitializedName::e_fortran_type_spec_default ||
-      !parameter->get_fortran_procedure_interface().is_null() ||
+      parameter->get_fortran_procedure_interface() != nullptr ||
       parameter->get_fortran_separate_shape_declaration() != nullptr ||
       parameter->get_fortran_separate_pointer_declaration() != nullptr ||
       parameter->get_cray_pointer_pointee() != nullptr ||
@@ -1628,6 +1239,8 @@ SgFunctionParameterList *cloneFortranCanonicalParameterList(
                                               definitionArgument->get_type(),
                                               /*initializer=*/nullptr);
     ASSERT_not_null(canonicalArgument);
+    canonicalArgument->set_fortran_c_argument_passing(
+        definitionArgument->get_fortran_c_argument_passing());
     requireFortranParameterSemanticSurface(definitionArgument,
                                            "defining procedure");
     requireFortranParameterSemanticSurface(canonicalArgument,
@@ -1650,17 +1263,15 @@ void requireFortranProcedureCanonicalSource(
   ASSERT_not_null(canonical);
   ASSERT_not_null(scope);
 
-  const std::string startPath =
-      StringUtility::getAbsolutePathFromRelativePath(start.path);
-  const std::string endPath =
-      StringUtility::getAbsolutePathFromRelativePath(end.path);
+  const auto &startPath = start.path;
+  const auto &endPath = end.path;
   Sg_File_Info *startInfo = canonical->get_startOfConstruct();
   Sg_File_Info *endInfo = canonical->get_endOfConstruct();
   SgAuxiliaryDeclarationList *auxiliary =
       isSgAuxiliaryDeclarationList(canonical->get_parent());
   const int expectedEndColumn = end.column - 1;
-  if (startPath.empty() || startPath != endPath || start.line < 1 ||
-      start.column < 1 || end.line < 1 || end.column < 1 ||
+  if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath ||
+      start.line < 1 || start.column < 1 || end.line < 1 || end.column < 1 ||
       startInfo == nullptr || endInfo == nullptr || startInfo == endInfo ||
       canonical->get_file_info() != startInfo ||
       startInfo->get_parent() != canonical ||
@@ -1735,22 +1346,8 @@ void requireFortranProcedureCanonicalSource(
 }
 } // namespace
 
-/// Constructor
-///
-SageTreeBuilder::SageTreeBuilder(SgSourceFile *source, LanguageEnum language,
-                                 std::istringstream &tokens)
-    : language_{language}, source_{source} {
-  tokens_ = new TokenStream(tokens);
-}
-
-SageTreeBuilder::~SageTreeBuilder() {
-  delete tokens_;
-  tokens_ = nullptr;
-}
-
 void SageTreeBuilder::setTokens(std::vector<Token> tokens) {
-  delete tokens_;
-  tokens_ = new TokenStream(std::move(tokens));
+  tokens_ = TokenStream(std::move(tokens));
 }
 
 void SageTreeBuilder::Enter(SgScopeStatement *&scope) {
@@ -1768,114 +1365,7 @@ void SageTreeBuilder::Leave(SgScopeStatement *scope) {
   scope = isSgGlobal(SageBuilder::topScopeStack());
   ASSERT_not_null(scope);
 
-  // Attaching any remaining comments
   attachRemainingComments(scope);
-  if ((language_ == LanguageEnum::Fortran ||
-       SageInterface::is_Fortran_language()) &&
-      isSgGlobal(scope) != nullptr) {
-    SgStatement *first_stmt = nullptr;
-    int first_line = -1;
-    const SgDeclarationStatementPtrList &decls = scope->getDeclarationList();
-    for (SgDeclarationStatement *decl : decls) {
-      if (decl == nullptr) {
-        continue;
-      }
-      PosInfo stmt_pos{decl};
-      int line = stmt_pos.getStartLine();
-      if (line > 0 && (first_line < 0 || line < first_line)) {
-        first_line = line;
-        first_stmt = decl;
-      }
-    }
-    if (first_stmt == nullptr && !decls.empty()) {
-      first_stmt = decls.front();
-    }
-    if (first_line <= 0 && first_stmt != nullptr) {
-      PosInfo first_pos{first_stmt};
-      if (first_pos.getStartLine() > 0) {
-        first_line = first_pos.getStartLine();
-      }
-    }
-    if (first_stmt != nullptr) {
-      AttachedPreprocessingInfoType *info_list =
-          scope->getAttachedPreprocessingInfo();
-      if (info_list != nullptr && !info_list->empty()) {
-        auto is_comment_info = [](const PreprocessingInfo *info) {
-          if (info == nullptr) {
-            return false;
-          }
-          const auto type = info->getTypeOfDirective();
-          return type == PreprocessingInfo::FortranStyleComment ||
-                 type == PreprocessingInfo::F90StyleComment ||
-                 type == PreprocessingInfo::C_StyleComment ||
-                 type == PreprocessingInfo::CplusplusStyleComment;
-        };
-        std::set<std::string> seen_keys;
-        std::set<PreprocessingInfo *> retained_infos;
-        std::set<PreprocessingInfo *> deleted_infos;
-        if (AttachedPreprocessingInfoType *first_info =
-                first_stmt->getAttachedPreprocessingInfo()) {
-          for (PreprocessingInfo *info : *first_info) {
-            if (!is_comment_info(info)) {
-              continue;
-            }
-            seen_keys.insert(BuildCommentKey(info));
-            retained_infos.insert(info);
-          }
-        }
-        AttachedPreprocessingInfoType to_move;
-        AttachedPreprocessingInfoType to_delete;
-        for (auto it = info_list->begin(); it != info_list->end();) {
-          PreprocessingInfo *info = *it;
-          if (info != nullptr && deleted_infos.count(info) > 0) {
-            ++it;
-            continue;
-          }
-          if (info != nullptr && is_comment_info(info) &&
-              (first_line <= 0 || info->getLineNumber() <= first_line)) {
-            const std::string key = BuildCommentKey(info);
-            if (seen_keys.count(key) > 0) {
-              if (retained_infos.count(info) == 0 &&
-                  deleted_infos.insert(info).second) {
-                to_delete.push_back(info);
-              }
-              ++it;
-              continue;
-            }
-            seen_keys.insert(key);
-            retained_infos.insert(info);
-            to_move.push_back(info);
-            ++it;
-            continue;
-          }
-          ++it;
-        }
-        for (PreprocessingInfo *info : to_delete) {
-          delete scope->detachPreprocessingInfo(info);
-        }
-        for (PreprocessingInfo *info : to_move) {
-          scope->detachPreprocessingInfo(info);
-          info->setRelativePosition(PreprocessingInfo::before);
-        }
-        PreprocessingInfo *prev = nullptr;
-        for (PreprocessingInfo *info : to_move) {
-          if (prev == nullptr) {
-            first_stmt->addToAttachedPreprocessingInfo(
-                info, PreprocessingInfo::before);
-          } else {
-            first_stmt->insertToAttachedPreprocessingInfo(info, prev);
-          }
-          prev = info;
-        }
-        if (auto *func_decl = isSgFunctionDeclaration(first_stmt)) {
-          DedupAttachedPreprocessingInfo(func_decl);
-          if (func_decl->get_parameterList() != nullptr) {
-            RemoveDuplicateComments(func_decl->get_parameterList(), func_decl);
-          }
-        }
-      }
-    }
-  }
 }
 
 void SageTreeBuilder::Enter(SgBasicBlock *&block) {
@@ -1896,9 +1386,9 @@ void SageTreeBuilder::Leave(SgBasicBlock *block) {
 
 void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
                             const std::optional<std::string> &name,
-                            const std::vector<std::string> &labels,
+                            std::optional<int> label,
                             const SourcePositions &sources,
-                            std::vector<Rose::builder::Token> &comments) {
+                            HeaderComments &comments) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Enter(SgProgramHeaderStatement* &, ...) "
       << std::get<0>(sources) << ":" << std::get<1>(sources) << ":"
@@ -1923,7 +1413,7 @@ void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
 
   SgProgramHeaderStatement *canonical_program_decl =
       new SgProgramHeaderStatement(program_name, function_type,
-                                   /*function_def*/ nullptr);
+                                   /*function_def*/ nullptr, nullptr);
   ASSERT_not_null(canonical_program_decl);
   canonical_program_decl->set_program_statement_kind(
       name.has_value()
@@ -1934,8 +1424,9 @@ void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
       canonical_program_decl);
   canonical_program_decl->set_definingDeclaration(nullptr);
 
-  program_decl = new SgProgramHeaderStatement(program_name, function_type,
-                                              /*function_def*/ nullptr);
+  program_decl =
+      new SgProgramHeaderStatement(program_name, function_type,
+                                   /*function_def*/ nullptr, nullptr);
   ASSERT_not_null(program_decl);
   SageInterface::setParameterList(program_decl, param_list);
   program_decl->set_program_statement_kind(
@@ -1974,35 +1465,17 @@ void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
   SgFunctionDefinition *program_def =
       new SgFunctionDefinition(program_decl, program_body);
 
-  if (language_ == LanguageEnum::Fortran ||
-      SageInterface::is_language_case_insensitive()) {
-    program_body->setCaseInsensitive(true);
-    program_def->setCaseInsensitive(true);
-  }
+  program_body->setCaseInsensitive(true);
+  program_def->setCaseInsensitive(true);
 
   ASSERT_require(SageBuilder::topScopeStack()->isCaseInsensitive());
   SageBuilder::pushScopeStack(program_def);
   ASSERT_require(SageBuilder::topScopeStack()->isCaseInsensitive());
   SageBuilder::pushScopeStack(program_body);
 
-  program_body->set_parent(program_def);
-  program_def->set_parent(program_decl);
-
-  // set source position and attach comments (order important as comments may be
-  // added as side effect)
   const SourcePosition &ps = std::get<0>(sources);
-  const SourcePosition &bs = std::get<1>(sources);
-  const SourcePosition &pe = std::get<2>(sources);
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  attachComments(program_decl, comments,
-                 PosInfo{ps.line, ps.column, pe.line, pe.column});
-  if (!is_fortran_language) {
-    attachComments(program_body, comments,
-                   PosInfo{bs.line, bs.column, pe.line, pe.column});
-  }
-
   setSourcePosition(program_decl, std::get<0>(sources), std::get<2>(sources));
+  attachComments(program_decl, comments);
   setGeneratedSourcePosition(
       canonical_program_decl, std::get<0>(sources), std::get<2>(sources),
       GeneratedSourceAnchorKind::program_canonical_declaration);
@@ -2075,11 +1548,10 @@ void SageTreeBuilder::Enter(SgProgramHeaderStatement *&program_decl,
     ROSE_ABORT();
   }
 
-  // set labels
-  if (SageInterface::is_Fortran_language() && labels.size() == 1) {
-    SageInterface::setFortranNumericLabel(
-        program_decl, ParseFortranNumericLabel(labels.front(), "PROGRAM"),
-        SgLabelSymbol::e_start_label_type, /*label_scope=*/program_def);
+  if (label) {
+    SageInterface::setFortranNumericLabel(program_decl, *label,
+                                          SgLabelSymbol::e_start_label_type,
+                                          /*label_scope=*/program_def);
   }
 
   ASSERT_require(program_body == SageBuilder::topScopeStack());
@@ -2164,20 +1636,13 @@ void SageTreeBuilder::Leave(SgProgramHeaderStatement *program_decl) {
   // Attach any remaining comments
   scope = program_decl->get_definition()->get_body();
   attachComments(scope, /*at_end*/ true);
-
-  DedupAttachedPreprocessingInfo(program_decl);
-  if ((language_ == LanguageEnum::Fortran ||
-       SageInterface::is_Fortran_language()) &&
-      program_decl != nullptr && program_decl->get_parameterList() != nullptr) {
-    RemoveDuplicateComments(program_decl->get_parameterList(), program_decl);
-  }
 }
 
 // Fortran has an end statement which may have an optional name and label
 void SageTreeBuilder::setFortranEndProgramStmt(
     SgProgramHeaderStatement *program_decl,
     const std::optional<std::string> &name,
-    const std::optional<std::string> &label) {
+    std::optional<int> label) {
   ASSERT_not_null(program_decl);
 
   SgProgramHeaderStatement *canonical_program_decl = isSgProgramHeaderStatement(
@@ -2235,9 +1700,9 @@ void SageTreeBuilder::setFortranEndProgramStmt(
   }
 
   if (label) {
-    SageInterface::setFortranNumericLabel(
-        program_decl, ParseFortranNumericLabel(*label, "END PROGRAM"),
-        SgLabelSymbol::e_end_label_type, /*label_scope=*/program_def);
+    SageInterface::setFortranNumericLabel(program_decl, *label,
+                                          SgLabelSymbol::e_end_label_type,
+                                          /*label_scope=*/program_def);
   }
 
   const bool hasEndStatementName =
@@ -2442,21 +1907,13 @@ void SageTreeBuilder::attachFortranProcedureCanonical(
 void SageTreeBuilder::Enter(SgFunctionParameterList *&param_list,
                             SgScopeStatement *&param_scope,
                             const std::string &function_name,
-                            SgType *function_type, bool is_defining_decl,
+                            bool is_defining_decl,
                             const SourcePositions *defining_sources) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Enter(SgFunctionParameterList*) \n";
 
   param_list = SageBuilder::buildFunctionParameterList_nfi();
   param_scope = nullptr;
-
-  if (function_type != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-construction]: function '"
-              << function_name
-              << "' requested the removed implicit result-symbol staging "
-                 "path\n";
-    ROSE_ABORT();
-  }
 
   SgScopeStatement *outer_scope = SageBuilder::topScopeStack();
   ASSERT_not_null(outer_scope);
@@ -2474,7 +1931,6 @@ void SageTreeBuilder::Enter(SgFunctionParameterList *&param_list,
     SgFunctionDefinition *definition = new SgFunctionDefinition(
         static_cast<SgFunctionDeclaration *>(nullptr), body);
     ASSERT_not_null(definition);
-    body->set_parent(definition);
     if (definition->get_parent() != nullptr ||
         definition->get_construction_physical_output_owner() != nullptr ||
         !definition->get_fortran_construction_name().is_null()) {
@@ -2526,14 +1982,10 @@ void SageTreeBuilder::Enter(SgFunctionParameterList *&param_list,
 
   ASSERT_not_null(param_scope);
 
-  if (language_ == LanguageEnum::Fortran ||
-      SageInterface::is_language_case_insensitive() ||
-      outer_scope->isCaseInsensitive()) {
-    param_scope->setCaseInsensitive(true);
-    if (SgFunctionDefinition *definition =
-            isSgFunctionDefinition(param_scope->get_parent())) {
-      definition->setCaseInsensitive(true);
-    }
+  param_scope->setCaseInsensitive(true);
+  if (SgFunctionDefinition *definition =
+          isSgFunctionDefinition(param_scope->get_parent())) {
+    definition->setCaseInsensitive(true);
   }
 
   if (SgFunctionDefinition *definition =
@@ -2597,6 +2049,8 @@ void SageTreeBuilder::Leave(
     ASSERT_not_null(parameter);
     requireFreshParameterSource(parameter);
     parameter->get_storageModifier() = declaration->get_storageModifier();
+    parameter->set_fortran_c_argument_passing(
+        declaration->get_fortran_c_argument_passing());
     requireFortranParameterSemanticSurface(parameter, "defining declaration");
     parameter->set_scope(param_scope);
     parameter->set_parent(param_list);
@@ -2643,12 +2097,8 @@ void SageTreeBuilder::Enter(SgFunctionDefinition *&function_def) {
   ASSERT_not_null(function_def);
   requireFreshUnclassifiedSource(function_def, "function-definition");
 
-  if (language_ == LanguageEnum::Fortran ||
-      SageInterface::is_language_case_insensitive() ||
-      SageBuilder::topScopeStack()->isCaseInsensitive()) {
-    function_def->setCaseInsensitive(true);
-    block->setCaseInsensitive(true);
-  }
+  function_def->setCaseInsensitive(true);
+  block->setCaseInsensitive(true);
 
   ASSERT_require(SageBuilder::topScopeStack()->isCaseInsensitive());
   SageBuilder::pushScopeStack(function_def);
@@ -2667,7 +2117,7 @@ void SageTreeBuilder::Enter(
     SgFunctionDefinition *exact_definition,
     const LanguageTranslation::FunctionModifierList &modifiers,
     bool is_defining_decl, const SourcePositions &sources,
-    std::vector<Rose::builder::Token> &comments,
+    HeaderComments &comments, bool from_module_file,
     SgProcedureHeaderStatement *canonical_nondefining,
     const SageBuilder::FortranBlockDataBuilderIdentity *block_data_identity) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
@@ -2739,6 +2189,7 @@ void SageTreeBuilder::Enter(
               canonical_nondefining ||
           canonical_nondefining->get_definingDeclaration() != nullptr ||
           canonical_type == nullptr ||
+          canonical_type->get_return_type() != return_type ||
           canonical_nondefining->get_subprogram_kind() != subprogram_kind ||
           canonical_nondefining->get_fortran_procedure_source_form() !=
               SgProcedureHeaderStatement::
@@ -2769,23 +2220,15 @@ void SageTreeBuilder::Enter(
         SgInitializedName *canonical_arg = canonical_args[i];
         if (definition_arg == nullptr || canonical_arg == nullptr ||
             definition_arg->get_name() != canonical_arg->get_name() ||
-            canonical_arg->get_type() == nullptr) {
+            canonical_arg->get_type() == nullptr ||
+            definition_arg->get_type() != canonical_arg->get_type()) {
           std::cerr << "REX_FLANG_INVARIANT[procedure-definition-signature]: "
                        "dummy argument "
                     << i << " of '" << name
                     << "' does not match its canonical declaration\n";
           ROSE_ABORT();
         }
-
-        // The internal-procedure prepass and definition pass visit the same
-        // Flang semantic declaration.  Kind expressions are AST nodes, so a
-        // second visit can otherwise manufacture structurally identical but
-        // pointer-distinct SgType nodes.  A declaration chain must share one
-        // canonical function signature; reuse its exact parameter types just
-        // as the defining-function builder reuses its exact SgFunctionType.
-        definition_arg->set_type(canonical_arg->get_type());
       }
-      return_type = canonical_type->get_return_type();
       ASSERT_not_null(return_type);
 
       SgFunctionType *definition_type =
@@ -2813,8 +2256,13 @@ void SageTreeBuilder::Enter(
       function_decl = SB::buildProcedureHeaderStatementFromExactDefinition(
           SageBuilder::function_declaration_ownership::sourceLexicalIn(scope),
           exact_definition, name.c_str(), return_type, param_list,
-          subprogram_kind, FortranProcedureHeaderSourceForm(sources), scope,
-          canonical_nondefining, block_data_identity);
+          subprogram_kind,
+          from_module_file
+              ? SgProcedureHeaderStatement::
+                    e_fortran_procedure_source_form_compiler_module_header
+              : SgProcedureHeaderStatement::
+                    e_fortran_procedure_source_form_header,
+          scope, canonical_nondefining, block_data_identity);
     }
     ASSERT_not_null(function_decl);
 
@@ -2831,13 +2279,6 @@ void SageTreeBuilder::Enter(
                    "procedure '"
                 << name << "' did not consume its exact construction tree\n";
       ROSE_ABORT();
-    }
-
-    if (language_ == LanguageEnum::Fortran ||
-        SageInterface::is_language_case_insensitive() ||
-        scope->isCaseInsensitive()) {
-      function_def->setCaseInsensitive(true);
-      function_body->setCaseInsensitive(true);
     }
 
     SageBuilder::pushScopeStack(function_def);
@@ -2858,28 +2299,10 @@ void SageTreeBuilder::Enter(
   }
   ASSERT_not_null(function_decl);
 
-  // set source position and attach comments (order important, from list first,
-  // decl before body)
   const SourcePosition &fs = std::get<0>(sources);
-  const SourcePosition &bs = std::get<1>(sources);
   const SourcePosition &fe = std::get<2>(sources);
-  const bool is_fortran_language = (language_ == LanguageEnum::Fortran) ||
-                                   SageInterface::is_Fortran_language();
-  attachComments(function_decl, comments,
-                 PosInfo{fs.line, fs.column, fe.line, fe.column});
-  if (!is_fortran_language) {
-    attachComments(function_body, comments,
-                   PosInfo{bs.line, bs.column, fe.line, fe.column});
-  }
-
-  if (function_decl)
-    setSourcePosition(function_decl, std::get<0>(sources),
-                      std::get<2>(sources));
-  if (function_def && function_def != exact_definition)
-    setSourcePosition(function_def, std::get<1>(sources), std::get<2>(sources));
-  if (function_body && function_def != exact_definition)
-    setSourcePosition(function_body, std::get<1>(sources),
-                      std::get<2>(sources));
+  setSourcePosition(function_decl, std::get<0>(sources), std::get<2>(sources));
+  attachComments(function_decl, comments);
   if (exact_definition != nullptr) {
     for (SgLocatedNode *node : {static_cast<SgLocatedNode *>(exact_definition),
                                 static_cast<SgLocatedNode *>(function_body)}) {
@@ -2893,33 +2316,28 @@ void SageTreeBuilder::Enter(
     }
   }
 
-  if (is_fortran_language) {
-    if (fs.line <= 0 || fs.column <= 0 || fs.path.empty()) {
-      std::cerr << "REX_FLANG_INVARIANT[parameter-location]: function '"
+  if (fs.line <= 0 || fs.column <= 0 || fs.path.empty()) {
+    std::cerr << "REX_FLANG_INVARIANT[parameter-location]: function '"
+              << function_decl->get_name().str()
+              << "' has no exact source anchor for its parameters\n";
+    ROSE_ABORT();
+  }
+  initializeFortranParameterSourceLocations(function_decl, fs);
+  if (is_defining_decl) {
+    SgProcedureHeaderStatement *canonical = isSgProcedureHeaderStatement(
+        function_decl->get_firstNondefiningDeclaration());
+    if (canonical == nullptr || canonical == function_decl) {
+      std::cerr << "REX_FLANG_INVARIANT[procedure-canonical-chain]: "
+                   "defining procedure '"
                 << function_decl->get_name().str()
-                << "' has no exact source anchor for its parameters\n";
+                << "' has no distinct canonical declaration\n";
       ROSE_ABORT();
     }
-    initializeFortranParameterSourceLocations(function_decl, fs);
-    if (is_defining_decl) {
-      SgProcedureHeaderStatement *canonical = isSgProcedureHeaderStatement(
-          function_decl->get_firstNondefiningDeclaration());
-      if (canonical == nullptr || canonical == function_decl) {
-        std::cerr << "REX_FLANG_INVARIANT[procedure-canonical-chain]: "
-                     "defining procedure '"
-                  << function_decl->get_name().str()
-                  << "' has no distinct canonical declaration\n";
-        ROSE_ABORT();
-      }
-      if (canonicalWasPredeclared) {
-        requireFortranProcedureCanonicalSource(canonical, scope, fs, fe);
-      } else {
-        attachFortranProcedureCanonical(canonical, scope, fs, fe);
-      }
+    if (canonicalWasPredeclared) {
+      requireFortranProcedureCanonicalSource(canonical, scope, fs, fe);
+    } else {
+      attachFortranProcedureCanonical(canonical, scope, fs, fe);
     }
-  } else {
-    publishTransformationSourceOnce(function_decl->get_parameterList(),
-                                    "non-Fortran-parameter-list");
   }
 
   if (list_contains(modifiers, e_function_modifier_recursive))
@@ -2962,9 +2380,12 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
     SageBuilder::popScopeStack(); // function body
     SageBuilder::popScopeStack(); // function definition
   } else {
-    ASSERT_not_null(isSgFunctionParameterScope(param_scope));
+    auto *parameters = isSgFunctionParameterScope(param_scope);
+    ASSERT_not_null(parameters);
+    SageInterface::publishGeneratedSubtreeOutputOwner(
+        parameters, parameters->get_construction_physical_output_owner());
     SageInterface::completeDetachedFunctionParameterScopeConstruction(
-        function_decl, isSgFunctionParameterScope(param_scope));
+        function_decl, parameters);
     if (param_scope->get_parent() != function_decl ||
         param_scope->get_scope() != function_decl->get_scope()) {
       std::cerr << "REX_FLANG_INVARIANT[parameter-scope-owner]: nondefining "
@@ -2976,169 +2397,10 @@ void SageTreeBuilder::Leave(SgFunctionDeclaration *function_decl,
   }
 
   if (is_defining_decl) {
-    // Attach any remaining comments
     auto scope = function_decl->get_definition()->get_body();
-    if ((language_ == LanguageEnum::Fortran ||
-         SageInterface::is_Fortran_language()) &&
-        scope != nullptr) {
-      if (tokens_ != nullptr) {
-        Sg_File_Info *decl_info = function_decl->get_startOfConstruct();
-        const int decl_line = decl_info != nullptr ? decl_info->get_line() : -1;
-        if (decl_line > 0) {
-          const Token *token = nullptr;
-          while ((token = tokens_->getNextToken()) &&
-                 token->getStartLine() < decl_line) {
-            attachCommentFromToken(function_decl, *token,
-                                   PreprocessingInfo::before, source_);
-            tokens_->consumeNextToken();
-          }
-        }
-      }
-      if (SgBasicBlock *body = isSgBasicBlock(scope)) {
-        SgStatement *first_stmt = nullptr;
-        int best_line = -1;
-        const SgStatementPtrList &stmts = body->getStatementList();
-        for (SgStatement *stmt : stmts) {
-          if (stmt == nullptr) {
-            continue;
-          }
-          PosInfo stmt_pos{stmt};
-          int line = stmt_pos.getStartLine();
-          if (line > 0 && (best_line < 0 || line < best_line)) {
-            best_line = line;
-            first_stmt = stmt;
-          }
-        }
-        if (first_stmt == nullptr && !stmts.empty()) {
-          first_stmt = stmts.front();
-        }
-        int first_stmt_line = best_line;
-        if (first_stmt_line <= 0 && first_stmt != nullptr) {
-          PosInfo first_pos{first_stmt};
-          if (first_pos.getStartLine() > 0) {
-            first_stmt_line = first_pos.getStartLine();
-          }
-        }
-        if (first_stmt != nullptr) {
-          AttachedPreprocessingInfoType *info_list =
-              body->getAttachedPreprocessingInfo();
-          if (info_list != nullptr && !info_list->empty()) {
-            AttachedPreprocessingInfoType to_move;
-            for (PreprocessingInfo *info : *info_list) {
-              if (info != nullptr &&
-                  (info->getTypeOfDirective() ==
-                       PreprocessingInfo::FortranStyleComment ||
-                   info->getTypeOfDirective() ==
-                       PreprocessingInfo::F90StyleComment ||
-                   info->getTypeOfDirective() ==
-                       PreprocessingInfo::C_StyleComment ||
-                   info->getTypeOfDirective() ==
-                       PreprocessingInfo::CplusplusStyleComment) &&
-                  (first_stmt_line <= 0 ||
-                   info->getLineNumber() <= first_stmt_line)) {
-                to_move.push_back(info);
-              }
-            }
-            for (PreprocessingInfo *info : to_move) {
-              body->detachPreprocessingInfo(info);
-              info->setRelativePosition(PreprocessingInfo::before);
-            }
-            PreprocessingInfo *prev = nullptr;
-            for (PreprocessingInfo *info : to_move) {
-              if (prev == nullptr) {
-                first_stmt->addToAttachedPreprocessingInfo(
-                    info, PreprocessingInfo::before);
-              } else {
-                first_stmt->insertToAttachedPreprocessingInfo(info, prev);
-              }
-              prev = info;
-            }
-          }
-        }
-      }
-    }
+    ASSERT_not_null(scope);
     attachComments(scope, /*at_end*/ true);
-    if ((language_ == LanguageEnum::Fortran ||
-         SageInterface::is_Fortran_language()) &&
-        function_decl != nullptr) {
-      Sg_File_Info *decl_info = function_decl->get_startOfConstruct();
-      const int decl_line = decl_info != nullptr ? decl_info->get_line() : -1;
-      SgBasicBlock *body = function_decl->get_definition()->get_body();
-      if (decl_line > 0 && body != nullptr) {
-        auto collect_comments =
-            [&](SgLocatedNode *owner, AttachedPreprocessingInfoType *info_list,
-                AttachedPreprocessingInfoType &out, bool skip_before) {
-              if (info_list == nullptr || info_list->empty()) {
-                return;
-              }
-              AttachedPreprocessingInfoType selected;
-              for (PreprocessingInfo *info : *info_list) {
-                if (info != nullptr &&
-                    (info->getTypeOfDirective() ==
-                         PreprocessingInfo::FortranStyleComment ||
-                     info->getTypeOfDirective() ==
-                         PreprocessingInfo::F90StyleComment ||
-                     info->getTypeOfDirective() ==
-                         PreprocessingInfo::C_StyleComment ||
-                     info->getTypeOfDirective() ==
-                         PreprocessingInfo::CplusplusStyleComment) &&
-                    info->getLineNumber() > 0 &&
-                    info->getLineNumber() < decl_line &&
-                    (!skip_before || info->getRelativePosition() !=
-                                         PreprocessingInfo::before)) {
-                  selected.push_back(info);
-                }
-              }
-              for (PreprocessingInfo *info : selected) {
-                owner->detachPreprocessingInfo(info);
-                out.push_back(info);
-              }
-            };
-        AttachedPreprocessingInfoType to_move;
-        collect_comments(function_decl,
-                         function_decl->getAttachedPreprocessingInfo(), to_move,
-                         /*skip_before=*/true);
-        collect_comments(body, body->getAttachedPreprocessingInfo(), to_move,
-                         /*skip_before=*/false);
-        for (SgStatement *stmt : body->get_statements()) {
-          if (stmt == nullptr) {
-            continue;
-          }
-          collect_comments(stmt, stmt->getAttachedPreprocessingInfo(), to_move,
-                           /*skip_before=*/false);
-        }
-        for (PreprocessingInfo *info : to_move) {
-          info->setRelativePosition(PreprocessingInfo::before);
-        }
-        PreprocessingInfo *prev = nullptr;
-        for (PreprocessingInfo *info : to_move) {
-          if (prev == nullptr) {
-            function_decl->addToAttachedPreprocessingInfo(
-                info, PreprocessingInfo::before);
-          } else {
-            function_decl->insertToAttachedPreprocessingInfo(info, prev);
-          }
-          prev = info;
-        }
-      }
-    }
   }
-
-  DedupAttachedPreprocessingInfo(function_decl);
-  if ((language_ == LanguageEnum::Fortran ||
-       SageInterface::is_Fortran_language()) &&
-      function_decl != nullptr &&
-      function_decl->get_parameterList() != nullptr) {
-    RemoveDuplicateComments(function_decl->get_parameterList(), function_decl);
-  }
-  if ((language_ == LanguageEnum::Fortran ||
-       SageInterface::is_Fortran_language()) &&
-      function_decl != nullptr && function_decl->get_definition() != nullptr) {
-    RemoveDuplicateComments(function_decl->get_definition(), function_decl);
-  }
-
-  // Finished using the map for labels
-  labels_.clear();
 
   SgScopeStatement *lexical_scope = SageBuilder::topScopeStack();
   ASSERT_not_null(lexical_scope);
@@ -3241,73 +2503,8 @@ void SageTreeBuilder::Leave(SgDerivedTypeStatement *derived_type_stmt) {
   SageBuilder::popScopeStack(); // class definition
 }
 
-void SageTreeBuilder::Leave(
-    SgDerivedTypeStatement *derived_type_stmt,
-    std::list<LanguageTranslation::ExpressionKind> &modifier_enum_list) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgDerivedTypeStatement*) with modifiers \n";
-
-  for (LanguageTranslation::ExpressionKind modifier_enum : modifier_enum_list) {
-    switch (modifier_enum) {
-    case LanguageTranslation::ExpressionKind::e_access_modifier_public:
-      derived_type_stmt->get_declarationModifier()
-          .get_accessModifier()
-          .setPublic();
-      break;
-    case LanguageTranslation::ExpressionKind::e_access_modifier_private:
-      derived_type_stmt->get_declarationModifier()
-          .get_accessModifier()
-          .setPrivate();
-      break;
-    case LanguageTranslation::ExpressionKind::e_type_modifier_abstract:
-      derived_type_stmt->get_declarationModifier()
-          .get_typeModifier()
-          .setAbstract();
-      break;
-    case LanguageTranslation::ExpressionKind::e_type_modifier_bind_c:
-      derived_type_stmt->get_declarationModifier().get_typeModifier().setBind();
-      break;
-    default:
-      break;
-    }
-  }
-
-  Leave(derived_type_stmt);
-}
-
 // Statements
 //
-
-void SageTreeBuilder::Enter(SgNamespaceDeclarationStatement *&namespace_decl,
-                            const std::string &name,
-                            const SourcePositionPair &positions) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgNamespaceDeclarationStatement* &, ...) \n";
-
-  // Build a namespace to contain the module
-  namespace_decl = SageBuilder::buildNamespaceDeclaration_nfi(
-      name, true, SageBuilder::topScopeStack(),
-      SageBuilder::e_namespace_declaration_canonical_generated_lexical, nullptr,
-      nullptr, nullptr, std::nullopt);
-
-  SgNamespaceDefinitionStatement *namespace_defn =
-      namespace_decl->get_definition();
-  ASSERT_not_null(namespace_defn);
-  ASSERT_require(SageBuilder::topScopeStack()->isCaseInsensitive());
-
-  // TEMPORARY: fix in SageBuilder
-  namespace_defn->setCaseInsensitive(true);
-  ASSERT_require(namespace_defn->isCaseInsensitive());
-
-  SageBuilder::pushScopeStack(namespace_defn);
-}
-
-void SageTreeBuilder::Leave(SgNamespaceDeclarationStatement *namespace_decl) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgNamespaceDeclarationStatement*, ...) \n";
-
-  SageBuilder::popScopeStack(); // namespace definition
-}
 
 void SageTreeBuilder::Enter(SgExprStatement *&assign_stmt, SgExpression *&rhs,
                             const std::vector<SgExpression *> &vars) {
@@ -3331,40 +2528,17 @@ void SageTreeBuilder::Enter(SgExprStatement *&assign_stmt, SgExpression *&rhs,
 }
 
 void SageTreeBuilder::Leave(SgExprStatement *exprStmt,
-                            std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgExprStatement*) \n";
 
-  SgStatement *stmt = wrapStmtWithLabels(exprStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
-}
-
-void SageTreeBuilder::Enter(SgCastExp *&cast_expr, const std::string &name,
-                            SgExpression *cast_operand) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgCastExp* &, ...) \n";
-
-  SgSymbol *symbol = SageInterface::lookupSymbolInParentScopes(
-      name, SageBuilder::topScopeStack());
-
-  if (isSgTypedefSymbol(symbol) == nullptr &&
-      isSgEnumSymbol(symbol) == nullptr) {
-    MLOG_ERROR_CXX(MLOG_FRONTEND)
-        << "UNIMPLEMENTED: SageTreeBuilder::Enter(SgCastExp* ...) for name "
-        << name;
-    ROSE_ABORT();
-  }
-
-  SgType *conv_type = symbol->get_type();
-  cast_expr = SageBuilder::buildTransformationCastExp_nfi(
-      cast_operand, conv_type, SgCastExp::e_C_style_cast);
+  setFortranNumericLabel(exprStmt, label);
+  SageInterface::appendStatement(exprStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgIfStmt *&if_stmt, SgExpression *conditional,
-                            SgBasicBlock *true_body, SgBasicBlock *false_body,
-                            std::vector<Rose::builder::Token> &comments,
-                            bool is_ifthen, bool has_end_stmt,
-                            bool is_else_if) {
+                            SgBasicBlock *true_body, bool is_ifthen,
+                            bool has_end_stmt, bool is_else_if) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Enter(SgIfStmt* &, ...) \n";
 
@@ -3373,8 +2547,7 @@ void SageTreeBuilder::Enter(SgIfStmt *&if_stmt, SgExpression *conditional,
 
   SgStatement *conditional_stmt =
       SageBuilder::buildExprStatement_nfi(conditional);
-  if_stmt =
-      SageBuilder::buildIfStmt_nfi(conditional_stmt, true_body, false_body);
+  if_stmt = SageBuilder::buildIfStmt_nfi(conditional_stmt, true_body, nullptr);
 
   if (is_ifthen) {
     if_stmt->set_use_then_keyword(true);
@@ -3385,8 +2558,6 @@ void SageTreeBuilder::Enter(SgIfStmt *&if_stmt, SgExpression *conditional,
   if (is_else_if) {
     if_stmt->set_is_else_if_statement(true);
   }
-
-  attachComments(if_stmt, comments);
 }
 
 void SageTreeBuilder::Leave(SgIfStmt *if_stmt) {
@@ -3396,23 +2567,22 @@ void SageTreeBuilder::Leave(SgIfStmt *if_stmt) {
   SageInterface::appendStatement(if_stmt, SageBuilder::topScopeStack());
 }
 
-void SageTreeBuilder::Leave(SgIfStmt *if_stmt,
-                            const std::vector<std::string> &labels) {
+void SageTreeBuilder::Leave(SgIfStmt *if_stmt, std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND) << "SageTreeBuilder::Leave(SgIfStmt*, ...)\n";
 
   ASSERT_not_null(if_stmt);
-  SgStatement *stmt = wrapStmtWithLabels(if_stmt, labels);
-  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+  setFortranNumericLabel(if_stmt, label);
+  SageInterface::appendStatement(if_stmt, SageBuilder::topScopeStack());
 }
 
 void SageTreeBuilder::Leave(SgArithmeticIfStatement *if_stmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgArithmeticIfStatement*, ...) \n";
 
   ASSERT_not_null(if_stmt);
-  SgStatement *stmt = wrapStmtWithLabels(if_stmt, labels);
-  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+  setFortranNumericLabel(if_stmt, label);
+  SageInterface::appendStatement(if_stmt, SageBuilder::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgContinueStmt *&continueStmt) {
@@ -3423,14 +2593,12 @@ void SageTreeBuilder::Enter(SgContinueStmt *&continueStmt) {
 }
 
 void SageTreeBuilder::Leave(SgContinueStmt *continueStmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgContinueStmt*, ...)\n";
 
-  // Append final label statement, if there are labels, otherwise
-  // stmt==continueStmt
-  SgStatement *stmt = wrapStmtWithLabels(continueStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
+  setFortranNumericLabel(continueStmt, label);
+  SageInterface::appendStatement(continueStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgBreakStmt *&breakStmt) {
@@ -3440,13 +2608,12 @@ void SageTreeBuilder::Enter(SgBreakStmt *&breakStmt) {
   breakStmt = SB::buildBreakStmt_nfi();
 }
 
-void SageTreeBuilder::Leave(SgBreakStmt *breakStmt,
-                            const std::vector<std::string> &labels) {
+void SageTreeBuilder::Leave(SgBreakStmt *breakStmt, std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgBreakStmt*, ...)\n";
 
-  SgStatement *stmt = wrapStmtWithLabels(breakStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
+  setFortranNumericLabel(breakStmt, label);
+  SageInterface::appendStatement(breakStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgFortranContinueStmt *&continueStmt) {
@@ -3457,86 +2624,25 @@ void SageTreeBuilder::Enter(SgFortranContinueStmt *&continueStmt) {
 }
 
 void SageTreeBuilder::Leave(SgFortranContinueStmt *continueStmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgFortranContinueStmt*, ...)\n";
 
-  // Append final label statement, if there are labels, otherwise
-  // stmt==continueStmt
-  SgStatement *stmt = wrapStmtWithLabels(continueStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
+  setFortranNumericLabel(continueStmt, label);
+  SageInterface::appendStatement(continueStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Leave(SgGotoStatement *gotoStmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgGotoStatement*, ...)\n";
 
-  // Append final label statement (if there are labels, otherwise
-  // stmt==gotoStmt)
-  SgStatement *stmt = wrapStmtWithLabels(gotoStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
-}
-
-void SageTreeBuilder::Enter(SgLabelStatement *&labelStmt,
-                            const std::string &label) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgLabelStatement*, ...)\n";
-
-  labelStmt = nullptr;
-  SgScopeStatement *currentScope = SB::topScopeStack();
-  ASSERT_not_null(currentScope);
-  SgScopeStatement *labelScope = currentScope;
-  if (SageInterface::is_Fortran_language()) {
-    if (SgScopeStatement *funcScope =
-            SageInterface::getEnclosingFunctionDefinition(
-                currentScope,
-                /*includingSelf*/ true)) {
-      labelScope = funcScope;
-    }
-  }
-
-  // Perhaps a label statement already exists
-  if (labels_.find(label) != labels_.end()) {
-    labelStmt = labels_[label];
-  } else {
-    labelStmt = nullptr;
-  }
-  if (labelStmt != nullptr && SageInterface::is_Fortran_language()) {
-    SgScopeStatement *existingScope = labelStmt->get_scope();
-    SgScopeStatement *existingLabelScope = existingScope;
-    if (existingScope != nullptr) {
-      if (SgScopeStatement *funcScope =
-              SageInterface::getEnclosingFunctionDefinition(
-                  existingScope, /*includingSelf*/ true)) {
-        existingLabelScope = funcScope;
-      }
-    }
-    if (existingLabelScope != labelScope) {
-      labelStmt = nullptr;
-    }
-  }
-  if (labelStmt == nullptr) {
-    // Build a temporary placeholder in the current label scope.
-    labelStmt = SB::buildLabelStatement_nfi(label, nullptr, labelScope);
-    labels_[label] = labelStmt;
-  }
-  ASSERT_not_null(labelStmt);
-}
-
-void SageTreeBuilder::Leave(SgLabelStatement *labelStmt,
-                            const std::vector<std::string> &labels) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgGotoStatement*, ...)\n";
-
-  // Append final label statement (if there are labels, otherwise
-  // stmt==labelStmt)
-  SgStatement *stmt = wrapStmtWithLabels(labelStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
+  setFortranNumericLabel(gotoStmt, label);
+  SageInterface::appendStatement(gotoStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgProcessControlStatement *&control_stmt,
-                            const std::string &stmt_kind,
+                            ProcessControlKind stmt_kind,
                             const std::optional<SgExpression *> &opt_code,
                             const std::optional<SgExpression *> &opt_quiet) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
@@ -3551,73 +2657,39 @@ void SageTreeBuilder::Enter(SgProcessControlStatement *&control_stmt,
                   : SageBuilder::buildNullExpression_nfi(
                         SgNullExpression::e_null_expression_syntactic_absence);
 
-  ASSERT_not_null(code);
-  control_stmt = new SgProcessControlStatement(code);
-  ASSERT_not_null(control_stmt);
-  requireFreshUnclassifiedSource(control_stmt, "process-control-statement");
-
-  ASSERT_not_null(quiet);
-  control_stmt->set_quiet(quiet);
-
-  if (stmt_kind == "abort") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_abort);
-  } else if (stmt_kind == "error_stop") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_error_stop);
-  } else if (stmt_kind == "exit") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_exit);
-  } else if (stmt_kind == "fail_image") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_fail_image);
-  } else if (stmt_kind == "pause") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_pause);
-  } else if (stmt_kind == "stop") {
-    control_stmt->set_control_kind(SgProcessControlStatement::e_stop);
-  } else {
-    MLOG_FATAL_CXX(MLOG_FRONTEND)
-        << "SageTreeBuilder::Enter(SgProcessControlStatement* &, ...): "
-           "incorrect statement kind\n";
+  SgProcessControlStatement::control_enum control_kind;
+  switch (stmt_kind) {
+  case ProcessControlKind::stop:
+    control_kind = SgProcessControlStatement::e_stop;
+    break;
+  case ProcessControlKind::error_stop:
+    control_kind = SgProcessControlStatement::e_error_stop;
+    break;
+  case ProcessControlKind::fail_image:
+    control_kind = SgProcessControlStatement::e_fail_image;
+    break;
+  case ProcessControlKind::pause:
+    control_kind = SgProcessControlStatement::e_pause;
+    break;
+  default:
     ROSE_ABORT();
   }
 
-  code->set_parent(control_stmt);
-  quiet->set_parent(control_stmt);
+  ASSERT_not_null(code);
+  ASSERT_not_null(quiet);
+  control_stmt = new SgProcessControlStatement(control_kind, code, quiet);
+  ASSERT_not_null(control_stmt);
+  requireFreshUnclassifiedSource(control_stmt, "process-control-statement");
 }
 
 void SageTreeBuilder::Leave(SgProcessControlStatement *controlStmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgProcessControlStatement*, ...) \n";
   ASSERT_not_null(controlStmt);
 
-  // Append final label statement (if there are labels, otherwise
-  // stmt==controlStmt)
-  SgStatement *stmt = wrapStmtWithLabels(controlStmt, labels);
-  SageInterface::appendStatement(stmt, SB::topScopeStack());
-}
-
-void SageTreeBuilder::Enter(SgSwitchStatement *&switch_stmt,
-                            SgExpression *selector,
-                            const SourcePositionPair &sources) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgSwitchStatement* &, ...) \n";
-
-  ASSERT_not_null(selector);
-  SgExprStatement *selector_stmt =
-      SageBuilder::buildExprStatement_nfi(selector);
-  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
-
-  switch_stmt = SageBuilder::buildSwitchStatement_nfi(selector_stmt, body);
-
-  // Append before push (so that symbol lookup will work)
-  SageInterface::appendStatement(switch_stmt, SageBuilder::topScopeStack());
-  SageBuilder::pushScopeStack(body);
-}
-
-void SageTreeBuilder::Leave(SgSwitchStatement *switch_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgSwitchStatement*, ...) \n";
-  ASSERT_not_null(switch_stmt);
-
-  SageBuilder::popScopeStack(); // switch statement body
+  setFortranNumericLabel(controlStmt, label);
+  SageInterface::appendStatement(controlStmt, SB::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgReturnStmt *&return_stmt,
@@ -3634,78 +2706,23 @@ void SageTreeBuilder::Enter(SgReturnStmt *&return_stmt,
   return_stmt = SageBuilder::buildReturnStmt_nfi(return_expr);
 }
 
-void SageTreeBuilder::Leave(SgReturnStmt *return_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgReturnStmt*, ...) \n";
-  ASSERT_not_null(return_stmt);
-
-  SageInterface::appendStatement(return_stmt, SageBuilder::topScopeStack());
-}
-
 void SageTreeBuilder::Leave(SgReturnStmt *return_stmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgReturnStmt*, ...) with labels \n";
   ASSERT_not_null(return_stmt);
 
-  SgStatement *stmt = wrapStmtWithLabels(return_stmt, labels);
-  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
-}
-
-void SageTreeBuilder::Enter(SgCaseOptionStmt *&case_option_stmt,
-                            SgExprListExp *key) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgCaseOptionStmt* &, ...) \n";
-  ASSERT_not_null(key);
-
-  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
-  case_option_stmt = SageBuilder::buildCaseOptionStmt_nfi(key, body);
-
-  // Append before push (so that symbol lookup will work)
-  SageInterface::appendStatement(case_option_stmt,
-                                 SageBuilder::topScopeStack());
-  SageBuilder::pushScopeStack(body);
-}
-
-void SageTreeBuilder::Leave(SgCaseOptionStmt *case_option_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgCaseOptionStmt*, ...) \n";
-  ASSERT_not_null(case_option_stmt);
-
-  SageBuilder::popScopeStack(); // case_option_stmt body
-}
-
-void SageTreeBuilder::Enter(SgDefaultOptionStmt *&default_option_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgDefautlOptionStmt* &, ...) \n";
-
-  SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
-  default_option_stmt = SageBuilder::buildDefaultOptionStmt(body);
-
-  // Append before push (so that symbol lookup will work)
-  SageInterface::appendStatement(default_option_stmt,
-                                 SageBuilder::topScopeStack());
-  SageBuilder::pushScopeStack(body);
-}
-
-void SageTreeBuilder::Leave(SgDefaultOptionStmt *default_option_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgDefautlOptionStmt*, ...) \n";
-  ASSERT_not_null(default_option_stmt);
-
-  SageBuilder::popScopeStack(); // default_option_stmt body
+  setFortranNumericLabel(return_stmt, label);
+  SageInterface::appendStatement(return_stmt, SageBuilder::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgFortranDo *&doStmt, SgExpression *initialization,
                             SgExpression *bound, SgExpression *increment) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgDoWhileStmt* &, ...) \n";
+      << "SageTreeBuilder::Enter(SgFortranDo* &, ...) \n";
 
   auto body = SageBuilder::buildBasicBlock_nfi();
   doStmt = SB::buildFortranDo_nfi(initialization, bound, increment, body);
-
-  // output "END DO"
-  doStmt->set_has_end_statement(true);
 }
 
 void SageTreeBuilder::Leave(SgFortranDo *doStmt) {
@@ -3717,58 +2734,24 @@ void SageTreeBuilder::Leave(SgFortranDo *doStmt) {
   SageBuilder::popScopeStack(); // do statement body
 }
 
-void SageTreeBuilder::Enter(SgPrintStatement *&print_stmt, SgExpression *format,
-                            std::list<SgExpression *> &expr_list) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgPrintStmt* &, ...) \n";
-
-  ASSERT_not_null(format);
-
-  print_stmt = new SgPrintStatement();
-  ASSERT_not_null(print_stmt);
-  requireFreshUnclassifiedSource(print_stmt, "print-statement");
-  print_stmt->set_io_statement(SgIOStatement::e_print);
-
-  print_stmt->set_format(format);
-  format->set_parent(print_stmt);
-
-  SgExprListExp *io_stmt_list =
-      SageBuilderCpp17::buildExprListExp_nfi(expr_list);
-  io_stmt_list->set_parent(print_stmt);
-  for (SgExpression *expr : io_stmt_list->get_expressions()) {
-    if (expr != nullptr) {
-      expr->set_parent(io_stmt_list);
-    }
-  }
-  print_stmt->set_io_stmt_list(io_stmt_list);
-}
-
-void SageTreeBuilder::Leave(SgPrintStatement *print_stmt) {
+void SageTreeBuilder::Leave(SgPrintStatement *print_stmt,
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgPrintStmt*, ...) \n";
   ASSERT_not_null(print_stmt);
 
+  setFortranNumericLabel(print_stmt, label);
   SageInterface::appendStatement(print_stmt, SageBuilder::topScopeStack());
 }
 
-void SageTreeBuilder::Leave(SgPrintStatement *print_stmt,
-                            const std::vector<std::string> &labels) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgPrintStmt*, ...) \n";
-  ASSERT_not_null(print_stmt);
-
-  SgStatement *stmt = wrapStmtWithLabels(print_stmt, labels);
-  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
-}
-
 void SageTreeBuilder::Leave(SgFormatStatement *format_stmt,
-                            const std::vector<std::string> &labels) {
+                            std::optional<int> label) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgFormatStatement*, ...) \n";
   ASSERT_not_null(format_stmt);
 
-  SgStatement *stmt = wrapStmtWithLabels(format_stmt, labels);
-  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+  setFortranNumericLabel(format_stmt, label);
+  SageInterface::appendStatement(format_stmt, SageBuilder::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgWhileStmt *&while_stmt, SgExpression *condition) {
@@ -3783,132 +2766,12 @@ void SageTreeBuilder::Enter(SgWhileStmt *&while_stmt, SgExpression *condition) {
   while_stmt = SageBuilder::buildWhileStmt_nfi(condition_stmt, body);
 }
 
-void SageTreeBuilder::Leave(SgWhileStmt *while_stmt, bool has_end_do_stmt) {
+void SageTreeBuilder::Leave(SgWhileStmt *while_stmt) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgWhileStmt*, ...) \n";
   ASSERT_not_null(while_stmt);
 
-  // The default value of has_end_do_stmt is false so if true,
-  // then the language supports it and it needs to be set.
-  if (has_end_do_stmt) {
-    while_stmt->set_has_end_statement(true);
-  }
-
   SageBuilder::popScopeStack(); // while statement body
-}
-
-void SageTreeBuilder::Enter(SgImplicitStatement *&implicit_stmt,
-                            bool none_external, bool none_type) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND) << "SageTreeBuilder::Enter(SgImplicitStatement*"
-                                   " &, bool none_external, bool none_type)\n";
-  // Implicit None
-
-  implicit_stmt = new SgImplicitStatement(true /* implicit none*/);
-  ASSERT_not_null(implicit_stmt);
-  implicit_stmt->set_definingDeclaration(implicit_stmt);
-  implicit_stmt->set_firstNondefiningDeclaration(implicit_stmt);
-  requireFreshUnclassifiedSource(implicit_stmt, "implicit-none-statement");
-
-  if (none_external && none_type) {
-    implicit_stmt->set_implicit_spec(
-        SgImplicitStatement::e_none_external_and_type);
-  } else if (none_external) {
-    implicit_stmt->set_implicit_spec(SgImplicitStatement::e_none_external);
-  } else if (none_type) {
-    implicit_stmt->set_implicit_spec(SgImplicitStatement::e_none_type);
-  } else {
-    implicit_stmt->set_implicit_spec(SgImplicitStatement::e_none);
-  }
-}
-
-void SageTreeBuilder::Enter(
-    SgImplicitStatement *&implicit_stmt,
-    std::list<std::tuple<SgType *, SgSymbol *, FortranImplicitTypeSpecKind,
-                         std::list<std::tuple<char, std::optional<char>>>>>
-        &implicit_spec_list) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgImplicitStatement* &, implicit_spec_list)\n";
-  // Implicit with Implicit-Spec
-
-  implicit_stmt = new SgImplicitStatement(false);
-  ASSERT_not_null(implicit_stmt);
-  implicit_stmt->set_definingDeclaration(implicit_stmt);
-  implicit_stmt->set_firstNondefiningDeclaration(implicit_stmt);
-  requireFreshUnclassifiedSource(implicit_stmt, "implicit-spec-statement");
-  implicit_stmt->set_implicit_spec(
-      SgImplicitStatement::e_has_implicit_spec_list);
-
-  SgInitializedNamePtrList &name_list = implicit_stmt->get_variables();
-  SgScopeStatement *scope = SageBuilder::topScopeStack();
-  ASSERT_not_null(scope);
-
-  // Step through the list of Implicit Specs
-  for (std::tuple<SgType *, SgSymbol *, FortranImplicitTypeSpecKind,
-                  std::list<std::tuple<char, std::optional<char>>>>
-           implicit_spec : implicit_spec_list) {
-    SgType *type;
-    SgSymbol *sourceDerivedTypeSymbol;
-    FortranImplicitTypeSpecKind fortranTypeSpec;
-    std::list<std::tuple<char, std::optional<char>>> letter_spec_list;
-    std::tie(type, sourceDerivedTypeSymbol, fortranTypeSpec, letter_spec_list) =
-        implicit_spec;
-
-    // Traverse the list of letter specs
-    for (std::tuple<char, std::optional<char>> letter_spec : letter_spec_list) {
-      char first;
-      std::optional<char> second;
-      std::tie(first, second) = letter_spec;
-      if (first == '\0') {
-        continue;
-      }
-
-      std::string name(1, first);
-      if (second) {
-        name += "-";
-        name.push_back(*second);
-      }
-
-      SgInitializedName *init_name = SageBuilder::buildInitializedName_nfi(
-          name, type, /*initializer*/ nullptr);
-      ASSERT_not_null(init_name);
-      publishTransformationSourceOnce(init_name, "implicit-letter-range");
-      init_name->set_fortran_source_derived_type_symbol(
-          sourceDerivedTypeSymbol);
-      switch (fortranTypeSpec) {
-      case FortranImplicitTypeSpecKind::intrinsic:
-        init_name->set_fortran_type_spec(
-            SgInitializedName::e_fortran_type_spec_default);
-        break;
-      case FortranImplicitTypeSpecKind::type:
-        init_name->set_fortran_type_spec(
-            SgInitializedName::e_fortran_type_spec_type);
-        break;
-      case FortranImplicitTypeSpecKind::class_type:
-        init_name->set_fortran_type_spec(
-            SgInitializedName::e_fortran_type_spec_class);
-        break;
-      case FortranImplicitTypeSpecKind::type_star:
-        init_name->set_fortran_type_spec(
-            SgInitializedName::e_fortran_type_spec_type_star);
-        break;
-      case FortranImplicitTypeSpecKind::class_star:
-        init_name->set_fortran_type_spec(
-            SgInitializedName::e_fortran_type_spec_class_star);
-        break;
-      }
-      init_name->set_scope(scope);
-      init_name->set_parent(implicit_stmt);
-      name_list.push_back(init_name);
-    }
-  }
-}
-
-void SageTreeBuilder::Leave(SgImplicitStatement *implicit_stmt) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgImplicitStatement*, ...) \n";
-  ASSERT_not_null(implicit_stmt);
-
-  SageInterface::appendStatement(implicit_stmt, SageBuilder::topScopeStack());
 }
 
 void SageTreeBuilder::Enter(SgModuleStatement *&module_stmt,
@@ -3936,31 +2799,6 @@ void SageTreeBuilder::Leave(SgModuleStatement *module_stmt) {
   ValidateResolvedFortranLabelSymbols(module_stmt->get_definition(), "MODULE");
 
   SageBuilder::popScopeStack(); // class definition
-}
-
-void SageTreeBuilder::Enter(SgUseStatement *&use_stmt,
-                            const std::string &module_name,
-                            const std::string &module_nature) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgUseStatement* &, ...)\n";
-
-  use_stmt = new SgUseStatement(module_name, false, module_nature);
-  ASSERT_not_null(use_stmt);
-  use_stmt->set_definingDeclaration(use_stmt);
-  use_stmt->set_firstNondefiningDeclaration(use_stmt);
-  requireFreshUnclassifiedSource(use_stmt, "use-statement");
-
-  SgClassSymbol *module_symbol =
-      SageInterface::lookupClassSymbolInParentScopes(module_name);
-  ASSERT_not_null(module_symbol);
-
-  SgClassDeclaration *decl = module_symbol->get_declaration();
-  ASSERT_not_null(decl);
-
-  SgModuleStatement *module_stmt = isSgModuleStatement(decl);
-  ASSERT_not_null(module_stmt);
-
-  use_stmt->set_module(module_stmt);
 }
 
 void SageTreeBuilder::Leave(SgUseStatement *use_stmt) {
@@ -3998,35 +2836,37 @@ void SageTreeBuilder::Enter(SgVariableDeclaration *&var_decl,
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
-  var_decl =
-      BuildUnclassifiedSourceVariableDeclaration(name, type, init_expr, scope);
+  var_decl = BuildUnclassifiedSourceVariableDeclaration(name, type, type,
+                                                        init_expr, scope);
   if (var_decl->get_variables().size() != 1 ||
       var_decl->get_variables().front() == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[source-type-publication]: Fortran "
                  "entity has no exact initialized-name owner\n";
     ROSE_ABORT();
   }
-  var_decl->get_variables().front()->set_fortran_source_type(type);
   SageBuilder::initializePendingSourceVariableDeclarationProvenance(var_decl);
 }
 
 void SageTreeBuilder::Enter(
-    SgVariableDeclaration *&var_decl, SgType *base_type,
-    std::list<std::tuple<std::string, SgType *, SgType *, SgExpression *>>
-        &init_info) {
+    SgVariableDeclaration *&var_decl, std::list<EntityDeclInfo> &init_info,
+    const std::optional<SgInitializedName::FortranProcedureComponentBinding>
+        &binding) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgVariableDeclaration* &, std::tuple<...>, "
+      << "SageTreeBuilder::Enter(SgVariableDeclaration* &, EntityDeclInfo, "
          "...) \n";
 
-  // Step through list of tuples to create the multi variable declaration
-  for (std::list<std::tuple<std::string, SgType *, SgType *,
-                            SgExpression *>>::iterator it = init_info.begin();
-       it != init_info.end(); ++it) {
-    std::string name;
-    SgType *semantic_type;
-    SgType *source_type;
-    SgExpression *init_expr;
-    std::tie(name, semantic_type, source_type, init_expr) = *it;
+  for (auto it = init_info.begin(); it != init_info.end(); ++it) {
+    const std::string &name = it->name;
+    SgType *semantic_type = it->semantic_type;
+    SgType *source_type = it->source_type;
+    SgExpression *init_expr = it->initializer;
+    SgInitializedName *prior = it->prior_declaration;
+    ROSE_ASSERT(SgInitializedName::is_valid_fortran_procedure_interface(
+        it->procedure_interface, semantic_type));
+    ROSE_ASSERT(
+        prior == nullptr ||
+        (prior->get_scope() == SageBuilder::topScopeStack() &&
+         SageInterface::isEquivalentType(prior->get_type(), semantic_type)));
 
     if (semantic_type == nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[semantic-type-publication]: Fortran "
@@ -4045,17 +2885,21 @@ void SageTreeBuilder::Enter(
                                    // variable declaration
       SgScopeStatement *scope = SageBuilder::topScopeStack();
       ASSERT_not_null(scope);
-      var_decl = BuildUnclassifiedSourceVariableDeclaration(name, semantic_type,
-                                                            init_expr, scope);
+      var_decl = BuildUnclassifiedSourceVariableDeclaration(
+          name, semantic_type, source_type, init_expr, scope, binding, &*it);
       if (var_decl == nullptr || var_decl->get_variables().size() != 1 ||
           var_decl->get_variables().front() == nullptr) {
         std::cerr << "REX_FLANG_INVARIANT[entity-publication]: first Fortran "
                      "entity has no exact initialized-name owner\n";
         ROSE_ABORT();
       }
-      var_decl->get_variables().front()->set_fortran_source_type(source_type);
     } else { // On later passes, create new initialized name and append to the
              // var decl
+      if (binding) {
+        ROSE_ASSERT(isSgClassDefinition(SageBuilder::topScopeStack()) !=
+                    nullptr);
+        ROSE_ASSERT(binding->isValidForType(semantic_type));
+      }
       SgAssignInitializer *init = nullptr;
       if (init_expr) {
         init =
@@ -4065,7 +2909,13 @@ void SageTreeBuilder::Enter(
       SgInitializedName *init_name =
           SageBuilder::buildInitializedName_nfi(name, semantic_type, init);
       ASSERT_not_null(init_name);
+      init_name->set_fortran_procedure_component_binding(binding);
       init_name->set_fortran_source_type(source_type);
+      init_name->set_fortran_procedure_interface(it->procedure_interface);
+      init_name->set_prev_decl_item(prior);
+      init_name->set_fortran_type_spec(it->type_spec);
+      init_name->set_fortran_source_derived_type_symbol(
+          it->source_derived_type_symbol);
       var_decl->append_variable(init_name, init);
       init_name->set_declptr(var_decl);
       init_name->set_parent(var_decl);
@@ -4074,20 +2924,15 @@ void SageTreeBuilder::Enter(
         init->set_parent(init_name);
       }
 
-      // A symbol for the variable also has to be created
-      SgVariableSymbol *var_sym = new SgVariableSymbol(init_name);
-      ASSERT_not_null(var_sym);
-      SgScopeStatement *scope = SageBuilder::topScopeStack();
-      ASSERT_not_null(scope);
-      scope->insert_symbol(SgName(name), var_sym);
+      if (prior == nullptr) {
+        SgVariableSymbol *var_sym = new SgVariableSymbol(init_name);
+        SgScopeStatement *scope = SageBuilder::topScopeStack();
+        ASSERT_not_null(scope);
+        scope->insert_symbol(SgName(name), var_sym);
+      }
     }
   }
   SageBuilder::initializePendingSourceVariableDeclarationProvenance(var_decl);
-}
-
-void SageTreeBuilder::Leave(SgVariableDeclaration *var_decl) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgVariableDeclaration*) \n";
 }
 
 void SageTreeBuilder::Leave(
@@ -4095,21 +2940,6 @@ void SageTreeBuilder::Leave(
     std::list<LanguageTranslation::ExpressionKind> &modifier_enum_list) {
   MLOG_TRACE_CXX(MLOG_FRONTEND)
       << "SageTreeBuilder::Leave(SgVariableDeclaration*) with modifiers \n";
-
-  auto apply_const_to_decl_types = [](SgVariableDeclaration *decl) {
-    if (decl == nullptr) {
-      return;
-    }
-    for (SgInitializedName *init_name : decl->get_variables()) {
-      if (init_name == nullptr) {
-        continue;
-      }
-      SgType *type = init_name->get_type();
-      if (type != nullptr && !SageInterface::isConstType(type)) {
-        init_name->set_type(SageBuilder::buildConstType(type));
-      }
-    }
-  };
 
   for (LanguageTranslation::ExpressionKind modifier_enum : modifier_enum_list) {
     switch (modifier_enum) {
@@ -4130,20 +2960,16 @@ void SageTreeBuilder::Leave(
       var_decl->set_linkage("C");
       break;
     }
-    case LanguageTranslation::ExpressionKind::e_type_modifier_parameter: {
-      var_decl->get_declarationModifier()
-          .get_typeModifier()
-          .get_constVolatileModifier()
-          .setConst();
-      apply_const_to_decl_types(var_decl);
-      break;
-    }
+    case LanguageTranslation::ExpressionKind::e_type_modifier_parameter:
     case LanguageTranslation::ExpressionKind::e_type_modifier_const: {
       var_decl->get_declarationModifier()
           .get_typeModifier()
           .get_constVolatileModifier()
           .setConst();
-      apply_const_to_decl_types(var_decl);
+      for (SgInitializedName *init_name : var_decl->get_variables()) {
+        ASSERT_not_null(init_name);
+        ROSE_ASSERT(SageInterface::isConstType(init_name->get_type()));
+      }
       break;
     }
     case LanguageTranslation::ExpressionKind::e_type_modifier_allocatable: {
@@ -4238,17 +3064,12 @@ void SageTreeBuilder::Leave(
     }
     case LanguageTranslation::ExpressionKind::e_type_modifier_pointer: {
       for (SgInitializedName *init_name : var_decl->get_variables()) {
-        SgType *type = init_name->get_type();
-        if (type != nullptr && isSgPointerType(type) == nullptr) {
-          init_name->set_type(SageBuilder::buildPointerType(type));
-        }
-        SgType *source_type = init_name->get_fortran_source_type();
-        if (source_type != nullptr && isSgPointerType(source_type) == nullptr) {
-          SgPointerType *source_pointer = new SgPointerType(source_type);
-          ASSERT_not_null(source_pointer);
-          source_pointer->set_fortran_source_syntax(true);
-          init_name->set_fortran_source_type(source_pointer);
-        }
+        ASSERT_not_null(init_name);
+        ROSE_ASSERT(isSgPointerType(init_name->get_type()) != nullptr);
+        SgPointerType *source_pointer =
+            isSgPointerType(init_name->get_fortran_source_type());
+        ASSERT_not_null(source_pointer);
+        ROSE_ASSERT(source_pointer->get_fortran_source_syntax());
       }
       break;
     }
@@ -4262,8 +3083,6 @@ void SageTreeBuilder::Leave(
       break;
     }
   }
-
-  Leave(var_decl);
 }
 
 void SageTreeBuilder::Enter(SgEnumDeclaration *&enum_decl,
@@ -4293,89 +3112,6 @@ void SageTreeBuilder::Leave(SgEnumDeclaration *enum_decl) {
                  "not have one exact lexical owner\n";
     ROSE_ABORT();
   }
-}
-
-void SageTreeBuilder::Enter(SgEnumVal *&enum_val, const std::string &name,
-                            SgEnumDeclaration *enum_decl, std::int64_t value,
-                            const SourcePositionPair &positions,
-                            SgCastExp *cast) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND) << "SageTreeBuilder::Enter(SgEnumVal*) \n";
-
-  ASSERT_not_null(enum_decl);
-  SgEnumType *enum_type = enum_decl->get_type();
-  SgScopeStatement *scope = enum_decl->get_scope();
-
-  SgEnumDeclaration *def_decl =
-      isSgEnumDeclaration(enum_decl->get_definingDeclaration());
-  ASSERT_not_null(def_decl);
-  SgEnumDeclaration *nondef_decl =
-      isSgEnumDeclaration(enum_decl->get_firstNondefiningDeclaration());
-  ASSERT_not_null(nondef_decl);
-
-  // There doesn't have to be an SgEnumVal, there shall be an SgInitializedName
-  SgExpression *init_expr = nullptr;
-  if (cast) {
-    init_expr = cast;
-  } else {
-    // This builder entry point is used only for a source-spelled Flang
-    // enumerator.  Construct the value with fresh source state so the parser's
-    // exact statement interval is its first and only provenance publication.
-    // buildEnumVal_nfi installs the legacy shared-null file identity, which is
-    // neither fresh nor an owned pending-source transaction.
-    enum_val = new SgEnumVal(value, nondef_decl, name);
-    ASSERT_not_null(enum_val);
-    setSourcePosition(enum_val, std::get<0>(positions), std::get<1>(positions));
-    init_expr = enum_val;
-  }
-
-  SgAssignInitializer *initializer =
-      SageBuilder::buildAssignInitializer_nfi(init_expr, enum_type);
-  SgInitializedName *init_name =
-      SageBuilder::buildInitializedName_nfi(name, enum_type, initializer);
-
-  init_name->set_scope(scope);
-  init_name->set_declptr(def_decl);
-  init_name->set_enum_constant_source_ownership(
-      SgInitializedName::e_enum_constant_source_body);
-  def_decl->append_enumerator(init_name);
-
-  // Add an associated field symbol to the symbol table
-  SgEnumFieldSymbol *enum_field_symbol = new SgEnumFieldSymbol(init_name);
-  ASSERT_not_null(enum_field_symbol);
-  scope->insert_symbol(name, enum_field_symbol);
-
-  if (enum_type->get_parent() == nullptr) {
-    enum_type->set_parent(enum_field_symbol);
-  }
-}
-
-void SageTreeBuilder::Enter(SgTypedefDeclaration *&type_def,
-                            const std::string &name, SgType *type) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Enter(SgTypedefDeclaration*) \n";
-  SgScopeStatement *scope = SageBuilder::topScopeStack();
-
-  type_def = SageBuilder::buildTypedefDeclaration_nfi(
-      SageBuilder::typedef_declaration_ownership::sourceLexical(),
-      SgTypedefDeclaration::e_typedef, name, type, scope);
-
-  // These things should be setup properly in SageBuilder?
-  SgTypedefSymbol *symbol =
-      SageInterface::lookupTypedefSymbolInParentScopes(name, scope);
-  ASSERT_not_null(symbol);
-  SgTypedefType *typedef_type = type_def->get_type();
-  ASSERT_not_null(typedef_type);
-
-  type_def->set_base_type(type);
-  type_def->set_parent_scope(symbol);
-  typedef_type->set_parent_scope(symbol);
-  ASSERT_not_null(type_def->get_parent_scope());
-  ASSERT_not_null(typedef_type->get_parent_scope());
-}
-
-void SageTreeBuilder::Leave(SgTypedefDeclaration *type_def) {
-  MLOG_TRACE_CXX(MLOG_FRONTEND)
-      << "SageTreeBuilder::Leave(SgTypedefDeclaration*) \n";
 }
 
 // Fortran specific nodes
@@ -4414,188 +3150,28 @@ void SageTreeBuilder::Leave(SgCommonBlock *common_block) {
   SageInterface::appendStatement(common_block, SageBuilder::topScopeStack());
 }
 
-SgStatement *
-SageTreeBuilder::wrapStmtWithLabels(SgStatement *stmt,
-                                    const std::vector<std::string> &labels) {
+void SageTreeBuilder::setFortranNumericLabel(SgStatement *stmt,
+                                             std::optional<int> label) {
   ASSERT_not_null(stmt);
-
-  // Order of the labels need to be reversed to come out right
-  std::vector<std::string> reversed = labels;
-  auto lbegin = reversed.begin();
-  auto lend = reversed.end();
-  std::reverse(lbegin, lend);
-
-  // Statements may have a label(s), wrap the statement with its label(s)
-  if (SageInterface::is_Fortran_language()) {
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(SB::topScopeStack(),
-                                                      /*includingSelf*/ true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: Fortran statement has "
-                   "no enclosing program-unit definition\n";
-      ROSE_ABORT();
-    }
-    for (const auto &label : reversed) {
-      int labelValue = 0;
-      const char *begin = label.data();
-      const char *end = begin + label.size();
-      const std::from_chars_result parsed =
-          std::from_chars(begin, end, labelValue);
-      if (label.empty() || parsed.ec != std::errc() || parsed.ptr != end ||
-          labelValue <= 0 || labelValue > 99999) {
-        std::cerr << "REX_FLANG_INVARIANT[numeric-label]: invalid Fortran "
-                     "statement label '"
-                  << label << "'\n";
-        ROSE_ABORT();
-      }
-      SageInterface::setFortranNumericLabel(
-          stmt, labelValue, SgLabelSymbol::e_start_label_type, labelScope);
-    }
-    return stmt;
+  if (!label) {
+    return;
   }
 
-  for (auto label : reversed) {
-    // A label statement may already exist for this label, e.g., from a
-    // placeholder created previously for an SgGotoStatement, for example,
-    // check.
-    SgLabelStatement *labelStmt{nullptr};
-    if (labels_.find(label) != labels_.end()) {
-      labelStmt = labels_[label];
-    } else {
-      labelStmt = SB::buildLabelStatement_nfi(label, stmt, SB::topScopeStack());
-      labels_[label] = labelStmt;
-    }
-
-    if (labelStmt && labelStmt->get_statement() == nullptr) {
-      // Found a placeholder label statement
-      labelStmt->set_statement(stmt);
-      stmt->set_parent(labelStmt);
-    }
-
-    stmt = labelStmt;
+  SgScopeStatement *labelScope =
+      SageInterface::getEnclosingFunctionDefinition(SB::topScopeStack(),
+                                                    /*includingSelf*/ true);
+  if (labelScope == nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[label-scope]: Fortran statement has "
+                 "no enclosing program-unit definition\n";
+    ROSE_ABORT();
   }
-  ASSERT_not_null(stmt);
-
-  return stmt;
+  SageInterface::setFortranNumericLabel(
+      stmt, *label, SgLabelSymbol::e_start_label_type, labelScope);
 }
 
-// Temporary wrappers for SageInterface functions (needed until ROSE builds with
-// C++17)
-//
 namespace SageBuilderCpp17 {
 
-// Types
-//
-SgType *buildBoolType() { return SageBuilder::buildBoolType(); }
-
-SgType *buildIntType() { return SageBuilder::buildIntType(); }
-
-SgType *buildFloatType() { return SageBuilder::buildFloatType(); }
-
-SgType *buildCharType() { return SageBuilder::buildCharType(); }
-
-SgType *buildDoubleType() { return SageBuilder::buildDoubleType(); }
-
-SgType *buildComplexType(SgType *base_type) {
-  return SageBuilder::buildComplexType(base_type);
-}
-
-SgType *buildBoolType(SgExpression *kind_expr) {
-  return SageBuilder::buildBoolType(kind_expr);
-}
-
-SgType *buildIntType(SgExpression *kind_expr) {
-  return SageBuilder::buildIntType(kind_expr);
-}
-
-SgType *buildFloatType(SgExpression *kind_expr) {
-  return SageBuilder::buildFloatType(kind_expr);
-}
-
-SgType *buildStringType(SgExpression *stringLengthExpression) {
-  return SageBuilder::buildStringType(stringLengthExpression);
-}
-
-SgType *buildArrayType(SgType *base_type,
-                       std::list<SgExpression *> &explicit_shape_list) {
-  SgExprListExp *dim_info = SageBuilder::buildExprListExp_nfi();
-
-  for (SgExpression *expr : explicit_shape_list) {
-    ASSERT_not_null(expr);
-    SageInterface::appendExpression(dim_info, expr);
-  }
-
-  return SageBuilder::buildArrayType(base_type, dim_info);
-}
-
-// SgBasicBlock
-//
-
-SgBasicBlock *buildBasicBlock_nfi() {
-  return SageBuilder::buildBasicBlock_nfi();
-}
-
-void pushScopeStack(SgBasicBlock *stmt) { SageBuilder::pushScopeStack(stmt); }
-
-void popScopeStack() { SageBuilder::popScopeStack(); }
-
 // Operators
-//
-SgExpression *buildAddOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                             SgType *result_type) {
-  return SageBuilder::buildAddOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildAndOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                             SgType *result_type) {
-  return SageBuilder::buildAndOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildDivideOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                SgType *result_type) {
-  return SageBuilder::buildDivideOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildEqualityOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                  SgType *result_type) {
-  return SageBuilder::buildEqualityOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildGreaterThanOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                     SgType *result_type) {
-  return SageBuilder::buildGreaterThanOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildGreaterOrEqualOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                        SgType *result_type) {
-  return SageBuilder::buildGreaterOrEqualOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildMultiplyOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                  SgType *result_type) {
-  return SageBuilder::buildMultiplyOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildLessThanOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                  SgType *result_type) {
-  return SageBuilder::buildLessThanOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildLessOrEqualOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                     SgType *result_type) {
-  return SageBuilder::buildLessOrEqualOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildNotEqualOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                  SgType *result_type) {
-  return SageBuilder::buildNotEqualOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildOrOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                            SgType *result_type) {
-  return SageBuilder::buildOrOp_nfi(lhs, rhs, result_type);
-}
-
 SgExpression *buildMinusOp_nfi(SgExpression *i, SgType *result_type,
                                bool is_prefix /* = true */) {
   SgUnaryOp::Sgop_mode mode_enum;
@@ -4609,49 +3185,7 @@ SgExpression *buildMinusOp_nfi(SgExpression *i, SgType *result_type,
   return SageBuilder::buildMinusOp_nfi(i, result_type, mode_enum);
 }
 
-SgExpression *buildSubtractOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                  SgType *result_type) {
-  return SageBuilder::buildSubtractOp_nfi(lhs, rhs, result_type);
-}
-
 // Expressions
-//
-SgExpression *buildConcatenationOp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                       SgType *result_type) {
-  return SageBuilder::buildConcatenationOp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildExprListExp_nfi() {
-  return SageBuilder::buildExprListExp_nfi();
-}
-
-SgExpression *buildBoolValExp_nfi(bool value) {
-  return SageBuilder::buildBoolValExp_nfi(value);
-}
-
-SgExpression *buildIntVal_nfi(int value = 0) {
-  return SageBuilder::buildIntVal_nfi(value);
-}
-
-SgExpression *buildStringVal_nfi(std::string value) {
-  return SageBuilder::buildStringVal_nfi(value);
-}
-
-SgExpression *buildFloatVal_nfi(const std::string &str) {
-  return SageBuilder::buildFloatVal_nfi(str);
-}
-
-SgExpression *buildComplexVal_nfi(SgExpression *real_value,
-                                  SgExpression *imaginary_value,
-                                  SgType *precision_type,
-                                  const std::string &str) {
-  ASSERT_not_null(real_value);
-  ASSERT_not_null(imaginary_value);
-  ASSERT_not_null(precision_type);
-  return SageBuilder::buildComplexVal_nfi(real_value, imaginary_value,
-                                          precision_type, str);
-}
-
 SgExpression *buildSubscriptExpression_nfi(SgExpression *lower_bound,
                                            SgExpression *upper_bound,
                                            SgExpression *stride) {
@@ -4659,16 +3193,13 @@ SgExpression *buildSubscriptExpression_nfi(SgExpression *lower_bound,
                                                    stride);
 }
 
-SgPntrArrRefExp *buildPntrArrRefExp_nfi(SgExpression *lhs, SgExpression *rhs,
-                                        SgType *result_type) {
-  return SageBuilder::buildPntrArrRefExp_nfi(lhs, rhs, result_type);
-}
-
-SgExpression *buildAggregateInitializer_nfi(SgExprListExp *initializers,
-                                            SgType *type) {
-  return SageBuilder::buildAggregateInitializer_nfi(
-      initializers, type,
-      SgAggregateInitializer::e_aggregate_initializer_source_fortran);
+SgPntrArrRefExp *
+buildPntrArrRefExp_nfi(SgExpression *lhs, SgExpression *rhs,
+                       SgType *result_type,
+                       std::optional<long long> result_size,
+                       const std::vector<std::optional<long long>> &strides) {
+  return SageBuilder::buildPntrArrRefExp_nfi(lhs, rhs, result_type, result_size,
+                                             strides);
 }
 
 SgExpression *buildAsteriskShapeExp_nfi() {
@@ -4690,10 +3221,6 @@ SgExpression *buildAssumedRankExp_nfi() {
 SgExpression *
 buildNullExpression_nfi(SgNullExpression::null_expression_role_enum role) {
   return SageBuilder::buildNullExpression_nfi(role);
-}
-
-SgExpression *buildFunctionCallExp(SgFunctionCallExp *func_call) {
-  return func_call;
 }
 
 SgExprListExp *buildExprListExp_nfi(const std::list<SgExpression *> &list) {
@@ -4723,11 +3250,6 @@ SgCommonBlockObject *buildCommonBlockObject(std::string name,
   }
   publishTransformationSourceOnce(common_block_object, "common-block-object");
   return common_block_object;
-}
-
-void set_false_body(SgIfStmt *&if_stmt, SgBasicBlock *false_body) {
-  ASSERT_not_null(if_stmt);
-  if_stmt->set_false_body(false_body);
 }
 
 void set_need_paren(SgExpression *&expr) {

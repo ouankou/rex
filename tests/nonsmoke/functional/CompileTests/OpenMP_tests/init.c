@@ -1,4 +1,3 @@
-// Test the placement of XOMP_init() in C/C++ input
 #include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>

@@ -158,23 +158,6 @@ void verifyProgramFamily(SgProject *project) {
   }
 }
 
-void rebuildGlobalSymbolTable(SgProject *project) {
-  ROSE_ASSERT(project != nullptr);
-  ROSE_ASSERT(project->numberOfFiles() == 1);
-  SgSourceFile *file = isSgSourceFile(&project->get_file(0));
-  ROSE_ASSERT(file != nullptr);
-  SgGlobal *global = file->get_globalScope();
-  ROSE_ASSERT(global != nullptr);
-  SgSymbolTable *table = global->get_symbol_table();
-  ROSE_ASSERT(table != nullptr);
-  ROSE_ASSERT(table->get_table() != nullptr);
-  table->get_table()->clear();
-  table->set_symbolSet(SgNodeSet());
-  table->clear_functionSymbolExactIndex();
-  ROSE_ASSERT(table->size() == 0);
-  SageInterface::rebuildSymbolTable(global);
-}
-
 } // namespace
 
 int main(int argc, char **argv) {
@@ -190,7 +173,7 @@ int main(int argc, char **argv) {
   AstTests::runAllTests(copy);
   SageInterface::deepDelete(copy);
 
-  rebuildGlobalSymbolTable(project);
   verifyProgramFamily(project);
+  AstTests::runAllTests(project);
   return 0;
 }

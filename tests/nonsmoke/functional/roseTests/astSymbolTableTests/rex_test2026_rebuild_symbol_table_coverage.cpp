@@ -12,7 +12,7 @@ std::string takeCheckMode(int &argc, char **argv) {
   filtered.reserve(argc);
   filtered.push_back(argv[0]);
 
-  const char prefix[] = "--rex-rebuild-check=";
+  const char prefix[] = "--rex-copy-check=";
   for (int i = 1; i < argc; ++i) {
     if (std::strncmp(argv[i], prefix, sizeof(prefix) - 1) == 0) {
       mode = argv[i] + sizeof(prefix) - 1;
@@ -29,35 +29,6 @@ std::string takeCheckMode(int &argc, char **argv) {
   return mode;
 }
 
-void clearScopeSymbolTables(SgNode *root) {
-  Rose_STL_Container<SgNode *> scopes =
-      NodeQuery::querySubTree(root, V_SgScopeStatement);
-  for (SgNode *node : scopes) {
-    SgScopeStatement *scope = isSgScopeStatement(node);
-    ROSE_ASSERT(scope != nullptr);
-    SgSymbolTable *table = scope->get_symbol_table();
-    if (table == nullptr) {
-      continue;
-    }
-    ROSE_ASSERT(table->get_table() != nullptr);
-    table->get_table()->clear();
-    table->set_symbolSet(SgNodeSet());
-    table->clear_functionSymbolExactIndex();
-    ROSE_ASSERT(table->size() == 0);
-  }
-}
-
-void rebuildScopeSymbolTables(SgNode *root) {
-  Rose_STL_Container<SgNode *> scopes =
-      NodeQuery::querySubTree(root, V_SgScopeStatement);
-  for (SgNode *node : scopes) {
-    SgScopeStatement *scope = isSgScopeStatement(node);
-    ROSE_ASSERT(scope != nullptr);
-    SageInterface::rebuildSymbolTable(scope);
-    ROSE_ASSERT(scope->get_symbol_table() != nullptr);
-    ROSE_ASSERT(scope->get_symbol_table()->get_parent() == scope);
-  }
-}
 
 void requireNode(SgNode *root, VariantT variant) {
   Rose_STL_Container<SgNode *> nodes = NodeQuery::querySubTree(root, variant);
@@ -91,9 +62,6 @@ void checkDeclarationScope(SgProject *project) {
   SgDeclarationScope *owner_scope = isSgDeclarationScope(target->get_parent());
   ROSE_ASSERT(owner_scope != nullptr);
 
-  clearScopeSymbolTables(project);
-  rebuildScopeSymbolTables(project);
-
   ROSE_ASSERT(owner_scope->lookup_nonreal_symbol(target->get_name(), nullptr,
                                                  nullptr) != nullptr);
 }
@@ -109,9 +77,6 @@ void checkOpenMP(SgProject *project) {
   requireNode(project, V_SgOmpRequiresStatement);
   requireNode(project, V_SgOmpTaskwaitStatement);
 
-  clearScopeSymbolTables(project);
-  rebuildScopeSymbolTables(project);
-
   SgGlobal *global = firstGlobalScope(project);
   ROSE_ASSERT(global->lookup_variable_symbol("rex_test2026_global") != nullptr);
   ROSE_ASSERT(global->lookup_function_symbol("rex_test2026_simd") != nullptr);
@@ -122,9 +87,6 @@ void checkFortranOpenMP(SgProject *project) {
   requireNode(project, V_SgProcedureHeaderStatement);
   requireNode(project, V_SgImplicitStatement);
   requireNode(project, V_SgUseStatement);
-
-  clearScopeSymbolTables(project);
-  rebuildScopeSymbolTables(project);
 
   SgGlobal *global = firstGlobalScope(project);
   SgProgramHeaderStatement *driver = nullptr;
@@ -164,15 +126,24 @@ void checkFortranOpenMP(SgProject *project) {
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgModuleStatement)) {
     SgModuleStatement *module = isSgModuleStatement(node);
     ROSE_ASSERT(module != nullptr);
-    if (module->get_name() == "rex_test2026_rebuild_mod") {
+    if (module->get_name() == "rex_test2026_rebuild_mod" &&
+        module->get_definition() != nullptr) {
+      ROSE_ASSERT(!saw_module_symbol);
       ROSE_ASSERT(module->get_scope() == global);
-      for (SgNode *symbol_node : global->get_symbol_table()->get_symbols()) {
-        SgModuleSymbol *symbol = isSgModuleSymbol(symbol_node);
-        if (symbol != nullptr && symbol->get_declaration() == module) {
-          saw_module_symbol = true;
-          break;
-        }
-      }
+      SgModuleStatement *moduleCanonical =
+          isSgModuleStatement(module->get_firstNondefiningDeclaration());
+      ROSE_ASSERT(moduleCanonical != nullptr && moduleCanonical != module);
+      ROSE_ASSERT(moduleCanonical->get_definingDeclaration() == module);
+      ROSE_ASSERT(moduleCanonical->get_firstNondefiningDeclaration() ==
+                  moduleCanonical);
+      SgClassSymbol *symbol = global->lookup_class_symbol(module->get_name());
+      ROSE_ASSERT(symbol != nullptr);
+      ROSE_ASSERT(symbol->get_declaration() == moduleCanonical);
+      ROSE_ASSERT(symbol->get_symbol_basis() == moduleCanonical);
+      ROSE_ASSERT(symbol->get_parent() == global->get_symbol_table());
+      ROSE_ASSERT(module->get_type() == moduleCanonical->get_type());
+      ROSE_ASSERT(module->get_type()->get_declaration() == moduleCanonical);
+      saw_module_symbol = true;
     }
   }
   ROSE_ASSERT(saw_module_symbol);
@@ -239,15 +210,23 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(project != nullptr);
   project->skipfinalCompileStep(true);
 
-  if (mode == "declaration-scope") {
-    checkDeclarationScope(project);
-  } else if (mode == "openmp") {
-    checkOpenMP(project);
-  } else if (mode == "fortran-openmp") {
-    checkFortranOpenMP(project);
-  } else {
-    ROSE_ABORT();
+  SgProject *copy = SageInterface::deepCopy(project);
+  ROSE_ASSERT(copy != nullptr && copy != project);
+  for (SgProject *root : {project, copy}) {
+    if (mode == "declaration-scope") {
+      checkDeclarationScope(root);
+    } else if (mode == "openmp") {
+      checkOpenMP(root);
+    } else if (mode == "fortran-openmp") {
+      checkFortranOpenMP(root);
+    } else {
+      ROSE_ABORT();
+    }
+    SageInterface::validateSymbolOwnership(root);
+    AstTests::runAllTests(root);
   }
+  SageInterface::deepDelete(copy);
+  AstTests::runAllTests(project);
 
   return 0;
 }

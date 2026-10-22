@@ -15,11 +15,11 @@ public:
   getPosition(SgLocatedNode *, SgUnparse_Info &info, FormatOpt opt) override;
 
   // return the value for indentation of code (part of control over style)
-  virtual int tabIndent();
+  int tabIndent() override;
 
   // return the value for where line wrapping starts (part of control over
   // style)
-  virtual int maxLineLength();
+  int maxLineLength() override;
 
 private:
   int defaultLineLength;
