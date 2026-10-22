@@ -25,9 +25,18 @@ int main(int argc, char *argv[]) {
 
   Rose_STL_Container<SgNode *> mappers =
       NodeQuery::querySubTree(project, V_SgOmpDeclareMapperStatement);
-  ROSE_ASSERT(mappers.size() == 1);
-  SgOmpDeclareMapperStatement *mapper =
-      isSgOmpDeclareMapperStatement(mappers.front());
+  ROSE_ASSERT(mappers.size() == 2);
+  SgOmpDeclareMapperStatement *mapper = nullptr;
+  for (SgNode *node : mappers) {
+    auto *candidate = isSgOmpDeclareMapperStatement(node);
+    ROSE_ASSERT(candidate != nullptr);
+    auto *variable = isSgVarRefExp(candidate->get_mapper_variable());
+    ROSE_ASSERT(variable != nullptr);
+    if (variable->get_type()->stripTypedefsAndModifiers() == class_type) {
+      ROSE_ASSERT(mapper == nullptr);
+      mapper = candidate;
+    }
+  }
   ROSE_ASSERT(mapper != nullptr);
 
   SgTypeExpression *class_type_expr =

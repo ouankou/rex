@@ -1,5 +1,6 @@
 #include "rose.h"
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <set>
@@ -95,6 +96,65 @@ int main(int argc, char *argv[]) {
   if (project == nullptr) {
     fail("frontend returned a null project");
   }
+  SgSourceFile *sourceFile = isSgSourceFile(project->get_fileList().front());
+  if (sourceFile == nullptr || sourceFile->get_globalScope() == nullptr) {
+    fail("frontend returned no source-file scope");
+  }
+  SgGlobal *scope = sourceFile->get_globalScope();
+  SgFunctionParameterList *parameters = SageBuilder::buildFunctionParameterList(
+      SageBuilder::buildInitializedName("value", SageBuilder::buildIntType()));
+  SgFunctionParameterList *written = SageBuilder::buildFunctionParameterList(
+      SageBuilder::buildInitializedName("value", SageBuilder::buildIntType()));
+  SgFunctionDeclaration *canonical =
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::semanticAuxiliary(),
+          "rex_signature_written_parameters", SageBuilder::buildVoidType(),
+          SageBuilder::buildSemanticFunctionParameterList(parameters), scope);
+  SgFunctionDeclaration *constructed =
+      SageBuilder::buildDefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::sourceLexicalIn(scope)
+              .withSourceParameterList(written)
+              .withConstexprSpecifier(
+                  SgFunctionDeclaration::e_constexpr_unspecified),
+          "rex_signature_written_parameters", SageBuilder::buildVoidType(),
+          parameters, scope, false, canonical, nullptr, false);
+  SgFunctionType *syntax = constructed->get_type_syntax();
+  if (constructed->get_parameterList_syntax() != written ||
+      written->get_parent() != constructed || syntax == nullptr ||
+      syntax == constructed->get_type() ||
+      syntax->get_parent() != constructed ||
+      !constructed->get_type_syntax_is_available() ||
+      written->get_args().front()->get_scope() !=
+          constructed->get_definition() ||
+      written->get_args().front()->get_declptr() != constructed) {
+    fail("defining builder did not publish its complete written signature");
+  }
+  const auto pragmas = NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
+  if (pragmas.size() != 1)
+    fail("expected one outline target");
+  auto *pragma = isSgPragmaDeclaration(pragmas.front());
+  auto *target = isSgBasicBlock(SageInterface::getNextStatement(pragma));
+  auto *owner =
+      SageInterface::getEnclosingFunctionDefinition(pragma)->get_body();
+  if (target == nullptr || owner == nullptr || target == owner)
+    fail("outline target has no distinct enclosing block");
+  auto *local = SageBuilder::buildNondefiningFunctionDeclaration(
+      SageBuilder::function_declaration_ownership::sourceLexicalIn(owner),
+      "rex_signature_local_factory", SageBuilder::buildIntType(),
+      SageBuilder::buildFunctionParameterList(SageBuilder::buildInitializedName(
+          "value", SageBuilder::buildIntType())),
+      owner);
+  auto *localSymbol = isSgFunctionSymbol(local->get_symbol_from_symbol_table());
+  if (local->get_parent() != owner || local->get_scope() != owner ||
+      local->get_firstNondefiningDeclaration() != local ||
+      localSymbol == nullptr || localSymbol->get_declaration() != local)
+    fail("local factory did not publish an exact lexical prototype");
+  for (int value : {1, 2})
+    SageInterface::appendStatement(
+        SageBuilder::buildExprStatement(SageBuilder::buildFunctionCallExp(
+            localSymbol,
+            SageBuilder::buildExprListExp(SageBuilder::buildIntVal(value)))),
+        target);
   AstTests::runAllTests(project);
 
   std::set<SgFunctionDeclaration *> originalDefinitions;
@@ -119,6 +179,42 @@ int main(int argc, char *argv[]) {
       continue;
     }
     validateSignature(definition, mode);
+    auto *body = definition->get_definition()->get_body();
+    SgFunctionSymbol *copiedSymbol = nullptr;
+    size_t prototypeCount = 0;
+    for (auto *node : NodeQuery::querySubTree(body, V_SgFunctionDeclaration)) {
+      auto *prototype = isSgFunctionDeclaration(node);
+      if (prototype->get_name() != local->get_name())
+        continue;
+      ++prototypeCount;
+      copiedSymbol =
+          isSgFunctionSymbol(prototype->get_symbol_from_symbol_table());
+      if (prototype == local || prototype->get_scope() != body ||
+          prototype->get_firstNondefiningDeclaration() != prototype ||
+          copiedSymbol == nullptr || copiedSymbol == localSymbol ||
+          copiedSymbol->get_declaration() != prototype ||
+          copiedSymbol->get_parent() != body->get_symbol_table())
+        fail("outlined local prototype has no exact destination binding");
+    }
+    if (prototypeCount != 1)
+      fail("repeated calls did not share one copied local prototype");
+    size_t callCount = 0;
+    for (auto *node : NodeQuery::querySubTree(body, V_SgFunctionRefExp)) {
+      auto *reference = isSgFunctionRefExp(node);
+      if (reference->get_symbol()->get_name() != local->get_name())
+        continue;
+      ++callCount;
+      if (reference->get_symbol() != copiedSymbol)
+        fail("outlined call retained the enclosing-block prototype binding");
+      const auto &statements = body->get_statements();
+      if (std::find(statements.begin(), statements.end(),
+                    copiedSymbol->get_declaration()) >=
+          std::find(statements.begin(), statements.end(),
+                    SageInterface::getEnclosingStatement(reference)))
+        fail("outlined prototype does not precede its call");
+    }
+    if (callCount != 2)
+      fail("outlining lost a local-prototype call");
     ++outlinedDefinitions;
   }
   if (outlinedDefinitions != 1) {

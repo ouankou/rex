@@ -216,9 +216,7 @@ nodeColor( SgStatement* statement )
           case V_SgLabelStatement:
           case V_SgNullStatement:
           case V_SgReturnStmt:
-          case V_SgSpawnStmt:
           case V_SgTryStmt:
-          case V_SgVariantStatement:
                returnString = "brown";
                break;
 

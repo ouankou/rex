@@ -3,7 +3,6 @@
 #define DEP_INFO_ANAL
 
 #include <map>
-// #include <vector>
 
 #include "DepInfo.h"
 
@@ -97,6 +96,11 @@ public:
 bool AnalyzeStmtRefs(AstInterface &fa, const AstNodePtr &n,
                      CollectObject<AstNodePtr> &wRefs,
                      CollectObject<AstNodePtr> &rRefs);
+
+// Include the runtime conversion of an attached condition declaration.
+bool AnalyzeConditionRefs(AstInterface &fa, const AstNodePtr &n,
+                          CollectObject<AstNodePtr> &wRefs,
+                          CollectObject<AstNodePtr> &rRefs);
 
 class SetDepEntry {
   DepInfo *dep;

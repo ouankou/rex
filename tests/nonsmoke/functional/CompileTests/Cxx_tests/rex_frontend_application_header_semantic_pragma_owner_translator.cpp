@@ -69,5 +69,41 @@ int main(int argc, char **argv) {
                           auxiliary->get_declarations().end(),
                           function) == auxiliary->get_declarations().end());
   }
+  size_t physicalMarkerCount = 0;
+  size_t lexicalMarkerCount = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(sourceFile, V_SgPragmaDeclaration)) {
+    SgPragmaDeclaration *pragma = isSgPragmaDeclaration(node);
+    ROSE_ASSERT(pragma != nullptr && pragma->get_pragma() != nullptr);
+    if (pragma->get_pragma()->get_pragma() == "rex_physical_marker") {
+      ROSE_ASSERT(pragma->get_startOfConstruct()->get_line() == 50);
+      ++physicalMarkerCount;
+    }
+    const std::string &text = pragma->get_pragma()->get_pragma();
+    if (text == "rex_namespace_marker") {
+      SgNamespaceDefinitionStatement *owner =
+          isSgNamespaceDefinitionStatement(pragma->get_parent());
+      ROSE_ASSERT(owner != nullptr && pragma->get_scope() == owner);
+      ROSE_ASSERT(owner->get_namespaceDeclaration()->get_name() ==
+                  "rex_pragma_inner");
+      ++lexicalMarkerCount;
+    } else if (text == "rex_record_marker") {
+      SgClassDefinition *owner = isSgClassDefinition(pragma->get_parent());
+      ROSE_ASSERT(owner != nullptr && pragma->get_scope() == owner);
+      ROSE_ASSERT(owner->get_declaration()->get_name() == "RexPragmaOwner");
+      ++lexicalMarkerCount;
+    } else if (text == "rex_block_marker") {
+      SgBasicBlock *owner = isSgBasicBlock(pragma->get_parent());
+      ROSE_ASSERT(owner != nullptr && pragma->get_scope() == owner);
+      SgFunctionDefinition *function =
+          isSgFunctionDefinition(owner->get_parent());
+      ROSE_ASSERT(function != nullptr && function->get_body() == owner);
+      ROSE_ASSERT(function->get_declaration()->get_name() ==
+                  "rex_empty_pragma_body");
+      ++lexicalMarkerCount;
+    }
+  }
+  ROSE_ASSERT(physicalMarkerCount == 2);
+  ROSE_ASSERT(lexicalMarkerCount == 3);
   return 0;
 }

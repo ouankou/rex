@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <limits>
 
 #include <list>
 
@@ -20,8 +21,6 @@
 #include "Preprocess.hh"
 
 #include "PreprocessingInfo.hh"
-
-#include "StmtRewrite.hh"
 
 #include "This.hh"
 
@@ -147,7 +146,6 @@ static SgVariableDeclaration *createThisShadowDecl(
     // Build final declaration.
     decl = SageBuilder::buildVariableDeclaration(var_name, var_type, init,
                                                  func_body);
-    // SageBuilder::buildVariableDeclaration (var_name, var_type, init, scope);
     ROSE_ASSERT(decl->get_baseTypeDefiningDeclaration() == nullptr);
     SageInterface::prependStatement(decl, func_body);
   }
@@ -181,55 +179,18 @@ static void replaceThisExprs(ASTtools::ThisExprSet_t &this_exprs,
     ROSE_ASSERT(e_repl);
     SageInterface::publishGeneratedSubtreeOutputOwner(e_repl, e_this);
 
-    SgNode *e_par = e_this->get_parent();
-    ROSE_ASSERT(e_par);
-    if (isSgBinaryOp(e_par)) {
-      SgBinaryOp *bin_op = isSgBinaryOp(e_par);
-      SgExpression *lhs = isSgThisExp(bin_op->get_lhs_operand());
-      if (lhs == e_this)
-        bin_op->set_lhs_operand(e_repl);
-      else {
-        SgExpression *rhs = isSgThisExp(bin_op->get_rhs_operand());
-        if (rhs == e_this)
-          bin_op->set_rhs_operand(e_repl);
-        else {
-          ROSE_ASSERT(!"*** Binary op does not use 'this' as expected. ***");
-        }
-      }
-    } else if (isSgUnaryOp(e_par)) {
-      SgUnaryOp *un_op = isSgUnaryOp(e_par);
-      SgThisExp *e = isSgThisExp(un_op->get_operand());
-      if (e == e_this)
-        un_op->set_operand(e_repl);
-      else {
-        ROSE_ASSERT(!"*** Unary op does not use 'this' as expected. ***");
-      }
-    } else if (isSgExprListExp(e_par)) {
-      SgExprListExp *e_list = isSgExprListExp(e_par);
-      SgExpressionPtrList &exprs = e_list->get_expressions();
-      SgExpressionPtrList::iterator i =
-          find(exprs.begin(), exprs.end(), e_this);
-      if (i == exprs.end()) {
-        ROSE_ASSERT(
-            !"*** Expression list does not contain 'this' as expected. ***");
-      } else
-        *i = e_repl;
-    } else if (isSgSizeOfOp(e_par)) {
-      SgSizeOfOp *e_sizeof = isSgSizeOfOp(e_par);
-      ROSE_ASSERT(e_sizeof->get_operand_expr() == e_this);
-      e_sizeof->set_operand_expr(e_repl);
-    } else if (isSgAssignInitializer(e_par)) {
-      SgAssignInitializer *e_assign = isSgAssignInitializer(e_par);
-      ROSE_ASSERT(e_assign->get_operand_i() == e_this);
-      e_assign->set_operand_i(e_repl);
-    } else // Don't know how to handle this...
-    {
-      cerr << "*** '" << e_par->class_name() << "' ***" << endl;
-      ROSE_ASSERT(!"*** Case not handled ***");
+    SgExpression *receiver = e_this;
+    while (auto *conversion = isSgCastExp(receiver->get_parent())) {
+      if (conversion->get_cast_type() != SgCastExp::e_implicit_cast)
+        break;
+      ROSE_ASSERT(conversion->get_operand() == receiver);
+      receiver = conversion;
     }
-
-    // Set parent pointer of replacement expression.
-    e_repl->set_parent(e_par);
+    auto *access = isSgArrowExp(receiver->get_parent());
+    if (access != nullptr && access->get_lhs_operand() == receiver &&
+        access->get_emission_role() == SgArrowExp::e_implicit_object_access)
+      access->set_emission_role(SgArrowExp::e_emit_arrow_operator);
+    SageInterface::replaceExpression(e_this, e_repl);
   }
 }
 
@@ -344,21 +305,19 @@ buildTemplateArgumentFromParameter(SgTemplateParameter *param,
 
   case SgTemplateParameter::nontype_parameter: {
     SgInitializedName *init_name = param->get_initializedName();
-    SgType *param_type = init_name != NULL ? init_name->get_type() : NULL;
-    const std::string param_name =
-        init_name != NULL ? init_name->get_name().getString() : std::string();
-    if (init_name == NULL || param_type == NULL || param_name.empty()) {
+    if (init_name == NULL || init_name->get_name().is_null() ||
+        position > static_cast<size_t>(std::numeric_limits<int>::max())) {
       break;
     }
     SgTemplateParameterVal *param_value =
-        SageBuilder::buildTemplateParameterVal_nfi(position, param_name);
+        SageBuilder::buildTemplateParameterVal_nfi(static_cast<int>(position),
+                                                   param);
     ROSE_ASSERT(param_value != NULL);
-    param_value->set_valueType(param_type);
 
-    argument = new SgTemplateArgument(
-        SgTemplateArgument::nontype_argument, false /*isArrayBoundUnknownType*/,
-        param_type, param_value, NULL, true /*explicitlySpecified*/);
-    param_value->set_parent(argument);
+    argument = new SgTemplateArgument(SgTemplateArgument::nontype_argument,
+                                      false /*isArrayBoundUnknownType*/,
+                                      param_value->get_type(), param_value,
+                                      NULL, true /*explicitlySpecified*/);
     break;
   }
 
@@ -387,38 +346,6 @@ buildTemplateArgumentFromParameter(SgTemplateParameter *param,
   return argument;
 }
 
-static std::string
-templateParameterSemanticName(SgTemplateParameter *parameter) {
-  ASSERT_not_null(parameter);
-  std::string name;
-  switch (parameter->get_parameterType()) {
-  case SgTemplateParameter::type_parameter:
-    if (SgTemplateType *type = isSgTemplateType(parameter->get_type()))
-      name = type->get_name().getString();
-    break;
-  case SgTemplateParameter::nontype_parameter:
-    if (SgInitializedName *initialized_name = parameter->get_initializedName())
-      name = initialized_name->get_name().getString();
-    break;
-  case SgTemplateParameter::template_parameter:
-    if (SgTemplateDeclaration *declaration =
-            isSgTemplateDeclaration(parameter->get_templateDeclaration())) {
-      name = SageInterface::get_name(declaration);
-    }
-    break;
-  case SgTemplateParameter::parameter_undefined:
-    break;
-  }
-  if (name.empty()) {
-    std::cerr << "REX_TRANSFORM_INVARIANT[unnamed-template-parameter]: "
-                 "outlining cannot construct a current-instantiation type\n";
-    ROSE_ABORT();
-  }
-  if (parameter->get_is_parameter_pack())
-    name += "...";
-  return name;
-}
-
 static SgType *buildCurrentInstantiationThisBaseType(SgClassSymbol *sym) {
   SgTemplateClassDeclaration *template_decl =
       getTemplateClassDeclarationFromSymbol(sym);
@@ -440,15 +367,6 @@ static SgType *buildCurrentInstantiationThisBaseType(SgClassSymbol *sym) {
     template_name = template_decl->get_name();
   ROSE_ASSERT(!template_name.is_null());
 
-  std::string semantic_name = template_name.getString() + "<";
-  for (size_t i = 0; i < template_params.size(); ++i) {
-    if (i != 0)
-      semantic_name += ", ";
-    semantic_name += templateParameterSemanticName(template_params[i]);
-  }
-  semantic_name += ">";
-  const SgName semantic_instantiation_name(semantic_name);
-
   SgScopeStatement *scope = template_decl->get_scope();
   if (scope == NULL) {
     cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-scope]: template "
@@ -458,8 +376,8 @@ static SgType *buildCurrentInstantiationThisBaseType(SgClassSymbol *sym) {
   }
 
   SgNonrealType *current_instantiation_type =
-      SageBuilder::buildSemanticNonrealType(
-          template_name, scope, &template_args, &semantic_instantiation_name);
+      SageBuilder::buildSemanticNonrealType(template_name, scope,
+                                            &template_args, template_decl);
   SgNonrealDecl *current_instantiation_declaration =
       current_instantiation_type != NULL
           ? isSgNonrealDecl(current_instantiation_type->get_declaration())
@@ -467,23 +385,14 @@ static SgType *buildCurrentInstantiationThisBaseType(SgClassSymbol *sym) {
   if (current_instantiation_declaration == NULL ||
       current_instantiation_declaration->get_nonreal_template_role() !=
           SgNonrealDecl::e_nonreal_template_id ||
-      current_instantiation_declaration->get_templateDeclaration() != NULL) {
+      current_instantiation_declaration->get_templateDeclaration() !=
+          template_decl) {
     cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-declaration]: "
-            "generated dependent type does not have one unbound typed "
+            "generated dependent type does not have one exact typed "
             "declaration"
          << endl;
     ROSE_ABORT();
   }
-  current_instantiation_declaration->set_templateDeclaration(template_decl);
-  if (current_instantiation_declaration->get_templateDeclaration() !=
-      template_decl) {
-    cerr << "REX_TRANSFORM_INVARIANT[current-instantiation-declaration]: "
-            "generated dependent type did not publish its primary class "
-            "template"
-         << endl;
-    ROSE_ABORT();
-  }
-
   return current_instantiation_type;
 }
 
@@ -513,8 +422,7 @@ buildImplicitThisPointerType(SgClassSymbol *sym,
 
   if (member_type->isConstFunc() || member_type->isVolatileFunc() ||
       member_type->isRestrictFunc()) {
-    SgModifierType *qualified_type = new SgModifierType(base_type);
-    SgTypeModifier &modifier = qualified_type->get_typeModifier();
+    SgTypeModifier modifier;
     if (member_type->isConstFunc())
       modifier.get_constVolatileModifier().setConst();
     if (member_type->isVolatileFunc())
@@ -522,11 +430,7 @@ buildImplicitThisPointerType(SgClassSymbol *sym,
     if (member_type->isRestrictFunc())
       modifier.setRestrict();
 
-    SgModifierType *canonical =
-        SgModifierType::insertModifierTypeIntoTypeTable(qualified_type);
-    if (canonical != qualified_type)
-      delete qualified_type;
-    base_type = canonical;
+    base_type = SageBuilder::buildModifierType(base_type, modifier);
   }
 
   return SgPointerType::createType(base_type);
@@ -844,7 +748,6 @@ SgBasicBlock *Outliner::Preprocess::transformThisExprs(SgBasicBlock *b) {
     b->unparseToString();
   }
 
-  // return b_this;
   return b;
 }
 

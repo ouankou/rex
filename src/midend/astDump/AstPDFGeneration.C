@@ -1,10 +1,6 @@
 
 
 // Author: Markus Schordan
-// $Id: AstPDFGeneration.C,v 1.5 2007/02/19 16:08:38 vuduc2 Exp $
-
-#ifndef ASTPDFGENERATION_C
-#define ASTPDFGENERATION_C
 
 #include "AstNodeVisitMapping.h"
 
@@ -24,19 +20,47 @@
 
 #include "PDFGeneration.h"
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
-class AstPDFGeneration_private : public PDFGeneration {
+// Input-only diagrams omit semantic declaration storage, which has no
+// source-written surface. Use the same traversal policy for page allocation
+// and rendering so every allocated page represents exactly one visited node.
+template <class Base> class AstPdfTraversal : public Base {
+public:
+  using Base::Base;
+  void setInputFileOnly(bool enabled) {
+    inputFileOnly = enabled;
+    this->set_useDefaultIndexBasedTraversal(!enabled);
+  }
+
+protected:
+  void
+  setNodeSuccessors(SgNode *node,
+                    typename Base::SuccessorsContainer &successors) override {
+    successors = node->get_traversalSuccessorContainer();
+    if (inputFileOnly) {
+      for (SgNode *&successor : successors) {
+        if (auto *auxiliary = isSgAuxiliaryDeclarationList(successor)) {
+          auxiliary->validate_semantic_non_output_role();
+          successor = nullptr;
+        }
+      }
+    }
+  }
+
+private:
+  bool inputFileOnly = false;
+};
+
+class AstPDFGeneration_private : public AstPdfTraversal<PDFGeneration> {
 public:
   virtual void generate(std::string filename, SgNode *node);
   virtual void generate(SgProject *projectNode);
   void generateInputFiles(SgProject *projectNode);
-  void generateWithinFile(const std::string &filename, SgFile *node); // ****
-  void generateWithinFile(SgFile *node);                              // ****
+  void generateWithinFile(const std::string &filename, SgFile *node);
+  void generateWithinFile(SgFile *node);
+
 protected:
-  // PDFInheritedAttribute evaluateInheritedAttribute(SgNode* node,
-  // PDFInheritedAttribute inheritedValue); -- using parent's version
   virtual std::string get_bookmark_name(SgNode *node);
   void edit_page(size_t pageNumber, SgNode *node,
                  PDFInheritedAttribute inheritedValue);
@@ -70,17 +94,16 @@ void AstPDFGeneration::generateWithinFile(SgFile *node) {
 }
 
 void AstPDFGeneration_private::generate(string filename, SgNode *node) {
+  setInputFileOnly(false);
   string pdffilename = filename + ".pdf";
-  // cout << "generating PDF file: " << pdffilename << " ... ";
   AstNodeVisitMapping addrPageMappingTrav(0);
   addrPageMappingTrav.traverse(node, preorder);
   size_t numPages = addrPageMappingTrav.pagenum;
   addrPageMapping = addrPageMappingTrav.address_pagenum;
   pdf_setup(pdffilename, numPages);
-  PDFInheritedAttribute pdfIA(pdfFile);
+  PDFInheritedAttribute pdfIA;
   traverse(node, pdfIA);
   pdf_finalize();
-  // cout << "done (full AST)." << endl;
 }
 
 // Full AST for the entire project, one pdf file for each input source file
@@ -108,22 +131,18 @@ void AstPDFGeneration_private::generateInputFiles(SgProject *projectNode) {
 
 void AstPDFGeneration_private::generateWithinFile(const string &pdffilename,
                                                   SgFile *node) {
-  AstNodeVisitMapping addrPageMappingTrav(1);
+  setInputFileOnly(true);
+  AstPdfTraversal<AstNodeVisitMapping> addrPageMappingTrav(0);
+  addrPageMappingTrav.setInputFileOnly(true);
   addrPageMappingTrav.traverseWithinFile(node, preorder);
   addrPageMapping = addrPageMappingTrav.address_pagenum;
-  // cout << "generating PDF file: " << pdffilename << " ... ";
   pdf_setup(pdffilename + ".pdf", addrPageMappingTrav.pagenum);
-  PDFInheritedAttribute pdfIA(pdfFile);
-  // traverse/*WithinFile*/(node,pdfIA);
-  //  tps (01/05/08) changed this call from traverse to traverseWithinFile
+  PDFInheritedAttribute pdfIA;
   traverseWithinFile(node, pdfIA);
   pdf_finalize();
-  // cout << "done." << endl;
 }
 
 void AstPDFGeneration_private::generateWithinFile(SgFile *node) {
-  // string
-  // pdffilename=string("./")+string(Rose::utility_stripPathFromFileName(Rose::getFileName(node)));
   string pdffilename =
       string("./") +
       string(Rose::utility_stripPathFromFileName(node->getFileName()));
@@ -131,45 +150,24 @@ void AstPDFGeneration_private::generateWithinFile(SgFile *node) {
 }
 
 string AstPDFGeneration_private::get_bookmark_name(SgNode *node) {
-  string nodefilename = "--not initialized--";
-  string bookmarktext;
-  {
-    ostringstream ss;
-    ss << node->sage_class_name() << " ";
-    SgLocatedNode *sgLocNode = dynamic_cast<SgLocatedNode *>(node);
-    if (sgLocNode) {
-      Sg_File_Info *fi = sgLocNode->get_file_info();
-      if (fi) {
-        // ss << "(" << fi->get_line() << "," << fi->get_col() << ") in \"" <<
-        // fi->get_filename() << "\""; nodefilename=string(fi->get_filename());
-        //  if (fi->isCompilerGenerated())
-        //    ss << " compilerGenerated ";
-        if (fi->isTransformation())
-          ss << " transformation ";
-        if (fi->isOutputInCodeGeneration())
-          ss << " unparsable ";
-        ss << "(" << fi->get_line() << "," << fi->get_col() << ") in \""
-           << fi->get_filename() << "\"";
-        nodefilename = string(fi->get_filename());
-      } else {
-        ss << "(BUG)";
-      }
-    } else {
-      ss << ""; // provide no explicit info about the lack of file_info
-    }
-    bookmarktext = ss.str();
+  ostringstream text;
+  text << node->sage_class_name() << " ";
+  if (auto *located = isSgLocatedNode(node)) {
+    Sg_File_Info *position = located->get_file_info();
+    ROSE_ASSERT(position != nullptr);
+    if (position->isTransformation())
+      text << " transformation ";
+    if (position->isOutputInCodeGeneration())
+      text << " unparsable ";
+    text << "(" << position->get_line() << "," << position->get_col()
+         << ") in \"" << position->get_filename() << "\"";
   }
-
-  return bookmarktext;
+  return text.str();
 }
 
 void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
                                          PDFInheritedAttribute inheritedValue) {
-  // JW (added by DQ 7/23/2004): Adds address of each IR node to the top of the
-  // page
   HPDF_Page_SetRGBFill(currentPage, 1, 0, 0);
-  // DQ (1/20/2006): Modified for 64 bit machines
-  // ostringstream _ss; _ss << "0x" << std::hex << (int)node;
   ostringstream _ss;
   _ss << "pointer:" << std::hex << node;
   HPDF_Page_ShowTextNextLine(currentPage, _ss.str().c_str());
@@ -181,11 +179,10 @@ void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
   SgLocatedNode *sgLocNode = dynamic_cast<SgLocatedNode *>(node);
   if (sgLocNode) {
     Sg_File_Info *fi = sgLocNode->get_file_info();
+    ROSE_ASSERT(fi != nullptr);
     ostringstream temp;
     temp << fi->get_filename() << " " << fi->get_line() << ":" << fi->get_col();
-    if (fi != NULL)
-      HPDF_Page_ShowTextNextLine(currentPage, temp.str().c_str());
-    assert(fi != NULL);
+    HPDF_Page_ShowTextNextLine(currentPage, temp.str().c_str());
     if (fi->isTransformation())
       HPDF_Page_ShowTextNextLine(currentPage, "IsTransformation:1");
     else
@@ -300,6 +297,16 @@ void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
   HPDF_Page_ShowTextNextLine(currentPage, "");
   HPDF_Page_ShowTextNextLine(currentPage, "");
 
+  for (const auto &[target, field] : node->returnDataMemberPointers()) {
+    const auto page = addrPageMapping.find(target);
+    if (page == addrPageMapping.end())
+      continue;
+    ROSE_ASSERT(page->second >= 0 &&
+                static_cast<size_t>(page->second) < pageDests.size());
+    HPDF_Page_ShowTextNextLine(currentPage, (field + ": ").c_str());
+    create_textlink(target->class_name(), pageDests[page->second]);
+  }
+
   // generate RTI information for SgNode
   {
     RTIReturnType rti = node->roseRTI();
@@ -322,32 +329,12 @@ void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
                 // reasonable length
         value = "<too long>: " + value.substr(0, 80);
       }
-      if (value.size() >= 80) {
-        value = "<too long>: " + value.substr(0, 80);
-      }
-      AstNodeVisitMapping::MappingType::iterator mapit;
-
-      // ensure that mapping value exists (otherwise it would be added to the
-      // map) and decide whether to create a link to a page (representing a
-      // node) or not
-      mapit = addrPageMapping.find(value);
-      if (mapit != addrPageMapping.end()) {
-        size_t destPageNum = mapit->second;
-        ROSE_ASSERT(destPageNum < pageDests.size());
-        create_textlink(value.c_str(), pageDests[destPageNum] /* targetpage */);
-      } else {
-        HPDF_Page_ShowText(currentPage, value.c_str());
-      }
+      HPDF_Page_ShowText(currentPage, value.c_str());
     }
   }
 
   // generate AstAttribute information
   {
-    // printf ("In AstPDFGeneration_private::edit_page(): using new attribute
-    // interface \n"); if (node->get_attribute() != NULL) DQ (4/10/2006): New
-    // AstAttribute Interface (but access the AstAttributeMechanism directly
-    // since "getAttributeIdentifiers()" is not in the interface implemented at
-    // the IR nodes).
     if (node->get_attributeMechanism() != NULL) {
       AstAttributeMechanism::AttributeIdentifiers aidents =
           node->get_attributeMechanism()->getAttributeIdentifiers();
@@ -361,33 +348,22 @@ void AstPDFGeneration_private::edit_page(size_t pageNumber, SgNode *node,
         HPDF_Page_SetRGBFill(currentPage, 0.0, 0.2, 0.7);
         HPDF_Page_ShowText(currentPage, ((*it) + ": ").c_str());
         HPDF_Page_SetRGBFill(currentPage, 0.0, 0.0, 0.0);
-        // float textxpos=PDF_get_value(pdfFile,"textx",0.0);
-        // float textypos=PDF_get_value(pdfFile,"texty",0.0);
-        // string attributeValue = (node->attribute()[*it])->toString();
         string attributeValue = node->getAttribute(*it)->toString();
 
-        // split string into different substrings separated by newlines
-        string substring = "";
-        int oldpos = 0;
-        int newpos;
-        do {
-          newpos = attributeValue.find('\n', oldpos);
-          substring = attributeValue.substr(oldpos, newpos - oldpos);
-          if (oldpos == 0)
-            HPDF_Page_ShowText(currentPage, substring.append("   ").c_str());
-          else
-            HPDF_Page_ShowTextNextLine(currentPage, substring.c_str());
-          oldpos = newpos + 1; // go to next '\n' and skip it
+        size_t start = 0;
+        while (true) {
+          const size_t end = attributeValue.find('\n', start);
+          string line = attributeValue.substr(start, end - start);
+          if (start == 0) {
+            line += "   ";
+            HPDF_Page_ShowText(currentPage, line.c_str());
+          } else
+            HPDF_Page_ShowTextNextLine(currentPage, line.c_str());
+          if (end == string::npos)
+            break;
+          start = end + 1;
         }
-        // DQ (8/9/2005): Suggested fix from Rich (fixes infinite loop where AST
-        // Attributes are attached) while( newpos < (int)
-        // attributeValue.size());
-        while (newpos < (int)attributeValue.size() && newpos >= 0);
-        // PDF_show_boxed(pdfFile, attributeValue.c_str(), textxpos, textypos,
-        // 0, 0, "left", "");
       }
     } // end if
   }
 }
-
-#endif

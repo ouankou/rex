@@ -19,27 +19,10 @@ Free Software Foundation, Inc., 59 Temple Place - Suite 330,
 Boston, MA  02111-1307, USA.
 
 Brian T. N. Gunney, brlynn@minn.net
-
-$Id: sla.h,v 1.3 2008/01/08 02:56:44 dquinlan Exp $
-
 */
-
-/*
- *
- * Jeremiah J. Willcock, 10-16-2007
- * Changed the C++ version of this code to use std::strings rather than char*
- * to allow better integration with the string version of ROSE command line
- * processing.
- *
- */
 
 #ifndef __INCLUDED_sla_hh__
 #define __INCLUDED_sla_hh__
-/*
-$Header:
-/nfs/casc/overture/ROSE/ROSE2_Repository/ROSE/src/util/commandlineProcessing/sla.h,v
-1.3 2008/01/08 02:56:44 dquinlan Exp $
-*/
 
 #if defined(__has_include)
 #if __has_include("rosedll.h")
@@ -131,7 +114,7 @@ ROSE_UTIL_API int sla_none(int *argc, ARGVCONST char **argv, const char *flind,
   if (!pname.empty() && pname[0] != '*') {                                     \
     ppname = "*" + ppname;                                                     \
   }                                                                            \
-  nvalue = sla_str(argv, flind, assop, ppname, rr, argd);                      \
+  nvalue = sla_str(argv, flind, assop, ppname, rr.data(), argd);               \
   if (nvalue > 0 && value != NULL) {                                           \
     if (!pname.empty() && pname[0] == '*') {                                   \
       for (i = 0; i < nvalue; i++)                                             \
@@ -174,7 +157,7 @@ ROSE_UTIL_API int sla_none(int *argc, ARGVCONST char **argv, const char *flind,
   if (pname.empty() || pname[0] != '*') {                                      \
     ppname = "*" + ppname;                                                     \
   }                                                                            \
-  nvalue = sla_str(argv, flind, assop, ppname, &rr[0], argd);                  \
+  nvalue = sla_str(argv, flind, assop, ppname, rr.data(), argd);               \
   if (nvalue > 0 && value != NULL) {                                           \
     if (!pname.empty() && pname[0] == '*') {                                   \
       for (i = 0; i < nvalue; i++)                                             \
@@ -207,14 +190,6 @@ ROSE_UTIL_API int sla_none(int *argc, ARGVCONST char **argv, const char *flind,
 #endif
 #endif
 
-/*
-  Generate additional sla for various primitive types.
-  The use of the SLA macro makes it
-  difficult to see the prototypes of the functions created.
-  To find the prototypes, try this:
-  > CC -P sla.cc
-  > pgrep 's/^(int sla\s*\([^\{]*).*$/$1;/' sla.i -s
- */
 #ifdef __cplusplus
 SLA_FCN_PROTO(sla_str, std::string);
 #else

@@ -36,6 +36,7 @@ void verifyDefinitionFamily(SgFunctionDeclaration *definition,
 
   SgSymbol *symbol = first->get_symbol_from_symbol_table();
   ROSE_ASSERT(symbol != nullptr);
+  ROSE_ASSERT(definition->get_symbol_from_symbol_table() == symbol);
   if (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
     symbol = alias->get_alias();
   }
@@ -184,8 +185,32 @@ void verifyStandaloneClassCopyAuxiliaryOwnership(
   ROSE_ASSERT(copiedFirst->get_scope() == copiedDefinition);
   ROSE_ASSERT(copiedFirst->get_symbol_from_symbol_table() !=
               originalFirst->get_symbol_from_symbol_table());
+  ROSE_ASSERT(SageInterface::declarationPreceedsDefinition(
+                  copiedFirst, copiedInlineDefinition) !=
+              SageInterface::declarationPreceedsDefinition(
+                  copiedInlineDefinition, copiedFirst));
+  ROSE_ASSERT(
+      !SageInterface::declarationPreceedsDefinition(copiedFirst, copiedFirst));
 
   SageInterface::deepDelete(copiedDeclaration);
+}
+
+void verifyExceptionParameterBinding(SgFunctionDeclaration *function) {
+  ROSE_ASSERT(function->get_parameterList() != nullptr &&
+              function->get_parameterList()->get_args().size() == 1);
+  auto *signature = function->get_declared_exception_signature();
+  ROSE_ASSERT(signature != nullptr && signature->get_parent() == function);
+  ROSE_ASSERT(signature->get_semantic_signature() == function->get_type());
+  ROSE_ASSERT(signature->get_exception_specification_is_written());
+  ROSE_ASSERT(signature->get_exception_specification_kind() ==
+              SgFunctionType::e_exception_noexcept_true);
+  auto *expression = signature->get_exception_specification_expression();
+  ROSE_ASSERT(expression != nullptr && expression->get_parent() == signature);
+  const auto references = NodeQuery::querySubTree(expression, V_SgVarRefExp);
+  ROSE_ASSERT(references.size() == 1);
+  ROSE_ASSERT(
+      isSgVarRefExp(references.front())->get_symbol()->get_declaration() ==
+      function->get_parameterList()->get_args().front());
 }
 
 void verifyReplacement(SgFunctionDeclaration *definition) {
@@ -205,6 +230,13 @@ void verifyReplacement(SgFunctionDeclaration *definition) {
   const int physicalFileId =
       definition->get_file_info()->get_physical_file_id();
   ROSE_ASSERT(physicalFileId >= 0);
+
+  SgBasicBlock *body = definition->get_definition()->get_body();
+  ROSE_ASSERT(body != nullptr);
+  Sg_File_Info *bodyPosition = body->get_startOfConstruct();
+  ROSE_ASSERT(bodyPosition != nullptr);
+  PreprocessingInfo *bodyComment = SageInterface::attachComment(
+      body, "REX retained body provenance", PreprocessingInfo::C_StyleComment);
 
   std::vector<SgFunctionDeclaration *> originalFamily;
   SgProject *project = SageInterface::getProject(definition);
@@ -236,6 +268,11 @@ void verifyReplacement(SgFunctionDeclaration *definition) {
   SgDeclarationStatement *sourceReplacement =
       SageInterface::replaceFunctionDefinitionWithDeclaration(definition);
   ROSE_ASSERT(sourceReplacement != nullptr);
+  ROSE_ASSERT(body->get_startOfConstruct() == bodyPosition);
+  ROSE_ASSERT(bodyPosition->get_physical_file_id() == physicalFileId);
+  ROSE_ASSERT(bodyComment->getAttachedOwner() == body);
+  ROSE_ASSERT(bodyComment->get_file_info()->get_physical_file_id() ==
+              bodyPosition->get_physical_file_id());
   ROSE_ASSERT(sourceReplacement->get_parent() == structuralOwner);
   ROSE_ASSERT(structuralOwner->statementExistsInScope(sourceReplacement));
   ROSE_ASSERT(sourceReplacement->get_file_info() != nullptr);
@@ -307,6 +344,55 @@ void verifyReplacement(SgFunctionDeclaration *definition) {
     ROSE_ASSERT(prototype->get_forward());
     ROSE_ASSERT(prototype->get_firstNondefiningDeclaration() == originalFirst);
     ROSE_ASSERT(prototype->get_definingDeclaration() == definition);
+    SgFunctionType *sourceSyntax = definition->get_type_syntax();
+    SgFunctionType *prototypeSyntax = prototype->get_type_syntax();
+    ROSE_ASSERT(sourceSyntax != nullptr);
+    ROSE_ASSERT(prototypeSyntax != nullptr && prototypeSyntax != sourceSyntax);
+    ROSE_ASSERT(sourceSyntax->get_parent() == definition);
+    ROSE_ASSERT(prototypeSyntax->get_parent() == prototype);
+    if (auto *signature = definition->get_declared_exception_signature();
+        signature != nullptr &&
+        signature->get_exception_specification_expression() != nullptr) {
+      verifyExceptionParameterBinding(definition);
+      verifyExceptionParameterBinding(prototype);
+      ROSE_ASSERT(prototype->get_declared_exception_signature()
+                      ->get_exception_specification_expression() !=
+                  definition->get_declared_exception_signature()
+                      ->get_exception_specification_expression());
+    }
+    if (auto *sourceMember = isSgMemberFunctionType(sourceSyntax)) {
+      auto *prototypeMember = isSgMemberFunctionType(prototypeSyntax);
+      ROSE_ASSERT(prototypeMember != nullptr);
+      ROSE_ASSERT(prototypeMember->get_mfunc_specifier() ==
+                  sourceMember->get_mfunc_specifier());
+      ROSE_ASSERT(prototype->get_type() == definition->get_type());
+    }
+    const auto &sourceArguments = sourceSyntax->get_argument_list()
+                                      ->get_argument_qualification_use_sites();
+    const auto &prototypeArguments =
+        prototypeSyntax->get_argument_list()
+            ->get_argument_qualification_use_sites();
+    ROSE_ASSERT(sourceArguments.size() == 1);
+    ROSE_ASSERT(prototypeArguments.size() == sourceArguments.size());
+    const auto *sourceArgument = sourceArguments.front();
+    const auto *prototypeArgument = prototypeArguments.front();
+    ROSE_ASSERT(sourceArgument->get_source_type_qualification_present());
+    ROSE_ASSERT(sourceArgument->get_source_type_global_qualification());
+    ROSE_ASSERT(
+        !sourceArgument->get_source_type_qualification_tokens().empty());
+    ROSE_ASSERT(prototypeArgument != sourceArgument);
+    ROSE_ASSERT(prototypeArgument->get_parent() ==
+                prototypeSyntax->get_argument_list());
+    ROSE_ASSERT(prototypeArgument->get_is_pack_expansion() ==
+                sourceArgument->get_is_pack_expansion());
+    ROSE_ASSERT(prototypeArgument->get_source_type_qualification_present() ==
+                sourceArgument->get_source_type_qualification_present());
+    ROSE_ASSERT(prototypeArgument->get_source_type_global_qualification() ==
+                sourceArgument->get_source_type_global_qualification());
+    ROSE_ASSERT(prototypeArgument->get_source_type_elaboration_required() ==
+                sourceArgument->get_source_type_elaboration_required());
+    ROSE_ASSERT(prototypeArgument->get_source_type_qualification_tokens() ==
+                sourceArgument->get_source_type_qualification_tokens());
   }
 
   SgFunctionSymbol *symbol =
@@ -321,7 +407,7 @@ void verifyReplacement(SgFunctionDeclaration *definition) {
 
 int main(int argc, char **argv) {
   bool rejectOutOfClassPrototype = false;
-  bool rejectNonemptySymbolRebuild = false;
+  bool rejectNonemptySymbolCopy = false;
   bool requireCopiedSemanticFunctionIdentity = false;
   enum class FunctionChainContractMode {
     none,
@@ -339,8 +425,8 @@ int main(int argc, char **argv) {
     const std::string argument = argv[readIndex];
     if (argument == "--reject-out-of-class-member-prototype") {
       rejectOutOfClassPrototype = true;
-    } else if (argument == "--reject-nonempty-symbol-rebuild") {
-      rejectNonemptySymbolRebuild = true;
+    } else if (argument == "--reject-nonempty-symbol-copy") {
+      rejectNonemptySymbolCopy = true;
     } else if (argument == "--require-copied-semantic-function-identity") {
       requireCopiedSemanticFunctionIdentity = true;
     } else if (argument == "--require-complete-function-chain") {
@@ -364,7 +450,7 @@ int main(int argc, char **argv) {
   argv[argc] = nullptr;
   const int selectedContractModes =
       (rejectOutOfClassPrototype ? 1 : 0) +
-      (rejectNonemptySymbolRebuild ? 1 : 0) +
+      (rejectNonemptySymbolCopy ? 1 : 0) +
       (requireCopiedSemanticFunctionIdentity ? 1 : 0) +
       (functionChainContractMode != FunctionChainContractMode::none ? 1 : 0);
   ROSE_ASSERT(selectedContractModes <= 1);
@@ -466,7 +552,7 @@ int main(int argc, char **argv) {
     ROSE_ABORT();
   }
 
-  if (rejectNonemptySymbolRebuild) {
+  if (rejectNonemptySymbolCopy) {
     SgClassDefinition *originalDefinition =
         isSgClassDefinition(inlineMemberDefinition->get_scope());
     ROSE_ASSERT(originalDefinition != nullptr);
@@ -478,10 +564,9 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(copiedDefinition->get_symbol_table() != nullptr);
     ROSE_ASSERT(copiedDefinition->get_symbol_table()->size() > 0);
 
-    // rebuildSymbolTable() is construction-only: callers must clear an
-    // existing table explicitly before requesting a rebuild.  A deep copy has
-    // already completed that construction phase and must be rejected here.
-    SageInterface::rebuildSymbolTable(copiedDefinition);
+    SgTreeCopy copyHelp;
+    SageInterface::fixupReferencesToSymbols(originalDefinition,
+                                            copiedDefinition, copyHelp);
     ROSE_ABORT();
   }
 
@@ -494,6 +579,46 @@ int main(int argc, char **argv) {
   verifyCompleteDefinitionFamily(project, freeDefinition, 3);
   verifyCompleteDefinitionFamily(project, inlineMemberDefinition, 2);
   verifyCompleteDefinitionFamily(project, outOfLineMemberDefinition, 2);
+
+  auto *arrayDefinition = findDefinition(project, "rex_array_definition");
+  verifyExceptionParameterBinding(arrayDefinition);
+  ROSE_ASSERT(arrayDefinition->get_parameterList_syntax() != nullptr &&
+              arrayDefinition->get_parameterList_syntax() !=
+                  arrayDefinition->get_parameterList());
+  ROSE_ASSERT(isSgArrayType(arrayDefinition->get_parameterList_syntax()
+                                ->get_args()
+                                .front()
+                                ->get_type()) != nullptr);
+
+  for (SgFunctionDeclaration *definition :
+       {freeDefinition, outOfLineMemberDefinition,
+        findDefinition(project, "rex_copy_reopened_definition")}) {
+    ROSE_ASSERT(definition != nullptr);
+    SgDeclarationStatement *first =
+        definition->get_firstNondefiningDeclaration();
+    ROSE_ASSERT(first != nullptr);
+    ROSE_ASSERT(
+        SageInterface::declarationPreceedsDefinition(first, definition));
+    ROSE_ASSERT(
+        !SageInterface::declarationPreceedsDefinition(definition, first));
+    ROSE_ASSERT(!SageInterface::declarationPreceedsDefinition(first, first));
+  }
+
+  SgGlobal *global = isSgGlobal(freeDefinition->get_parent());
+  ROSE_ASSERT(global != nullptr);
+  SgDeclarationStatementPtrList &declarations = global->get_declarations();
+  auto firstPosition =
+      std::find(declarations.begin(), declarations.end(),
+                freeDefinition->get_firstNondefiningDeclaration());
+  auto definitionPosition =
+      std::find(declarations.begin(), declarations.end(), freeDefinition);
+  ROSE_ASSERT(firstPosition != declarations.end());
+  ROSE_ASSERT(definitionPosition != declarations.end());
+  std::iter_swap(firstPosition, definitionPosition);
+  ROSE_ASSERT(!SageInterface::declarationPreceedsDefinition(
+      freeDefinition->get_firstNondefiningDeclaration(), freeDefinition));
+  std::iter_swap(firstPosition, definitionPosition);
+
   verifyStandaloneClassCopyAuxiliaryOwnership(inlineMemberDefinition);
 
   // Copy the complete project so every copied global remains structurally
@@ -513,6 +638,9 @@ int main(int argc, char **argv) {
   SgFunctionDeclaration *copiedOutOfLineMemberDefinition =
       findDefinition(generatedGlobal, "rex_out_of_line_member_definition");
   verifyDefinitionFamily(copiedFreeDefinition, false);
+  verifyExceptionParameterBinding(copiedFreeDefinition);
+  verifyExceptionParameterBinding(
+      findDefinition(generatedGlobal, "rex_array_definition"));
   verifyDefinitionFamily(copiedInlineMemberDefinition, true);
   verifyDefinitionFamily(copiedOutOfLineMemberDefinition, false);
   verifyCompleteDefinitionFamily(generatedProject, copiedFreeDefinition, 3);
@@ -551,6 +679,24 @@ int main(int argc, char **argv) {
       originalFirstNamespace->isSameNamespace(originalDefiningNamespace));
   ROSE_ASSERT(copiedFirstNamespace->isSameNamespace(copiedDefiningNamespace));
 
+  SgNamespaceAliasDeclarationStatement *copiedAlias = nullptr;
+  for (SgDeclarationStatement *declaration :
+       generatedGlobal->get_declarations()) {
+    if (auto *alias = isSgNamespaceAliasDeclarationStatement(declaration)) {
+      ROSE_ASSERT(copiedAlias == nullptr);
+      copiedAlias = alias;
+    }
+  }
+  ROSE_ASSERT(copiedAlias != nullptr);
+  ROSE_ASSERT(copiedAlias->get_name() == "rex_copy_reopened_alias");
+  SgNamespaceSymbol *copiedAliasSymbol =
+      generatedGlobal->lookup_namespace_symbol(copiedAlias->get_name());
+  ROSE_ASSERT(copiedAliasSymbol != nullptr);
+  ROSE_ASSERT(copiedAliasSymbol->get_aliasDeclaration() == copiedAlias);
+  ROSE_ASSERT(copiedAliasSymbol->get_symbol_basis() == copiedAlias);
+  ROSE_ASSERT(copiedAliasSymbol->get_parent() ==
+              generatedGlobal->get_symbol_table());
+
   SgVariableDeclaration *copiedLoopLocal = nullptr;
   for (SgNode *node : NodeQuery::querySubTree(copiedReopenedDefinition,
                                               V_SgVariableDeclaration)) {
@@ -571,6 +717,7 @@ int main(int argc, char **argv) {
   SageInterface::deepDelete(generatedProject);
 
   verifyReplacement(freeDefinition);
+  verifyReplacement(arrayDefinition);
   verifyReplacement(inlineMemberDefinition);
 
   // Empty source replacements must not inherit an unrelated active builder

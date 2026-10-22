@@ -23,6 +23,23 @@ int main(int argc, char **argv) {
   SgGlobal *glb = getFirstGlobalScope(project);
   appendStatement(func_copy, glb);
 
+  SgFunctionDeclaration *prepended_copy =
+      isSgFunctionDeclaration(copyStatement(func));
+  ROSE_ASSERT(prepended_copy != NULL && prepended_copy != func);
+  ROSE_ASSERT(prepended_copy->get_parent() == NULL);
+  prepended_copy->set_name("bar_prepended_copy");
+  prependStatement(prepended_copy, glb);
+  SgFunctionDeclaration *canonical = isSgFunctionDeclaration(
+      prepended_copy->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(canonical != NULL);
+  ROSE_ASSERT(glb->get_declarations().front() == prepended_copy);
+  ROSE_ASSERT(prepended_copy->get_parent() == glb);
+  ROSE_ASSERT(canonical->get_parent() == glb->get_auxiliary_declarations());
+  ROSE_ASSERT(canonical->get_scope() == glb);
+  ROSE_ASSERT(canonical->get_name() == prepended_copy->get_name());
+  ROSE_ASSERT(canonical->get_definingDeclaration() == prepended_copy);
+  ROSE_ASSERT(glb->find_symbol_from_declaration(canonical) != NULL);
+
   // copy a non-defining function declaration
 
   SgFunctionDeclaration *nfunc =

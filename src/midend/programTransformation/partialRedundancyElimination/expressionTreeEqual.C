@@ -1,19 +1,8 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "expressionTreeEqual.h"
 
 #include "sage3basic.h"
 
-//~ namespace legacy
-//~ {
-
-// DQ (12/31/2005): This is OK if not declared in a header file
-using namespace std;
-
-// using namespace PRE;
-
-bool isFunctionSideEffectFree(SgExpression *) {
-  return false; // FIXME
-}
+#include <cmath>
 
 bool expressionTreeEqualStar(const SgExpressionPtrList &as,
                              const SgExpressionPtrList &bs) {
@@ -27,25 +16,46 @@ bool expressionTreeEqualStar(const SgExpressionPtrList &as,
 }
 
 bool expressionTreeEqual(SgExpression *a, SgExpression *b) {
-  // cout << "Comparing " << a->unparseToString() << " of type " <<
-  // a->sage_class_name() << " with " << b->unparseToString() << " of type " <<
-  // b->sage_class_name() << endl;
+  ROSE_ASSERT(a != nullptr && b != nullptr);
   if (a->variantT() != b->variantT())
     return false;
+  // PRE cannot equate effects or reads whose storage may change through
+  // aliases.
+  if (isSgAssignOp(a) || isSgCompoundAssignOp(a) || isSgPlusPlusOp(a) ||
+      isSgMinusMinusOp(a) || isSgThrowOp(a) || isSgPointerDerefExp(a) ||
+      isSgPntrArrRefExp(a) || isSgMemberAccessExp(a))
+    return false;
   if (isSgBinaryOp(a)) {
-    assert(isSgBinaryOp(b));
+    ROSE_ASSERT(isSgBinaryOp(b));
+    if (a->get_type() != b->get_type())
+      return false;
     return expressionTreeEqual(isSgBinaryOp(a)->get_lhs_operand(),
                                isSgBinaryOp(b)->get_lhs_operand()) &&
            expressionTreeEqual(isSgBinaryOp(a)->get_rhs_operand(),
                                isSgBinaryOp(b)->get_rhs_operand());
   }
   if (isSgUnaryOp(a)) {
-    assert(isSgUnaryOp(b));
-    return expressionTreeEqual(isSgUnaryOp(a)->get_operand(),
-                               isSgUnaryOp(b)->get_operand());
+    ROSE_ASSERT(isSgUnaryOp(b));
+    SgUnaryOp *unary_a = isSgUnaryOp(a);
+    SgUnaryOp *unary_b = isSgUnaryOp(b);
+    if (SgCastExp *cast_a = isSgCastExp(a)) {
+      SgCastExp *cast_b = isSgCastExp(b);
+      cast_a->validate_semantic_conversion();
+      cast_b->validate_semantic_conversion();
+      if (cast_a->get_cast_type() != cast_b->get_cast_type() ||
+          cast_a->get_semantic_conversion_kind() !=
+              cast_b->get_semantic_conversion_kind() ||
+          cast_a->get_value_category() != cast_b->get_value_category() ||
+          cast_a->get_conversion_base_path() !=
+              cast_b->get_conversion_base_path())
+        return false;
+    }
+    return unary_a->get_type() == unary_b->get_type() &&
+           unary_a->get_mode() == unary_b->get_mode() &&
+           expressionTreeEqual(unary_a->get_operand(), unary_b->get_operand());
   }
   if (isSgConditionalExp(a)) {
-    assert(isSgConditionalExp(b));
+    ROSE_ASSERT(isSgConditionalExp(b));
     SgConditionalExp *conditional_a = isSgConditionalExp(a);
     SgConditionalExp *conditional_b = isSgConditionalExp(b);
     conditional_a->validate();
@@ -63,65 +73,83 @@ bool expressionTreeEqual(SgExpression *a, SgExpression *b) {
                                conditional_b->get_false_exp());
   }
   if (isSgDeleteExp(a)) {
-    assert(isSgDeleteExp(b));
+    ROSE_ASSERT(isSgDeleteExp(b));
     return false;
   }
   if (isSgExprListExp(a)) {
-    assert(isSgExprListExp(b));
+    ROSE_ASSERT(isSgExprListExp(b));
     return expressionTreeEqualStar(isSgExprListExp(a)->get_expressions(),
                                    isSgExprListExp(b)->get_expressions());
   }
   if (isSgFunctionCallExp(a)) {
-    assert(isSgFunctionCallExp(b));
-    return expressionTreeEqual(isSgFunctionCallExp(a)->get_function(),
-                               isSgFunctionCallExp(b)->get_function()) &&
-           expressionTreeEqual(isSgFunctionCallExp(a)->get_args(),
-                               isSgFunctionCallExp(b)->get_args()) &&
-           isFunctionSideEffectFree(isSgFunctionCallExp(a)->get_function());
+    ROSE_ASSERT(isSgFunctionCallExp(b));
+    return false;
   }
   if (isSgFunctionRefExp(a)) {
-    assert(isSgFunctionRefExp(b));
+    ROSE_ASSERT(isSgFunctionRefExp(b));
     return (isSgFunctionRefExp(a)->get_symbol()->get_declaration() ==
             isSgFunctionRefExp(b)->get_symbol()->get_declaration());
   }
   if (isSgAssignInitializer(a)) {
-    assert(isSgAssignInitializer(b));
+    ROSE_ASSERT(isSgAssignInitializer(b));
     return expressionTreeEqual(isSgAssignInitializer(a)->get_operand(),
                                isSgAssignInitializer(b)->get_operand());
   }
   if (isSgAggregateInitializer(a)) {
-    assert(isSgAggregateInitializer(b));
+    ROSE_ASSERT(isSgAggregateInitializer(b));
     return expressionTreeEqual(isSgAggregateInitializer(a)->get_initializers(),
                                isSgAggregateInitializer(b)->get_initializers());
   }
   if (isSgConstructorInitializer(a)) {
-    assert(isSgConstructorInitializer(b));
-    return false; // FIXME
+    ROSE_ASSERT(isSgConstructorInitializer(b));
+    return false;
   }
   if (isSgMemberFunctionRefExp(a)) {
-    assert(isSgMemberFunctionRefExp(b));
+    ROSE_ASSERT(isSgMemberFunctionRefExp(b));
     return (isSgMemberFunctionRefExp(a)->get_symbol()->get_declaration() ==
             isSgMemberFunctionRefExp(b)->get_symbol()->get_declaration());
   }
   if (isSgNewExp(a)) {
-    assert(isSgNewExp(b));
+    ROSE_ASSERT(isSgNewExp(b));
     return false;
   }
-  if (isSgRefExp(a)) {
-    assert(isSgRefExp(b));
-    assert(!"FIXME");
-  }
   if (isSgSizeOfOp(a)) {
-    assert(isSgSizeOfOp(b));
-    return expressionTreeEqual(isSgSizeOfOp(a)->get_operand_expr(),
-                               isSgSizeOfOp(b)->get_operand_expr());
+    ROSE_ASSERT(isSgSizeOfOp(b));
+    SgSizeOfOp *size_a = isSgSizeOfOp(a);
+    SgSizeOfOp *size_b = isSgSizeOfOp(b);
+    if (size_a->get_type() != size_b->get_type() ||
+        size_a->get_operator_kind() != size_b->get_operator_kind())
+      return false;
+    if (size_a->get_operand_type() || size_b->get_operand_type())
+      return size_a->get_operand_type() == size_b->get_operand_type();
+    return expressionTreeEqual(size_a->get_operand_expr(),
+                               size_b->get_operand_expr());
+  }
+  if (auto *align_a = isSgAlignOfOp(a)) {
+    auto *align_b = isSgAlignOfOp(b);
+    ROSE_ASSERT(align_b != nullptr);
+    if (align_a->get_type() != align_b->get_type() ||
+        align_a->get_operator_kind() != align_b->get_operator_kind())
+      return false;
+    if (align_a->get_operand_type() || align_b->get_operand_type())
+      return align_a->get_operand_type() == align_b->get_operand_type();
+    return expressionTreeEqual(align_a->get_operand_expr(),
+                               align_b->get_operand_expr());
   }
   if (isSgThisExp(a)) {
-    assert(isSgThisExp(b));
-    return true;
+    ROSE_ASSERT(isSgThisExp(b));
+    SgThisExp *this_a = isSgThisExp(a);
+    SgThisExp *this_b = isSgThisExp(b);
+    SgType *type_a = this_a->get_type();
+    SgType *type_b = this_b->get_type();
+    return this_a->get_class_symbol() == this_b->get_class_symbol() &&
+           this_a->get_nonreal_symbol() == this_b->get_nonreal_symbol() &&
+           type_a == type_b;
   }
   if (isSgValueExp(a)) {
-    assert(isSgValueExp(b));
+    ROSE_ASSERT(isSgValueExp(b));
+    if (a->get_type() != b->get_type())
+      return false;
     switch (a->variantT()) {
 #define HANDLEVAL(type)                                                        \
   case V_##type:                                                               \
@@ -129,11 +157,8 @@ bool expressionTreeEqual(SgExpression *a, SgExpression *b) {
 
       HANDLEVAL(SgBoolValExp);
       HANDLEVAL(SgCharVal);
-      HANDLEVAL(SgDoubleVal);
       HANDLEVAL(SgEnumVal);
-      HANDLEVAL(SgFloatVal);
       HANDLEVAL(SgIntVal);
-      HANDLEVAL(SgLongDoubleVal);
       HANDLEVAL(SgLongIntVal);
       HANDLEVAL(SgLongLongIntVal);
       HANDLEVAL(SgShortVal);
@@ -147,23 +172,43 @@ bool expressionTreeEqual(SgExpression *a, SgExpression *b) {
       HANDLEVAL(SgWcharVal);
 #undef HANDLEVAL
 
+    case V_SgFloatVal: {
+      const float left = isSgFloatVal(a)->get_value();
+      const float right = isSgFloatVal(b)->get_value();
+      return left == right && std::signbit(left) == std::signbit(right);
+    }
+    case V_SgDoubleVal: {
+      const double left = isSgDoubleVal(a)->get_value();
+      const double right = isSgDoubleVal(b)->get_value();
+      return left == right && std::signbit(left) == std::signbit(right);
+    }
+    case V_SgLongDoubleVal: {
+      const auto left = isSgLongDoubleVal(a)->get_value();
+      const auto right = isSgLongDoubleVal(b)->get_value();
+      return left.format() == right.format() && left.words() == right.words();
+    }
     default:
-      assert(!"Bad SgValueExp");
+      return false;
     }
   }
   if (isSgVarRefExp(a)) {
-    assert(isSgVarRefExp(b));
+    ROSE_ASSERT(isSgVarRefExp(b));
+    SgType *type = a->get_type();
+    SgType *qualified = type->stripType(SgType::STRIP_TYPEDEF_TYPE);
+    while (auto *modifier = isSgModifierType(qualified)) {
+      if (modifier->get_typeModifier().isAtomic())
+        return false;
+      qualified =
+          modifier->get_base_type()->stripType(SgType::STRIP_TYPEDEF_TYPE);
+    }
+    SgType *semantic_type = type->stripTypedefsAndModifiers();
+    ROSE_ASSERT(semantic_type != nullptr);
+    if (SageInterface::isVolatileType(type) ||
+        isSgReferenceType(semantic_type) ||
+        isSgRvalueReferenceType(semantic_type))
+      return false;
     return (isSgVarRefExp(a)->get_symbol()->get_declaration() ==
             isSgVarRefExp(b)->get_symbol()->get_declaration());
   }
-  if (isSgNullExpression(a))
-    return false;
-
-  cerr << a->sage_class_name() << endl;
-  ROSE_ASSERT(!"FIXME");
-
-  /* Unreachable */
   return false;
 }
-
-//~ } // namespace legacy

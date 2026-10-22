@@ -1,4 +1,6 @@
-#include "sage3basic.h"
+#include "rose.h"
+
+#include "AstDOTGeneration.h"
 
 #include <string>
 
@@ -12,17 +14,11 @@ using namespace std;
 // Liao 1/23/2013. It turns out there is another FunctionFilter used in
 // src/midend/programAnalysis/VirtualFunctionAnalysis/PtrAliasAnalysis.C We have
 // to make two filters consistent or there will be mismatch!
-struct keepFunction : public unary_function<bool, SgFunctionDeclaration *> {
+struct keepFunction {
 public:
   bool operator()(SgFunctionDeclaration *funcDecl) {
     bool returnValue = true;
     ROSE_ASSERT(funcDecl != NULL);
-    string filename = funcDecl->get_file_info()->get_filename();
-
-    // Filter out functions from the ROSE preinclude header file
-    if (filename.find("rose_required_macros_and_functions") != string::npos)
-      returnValue = false;
-
     // Filter out compiler generated functions
     if (funcDecl->get_file_info()->isCompilerGenerated() == true)
       returnValue = false;

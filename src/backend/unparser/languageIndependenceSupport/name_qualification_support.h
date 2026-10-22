@@ -81,25 +81,13 @@ public:
                           const SgStatement *useSiteStatement) const;
 };
 
-// #include "rose.h"
-// #include "unparser_opt.h"
-// #include "unparser.h"
-// #include "unparse_type.h"
-
 class Unparser;
 
 class Unparser_Nameq {
-  // This class has the low level support for name qualification.
-
 private:
   NameQualificationContext &nameQualifications;
 
-  // DQ (3/28/2017): Eliminate warning about unused variable from Clang.
-  // Unparser* unp;
-
 public:
-  // DQ (3/28/2017): Eliminate warning about unused variable from Clang.
-  // Unparser_Nameq(Unparser* unp):unp(unp){};
   Unparser_Nameq(Unparser *, NameQualificationContext &qualifications)
       : nameQualifications(qualifications) {};
   virtual ~Unparser_Nameq() {};
@@ -119,10 +107,6 @@ public:
                                        bool skipGeneratedQualification) const;
   NameQualificationResult lookup_pointer_member_base_qualification(
       const SgNode *node, const SgStatement *useSiteStatement) const;
-
-  // DQ (3/14/2019): Adding debugging support to output the map of names.
-  void outputNameQualificationMap(
-      const SgUnorderedMapNodeToString &qualifiedNameMap);
 };
 
 #endif

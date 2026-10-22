@@ -6,7 +6,8 @@
 
 #include <assert.h>
 
-#include <stdio.h>
+#include <string>
+#include <vector>
 
 class CondSliceStmt : public CompSliceStmt {
   int groupIndex;
@@ -95,25 +96,30 @@ LoopTreeNode *DynamicSlicing::Transform(LoopTreeDepComp &c,
   int num = slice->QuerySliceGroupNumber();
   LoopTreeNode *nr = root;
   if (num > 1) {
-    std::string groupVar = fa.NewVar(fa.GetType("int")),
-                groupVarN = groupVar + "N";
-    fa.NewVar(fa.GetType("int"), groupVarN);
+    AstNodePtr groupSymbol, countSymbol;
+    std::string groupVar = fa.NewVar(fa.GetType("int"), "", false, true,
+                                     AST_NULL, AST_NULL, &groupSymbol);
+    std::string groupVarN = groupVar + "N";
+    fa.NewVar(fa.GetType("int"), groupVarN, false, true, AST_NULL, AST_NULL,
+              &countSymbol);
     LoopTreeCreate *tc = c.GetLoopTreeCreate();
-    nr = tc->CreateLoopNode(SymbolicVar(groupVar, AST_NULL), 1,
-                            SymbolicVar(groupVarN, AST_NULL), 1);
+    nr = tc->CreateLoopNode(SymbolicVar(groupVar, AST_NULL, groupSymbol), 1,
+                            SymbolicVar(groupVarN, AST_NULL, countSymbol), 1);
     LoopTreeTransform().InsertLoop(nr, root, -1);
 
     AstInterface::AstNodeList args;
-    char buf[11];
+    std::vector<SymbolicVar> groupValues(1);
     for (int i = 1; i <= num; ++i) {
-      snprintf(buf, sizeof(buf), "%1d", i);
-      std::string name = groupVar + buf;
-      fa.NewVar(fa.GetType("int"), name);
-      args.push_back(fa.CreateVarRef(name).get_ptr());
+      std::string name = groupVar + std::to_string(i);
+      AstNodePtr symbol;
+      fa.NewVar(fa.GetType("int"), name, false, true, AST_NULL, AST_NULL,
+                &symbol);
+      groupValues.emplace_back(name, AST_NULL, symbol);
+      args.push_back(groupValues.back().CodeGen(fa).get_ptr());
     }
     int id = 0;
     AstNodePtr config = LoopTransformInterface::CreateDynamicFusionConfig(
-        fa.CreateVarRef(groupVarN), args, id);
+        SymbolicVar(groupVarN, AST_NULL, countSymbol).CodeGen(fa), args, id);
     LoopTreeNode *configNode = tc->CreateStmtNode(config);
     configNode->Link(nr, LoopTreeNode::AsPrevSibling);
     AstNodePtr configEnd = LoopTransformInterface::CreateDynamicFusionEnd(id);
@@ -123,8 +129,9 @@ LoopTreeNode *DynamicSlicing::Transform(LoopTreeDepComp &c,
     for (CompSlice::ConstStmtIterator p = slice->GetConstStmtIterator();
          !p.ReachEnd(); ++p) {
       LoopTreeNode *stmt = p.Current();
-      snprintf(buf, sizeof(buf), "%1d", slice->QuerySliceStmtGroupIndex(stmt));
-      LoopTreeEmbedStmt()(nr, stmt, SymbolicVar(groupVar + buf, AST_NULL));
+      unsigned group = slice->QuerySliceStmtGroupIndex(stmt);
+      ROSE_ASSERT(group > 0 && group < groupValues.size());
+      LoopTreeEmbedStmt()(nr, stmt, groupValues[group]);
     }
     DependenceHoisting::Transform(c, slice, root);
   } else

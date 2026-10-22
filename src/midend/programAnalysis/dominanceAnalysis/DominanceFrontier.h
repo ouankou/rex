@@ -4,7 +4,7 @@
 #include "DominatorTree.h"
 
 #include <algorithm>
-using std::set_difference;
+#include <iterator>
 
 namespace DominatorTreesAndDominanceFrontiers {
 
@@ -27,22 +27,18 @@ class TemplatedDominanceFrontier
 public:
   //! retunrs a set of ID's with the nodes dominance-frontier
   std::set<int> getFrontier(int node) {
-    if (validID(node))
-      return dominatorFrontier[node];
-    else {
+    if (!validID(node)) {
       std::cerr << "no such ID (" << node << ") in dominator-tree\n";
       ROSE_ABORT();
     }
-    return std::set<int>();
+    return dominatorFrontier[node];
   }
 
   //! construct the domnancefrontier
   TemplatedDominanceFrontier(TemplatedDominatorTree<CFGFilterFunction> dt)
       : DominatorForwardBackwardWrapperClass<CFGFilterFunction>(
             dt.getDirection()),
-        dominatorTree(dt) {
-    dominatorTree = dt;
-    init();
+        dominatorTree(dt), dominatorFrontier(dominatorTree.getSize()) {
     buildFrontier();
   }
 
@@ -59,16 +55,12 @@ public:
       }
       std::cout << "}" << std::endl;
     }
-    return;
   }
 
 private:
   //! checks if the id is valid
-  int validID(int id) {
-    if (id >= 0 && id < dominatorFrontier.size())
-      return true;
-    else
-      return false;
+  bool validID(int id) {
+    return id >= 0 && static_cast<std::size_t>(id) < dominatorFrontier.size();
   }
 
   // ! The dominator tree the dominance frontiers are based on
@@ -77,40 +69,26 @@ private:
   //! a vector of dominance-frontiers, for every possible id one
   std::vector<std::set<int>> dominatorFrontier;
 
-  //! allocate the vector and initialize it with sets
-  void init() {
-    for (int i = 0; i < dominatorTree.getSize(); i++) {
-      dominatorFrontier.push_back(std::set<int>());
-    }
-  }
-
   void buildFrontier() {
     std::vector<std::set<int>> domSets;
     std::vector<std::set<int>> dfLocal;
     int nodeCount = dominatorTree.getSize();
     int i;
-#ifdef DEBUG
-    std::cout << "x\tDFl\tDS\tDF\n";
-#endif
     for (i = 0; i < nodeCount; i++) {
-      // make shure that the set acutally exists in the vector
       domSets.push_back(dominatorTree.getDirectDominatedSet(i));
       dfLocal.push_back(std::set<int>());
-      // compute the df local
       VirtualCFG::FilteredCFGNode<CFGFilterFunction> currentNode =
           dominatorTree.getCFGNodeFromID(i);
-      // for each child
       std::vector<VirtualCFG::FilteredCFGEdge<CFGFilterFunction>> outEdges =
           this->getDirectionModifiedOutEdges(currentNode);
-      // for all those children
       for (unsigned int edge = 0; edge < outEdges.size(); edge++) {
         VirtualCFG::FilteredCFGNode<CFGFilterFunction> child =
-            outEdges[edge].target();
-        int imDom = dominatorTree.getImDomID(child);
+            this->target(outEdges[edge]);
         int childID = dominatorTree.getID(child);
-        // if the current ID is the immdom of this child, put it in the domSet
+        if (childID < 0)
+          continue;
+        int imDom = dominatorTree.getImDomID(childID);
         if (i != imDom) {
-          // child is not dominated -> frontier
           dfLocal[i].insert(childID);
         }
       }
@@ -125,13 +103,9 @@ private:
            j != domSets[i].end(); j++) {
         tmp.insert(dfLocal[(*j)].begin(), dfLocal[(*j)].end());
       }
-      set_difference(
+      std::set_difference(
           tmp.begin(), tmp.end(), domSets[i].begin(), domSets[i].end(),
-          inserter(dominatorFrontier[i], dominatorFrontier[i].begin()));
-#ifdef DEBUG
-      std::cout << i << "\t" << dfLocal[i] << "\t" << domSets[i] << "\t"
-                << dominatorFrontier[i] << std::endl;
-#endif
+          std::inserter(dominatorFrontier[i], dominatorFrontier[i].begin()));
     }
   }
 };

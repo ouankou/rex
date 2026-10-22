@@ -111,36 +111,6 @@ ROSE_UTIL_API std::string join(char separator, const char *strings[],
 
 /** @} */
 
-/** Join strings as if they were English prose.
- *
- *  This is useful when generating documentation strings.
- *
- *  If the input is empty, the output is the empty string.
- *  I.e., `() => ""`
- *
- *  If the input is one phrase, the output is that phrase.
- *  E.g., `("foo") => "foo"`
- *
- *  If the input is two phrases, the output will be those two phrases separated
- * by "and" (the `finalIntro).` E.g., `("foo", "bar") => "foo and bar"`
- *
- *  If the input is three or more phrases, they will be separated from one
- * another by commas (the `separator)` and the last item will also be introduced
- * with "and" (the `finalIntro).` E.g., `("foo", "bar", "baz") => "foo, bar, and
- * baz"`
- *
- *  No transformations are performed on the input phrases. Space characters are
- * inserted after each `separator` and `finalIntro`. A space is also inserted
- * before the `finalIntro` when the input is two phrases.
- *
- * @param phrases Input phrases.
- * @param separator Separator between items.
- * @param finalIntro Intro before the final item.
- * @return Joined string. */
-ROSE_UTIL_API std::string joinEnglish(const std::vector<std::string> &phrases,
-                                      const std::string &separator = ",",
-                                      const std::string &finalIntro = "and");
-
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                      Container versus scalar functions
 //

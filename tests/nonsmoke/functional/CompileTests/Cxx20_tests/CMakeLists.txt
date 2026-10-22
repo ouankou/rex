@@ -158,6 +158,36 @@ rex_register_compile_source_set(REX_CXX20_TESTS_NEGATIVE_SOURCES
 
 set(ROSE_FLAGS -rose:verbose 0 -std=c++20)
 
+rex_register_compile_source_set(REX_CONDITIONAL_MACRO_DIRECTIVE_SOURCES
+  rex_frontend_conditional_macro_directives.cpp)
+add_executable(rex_frontend_conditional_macro_directives_translator
+  rex_frontend_conditional_macro_directives_translator.cpp)
+target_link_libraries(rex_frontend_conditional_macro_directives_translator
+  ROSE_DLL ${link_with_libraries})
+foreach(_branch IN ITEMS primary secondary neither)
+  set(_branch_flags -DREX_PRIMARY_BRANCH=0)
+  if(_branch STREQUAL "primary")
+    set(_branch_flags -DREX_PRIMARY_BRANCH=1 -DREX_EXPECT_ELIFDEF=1
+      -DREX_EXPECT_ELIFNDEF=1)
+  elseif(_branch STREQUAL "secondary")
+    list(APPEND _branch_flags -DREX_SECONDARY_BRANCH=1 -DREX_EXPECT_ELIFDEF=2
+      -DREX_EXPECT_ELIFNDEF=3)
+  else()
+    list(APPEND _branch_flags -DREX_EXPECT_ELIFDEF=3 -DREX_EXPECT_ELIFNDEF=2)
+  endif()
+  set(_test Cxx23_tests_rex_frontend_conditional_macro_directives_${_branch})
+  add_test(NAME ${_test}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND $<TARGET_FILE:rex_frontend_conditional_macro_directives_translator>
+      -rose:verbose 0 -std=c++23 ${_branch_flags} ${ROSE_INCLUDE_FLAGS}
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_conditional_macro_directives.cpp)
+  set_tests_properties(${_test} PROPERTIES LABELS "Cxx23_tests;rex;CFE;UNPARSER")
+  rex_lock_test_for_input(${_test} rex_frontend_conditional_macro_directives.cpp)
+endforeach()
+unset(_branch)
+unset(_branch_flags)
+unset(_test)
+
 foreach(file_to_test ${CXX20_POSITIVE_TESTCODES})
   if(file_to_test STREQUAL "test2020_45.C")
     continue()
@@ -354,6 +384,44 @@ rex_lock_test_for_input(
   rex_frontend_export_context_scope.cpp
 )
 
+add_test(
+  NAME Cxx20_tests_rex_frontend_explicit_deduction_guide
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -std=c++20 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/rex_test2026_deduction_guide.cpp)
+set_tests_properties(Cxx20_tests_rex_frontend_explicit_deduction_guide
+  PROPERTIES LABELS "Cxx20_tests;rex;CFE;UNPARSER")
+rex_lock_test_for_input(Cxx20_tests_rex_frontend_explicit_deduction_guide
+  rex_test2026_deduction_guide.cpp)
+
+add_test(
+  NAME Cxx20_tests_rex_frontend_explicit_deduction_guide_json
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:${translator}> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_explicit_specifier_json
+    -std=c++20 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/rex_test2026_deduction_guide.cpp)
+set(_rex_explicit_cases json)
+if(ENABLE-EXAMPLE-TRANSLATORS-DIRECTORY)
+  add_test(
+    NAME Cxx20_tests_rex_frontend_explicit_deduction_guide_copy
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    COMMAND $<TARGET_FILE:astCopyReplTest> ${ROSE_FLAGS} ${ROSE_INCLUDE_FLAGS}
+      -std=c++20 -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/rex_test2026_deduction_guide.cpp)
+  list(APPEND _rex_explicit_cases copy)
+endif()
+foreach(_rex_explicit_case IN LISTS _rex_explicit_cases)
+  set_tests_properties(
+    Cxx20_tests_rex_frontend_explicit_deduction_guide_${_rex_explicit_case}
+    PROPERTIES LABELS "Cxx20_tests;rex;CFE;UNPARSER")
+  rex_lock_test_for_input(
+    Cxx20_tests_rex_frontend_explicit_deduction_guide_${_rex_explicit_case}
+    rex_test2026_deduction_guide.cpp)
+endforeach()
+
 # rex_test2026: Concepts/constraints require C++20 and must round-trip cleanly.
 add_executable(
   rex_frontend_requires_typed_contract_translator
@@ -381,6 +449,8 @@ add_test(
   COMMAND
     $<TARGET_FILE:rex_frontend_variable_template_explicit_instantiation_semantic_initializer_translator>
     ${ROSE_FLAGS} -rose:skipfinalCompileStep
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=rex_frontend_variable_template_storage_use_json
     ${ROSE_INCLUDE_FLAGS}
     -I${CMAKE_CURRENT_SOURCE_DIR}
     -c
@@ -504,7 +574,12 @@ target_link_libraries(
   ${link_with_libraries}
 )
 
-foreach(_rex_coroutine_source test2020_42.C test2020_43.C test2020_44.C)
+foreach(_rex_coroutine_source
+  test2020_42.C
+  test2020_43.C
+  test2020_44.C
+  rex_coroutine_yield_operator.C
+)
   get_filename_component(
     _rex_coroutine_stem
     "${_rex_coroutine_source}"

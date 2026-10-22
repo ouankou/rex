@@ -5,6 +5,8 @@
 
 #include <algorithm>
 
+#include <functional>
+
 #include <memory>
 
 extern int pointerAliasAnalysisDebugLevel;
@@ -31,14 +33,16 @@ struct aliasDerefCount {
   int derefLevel = 0;
 
   bool operator==(const aliasDerefCount &that) const {
-    assert(this != NULL);
     return (this->var == that.var && this->vID == that.vID &&
             this->derefLevel == that.derefLevel);
   }
 
   bool operator<(const aliasDerefCount &that) const {
-    assert(this != NULL);
-    return true;
+    if (var != that.var)
+      return std::less<SgVariableSymbol *>{}(var, that.var);
+    if (vID != that.vID)
+      return vID < that.vID;
+    return derefLevel < that.derefLevel;
   }
 };
 
@@ -96,9 +100,6 @@ public:
   void setAliasRelation(std::pair<aliasDerefCount, aliasDerefCount> alRel);
   set<std::pair<aliasDerefCount, aliasDerefCount>> getAliasRelations();
   set<varID> getAliasedVariables();
-
-private:
-  template <typename T> bool search(set<T> thisSet, T value);
 };
 
 /*
@@ -124,7 +125,8 @@ public:
   void visit(SgConstructorInitializer *sgn);
 
   bool finish();
-  pointerAliasAnalysisTransfer(const Function &func, const DataflowNode &n,
+  pointerAliasAnalysisTransfer(const Function &func,
+                               const VirtualCFG::DataflowNode &n,
                                NodeState &state,
                                const std::vector<Lattice *> &dfInfo);
 
@@ -156,14 +158,14 @@ protected:
 
 public:
   pointerAliasAnalysis(LiveDeadVarsAnalysis *ldva);
-  void genInitState(const Function &func, const DataflowNode &n,
+  void genInitState(const Function &func, const VirtualCFG::DataflowNode &n,
                     const NodeState &state,
                     std::vector<Lattice *> &initLattices,
                     std::vector<NodeFact *> &initFacts);
-  bool transfer(const Function &func, const DataflowNode &n, NodeState &state,
-                const std::vector<Lattice *> &dfInfo);
+  bool transfer(const Function &func, const VirtualCFG::DataflowNode &n,
+                NodeState &state, const std::vector<Lattice *> &dfInfo);
   std::shared_ptr<IntraDFTransferVisitor>
-  getTransferVisitor(const Function &func, const DataflowNode &n,
+  getTransferVisitor(const Function &func, const VirtualCFG::DataflowNode &n,
                      NodeState &state, const std::vector<Lattice *> &dfInfo);
 };
 

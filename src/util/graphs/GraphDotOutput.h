@@ -4,9 +4,7 @@
 #include "GraphAccess.h"
 
 #include <fstream>
-
-#include <iostream>
-
+#include <stdexcept>
 #include <string>
 
 template <class Graph> class GraphDotOutput {
@@ -16,13 +14,10 @@ public:
 
   void writeToDOTFile(const std::string &filename,
                       const std::string &graphname) {
-    bool debug = false;
-    if (debug)
-      std::cerr << " dot output to " << filename << std::endl;
-    std::ofstream dotfile(filename.c_str());
+    std::ofstream dotfile(filename);
+    if (!dotfile)
+      throw std::runtime_error("Cannot open graph DOT file: " + filename);
 
-    // Liao, add "" to enclose the graphname,otherwise syntax error for .dot
-    // file. 2/22/2008
     dotfile << "digraph \"" << graphname << "\"" << " {\n";
     for (typename Graph::NodeIterator p = g.GetNodeIterator(); !p.ReachEnd();
          ++p) {
@@ -31,13 +26,8 @@ public:
               << std::endl;
     }
 
-    if (debug)
-      std::cerr << " finished add node" << std::endl; // debug
-
     for (typename Graph::NodeIterator p = g.GetNodeIterator(); !p.ReachEnd();
          ++p) {
-      if (debug)
-        std::cerr << " add edge from node ... " << std::endl; // debug
       typename Graph::Node *node1 = *p;
       typename Graph::EdgeIterator edges =
           g.GetNodeEdgeIterator(node1, GraphAccess::EdgeOut);
@@ -48,9 +38,10 @@ public:
                 << getEdgeLabel(e) << "\"];" << std::endl;
       }
     }
-    if (debug)
-      std::cerr << " writing content to " << filename << std::endl; // debug
     dotfile << "}\n";
+    dotfile.close();
+    if (!dotfile)
+      throw std::runtime_error("Cannot write graph DOT file: " + filename);
   }
 
 private:

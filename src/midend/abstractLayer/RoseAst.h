@@ -8,24 +8,16 @@
 
 #include "roseInternal.h"
 
-#include <Cxx_GrammarVariants.h>
-
 #include <cstddef>
-
-#include <list>
 
 #include <stack>
 
-#include <string>
-
-class SgFunctionDeclaration;
-class SgFunctionDefinition;
 class SgNode;
 
 /** Interface for iterating over an AST.
  *
  *  The iterator follows the STL iterator pattern and is implemented as a
- * depth-first, pre-order traversal that mtaintsins its own stack. The iterator
+ * depth-first, pre-order traversal that maintains its own stack. The iterator
  * performs the exact same traversal as the traversal classes in ROSE (it is
  * using the same underlying information).
  *
@@ -44,8 +36,6 @@ public:
   typedef elementType &reference;
   typedef size_t size_type;
 
-  // no default constructor
-
   /** Defines the starting node for traversal.
    *
    *  The traversal is over a subtree rooted at the specified `root` node. All
@@ -56,15 +46,13 @@ public:
   /** AST iterator.
    *
    *  This is an STL-compliant forward iterator for traversing AST nodes in
-   * depth-first pre-order. The @ref withoutNullValues and @ref withNullValues
-   * functions control whether the traversal follows null child pointers (the
-   * default is that null pointers are not followed). Entire subtrees can be
+   * depth-first pre-order. The @ref withNullValues function includes null
+   * child pointers, which are skipped by default. Entire subtrees can be
    * excluded from traversal with the @ref skipChildrenOnForward function.
    *
    *  The iterator also provides a number of auxiliary functions for querying
    * some structural properties of the AST w.r.t. the position in the traversal
-   * (e.g., @ref is_at_first_child, @ref is_at_last_child, @ref is_at_root, @ref
-   * parent, etc.).
+   * (e.g., @ref parent and @ref stack_size).
    *
    *  @note Comparison of iterators is also correct for null values. Only if two
    * iterators refer to the same (identical) null value, they are equal,
@@ -80,7 +68,7 @@ public:
     iterator();
 
     /** Construct an iterator pointing to a particular AST node. */
-    iterator(SgNode *x, bool withNullValues, bool withTemplates);
+    iterator(SgNode *x, bool withNullValues);
 
     /** Test iterator equality.
      *
@@ -96,10 +84,7 @@ public:
      *  @ref skipChildrenOnForward state. */
     bool operator==(const iterator &x) const;
 
-    /** Test iterator inequality.
-     *
-     *  This is just a convenince function that inverts the test for equality.
-     */
+    /** Test iterator inequality. */
     bool operator!=(const iterator &x) const;
 
     /** Dereference an iterator.
@@ -107,7 +92,7 @@ public:
      *  Dereference an iterator to obtain the AST node to which it points.
      * Dereferencing an end iterator will throw an `std::out_of_range`
      * exception.  If null AST pointers are being followed, the return value can
-     * be a null node (see @ref withNullValues and @ref withoutNullValues). */
+     * be a null node (see @ref withNullValues). */
     SgNode *operator*() const;
 
     /** Advance the iterator.
@@ -115,8 +100,7 @@ public:
      *  Advances the iterator to the next AST node in a depth-first pre-order
      * search.  If the @ref skipChildrenOnForward flag is set then all children
      * of the current node are skipped and the @ref skipChildrenOnForward flag
-     * is cleared.  If the @ref withoutNullValues flag is set, then all null
-     * child pointers are skipped but that flag is not cleared.
+     * is cleared. Null child pointers are skipped by default.
      *
      * @{ */
     iterator &operator++();   // prefix
@@ -125,7 +109,7 @@ public:
 
     /** Cause children to be skipped on the next advancement.
      *
-     *  This function marks the iterator so that it's next increment operator
+     *  This function marks the iterator so that its next increment operator
      * will advance over the current node's children without visiting them. The
      * children are skipped only for the immediate next forward iteration (this
      * is useful when used in the iterator idiom). This function is specific to
@@ -133,15 +117,10 @@ public:
      * are traversing the tree nodes as a sequence. */
     void skipChildrenOnForward();
 
-    /** Mode to enable or disable skipping null child pointers.
+    /** Include null child pointers in subsequent traversal.
      *
-     *  The @ref withoutNullValues mode causes the iterator to skip over null
-     * child pointers, while the @ref withNullValues mode causse null child
-     * pointers to be followed followed.  The mode affects subsequent
-     * advancement of the iterator, not its current value.  In other words, in
-     * the @ref withNullValues mode the iterator dereference operator will
-     * always return non-null values after its next increment. The default mode
-     * is @ref withoutNullValues.
+     *  Call this on the root iterator before advancing it. By default, null
+     * child pointers are skipped.
      *
      *  The function returns this iterator and can therefore be called together
      * with @ref begin, like this:
@@ -151,12 +130,8 @@ public:
      *  @endcode
      *
      * @{ */
-    iterator &withoutNullValues();
     iterator &withNullValues();
     /** @} */
-
-    iterator &withoutTemplates();
-    iterator &withTemplates();
 
     /** Parent AST node relative to the iteration.
      *
@@ -166,43 +141,14 @@ public:
      * is null. */
     SgNode *parent() const;
 
-    /** Test whether iterator is pointing to root node of AST to be traversed.
-     *
-     *  Returns true if and only if the current node of this iterator is also
-     * the root of the traversed subtree. */
-    bool is_at_root() const;
-
-    /**  Test whether iterator is at the first child of its parent.
-     *
-     *   Returns true if the current node of this iterator is the first child of
-     * the parent node.
-     */
-    bool is_at_first_child() const;
-
-    /** Test whether iterator as at the last child of its parent.
-     *
-     *  Returns true if the current node of this iterator is the last child of
-     * the parent node.
-     */
-    bool is_at_last_child() const;
-
     // internal
     bool is_past_the_end() const;
-    // internal
-    std::string current_node_id() const;
-    // internal
-    std::string parent_node_id() const;
-    // internal
-    void print_top_element() const;
-
     /** Depth of traversal. */
     int stack_size() const;
 
   protected:
-    SgNode *_startNode;
     bool _skipChildrenOnForward;
     bool _withNullValues;
-    bool _withTemplates;
 
   private:
     static const int ROOT_NODE_INDEX = -2;
@@ -213,9 +159,6 @@ public:
     } stack_element;
     std::stack<stack_element> _stack;
     SgNode *access_node_by_parent_and_index(SgNode *p, int index) const;
-
-    // not necessary with a children iterator
-    int num_children(SgNode *p) const;
   };
 
   /** Iterator positioned at root of subtree.
@@ -230,36 +173,8 @@ public:
    * depth-first pre-order traversal. */
   iterator end();
 
-  // ast access function
-  SgFunctionDefinition *findFunctionByName(std::string name);
-  std::list<SgFunctionDeclaration *>
-  findFunctionDeclarationsByName(std::string name);
-
-  /** determines whether a node is used to represent the root node of a template
-   * instantiation */
-  static bool isTemplateInstantiationNode(SgNode *node);
-
-  /** determines whether a node is used to represent the root node of a
-   * template. */
-  static bool isTemplateNode(SgNode *node);
-
-  /** determines based on VariantT whether a ROSE-AST node is a subtype of
-   * another node type.*/
-  static bool isSubTypeOf(VariantT DerivedClassVariant,
-                          VariantT BaseClassVariant);
-  /** deprecated, use isSubTypeOf instead */
-  static bool isSubType(VariantT DerivedClassVariant,
-                        VariantT BaseClassVariant);
-  void setWithNullValues(bool flag);
-  void setWithTemplates(bool flag);
-
-protected:
-  static SgNode *parent(SgNode *astNode);
-
 private:
   SgNode *_startNode;
-  bool _withNullValues;
-  bool _withTemplates;
 };
 
 #endif

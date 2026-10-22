@@ -458,9 +458,32 @@ void validateFunctionDeclarationCycleCopy(SgProject *project) {
   ROSE_ASSERT(originalParameters->get_parent() == originalFunction);
   ROSE_ASSERT(originalParameters->get_args().size() == 2);
 
-  SgTreeCopy copyHelp;
+  struct SignatureCopy : SgTreeCopy {
+    SgFunctionDefinition *source;
+    bool checked = false;
+    explicit SignatureCopy(SgFunctionDefinition *definition)
+        : source(definition) {}
+    SgNode *copyAst(const SgNode *node) override {
+      if (node == source->get_body()) {
+        auto *definition =
+            isSgFunctionDefinition(get_copiedNodeMap().at(source));
+        auto *declaration = isSgFunctionDeclaration(
+            get_copiedNodeMap().at(source->get_declaration()));
+        ROSE_ASSERT(definition->get_declaration() == declaration &&
+                    declaration->get_definition() == definition);
+        for (auto *parameter : source->get_declaration()->get_args()) {
+          auto *copy = isSgInitializedName(get_copiedNodeMap().at(parameter));
+          ROSE_ASSERT(copy->get_declptr() == declaration &&
+                      copy->get_scope() == definition);
+        }
+        checked = true;
+      }
+      return SgTreeCopy::copyAst(node);
+    }
+  } copyHelp(originalDefinition);
   SgFunctionDeclaration *copiedFunction =
       isSgFunctionDeclaration(originalFunction->copy(copyHelp));
+  ROSE_ASSERT(copyHelp.checked);
   ROSE_ASSERT(copiedFunction != nullptr);
   ROSE_ASSERT(copiedFunction != originalFunction);
   SgFunctionDefinition *copiedDefinition = copiedFunction->get_definition();
@@ -512,8 +535,78 @@ void validateFunctionDeclarationCycleCopy(SgProject *project) {
   ROSE_ASSERT(referencedParameters.size() == copiedParameterByName.size());
 }
 
-void validateSeparateFileCatchFixup(SgProject *project,
-                                    SgTryStmt *originalTry) {
+void validateCopiedSignatureDependencies(SgProject *project) {
+  auto *original =
+      findFunctionDefinition(project, "rex_copy_lambda_signature_owner");
+  ROSE_ASSERT(original != nullptr);
+  struct Call {
+    SgFunctionCallExp *expression;
+    SgFunctionDeclaration *declaration;
+    SgFunctionType *type;
+    SgSymbol *symbol;
+  };
+  std::vector<Call> calls;
+  for (auto *node : RoseAst(original->get_body())) {
+    if (auto *call = isSgFunctionCallExp(node)) {
+      auto *declaration = call->getAssociatedFunctionDeclaration();
+      ROSE_ASSERT(declaration != nullptr);
+      calls.push_back({call, declaration, declaration->get_type(),
+                       declaration->get_symbol_from_symbol_table()});
+    }
+  }
+  ROSE_ASSERT(calls.size() == 3);
+  SgTreeCopy help;
+  ROSE_ASSERT(isSgFunctionDefinition(original->copy(help)) != nullptr);
+  for (const auto &call : calls) {
+    auto *copiedCall =
+        isSgFunctionCallExp(help.get_copiedNodeMap().at(call.expression));
+    ROSE_ASSERT(copiedCall != nullptr);
+    if (call.type->get_argument_list()->get_arguments().empty()) {
+      ROSE_ASSERT(copiedCall->getAssociatedFunctionDeclaration() ==
+                  call.declaration);
+      ROSE_ASSERT(call.declaration->get_symbol_from_symbol_table() ==
+                  call.symbol);
+      continue;
+    }
+    auto *copy =
+        isSgFunctionDeclaration(help.get_copiedNodeMap().at(call.declaration));
+    ROSE_ASSERT(copy != nullptr && copy != call.declaration);
+    ROSE_ASSERT(copiedCall->getAssociatedFunctionDeclaration() == copy);
+    ROSE_ASSERT(call.declaration->get_type() == call.type);
+    ROSE_ASSERT(call.declaration->get_symbol_from_symbol_table() ==
+                call.symbol);
+    ROSE_ASSERT(copy->get_scope() == call.declaration->get_scope());
+    ROSE_ASSERT(copy->get_type() != call.type);
+    auto *first =
+        isSgFunctionDeclaration(copy->get_firstNondefiningDeclaration());
+    auto *defining = isSgFunctionDeclaration(copy->get_definingDeclaration());
+    ROSE_ASSERT(first != nullptr && defining != nullptr);
+    ROSE_ASSERT(first->get_firstNondefiningDeclaration() == first);
+    ROSE_ASSERT(first->get_definingDeclaration() == defining);
+    ROSE_ASSERT(defining->get_firstNondefiningDeclaration() == first);
+    ROSE_ASSERT(defining->get_definingDeclaration() == defining);
+    ROSE_ASSERT(defining->get_definition()->get_declaration() == defining);
+    auto *symbol = first->get_symbol_from_symbol_table();
+    ROSE_ASSERT(symbol != nullptr && symbol != call.symbol);
+    ROSE_ASSERT(symbol->get_symbol_basis() == first);
+    ROSE_ASSERT(symbol->get_parent() == copy->get_scope()->get_symbol_table());
+    ROSE_ASSERT(first->get_parent() ==
+                copy->get_scope()->get_auxiliary_declarations());
+    ROSE_ASSERT(defining->get_parent() == first->get_parent());
+    auto *oldArgument = call.type->get_argument_list()->get_arguments().front();
+    auto *newArgument =
+        copy->get_type()->get_argument_list()->get_arguments().front();
+    ROSE_ASSERT(oldArgument != newArgument);
+    ROSE_ASSERT(help.get_copiedNodeMap().at(oldArgument) == newArgument);
+    auto *oldClass = isSgClassType(oldArgument);
+    auto *newClass = isSgClassType(newArgument);
+    ROSE_ASSERT(oldClass != nullptr && newClass != nullptr);
+    ROSE_ASSERT(help.get_copiedNodeMap().at(oldClass->get_declaration()) ==
+                newClass->get_declaration());
+  }
+}
+
+void validateSeparateFileCatchCopy(SgProject *project, SgTryStmt *originalTry) {
   SgFunctionDefinition *targetDefinition =
       findFunctionDefinition(project, "rex_copy_separate_file_catch_target");
   ROSE_ASSERT(targetDefinition != nullptr);
@@ -529,8 +622,6 @@ void validateSeparateFileCatchFixup(SgProject *project,
   ROSE_ASSERT(SageInterface::getEnclosingFileNode(copiedTry) !=
               SageInterface::getEnclosingFileNode(originalTry));
 
-  SageBuilder::fixupCopyOfAstFromSeparateFileInNewTargetAst(
-      targetBody, true, copiedTry, originalTry);
   validateCatchPair(originalTry, copiedTry);
 
   SgCatchOptionStmt *copiedHandler = requireSingleCatch(copiedTry);
@@ -563,10 +654,15 @@ int main(int argc, char **argv) {
       argc == 3 && std::strcmp(argv[1], "--reject-missing-owned-scope") == 0;
   const bool rejectCatchSemantic =
       argc == 3 && std::strcmp(argv[1], "--reject-catch-semantic-edge") == 0;
+  const bool rejectShallowBody =
+      argc == 3 && std::strcmp(argv[1], "--reject-shallow-body") == 0;
+  const bool rejectShallowInitializer =
+      argc == 3 && std::strcmp(argv[1], "--reject-shallow-initializer") == 0;
   if ((!validateSeparateFileCatch &&
        argc != ((validateDetachedParameterList || validateFunctionOwnerCycle ||
                  validateTemplateDefaultType || rejectTemplateSemantic ||
-                 rejectOwnedScope || rejectCatchSemantic)
+                 rejectOwnedScope || rejectCatchSemantic || rejectShallowBody ||
+                 rejectShallowInitializer)
                     ? 3
                     : 2)) ||
       (validateSeparateFileCatch && argc != 4)) {
@@ -584,6 +680,40 @@ int main(int argc, char **argv) {
                                 frontendArguments.data());
   ROSE_ASSERT(project != nullptr);
   ROSE_ASSERT(frontendExitStatus(project) == 0);
+  if (rejectShallowBody) {
+    auto *definition =
+        findFunctionDefinition(project, "rex_copy_parameter_owner");
+    ROSE_ASSERT(definition != nullptr);
+    auto *body = definition->get_body();
+    ROSE_ASSERT(body != nullptr && body->get_parent() == definition);
+    struct SharedBodyCopy : SgTreeCopy {
+      SgBasicBlock *body;
+      explicit SharedBodyCopy(SgBasicBlock *source) : body(source) {}
+      SgNode *copyAst(const SgNode *node) override {
+        return node == body ? body : SgTreeCopy::copyAst(node);
+      }
+    } copy(body);
+    (void)definition->copy(copy);
+    return 1;
+  }
+  if (rejectShallowInitializer) {
+    auto *definition =
+        findFunctionDefinition(project, "rex_copy_lambda_signature_owner");
+    ROSE_ASSERT(definition != nullptr);
+    auto *body = definition->get_body();
+    ROSE_ASSERT(body != nullptr && body->get_parent() == definition);
+    ROSE_ASSERT(!body->get_statements().empty());
+    auto *declaration = isSgVariableDeclaration(body->get_statements().front());
+    ROSE_ASSERT(declaration != nullptr && declaration->get_parent() == body);
+    ROSE_ASSERT(declaration->get_variables().size() == 1);
+    auto *name = declaration->get_variables().front();
+    ROSE_ASSERT(name != nullptr && name->get_parent() == declaration);
+    auto *initializer = name->get_initptr();
+    ROSE_ASSERT(initializer != nullptr && initializer->get_parent() == name);
+    SgShallowCopy copy;
+    (void)name->copy(copy);
+    return 1;
+  }
   if (validateDetachedParameterList) {
     validateDetachedFunctionParameterListCopy(project);
     return 0;
@@ -628,8 +758,9 @@ int main(int argc, char **argv) {
   validateCatchCopy(tryStatement);
   validateDetachedFunctionParameterListCopy(project);
   validateFunctionDeclarationCycleCopy(project);
+  validateCopiedSignatureDependencies(project);
   if (validateSeparateFileCatch) {
-    validateSeparateFileCatchFixup(project, tryStatement);
+    validateSeparateFileCatchCopy(project, tryStatement);
   }
   return 0;
 }

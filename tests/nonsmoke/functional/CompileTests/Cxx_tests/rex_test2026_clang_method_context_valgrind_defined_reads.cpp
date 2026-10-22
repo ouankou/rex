@@ -17,6 +17,10 @@ private:
   double fraction_;
 };
 
+template <class Base> class RexTest2026DependentCommand : public Base {
+  bool apply(unsigned index) const override final { return index != 0; }
+};
+
 bool RexTest2026CleanCommand::apply(unsigned index) const {
   return index != 0 && fraction_ > 0.0;
 }

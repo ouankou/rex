@@ -269,7 +269,7 @@ int main(int argc, char **argv) {
     }
   }
 
-  SgStringVal *raw = SageBuilder::buildStringVal("decoded payload");
+  SgStringVal *raw = SageBuilder::buildStringVal("first line  \n\nthird line");
   raw->set_literal_encoding(SgStringVal::e_string_encoding_utf8);
   raw->set_isRawString(true);
   raw->set_raw_string_delimiter("rex_tag");
@@ -290,6 +290,15 @@ int main(int argc, char **argv) {
       rawCopy->unparseToString() != expectedRaw) {
     return 11;
   }
+
+  ROSE_ASSERT(rawCopy->get_value() == raw->get_value());
+  rawCopy->set_value(SgStringVal::code_units_from_bytes("updated\npayload"));
+  ROSE_ASSERT(!rawCopy->get_isRawString());
+  ROSE_ASSERT(rawCopy->get_raw_string_payload().empty());
+  ROSE_ASSERT(rawCopy->get_raw_string_delimiter().empty());
+  ROSE_ASSERT(rawCopy->get_byte_value() == "updated\npayload");
+  ROSE_ASSERT(rawCopy->unparseToString() == "u8\"updated\\npayload\"");
+  ROSE_ASSERT(raw->unparseToString() == expectedRaw);
 
   const std::string exactMultilineLiteral =
       "R\"rex_exact(first line  \n\nthird line)rex_exact\"";

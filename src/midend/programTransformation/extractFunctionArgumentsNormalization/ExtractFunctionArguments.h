@@ -1,13 +1,6 @@
 #pragma once
 
-// DQ (10/5/2014): This is more strict now that we include rose_config.h in the
-// sage3basic.h. #include "rose.h"
-
-#include "sage3basic.h"
-
 #include "functionEvaluationOrderTraversal.h"
-
-// class FunctionCallInfo;
 
 //! This normalization makes sure each function call argument is a side-effect
 //! free expression of only one variable. To accomplish this, temporary

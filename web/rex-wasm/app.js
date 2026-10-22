@@ -81,6 +81,7 @@ let currentFilename = sample.filename;
 let currentMode = sample.mode;
 let activeRun = null;
 let currentTabs = [];
+let sourceGeneration = 0;
 
 function escapeHtml(text) {
   return text.replaceAll("&", "&amp;")
@@ -194,9 +195,6 @@ function highlightLine(line, state) {
 
 function renderCodeLines(target, content, kind = "code") {
   const lines = (content || "").split("\n");
-  if (lines.length === 0) {
-    lines.push("");
-  }
 
   const state = {inBlockComment : false};
   target.replaceChildren();
@@ -252,7 +250,7 @@ function renderBuildInfo() {
 function setStatus(kind, message) {
   statusLine.textContent = message;
   runBadge.className = `run-badge ${kind}`;
-  runBadge.textContent = kind === "running" ? "running" : kind;
+  runBadge.textContent = kind;
 }
 
 function renderTabs(tabs, activeIndex = 0) {
@@ -295,12 +293,15 @@ function renderResult(result) {
   }
 }
 
-function runCurrentMode() {
+function cancelActiveRun() {
   if (activeRun) {
     activeRun.terminate();
     activeRun = null;
   }
+}
 
+function runCurrentMode() {
+  cancelActiveRun();
   setStatus("running", "Loading REX WASM");
   setOutputMode(currentMode);
   renderTabs([ {name : "Log", content : "Starting REX WASM..."} ]);
@@ -309,6 +310,9 @@ function runCurrentMode() {
   activeRun = worker;
 
   worker.onmessage = (event) => {
+    if (activeRun !== worker) {
+      return;
+    }
     if (event.data.type === "ready") {
       setStatus("running", "Running REX");
       return;
@@ -328,6 +332,9 @@ function runCurrentMode() {
   };
 
   worker.onerror = (event) => {
+    if (activeRun !== worker) {
+      return;
+    }
     activeRun = null;
     worker.terminate();
     setStatus("error", "Worker failed");
@@ -354,19 +361,41 @@ fileInput.addEventListener("change", async () => {
   if (!file) {
     return;
   }
+  fileInput.value = "";
+  const generation = ++sourceGeneration;
+  cancelActiveRun();
+  setStatus("idle", "Loading source");
+  let source;
+  try {
+    source = await file.text();
+  } catch (error) {
+    if (generation === sourceGeneration) {
+      setStatus("error", "Could not read source file");
+      renderTabs([ {name : "Log", content : String(error)} ]);
+    }
+    return;
+  }
+  if (generation !== sourceGeneration) {
+    return;
+  }
+  cancelActiveRun();
   currentFilename = file.name;
-  editor.value = await file.text();
+  editor.value = source;
   renderSourceMirror();
   renderTabs([ {name : "Log", content : `${file.name} loaded.`} ]);
   setOutputMode(null);
   setStatus("idle", "Source loaded");
-  fileInput.value = "";
 });
 
 editor.value = sample.source;
 renderBuildInfo();
 renderSourceMirror();
-editor.addEventListener("input", renderSourceMirror);
+editor.addEventListener("input", () => {
+  sourceGeneration += 1;
+  cancelActiveRun();
+  renderSourceMirror();
+  setStatus("idle", "Source changed; run again");
+});
 editor.addEventListener("scroll", () => {
   sourceMirror.style.transform = `translateY(${- editor.scrollTop}px)`;
 });

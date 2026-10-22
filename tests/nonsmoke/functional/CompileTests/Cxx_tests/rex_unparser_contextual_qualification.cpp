@@ -45,6 +45,10 @@ template <class T> int lambda_default_argument(int = accept_callable([] {})) {
   return sizeof(T);
 }
 
+int inherited_lambda_default(int = [] { return 3; }());
+int inherited_lambda_default(int);
+int inherited_lambda_default(int value) { return value; }
+
 template <class T> void assign_dependent_references(T &lhs, T &rhs) {
   lhs = rhs;
 }

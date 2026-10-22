@@ -79,8 +79,9 @@ int main(int argc, char *argv[]) {
 
   // DQ (3/20/2017): Build value expressions not tested elsewhere.
   SgDoubleVal *imaginary_doubleValue_3 = buildDoubleVal(42.0);
+  imaginary_doubleValue_3->set_valueString("42.0");
   SgComplexVal *imaginaryValue_3 =
-      buildImaginaryVal(imaginary_doubleValue_3, buildDoubleType(), "42.0i");
+      buildImaginaryVal(imaginary_doubleValue_3, buildDoubleType());
   SgExprStatement *exprStatement_5 = buildExprStatement(imaginaryValue_3);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, exprStatement_5);

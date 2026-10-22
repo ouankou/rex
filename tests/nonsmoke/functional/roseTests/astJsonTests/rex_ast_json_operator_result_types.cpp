@@ -96,6 +96,31 @@ void verifyExactOperatorResultTypes(SgProject *project) {
   ROSE_ASSERT(builtin_bit_casts == 1);
   ROSE_ASSERT(functional_casts >= 1);
   ROSE_ASSERT(two_edge_paths >= 1);
+
+  const auto deletions = NodeQuery::querySubTree(project, V_SgDeleteExp);
+  ROSE_ASSERT(deletions.size() == 2);
+  bool saw_scalar = false;
+  bool saw_global_array = false;
+  for (SgNode *node : deletions) {
+    auto *deletion = isSgDeleteExp(node);
+    ROSE_ASSERT(deletion != nullptr);
+    ROSE_ASSERT(deletion->get_variable() != nullptr);
+    ROSE_ASSERT(deletion->get_variable()->get_parent() == deletion);
+    SgFunctionDeclaration *selected = deletion->get_deleteOperatorDeclaration();
+    ROSE_ASSERT(selected != nullptr);
+    ROSE_ASSERT(selected->get_type()->get_return_type() ==
+                SageBuilder::buildVoidType());
+    ROSE_ASSERT(isSgGlobal(selected->get_scope()) != nullptr);
+    if (deletion->get_is_array() == 0) {
+      ROSE_ASSERT(deletion->get_need_global_specifier() == 0);
+      saw_scalar = true;
+    } else {
+      ROSE_ASSERT(deletion->get_is_array() == 1);
+      ROSE_ASSERT(deletion->get_need_global_specifier() == 1);
+      saw_global_array = true;
+    }
+  }
+  ROSE_ASSERT(saw_scalar && saw_global_array);
 }
 
 } // namespace

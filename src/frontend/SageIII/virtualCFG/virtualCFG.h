@@ -3,7 +3,7 @@
 
 #include "rosedll.h"
 
-#include <assert.h>
+#include "ROSE_ASSERT.h"
 
 #include <string>
 
@@ -27,13 +27,7 @@ const SgExpression *isSgExpression(const SgNode *node);
 SgInitializedName *isSgInitializedName(SgNode *node);
 const SgInitializedName *isSgInitializedName(const SgNode *node);
 
-// DQ (9/1/2012): Debugging code to trace haskell_port error.
-extern int abcd;
-
 namespace VirtualCFG {
-
-// DQ (9/1/2012): Debugging code to trace haskell_port error.
-extern int efgh;
 
 class CFGEdge;
 
@@ -60,12 +54,17 @@ enum EdgeConditionKind {
                        //! zero
   eckArithmeticIfEqual, //! Edge for the arithmetic if expression being equal to
                         //! zero
-  eckArithmeticIfGreater, //! Edge for the arithmetic if expression being
-                          //! greater than zero
-  eckInterprocedural,     //! Edge spanning two procedures
+  eckArithmeticIfGreater,       //! Edge for the arithmetic if expression being
+                                //! greater than zero
+  eckInterprocedural,           //! Edge spanning two procedures
+  eckCompleteObjectDestruction, //! Virtual base cleanup in a complete object
+  eckBaseObjectDestruction,     //! Skip virtual base cleanup in a base object
 
-  // DQ (1/19/2018): Allow an error value to use for debugging.
-  eckError //! Allow an error value
+  eckError,                      //! Allow an error value
+  eckCompleteObjectConstruction, //! Initialize a virtual base in a complete
+                                 //! object
+  eckBaseObjectConstruction      //! Skip virtual base initialization in a base
+                                 //! object
 };
 
 //! A node in the control flow graph.  Each CFG node corresponds to an AST
@@ -123,7 +122,7 @@ class ROSE_DLL_API CFGEdge {
 public:
   //! Constructor
   CFGEdge(CFGNode src, CFGNode tgt) : src(src), tgt(tgt) {
-    assert(src.getNode() != NULL && tgt.getNode() != NULL);
+    ROSE_ASSERT(src.getNode() != NULL && tgt.getNode() != NULL);
   }
 
   //! Default constructor. Used for compatibility with containers
@@ -185,9 +184,9 @@ public:
   CFGPath(CFGEdge e) : edges(1, e) {}
   // Merge two CFG paths
   CFGPath(const CFGPath &a, const CFGPath &b) : edges(a.edges) {
-    assert(!a.edges.empty());
-    assert(!b.edges.empty());
-    assert(a.edges.back().target() == b.edges.front().source());
+    ROSE_ASSERT(!a.edges.empty());
+    ROSE_ASSERT(!b.edges.empty());
+    ROSE_ASSERT(a.edges.back().target() == b.edges.front().source());
     edges.insert(edges.end(), b.edges.begin(), b.edges.end());
   }
 
@@ -199,12 +198,12 @@ public:
   std::string id() const;
   // Get the head CFG node of the path
   CFGNode source() const {
-    assert(!edges.empty());
+    ROSE_ASSERT(!edges.empty());
     return edges.front().source();
   }
   // Get the tail CFG node of the path
   CFGNode target() const {
-    assert(!edges.empty());
+    ROSE_ASSERT(!edges.empty());
     return edges.back().target();
   }
   // Return the first non-unconditional edge's condition
@@ -326,6 +325,7 @@ class InterestingEdge {
 
 public:
   InterestingEdge(CFGPath p) : p(p) {}
+  const CFGPath &getPath() const { return p; }
   std::string toString() const { return p.toString(); }
   std::string toStringForDebugging() const { return p.toStringForDebugging(); }
   std::string id() const { return p.id(); }
@@ -361,11 +361,6 @@ void makeEdge(Node1T from, Node2T to, std::vector<EdgeT> &result);
 
 } // end namespace VirtualCFG
 
-#define SGFUNCTIONCALLEXP_INTERPROCEDURAL_INDEX 2
-#define SGCONSTRUCTORINITIALIZER_INTERPROCEDURAL_INDEX 1
-#define SGFUNCTIONDEFINITION_INTERPROCEDURAL_INDEX 2
-
-#define SGFUNCTIONCALLEXP_INTERPROCEDURAL_INDEX 2
 #define SGCONSTRUCTORINITIALIZER_INTERPROCEDURAL_INDEX 1
 #define SGFUNCTIONDEFINITION_INTERPROCEDURAL_INDEX 2
 

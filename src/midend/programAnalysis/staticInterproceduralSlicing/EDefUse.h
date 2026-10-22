@@ -1,6 +1,5 @@
 #ifndef EDEFUSE_CLASS
 #define EDEFUSE_CLASS
-// #include "rose.h"
 
 #include "DFAnalysis.h"
 

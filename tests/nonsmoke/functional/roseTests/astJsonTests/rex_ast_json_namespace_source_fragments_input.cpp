@@ -13,6 +13,8 @@ using RexJsonNamespaceAlias = RexJsonNamespaceBox<RexJsonNamespaceType>;
 int value = 1;
 REX_NAMESPACE_END()
 
+using namespace rex_json_namespace;
+
 int rex_json_after_namespace = 1;
 
-int main() { return rex_json_namespace::value + rex_json_after_namespace; }
+int main() { return value + rex_json_after_namespace; }

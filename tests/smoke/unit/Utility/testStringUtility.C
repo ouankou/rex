@@ -6,6 +6,11 @@
 #include "Rose/StringUtility/StringToNumber.h"
 
 #include <algorithm>
+#include <climits>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <limits>
 
 #include <iostream>
 
@@ -216,6 +221,9 @@ static void test_escapes() {
   check(cEscape('\'', '"') == "'");
 
   check(cEscape("\377") == "\\377");
+  check(bourneEscape("\377") == "$'\\377'");
+  check(escapeString("\377") == "\\377");
+  check(escapeNewlineAndDoubleQuoteCharacters("a\n\"b") == "a\\l\\\"b");
 
   check(cEscape("-\t") == "-\\t");
   check(cEscape("\t-") == "\\t-");
@@ -238,6 +246,7 @@ static void test_escapes() {
   check(cUnescape("a\\00b") == std::string("a") + '\0' + "b");
   check(cUnescape("a\\000b") == std::string("a") + '\0' + "b");
   check(cUnescape("a\\0000b") == std::string("a") + '\0' + "0b");
+  check(cUnescape(std::string("\\1\0x", 4)) == std::string("\1\0x", 3));
   check(cUnescape("a\\'b") == "a'b");
   check(cUnescape("a\\\"b") == "a\"b");
   check(cUnescape("a\\?b") == "a?b");
@@ -399,6 +408,28 @@ static void test_numberToString() {
   check(numberToString(1.0) == "1.00");
   check(numberToString(1.0 / 32) == "0.03");
   check(numberToString(-1.5) == "-1.50");
+  const double largest = std::numeric_limits<double>::max();
+  for (double value : {largest, -largest}) {
+    const std::string rendered = numberToString(value);
+    check(rendered.size() > 128);
+    check(rendered.compare(rendered.size() - 3, 3, ".00") == 0);
+    char *end = nullptr;
+    check(std::strtod(rendered.c_str(), &end) == value);
+    check(end == rendered.c_str() + rendered.size());
+  }
+#if defined(__SIZEOF_INT128__)
+  using U = unsigned __int128;
+  const __int128 half = static_cast<__int128>(U{1} << 126);
+  check(numberToString((U{1} << 100) + 7) == "1267650600228229401496703205383");
+  check(numberToString(~U{0}) == "340282366920938463463374607431768211455");
+  check(numberToString(-half - half) ==
+        "-170141183460469231731687303715884105728");
+#endif
+}
+
+static void test_conversion_boundaries() {
+  check(removeAnsiEscapes("a\033[0~b") == "ab");
+  check(encode_base64(std::vector<uint8_t>{}) == "");
 }
 
 static void test_numberToHexString() {
@@ -483,6 +514,7 @@ static void test_hexadecimalToInt() {
 
   check(hexadecimalToInt('g') == 0);
   check(hexadecimalToInt('G') == 0);
+  check(hexadecimalToInt(static_cast<char>(0xff)) == 0);
 }
 
 static void test_removeRedundantSubstrings() {
@@ -562,18 +594,112 @@ static void test_fixLineTermination() {
   check(fixLineTermination("\ra\rb\r") == "\na\nb\n");
 }
 
-// WARNING: This "test" doesn't really test anything. It just calls the
-// functions and spits out results without checking that
-//          the results are valid.
-static bool stringTest(std::string s) {
-  std::string s_filename = StringUtility::stripPathFromFileName(s);
-  std::string s_path = StringUtility::getPathFromFileName(s);
-  std::string s_nosuffix = StringUtility::stripFileSuffixFromFileName(s);
-  printf("s = %s s_filename = %s \n", s.c_str(), s_filename.c_str());
-  printf("s = %s s_path     = %s \n", s.c_str(), s_path.c_str());
-  printf("s = %s s_nosuffix = %s \n", s.c_str(), s_nosuffix.c_str());
-  printf("\n");
-  return true;
+static void test_split() {
+  check((split(",", "a,", 2) == std::vector<std::string>{"a", ""}));
+  check((split(',', "a,", 2) == std::vector<std::string>{"a", ""}));
+  check((split(",", "a,", 1) == std::vector<std::string>{"a,"}));
+  check((split(",", "a,", 3) == std::vector<std::string>{"a", ""}));
+  check((split("::", "a::", 2) == std::vector<std::string>{"a", ""}));
+  check((split(",", "a,b,c", 2) == std::vector<std::string>{"a", "b,c"}));
+  check((split(",", "a,,", 2) == std::vector<std::string>{"a", ","}));
+  check((split(",", "a,,", 3) == std::vector<std::string>{"a", "", ""}));
+  check(split(",", "", 2).empty());
+  check(split(",", "a,", 0).empty());
+  check((split("", "abc", 2) == std::vector<std::string>{"a", "bc"}));
+  check((split(",", " a , ", 2, true) == std::vector<std::string>{"a", ""}));
+}
+
+static void test_copyEdit() {
+  check(copyEdit("aba aba", "aba", "aba!") == "aba! aba!");
+  check(copyEdit("aaaa", "aa", "x") == "xx");
+  check(copyEdit("abc", "missing", "z") == "abc");
+  check(copyEdit("abc", "b", "") == "ac");
+  check(copyEdit(std::string("a\0a", 3), "a", "b") == std::string("b\0b", 3));
+  check(replaceAllCopy("aaa", "aa", "x") == "xa");
+  const FileWithLineNumbers input{{"left $X right", "source", 17}};
+  const auto replaced = copyEdit(input, "$X", "middle");
+  check(replaced.size() == 1 && replaced[0].str == "left middle right");
+  check(replaced[0].filename == "source" && replaced[0].line == 17);
+  const auto inserted =
+      copyEdit(input, "$X", FileWithLineNumbers{{"middle", "", 1}});
+  check(inserted.size() == 3 && inserted[0].str == "left " &&
+        inserted[1].str == "middle" && inserted[2].str == " right");
+  check(inserted[0].filename == "source" && inserted[0].line == 17);
+  check(inserted[1].filename.empty() && inserted[1].line == 1);
+  check(inserted[2].filename == "source" && inserted[2].line == 17);
+  check(input[0].str == "left $X right");
+}
+
+static void test_readFile() {
+  const std::string filename = "rex_string_utility_read_file.txt";
+  const std::vector<std::pair<std::string, std::vector<std::string>>> cases{
+      {"", {""}},
+      {"\n", {""}},
+      {"first\nsecond\n", {"first", "second"}},
+      {"first\n\n", {"first", ""}},
+      {"first", {"first"}},
+      {"first\nsecond", {"first", "second"}},
+      {"first\r\nsecond", {"first\r", "second"}}};
+  for (const auto &entry : cases) {
+    std::ofstream output;
+    output.exceptions(std::ios::failbit | std::ios::badbit);
+    output.open(filename, std::ios::binary | std::ios::trunc);
+    output << entry.first;
+    output.close();
+    check(readFile(filename) == entry.first);
+    check(getAbsolutePathFromRelativePath(filename) ==
+          std::filesystem::canonical(filename).string());
+    const auto lines = readFileWithPos(filename);
+    check(lines.size() == entry.second.size() + 1);
+    const auto absolute = std::filesystem::canonical(filename).string();
+    for (size_t i = 0; i < entry.second.size(); ++i) {
+      check(lines[i].str == entry.second[i]);
+      check(lines[i].line == i + 1);
+      check(lines[i].filename == absolute);
+    }
+    check(lines.back().str.empty() && lines.back().filename.empty() &&
+          lines.back().line == 1);
+  }
+  const std::filesystem::path missing = filename + ".missing";
+  check(!std::filesystem::exists(missing));
+  for (const auto &path : {missing, missing / ".." / filename}) {
+    bool rejected = false;
+    try {
+      (void)getAbsolutePathFromRelativePath(path.string());
+    } catch (const std::filesystem::filesystem_error &) {
+      rejected = true;
+    }
+    check(rejected);
+  }
+  check(std::filesystem::remove(filename));
+}
+
+static void test_fileNamePaths() {
+  const std::pair<std::string, std::string> suffixes[] = {
+      {"", ""},
+      {"foo", "foo"},
+      {"foo.c", "c"},
+      {"dir/foo.c", "c"},
+      {"dir.ext/foo", "dir.ext/foo"},
+      {"dir.ext/", "dir.ext/"},
+      {"dir.ext/.hidden", "hidden"},
+      {"foo.", ""},
+      {"dir.ext/foo.", ""},
+      {"dir.ext/foo.c", "c"}};
+  for (const auto &entry : suffixes)
+    check(StringUtility::fileNameSuffix(entry.first) == entry.second);
+  check(StringUtility::stripFileSuffixFromFileName("dir.ext/foo") ==
+        "dir.ext/foo");
+  check(StringUtility::stripFileSuffixFromFileName("dir.ext/foo.c") ==
+        "dir.ext/foo");
+  check(StringUtility::stripFileSuffixFromFileName("dir.ext/.hidden") ==
+        "dir.ext/");
+  check(StringUtility::stripFileSuffixFromFileName("foo.") == "foo");
+
+  const std::string directory(PATH_MAX - 1, 'd');
+  const std::string input = directory + "/foo.h";
+  check(StringUtility::stripPathFromFileName(input) == "foo.h");
+  check(StringUtility::getPathFromFileName(input) == directory);
 }
 
 int main() {
@@ -585,28 +711,17 @@ int main() {
   test_listToString();
   test_stringToList();
   test_numberToString();
+  test_conversion_boundaries();
   test_numberToHexString();
   test_tokenize();
   test_hexadecimalToInt();
   test_removeRedundantSubstrings();
   test_caseConversion();
   test_fixLineTermination();
+  test_split();
+  test_copyEdit();
+  test_readFile();
+  test_fileNamePaths();
 
-  size_t nfailures = 0;
-
-  nfailures += stringTest("foo.h") ? 0 : 1;
-  nfailures += stringTest("/foo.h") ? 0 : 1;
-  nfailures += stringTest("//foo.h") ? 0 : 1;
-  nfailures += stringTest("///foo.h") ? 0 : 1;
-  nfailures += stringTest("////foo.h") ? 0 : 1;
-  nfailures += stringTest("./foo.h") ? 0 : 1;
-  nfailures += stringTest("../foo.h") ? 0 : 1;
-  nfailures += stringTest("//foo.h") ? 0 : 1;
-  nfailures += stringTest("path/foo.h") ? 0 : 1;
-  nfailures += stringTest("/path/foo.h") ? 0 : 1;
-  nfailures += stringTest("/pathA/pathB/foo.h") ? 0 : 1;
-  nfailures += stringTest("foo") ? 0 : 1;
-  nfailures += stringTest("/path/foo") ? 0 : 1;
-
-  return 0 == nfailures ? 0 : 1;
+  return 0;
 }

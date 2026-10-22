@@ -1,5 +1,3 @@
-
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include "sageBuilder.h"
@@ -11,7 +9,6 @@
 #include <set>
 
 #include <string>
-// PP(14/10/20) PRE->legacy::PRE #include "pre.h"
 
 #include "AstConsistencyTests.h"
 
@@ -27,50 +24,24 @@
 using namespace std;
 using namespace Rose;
 using namespace SageInterface;
-// void FixSgTree(SgNode*);
-// void FixSgProject(SgProject&);
 
-// a namespace
 namespace Inliner {
 bool skipHeaders = false;
 bool verbose = false; // if set to true, generate debugging information
 } // namespace Inliner
 
 namespace {
-SgExpression *lambdaCaptureSourceExpression(const SgLambdaCapture *capture) {
-  if (capture == NULL) {
-    return NULL;
-  }
-
-  if (SgExpression *source = capture->get_source_closure_variable()) {
-    return source;
-  }
-
-  return capture->get_capture_variable();
-}
-
 SgLambdaExp *
 lambdaExpressionForClassDeclaration(SgClassDeclaration *classDecl) {
-  if (classDecl == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *candidates[] = {
-      classDecl,
-      isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration()),
-      isSgClassDeclaration(classDecl->get_definingDeclaration())};
-
-  for (SgClassDeclaration *candidate : candidates) {
-    if (candidate == NULL) {
-      continue;
-    }
-
-    if (SgLambdaExp *lambdaExp = isSgLambdaExp(candidate->get_parent())) {
-      return lambdaExp;
-    }
-  }
-
-  return NULL;
+  if (classDecl == nullptr ||
+      classDecl->get_class_type() != SgClassDeclaration::e_lambda_closure)
+    return nullptr;
+  auto *definition = isSgClassDeclaration(classDecl->get_definingDeclaration());
+  ROSE_ASSERT(definition != nullptr);
+  SgLambdaExp *expression = definition->get_lambda_expression();
+  if (expression != nullptr)
+    ROSE_ASSERT(expression->get_lambda_closure_class() == definition);
+  return expression;
 }
 
 SgType *buildAutoShadowTypeForFormal(SgType *formalType) {
@@ -107,55 +78,11 @@ SgType *buildAutoShadowTypeForFormal(SgType *formalType) {
 
 SgLambdaExp *
 lambdaExpressionForFunctionDeclaration(SgFunctionDeclaration *functionDecl) {
-  if (functionDecl == NULL) {
-    return NULL;
-  }
-
-  SgFunctionDeclaration *candidates[] = {
-      functionDecl,
-      isSgFunctionDeclaration(functionDecl->get_firstNondefiningDeclaration()),
-      isSgFunctionDeclaration(functionDecl->get_definingDeclaration())};
-  for (SgFunctionDeclaration *candidate : candidates) {
-    if (candidate == NULL) {
-      continue;
-    }
-
-    if (SgLambdaExp *lambdaExp = isSgLambdaExp(candidate->get_parent())) {
-      return lambdaExp;
-    }
-  }
-
-  if (SgMemberFunctionDeclaration *memberDecl =
-          isSgMemberFunctionDeclaration(functionDecl)) {
-    if (SgClassDeclaration *associatedClass = isSgClassDeclaration(
-            memberDecl->get_associatedClassDeclaration())) {
-      if (SgLambdaExp *lambdaExp =
-              lambdaExpressionForClassDeclaration(associatedClass)) {
-        return lambdaExp;
-      }
-    }
-
-    if (SgClassDefinition *classDef =
-            isSgClassDefinition(memberDecl->get_parent())) {
-      if (SgLambdaExp *lambdaExp = lambdaExpressionForClassDeclaration(
-              classDef->get_declaration())) {
-        return lambdaExp;
-      }
-    }
-
-    if (SgMemberFunctionType *memberType =
-            isSgMemberFunctionType(memberDecl->get_type())) {
-      if (SgClassType *classType =
-              isSgClassType(memberType->get_class_type())) {
-        if (SgLambdaExp *lambdaExp = lambdaExpressionForClassDeclaration(
-                isSgClassDeclaration(classType->get_declaration()))) {
-          return lambdaExp;
-        }
-      }
-    }
-  }
-
-  return NULL;
+  auto *member = isSgMemberFunctionDeclaration(functionDecl);
+  return member == nullptr
+             ? nullptr
+             : lambdaExpressionForClassDeclaration(isSgClassDeclaration(
+                   member->get_associatedClassDeclaration()));
 }
 
 SgClassDefinition *classDefinitionForDeclaration(SgClassDeclaration *decl) {
@@ -206,11 +133,6 @@ SgClassDefinition *
 classDefinitionForDeclarationContext(SgDeclarationStatement *decl) {
   if (decl == NULL) {
     return NULL;
-  }
-
-  if (SgInitializedName *initializedName = isSgInitializedName(decl)) {
-    return classDefinitionForDeclarationContext(
-        initializedName->get_declaration());
   }
 
   if (SgClassDefinition *scopeClass = isSgClassDefinition(decl->get_scope())) {
@@ -353,11 +275,13 @@ bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
                                              SgFunctionCallExp *funcall) {
   class NonPublicMemberAccessTraversal : public AstSimpleProcessing {
     SgFunctionCallExp *funcall;
+    SgFunctionDeclaration *function;
     bool unavailableAccess = false;
 
   public:
-    explicit NonPublicMemberAccessTraversal(SgFunctionCallExp *funcall)
-        : funcall(funcall) {}
+    NonPublicMemberAccessTraversal(SgFunctionCallExp *funcall,
+                                   SgFunctionDeclaration *function)
+        : funcall(funcall), function(function) {}
 
     void visit(SgNode *node) override {
       SgDeclarationStatement *decl = NULL;
@@ -376,10 +300,17 @@ bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
       }
 
       SgClassDefinition *owningClass = nonPublicClassOwningDeclaration(decl);
-      if (owningClass != NULL &&
-          !callSiteHasClassAccess(
-              funcall, owningClass,
-              decl->get_declarationModifier().get_accessModifier())) {
+      if (owningClass == nullptr)
+        return;
+      const auto &access = decl->get_declarationModifier().get_accessModifier();
+      auto *context = SageInterface::getEnclosingFunctionDeclaration(node);
+      if (context != nullptr)
+        context = isSgFunctionDeclaration(context->get_definingDeclaration());
+      if (context != function &&
+          functionContextHasClassAccess(context, owningClass,
+                                        access.isProtected()))
+        return;
+      if (!callSiteHasClassAccess(funcall, owningClass, access)) {
         unavailableAccess = true;
       }
     }
@@ -387,7 +318,7 @@ bool functionBodyNeedsUnavailableClassAccess(SgFunctionDefinition *fundef,
     bool foundUnavailableAccess() const { return unavailableAccess; }
   };
 
-  NonPublicMemberAccessTraversal traversal(funcall);
+  NonPublicMemberAccessTraversal traversal(funcall, fundef->get_declaration());
   traversal.traverse(fundef->get_body(), preorder);
 
   if (SgMemberFunctionDeclaration *memberDecl =
@@ -458,10 +389,6 @@ public:
         return;
       }
 
-      // std::cout << "Converting return statement " << rs->unparseToString();
-      // std::cout << " into possible assignment to " <<
-      // where_to_write_answer->unparseToString(); std::cout << " and jump to "
-      // << label->get_name().getString() << std::endl;
       SgExpression *return_expr = rs->get_expression();
       if (return_expr != NULL) {
         if (return_expr->get_parent() != rs) {
@@ -480,7 +407,6 @@ public:
       // generated statements are published into it.  This also detaches the
       // old return in one checked ownership transaction.
       SageInterface::replaceStatement(rs, block);
-      // printf ("Building IR node #1: new SgBasicBlock = %p \n",block);
       if (return_expr) {
         SgExpression *result_expr = return_expr;
         SgExpression *answer_expr =
@@ -490,7 +416,8 @@ public:
         if (returns_by_reference && where_to_write_answer != NULL &&
             SageInterface::isPointerType(where_to_write_answer->get_type())) {
           result_expr = SageBuilder::buildAddressOfOp(
-              return_expr, where_to_write_answer->get_type());
+              return_expr, where_to_write_answer->get_type(),
+              SgAddressOfOp::e_address_operand_object);
         }
 
         SgExpression *assignment =
@@ -571,32 +498,43 @@ public:
   }
 };
 
-// Pei-Hung (06/12/20) This will replace the closure symbols to the capture
-// symbols
 class ReplaceCaptureVariableVisitor : public AstSimpleProcessing {
 public:
-  // map < closureSymbol, captureSymbol>
   typedef std::map<SgVariableSymbol *, SgVariableSymbol *> captureVarMap;
 
 private:
   const captureVarMap &varMap;
+  std::vector<SgBinaryOp *> retired;
 
 public:
   ReplaceCaptureVariableVisitor(const captureVarMap &varMap) : varMap(varMap) {}
 
-  virtual void visit(SgNode *n) {
+  void atTraversalEnd() override {
+    for (SgBinaryOp *binaryOp : retired) {
+      ROSE_ASSERT(binaryOp->get_parent() == nullptr &&
+                  binaryOp->get_rhs_operand() == nullptr);
+      SageInterface::deepDelete(binaryOp);
+    }
+    retired.clear();
+  }
+
+  void visit(SgNode *n) override {
     if (isSgDotExp(n) || isSgArrowExp(n)) {
       SgBinaryOp *binaryOp = isSgBinaryOp(n);
-      isSgExpression(n->get_parent())
-          ->replace_expression(isSgExpression(n), binaryOp->get_rhs_operand());
+      SgExpression *replacement = binaryOp->get_rhs_operand();
+      ROSE_ASSERT(replacement != nullptr &&
+                  replacement->get_parent() == binaryOp);
+      binaryOp->set_rhs_operand(nullptr);
+      replacement->set_parent(nullptr);
+      SageInterface::replaceExpression(binaryOp, replacement, true);
+      retired.push_back(binaryOp);
     }
     if (isSgVarRefExp(n)) {
       SgVarRefExp *vr = isSgVarRefExp(n);
       SgVariableSymbol *sym = vr->get_symbol();
       captureVarMap::const_iterator iter = varMap.find(sym);
       if (iter == varMap.end())
-        return; // This is not a parameter use
-      // cout <<" replace closure symbol" << endl;
+        return;
       vr->set_symbol(iter->second);
     }
   }
@@ -647,21 +585,16 @@ public:
   }
 };
 
-// Convert a declaration such as "A x = A(1, 2);" into "A x(1, 2);".  This is
-// always (IIRC) safe to do by C++ language rules, even if A has a nontrivial
-// copy constructor and/or destructor.
-// FIXME (bug in another part of ROSE) -- the output from this routine unparses
-// as if no changes had occurred, even though the PDF shows the transformation
-// correctly.
 void removeRedundantCopyInConstruction(SgInitializedName *in) {
+  ROSE_ASSERT(in);
   SgAssignInitializer *ai = isSgAssignInitializer(in->get_initializer());
-  ROSE_ASSERT(ai);
+  ROSE_ASSERT(ai && ai->get_parent() == in);
   SgInitializer *realInit = isSgInitializer(ai->get_operand());
   ROSE_ASSERT(realInit);
   ROSE_ASSERT(isSgConstructorInitializer(realInit));
+  ROSE_ASSERT(ai->release_operand() == realInit);
   in->set_initializer(realInit);
-  realInit->set_parent(in);
-  // FIXME -- do we need to delete ai?
+  delete ai;
 }
 
 // Mark AST as being a transformation
@@ -784,42 +717,17 @@ static void markAsTransformation(SgNode *ast) {
   };
   FixFileInfo().traverse(ast, false);
 }
-// Main inliner code.  Accepts a function call as a parameter, and inlines
-// only that single function call.  Returns true if it succeeded, and false
-// otherwise.  The function call must be to a named function, static member
-// function, or non-virtual non-static member function, and the function
-// must be known (not through a function pointer or member function
-// pointer).  Also, the body of the function must already be visible.
-// Recursive procedures are handled properly (when allowRecursion is set), by
-// inlining one copy of the procedure into itself.  Any other restrictions on
-// what can be inlined are bugs in the inliner code.
 bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
 
   if (Inliner::verbose) {
     Sg_File_Info *info_start = funcall->get_startOfConstruct();
     size_t a_start = (size_t)info_start->get_line();
     cout << "Inside doInling() for a function call @ " << a_start << endl;
-    // funcall->get_file_info()->display();
   }
-  if (Inliner::skipHeaders) {
-    // Liao 1/23/2018. we ignore function calls within header files, which are
-    // not unparsed by ROSE.
-    string filename = funcall->get_file_info()->get_filename();
-    string suffix = StringUtility ::fileNameSuffix(filename);
-    // vector.tcc: This is an internal header file, included by other library
-    // headers
-    if (suffix == "h" || suffix == "hpp" || suffix == "hh" || suffix == "H" ||
-        suffix == "hxx" || suffix == "h++" || suffix == "tcc")
-      return false;
-
-    // also check if it is compiler generated, mostly template instantiations.
-    // They are not from user code.
-    if (funcall->get_file_info()->isCompilerGenerated())
-      return false;
-    // check if the file is within compiler header staging directories
-    if (insideSystemHeader(funcall))
-      return false;
-  }
+  if (Inliner::skipHeaders &&
+      (funcall->get_file_info()->isCompilerGenerated() ||
+       SageInterface::insideHeader(funcall)))
+    return false;
 
   // Handle member function calls like a.foo() or aptr->foo()
   // Walk to its right-hand side to get the member function reference
@@ -853,26 +761,25 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     if (dotexp) {
       SgExpression *lhs = dotexp->get_lhs_operand();
 
-      // Skip operator overloading functions for now.
-      SgExpression *rhs = dotexp->get_rhs_operand();
-      // TODO: refactored into SageInterface: isOperatorOverloading()
-      SgMemberFunctionRefExp *m_ref_exp = isSgMemberFunctionRefExp(rhs);
+      SgMemberFunctionRefExp *m_ref_exp =
+          isSgMemberFunctionRefExp(func_ref_exp);
       if (m_ref_exp) {
-        SgMemberFunctionDeclaration *m_func_decl =
-            m_ref_exp->get_symbol()->get_declaration();
-        if (m_func_decl) {
-          string q_name = m_func_decl->get_qualified_name().getString();
-          string::size_type pos = q_name.find("::operator", 0);
-          const bool isLambdaOperator =
-              lambdaExpressionForFunctionDeclaration(m_func_decl) != NULL;
-
-          if (pos != string::npos && isLambdaOperator == false) {
-            //                  if (Inliner::verbose)
-            std::cout << "Inline returns false: skip non-anonymous operator "
+        SgMemberFunctionSymbol *symbol = m_ref_exp->get_symbol();
+        ROSE_ASSERT(symbol);
+        SgMemberFunctionDeclaration *m_func_decl = symbol->get_declaration();
+        ROSE_ASSERT(m_func_decl);
+        const SgSpecialFunctionModifier &special =
+            m_func_decl->get_specialFunctionModifier();
+        if ((special.isOperator() || special.isConversion() ||
+             special.isUldOperator()) &&
+            lambdaExpressionForFunctionDeclaration(m_func_decl) == nullptr) {
+          if (Inliner::verbose) {
+            std::cout << "Inline returns false: skip non-lambda operator "
                          "function named:"
-                      << q_name << std::endl;
-            return false;
+                      << m_func_decl->get_qualified_name().getString()
+                      << std::endl;
           }
+          return false;
         }
       }
 
@@ -883,11 +790,10 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
 
       if (!is_lvalue) {
         SgAssignInitializer *ai = SageInterface::splitExpression(lhs);
-        // ROSE_ASSERT (isSgInitializer(ai->get_operand())); // it can be
-        // SgVarRefExp
+        ROSE_ASSERT(ai);
         SgInitializedName *in = isSgInitializedName(ai->get_parent());
-        in->set_auto_decltype(SageBuilder::buildAutoType());
         ROSE_ASSERT(in);
+        in->set_auto_decltype(SageBuilder::buildAutoType());
         if (isSgInitializer(ai->get_operand()))
           removeRedundantCopyInConstruction(in);
         lhs = dotexp->get_lhs_operand(); // Should be a var ref now
@@ -910,7 +816,8 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
         ROSE_ABORT();
       }
       thisptr = SageBuilder::buildAddressOfOp(
-          SageInterface::copyExpression(lhs), thisPointerType);
+          SageInterface::copyExpression(lhs), thisPointerType,
+          SgAddressOfOp::e_address_operand_object);
     } else if (arrowexp) {
       thisptr = SageInterface::copyExpression(arrowexp->get_lhs_operand());
     } else {
@@ -956,16 +863,25 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   fundecl = fundecl
                 ? isSgFunctionDeclaration(fundecl->get_definingDeclaration())
                 : NULL;
-  // check the qualified name of the function to be inlined: skip std::xx
-  // functions
   if (fundecl) {
-    string q_name = fundecl->get_qualified_name().getString();
-    string::size_type pos = q_name.find("::std::", 0);
-    if (pos == 0) {
-      if (Inliner::verbose)
-        std::cout << "Inline returns false: skip std function named:" << q_name
-                  << std::endl;
-      return false;
+    ROSE_ASSERT(fundecl->get_scope());
+    for (SgScopeStatement *scope = fundecl->get_scope(); !isSgGlobal(scope);
+         scope = SageInterface::getEnclosingScope(scope)) {
+      ROSE_ASSERT(scope);
+      if (SgNamespaceDefinitionStatement *namespace_scope =
+              isSgNamespaceDefinitionStatement(scope)) {
+        SgNamespaceDeclarationStatement *namespace_decl =
+            namespace_scope->get_namespaceDeclaration();
+        ROSE_ASSERT(namespace_decl && namespace_decl->get_scope());
+        if (namespace_decl->get_name() == "std" &&
+            isSgGlobal(namespace_decl->get_scope())) {
+          if (Inliner::verbose) {
+            std::cout << "Inline returns false: skip std function named:"
+                      << fundecl->get_qualified_name().getString() << std::endl;
+          }
+          return false;
+        }
+      }
     }
   }
 
@@ -992,15 +908,9 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     SgNode *my_fundef = funcall;
     // find enclosing function definition of the call site
     while (my_fundef && !isSgFunctionDefinition(my_fundef)) {
-      // printf ("Before reset: my_fundef = %p = %s
-      // \n",my_fundef,my_fundef->class_name().c_str());
       my_fundef = my_fundef->get_parent();
       ROSE_ASSERT(my_fundef != NULL);
-      // printf ("After reset: my_fundef = %p = %s
-      // \n",my_fundef,my_fundef->class_name().c_str());
     }
-    // printf ("After reset: my_fundef = %p = %s
-    // \n",my_fundef,my_fundef->class_name().c_str());
     assert(isSgFunctionDefinition(my_fundef));
     if (isSgFunctionDefinition(my_fundef) == fundef) {
       if (Inliner::verbose)
@@ -1036,25 +946,23 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
     if (specialMod.isConstructor()) {
       thisptrtype = SageBuilder::buildPointerType(ct);
     }
-    // Pei-Hung (06/12/20) check if the parent of SgClassDeclaration is a
-    // SgLambdaExp
     SgClassDeclaration *classDecl =
         isSgClassDeclaration(isSgClassType(ct)->get_declaration());
     ROSE_ASSERT(classDecl);
     if (SgLambdaExp *lambdaExp =
             lambdaExpressionForClassDeclaration(classDecl)) {
-      // Pei-Hung (06/12/20) If this is a lambda function call, we try to skip
-      // the class declaration.
       isLambdaMemberFuncCall = true;
-      // cout << "There is a lambda class" << endl;
       SgLambdaCaptureList *lambdaCaptureList =
           lambdaExp->get_lambda_capture_list();
       SgLambdaCapturePtrList captureList =
           lambdaCaptureList->get_capture_list();
       for (SgLambdaCapture *capture : captureList) {
         // get the capture variable
+        ROSE_ASSERT(capture != nullptr &&
+                    capture->get_capture_variable() != nullptr &&
+                    capture->get_capture_variable()->get_parent() == capture);
         SgVarRefExp *captureVarRef =
-            isSgVarRefExp(lambdaCaptureSourceExpression(capture));
+            isSgVarRefExp(capture->get_capture_variable());
         if (captureVarRef == NULL) {
           continue;
         }
@@ -1073,7 +981,6 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
       SgConstVolatileModifier &thiscv = fundecl->get_declarationModifier()
                                             .get_typeModifier()
                                             .get_constVolatileModifier();
-      // if (thiscv.isConst() || thiscv.isVolatile()) { FIXME
       SgTypeModifier exact_modifier;
       exact_modifier.get_constVolatileModifier() = thiscv;
       thisptrtype = SageBuilder::buildModifierType(thisptrtype, exact_modifier);
@@ -1103,150 +1010,7 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
   SgFunctionDefinition *function_copy =
       isSgFunctionDefinition(fundef->copy(tc));
 
-  auto validateExactCopiedScopes = [&tc](SgNode *root) {
-    std::map<SgNode *, const SgNode *> originalByCopy;
-    for (SgCopyHelp::copiedNodeMapTypeIterator it =
-             tc.get_copiedNodeMap().begin();
-         it != tc.get_copiedNodeMap().end(); ++it) {
-      if (it->first != NULL && it->second != NULL && it->first != it->second) {
-        const bool inserted =
-            originalByCopy.emplace(it->second, it->first).second;
-        if (!inserted) {
-          fprintf(stderr,
-                  "REX_INLINE_INVARIANT[copy-map-identity]: copy=%p/%s has "
-                  "multiple original nodes\n",
-                  static_cast<void *>(it->second),
-                  it->second->class_name().c_str());
-          ROSE_ABORT();
-        }
-      }
-    }
-
-    class ValidateCopiedScopes : public AstSimpleProcessing {
-      SgCopyHelp &copyHelp;
-      const std::map<SgNode *, const SgNode *> &originalByCopy;
-
-      SgNode *expectedSemanticTarget(const SgNode *originalTarget,
-                                     const SgNode *originalOwner,
-                                     SgNode *copiedOwner) const {
-        if (originalTarget == NULL) {
-          return NULL;
-        }
-        if (originalTarget == originalOwner) {
-          return copiedOwner;
-        }
-        SgCopyHelp::copiedNodeMapTypeIterator mapped =
-            copyHelp.get_copiedNodeMap().find(
-                const_cast<SgNode *>(originalTarget));
-        if (mapped != copyHelp.get_copiedNodeMap().end() &&
-            mapped->second != originalTarget) {
-          return mapped->second;
-        }
-        return const_cast<SgNode *>(originalTarget);
-      }
-
-      const SgNode *requireOriginal(SgNode *copy) const {
-        std::map<SgNode *, const SgNode *>::const_iterator found =
-            originalByCopy.find(copy);
-        if (found == originalByCopy.end()) {
-          fprintf(stderr,
-                  "REX_INLINE_INVARIANT[copy-map-completeness]: copied "
-                  "node=%p/%s has no exact original\n",
-                  static_cast<void *>(copy), copy->class_name().c_str());
-          ROSE_ABORT();
-        }
-        return found->second;
-      }
-
-    public:
-      ValidateCopiedScopes(
-          SgCopyHelp &copyHelp,
-          const std::map<SgNode *, const SgNode *> &originalByCopy)
-          : copyHelp(copyHelp), originalByCopy(originalByCopy) {}
-
-      void visit(SgNode *node) override {
-        if (SgInitializedName *copiedName = isSgInitializedName(node)) {
-          const SgInitializedName *originalName =
-              isSgInitializedName(const_cast<SgNode *>(requireOriginal(node)));
-          ROSE_ASSERT(originalName != NULL);
-          SgScopeStatement *expectedScope =
-              isSgScopeStatement(expectedSemanticTarget(
-                  originalName->get_scope(), originalName, copiedName));
-          if (copiedName->get_scope() != expectedScope) {
-            fprintf(stderr,
-                    "REX_INLINE_INVARIANT[initialized-name-scope]: "
-                    "original=%p/%s scope=%p copy=%p scope=%p expected=%p\n",
-                    static_cast<const void *>(originalName),
-                    originalName->get_name().str(),
-                    static_cast<void *>(originalName->get_scope()),
-                    static_cast<void *>(copiedName),
-                    static_cast<void *>(copiedName->get_scope()),
-                    static_cast<void *>(expectedScope));
-            ROSE_ABORT();
-          }
-        }
-
-        if (SgDeclarationStatement *copiedDeclaration =
-                isSgDeclarationStatement(node)) {
-          const SgDeclarationStatement *originalDeclaration =
-              isSgDeclarationStatement(
-                  const_cast<SgNode *>(requireOriginal(node)));
-          ROSE_ASSERT(originalDeclaration != NULL);
-
-          SgDeclarationStatement *expectedDefining =
-              isSgDeclarationStatement(expectedSemanticTarget(
-                  originalDeclaration->get_definingDeclaration(),
-                  originalDeclaration, copiedDeclaration));
-          SgDeclarationStatement *expectedFirst =
-              isSgDeclarationStatement(expectedSemanticTarget(
-                  originalDeclaration->get_firstNondefiningDeclaration(),
-                  originalDeclaration, copiedDeclaration));
-          if (copiedDeclaration->get_definingDeclaration() !=
-                  expectedDefining ||
-              copiedDeclaration->get_firstNondefiningDeclaration() !=
-                  expectedFirst) {
-            fprintf(stderr,
-                    "REX_INLINE_INVARIANT[declaration-chain]: original=%p/%s "
-                    "copy=%p defining=%p expected=%p first=%p expected=%p\n",
-                    static_cast<const void *>(originalDeclaration),
-                    originalDeclaration->class_name().c_str(),
-                    static_cast<void *>(copiedDeclaration),
-                    static_cast<void *>(
-                        copiedDeclaration->get_definingDeclaration()),
-                    static_cast<void *>(expectedDefining),
-                    static_cast<void *>(
-                        copiedDeclaration->get_firstNondefiningDeclaration()),
-                    static_cast<void *>(expectedFirst));
-            ROSE_ABORT();
-          }
-
-          if (originalDeclaration->hasExplicitScope()) {
-            SgScopeStatement *expectedScope = isSgScopeStatement(
-                expectedSemanticTarget(originalDeclaration->get_scope(),
-                                       originalDeclaration, copiedDeclaration));
-            if (originalDeclaration->get_scope() == NULL ||
-                copiedDeclaration->get_scope() != expectedScope) {
-              fprintf(stderr,
-                      "REX_INLINE_INVARIANT[declaration-scope]: "
-                      "original=%p/%s scope=%p copy=%p scope=%p expected=%p\n",
-                      static_cast<const void *>(originalDeclaration),
-                      originalDeclaration->class_name().c_str(),
-                      static_cast<void *>(originalDeclaration->get_scope()),
-                      static_cast<void *>(copiedDeclaration),
-                      static_cast<void *>(copiedDeclaration->get_scope()),
-                      static_cast<void *>(expectedScope));
-              ROSE_ABORT();
-            }
-          }
-        }
-      }
-    };
-
-    ValidateCopiedScopes validator(tc, originalByCopy);
-    validator.traverse(root, preorder);
-  };
   ROSE_ASSERT(function_copy);
-  validateExactCopiedScopes(function_copy);
 
   SgFunctionDeclaration *function_copy_declaration =
       function_copy->get_declaration();
@@ -1586,13 +1350,6 @@ bool doInline(SgFunctionCallExp *funcall, bool allowRecursion) {
       SageInterface::isReferenceType(funcall->get_type()));
   replaceExpressionWithStatement(funcall, &previsitor);
 
-  // Make sure the AST is consistent. To save time, we'll just fix things that
-  // we know can go wrong. For instance, the SgAsmExpression.p_lvalue data
-  // member is required to be true for certain operators and is set to false in
-  // other situations. Since we've introduced new expressions into the AST we
-  // need to adjust their p_lvalue according to the operators where they were
-  // inserted.
-  markLhsValues(targetFunction);
 #ifdef NDEBUG
   AstTests::runAllTests(SageInterface::getProject());
 #endif

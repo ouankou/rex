@@ -1,4 +1,3 @@
-// tps : Switching from rose.h to sage3 changed size from 19,6 MB to 9,3MB
 #include "sage3basic.h"
 
 #include "AstInterface.h"
@@ -13,13 +12,9 @@
 
 #include "StmtInfoCollect.h"
 
-#include "ControlFlowGraph.h"
-
 #include "CreateSlice.h"
 
 #include "DominatorTree.h"
-
-#include "SlicingInfo.h"
 
 #include "DFAnalysis.h"
 
@@ -27,25 +22,13 @@
 
 #include <iostream>
 
-#include <list>
-
-#include <set>
-
-#define DEBUG 1
-
 using namespace DominatorTreesAndDominanceFrontiers;
 using namespace std;
 namespace DUVariableAnalysisExt {
-bool isAssignmentExpr(SgNode *node) {
+static bool isAssignmentExpr(SgNode *node) {
   return isSgAssignOp(node) || isSgCompoundAssignOp(node);
 }
-bool isFunctionParameter(SgNode *node) {
-  if (isSgExprListExp(node->get_parent()) &&
-      isSgFunctionCallExp(node->get_parent()->get_parent()))
-    return true;
-  return false;
-}
-bool isPointerType(SgVarRefExp *ref) {
+static bool isPointerType(SgVarRefExp *ref) {
   SgType *varType = ref->get_type();
   if (isSgArrayType(varType) || isSgPointerType(varType)) {
     return true;
@@ -55,18 +38,13 @@ bool isPointerType(SgVarRefExp *ref) {
 }
 
 // is it a struct
-bool isComposedType(SgVarRefExp *ref) {
+static bool isComposedType(SgVarRefExp *ref) {
   SgType *varType = ref->get_type();
   if (isSgClassType(varType)) {
     return true;
   } else {
     return false;
   }
-}
-
-bool isMemberVar(SgVarRefExp *ref) {
-  SgNode *parent = ref->get_parent();
-  return isSgDotExp(parent) || isSgArrowExp(parent);
 }
 
 SgNode *getNextParentInterstingNode(SgNode *node) {
@@ -96,34 +74,18 @@ SgNode *getNextParentInterstingNode(SgNode *node) {
       break;
     if (isSgFunctionDefinition(tmp))
       break;
-    /*    while(!IsImportantForSliceSgFilter(tmp) && // get the filtered nodes
-       from the CFG !isSgFunctionCallExp(tmp) && // get function calls
-            !isSgFunctionDefinition(tmp) && // keep function definitions
-            !tmp->get_parent() && !isSgExprListExp(tmp->get_parent())
-       &&!isSgFunctionCallExp(tmp->get_parent()->get_parent())&&// next
-       interesting: actula in & out
-            !isSgInitializedName(tmp)&&tmp->get_parent()&&isSgFunctionDeclaration(tmp->get_parent()))
-            )
-
-          //ddwhile(!IsImportantForSliceSgFilter(tmp) &&
-       !isSgFunctionCallExp(tmp) &&!isSgFunctionDefinition(tmp))
-        {*/
   }
   return tmp;
 }
 
-bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
+static bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
   if (!isSgVarRefExp(node)) {
     cerr << "this is not a SgVarRefExpr" << endl;
     return false;
   }
-  int depth = 1;
   SgNode *parent = node->get_parent(), *current = node;
   bool finished = false;
   bool indirect = false, def[2] = {false, false}, use[2] = {false, false};
-
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable. bool addressOf=false;
 
   bool isVariable = true;
   finished = isSgStatement(parent);
@@ -135,7 +97,6 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
               static_cast<void *>(node));
       ROSE_ABORT();
     }
-    //      cout <<"\t"<<depth<<": "<<parent->unparseToString()<<endl;
     if (isAssignmentExpr(parent) &&
         isSgBinaryOp(parent)->get_lhs_operand() == current) {
       // this is a def
@@ -199,34 +160,15 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
     } else if (isSgAddressOfOp(parent)) {
       // the return of this is an address, this is not ok unless used for
       // passing parameters to functions
-      //              if (!isSgExprListExp(parent->get_parent()))
-      //      {
       cerr << "the & operator is used on a variable" << endl;
-
-      // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-      // -Werror=unused-but-set-variable. addressOf=true;
-
       // from this point on this may be anything!!!
       use[0] = use[1] = 1;
       def[0] = def[1] = 1;
-      //                      cerr<<"the & operator is not impleted for cases
-      //                      other than passing addresses to functions"<<endl;
-      //                      exit(-1);
-
-      //              }
-      //              else
-      //              {
-      // the addresOfOperator is used like foo(&LValue)
-
-      //      }
     }
 
     // do the traversal towards the top
     current = parent;
     parent = parent->get_parent();
-    depth++;
-    //                      cout  << "u " <<use<<" d "<<def[0]<<" id
-    //                      "<<def[1]<<" i "<<indirect<<endl;
 
     if (isSgStatement(parent))
       finished = true;
@@ -234,70 +176,13 @@ bool calcUseDefs(SgNode *node, bool getDef, bool getIndirect) {
   // if there is no def (indirect or direct) set the according use
   if (isVariable && !def[0] && !def[1])
     use[indirect] = true;
-  /*
-          if (use[0])
-                  cout <<"\t*is Use"<<endl;
-          if (use[1])
-                  cout <<"\t*is iUse"<<endl;
-          if (def[0])
-                  cout <<"\t*is Def"<<endl;
-          if (def[1])
-                  cout <<"\t*is iDef"<<endl;
-          */
   if (getDef)
     return def[getIndirect];
   else
     return use[getIndirect];
-
-  return false;
 }
 bool isDef(SgNode *n) { return calcUseDefs(n, true, false); }
 bool isIDef(SgNode *n) { return calcUseDefs(n, true, true); }
 bool isUse(SgNode *n) { return calcUseDefs(n, false, false); }
 bool isIUse(SgNode *n) { return calcUseDefs(n, false, true); }
-bool functionUsesAddressOf(SgVarRefExp *node, SgFunctionCallExp *call) {
-  SgNode *parent = node->get_parent(), *current = node;
-
-  // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-  // -Werror=unused-but-set-variable. bool finished=false;
-  // finished=isSgStatement(parent);
-
-  while (parent != call) {
-    //      cout <<"\t"<<depth<<": "<<parent->unparseToString()<<endl;
-    if (isAssignmentExpr(parent) &&
-        isSgBinaryOp(parent)->get_rhs_operand() == current) {
-      // this is a def
-      return false;
-    }
-    // where in the -> or . op are we
-    else if (isSgDotExp(parent) ||
-             (isSgArrowExp(parent) &&
-              isSgBinaryOp(node->get_parent())->get_rhs_operand() == current)) {
-      return false;
-    }
-    // array deref op a[]
-    else if (isSgPntrArrRefExp(parent)) {
-      if ((isSgBinaryOp(node->get_parent())->get_rhs_operand() == current)) {
-        return false;
-      }
-    }
-    // this rule has to be thought over regarding indirect definitions
-    else if (isSgExprListExp(parent)) {
-      return parent;
-    } else if (isSgAddressOfOp(parent)) {
-      return true;
-    }
-    // do the traversal towards the top
-    /**/
-    current = parent;
-    parent = parent->get_parent();
-    if (isSgStatement(current)) {
-      cerr << "another statement reached than spedcified with sgfunctioncallexp"
-           << endl;
-      // segfault
-      ROSE_ABORT();
-    }
-  }
-  return false;
-}
 } // namespace DUVariableAnalysisExt

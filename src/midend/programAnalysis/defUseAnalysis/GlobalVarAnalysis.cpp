@@ -3,35 +3,20 @@
  * GlobalVar Analysis Definition
  * created by tps in Feb 2007
  *****************************************/
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 17,3 MB to
-// 7,0MB
-
 #include "GlobalVarAnalysis.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
 
 using namespace std;
 
-/******************************************
- * filter out global variables from external libraries
- *****************************************/
 bool GlobalVarAnalysis::isFromLibrary(SgInitializedName *initName) {
-  // Liao, 8/26/2009, Not used and caused problem for builtin function's
-  // parameters
-  //  string name = initName->get_qualified_name().str();
   Sg_File_Info *fi = initName->get_file_info();
   if (fi->isCompilerGenerated())
     return true;
-  string filename = fi->get_filenameString();
-  if ((filename.find("/include/") != std::string::npos))
-    return true;
-
-  return false;
+  return SageInterface::insideSystemHeader(initName);
 }
 
-/******************************************
- * is this variable a global variable ?
- *****************************************/
 bool GlobalVarAnalysis::isGlobalVar(SgInitializedName *initName) {
   SgScopeStatement *scope = initName->get_scope();
   bool globalVar = false;
@@ -40,12 +25,8 @@ bool GlobalVarAnalysis::isGlobalVar(SgInitializedName *initName) {
   return globalVar;
 }
 
-/******************************************
- * Detect all global variables and add them to table
- *****************************************/
 vector<SgInitializedName *> GlobalVarAnalysis::run() {
   vector<SgInitializedName *> globalVars;
-  globalVars.clear();
 
   Rose_STL_Container<SgNode *> initNames =
       NodeQuery::querySubTree(project, V_SgInitializedName);

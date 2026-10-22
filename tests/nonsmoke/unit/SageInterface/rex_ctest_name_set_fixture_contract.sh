@@ -55,6 +55,31 @@ if [ "$output" != "$expected" ]; then
   exit 1
 fi
 
+# A later inventory must preserve even an interrupted dashboard's partial
+# evidence. CTest's show-only Memcheck mode otherwise overwrites this report.
+python3 - "$runner" "$ctest" "$binary_dir" <<'PY'
+from pathlib import Path
+import subprocess
+import sys
+
+runner, ctest, directory = sys.argv[1:]
+testing = Path(directory) / "Testing"
+tag = (testing / "TAG").read_bytes()
+report = testing / tag.decode().splitlines()[0] / "DynamicAnalysis.xml"
+evidence = b"retained interrupted Memcheck evidence\n"
+report.write_bytes(evidence)
+result = subprocess.run([
+    sys.executable, runner, "--test-dir", directory, "--ctest", ctest,
+    "--jobs", "1", "--memcheck", "--dry-run",
+    "--include-regex", "^rex_memcheck_selected$",
+], capture_output=True, text=True)
+(testing / "rejected-inventory.log").write_text(result.stdout + result.stderr)
+assert result.returncode != 0, "Memcheck inventory reused an existing dashboard"
+assert "existing evidence" in result.stderr, result.stderr
+assert (testing / "TAG").read_bytes() == tag
+assert report.read_bytes() == evidence, "Memcheck inventory overwrote evidence"
+PY
+
 output=$(python3 "$runner" \
   --test-dir "$binary_dir" \
   --include-regex '^rex_dependency_(producer|consumer)$' \
@@ -95,3 +120,23 @@ python3 "$runner" \
   --shard-count 3 \
   --ctest "$ctest" \
   --jobs 1
+
+python3 - "$runner" "$binary_dir" <<'PY'
+from pathlib import Path
+import runpy
+import sys
+
+verify = runpy.run_path(sys.argv[1])["verify_results"]
+report = Path(sys.argv[2]) / "malformed-results.xml"
+registry = {"tests": [{"name": "producer"}, {"name": "consumer"}]}
+report.write_text('<testsuite><testcase name="producer" status="run"/></testsuite>')
+assert "Missing result: consumer" in verify(registry, [report])
+report.write_text(
+    '<testsuite failures="1"><testcase name="producer" status="run"/>'
+    '<testcase name="consumer" status="run"/></testsuite>')
+assert any("Unsuccessful JUnit suite" in problem for problem in verify(registry, [report]))
+report.write_text(
+    '<testsuite><testcase name="producer" status="run"/>'
+    '<testcase name="consumer" status="skipped"/></testsuite>')
+assert any("Unsuccessful test" in problem for problem in verify(registry, [report]))
+PY

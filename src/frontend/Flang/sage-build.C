@@ -1,10 +1,9 @@
+#include "FortranProcedureBinding.h"
 #include "sage3basic.h"
 
 #include "SageTreeBuilder.h"
 
 #include "sage-build.h"
-
-#include "flang-sage.h"
 
 #include "BuildExprVisitor.h"
 
@@ -45,67 +44,24 @@
 #include <llvm/Frontend/OpenACC/ACC.h.inc>
 
 #include <flang/Evaluate/characteristics.h>
+#include <flang/Evaluate/check-expression.h>
 #include <flang/Evaluate/fold.h>
+#include <flang/Evaluate/real.h>
+#include <flang/Evaluate/target.h>
 #include <flang/Evaluate/tools.h>
 #include <flang/Parser/tools.h>
+#include <flang/Semantics/expression.h>
 #include <flang/Semantics/tools.h>
-
-#include "type-parsers.h"
-
-// Controls debugging information output
-#define PRINT_FLANG_TRAVERSAL 0
-
-#define ABORT_NO_IMPL ROSE_ABORT()
-#define ABORT_NO_TEST ROSE_ABORT()
-
-#define REPLACE 0
-
-#define DO_TODO 0
-#define DEPRECATED 0
-// NOTE: This is in a holding pattern as pattern for Replace
-#if REPLACE
-namespace Fortran::parser {
-void Replace(Fortran::parser::IntLiteralConstant &x, const SgExpression *sg) {
-  ASSERT_not_null(isSgLongLongIntVal(sg));
-
-  // Testing for now
-  std::string value{sage->get_valueString()};
-
-  std::cerr
-      << "Replace(Fortran::parser::IntLiteralConstant: need memory for string "
-      << value << "\n";
-  static const char *tt = "666xxx";
-
-  // Need to also try replacing with a KindParam
-  parser::CharBlock cb{tt, 3};
-  std::tuple<parser::CharBlock, std::optional<parser::KindParam>> tup{
-      std::move(cb), std::nullopt};
-
-  x.t = std::move(tup);
-}
-} // namespace Fortran::parser
-#endif
-
-// Dump debug information
-template <class T> static void info(const T &x) {
-  std::cerr << "Rose::builder::Build() for flang type " << typeid(x).name()
-            << "\n";
-}
-template <class T> static void info(const T &x, const std::string &pre) {
-  std::cerr << pre;
-  std::cerr << "Rose::builder::Build() for flang type " << typeid(x).name()
-            << "\n";
-}
 
 namespace Rose::builder {
 
 using namespace Fortran;
+using SageInterface::Detail::isExactFortranSemanticProcedurePublication;
 
 // Helps with finding source position information
 enum class Order { begin, end };
-
-// Why is this needed?
-template <typename T> void WalkExpr(const T &root, SgExpression *&expr);
+std::size_t
+RequireFlangCookedSourceOrder(const Fortran::parser::CharBlock &source);
 
 void CollectCudaSubprogramAttrs(
     const std::list<parser::PrefixSpec> &prefixes,
@@ -157,13 +113,16 @@ namespace detail {
 } // namespace detail
 
 namespace {
+bool FortranProcedureFromModuleFile(const Fortran::parser::Name &name) {
+  ASSERT_not_null(name.symbol);
+  // REX parses module interfaces as inputs, so Flang does not mark their
+  // symbols.
+  return FlangModuleInfo::isModuleFile() || name.symbol->IsFromModFile();
+}
+
 SgProcedureHeaderStatement::fortran_procedure_source_form_enum
-FortranProcedureHeaderSourceForm(const SourcePosition &source) {
-  std::string extension =
-      std::filesystem::path(source.path).extension().string();
-  std::transform(extension.begin(), extension.end(), extension.begin(),
-                 [](unsigned char ch) { return std::tolower(ch); });
-  if (extension == ".mod" || extension == ".rmod" || extension == ".rcmp") {
+FortranProcedureHeaderSourceForm(const Fortran::parser::Name &name) {
+  if (FortranProcedureFromModuleFile(name)) {
     return SgProcedureHeaderStatement::
         e_fortran_procedure_source_form_compiler_module_header;
   }
@@ -222,24 +181,16 @@ void RegisterPendingFortranAlternateReturns(const Fortran::parser::Call &call,
 void PublishExactFortranIoAsteriskSources(
     SgIOStatement *statement, const Fortran::parser::CharBlock &statementSource,
     const char *keyword);
-std::string
-FormatSpecificationToString(const Fortran::format::FormatSpecification &spec);
-std::string FormatItemToString(const Fortran::format::FormatItem &item);
-std::string
-FormatItemsToString(const std::list<Fortran::format::FormatItem> &items);
 void ApplyIoControlSpec(const Fortran::parser::IoControlSpec &x,
                         SgReadStatement *readStmt, SgWriteStatement *writeStmt);
+SgSymbol *BuildFortranNamelistIoBinding(
+    const std::list<Fortran::parser::IoControlSpec> &controls);
 void ApplyConnectSpec(const Fortran::parser::ConnectSpec &x,
                       SgOpenStatement *stmt);
 void ApplyCloseSpec(const Fortran::parser::CloseStmt::CloseSpec &x,
                     SgCloseStatement *stmt);
 void ApplyPositionOrFlushSpec(const Fortran::parser::PositionOrFlushSpec &x,
                               SgIOStatement *stmt);
-SgFunctionSymbol *LookupDefinedOperatorSymbol(const SgName &operatorName,
-                                              SgScopeStatement *scope);
-SgType *GetFunctionResultType(SgFunctionSymbol *symbol);
-SgClassSymbol *lookupDerivedTypeSymbol(const SgName &derivedTypeName,
-                                       SgScopeStatement *currentScope);
 SgClassSymbol *ResolveFortranClassSymbol(SgSymbol *symbol,
                                          const SgName &semanticName);
 SgClassSymbol *RequireFortranSemanticDerivedTypeSymbol(
@@ -255,14 +206,32 @@ void ConsumeFortranSemanticDerivedTypeForward(
     const Fortran::semantics::Symbol &semanticType);
 SgType *
 BuildFortranSemanticExpressionType(const Fortran::parser::TypedExpr &typedExpr);
+SgType *BuildFortranSemanticExpressionType(
+    const Fortran::evaluate::Expr<Fortran::evaluate::SomeType> &expression);
 SgType *BuildFortranSemanticExpressionType(const Fortran::parser::Expr &expr);
 void BuildExactDefinedBinaryOperator(
     BuildExprVisitor &visitor,
     const Fortran::parser::Expr::DefinedBinary &parseOperator);
+bool BuildResolvedUserDefinedUnaryOperator(BuildExprVisitor &visitor,
+                                           const Fortran::parser::Expr &operand,
+                                           const SgName &operatorName);
 void BuildComplexLiteralConstant(
     const Fortran::parser::ComplexLiteralConstant &literal,
     SgType *semanticType, SgExpression *&expression);
 SgType *RequireComplexLiteralSemanticBase(SgType *semanticType);
+std::string
+FormatRealLiteralConstant(const Fortran::parser::RealLiteralConstant &);
+SgExpression *
+BuildRealLiteral(Fortran::evaluate::Expr<Fortran::evaluate::SomeType> semantic,
+                 const std::string &spelling);
+SgValueExp *BuildIntegerLiteralValue(
+    Fortran::evaluate::Expr<Fortran::evaluate::SomeType> semantic,
+    const std::string &spelling);
+SgValueExp *BuildSignedIntegerLiteral(
+    const Fortran::parser::SignedIntLiteralConstant &literal,
+    SgType *expectedType);
+template <typename Literal>
+std::string FormatIntegerLiteralConstant(const Literal &literal);
 void BuildFortranArrayConstructor(const Fortran::parser::AcSpec &specification,
                                   SgType *semanticType,
                                   const Fortran::parser::CharBlock &source,
@@ -408,38 +377,6 @@ RequireFortranAuxiliaryDeclarationOwner(SgDeclarationStatement *declaration,
   return container;
 }
 
-bool IsExactFortranSemanticProcedurePublication(SgFunctionSymbol *symbol) {
-  SgProcedureHeaderStatement *declaration =
-      symbol != nullptr
-          ? isSgProcedureHeaderStatement(symbol->get_declaration())
-          : nullptr;
-  SgScopeStatement *scope = symbol != nullptr ? symbol->get_scope() : nullptr;
-  SgSymbolTable *table = scope != nullptr ? scope->get_symbol_table() : nullptr;
-  SgAuxiliaryDeclarationList *owner =
-      declaration != nullptr
-          ? isSgAuxiliaryDeclarationList(declaration->get_parent())
-          : nullptr;
-  Sg_File_Info *source =
-      declaration != nullptr ? declaration->get_file_info() : nullptr;
-  const SgDeclarationStatementPtrList *declarations =
-      owner != nullptr ? &owner->get_declarations() : nullptr;
-  return declaration != nullptr && scope != nullptr && table != nullptr &&
-         owner != nullptr && owner->get_parent() == scope &&
-         scope->get_auxiliary_declarations() == owner &&
-         declaration->get_scope() == scope &&
-         declaration->get_firstNondefiningDeclaration() == declaration &&
-         declaration->get_fortran_procedure_source_form() ==
-             SgProcedureHeaderStatement::
-                 e_fortran_procedure_source_form_semantic_only &&
-         source != nullptr && source->isCompilerGenerated() &&
-         source->isOutputInCodeGeneration() && declarations != nullptr &&
-         std::count(declarations->begin(), declarations->end(), declaration) ==
-             1 &&
-         symbol->get_declaration() == declaration &&
-         symbol->get_parent() == table && table->exists(symbol) &&
-         scope->find_symbol_from_declaration(declaration) == symbol;
-}
-
 bool HasExactFortranLexicalProcedureDefinition(SgFunctionSymbol *symbol) {
   SgFunctionDeclaration *canonical =
       symbol != nullptr ? symbol->get_declaration() : nullptr;
@@ -577,41 +514,13 @@ SgIntVal *BuildFortranDefaultIntegerValue(int value,
   return literal;
 }
 
-SgType *ApplyFortranSemanticTypeWrappers(SgType *published, SgType *semantic) {
-  ASSERT_not_null(published);
-  ASSERT_not_null(semantic);
-  const bool isConst = SageInterface::isConstType(published);
-  bool isPointer = false;
-  for (SgType *current = published; current != nullptr;) {
-    if (SgModifierType *modifier = isSgModifierType(current)) {
-      current = modifier->get_base_type();
-    } else if (SgPointerType *pointer = isSgPointerType(current)) {
-      isPointer = true;
-      current = pointer->get_base_type();
-    } else {
-      break;
-    }
-  }
-  if (isPointer) {
-    bool semanticIsPointer = false;
-    for (SgType *current = semantic; current != nullptr;) {
-      if (SgModifierType *modifier = isSgModifierType(current)) {
-        current = modifier->get_base_type();
-      } else if (SgPointerType *pointer = isSgPointerType(current)) {
-        semanticIsPointer = true;
-        current = pointer->get_base_type();
-      } else {
-        break;
-      }
-    }
-    if (!semanticIsPointer) {
-      semantic = SageBuilder::buildPointerType(semantic);
-    }
-  }
-  if (isConst) {
-    semantic = SageBuilder::buildConstType(semantic);
-  }
-  return semantic;
+SgPointerType *BuildFortranSourcePointerType(SgType *baseType) {
+  ASSERT_not_null(baseType);
+  ROSE_ASSERT(isSgPointerType(baseType) == nullptr);
+  SgPointerType *pointer = new SgPointerType(baseType);
+  ASSERT_not_null(pointer);
+  pointer->set_fortran_source_syntax(true);
+  return pointer;
 }
 
 bool EquivalentFortranSemanticObjectType(SgType *published, SgType *semantic) {
@@ -695,22 +604,20 @@ bool IsFunctionType(SgType *type) {
          isSgMemberFunctionType(type) != nullptr;
 }
 
-void FinalizeFortranAggregateInitializerType(SgExpression *expression,
+void ValidateFortranAggregateInitializerType(SgExpression *expression,
                                              SgType *semanticType) {
   SgAggregateInitializer *initializer = isSgAggregateInitializer(expression);
   if (initializer == nullptr) {
     return;
   }
-  if (semanticType == nullptr || isSgTypeDefault(semanticType) != nullptr ||
-      isSgTypeUnknown(semanticType) != nullptr) {
+  if (SageInterface::containsUnknownType(semanticType)) {
     std::cerr << "REX_FLANG_INVARIANT[aggregate-initializer-type]: Fortran "
                  "aggregate initializer has no exact semantic owner type\n";
     ROSE_ABORT();
   }
 
   SgType *publishedType = initializer->get_expression_type();
-  if (publishedType == nullptr || isSgTypeDefault(publishedType) != nullptr ||
-      isSgTypeUnknown(publishedType) != nullptr) {
+  if (SageInterface::containsUnknownType(publishedType)) {
     std::cerr << "REX_FLANG_INVARIANT[aggregate-initializer-type]: Fortran "
                  "aggregate initializer has no exact expression semantic "
                  "type\n";
@@ -721,6 +628,18 @@ void FinalizeFortranAggregateInitializerType(SgExpression *expression,
   // Valid Fortran initialization may change array bounds or CHARACTER length;
   // Flang has already checked assignment compatibility.  Never replace the
   // expression's exact typed result with its destination type here.
+}
+
+SgInitializer *BuildFortranInitializer(parser::Initialization &source,
+                                       SgType *destinationType) {
+  SgExpression *expression = nullptr;
+  Build(source, expression, destinationType);
+  if (auto *initializer = isSgFortranDataInitializer(expression)) {
+    ROSE_ASSERT(initializer->get_type() == destinationType);
+    return initializer;
+  }
+  ValidateFortranAggregateInitializerType(expression, destinationType);
+  return SageBuilder::buildAssignInitializer_nfi(expression, destinationType);
 }
 
 bool KindSelectorHasStar(const std::optional<parser::KindSelector> &kind) {
@@ -790,14 +709,6 @@ std::int64_t RequireFortranUnsignedSelectorValue(std::uint64_t value,
     ROSE_ABORT();
   }
   return static_cast<std::int64_t>(value);
-}
-
-void SetFortranUnsignedSelectorValue(std::uint64_t value,
-                                     SgExpression *expression,
-                                     const char *contract) {
-  SetFortranIntegerSelectorValue(
-      expression, RequireFortranUnsignedSelectorValue(value, contract),
-      contract);
 }
 
 void BuildFortranKindSelector(
@@ -1090,109 +1001,6 @@ bool IsFortranSpecificationStatement(const SgStatement *stmt) {
           isSgFortranIncludeLine(stmt) != nullptr);
 }
 
-std::string NormalizeSourcePath(const std::string &path);
-std::string ExtractIncludeFilenameFromDirective(const std::string &directive);
-
-bool IsRawIncludeDirective(const PreprocessingInfo *info) {
-  if (info == nullptr) {
-    return false;
-  }
-
-  const PreprocessingInfo::DirectiveType type = info->getTypeOfDirective();
-  return type == PreprocessingInfo::CpreprocessorIncludeDeclaration ||
-         type == PreprocessingInfo::CpreprocessorIncludeNextDeclaration ||
-         (type == PreprocessingInfo::CSkippedToken &&
-          !ExtractIncludeFilenameFromDirective(info->getString()).empty());
-}
-
-bool MatchesRawIncludeDirectiveAtSource(const PreprocessingInfo *info,
-                                        const SourcePosition &source) {
-  if (!IsRawIncludeDirective(info) || source.line <= 0) {
-    return false;
-  }
-  if (info->getLineNumber() != source.line) {
-    return false;
-  }
-
-  const std::string target_path = NormalizeSourcePath(source.path);
-  const std::string info_path = NormalizeSourcePath(info->getFilename());
-  return target_path.empty() || info_path.empty() || info_path == target_path;
-}
-
-void RemoveRawIncludeDirectiveFromAttachedInfo(
-    SgLocatedNode *node, const SourcePosition &source,
-    std::set<PreprocessingInfo *> *removed_infos = nullptr) {
-  if (node == nullptr) {
-    return;
-  }
-
-  AttachedPreprocessingInfoType *info_list =
-      node->getAttachedPreprocessingInfo();
-  if (info_list == nullptr || info_list->empty()) {
-    return;
-  }
-
-  for (auto it = info_list->begin(); it != info_list->end();) {
-    PreprocessingInfo *info = *it;
-    if (MatchesRawIncludeDirectiveAtSource(info, source)) {
-      it = info_list->erase(it);
-      if (removed_infos != nullptr) {
-        removed_infos->insert(info);
-      } else {
-        delete info;
-      }
-      continue;
-    }
-    ++it;
-  }
-}
-
-void ConsumeRawFortranIncludeDirective(SgSourceFile *source_file,
-                                       const SourcePosition &source) {
-  if (source_file == nullptr || source.line <= 0) {
-    return;
-  }
-
-  std::set<PreprocessingInfo *> removed_infos;
-
-  if (ROSEAttributesListContainerPtr directives =
-          source_file->get_preprocessorDirectivesAndCommentsList()) {
-    std::map<std::string, ROSEAttributesList *> &lists = directives->getList();
-    for (std::map<std::string, ROSEAttributesList *>::iterator it =
-             lists.begin();
-         it != lists.end(); ++it) {
-      ROSEAttributesList *list = it->second;
-      if (list == nullptr) {
-        continue;
-      }
-      std::vector<PreprocessingInfo *> &entries = list->getList();
-      for (auto entry_it = entries.begin(); entry_it != entries.end();) {
-        PreprocessingInfo *info = *entry_it;
-        if (MatchesRawIncludeDirectiveAtSource(info, source)) {
-          entry_it = entries.erase(entry_it);
-          removed_infos.insert(info);
-          continue;
-        }
-        ++entry_it;
-      }
-    }
-  }
-
-  RemoveRawIncludeDirectiveFromAttachedInfo(source_file->get_globalScope(),
-                                            source, &removed_infos);
-
-  std::vector<SgNode *> nodes =
-      NodeQuery::querySubTree(source_file->get_globalScope(), V_SgLocatedNode);
-  for (SgNode *node : nodes) {
-    RemoveRawIncludeDirectiveFromAttachedInfo(isSgLocatedNode(node), source,
-                                              &removed_infos);
-  }
-
-  for (PreprocessingInfo *info : removed_infos) {
-    delete info;
-  }
-}
-
 SgScopeStatement *FindFortranImplicitDeclScope(SgScopeStatement *scope) {
   if (scope == nullptr) {
     return nullptr;
@@ -1390,7 +1198,7 @@ SgFunctionSymbol *LookupExactFortranSourceVisibleFunction(
         continue;
       }
       if (candidate->get_type() != type ||
-          (IsExactFortranSemanticProcedurePublication(candidate) &&
+          (isExactFortranSemanticProcedurePublication(candidate) &&
            !HasExactFortranLexicalProcedureDefinition(candidate))) {
         continue;
       }
@@ -1566,28 +1374,6 @@ void InsertFortranSpecificationStatement(SgStatement *stmt,
   SageInterface::appendStatement(stmt, scope);
 }
 
-SgType *GetExprTypeForDisambiguation(SgExpression *expr) {
-  if (expr == nullptr) {
-    return nullptr;
-  }
-  if (expr->get_type() != nullptr) {
-    return expr->get_type();
-  }
-  if (auto *varRef = isSgVarRefExp(expr)) {
-    if (SgVariableSymbol *sym = varRef->get_symbol()) {
-      return sym->get_type();
-    }
-  }
-  if (auto *dot = isSgDotExp(expr)) {
-    return GetExprTypeForDisambiguation(dot->get_rhs_operand_i());
-  }
-  return nullptr;
-}
-
-bool IsArrayDesignator(SgExpression *expr) {
-  return IsArrayType(GetExprTypeForDisambiguation(expr));
-}
-
 SgExpression *BuildFortranNameReference(const parser::Name &name) {
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
@@ -1596,36 +1382,76 @@ SgExpression *BuildFortranNameReference(const parser::Name &name) {
                                                  scope);
 }
 
-SgType *RequireFortranArrayElementType(SgExpression *base,
-                                       const char *producer) {
-  if (base == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[array-reference-result-type]: "
-              << producer << " has no base expression\n";
+std::optional<long long> MeasureFortranExpressionStorage(
+    const evaluate::Expr<evaluate::SomeType> &typed) {
+  auto &context = CurrentBuildVisitor().foldingContext();
+  const auto characteristics =
+      evaluate::characteristics::TypeAndShape::Characterize(typed, context);
+  if (!characteristics) {
+    std::cerr << "REX_FLANG_INVARIANT[expression-storage]: typed expression "
+                 "cannot be characterized\n";
     ROSE_ABORT();
   }
-  SgType *base_type = base->get_type();
-  if (base_type == nullptr || isSgTypeUnknown(base_type) != nullptr ||
-      isSgTypeDefault(base_type) != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[array-reference-result-type]: "
-              << producer << " has no exact base type\n";
-    ROSE_ABORT();
-  }
-  SgType *result_type = SageInterface::getArrayElementType(base_type);
-  if (result_type == nullptr || isSgTypeUnknown(result_type) != nullptr ||
-      isSgTypeDefault(result_type) != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[array-reference-result-type]: "
-              << producer << " has no exact element type\n";
-    ROSE_ABORT();
-  }
-  return result_type;
+  auto measurement = characteristics->MeasureSizeInBytes(context);
+  if (!measurement)
+    return std::nullopt;
+  const auto size =
+      evaluate::ToInt64(evaluate::Fold(context, std::move(*measurement)));
+  ROSE_ASSERT(!size || *size >= 0);
+  return size;
 }
 
-SgExpression *BuildArrayRefFromCallArgs(SgExpression *base,
-                                        SgExprListExp *args) {
-  ASSERT_not_null(base);
-  ASSERT_not_null(args);
-  return SageBuilderCpp17::buildPntrArrRefExp_nfi(
-      base, args, RequireFortranArrayElementType(base, "array designator"));
+std::optional<long long>
+MeasureFortranExpressionStorage(const parser::TypedExpr &typed) {
+  ROSE_ASSERT(typed && typed->v);
+  return MeasureFortranExpressionStorage(*typed->v);
+}
+
+std::vector<std::optional<long long>> MeasureFortranSubscriptStrides(
+    const evaluate::Expr<evaluate::SomeType> &expression,
+    const semantics::Symbol &base, std::size_t rank) {
+  auto &context = CurrentBuildVisitor().foldingContext();
+  const auto &symbol = base.GetUltimate();
+  std::vector<std::optional<long long>> strides(rank);
+  const auto contiguous = evaluate::IsContiguous(
+      symbol, context, /*namedConstantSectionsAreContiguous=*/false);
+  if (!contiguous || !*contiguous)
+    return strides;
+  const auto characteristics =
+      evaluate::characteristics::TypeAndShape::Characterize(expression,
+                                                            context);
+  ROSE_ASSERT(characteristics);
+  auto elementSize =
+      characteristics->MeasureElementSizeInBytes(context, /*align=*/true);
+  if (!elementSize)
+    return strides;
+  auto stride =
+      evaluate::ToInt64(evaluate::Fold(context, std::move(*elementSize)));
+  ROSE_ASSERT(!stride || *stride >= 0);
+  if (stride) {
+    ROSE_ASSERT(*stride <= std::numeric_limits<long long>::max() / 8);
+    *stride *= 8;
+  }
+  auto shape = evaluate::GetShape(context, symbol);
+  ROSE_ASSERT(!shape || shape->size() == rank);
+  for (std::size_t axis = 0; axis < rank; ++axis) {
+    strides[axis] = stride;
+    if (axis + 1 == rank || !stride || *stride == 0)
+      continue;
+    const auto extent = shape && (*shape)[axis]
+                            ? evaluate::ToInt64(evaluate::Fold(
+                                  context, std::move(*(*shape)[axis])))
+                            : std::nullopt;
+    if (!extent) {
+      stride.reset();
+      continue;
+    }
+    ROSE_ASSERT(*extent >= 0);
+    ROSE_ASSERT(*extent == 0 ||
+                *stride <= std::numeric_limits<long long>::max() / *extent);
+    *stride *= *extent;
+  }
+  return strides;
 }
 } // namespace
 
@@ -1781,17 +1607,16 @@ void RequireFlangSourceTypeContract(SgType *source, SgType *semantic,
 }
 } // namespace detail
 
-void Build(parser::ComponentDecl &x, std::list<EntityDeclTuple> &componentDecls,
+void Build(parser::ComponentDecl &x, std::list<EntityDeclInfo> &componentDecls,
+           SgType *baseType, const parser::CharBlock &statementSource,
+           bool sourcePointer);
+void Build(parser::ComponentDecl &x, std::string &name, SgType *&type,
            SgType *baseType, const parser::CharBlock &statementSource);
-void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
-           SgType *&type, SgType *baseType,
-           const parser::CharBlock &statementSource);
 void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
            const parser::CharBlock &statementSource);
 void Build(parser::DataStmtObject &x, SgExpression *&expr);
 void Build(parser::DataIDoObject &x, SgExpression *&expr);
 void Build(parser::DataImpliedDo &x, SgExpression *&expr);
-void Build(parser::DataStmtValue &x, SgExpression *&expr);
 void Build(parser::DataStmtConstant &x, SgExpression *&expr);
 void Build(parser::DataStmtRepeat &x, SgExpression *&expr);
 void getComponentAttrSpec(
@@ -1821,16 +1646,55 @@ enum class FortranLiteralCategory {
   logical
 };
 
+evaluate::Expr<evaluate::SomeType>
+RequireFortranLiteralSemantics(BuildExprVisitor &visitor) {
+  auto semantic = [&]() {
+    if (const parser::Expr *source = visitor.semanticExpression()) {
+      auto analyzed = semantics::AnalyzeExpr(
+          CurrentBuildVisitor().semanticContext(), *source);
+      ROSE_ASSERT(analyzed.has_value());
+      return std::move(*analyzed);
+    }
+    const auto *typed = visitor.semanticTypedExpression();
+    ROSE_ASSERT(typed != nullptr && *typed && (*typed)->v);
+    return *(*typed)->v;
+  }();
+  if (SgType *expected = visitor.expectedLiteralType()) {
+    ROSE_ASSERT(SageInterface::isEquivalentType(
+        expected, BuildFortranSemanticExpressionType(semantic)));
+  }
+  return semantic;
+}
+
+template <typename BuildLiteral>
 SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
                                      FortranLiteralCategory category,
-                                     SgExpression *expression) {
-  SgValueExp *value = isSgValueExp(expression);
+                                     BuildLiteral buildLiteral) {
   const Fortran::parser::TypedExpr *semantic =
       visitor.semanticTypedExpression();
-  if (value == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[literal-semantic-type]: source literal "
-                 "has no exact value node\n";
-    ROSE_ABORT();
+  auto buildValue = [&]() {
+    auto *value = isSgValueExp(buildLiteral());
+    if (value == nullptr) {
+      std::cerr << "REX_FLANG_INVARIANT[literal-semantic-type]: source literal "
+                   "has no exact value node\n";
+      ROSE_ABORT();
+    }
+    return value;
+  };
+
+  if (category == FortranLiteralCategory::real) {
+    auto *value = buildValue();
+    SgType *literalType = value->get_literal_type();
+    if (literalType == nullptr ||
+        isSgTypeFloat(StripModifierType(literalType)) == nullptr ||
+        (visitor.expectedLiteralType() != nullptr &&
+         !SageInterface::isEquivalentType(literalType,
+                                          visitor.expectedLiteralType()))) {
+      std::cerr << "REX_FLANG_INVARIANT[literal-semantic-type]: REAL literal "
+                   "has no exact KIND or conflicts with its parent type\n";
+      ROSE_ABORT();
+    }
+    return value;
   }
 
   SgType *semanticType = nullptr;
@@ -1838,8 +1702,7 @@ SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
     semanticType = BuildFortranSemanticExpressionType(*semantic);
   }
   if (SgType *expectedType = visitor.expectedLiteralType()) {
-    if (isSgTypeUnknown(expectedType) != nullptr ||
-        isSgTypeDefault(expectedType) != nullptr) {
+    if (SageInterface::containsUnknownType(expectedType)) {
       std::cerr << "REX_FLANG_INVARIANT[literal-semantic-type]: parent "
                    "published an invalid expected literal type\n";
       ROSE_ABORT();
@@ -1871,8 +1734,6 @@ SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
        isSgTypeInt(baseType) != nullptr) ||
       (category == FortranLiteralCategory::unsigned_integer &&
        isSgTypeUnsignedInt(baseType) != nullptr) ||
-      (category == FortranLiteralCategory::real &&
-       isSgTypeFloat(baseType) != nullptr) ||
       (category == FortranLiteralCategory::character &&
        isSgTypeString(baseType) != nullptr) ||
       (category == FortranLiteralCategory::logical &&
@@ -1883,6 +1744,7 @@ SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
                  "type\n";
     ROSE_ABORT();
   }
+  auto *value = buildValue();
   if (value->get_literal_type() != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[literal-semantic-type]: literal "
                  "producer attempted to replace an existing semantic type\n";
@@ -1896,27 +1758,57 @@ template <typename Literal>
 SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
                                      const Literal &literal,
                                      FortranLiteralCategory category) {
-  SgExpression *expression = nullptr;
-  BuildImpl(literal, expression);
-  return BuildExactFortranLiteral(visitor, category, expression);
+  return BuildExactFortranLiteral(visitor, category, [&]() {
+    SgExpression *expression = nullptr;
+    BuildImpl(literal, expression);
+    return expression;
+  });
 }
 } // namespace
 
 void BuildExprVisitor::Build(const Fortran::parser::IntLiteralConstant &x) {
   this->set(
-      BuildExactFortranLiteral(*this, x, FortranLiteralCategory::integer));
+      BuildExactFortranLiteral(*this, FortranLiteralCategory::integer, [&]() {
+        auto semantic = RequireFortranLiteralSemantics(*this);
+        return BuildIntegerLiteralValue(std::move(semantic),
+                                        FormatIntegerLiteralConstant(x));
+      }));
 }
 
 void BuildExprVisitor::Build(
     const Fortran::parser::UnsignedLiteralConstant &x) {
-  this->set(BuildExactFortranLiteral(*this, x,
-                                     FortranLiteralCategory::unsigned_integer));
+  this->set(BuildExactFortranLiteral(
+      *this, FortranLiteralCategory::unsigned_integer, [&]() -> SgValueExp * {
+        const auto semantic = RequireFortranLiteralSemantics(*this);
+        const auto *integer =
+            evaluate::UnwrapExpr<evaluate::Expr<evaluate::SomeUnsigned>>(
+                semantic);
+        ASSERT_not_null(integer);
+        ROSE_ASSERT(integer->Rank() == 0);
+        const std::string spelling = FormatIntegerLiteralConstant(x);
+        return common::visit(
+            [&](const auto &expression) -> SgValueExp * {
+              using Type = evaluate::ResultType<decltype(expression)>;
+              const auto *constant =
+                  evaluate::UnwrapExpr<evaluate::Constant<Type>>(expression);
+              ASSERT_not_null(constant);
+              const auto scalar = constant->GetScalarValue();
+              ROSE_ASSERT(scalar.has_value());
+              const auto number = scalar->ToUInt64();
+              if (number <= std::numeric_limits<unsigned int>::max()) {
+                return SageBuilder::buildUnsignedIntVal_nfi(
+                    static_cast<unsigned int>(number), spelling);
+              }
+              return SageBuilder::buildUnsignedLongLongIntVal_nfi(number,
+                                                                  spelling);
+            },
+            integer->u);
+      }));
 }
 
 void BuildExprVisitor::Build(
     const Fortran::parser::SignedIntLiteralConstant &x) {
-  this->set(
-      BuildExactFortranLiteral(*this, x, FortranLiteralCategory::integer));
+  this->set(BuildSignedIntegerLiteral(x, expectedLiteralType()));
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::CharLiteralConstant &x) {
@@ -1931,7 +1823,12 @@ void BuildExprVisitor::Build(
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::RealLiteralConstant &x) {
-  this->set(BuildExactFortranLiteral(*this, x, FortranLiteralCategory::real));
+  const auto *semantic = semanticTypedExpression();
+  ROSE_ASSERT(semantic != nullptr && *semantic && (*semantic)->v);
+  this->set(
+      BuildExactFortranLiteral(*this, FortranLiteralCategory::real, [&]() {
+        return BuildRealLiteral(*(*semantic)->v, FormatRealLiteralConstant(x));
+      }));
 }
 
 void BuildExprVisitor::Build(
@@ -1942,6 +1839,19 @@ void BuildExprVisitor::Build(
 void BuildExprVisitor::Build(const Fortran::parser::LogicalLiteralConstant &x) {
   this->set(
       BuildExactFortranLiteral(*this, x, FortranLiteralCategory::logical));
+}
+
+void BuildExprVisitor::Build(const Fortran::parser::BOZLiteralConstant &) {
+  const auto semantic = RequireFortranLiteralSemantics(*this);
+  const auto *bits =
+      evaluate::UnwrapExpr<evaluate::BOZLiteralConstant>(semantic);
+  ASSERT_not_null(bits);
+  static_assert(evaluate::BOZLiteralConstant::bits == 128);
+  auto *value = new SgFortranBOZVal(Rose::Integer128Value::fromBits(
+      {bits->IBITS(0, 64).ToUInt64(), bits->IBITS(64, 64).ToUInt64()}, true));
+  SageInterface::setOneSourcePositionNull(value);
+  value->set_literal_spelling_form(SgValueExp::e_literal_canonical_generated);
+  this->set(value);
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::Designator &x) {
@@ -1966,10 +1876,13 @@ void BuildExprVisitor::Build(
                  "literal substring has no exact Flang result type\n";
     ROSE_ABORT();
   }
-  SgType *substringType = BuildFortranSemanticExpressionType(*typed);
-  ASSERT_not_null(substringType);
+  const auto *expression = semanticExpression();
+  ASSERT_not_null(expression);
+  const auto *syntax = std::get_if<Fortran::common::Indirection<
+      Fortran::parser::CharLiteralConstantSubstring>>(&expression->u);
+  ROSE_ASSERT(syntax != nullptr && &syntax->value() == &x);
   SgExpression *expr{nullptr};
-  Rose::builder::Build(x, substringType, expr);
+  Rose::builder::Build(*syntax, *typed, expression->source, expr);
   ASSERT_not_null(expr);
   this->set(expr);
 }
@@ -2024,10 +1937,13 @@ void BuildExprVisitor::Build(const Fortran::parser::StructureConstructor &x) {
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedUnary &x) {
-  SgExpression *expr{nullptr};
-  Rose::builder::Build(x, expr);
-  ASSERT_not_null(expr);
-  this->set(expr);
+  if (!BuildResolvedUserDefinedUnaryOperator(
+          *this, std::get<1>(x.t).value(),
+          SgName(std::get<0>(x.t).v.ToString()))) {
+    std::cerr << "REX_FLANG_INVARIANT[operator-semantics]: defined unary "
+                 "operator did not resolve to a user-defined Flang procedure\n";
+    ROSE_ABORT();
+  }
 }
 
 void BuildExprVisitor::Build(const Fortran::parser::Expr::DefinedBinary &x) {
@@ -2214,7 +2130,7 @@ void BuildExprVisitor::Build(
       BuildFortranSemanticExpressionType(*semanticTypedExpression());
   SgType *precisionType = RequireComplexLiteralSemanticBase(resultType);
   SgComplexVal *value =
-      SageBuilder::buildComplexVal_nfi(lhs, rhs, precisionType, std::string());
+      SageBuilder::buildComplexVal_nfi(lhs, rhs, precisionType);
   ASSERT_not_null(value);
   this->set(value);
 }
@@ -2424,7 +2340,7 @@ void BuildExprVisitor::Build(const Fortran::parser::FunctionReference &x) {
   SgExpression *call_expr = nullptr;
   if (designator != nullptr) {
     if (semanticProcedure == nullptr || procedureName != nullptr ||
-        IsArrayDesignator(designator)) {
+        IsArrayType(designator->get_type())) {
       std::cerr << "REX_FLANG_INVARIANT[procedure-call-semantics]: parsed "
                    "procedure component does not match the resolved Flang "
                    "call target\n";
@@ -2506,7 +2422,13 @@ void BuildExprVisitor::Build(const Fortran::parser::FunctionReference &x) {
       }
       SetExactFlangExpressionSourcePosition(array, *designatorFirst,
                                             *designatorLast);
-      call_expr = BuildArrayRefFromCallArgs(array, param_list);
+      SgType *resultType = BuildFortranSemanticExpressionType(*typedExpression);
+      call_expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(
+          array, param_list, resultType,
+          MeasureFortranExpressionStorage(*typedExpression),
+          MeasureFortranSubscriptStrides(*(*typedExpression)->v,
+                                         *procedureName->symbol,
+                                         param_list->get_expressions().size()));
     }
   } else {
     SgType *resultType =
@@ -2526,22 +2448,10 @@ void BuildExprVisitor::Build(const Fortran::parser::FunctionReference &x) {
 }
 
 void BuildExprVisitor::Post(const Fortran::parser::Expr &expr) {
-  SgFunctionCallExp *call = isSgFunctionCallExp(post_);
-  if (call != nullptr && isSgTypeUnknown(call->get_type()) != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[function-result-type]: function call "
-                 "left expression construction with an unknown type\n";
-    ROSE_ABORT();
-  }
   finishSemanticExpression(expr);
 }
 
 void BuildExprVisitor::Post(const Fortran::parser::Variable &variable) {
-  SgFunctionCallExp *call = isSgFunctionCallExp(post_);
-  if (call != nullptr && isSgTypeUnknown(call->get_type()) != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[function-result-type]: function call "
-                 "left variable construction with an unknown type\n";
-    ROSE_ABORT();
-  }
   finishSemanticVariable(variable);
 }
 
@@ -2572,15 +2482,12 @@ void BuildExprVisitor::Build(const Fortran::parser::ArrayConstructor &x) {
 // The Build functions need to be turned into a class (global variable used for
 // now)
 
-// This constructor is temporary until ROSE supports C++17
 // WARNING, requires that setSgSourceFile be called (see below) before fully
 // constructed
-SageTreeBuilder builder{SageTreeBuilder::LanguageEnum::Fortran};
-// TEMPORARY until C++17
+SageTreeBuilder builder{};
 void setSgSourceFile(SgSourceFile *sg_file) { builder.setSourceFile(sg_file); }
 SgSourceFile *getSgSourceFile() { return builder.getSourceFile(); }
 
-// TODO: change this to a reference
 Fortran::parser::AllCookedSources *cooked_{nullptr};
 BuildVisitor *current_build_visitor{nullptr};
 std::set<std::string> *fortran_directive_group_ids_{nullptr};
@@ -2764,80 +2671,10 @@ RequireExactFlangExpressionSourceImpl(const Fortran::parser::Expr &expression,
   return source;
 }
 
-bool IsFixedFormSource(const SgSourceFile *source) {
-  if (source == nullptr) {
-    return false;
-  }
-  if (source->get_inputFormat() == SgFile::e_fixed_form_output_format) {
-    return true;
-  }
-  if (source->get_inputFormat() == SgFile::e_unknown_output_format &&
-      source->get_F77_only()) {
-    return true;
-  }
-  return false;
-}
-
-bool IsFlangSyntheticPrimaryPath(const std::string &path,
-                                 const SgSourceFile *source) {
-  if (path.empty() || source == nullptr ||
-      !source->get_experimental_flang_frontend()) {
-    return false;
-  }
-
-  std::string sourcePath = source->get_sourceFileNameWithPath();
-  if (sourcePath.empty()) {
-    sourcePath = source->getFileName();
-  }
-  if (sourcePath.empty()) {
-    return false;
-  }
-
-  const std::string sourceStem =
-      std::filesystem::path(sourcePath).stem().string();
-  if (sourceStem.empty()) {
-    return false;
-  }
-
-  const std::string inputStem = std::filesystem::path(path).stem().string();
-  const std::string syntheticPrefix = sourceStem + ".rose_flang_";
-  return inputStem.rfind(syntheticPrefix, 0) == 0;
-}
-
-std::string NormalizeSourcePath(const std::string &path) {
-  // Preserve the path provided by Flang provenance. Replacing it with the
-  // current builder source file path loses include-vs-top-level ownership and
-  // can misattach subsequent statements/comments.
-  if (!path.empty()) {
-    std::string normalizedPath =
-        StringUtility::getAbsolutePathFromRelativePath(path);
-
-    SgSourceFile *source = builder.getSourceFile();
-    if (IsFlangSyntheticPrimaryPath(normalizedPath, source)) {
-      std::string sourcePath = source->get_sourceFileNameWithPath();
-      if (sourcePath.empty()) {
-        sourcePath = source->getFileName();
-      }
-      if (!sourcePath.empty()) {
-        return StringUtility::getAbsolutePathFromRelativePath(sourcePath);
-      }
-    }
-
-    return normalizedPath;
-  }
-
-  SgSourceFile *source = builder.getSourceFile();
-  if (source == nullptr) {
-    return path;
-  }
-  std::string filename = source->get_sourceFileNameWithPath();
-  if (filename.empty()) {
-    filename = source->getFileName();
-  }
-  if (!filename.empty()) {
-    return StringUtility::getAbsolutePathFromRelativePath(filename);
-  }
-  return path;
+std::string RequirePhysicalSourcePath(const Fortran::parser::SourceFile &file) {
+  const auto &path = file.path();
+  ROSE_ASSERT(!path.empty() && path.find('\0') == std::string::npos);
+  return std::filesystem::canonical(path).string();
 }
 
 bool IsAllWhitespace(const std::string &text) {
@@ -2864,13 +2701,6 @@ void TrimRight(std::string &text) {
     --size;
   }
   text.erase(size);
-}
-
-bool EndsWith(const std::string &text, const std::string &suffix) {
-  if (suffix.size() > text.size()) {
-    return false;
-  }
-  return text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 std::string StripTrailingNewlines(std::string text) {
@@ -2939,57 +2769,21 @@ std::optional<SourcePosition> BuildSourcePositionFromProvenance(
           sources.GetSourceFile(physical, &offset, /*topLevel=*/false)) {
     const Fortran::parser::SourcePosition position =
         file->GetSourcePosition(offset);
-    const std::string path = NormalizeSourcePath(file->path());
-    if (!path.empty() && position.trueLineNumber > 0 && position.column > 0) {
-      return SourcePosition{path, position.trueLineNumber, position.column};
-    }
+    ROSE_ASSERT(position.trueLineNumber > 0 && position.column > 0);
+    return SourcePosition{RequirePhysicalSourcePath(*file),
+                          position.trueLineNumber, position.column};
   }
   return std::nullopt;
 }
 
-std::optional<std::string>
-GetSourceFilePathForProvenance(const Fortran::parser::AllSources &sources,
-                               const Fortran::parser::Provenance provenance,
-                               bool topLevel) {
+std::optional<std::string> GetPhysicalSourcePathForProvenance(
+    const Fortran::parser::AllSources &sources,
+    const Fortran::parser::Provenance provenance) {
   if (const Fortran::parser::SourceFile *file =
-          sources.GetSourceFile(provenance, nullptr, topLevel)) {
-    if (!file->path().empty()) {
-      return file->path();
-    }
+          sources.GetSourceFile(provenance, nullptr, /*topLevel=*/false)) {
+    return RequirePhysicalSourcePath(*file);
   }
   return std::nullopt;
-}
-
-std::string GetIncludedPathForSource(const Fortran::parser::CharBlock &source,
-                                     const Fortran::parser::SourcePosition &pos,
-                                     bool useStart) {
-  if (cooked_ == nullptr || source.empty() ||
-      NormalizeSourcePath(pos.sourceFile->path()).empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[included-source-provenance]: included "
-                 "parser source has no cooked, source-block, or source-file "
-                 "owner\n";
-    ROSE_ABORT();
-  }
-  const std::optional<Fortran::parser::ProvenanceRange> statementRange =
-      cooked_->GetProvenanceRange(source);
-  if (!statementRange || statementRange->empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[included-source-provenance]: included "
-                 "parser source has no exact non-empty provenance range\n";
-    ROSE_ABORT();
-  }
-  const Fortran::parser::AllSources &sources = cooked_->allSources();
-  const Fortran::parser::Provenance provenance =
-      useStart ? statementRange->start() : statementRange->Last();
-  const std::optional<std::string> rawPath =
-      GetSourceFilePathForProvenance(sources, provenance, /*topLevel=*/false);
-  const std::string path =
-      rawPath ? NormalizeSourcePath(*rawPath) : std::string{};
-  if (path.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[included-source-provenance]: included "
-                 "parser source endpoint has no exact physical filename\n";
-    ROSE_ABORT();
-  }
-  return path;
 }
 
 bool IsFromIncludedFile(const Fortran::parser::CharBlock &source) {
@@ -3069,27 +2863,14 @@ std::string RequireExactPhysicalFortranName(const Fortran::parser::Name &name) {
   return physicalSpelling;
 }
 
-SourcePosition ChooseCommentAnchor(const std::optional<SourcePosition> &begin,
-                                   const std::optional<SourcePosition> &body,
-                                   const SourcePosition &end) {
-  if (begin && begin->line > 0) {
-    return *begin;
-  }
-  if (body && body->line > 0) {
-    return *body;
-  }
-  return end;
-}
-
 void NormalizeConstructBodyStart(const std::optional<SourcePosition> &begin,
                                  std::optional<SourcePosition> &body) {
   if (!begin || !body) {
     return;
   }
 
-  const std::string begin_path = NormalizeSourcePath(begin->path);
-  const std::string body_path = NormalizeSourcePath(body->path);
-  if (begin_path.empty() || body_path.empty() || begin_path == body_path) {
+  ROSE_ASSERT(!begin->path.empty() && !body->path.empty());
+  if (begin->path == body->path) {
     return;
   }
 
@@ -3157,27 +2938,11 @@ size_t FindFortranDirectivePayloadStart(const std::string &text) {
   return std::string::npos;
 }
 
-bool GetSourceRangeForCharBlock(const Fortran::parser::CharBlock &source,
-                                SourcePosition &start, SourcePosition &end) {
-  if (cooked_ == nullptr || source.empty()) {
-    return false;
-  }
-  if (auto sourceInfo{cooked_->GetSourcePositionRange(source)}) {
-    start = SourcePosition{NormalizeSourcePath(sourceInfo->first.path),
-                           sourceInfo->first.line, sourceInfo->first.column};
-    end = SourcePosition{NormalizeSourcePath(sourceInfo->second.path),
-                         sourceInfo->second.line, sourceInfo->second.column};
-    return true;
-  }
-  return false;
-}
-
 struct FortranDirectivePhysicalLine {
   int line;
   int column;
   size_t length;
   std::string raw_text;
-  std::string pragma_text;
 };
 
 std::vector<FortranDirectivePhysicalLine>
@@ -3208,20 +2973,8 @@ CollectFortranDirectivePhysicalLines(const std::string &directive,
       ROSE_ABORT();
     }
 
-    std::string trimmed = line_text;
-    TrimLeft(trimmed);
-    const size_t payload_start = FindFortranDirectivePayloadStart(trimmed);
-    std::string pragma_text = payload_start == std::string::npos
-                                  ? trimmed
-                                  : trimmed.substr(payload_start);
-    TrimRight(pragma_text);
-    if (pragma_text.empty()) {
-      std::cerr << "REX_FLANG_INVARIANT[directive-source]: physical "
-                   "directive line has no payload\n";
-      ROSE_ABORT();
-    }
     lines.push_back(FortranDirectivePhysicalLine{line, column, line_text.size(),
-                                                 line_text, pragma_text});
+                                                 line_text});
     if (!has_newline) {
       break;
     }
@@ -3233,14 +2986,7 @@ CollectFortranDirectivePhysicalLines(const std::string &directive,
 }
 
 void AppendDirectivePragmasFromParserSource(
-    const Fortran::parser::CharBlock &source,
-    const std::string &expected_family) {
-  if (!expected_family.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[directive-ownership]: an externally "
-                 "owned directive reached the generic compiler-directive "
-                 "builder\n";
-    ROSE_ABORT();
-  }
+    const Fortran::parser::CharBlock &source) {
   if (source.empty()) {
     std::cerr << "REX_FLANG_INVARIANT[directive-source]: parser directive has "
                  "no source range\n";
@@ -3254,15 +3000,17 @@ void AppendDirectivePragmasFromParserSource(
 
   const std::optional<Fortran::parser::ProvenanceRange> parser_range =
       cooked_->GetProvenanceRange(source);
-  const auto parser_positions = cooked_->GetSourcePositionRange(source);
-  if (!parser_range || !parser_positions || parser_range->empty() ||
-      parser_positions->first.column <= 0) {
+  if (!parser_range || parser_range->empty()) {
     std::cerr << "REX_FLANG_INVARIANT[directive-source]: Flang did not provide "
                  "exact provenance for parser directive\n";
     ROSE_ABORT();
   }
 
-  const ptrdiff_t prefix_width = parser_positions->first.column - 1;
+  const Fortran::parser::AllSources &all_sources = cooked_->allSources();
+  const auto parser_position =
+      BuildSourcePositionFromProvenance(all_sources, parser_range->start());
+  ROSE_ASSERT(parser_position.has_value());
+  const ptrdiff_t prefix_width = parser_position->column - 1;
   const Fortran::parser::Provenance source_start =
       parser_range->start() + (-prefix_width);
   const Fortran::parser::Provenance source_end = parser_range->NextAfter();
@@ -3272,17 +3020,16 @@ void AppendDirectivePragmasFromParserSource(
     ROSE_ABORT();
   }
 
-  const Fortran::parser::AllSources &all_sources = cooked_->allSources();
   const Fortran::parser::ProvenanceRange source_range{
       source_start, source_end - source_start};
-  const auto raw_start = all_sources.GetSourcePosition(source_start);
-  const auto raw_end = all_sources.GetSourcePosition(source_range.Last());
+  const auto raw_start =
+      BuildSourcePositionFromProvenance(all_sources, source_start);
+  const auto raw_end =
+      BuildSourcePositionFromProvenance(all_sources, source_range.Last());
   const char *raw_source = all_sources.GetSource(source_range);
   if (!all_sources.IsValid(source_range) || !raw_start || !raw_end ||
-      raw_source == nullptr ||
-      raw_start->line != parser_positions->first.line ||
-      raw_start->column != 1 ||
-      raw_start->path != parser_positions->first.path ||
+      raw_source == nullptr || raw_start->line != parser_position->line ||
+      raw_start->column != 1 || raw_start->path != parser_position->path ||
       raw_end->path != raw_start->path) {
     std::cerr << "REX_FLANG_INVARIANT[directive-source]: parser directive "
                  "provenance does not map to one exact physical source span\n";
@@ -3298,19 +3045,19 @@ void AppendDirectivePragmasFromParserSource(
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
 
-  SourcePosition startPos{NormalizeSourcePath(raw_start->path), raw_start->line,
-                          raw_start->column};
   const std::vector<FortranDirectivePhysicalLine> lines =
-      CollectFortranDirectivePhysicalLines(directive, startPos);
+      CollectFortranDirectivePhysicalLines(directive, *raw_start);
 
   for (size_t line_index = 0; line_index < lines.size(); ++line_index) {
     const FortranDirectivePhysicalLine &line_info = lines[line_index];
-    SgPragmaDeclaration *pragma =
-        SageBuilder::buildPragmaDeclaration_nfi(line_info.pragma_text, scope);
+    SgPragmaDeclaration *pragma = SageBuilder::buildPragmaDeclaration_nfi(
+        line_info.raw_text, scope,
+        SgPragmaDeclaration::e_fortran_directive_compiler);
     ASSERT_not_null(pragma);
-    SourcePosition line_start_pos{startPos.path, line_info.line,
-                                  line_info.column};
-    SourcePosition line_end_pos{startPos.path, line_info.line,
+    SourcePosition line_start_pos{raw_start->path, line_info.line,
+                                  line_info.column,
+                                  RequireFlangCookedSourceOrder(source)};
+    SourcePosition line_end_pos{raw_start->path, line_info.line,
                                 line_info.column +
                                     static_cast<int>(line_info.length)};
     builder.setSourcePosition(pragma, line_start_pos, line_end_pos);
@@ -3341,10 +3088,43 @@ inline constexpr bool IsOpenAccDirectiveSourceNode =
     std::is_same_v<T, Fortran::parser::OpenACCStandaloneDeclarativeConstruct> ||
     std::is_same_v<T, Fortran::parser::OpenACCRoutineConstruct>;
 
-class FlangDirectiveSourceCollector {
+class FlangParserSourceCollector {
 public:
-  FlangDirectiveSourceCollector(bool enableOpenMp, bool enableOpenAcc)
+  FlangParserSourceCollector(bool enableOpenMp, bool enableOpenAcc)
       : enable_openmp_{enableOpenMp}, enable_openacc_{enableOpenAcc} {}
+
+  bool Pre(Fortran::parser::Expr &expression) {
+    auto *defined =
+        std::get_if<Fortran::parser::Expr::DefinedUnary>(&expression.u);
+    if (defined == nullptr)
+      return true;
+    const Fortran::parser::CharBlock &operatorSource =
+        std::get<0>(defined->t).v.source;
+    if (expression.source.empty() || operatorSource.empty() ||
+        !expression.source.Contains(operatorSource)) {
+      std::cerr << "REX_FLANG_INVARIANT[expression-source]: defined unary "
+                   "operator has no exact enclosing parser range\n";
+      ROSE_ABORT();
+    }
+    // LLVM 22.1.8's level1Expr sources DefinedUnary but not its primary.
+    // Attach that grammar-owned suffix before REX construction. Remove this
+    // adapter when Flang sources the primary in expr-parsers.cpp (R1002).
+    const char *begin = operatorSource.end();
+    while (begin != expression.source.end() &&
+           std::isspace(static_cast<unsigned char>(*begin))) {
+      ++begin;
+    }
+    const Fortran::parser::CharBlock source(begin, expression.source.end());
+    Fortran::parser::Expr &operand = std::get<1>(defined->t).value();
+    if (source.empty() ||
+        (!operand.source.empty() && operand.source != source)) {
+      std::cerr << "REX_FLANG_INVARIANT[expression-source]: defined unary "
+                   "primary has an empty or conflicting parser range\n";
+      ROSE_ABORT();
+    }
+    operand.source = source;
+    return true;
+  }
 
   template <typename T> bool Pre(T &node) {
     using Node = std::remove_cv_t<std::remove_reference_t<T>>;
@@ -3696,7 +3476,7 @@ SourcePositionPair BuildExactFlangMacroInvocationRange(
                  "invocation has inconsistent physical source coordinates\n";
     ROSE_ABORT();
   }
-  const std::string path = NormalizeSourcePath(physicalFile.path());
+  const std::string path = RequirePhysicalSourcePath(physicalFile);
   return SourcePositionPair{
       SourcePosition{path, begin.trueLineNumber, begin.column},
       SourcePosition{path, final.trueLineNumber, final.column + 1}};
@@ -3724,12 +3504,7 @@ FindTypedFlangDirectiveGroup(const Fortran::parser::CharBlock &source) {
   }
 
   const std::size_t physical = mapping->provenance.offset();
-  const std::string physicalPath = NormalizeSourcePath(mapping->file->path());
-  if (physicalPath.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[directive-ownership]: directive cooked "
-                 "source has no exact physical filename\n";
-    ROSE_ABORT();
-  }
+  const std::string physicalPath = RequirePhysicalSourcePath(*mapping->file);
   const FlangDirectiveGroup *matched = nullptr;
   for (const FlangDirectiveGroup &group : flang_source_stream_->directives) {
     if (group.range.provenance_size == 0 || group.range.path.empty()) {
@@ -4367,7 +4142,7 @@ BuildFlangSourceRange(const Fortran::parser::SourceFile &file,
   }
   return FlangSourceRange{(fileProvenanceStart + startOffset).offset(),
                           endOffset - startOffset,
-                          NormalizeSourcePath(file.path()),
+                          RequirePhysicalSourcePath(file),
                           start.trueLineNumber,
                           start.column,
                           end.trueLineNumber,
@@ -4734,11 +4509,9 @@ AppendTypedFortranDirectiveGroup(const FlangDirectiveGroup &group,
                    "family\n";
       ROSE_ABORT();
     }
-    SgPragmaDeclaration *pragma =
-        SageBuilder::buildPragmaDeclaration_nfi(pragmaText, scope);
+    SgPragmaDeclaration *pragma = SageBuilder::buildPragmaDeclaration_nfi(
+        pragmaText, scope, ToSageFortranDirectiveFamily(group.family));
     ASSERT_not_null(pragma);
-    pragma->set_fortran_directive_family(
-        ToSageFortranDirectiveFamily(group.family));
     pragma->set_fortran_directive_group_id(groupId);
     pragma->set_fortran_directive_member_index(index);
     pragma->set_fortran_directive_member_count(group.physical_lines.size());
@@ -4750,7 +4523,8 @@ AppendTypedFortranDirectiveGroup(const FlangDirectiveGroup &group,
       pragma->set_fortran_directive_semantic_text(group.semantic_spelling);
     }
     const SourcePosition begin{line.range.path, line.range.start_line,
-                               line.range.start_column};
+                               line.range.start_column,
+                               group.source_order_start};
     const SourcePosition end{line.range.path, line.range.end_line,
                              line.range.end_column};
     builder.setSourcePosition(pragma, begin, end);
@@ -4873,7 +4647,7 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
                  "owned by neither the directive nor base cooked stream\n";
     ROSE_ABORT();
   };
-  FlangDirectiveSourceCollector collector{enableOpenMp, enableOpenAcc};
+  FlangParserSourceCollector collector{enableOpenMp, enableOpenAcc};
   Fortran::parser::Walk(program, collector);
   std::vector<FlangDirectiveSourceBlock> sourceBlocks = collector.blocks();
   AddRexOpenMPDirectiveSourceBlocks(sourceBlocks, cookedSource, enableOpenMp);
@@ -5064,11 +4838,29 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
   }
 
   std::vector<bool> cookedOwned(content.size(), false);
+  std::vector<bool> tokenOwned(content.size(), false);
   const Fortran::parser::CharBlock allCooked = cookedSource.AsCharBlock();
   for (std::size_t index = 0; index < allCooked.size(); ++index) {
     const std::optional<FlangPhysicalMapping> mapping = GetFlangPhysicalMapping(
         cooked, Fortran::parser::CharBlock{allCooked.begin() + index, 1});
-    if (!mapping || mapping->file != primaryFile) {
+    if (!mapping) {
+      continue;
+    }
+    if (mapping->file != primaryFile) {
+      auto inclusion = sources.GetInclusionInfo(
+          Fortran::parser::ProvenanceRange{mapping->provenance, 1});
+      while (inclusion && !inclusion->empty()) {
+        if (firstFileRange->Contains(*inclusion)) {
+          const std::size_t start =
+              inclusion->start() - firstFileRange->start();
+          if (!tokenOwned[start]) {
+            std::fill(tokenOwned.begin() + start,
+                      tokenOwned.begin() + start + inclusion->size(), true);
+          }
+          break;
+        }
+        inclusion = sources.GetInclusionInfo(inclusion);
+      }
       continue;
     }
     if (mapping->offset >= content.size()) {
@@ -5116,7 +4908,6 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
               cookedOwned.begin() + macroEnd, true);
   }
 
-  std::vector<bool> tokenOwned(content.size(), false);
   auto lineHasCookedSource = [&](const PhysicalLine &line) {
     for (std::size_t offset = line.start; offset < line.content_end; ++offset) {
       if (cookedOwned[offset] &&
@@ -5139,8 +4930,24 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
     std::string trimmed(content.data() + line.start,
                         line.content_end - line.start);
     TrimLeft(trimmed);
+    const auto payload = FindFortranDirectivePayloadStart(trimmed);
     if (trimmed.empty() || trimmed.front() == '$' ||
-        FindFortranDirectivePayloadStart(trimmed) == std::string::npos) {
+        payload == std::string::npos) {
+      continue;
+    }
+    bool languageDirective = false;
+    for (auto family : {FlangDirectiveGroup::Family::openmp,
+                        FlangDirectiveGroup::Family::openmp_extension,
+                        FlangDirectiveGroup::Family::openacc,
+                        FlangDirectiveGroup::Family::cuda_fortran}) {
+      languageDirective |= StartsWithKeywordAt(
+          trimmed, payload, FlangDirectiveFamilySpelling(family).c_str());
+    }
+    const bool conditionalCompilation =
+        trimmed.size() >= 2 && trimmed[1] == '$' &&
+        (trimmed.size() == 2 ||
+         std::isspace(static_cast<unsigned char>(trimmed[2])));
+    if (!languageDirective && !conditionalCompilation) {
       continue;
     }
     const bool hasTypedDirectiveOwner = std::any_of(
@@ -5169,7 +4976,7 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
       ++firstNonSpace;
     }
     if (firstNonSpace == line.content_end || content[firstNonSpace] != '#' ||
-        directiveOwned[firstNonSpace]) {
+        directiveOwned[firstNonSpace] || tokenOwned[firstNonSpace]) {
       continue;
     }
 
@@ -5348,6 +5155,17 @@ void SetFortranEndLabelReference(SgStatement *stmt, int label_value,
   ROSE_ASSERT(stmt != nullptr);
   ROSE_ASSERT(label_value > 0 && label_value <= 99999);
   ROSE_ASSERT(label_scope != nullptr);
+  if (!stmt->has_end_numeric_label()) {
+    std::cerr << "REX_FLANG_INVARIANT[end-label-owner]: statement=" << stmt
+              << " type=" << stmt->class_name()
+              << " cannot own end label=" << label_value << '\n';
+    ROSE_ABORT();
+  }
+  if (stmt->get_end_numeric_label() != nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[end-label-owner]: statement=" << stmt
+              << " already owns an end label\n";
+    ROSE_ABORT();
+  }
 
   SgName label_name(StringUtility::numberToString(label_value));
   SgLabelSymbol *symbol = label_scope->lookup_label_symbol(label_name);
@@ -5364,7 +5182,8 @@ void SetFortranEndLabelReference(SgStatement *stmt, int label_value,
   if (symbol->get_symbol_basis() != target || target == nullptr ||
       targetRef == nullptr || targetRef->get_symbol() != symbol ||
       symbol->get_parent() != label_scope->get_symbol_table() ||
-      label_scope->get_symbol_table()->find_label(label_name) != symbol) {
+      label_scope->get_symbol_table()->find_label(label_name) != symbol ||
+      symbol->get_numeric_label_value() != label_value) {
     std::cerr << "REX_FLANG_INVARIANT[end-label-resolution]: statement end "
                  "label "
               << label_value
@@ -5373,15 +5192,6 @@ void SetFortranEndLabelReference(SgStatement *stmt, int label_value,
   }
   symbol->set_label_type(SgLabelSymbol::e_end_label_type);
 
-  const int numeric_value = symbol->get_numeric_label_value();
-  if (numeric_value <= 0) {
-    symbol->set_numeric_label_value(label_value);
-  } else if (numeric_value != label_value) {
-    std::cerr << "Error. Fortran label value mismatch for " << label_name
-              << " (" << numeric_value << " vs " << label_value << ")\n";
-    ROSE_ABORT();
-  }
-
   SgLabelRefExp *ref_exp = SageBuilder::buildLabelRefExp(symbol);
   ROSE_ASSERT(ref_exp != nullptr);
   ref_exp->set_parent(stmt);
@@ -5389,10 +5199,22 @@ void SetFortranEndLabelReference(SgStatement *stmt, int label_value,
 }
 
 void ApplyFortranBoundaryLabels(
-    SgStatement *stmt, SgScopeStatement *label_scope,
+    SgStatement *stmt, SgScopeStatement *scope,
     const std::optional<Fortran::parser::Label> &start_label,
     const std::optional<Fortran::parser::Label> &end_label) {
   ASSERT_not_null(stmt);
+  if (!start_label && !end_label)
+    return;
+
+  ASSERT_not_null(scope);
+  SgScopeStatement *label_scope = nullptr;
+  if (auto *function =
+          SageInterface::getEnclosingFunctionDefinition(scope, true)) {
+    label_scope = function;
+  } else if (auto *module =
+                 SageInterface::getEnclosingModuleStatement(scope, true)) {
+    label_scope = module->get_definition();
+  }
   if (label_scope == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[label-scope]: program-unit boundary "
                  "has no exact semantic label scope\n";
@@ -5566,21 +5388,18 @@ BuildRequiredStatementSourcePosition(const Fortran::parser::CharBlock &source,
     ROSE_ABORT();
   }
 
+  const Fortran::parser::AllSources &sources = cooked_->allSources();
   const std::optional<Fortran::parser::ProvenanceRange> provenance =
       cooked_->GetProvenanceRange(source);
-  if (!provenance || provenance->empty()) {
-    const SourcePositionPair macroRange =
-        BuildExactFlangMacroInvocationRange(source, *cooked_);
-    return from == Order::begin ? std::get<0>(macroRange)
-                                : std::get<1>(macroRange);
-  }
-  const Fortran::parser::AllSources &sources = cooked_->allSources();
-  const std::optional<SourcePosition> physicalBegin =
-      BuildSourcePositionFromProvenance(sources, provenance->start());
-  std::optional<SourcePosition> physicalEnd =
-      BuildSourcePositionFromProvenance(sources, provenance->Last());
-  if (physicalEnd) {
-    ++physicalEnd->column;
+  std::optional<SourcePosition> physicalBegin, physicalEnd;
+  if (provenance && !provenance->empty()) {
+    physicalBegin =
+        BuildSourcePositionFromProvenance(sources, provenance->start());
+    physicalEnd =
+        BuildSourcePositionFromProvenance(sources, provenance->Last());
+    if (physicalEnd) {
+      ++physicalEnd->column;
+    }
   }
   const bool physicalRangeOrdered =
       physicalBegin && physicalEnd &&
@@ -5588,19 +5407,23 @@ BuildRequiredStatementSourcePosition(const Fortran::parser::CharBlock &source,
       (physicalEnd->line > physicalBegin->line ||
        (physicalEnd->line == physicalBegin->line &&
         physicalEnd->column > physicalBegin->column));
-  if (!physicalRangeOrdered) {
+  SourcePosition position;
+  if (physicalRangeOrdered) {
+    position = from == Order::begin ? *physicalBegin : *physicalEnd;
+  } else {
     const SourcePositionPair macroRange =
         BuildExactFlangMacroInvocationRange(source, *cooked_);
-    return from == Order::begin ? std::get<0>(macroRange)
-                                : std::get<1>(macroRange);
+    position = from == Order::begin ? std::get<0>(macroRange)
+                                    : std::get<1>(macroRange);
   }
-  const SourcePosition position =
-      from == Order::begin ? *physicalBegin : *physicalEnd;
   if (position.path.empty() || position.line < 1 || position.column < 1) {
     std::cerr << "REX_FLANG_INVARIANT[statement-source-partial]: parser "
                  "statement has an incomplete cooked source endpoint\n";
     ROSE_ABORT();
   }
+  const Fortran::parser::CharBlock endpoint{
+      from == Order::begin ? source.begin() : source.end() - 1, 1};
+  position.cooked_source_order = RequireFlangCookedSourceOrder(endpoint);
   return position;
 }
 
@@ -5653,15 +5476,15 @@ void RequireExactFlangExpressionSourcePosition(
            !position->isSourcePositionUnavailableInFrontend() &&
            position->get_line() > 0 && position->get_col() > 0;
   };
-  const bool matches =
-      isOwnedPhysicalPosition(start) && isOwnedPhysicalPosition(end) &&
-      isOwnedPhysicalPosition(operatorPosition) &&
-      NormalizeSourcePath(start->get_filenameString()) == expectedBegin.path &&
-      NormalizeSourcePath(end->get_filenameString()) == expectedEnd.path &&
-      start->get_line() == expectedBegin.line &&
-      start->get_col() == expectedBegin.column &&
-      end->get_line() == expectedEnd.line &&
-      end->get_col() == expectedEnd.column - 1;
+  const bool matches = isOwnedPhysicalPosition(start) &&
+                       isOwnedPhysicalPosition(end) &&
+                       isOwnedPhysicalPosition(operatorPosition) &&
+                       start->get_physical_filename() == expectedBegin.path &&
+                       end->get_physical_filename() == expectedEnd.path &&
+                       start->get_line() == expectedBegin.line &&
+                       start->get_col() == expectedBegin.column &&
+                       end->get_line() == expectedEnd.line &&
+                       end->get_col() == expectedEnd.column - 1;
   if (!matches) {
     std::cerr << "REX_FLANG_INVARIANT[expression-source-owner]: " << producer
               << " did not publish its exact owned parser source range on "
@@ -5745,6 +5568,20 @@ BuildSourcePosition(const std::optional<Fortran::parser::Statement<T>> &opt,
 }
 
 template <typename T>
+HeaderComments
+CaptureHeaderComments(const Fortran::parser::Statement<T> &stmt) {
+  const SourcePosition begin = BuildSourcePosition(stmt, Order::begin);
+  const SourcePosition end = BuildSourcePosition(stmt, Order::end);
+  if (IsFromIncludedFile(stmt.source)) {
+    return {};
+  }
+  HeaderComments comments;
+  builder.captureHeaderComments(
+      comments, PosInfo{begin.line, begin.column, end.line, end.column});
+  return comments;
+}
+
+template <typename T>
 std::optional<SourcePosition>
 TryBuildStatementPosition(const Fortran::parser::Statement<T> &stmt) {
   if (IsFromIncludedFile(stmt.source)) {
@@ -5825,100 +5662,6 @@ bool namesMatch(const SgName &left, const SgName &right, bool caseInsensitive) {
          StringUtility::convertToLowerCase(right.str());
 }
 
-bool isPubliclyAccessibleSymbol(SgSymbol *symbol);
-std::optional<SgAccessModifier::access_modifier_enum>
-getFortranModuleRecordedAccess(SgSymbol *symbol);
-
-using SymbolList = std::vector<SgSymbol *>;
-using PublicSymbolMap = std::unordered_map<std::string, SymbolList>;
-
-std::string symbolKey(const SgName &name, bool caseInsensitive) {
-  if (!caseInsensitive) {
-    return name.str();
-  }
-  return StringUtility::convertToLowerCase(name.str());
-}
-
-SgClassDefinition *
-getFortranModuleDefinitionFromScope(SgScopeStatement *scope) {
-  if (scope == nullptr) {
-    return nullptr;
-  }
-
-  if (SgClassDefinition *classDefinition = isSgClassDefinition(scope)) {
-    if (isSgModuleStatement(classDefinition->get_declaration()) != nullptr) {
-      return classDefinition;
-    }
-  }
-
-  if (SgModuleStatement *moduleStmt =
-          SageInterface::getEnclosingModuleStatement(scope, true)) {
-    return moduleStmt->get_definition();
-  }
-
-  return nullptr;
-}
-
-std::optional<SgAccessModifier::access_modifier_enum>
-getFortranModuleRecordedAccess(SgSymbol *symbol) {
-  if (symbol == nullptr) {
-    return std::nullopt;
-  }
-
-  SgClassDefinition *moduleDefinition =
-      getFortranModuleDefinitionFromScope(symbol->get_scope());
-  if (moduleDefinition == nullptr) {
-    return std::nullopt;
-  }
-
-  const bool caseInsensitive = moduleDefinition->isCaseInsensitive();
-  const std::string target = symbolKey(symbol->get_name(), caseInsensitive);
-  std::optional<SgAccessModifier::access_modifier_enum> defaultAccess;
-  std::optional<SgAccessModifier::access_modifier_enum> explicitAccess;
-  for (SgDeclarationStatement *member : moduleDefinition->get_members()) {
-    SgAttributeSpecificationStatement *accessStatement =
-        isSgAttributeSpecificationStatement(member);
-    if (accessStatement == nullptr) {
-      continue;
-    }
-
-    SgAccessModifier::access_modifier_enum access;
-    switch (accessStatement->get_attribute_kind()) {
-    case SgAttributeSpecificationStatement::e_accessStatement_private:
-      access = SgAccessModifier::e_private;
-      break;
-    case SgAttributeSpecificationStatement::e_accessStatement_public:
-      access = SgAccessModifier::e_public;
-      break;
-    default:
-      continue;
-    }
-
-    const SgStringList &names = accessStatement->get_name_list();
-    if (names.empty()) {
-      if (defaultAccess && *defaultAccess != access) {
-        std::cerr << "REX_FLANG_INVARIANT[module-access]: module has "
-                     "conflicting typed default ACCESS statements\n";
-        ROSE_ABORT();
-      }
-      defaultAccess = access;
-      continue;
-    }
-    for (const std::string &name : names) {
-      if (symbolKey(SgName(name), caseInsensitive) != target) {
-        continue;
-      }
-      if (explicitAccess && *explicitAccess != access) {
-        std::cerr << "REX_FLANG_INVARIANT[module-access]: symbol '"
-                  << symbol->get_name()
-                  << "' has conflicting typed ACCESS statements\n";
-        ROSE_ABORT();
-      }
-      explicitAccess = access;
-    }
-  }
-  return explicitAccess ? explicitAccess : defaultAccess;
-}
 std::string formatSourcePosition(const SourcePosition &pos) {
   if (pos.path.empty() && pos.line <= 0 && pos.column <= 0) {
     return {};
@@ -5934,86 +5677,6 @@ std::string formatSourcePosition(const SourcePosition &pos) {
     }
   }
   return out.str();
-}
-
-std::string formatLocatedNode(const SgLocatedNode *node) {
-  if (node == nullptr) {
-    return {};
-  }
-  const Sg_File_Info *info = node->get_startOfConstruct();
-  if (info == nullptr) {
-    return {};
-  }
-  std::ostringstream out;
-  const std::string &file = info->get_filenameString();
-  if (!file.empty()) {
-    out << file;
-  }
-  if (info->get_line() > 0) {
-    out << ":" << info->get_line();
-    if (info->get_col() > 0) {
-      out << ":" << info->get_col();
-    }
-  }
-  return out.str();
-}
-
-PublicSymbolMap collectPublicSymbols(SgClassDefinition *classDefinition,
-                                     bool caseInsensitive) {
-  PublicSymbolMap publicSymbols;
-  SgSymbol *symbol = classDefinition->first_any_symbol();
-  while (symbol != nullptr) {
-    if (isPubliclyAccessibleSymbol(symbol)) {
-      publicSymbols[symbolKey(symbol->get_name(), caseInsensitive)].push_back(
-          symbol);
-    }
-    symbol = classDefinition->next_any_symbol();
-  }
-  return publicSymbols;
-}
-
-bool isPubliclyAccessibleSymbol(SgSymbol *symbol) {
-  SgNode *symbolBasis = symbol->get_symbol_basis();
-  if (auto *declaration = isSgDeclarationStatement(symbolBasis)) {
-    auto &access = declaration->get_declarationModifier().get_accessModifier();
-    if (access.isPublic()) {
-      return true;
-    }
-    if (access.isPrivate()) {
-      return false;
-    }
-    if (std::optional<SgAccessModifier::access_modifier_enum> moduleAccess =
-            getFortranModuleRecordedAccess(symbol)) {
-      return *moduleAccess == SgAccessModifier::e_public;
-    }
-    return access.isDefault() || access.isUndefined();
-  }
-
-  if (auto *initializedName = isSgInitializedName(symbolBasis)) {
-    auto *parent = initializedName->get_parent();
-    if (auto *declaration = isSgDeclarationStatement(parent)) {
-      auto &access =
-          declaration->get_declarationModifier().get_accessModifier();
-      if (access.isPublic()) {
-        return true;
-      }
-      if (access.isPrivate()) {
-        return false;
-      }
-      if (std::optional<SgAccessModifier::access_modifier_enum> moduleAccess =
-              getFortranModuleRecordedAccess(symbol)) {
-        return *moduleAccess == SgAccessModifier::e_public;
-      }
-      if (access.isDefault() || access.isUndefined()) {
-        return true;
-      }
-      if (initializedName->get_protected_declaration()) {
-        return false;
-      }
-    }
-  }
-
-  return false;
 }
 
 std::string definedOperatorName(const parser::DefinedOpName &opName) {
@@ -6107,45 +5770,21 @@ SgModuleStatement *lookupModuleStatement(const std::string &moduleName) {
   return isSgModuleStatement(definingDecl);
 }
 
-SgClassSymbol *lookupDerivedTypeSymbol(const SgName &derivedTypeName,
-                                       SgScopeStatement *currentScope) {
-  auto resolveClassSymbol = [](SgSymbol *symbol) -> SgClassSymbol * {
-    SgSymbol *resolved = symbol;
-    while (auto *alias = isSgAliasSymbol(resolved)) {
-      SgSymbol *next = alias->get_alias();
-      if (next == nullptr || next == resolved) {
-        break;
-      }
-      resolved = next;
-    }
-    return isSgClassSymbol(resolved);
-  };
-
-  SgClassSymbol *derivedTypeSymbol{nullptr};
-  SgScopeStatement *scope{currentScope};
-  while (derivedTypeSymbol == nullptr && scope != nullptr) {
-    SgSymbolTable *symbols = scope->get_symbol_table();
-    ASSERT_not_null(symbols);
-    SgSymbol *directSymbol =
-        symbols->find_any(derivedTypeName, nullptr, nullptr);
-    derivedTypeSymbol = resolveClassSymbol(directSymbol);
-    if (derivedTypeSymbol == nullptr)
-      derivedTypeSymbol = symbols->find_class(derivedTypeName);
-    scope = isSgGlobal(scope) ? nullptr : scope->get_scope();
-  }
-
-  return derivedTypeSymbol;
-}
-
 SgType *BuildFortranSemanticExpressionType(const parser::TypedExpr &typedExpr) {
   if (!typedExpr || !typedExpr->v) {
     std::cerr << "REX_FLANG_INVARIANT[expression-type]: Flang expression has "
                  "no semantic type metadata\n";
     ROSE_ABORT();
   }
+  return BuildFortranSemanticExpressionType(*typedExpr->v);
+}
 
+SgType *BuildFortranSemanticExpressionType(
+    const evaluate::Expr<evaluate::SomeType> &expression) {
+  if (evaluate::UnwrapExpr<evaluate::BOZLiteralConstant>(expression) != nullptr)
+    return SgTypeFortranBOZ::createType();
   const std::optional<Fortran::evaluate::DynamicType> dynamicType =
-      typedExpr->v->GetType();
+      expression.GetType();
   if (!dynamicType) {
     std::cerr << "REX_FLANG_INVARIANT[expression-type]: Flang semantic "
                  "expression has no result type\n";
@@ -6177,10 +5816,8 @@ SgType *BuildFortranSemanticExpressionType(const parser::TypedExpr &typedExpr) {
     break;
   case Fortran::common::TypeCategory::Character: {
     const auto *characterExpression = Fortran::evaluate::UnwrapExpr<
-        Fortran::evaluate::Expr<Fortran::evaluate::SomeCharacter>>(
-        *typedExpr->v);
-    const std::optional<
-        Fortran::evaluate::Expr<Fortran::evaluate::SubscriptInteger>>
+        Fortran::evaluate::Expr<Fortran::evaluate::SomeCharacter>>(expression);
+    std::optional<Fortran::evaluate::Expr<Fortran::evaluate::SubscriptInteger>>
         exactLength =
             characterExpression != nullptr ? characterExpression->LEN()
                                            : std::nullopt;
@@ -6195,8 +5832,12 @@ SgType *BuildFortranSemanticExpressionType(const parser::TypedExpr &typedExpr) {
       }
       hasDynamicResultLength = true;
     }
+    if (exactLength) {
+      *exactLength = evaluate::Fold(CurrentBuildVisitor().foldingContext(),
+                                    std::move(*exactLength));
+    }
     const std::optional<std::int64_t> length =
-        exactLength ? Fortran::evaluate::ToInt64(*exactLength) : std::nullopt;
+        exactLength ? evaluate::ToInt64(*exactLength) : std::nullopt;
     SgExpression *lengthExpression = nullptr;
     if (length) {
       if (*length < 0) {
@@ -6250,9 +5891,13 @@ SgType *BuildFortranSemanticExpressionType(const parser::TypedExpr &typedExpr) {
     break;
   }
   }
-  ASSERT_not_null(resultType);
+  if (SageInterface::containsUnknownType(resultType)) {
+    std::cerr << "REX_FLANG_INVARIANT[expression-type]: Flang semantic "
+                 "expression produced an unresolved result type\n";
+    ROSE_ABORT();
+  }
 
-  const int rank = typedExpr->v->Rank();
+  const int rank = expression.Rank();
   if (rank < 0) {
     std::cerr << "REX_FLANG_INVARIANT[expression-rank]: Flang expression has "
                  "an indeterminate rank\n";
@@ -6373,6 +6018,25 @@ void BuildVisitor::RegisterSemanticSymbol(
     const Fortran::semantics::Symbol *semantic, SgSymbol *sage) {
   ASSERT_not_null(semantic);
   ASSERT_not_null(sage);
+  const auto &ultimate = semantic->GetUltimate();
+  if (auto *variable = isSgVariableSymbol(sage)) {
+    if (ultimate.detailsIf<Fortran::semantics::ObjectEntityDetails>() !=
+            nullptr &&
+        !ultimate.attrs().test(Fortran::semantics::Attr::POINTER) &&
+        !ultimate.attrs().test(Fortran::semantics::Attr::ALLOCATABLE)) {
+      const auto characteristics =
+          Fortran::evaluate::characteristics::TypeAndShape::Characterize(
+              ultimate, foldingContext());
+      if (characteristics) {
+        const auto size = Fortran::evaluate::ToInt64(
+            characteristics->MeasureSizeInBytes(foldingContext()));
+        if (size) {
+          ROSE_ASSERT(*size >= 0);
+          variable->get_declaration()->set_storage_size_bytes(*size);
+        }
+      }
+    }
+  }
   SgScopeStatement *sageScope = sage->get_scope();
   if (sageScope == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[semantic-symbol-publication]: Flang "
@@ -6993,16 +6657,14 @@ void BuildVisitor::PublishPendingSemanticGenericInterfaceSpecifics(
           sourceEnd != nullptr && sourceBegin->get_line() > 0 &&
           sourceBegin->get_col() > 0 && sourceEnd->get_line() > 0 &&
           sourceEnd->get_col() > 0 &&
-          NormalizeSourcePath(sourceBegin->get_physical_filename()) ==
-              NormalizeSourcePath(sourceEnd->get_physical_filename())) {
+          sourceBegin->get_physical_filename() ==
+              sourceEnd->get_physical_filename()) {
         published = PublishGeneratedFortranProcedureSymbol(
             pending->local_name, procedureType, visibilityScope,
-            SourcePosition{
-                NormalizeSourcePath(sourceBegin->get_physical_filename()),
-                sourceBegin->get_line(), sourceBegin->get_col()},
-            SourcePosition{
-                NormalizeSourcePath(sourceEnd->get_physical_filename()),
-                sourceEnd->get_line(), sourceEnd->get_col()});
+            SourcePosition{sourceBegin->get_physical_filename(),
+                           sourceBegin->get_line(), sourceBegin->get_col()},
+            SourcePosition{sourceEnd->get_physical_filename(),
+                           sourceEnd->get_line(), sourceEnd->get_col()});
       }
     }
     if (published == nullptr || published->get_declaration() == nullptr ||
@@ -7394,66 +7056,6 @@ void BuildVisitor::ConsumeSemanticDerivedTypeForward(
               << " was consumed without one exact forward transaction\n";
     ROSE_ABORT();
   }
-}
-
-void BuildVisitor::RegisterStatementFunctionTypePlaceholder(
-    const Fortran::semantics::Symbol *semantic, SgVariableSymbol *sage) {
-  ASSERT_not_null(semantic);
-  ASSERT_not_null(sage);
-  if (!semantic->GetUltimate().test(
-          Fortran::semantics::Symbol::Flag::StmtFunction)) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-function-placeholder-kind]: "
-                 "Flang symbol '"
-              << semantic->name().ToString()
-              << "' is not a statement function\n";
-    ROSE_ABORT();
-  }
-  SgVariableSymbol *&published =
-      statement_function_type_placeholders_[semantic];
-  if (published != nullptr && published != sage) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-function-placeholder]: "
-                 "Flang statement function '"
-              << semantic->name().ToString()
-              << "' has multiple Sage type placeholders\n";
-    ROSE_ABORT();
-  }
-  published = sage;
-}
-
-SgVariableSymbol *BuildVisitor::LookupStatementFunctionTypePlaceholder(
-    const Fortran::semantics::Symbol *semantic) const {
-  if (semantic == nullptr) {
-    return nullptr;
-  }
-  const auto found = statement_function_type_placeholders_.find(semantic);
-  return found != statement_function_type_placeholders_.end() ? found->second
-                                                              : nullptr;
-}
-
-SgVariableSymbol *BuildVisitor::ConsumeStatementFunctionTypePlaceholder(
-    const Fortran::semantics::Symbol *semantic,
-    SgScopeStatement *expectedScope) {
-  ASSERT_not_null(semantic);
-  ASSERT_not_null(expectedScope);
-  const auto found = statement_function_type_placeholders_.find(semantic);
-  if (found == statement_function_type_placeholders_.end()) {
-    return nullptr;
-  }
-  SgVariableSymbol *placeholder = found->second;
-  SgInitializedName *declaration =
-      placeholder != nullptr ? placeholder->get_declaration() : nullptr;
-  if (placeholder == nullptr || declaration == nullptr ||
-      declaration->get_type() == nullptr ||
-      placeholder->get_scope() != expectedScope ||
-      declaration->get_scope() != expectedScope ||
-      expectedScope->find_symbol_from_declaration(declaration) != placeholder) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-function-placeholder]: exact "
-                 "type placeholder for Flang statement function '"
-              << semantic->name().ToString() << "' is malformed\n";
-    ROSE_ABORT();
-  }
-  statement_function_type_placeholders_.erase(found);
-  return placeholder;
 }
 
 SgSymbol *BuildVisitor::LookupSemanticSymbol(
@@ -7868,6 +7470,34 @@ SgClassSymbol *BuildVisitor::LookupSemanticClassSymbol(
   return resolved;
 }
 
+SgClassSymbol *BuildVisitor::LookupCanonicalSemanticClassSymbol(
+    const Fortran::semantics::Symbol *semantic) const {
+  ASSERT_not_null(semantic);
+  const auto &ultimate = semantic->GetUltimate();
+  ASSERT_require(ultimate.detailsIf<Fortran::semantics::DerivedTypeDetails>() !=
+                 nullptr);
+  const auto found = semantic_symbols_.find(&ultimate);
+  if (found == semantic_symbols_.end())
+    return nullptr;
+
+  SgClassSymbol *canonical = nullptr;
+  for (const SemanticSymbolBinding &binding : found->second) {
+    SgClassSymbol *candidate = ResolveFortranClassSymbol(
+        binding.symbol, SgName(ultimate.name().ToString()));
+    ASSERT_not_null(candidate);
+    ASSERT_not_null(candidate->get_declaration());
+    ASSERT_not_null(candidate->get_declaration()->get_type());
+    if (canonical != nullptr && canonical->get_declaration()->get_type() !=
+                                    candidate->get_declaration()->get_type()) {
+      std::cerr << "REX_FLANG_INVARIANT[semantic-derived-type-identity]: "
+                   "one exact Flang type has multiple canonical Sage types\n";
+      ROSE_ABORT();
+    }
+    canonical = candidate;
+  }
+  return canonical;
+}
+
 SgClassSymbol *BuildVisitor::LookupSemanticClassSymbolInExactScope(
     const Fortran::semantics::Symbol *semantic,
     SgScopeStatement *exactScope) const {
@@ -8015,6 +7645,91 @@ SgFunctionSymbol *BuildVisitor::LookupCanonicalSemanticFunctionSymbol(
   return canonical;
 }
 
+void BuildVisitor::PublishImportedDerivedTypeComponents(
+    const Fortran::semantics::Symbol &semantic, SgClassSymbol *published) {
+  ASSERT_not_null(published);
+  ASSERT_not_null(published->get_declaration());
+  const Fortran::semantics::Symbol &ultimate = semantic.GetUltimate();
+  ASSERT_require(ultimate.detailsIf<Fortran::semantics::DerivedTypeDetails>() !=
+                 nullptr);
+  ASSERT_not_null(ultimate.scope());
+
+  // A module parse owns a different semantic context. Publish the importing
+  // context's component identities while bridging its completed class, before
+  // any component reference is constructed. Names select members only within
+  // the exact paired type scopes; no source spelling or expression is reparsed.
+  std::map<const Fortran::semantics::Scope *, SgClassDefinition *> pairedScopes;
+  std::function<void(const Fortran::semantics::Scope &, SgClassDeclaration *)>
+      publishScope;
+  publishScope = [&](const Fortran::semantics::Scope &semanticScope,
+                     SgClassDeclaration *declaration) {
+    ASSERT_not_null(declaration);
+    auto *definitionDeclaration =
+        isSgClassDeclaration(declaration->get_definingDeclaration());
+    ASSERT_not_null(definitionDeclaration);
+    SgClassDefinition *definition = definitionDeclaration->get_definition();
+    ASSERT_not_null(definition);
+    ASSERT_require(semanticScope.IsDerivedType());
+    const auto [entry, inserted] =
+        pairedScopes.emplace(&semanticScope, definition);
+    ASSERT_require(entry->second == definition);
+    if (!inserted)
+      return; // A recursive component retains the same exact type identity.
+
+    for (SgDeclarationStatement *member : definition->get_members()) {
+      auto *variables = isSgVariableDeclaration(member);
+      if (variables == nullptr)
+        continue;
+      for (SgInitializedName *initialized : variables->get_variables()) {
+        ASSERT_not_null(initialized);
+        ASSERT_require(initialized->get_scope() == definition);
+        const std::string name = initialized->get_name().getString();
+        const auto found = semanticScope.find(Fortran::parser::CharBlock(name));
+        if (found == semanticScope.end()) {
+          std::cerr << "REX_FLANG_INVARIANT[imported-component-publication]: "
+                       "published component '"
+                    << name
+                    << "' has no symbol in its exact Flang type scope\n";
+          ROSE_ABORT();
+        }
+        const Fortran::semantics::Symbol &component = *found->second;
+        ASSERT_require(&component.owner() == &semanticScope);
+        auto *symbol = isSgVariableSymbol(
+            definition->find_symbol_from_declaration(initialized));
+        ASSERT_not_null(symbol);
+        ASSERT_require(symbol->get_declaration() == initialized);
+        RegisterSemanticSymbolBinding(&component, symbol, definition);
+        RegisterSemanticSymbolBinding(&component.GetUltimate(), symbol,
+                                      definition);
+
+        if (component.detailsIf<Fortran::semantics::ObjectEntityDetails>() ==
+            nullptr)
+          continue;
+        const Fortran::semantics::DeclTypeSpec *type = component.GetType();
+        ASSERT_not_null(type);
+        if (type->category() == Fortran::semantics::DeclTypeSpec::TypeDerived ||
+            type->category() ==
+                Fortran::semantics::DeclTypeSpec::ClassDerived) {
+          ASSERT_not_null(initialized->get_type());
+          auto *classType = isSgClassType(initialized->get_type()->stripType(
+              SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_ARRAY_TYPE |
+              SgType::STRIP_POINTER_TYPE));
+          ASSERT_not_null(classType);
+          // GetScope resolves both the canonical type symbol and a
+          // parameterized instantiation. The optional instance-only scope() is
+          // unset for valid forward-referenced recursive components.
+          const Fortran::semantics::Scope *componentScope =
+              type->derivedTypeSpec().GetScope();
+          ASSERT_not_null(componentScope);
+          publishScope(*componentScope,
+                       isSgClassDeclaration(classType->get_declaration()));
+        }
+      }
+    }
+  };
+  publishScope(*ultimate.scope(), published->get_declaration());
+}
+
 SgVariableSymbol *BuildVisitor::LookupSemanticComponentSymbol(
     const Fortran::semantics::Symbol *semantic) {
   if (semantic == nullptr) {
@@ -8112,8 +7827,7 @@ void BuildVisitor::BeginDirectiveLocalSemanticTypes(
     ROSE_ABORT();
   }
   for (const auto &[semantic, type] : types) {
-    if (semantic == nullptr || type == nullptr ||
-        isSgTypeUnknown(type) != nullptr || isSgTypeDefault(type) != nullptr) {
+    if (semantic == nullptr || SageInterface::containsUnknownType(type)) {
       std::cerr << "REX_FLANG_INVARIANT[directive-local-type-lifecycle]: "
                    "directive-local semantic type transaction contains an "
                    "invalid symbol or type\n";
@@ -8433,175 +8147,46 @@ void BuildVisitor::RegisterSemanticNamelistGroup(
   ASSERT_not_null(semantic);
   ASSERT_not_null(scope);
   ASSERT_not_null(group);
-  const Fortran::semantics::Symbol *ultimate = &semantic->GetUltimate();
+  const auto &ultimate = semantic->GetUltimate();
   const auto *details =
-      ultimate->detailsIf<Fortran::semantics::NamelistDetails>();
-  SgNamelistStatement *owner = isSgNamelistStatement(group->get_parent());
-  const std::size_t ownerOccurrences =
-      owner != nullptr ? static_cast<std::size_t>(
-                             std::count(owner->get_group_list().begin(),
-                                        owner->get_group_list().end(), group))
-                       : 0;
-  if (details == nullptr || owner == nullptr || ownerOccurrences != 1 ||
-      owner->get_scope() == nullptr || owner->get_parent() == nullptr ||
-      group->get_group_name().empty() ||
-      !NamesMatch(group->get_group_name(), ultimate->name().ToString(),
-                  /*case_insensitive=*/true)) {
-    std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: Flang "
-                 "NAMELIST identity and Sage group do not form one exact "
-                 "owned producer\n";
-    ROSE_ABORT();
-  }
+      ultimate.detailsIf<Fortran::semantics::NamelistDetails>();
+  auto *owner = isSgNamelistStatement(group->get_parent());
+  ROSE_ASSERT(details != nullptr && owner != nullptr);
+  ROSE_ASSERT(owner->get_scope() == scope && owner->get_parent() != nullptr);
+  ROSE_ASSERT(std::count(owner->get_group_list().begin(),
+                         owner->get_group_list().end(), group) == 1);
+  group->validate_group();
+  ROSE_ASSERT(NamesMatch(group->get_group_name(), ultimate.name().ToString(),
+                         /*case_insensitive=*/true));
 
-  auto registerKey = [&](const Fortran::semantics::Symbol *key) {
-    std::vector<SemanticNamelistBinding> &bindings = semantic_namelists_[key];
-    SemanticNamelistBinding *exact = nullptr;
-    for (SemanticNamelistBinding &binding : bindings) {
-      if (binding.scope == scope) {
-        if (exact != nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                       "one semantic NAMELIST has multiple bindings in the "
-                       "same scope\n";
-          ROSE_ABORT();
-        }
-        exact = &binding;
-      }
-    }
-    if (exact == nullptr) {
-      bindings.push_back(SemanticNamelistBinding{scope, {}});
-      exact = &bindings.back();
-    }
-    if (std::find(exact->groups.begin(), exact->groups.end(), group) !=
-        exact->groups.end()) {
-      return;
-    }
-
-    std::size_t objectOffset = 0;
-    for (SgNameGroup *published : exact->groups) {
-      ASSERT_not_null(published);
-      objectOffset += published->get_name_list().size();
-    }
-    const SgStringList &sourceNames = group->get_name_list();
-    if (sourceNames.empty() ||
-        objectOffset + sourceNames.size() > details->objects().size()) {
-      std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: Sage "
-                   "NAMELIST group has no exact semantic object slice\n";
-      ROSE_ABORT();
-    }
-    auto source = sourceNames.begin();
-    for (std::size_t index = 0; index < sourceNames.size(); ++index, ++source) {
-      const Fortran::semantics::Symbol &object =
-          details->objects()[objectOffset + index].get();
-      if (!NamesMatch(*source, object.name().ToString(),
-                      /*case_insensitive=*/true)) {
-        std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                     "Sage NAMELIST object order disagrees with its exact "
-                     "Flang semantic identity\n";
-        ROSE_ABORT();
-      }
-    }
-    exact->groups.push_back(group);
-  };
-  registerKey(semantic);
-  if (ultimate != semantic) {
-    registerKey(ultimate);
+  SgSymbol *existing = LookupSemanticSymbol(semantic, scope);
+  auto *symbol = isSgNamelistSymbol(existing);
+  ROSE_ASSERT(existing == nullptr ||
+              (symbol != nullptr && symbol->get_scope() == scope));
+  std::size_t objectOffset = 0;
+  if (symbol != nullptr)
+    for (auto *declaration : symbol->get_declarations())
+      objectOffset += declaration->get_objects().size();
+  ROSE_ASSERT(objectOffset + group->get_objects().size() <=
+              details->objects().size());
+  for (std::size_t index = 0; index < group->get_objects().size(); ++index) {
+    const auto &object = details->objects()[objectOffset + index].get();
+    // USE can import the group without importing its objects.
+    auto *objectSymbol =
+        LookupSemanticObjectSymbol(&object, owner->get_scope());
+    ROSE_ASSERT(objectSymbol != nullptr &&
+                group->get_objects()[index]->get_symbol()->get_declaration() ==
+                    objectSymbol->get_declaration());
   }
-}
-
-bool BuildVisitor::IsVisibleSemanticNamelist(
-    const Fortran::semantics::Symbol *semantic,
-    SgScopeStatement *semanticScope) const {
-  if (semantic == nullptr || semanticScope == nullptr) {
-    return false;
+  if (symbol == nullptr) {
+    symbol = new SgNamelistSymbol({group});
+    scope->insert_symbol(symbol->get_name(), symbol);
+  } else {
+    symbol->append_declaration(group);
   }
-  auto found = semantic_namelists_.find(semantic);
-  if (found == semantic_namelists_.end()) {
-    found = semantic_namelists_.find(&semantic->GetUltimate());
-  }
-  if (found == semantic_namelists_.end()) {
-    return false;
-  }
-  const auto *details =
-      semantic->GetUltimate().detailsIf<Fortran::semantics::NamelistDetails>();
-  if (details == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                 "registered NAMELIST has no exact Flang details\n";
-    ROSE_ABORT();
-  }
-
-  std::unordered_set<SgScopeStatement *> visited;
-  for (SgScopeStatement *current = semanticScope; current != nullptr;) {
-    const SemanticNamelistBinding *exact = nullptr;
-    for (const SemanticNamelistBinding &binding : found->second) {
-      if (binding.scope == current) {
-        if (exact != nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                       "NAMELIST lookup found multiple exact scope bindings\n";
-          ROSE_ABORT();
-        }
-        exact = &binding;
-      }
-    }
-    if (exact != nullptr) {
-      std::size_t objectCount = 0;
-      for (SgNameGroup *group : exact->groups) {
-        if (group == nullptr ||
-            isSgNamelistStatement(group->get_parent()) == nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                       "visible NAMELIST binding contains a detached group\n";
-          ROSE_ABORT();
-        }
-        objectCount += group->get_name_list().size();
-      }
-      if (exact->groups.empty() || objectCount != details->objects().size()) {
-        std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                     "visible NAMELIST binding does not cover its complete "
-                     "semantic object sequence\n";
-        ROSE_ABORT();
-      }
-      return true;
-    }
-    if (!visited.insert(current).second) {
-      std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                   "NAMELIST visibility chain is cyclic\n";
-      ROSE_ABORT();
-    }
-    if (isSgGlobal(current) != nullptr) {
-      break;
-    }
-    if (SgFunctionParameterScope *parameterScope =
-            isSgFunctionParameterScope(current)) {
-      if (parameterScope->get_parent() == nullptr) {
-        current = parameterScope->get_scope();
-        continue;
-      }
-    }
-    if (SgFunctionDefinition *definition = isSgFunctionDefinition(current)) {
-      if (definition->get_parent() == nullptr) {
-        current = definition->get_construction_physical_output_owner();
-        if (current == nullptr || definition->get_declaration() != nullptr ||
-            definition->get_body() == nullptr ||
-            definition->get_body()->get_parent() != definition) {
-          std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                       "detached procedure has no exact construction owner\n";
-          ROSE_ABORT();
-        }
-        continue;
-      }
-    }
-    if (SgScopeStatement *constructionOwner =
-            ExactFlangDetachedBlockConstructionOwner(current)) {
-      current = constructionOwner;
-      continue;
-    }
-    if (current->get_parent() == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[namelist-semantic-publication]: "
-                   "visibility scope is detached without an exact owner\n";
-      ROSE_ABORT();
-    }
-    current = current->get_scope();
-  }
-  return false;
+  RegisterSemanticSymbol(semantic, symbol);
+  if (&ultimate != semantic)
+    RegisterSemanticSymbol(&ultimate, symbol);
 }
 
 namespace detail {
@@ -8729,26 +8314,21 @@ SgExpression *BuildFlangSemanticNameReference(const Fortran::parser::Name &name,
     }
     if (SgEnumFieldSymbol *field = isSgEnumFieldSymbol(published)) {
       SgInitializedName *enumerator = field->get_declaration();
-      SgAssignInitializer *initializer =
-          enumerator != nullptr
-              ? isSgAssignInitializer(enumerator->get_initializer())
-              : nullptr;
-      SgEnumVal *identity = initializer != nullptr
-                                ? isSgEnumVal(initializer->get_operand_i())
-                                : nullptr;
       SgEnumDeclaration *declaration =
-          identity != nullptr ? identity->get_declaration() : nullptr;
-      if (enumerator == nullptr || initializer == nullptr ||
-          identity == nullptr || declaration == nullptr ||
-          identity->get_name() != enumerator->get_name()) {
+          enumerator != nullptr ? isSgEnumDeclaration(enumerator->get_declptr())
+                                : nullptr;
+      if (declaration == nullptr || enumerator->get_parent() != declaration ||
+          !enumerator->get_enum_constant_value().has_value()) {
         std::cerr << "REX_FLANG_INVARIANT[expression-enumerator-identity]: "
                      "enumerator '"
                   << spelling
                   << "' has no exact typed declaration value identity\n";
         ROSE_ABORT();
       }
-      return SageBuilder::buildEnumVal_nfi(identity->get_value(), declaration,
-                                           spelling);
+      auto *canonical =
+          isSgEnumDeclaration(declaration->get_firstNondefiningDeclaration());
+      return SageBuilder::buildEnumVal_nfi(
+          *enumerator->get_enum_constant_value(), canonical, spelling);
     }
     std::cerr << "REX_FLANG_INVARIANT[expression-semantic-kind]: Flang "
                  "object '"
@@ -8789,7 +8369,7 @@ SgExpression *BuildFlangSemanticNameReference(const Fortran::parser::Name &name,
       if (registeredIntrinsicSource != nullptr) {
         sourceVisible = registeredIntrinsicSource;
         bindingKind =
-            registeredIntrinsicSource != exactTypeVisible
+            registeredIntrinsicSource != function
                 ? SgFunctionRefExp::
                       e_fortran_source_visible_binding_intrinsic_shadow
                 : SgFunctionRefExp::
@@ -8811,7 +8391,7 @@ SgExpression *BuildFlangSemanticNameReference(const Fortran::parser::Name &name,
           bindingKind =
               SgFunctionRefExp::e_fortran_source_visible_binding_exact_typed;
         }
-      } else if (IsExactFortranSemanticProcedurePublication(function)) {
+      } else if (isExactFortranSemanticProcedurePublication(function)) {
         sourceVisible = function;
         bindingKind = SgFunctionRefExp::
             e_fortran_source_visible_binding_semantic_publication;
@@ -8958,40 +8538,19 @@ SgType *FindExactFortranImplicitTypeProducer(const SgName &name,
       continue;
     }
     if (implicit->get_parent() != scope ||
-        !scope->statementExistsInScope(implicit) ||
-        implicit->get_variables().empty()) {
+        !scope->statementExistsInScope(implicit)) {
       std::cerr << "REX_FLANG_INVARIANT[implicit-type-producer]: source "
                    "IMPLICIT statement has no exact lexical owner or type "
                    "ranges\n";
       ROSE_ABORT();
     }
-    for (SgInitializedName *range : implicit->get_variables()) {
-      const std::string letters =
-          range != nullptr ? range->get_name().getString() : std::string();
-      const bool singleton = letters.size() == 1;
-      const bool interval = letters.size() == 3 && letters[1] == '-';
-      if (range == nullptr || range->get_parent() != implicit ||
-          range->get_scope() != scope || range->get_type() == nullptr ||
-          (!singleton && !interval) ||
-          std::isalpha(static_cast<unsigned char>(letters.front())) == 0 ||
-          (interval &&
-           std::isalpha(static_cast<unsigned char>(letters.back())) == 0)) {
-        std::cerr << "REX_FLANG_INVARIANT[implicit-type-producer]: source "
-                     "IMPLICIT statement contains a malformed typed letter "
-                     "range\n";
-        ROSE_ABORT();
-      }
+    implicit->validate_implicit_statement();
+    for (SgFortranImplicitRange *range : implicit->get_ranges()) {
       const char first = static_cast<char>(
-          std::tolower(static_cast<unsigned char>(letters.front())));
-      const char last = interval
-                            ? static_cast<char>(std::tolower(
-                                  static_cast<unsigned char>(letters.back())))
-                            : first;
-      if (first > last) {
-        std::cerr << "REX_FLANG_INVARIANT[implicit-type-producer]: source "
-                     "IMPLICIT statement contains a retrograde letter range\n";
-        ROSE_ABORT();
-      }
+          std::tolower(static_cast<unsigned char>(range->get_first_letter())));
+      const char last =
+          static_cast<char>(std::tolower(static_cast<unsigned char>(
+              range->get_last_letter().value_or(range->get_first_letter()))));
       if (initial < first || initial > last) {
         continue;
       }
@@ -9319,6 +8878,22 @@ void BuildVisitor::PublishSemanticNameBeforeConsumption(
     return;
   }
 
+  if (semantic.GetUltimate()
+              .detailsIf<Fortran::semantics::SubprogramDetails>() != nullptr &&
+      !Fortran::semantics::IsPointer(semantic.GetUltimate())) {
+    if (EnsurePendingContainedProcedurePredeclared(name.symbol))
+      return;
+    std::set<const Fortran::semantics::Symbol *> active;
+    SgFunctionType *type = BuildFortranSemanticProcedureType(semantic, active);
+    ROSE_ASSERT(type != nullptr && !SageInterface::containsUnknownType(type));
+    SgScopeStatement *scope = FindFortranImplicitDeclScope(currentScope);
+    ASSERT_not_null(scope);
+    SgFunctionSymbol *published =
+        PublishExactFortranProcedureSymbol(name, type, scope);
+    RegisterSemanticSymbol(name.symbol, published);
+    ASSERT_require(lookupPublishedRole(name.symbol, currentScope) == published);
+    return;
+  }
   static_cast<void>(
       PublishImplicitSemanticObjectBeforeConsumption(semantic, currentScope));
 }
@@ -9416,7 +8991,6 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked,
   BuildVisitor visitor{cooked, doublePrecisionKind, semanticContext};
   std::set<std::string> directive_group_ids;
 
-  // TODO: make go away
   CookedSourcesGuard cooked_guard{cooked_, &cooked};
   FortranDirectiveGroupsGuard directive_groups_guard{
       fortran_directive_group_ids_, &directive_group_ids};
@@ -9432,19 +9006,12 @@ void Build(parser::Program &x, parser::AllCookedSources &cooked,
   // Start by building ProgramUnit(s)
   Walk(x.v, visitor);
 
-  // The global-scope leave attaches any remaining physical comment and
-  // preprocessing tokens.  Final frontend validation must run after that
-  // producer step so typed INCLUDE ownership can reject/reconcile duplicate
-  // raw token representations at the true transaction boundary.
   builder.Leave(scope);
   visitor.Done();
 }
 
 // MainProgram
 void BuildVisitor::Build(parser::MainProgram &x) {
-  // std::tuple<>
-  //   std::optional<Statement<ProgramStmt>>, SpecificationPart, ExecutionPart,
-  //   std::optional<InternalSubprogramPart>, Statement<EndProgramStmt>>
   using namespace Fortran::parser;
 
   auto &stmt{std::get<std::optional<Statement<ProgramStmt>>>(x.t)};
@@ -9453,13 +9020,13 @@ void BuildVisitor::Build(parser::MainProgram &x) {
   auto &internal{std::get<std::optional<InternalSubprogramPart>>(x.t)};
   auto &end{std::get<Statement<EndProgramStmt>>(x.t)};
 
-  std::vector<std::string> labels{};
+  std::optional<int> label;
   std::optional<SourcePosition> srcPosBody{std::nullopt};
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEndBegin{BuildSourcePosition(end, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
-  std::vector<Rose::builder::Token> comments{};
+  HeaderComments comments;
 
   std::optional<std::string> name{std::nullopt};
 
@@ -9469,10 +9036,14 @@ void BuildVisitor::Build(parser::MainProgram &x) {
     name.emplace(RequireExactPhysicalFortranName(stmt.value().statement.v));
   }
   if (stmt && stmt->label) {
-    const int labelValue = static_cast<int>(stmt->label.value());
-    if (labelValue > 0) {
-      labels.push_back(std::to_string(labelValue));
+    const auto value = *stmt->label;
+    if (value < 1 || value > 99999) {
+      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: PROGRAM has invalid "
+                   "label "
+                << value << '\n';
+      ROSE_ABORT();
     }
+    label = static_cast<int>(value);
   }
 
   if (auto pos{FirstSourcePosition(spec)}) {
@@ -9504,38 +9075,39 @@ void BuildVisitor::Build(parser::MainProgram &x) {
   if (!srcPosBegin) {
     srcPosBegin.emplace(*srcPosBody);
   }
-  SourcePosition comment_pos =
-      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
-  builder.consumePrecedingComments(
-      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
-                        comment_pos.column});
+  if (stmt) {
+    comments = CaptureHeaderComments(*stmt);
+  }
 
   // Build the SgProgramHeaderStatement node
   //
   SgProgramHeaderStatement *programDecl{nullptr};
   std::optional<std::string> opt_name{name};
 
-  builder.Enter(programDecl, opt_name, labels,
+  builder.Enter(programDecl, opt_name, label,
                 SourcePositions{*srcPosBegin, *srcPosBody, srcPosEnd},
                 comments);
 
   // SpecificationPart, ExecutionPart, and optional InternalSubprogramPart
-  Walk(spec);
-  PredeclareInternalSubprograms(internal);
+  PredeclareInternalSubprograms(spec, internal);
   Walk(execution);
   Walk(internal);
 
   // EndProgramStmt
   std::optional<std::string> endName{std::nullopt};
-  std::optional<std::string> endLabel{std::nullopt};
+  std::optional<int> endLabel;
   if (end.statement.v) {
     endName = RequireExactPhysicalFortranName(end.statement.v.value());
   }
   if (end.label) {
-    const int labelValue = static_cast<int>(end.label.value());
-    if (labelValue > 0) {
-      endLabel = std::to_string(labelValue);
+    const auto value = *end.label;
+    if (value < 1 || value > 99999) {
+      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: END PROGRAM has "
+                   "invalid label "
+                << value << '\n';
+      ROSE_ABORT();
     }
+    endLabel = static_cast<int>(value);
   }
 
   // Fortran specific functionality
@@ -9560,6 +9132,7 @@ void DummyArg(std::list<parser::DummyArg> &x, std::list<std::string> &args) {
 
 struct FortranLanguageBindingInfo {
   bool present = false;
+  bool labelPresent = false;
   std::string label;
   bool cdefined = false;
 };
@@ -9577,6 +9150,7 @@ getLanguageBindingInfo(const parser::LanguageBindingSpec *binding) {
       std::get<std::optional<parser::ScalarDefaultCharConstantExpr>>(
           binding->t);
   if (label) {
+    result.labelPresent = true;
     const parser::Expr &expr = label->thing.thing.thing.value();
     if (!expr.typedExpr || !expr.typedExpr->v) {
       std::cerr << "REX_FRONTEND_INVARIANT[fortran-bind]: NAME expression "
@@ -9613,7 +9187,59 @@ void applyLanguageBinding(SgDeclarationStatement *declaration,
   declaration->get_declarationModifier().setBind();
   declaration->set_linkage("C");
   declaration->set_binding_label(info.label);
+  declaration->set_binding_label_present(info.labelPresent);
   declaration->set_binding_cdefined(info.cdefined);
+}
+
+void applyProcedureLanguageBinding(SgFunctionDeclaration *declaration,
+                                   const parser::LanguageBindingSpec *binding,
+                                   const parser::Name &name) {
+  ASSERT_not_null(declaration);
+  ASSERT_not_null(name.symbol);
+  const Fortran::semantics::Symbol &semantic = name.symbol->GetUltimate();
+  const bool isBind = semantic.attrs().test(Fortran::semantics::Attr::BIND_C);
+  if (binding != nullptr && !isBind) {
+    std::cerr << "REX_FRONTEND_INVARIANT[fortran-bind]: source binding has "
+                 "no semantic BIND(C) attribute\n";
+    ROSE_ABORT();
+  }
+  applyLanguageBinding(declaration, binding);
+  const std::string *bindingName = semantic.GetBindName();
+  if (!isBind && bindingName != nullptr) {
+    std::cerr << "REX_FRONTEND_INVARIANT[fortran-bind]: external binding "
+                 "name has no semantic BIND(C) attribute\n";
+    ROSE_ABORT();
+  }
+  // Flang resolves default names, constant expressions, blank trimming, and
+  // entities with no external binding. Preserve that semantic result directly.
+  const SgName identity(bindingName != nullptr ? *bindingName : std::string());
+  for (SgDeclarationStatement *peer :
+       {static_cast<SgDeclarationStatement *>(declaration),
+        declaration->get_firstNondefiningDeclaration(),
+        declaration->get_definingDeclaration()}) {
+    if (peer == nullptr) {
+      continue;
+    }
+    SgProcedureHeaderStatement *procedure = isSgProcedureHeaderStatement(peer);
+    ASSERT_not_null(procedure);
+    if (!procedure->get_fortran_binding_name().is_null() &&
+        procedure->get_fortran_binding_name() != identity) {
+      std::cerr << "REX_FRONTEND_INVARIANT[fortran-bind]: canonical "
+                   "procedure family has conflicting binding identities\n";
+      ROSE_ABORT();
+    }
+    procedure->set_fortran_binding_name(identity);
+    if (isBind) {
+      if (!procedure->get_linkage().empty() &&
+          procedure->get_linkage() != "C") {
+        std::cerr << "REX_FRONTEND_INVARIANT[fortran-bind]: canonical "
+                     "procedure family has conflicting language linkage\n";
+        ROSE_ABORT();
+      }
+      procedure->get_declarationModifier().setBind();
+      procedure->set_linkage("C");
+    }
+  }
 }
 
 void ApplyFortranProcedureTypeDeclarationModifiers(
@@ -9651,8 +9277,6 @@ void ApplyFortranProcedureTypeDeclarationModifiers(
 void getSubroutineStmt(parser::SubroutineStmt &x, std::list<std::string> &args,
                        LanguageTranslation::FunctionModifierList &modifiers,
                        BuildVisitor &visitor) {
-  // std::tuple<> std::list<PrefixSpec>, Name, std::list<DummyArg>,
-  // std::optional<LanguageBindingSpec>
   using namespace Fortran::parser;
 
   visitor.BuildPrefix(std::get<std::list<parser::PrefixSpec>>(x.t), modifiers);
@@ -9744,7 +9368,6 @@ void RegisterFortranSemanticProcedureDefinition(
 }
 
 void BuildVisitor::Build(parser::InternalSubprogramPart &x) {
-  // std::tuple<> Statement<ContainsStmt>, std::list<InternalSubprogram>
   using namespace Fortran::parser;
   Walk(std::get<Statement<ContainsStmt>>(x.t));
   Walk(std::get<std::list<InternalSubprogram>>(x.t));
@@ -9804,9 +9427,13 @@ SgType *BuildFortranCharacteristicDataType(
         SgTypeComplex::createType(SageBuilder::buildFloatType(kindExpression));
     break;
   case Fortran::common::TypeCategory::Character: {
+    auto exactLength = semantic.LEN();
+    if (exactLength) {
+      *exactLength = evaluate::Fold(CurrentBuildVisitor().foldingContext(),
+                                    std::move(*exactLength));
+    }
     const std::optional<std::int64_t> length =
-        semantic.LEN() ? Fortran::evaluate::ToInt64(*semantic.LEN())
-                       : std::nullopt;
+        exactLength ? evaluate::ToInt64(*exactLength) : std::nullopt;
     if (length && *length < 0) {
       std::cerr
           << "REX_FLANG_INVARIANT[procedure-characteristics-character]: "
@@ -9933,8 +9560,7 @@ SgFunctionType *BuildFortranCharacteristicProcedureType(
           ? BuildFortranCharacteristicFunctionResultType(
                 *semantic.functionResult)
           : static_cast<SgType *>(SageBuilder::buildVoidType());
-  SgFunctionParameterTypeList *parameters = new SgFunctionParameterTypeList();
-  ASSERT_not_null(parameters);
+  auto parameters = std::make_unique<SgFunctionParameterTypeList>();
   for (const auto &dummy : semantic.dummyArguments) {
     SgType *type = std::visit(
         [](const auto &value) -> SgType * {
@@ -9966,8 +9592,11 @@ SgFunctionType *BuildFortranCharacteristicProcedureType(
     ASSERT_not_null(type);
     parameters->append_argument(type);
   }
-  SgFunctionType *type = SageBuilder::buildFunctionType(returnType, parameters);
+  SgFunctionType *type =
+      SageBuilder::buildFunctionType(returnType, parameters.get());
   ASSERT_not_null(type);
+  if (type->get_argument_list() == parameters.get())
+    parameters.release();
   return type;
 }
 
@@ -10023,11 +9652,12 @@ SgFunctionType *BuildFortranSemanticProcedureType(
         ultimate.GetType() != nullptr
             ? BuildFortranSemanticObjectType(ultimate)
             : static_cast<SgType *>(SageBuilder::buildVoidType());
-    SgFunctionParameterTypeList *parameters = new SgFunctionParameterTypeList();
-    ASSERT_not_null(parameters);
+    auto parameters = std::make_unique<SgFunctionParameterTypeList>();
     SgFunctionType *type =
-        SageBuilder::buildFunctionType(returnType, parameters);
+        SageBuilder::buildFunctionType(returnType, parameters.get());
     ASSERT_not_null(type);
+    if (type->get_argument_list() == parameters.get())
+      parameters.release();
     activeProcedures.erase(&ultimate);
     return type;
   }
@@ -10036,8 +9666,7 @@ SgFunctionType *BuildFortranSemanticProcedureType(
       details->isFunction()
           ? BuildFortranSemanticFunctionResultType(details->result())
           : static_cast<SgType *>(SageBuilder::buildVoidType());
-  SgFunctionParameterTypeList *parameters = new SgFunctionParameterTypeList();
-  ASSERT_not_null(parameters);
+  auto parameters = std::make_unique<SgFunctionParameterTypeList>();
   for (const Fortran::semantics::Symbol *dummy : details->dummyArgs()) {
     SgType *dummyType = nullptr;
     if (dummy == nullptr) {
@@ -10061,8 +9690,11 @@ SgFunctionType *BuildFortranSemanticProcedureType(
     ASSERT_not_null(dummyType);
     parameters->append_argument(dummyType);
   }
-  SgFunctionType *type = SageBuilder::buildFunctionType(returnType, parameters);
+  SgFunctionType *type =
+      SageBuilder::buildFunctionType(returnType, parameters.get());
   ASSERT_not_null(type);
+  if (type->get_argument_list() == parameters.get())
+    parameters.release();
   activeProcedures.erase(&ultimate);
   return type;
 }
@@ -10089,8 +9721,7 @@ RequireFortranSemanticProcedureType(const Fortran::parser::Name &name,
   std::set<const Fortran::semantics::Symbol *> activeProcedures;
   SgFunctionType *type =
       BuildFortranSemanticProcedureType(*name.symbol, activeProcedures);
-  if (type == nullptr || type->get_return_type() == nullptr ||
-      isSgTypeUnknown(type->get_return_type()) != nullptr) {
+  if (SageInterface::containsUnknownType(type)) {
     std::cerr << "REX_FLANG_INVARIANT[procedure-semantic-type]: " << context
               << " '" << name.ToString()
               << "' has no exact semantic procedure type\n";
@@ -10103,26 +9734,27 @@ namespace {
 SgFunctionType *
 BuildExactFortranCallType(SgType *resultType,
                           const std::list<SgExpression *> &arguments) {
-  if (resultType == nullptr || isSgTypeUnknown(resultType) != nullptr) {
+  if (SageInterface::containsUnknownType(resultType)) {
     std::cerr << "REX_FLANG_INVARIANT[call-type]: resolved Fortran call has no "
                  "exact result type\n";
     ROSE_ABORT();
   }
-  SgFunctionParameterTypeList *parameterTypes =
-      new SgFunctionParameterTypeList();
-  ASSERT_not_null(parameterTypes);
+  auto parameterTypes = std::make_unique<SgFunctionParameterTypeList>();
   for (SgExpression *argument : arguments) {
     SgType *argumentType = argument != nullptr ? argument->get_type() : nullptr;
-    if (argumentType == nullptr || isSgTypeUnknown(argumentType) != nullptr) {
+    if (SageInterface::containsUnknownType(argumentType)) {
       std::cerr << "REX_FLANG_INVARIANT[call-type]: resolved Fortran actual "
                    "argument has no exact type\n";
       ROSE_ABORT();
     }
-    parameterTypes->append_argument(argumentType);
+    parameterTypes->append_argument(
+        SageBuilder::functionParameterTypeFromDeclaredType(argumentType));
   }
   SgFunctionType *type =
-      SageBuilder::buildFunctionType(resultType, parameterTypes);
+      SageBuilder::buildFunctionType(resultType, parameterTypes.get());
   ASSERT_not_null(type);
+  if (type->get_argument_list() == parameterTypes.get())
+    parameterTypes.release();
   return type;
 }
 
@@ -10224,8 +9856,7 @@ SgFunctionSymbol *PublishGeneratedFortranProcedureSymbol(
   ASSERT_not_null(type);
   ASSERT_not_null(scope);
   if (sageName.is_null() || sageName.getString().empty() ||
-      type->get_return_type() == nullptr ||
-      isSgTypeUnknown(type->get_return_type()) != nullptr) {
+      SageInterface::containsUnknownType(type)) {
     std::cerr << "REX_FLANG_INVARIANT[procedure-publication]: cannot publish "
                  "a semantic procedure without an exact parser name, source "
                  "anchor, and type\n";
@@ -10244,19 +9875,12 @@ SgFunctionSymbol *PublishGeneratedFortranProcedureSymbol(
     return existing;
   }
 
-  SgFunctionParameterTypeList *parameterTypes =
-      new SgFunctionParameterTypeList();
-  ASSERT_not_null(parameterTypes);
+  auto parameterTypes = std::make_unique<SgFunctionParameterTypeList>();
   for (SgType *argumentType : type->get_arguments()) {
-    if (argumentType == nullptr || isSgTypeUnknown(argumentType) != nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[procedure-publication]: exact "
-                   "procedure type contains a missing argument type\n";
-      ROSE_ABORT();
-    }
     parameterTypes->append_argument(argumentType);
   }
   SgFunctionParameterList *parameters =
-      SageBuilder::buildFunctionParameterList_nfi(parameterTypes);
+      SageBuilder::buildFunctionParameterList_nfi(parameterTypes.get());
   ASSERT_not_null(parameters);
   const SgProcedureHeaderStatement::subprogram_kind_enum kind =
       isSgTypeVoid(type->get_return_type()) != nullptr
@@ -10534,7 +10158,7 @@ SgExpression *BuildPublishedFortranProcedureReference(
     if (registeredIntrinsicSource != nullptr) {
       sourceVisible = registeredIntrinsicSource;
       bindingKind =
-          registeredIntrinsicSource != exactTypeVisible
+          registeredIntrinsicSource != function
               ? SgFunctionRefExp::
                     e_fortran_source_visible_binding_intrinsic_shadow
               : SgFunctionRefExp::e_fortran_source_visible_binding_exact_typed;
@@ -10562,7 +10186,7 @@ SgExpression *BuildPublishedFortranProcedureReference(
       sourceVisible = intrinsicUseRename;
       bindingKind =
           SgFunctionRefExp::e_fortran_source_visible_binding_intrinsic_shadow;
-    } else if (IsExactFortranSemanticProcedurePublication(function)) {
+    } else if (isExactFortranSemanticProcedurePublication(function)) {
       sourceVisible = function;
       bindingKind = SgFunctionRefExp::
           e_fortran_source_visible_binding_semantic_publication;
@@ -10613,8 +10237,7 @@ SgExpression *BuildPublishedFortranProcedureReference(
   SgType *publishedResult =
       procedureType != nullptr ? procedureType->get_return_type() : nullptr;
   if (reference == nullptr || procedureType == nullptr ||
-      publishedResult == nullptr ||
-      isSgTypeUnknown(publishedResult) != nullptr ||
+      SageInterface::containsUnknownType(publishedResult) ||
       (isSubroutine != (isSgTypeVoid(publishedResult) != nullptr)) ||
       (!isSubroutine && !FortranProcedureResultMatchesResolvedCall(
                             publishedResult, resultType, isIntrinsic,
@@ -10669,8 +10292,7 @@ SgExpression *BuildExactFortranProcedureDesignator(
   SgType *exactResultType =
       isSubroutine ? static_cast<SgType *>(SageBuilder::buildVoidType())
                    : resultType;
-  if (exactResultType == nullptr ||
-      isSgTypeUnknown(exactResultType) != nullptr) {
+  if (SageInterface::containsUnknownType(exactResultType)) {
     std::cerr << "REX_FLANG_INVARIANT[procedure-call-target]: resolved call to "
                  "'"
               << sourceName << "' has no exact result type\n";
@@ -10697,8 +10319,7 @@ SgExpression *BuildExactFortranProcedureDesignator(
         semanticType != nullptr ? semanticType->get_return_type() : nullptr;
     const bool pointerSignature =
         isSgPointerType(StripModifierType(publishedResultType)) != nullptr;
-    if (publishedResultType == nullptr ||
-        isSgTypeUnknown(publishedResultType) != nullptr ||
+    if (SageInterface::containsUnknownType(publishedResultType) ||
         (isSubroutine != (isSgTypeVoid(publishedResultType) != nullptr)) ||
         (!isSubroutine && !FortranProcedureResultMatchesResolvedCall(
                               publishedResultType, exactResultType,
@@ -11024,6 +10645,48 @@ std::list<SgVariableSymbol *> CollectFortranSemanticDummySymbols(
                 << "' has no exact producer-published Sage symbol\n";
       ROSE_ABORT();
     }
+    const Fortran::semantics::Symbol *procedure = dummy->owner().symbol();
+    ASSERT_not_null(procedure);
+    if (Fortran::semantics::IsBindCProcedure(*procedure)) {
+      const Fortran::semantics::Symbol &semantic = dummy->GetUltimate();
+      using Name = SgInitializedName;
+      Name::fortran_c_argument_passing_enum passing;
+      if (semantic.detailsIf<Fortran::semantics::ProcEntityDetails>() !=
+              nullptr ||
+          semantic.detailsIf<Fortran::semantics::SubprogramDetails>() !=
+              nullptr) {
+        passing = Fortran::semantics::IsPointer(semantic)
+                      ? Name::e_fortran_c_argument_procedure_pointer
+                      : Name::e_fortran_c_argument_procedure;
+      } else {
+        const auto characteristics =
+            Fortran::evaluate::characteristics::DummyDataObject::Characterize(
+                semantic, CurrentBuildVisitor().foldingContext());
+        if (!characteristics) {
+          std::cerr << "REX_FRONTEND_INVARIANT[fortran-c-argument]: BIND(C) "
+                       "dummy has no semantic data characteristics\n";
+          ROSE_ABORT();
+        }
+        using Attr = Fortran::evaluate::characteristics::DummyDataObject::Attr;
+        if (characteristics->attrs.test(Attr::Allocatable) ||
+            characteristics->attrs.test(Attr::Pointer) ||
+            characteristics->IsPassedByDescriptor(/*isBindC=*/true)) {
+          passing = Name::e_fortran_c_argument_descriptor;
+        } else {
+          passing = characteristics->attrs.test(Attr::Value)
+                        ? Name::e_fortran_c_argument_value
+                        : Name::e_fortran_c_argument_reference;
+        }
+      }
+      if (declaration->get_fortran_c_argument_passing() !=
+              Name::e_fortran_c_argument_none &&
+          declaration->get_fortran_c_argument_passing() != passing) {
+        std::cerr << "REX_FRONTEND_INVARIANT[fortran-c-argument]: dummy "
+                     "has conflicting semantic passing conventions\n";
+        ROSE_ABORT();
+      }
+      declaration->set_fortran_c_argument_passing(passing);
+    }
     result.push_back(published);
     ++parsed;
   }
@@ -11294,6 +10957,7 @@ SgVariableSymbol *PublishFlangSemanticFunctionResult(
 } // namespace detail
 
 void BuildVisitor::PredeclareContainedSubprograms(
+    parser::SpecificationPart &specification,
     parser::InternalSubprogramPart *internalPart,
     parser::ModuleSubprogramPart *modulePart) {
   using namespace Fortran::parser;
@@ -11331,6 +10995,9 @@ void BuildVisitor::PredeclareContainedSubprograms(
                      SgFunctionParameterScope *parameterScope) {
     ASSERT_not_null(declaration);
     ASSERT_not_null(parameterScope);
+    SageInterface::publishGeneratedSubtreeOutputOwner(
+        parameterScope,
+        parameterScope->get_construction_physical_output_owner());
     SageInterface::completeDetachedFunctionParameterScopeConstruction(
         declaration, parameterScope);
     SgAuxiliaryDeclarationList *auxiliary =
@@ -11409,7 +11076,6 @@ void BuildVisitor::PredeclareContainedSubprograms(
               SgFunctionParameterList *parameterList = nullptr;
               SgScopeStatement *parameterScope = nullptr;
               builder.Enter(parameterList, parameterScope, name,
-                            /*function_type=*/nullptr,
                             /*is_defining_decl=*/false);
               DeclareFortranSemanticDummyArguments(
                   parameterScope, semanticDetails, dummyArgs,
@@ -11436,7 +11102,8 @@ void BuildVisitor::PredeclareContainedSubprograms(
               ASSERT_not_null(declaration);
               const auto &binding =
                   std::get<std::optional<LanguageBindingSpec>>(header.t);
-              applyLanguageBinding(declaration, binding ? &*binding : nullptr);
+              applyProcedureLanguageBinding(
+                  declaration, binding ? &*binding : nullptr, procedureName);
               applyModifiers(declaration, modifiers);
               builder.attachFortranProcedureCanonical(
                   declaration, hostScope,
@@ -11479,7 +11146,6 @@ void BuildVisitor::PredeclareContainedSubprograms(
               SgFunctionParameterList *parameterList = nullptr;
               SgScopeStatement *parameterScope = nullptr;
               builder.Enter(parameterList, parameterScope, name,
-                            /*function_type=*/nullptr,
                             /*is_defining_decl=*/false);
               DeclareFortranSemanticDummyArguments(
                   parameterScope, semanticDetails, dummyArgs,
@@ -11510,9 +11176,10 @@ void BuildVisitor::PredeclareContainedSubprograms(
                           e_fortran_procedure_source_form_semantic_only,
                       hostScope);
               ASSERT_not_null(declaration);
-              applyLanguageBinding(declaration, suffix && suffix->binding
-                                                    ? &*suffix->binding
-                                                    : nullptr);
+              applyProcedureLanguageBinding(
+                  declaration,
+                  suffix && suffix->binding ? &*suffix->binding : nullptr,
+                  procedureName);
               applyModifiers(declaration, modifiers);
               builder.attachFortranProcedureCanonical(
                   declaration, hostScope,
@@ -11627,6 +11294,9 @@ void BuildVisitor::PredeclareContainedSubprograms(
     }
   }
 
+  Walk(specification);
+  ASSERT_require(SageBuilder::topScopeStack() == hostScope);
+
   for (const Fortran::semantics::Symbol *semantic : sourceOrder) {
     if (!EnsurePendingContainedProcedurePredeclared(semantic)) {
       std::cerr
@@ -11649,9 +11319,12 @@ void BuildVisitor::PredeclareContainedSubprograms(
 }
 
 void BuildVisitor::PredeclareInternalSubprograms(
+    parser::SpecificationPart &specification,
     std::optional<parser::InternalSubprogramPart> &part) {
   if (part) {
-    PredeclareContainedSubprograms(&*part, nullptr);
+    PredeclareContainedSubprograms(specification, &*part, nullptr);
+  } else {
+    Walk(specification);
   }
   SgScopeStatement *hostScope = SageBuilder::topScopeStack();
   ASSERT_not_null(hostScope);
@@ -11660,9 +11333,12 @@ void BuildVisitor::PredeclareInternalSubprograms(
 }
 
 void BuildVisitor::PredeclareModuleSubprograms(
+    parser::SpecificationPart &specification,
     std::optional<parser::ModuleSubprogramPart> &part) {
   if (part) {
-    PredeclareContainedSubprograms(nullptr, &*part);
+    PredeclareContainedSubprograms(specification, nullptr, &*part);
+  } else {
+    Walk(specification);
   }
   SgScopeStatement *hostScope = SageBuilder::topScopeStack();
   ASSERT_not_null(hostScope);
@@ -12189,14 +11865,8 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                           }
                           const Fortran::semantics::Symbol &ultimate =
                               semanticName.symbol->GetUltimate();
-                          const auto *statementFunctionDetails =
-                              ultimate.detailsIf<
-                                  Fortran::semantics::SubprogramDetails>();
-                          const bool isStatementFunction =
-                              statementFunctionDetails != nullptr &&
-                              statementFunctionDetails->isFunction() &&
-                              ultimate.test(Fortran::semantics::Symbol::Flag::
-                                                StmtFunction);
+                          const bool isStatementFunction = ultimate.test(
+                              Fortran::semantics::Symbol::Flag::StmtFunction);
                           const bool isProcedureEntity =
                               ultimate.detailsIf<
                                   Fortran::semantics::ProcEntityDetails>() !=
@@ -12204,7 +11874,8 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                           const bool isProcedurePointer =
                               isProcedureEntity &&
                               Fortran::semantics::IsPointer(ultimate);
-                          if (isProcedureEntity && !isProcedurePointer) {
+                          if ((isProcedureEntity || isStatementFunction) &&
+                              !isProcedurePointer) {
                             // A source-written procedure type declaration is
                             // constructed directly as a lexical
                             // SgProcedureHeaderStatement when this statement
@@ -12216,7 +11887,7 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                           if (ultimate.detailsIf<
                                   Fortran::semantics::ObjectEntityDetails>() ==
                                   nullptr &&
-                              !isStatementFunction && !isProcedurePointer) {
+                              !isProcedurePointer) {
                             std::cerr << "REX_FLANG_INVARIANT[explicit-"
                                          "semantic-kind]: explicitly "
                                          "declared entity '"
@@ -12224,14 +11895,8 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                                       << "' is not a Flang object entity\n";
                             ROSE_ABORT();
                           }
-                          SgSymbol *mapped =
-                              isStatementFunction
-                                  ? static_cast<SgSymbol *>(
-                                        LookupStatementFunctionTypePlaceholder(
-                                            semanticName.symbol))
-                                  : static_cast<SgSymbol *>(
-                                        LookupSemanticObjectSymbol(
-                                            semanticName.symbol, scope));
+                          SgSymbol *mapped = LookupSemanticObjectSymbol(
+                              semanticName.symbol, scope);
                           if (mapped != nullptr) {
                             SgVariableSymbol *existing =
                                 isSgVariableSymbol(mapped);
@@ -12298,9 +11963,7 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                                                 "typed procedure pointer "
                                                 "predeclaration")))
                                   : BuildFortranSemanticObjectType(
-                                        isStatementFunction
-                                            ? statementFunctionDetails->result()
-                                            : *semanticName.symbol);
+                                        *semanticName.symbol);
                           ASSERT_not_null(semanticType);
                           SgTypeString *semanticString = isSgTypeString(
                               FortranScalarSelectorBase(semanticType));
@@ -12351,7 +12014,7 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                             RegisterProvisionalDynamicCharacterLength(
                                 semanticName.symbol, semanticType);
                           }
-                          if (!isStatementFunction && !isProcedurePointer) {
+                          if (!isProcedurePointer) {
                             semanticType = BuildFortranSemanticObjectOwnerType(
                                 *semanticName.symbol);
                             ASSERT_not_null(semanticType);
@@ -12396,14 +12059,9 @@ void BuildVisitor::PredeclareFortranExplicitEntities(
                                    "and symbol ownership\n";
                             ROSE_ABORT();
                           }
-                          if (isStatementFunction) {
-                            RegisterStatementFunctionTypePlaceholder(
-                                semanticName.symbol, forward_symbol);
-                          } else {
-                            RegisterSemanticSymbol(semanticName.symbol,
-                                                   forward_symbol);
-                            RegisterSemanticSymbol(&ultimate, forward_symbol);
-                          }
+                          RegisterSemanticSymbol(semanticName.symbol,
+                                                 forward_symbol);
+                          RegisterSemanticSymbol(&ultimate, forward_symbol);
                         }
                         EndStatementSource();
                       },
@@ -12578,10 +12236,6 @@ void BuildVisitor::ConsumePredeclaredFortranExplicitEntities(
 }
 
 void BuildVisitor::Build(parser::SpecificationPart &x) {
-  // std::tuple<> - OmpEndForallDirective, OmpEndParallelDoDirective,
-  //                std::list<Statement<UseStmt>>,
-  //                std::list<Statement<ImportStmt>>, ImplicitPart,
-  //                std::list<DeclarationConstruct>
   if (pending_predeclared_specification_parts_.count(&x) == 0) {
     PredeclareFortranExplicitEntities(x);
   }
@@ -12673,22 +12327,17 @@ void BuildVisitor::Build(parser::SpecificationPart &x) {
 
 // SubroutineSubprogram
 void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
-  // std::tuple<> - Statement<SubroutineStmt>, SpecificationPart, ExecutionPart,
-  // std::optional<InternalSubprogramPart>,
-  //                Statement<EndSubroutineStmt>
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<SubroutineStmt>>(x.t)};
   auto &end{std::get<Statement<EndSubroutineStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
 
-  std::vector<std::string> labels{};
   std::optional<SourcePosition> srcPosBody{
       FirstSourcePosition(std::get<SpecificationPart>(x.t))};
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
-  std::vector<Rose::builder::Token> comments{};
 
   // There need not be any statements
   if (!srcPosBody) {
@@ -12699,11 +12348,7 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
     }
   }
   NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
-  SourcePosition comment_pos =
-      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
-  builder.consumePrecedingComments(
-      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
-                        comment_pos.column});
+  HeaderComments comments = CaptureHeaderComments(stmt);
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -12717,11 +12362,9 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
       std::get<std::list<parser::PrefixSpec>>(stmt.statement.t), cudaAttrs);
   getSubroutineStmt(stmt.statement, dummyArgs, modifiers, *this);
 
-  // Enter SageTreeBuilder for SgFunctionParameterList
   bool isDefDecl{true};
   std::string name{std::get<Name>(stmt.statement.t).ToString()};
-  builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
-                isDefDecl, &sources);
+  builder.Enter(paramList, paramScope, name, isDefDecl, &sources);
   PrebuildFortranUseStatements(std::get<SpecificationPart>(x.t));
   DeclareFortranDummyArguments(std::get<Name>(stmt.statement.t), paramScope,
                                dummyArgs);
@@ -12729,10 +12372,9 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   RegisterFortranSemanticDummyArguments(std::get<Name>(stmt.statement.t),
                                         paramScope, dummyArgs);
 
-  // SpecificationPart
-  Walk(std::get<SpecificationPart>(x.t));
+  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
+  PredeclareInternalSubprograms(std::get<SpecificationPart>(x.t), internalPart);
 
-  // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope,
                 CollectFortranSemanticDummySymbols(
                     std::get<Name>(stmt.statement.t), paramScope, dummyArgs));
@@ -12742,19 +12384,18 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   builder.Enter(funcDecl, name, /*return_type*/ nullptr, paramList,
                 isSgFunctionDefinition(paramScope->get_parent()), modifiers,
                 isDefDecl, sources, comments,
+                FortranProcedureFromModuleFile(procedureName),
                 LookupPredeclaredInternalProcedure(*this, procedureName));
   ValidatePredeclaredInternalProcedure(*this, procedureName, funcDecl);
   RegisterFortranSemanticProcedureDefinition(*this, procedureName, funcDecl);
   const auto &languageBinding =
       std::get<std::optional<LanguageBindingSpec>>(stmt.statement.t);
-  applyLanguageBinding(funcDecl, languageBinding ? &*languageBinding : nullptr);
+  applyProcedureLanguageBinding(
+      funcDecl, languageBinding ? &*languageBinding : nullptr, procedureName);
   ApplyCudaSubprogramAttrs(funcDecl, cudaAttrs);
   ApplyFortranBoundaryLabels(funcDecl,
                              isSgScopeStatement(funcDecl->get_definition()),
                              stmt.label, end.label);
-
-  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
-  PredeclareInternalSubprograms(internalPart);
 
   // ExecutionPart
   Walk(std::get<ExecutionPart>(x.t));
@@ -12768,7 +12409,6 @@ void BuildVisitor::Build(parser::SubroutineSubprogram &x) {
   // InternalSubprogramPart is optional
   Walk(internalPart);
 
-  // Leave SageTreeBuilder for SgFunctionDeclaration
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(), end.source);
   ResolvePendingFortranLabelReferences(funcDecl->get_definition(),
                                        "SUBROUTINE");
@@ -12791,7 +12431,6 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
-  std::vector<Rose::builder::Token> comments{};
 
   if (!srcPosBody) {
     if (srcPosBegin) {
@@ -12804,11 +12443,7 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
     srcPosBegin.emplace(*srcPosBody);
   }
   NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
-  SourcePosition comment_pos =
-      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
-  builder.consumePrecedingComments(
-      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
-                        comment_pos.column});
+  HeaderComments comments = CaptureHeaderComments(stmt);
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   std::string name = stmt.statement.v.ToString();
@@ -12823,12 +12458,10 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
 
   SgType *returnType{nullptr};
 
-  // Enter SageTreeBuilder for SgFunctionParameterList
-  builder.Enter(paramList, paramScope, name, /*function_type=*/nullptr,
-                isDefDecl, &sources);
+  builder.Enter(paramList, paramScope, name, isDefDecl, &sources);
 
-  // SpecificationPart
-  Walk(spec);
+  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
+  PredeclareInternalSubprograms(spec, internalPart);
 
   std::optional<PublishedFortranFunctionResult> semanticResult;
   parser::Name &procedureName = stmt.statement.v;
@@ -12855,13 +12488,13 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
     returnType = semanticResult->type;
   }
 
-  // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope, std::list<SgVariableSymbol *>{});
 
   // Begin SageTreeBuilder for SgFunctionDeclaration
   builder.Enter(funcDecl, name, returnType, paramList,
                 isSgFunctionDefinition(paramScope->get_parent()), modifiers,
-                isDefDecl, sources, comments);
+                isDefDecl, sources, comments,
+                FortranProcedureFromModuleFile(procedureName));
   RegisterFortranSemanticProcedureDefinition(*this, procedureName, funcDecl);
   ApplyFortranBoundaryLabels(funcDecl,
                              isSgScopeStatement(funcDecl->get_definition()),
@@ -12869,9 +12502,6 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   if (semanticResult) {
     RegisterSemanticSymbol(semanticResult->semantic, semanticResult->sage);
   }
-
-  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
-  PredeclareInternalSubprograms(internalPart);
 
   // ExecutionPart
   Walk(std::get<ExecutionPart>(x.t));
@@ -12885,7 +12515,6 @@ void BuildVisitor::Build(parser::SeparateModuleSubprogram &x) {
   // InternalSubprogramPart is optional
   Walk(internalPart);
 
-  // Leave SageTreeBuilder for SgFunctionDeclaration
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(), end.source);
   ResolvePendingFortranLabelReferences(funcDecl->get_definition(),
                                        "separate module procedure");
@@ -13004,9 +12633,6 @@ void AttachFortranProcedurePrefixType(
       detail::FlangSourceTypeContract::procedure_result,
       procedure->get_name().getString());
 
-  SgFunctionType *sourceType = new SgFunctionType(prefixType.sourceType, false);
-  ASSERT_not_null(sourceType);
-  sourceType->set_fortran_source_syntax(true);
   SgFunctionParameterTypeList *argumentTypes =
       new SgFunctionParameterTypeList();
   ASSERT_not_null(argumentTypes);
@@ -13018,20 +12644,16 @@ void AttachFortranProcedurePrefixType(
     }
     argumentTypes->append_argument(argument);
   }
-  SgFunctionParameterTypeList *defaultArguments =
-      sourceType->get_argument_list();
-  if (defaultArguments == nullptr ||
-      defaultArguments->get_parent() != sourceType ||
-      argumentTypes->get_parent() != nullptr) {
+  SgFunctionType *sourceType =
+      new SgFunctionType(prefixType.sourceType, false, argumentTypes);
+  ASSERT_not_null(sourceType);
+  sourceType->set_fortran_source_syntax(true);
+  if (sourceType->get_argument_list() != argumentTypes ||
+      argumentTypes->get_parent() != sourceType) {
     std::cerr << "REX_FLANG_INVARIANT[procedure-prefix-type]: source "
                  "function type has malformed argument-list ownership\n";
     ROSE_ABORT();
   }
-  sourceType->set_argument_list(argumentTypes);
-  argumentTypes->set_parent(sourceType);
-  defaultArguments->set_parent(nullptr);
-  SageInterface::deleteAST(
-      defaultArguments, SageInterface::DeleteAstMode::kSkipExternalReferences);
 
   if (sourceType->get_parent() != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[procedure-prefix-type-owner]: function '"
@@ -13060,13 +12682,8 @@ void AttachFortranProcedurePrefixType(
 
 // FunctionSubprogram
 void BuildVisitor::Build(parser::FunctionSubprogram &x) {
-  // std::tuple<> Statement<FunctionStmt>, SpecificationPart, ExecutionPart,
-  //              std::optional<InternalSubprogramPart>,
-  //              Statement<EndFunctionStmt>
   using namespace Fortran::parser;
 
-  // FunctionStmt - std::tuple<> std::list<PrefixSpec>, Name, std::list<Name>,
-  // std::optional<Suffix>
   auto &stmt{std::get<Statement<FunctionStmt>>(x.t)};
   auto &end{std::get<Statement<EndFunctionStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
@@ -13076,7 +12693,6 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   std::optional<SourcePosition> srcPosBegin{
       BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcPosEnd{BuildSourcePosition(end, Order::end)};
-  std::vector<Rose::builder::Token> comments{};
 
   // There need not be any statements
   if (!srcPosBody) {
@@ -13087,11 +12703,7 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
     }
   }
   NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
-  SourcePosition comment_pos =
-      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
-  builder.consumePrecedingComments(
-      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
-                        comment_pos.column});
+  HeaderComments comments = CaptureHeaderComments(stmt);
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -13118,12 +12730,9 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // Suffix
   auto &suffix{std::get<std::optional<Suffix>>(stmt.statement.t)};
   if (suffix && suffix->resultName) {
-    // TODO: LanguageBinding also in suffix
     resultName = suffix->resultName.value().ToString();
   }
-  // Enter SageTreeBuilder for SgFunctionParameterList
-  builder.Enter(paramList, paramScope, name, /*function_type=*/nullptr,
-                isDefDecl, &sources);
+  builder.Enter(paramList, paramScope, name, isDefDecl, &sources);
   PrebuildFortranUseStatements(std::get<SpecificationPart>(x.t));
   DeclareFortranDummyArguments(std::get<Name>(stmt.statement.t), paramScope,
                                dummyArgs);
@@ -13133,8 +12742,8 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   const FortranProcedurePrefixType prefixType = BuildFortranProcedurePrefixType(
       prefixSpecs, stmt.source, std::get<Name>(stmt.statement.t));
 
-  // SpecificationPart
-  Walk(std::get<SpecificationPart>(x.t));
+  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
+  PredeclareInternalSubprograms(std::get<SpecificationPart>(x.t), internalPart);
   Name &procedureName = std::get<Name>(stmt.statement.t);
   PublishedFortranFunctionResult semanticResult =
       PublishFortranSemanticFunctionResult(
@@ -13149,7 +12758,6 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
         detail::FlangSourceTypeContract::procedure_result, name);
   }
 
-  // Leave SageTreeBuilder for SgFunctionParameterList
   builder.Leave(paramList, paramScope,
                 CollectFortranSemanticDummySymbols(
                     std::get<Name>(stmt.statement.t), paramScope, dummyArgs));
@@ -13158,22 +12766,21 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   builder.Enter(functionDecl, name, returnType, paramList,
                 isSgFunctionDefinition(paramScope->get_parent()), modifiers,
                 isDefDecl, sources, comments,
+                FortranProcedureFromModuleFile(procedureName),
                 LookupPredeclaredInternalProcedure(*this, procedureName));
   AttachFortranProcedurePrefixType(isSgProcedureHeaderStatement(functionDecl),
                                    prefixType);
   ValidatePredeclaredInternalProcedure(*this, procedureName, functionDecl);
   RegisterFortranSemanticProcedureDefinition(*this, procedureName,
                                              functionDecl);
-  applyLanguageBinding(functionDecl,
-                       suffix && suffix->binding ? &*suffix->binding : nullptr);
+  applyProcedureLanguageBinding(
+      functionDecl, suffix && suffix->binding ? &*suffix->binding : nullptr,
+      procedureName);
   ApplyFortranBoundaryLabels(functionDecl,
                              isSgScopeStatement(functionDecl->get_definition()),
                              stmt.label, end.label);
   ApplyCudaSubprogramAttrs(functionDecl, cudaAttrs);
   RegisterSemanticSymbol(semanticResult.semantic, semanticResult.sage);
-
-  auto &internalPart = std::get<std::optional<InternalSubprogramPart>>(x.t);
-  PredeclareInternalSubprograms(internalPart);
 
   // ExecutionPart
   Walk(std::get<ExecutionPart>(x.t));
@@ -13187,7 +12794,6 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
   // InternalSubprogramPart is optional
   Walk(internalPart);
 
-  // Leave SageTreeBuilder for SgFunctionDeclaration
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(), end.source);
   ResolvePendingFortranLabelReferences(functionDecl->get_definition(),
                                        "FUNCTION");
@@ -13196,14 +12802,12 @@ void BuildVisitor::Build(parser::FunctionSubprogram &x) {
 
 // Module
 void BuildVisitor::Build(parser::Module &x) {
-  // std::tuple<> Statement<ModuleStmt>, SpecificationPart,
-  // std::optional<ModuleSubprogramPart>,
-  //              Statement<EndModuleStmt>
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<ModuleStmt>>(x.t)};
   auto &end{std::get<Statement<EndModuleStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
+  HeaderComments comments = CaptureHeaderComments(stmt);
   SourcePosition srcBegin{BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
 
@@ -13213,6 +12817,7 @@ void BuildVisitor::Build(parser::Module &x) {
   SgClassDefinition *moduleDef = module->get_definition();
   ASSERT_not_null(moduleDef);
   builder.setSourcePosition(moduleDef, srcBegin, srcEnd);
+  builder.attachComments(module, comments);
   SageBuilder::publishExactSourceLexicalDeclaration(module,
                                                     module->get_scope());
   FlangModuleInfo::registerModule(module);
@@ -13220,25 +12825,16 @@ void BuildVisitor::Build(parser::Module &x) {
   ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
                              end.label);
 
-  Walk(std::get<parser::SpecificationPart>(x.t));
   auto &subprogramPart = std::get<std::optional<ModuleSubprogramPart>>(x.t);
-  PredeclareModuleSubprograms(subprogramPart);
+  PredeclareModuleSubprograms(std::get<SpecificationPart>(x.t), subprogramPart);
   Walk(subprogramPart);
 
-  // EndModuleStmt - std::optional<Name> v;
-  std::string endName;
-  if (end.statement.v) {
-    endName = end.statement.v->ToString();
-  }
-
-  // Leave SageTreeBuilder for SgModuleStatement
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(), end.source);
   ResolvePendingFortranLabelReferences(module->get_definition(), "MODULE");
   builder.Leave(module);
 }
 
 void BuildVisitor::Build(parser::ModuleSubprogramPart &x) {
-  // std::tuple<> Statement<ContainsStmt>, std::list<ModuleSubprogram>
   using namespace Fortran::parser;
   Walk(std::get<Statement<ContainsStmt>>(x.t));
 
@@ -13247,14 +12843,12 @@ void BuildVisitor::Build(parser::ModuleSubprogramPart &x) {
 
 // Submodule
 void BuildVisitor::Build(parser::Submodule &x) {
-  // std::tuple<> Statement<SubmoduleStmt>, SpecificationPart,
-  //              std::optional<ModuleSubprogramPart>,
-  //              Statement<EndSubmoduleStmt>
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<SubmoduleStmt>>(x.t)};
   auto &end{std::get<Statement<EndSubmoduleStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
+  HeaderComments comments = CaptureHeaderComments(stmt);
   SourcePosition srcBegin{BuildSourcePosition(stmt, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(end, Order::end)};
   auto &parentId = std::get<ParentIdentifier>(stmt.statement.t);
@@ -13270,8 +12864,7 @@ void BuildVisitor::Build(parser::Submodule &x) {
   SgClassDefinition *moduleDef = module->get_definition();
   ASSERT_not_null(moduleDef);
   builder.setSourcePosition(moduleDef, srcBegin, srcEnd);
-  SageBuilder::publishExactSourceLexicalDeclaration(module,
-                                                    module->get_scope());
+  builder.attachComments(module, comments);
   if (parentName.empty()) {
     std::cerr << "REX_FLANG_INVARIANT[submodule-parent]: submodule '"
               << submoduleName << "' has no exact ancestor module name\n";
@@ -13279,6 +12872,8 @@ void BuildVisitor::Build(parser::Submodule &x) {
   }
   module->set_fortran_module_kind(SgModuleStatement::e_fortran_submodule);
   module->set_fortran_submodule_parent(SgName(parentName));
+  SageBuilder::publishExactSourceLexicalDeclaration(module,
+                                                    module->get_scope());
 
   ApplyFortranBoundaryLabels(module, module->get_definition(), stmt.label,
                              end.label);
@@ -13286,20 +12881,13 @@ void BuildVisitor::Build(parser::Submodule &x) {
   Walk(std::get<parser::SpecificationPart>(x.t));
   Walk(std::get<std::optional<ModuleSubprogramPart>>(x.t));
 
-  // Leave SageTreeBuilder for SgModuleStatement
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(), end.source);
   ResolvePendingFortranLabelReferences(module->get_definition(), "SUBMODULE");
   builder.Leave(module);
 }
 
-// BlockData
 void BuildVisitor::Build(parser::BlockData &x) {
-  // BlockData std::tuple<> Statement<BlockDataStmt>, SpecificationPart,
-  // Statement<EndBlockDataStmt> BlockDataStmt std::optional<Name> v;
-  // EndBlockDataStmt std::optional<Name> v;
-
   using namespace Fortran::parser;
-  std::cout << "Rose::builder::Build(BlockData)\n";
   auto &stmt{std::get<Statement<BlockDataStmt>>(x.t)};
   auto &end{std::get<Statement<EndBlockDataStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
@@ -13342,7 +12930,6 @@ void BuildVisitor::Build(parser::BlockData &x) {
            StringUtility::numberToString(srcPosBegin->line) + "_" +
            StringUtility::numberToString(srcPosBegin->column);
   }
-  std::vector<Rose::builder::Token> comments{};
   if (!srcPosBody) {
     if (srcPosBegin) {
       srcPosBody.emplace(*srcPosBegin);
@@ -13351,11 +12938,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
     }
   }
   NormalizeConstructBodyStart(srcPosBegin, srcPosBody);
-  SourcePosition comment_pos =
-      ChooseCommentAnchor(srcPosBegin, srcPosBody, srcPosEnd);
-  builder.consumePrecedingComments(
-      comments, PosInfo{comment_pos.line, comment_pos.column, comment_pos.line,
-                        comment_pos.column});
+  HeaderComments comments = CaptureHeaderComments(stmt);
   Rose::builder::SourcePositions sources(*srcPosBegin, *srcPosBody, srcPosEnd);
 
   SgFunctionParameterList *paramList{nullptr};
@@ -13373,8 +12956,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
       SgName(name),        nameKind,       srcPosBegin->path, srcPosBegin->line,
       srcPosBegin->column, srcPosEnd.line, srcPosEnd.column};
 
-  builder.Enter(paramList, paramScope, name, /*function_type*/ nullptr,
-                isDefDecl, &sources);
+  builder.Enter(paramList, paramScope, name, isDefDecl, &sources);
 
   Walk(std::get<SpecificationPart>(x.t));
 
@@ -13382,7 +12964,7 @@ void BuildVisitor::Build(parser::BlockData &x) {
 
   builder.Enter(functionDecl, sourceName, /*return_type*/ nullptr, paramList,
                 isSgFunctionDefinition(paramScope->get_parent()), modifiers,
-                isDefDecl, sources, comments,
+                isDefDecl, sources, comments, /*from_module_file=*/false,
                 /*canonical_nondefining=*/nullptr, &blockDataIdentity);
 
   if (auto *procDecl = isSgProcedureHeaderStatement(functionDecl)) {
@@ -13546,7 +13128,7 @@ void BuildVisitor::Build(parser::AssignmentStmt &x) {
   // std::tuple<> Variable, Expr
   using namespace Fortran::parser;
 
-  std::vector<std::string> labels = getLabels();
+  const std::optional<int> label = getLabel();
   SgExpression *lhs{nullptr}, *rhs{nullptr};
   SgExprStatement *stmt{nullptr};
 
@@ -13573,8 +13155,7 @@ void BuildVisitor::Build(parser::AssignmentStmt &x) {
                                         *assignmentLast);
   ApplyCurrentStatementSource(stmt);
 
-  // Leave SageTreeBuilder
-  builder.Leave(stmt, labels);
+  builder.Leave(stmt, label);
 }
 
 void BuildVisitor::Build(parser::ForallAssignmentStmt &x) {
@@ -13620,41 +13201,10 @@ void BuildVisitor::Build(parser::AssociateConstruct &x) {
   builder.setSourcePosition(associateStatement, srcBegin, srcEnd);
   builder.setSourcePosition(body, srcBegin, srcEnd);
 
-  SageInterface::appendStatement(associateStatement, outerScope);
+  associateStatement->set_parent(outerScope);
 
-  auto set_label = [&](const std::optional<Label> &label,
-                       SgLabelSymbol::label_type_enum label_type) {
-    if (!label) {
-      return;
-    }
-    const int labelValue = static_cast<int>(label.value());
-    if (labelValue <= 0 || labelValue > 99999) {
-      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: ASSOCIATE has invalid "
-                   "label "
-                << labelValue << "\n";
-      ROSE_ABORT();
-    }
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: ASSOCIATE has no exact "
-                   "program-unit label scope\n";
-      ROSE_ABORT();
-    }
-    SageInterface::setFortranNumericLabel(associateStatement, labelValue,
-                                          label_type, labelScope);
-  };
-
-  set_label(associateStmt.label, SgLabelSymbol::e_start_label_type);
-  if (associateStatement->has_end_numeric_label()) {
-    set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
-  }
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(associateStatement,
-                                                  force_case_insensitive);
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+  ApplyFortranBoundaryLabels(associateStatement, outerScope,
+                             associateStmt.label, endStmt.label);
 
   BeginStatementSource(associateStmt.source);
   SageBuilder::pushScopeStack(body);
@@ -13695,6 +13245,25 @@ void BuildVisitor::Build(parser::AssociateConstruct &x) {
     SgVariableDeclaration *varDecl = SageBuilder::buildVariableDeclaration_nfi(
         name, assocType, initializer, body);
     ASSERT_not_null(varDecl);
+    ASSERT_require(varDecl->get_variables().size() == 1);
+    auto *associationName = varDecl->get_variables().front();
+    ASSERT_not_null(associationName);
+    auto *definition = associationName->get_definition();
+    ASSERT_not_null(definition);
+    ASSERT_require(definition->get_parent() == associationName);
+    const auto nameBegin =
+        BuildRequiredStatementSourcePosition(semanticName.source, Order::begin);
+    const auto nameEnd =
+        BuildRequiredStatementSourcePosition(semanticName.source, Order::end);
+    const auto selectorEnd =
+        BuildRequiredStatementSourcePosition(selectorSource, Order::end);
+    ASSERT_require(nameBegin.path == selectorEnd.path &&
+                   (selectorEnd.line > nameBegin.line ||
+                    (selectorEnd.line == nameBegin.line &&
+                     selectorEnd.column >= nameBegin.column)));
+    builder.setSourcePosition(varDecl, nameBegin, selectorEnd);
+    builder.setSourcePosition(associationName, nameBegin, nameEnd);
+    builder.setSourcePosition(definition, nameBegin, nameEnd);
     MarkFortranSemanticOnlyDeclaration(varDecl);
     associateStatement->append_associate(varDecl);
     if (semanticName.symbol == nullptr ||
@@ -13741,6 +13310,7 @@ void BuildVisitor::Build(parser::AssociateConstruct &x) {
                  "lost its producer-owned construct range\n";
     ROSE_ABORT();
   }
+  SageInterface::appendStatement(associateStatement, outerScope);
 }
 
 namespace {
@@ -13821,6 +13391,10 @@ BuildLoopControl(std::optional<parser::LoopControl> &loopControl) {
             info.bound = BuildScalarExpr(bounds.upper);
             if (bounds.step) {
               info.increment = BuildScalarExpr(bounds.step.value());
+            } else {
+              info.increment = BuildFortranDefaultIntegerValue(1, "1");
+              SageBuilder::initializeSemanticExpressionSourceProvenance(
+                  info.increment);
             }
           },
           [&](parser::ScalarLogicalExpr &expr) {
@@ -14021,7 +13595,7 @@ void BuildVisitor::Build(parser::BlockConstruct &x) {
   }
   SetBlockSourceRange(block, BuildSourcePosition(beginStmt, Order::begin),
                       BuildSourcePosition(endStmt, Order::end));
-  SageInterface::appendStatement(block, outerScope);
+  block->set_parent(outerScope);
 
   SgScopeStatement *labelScope =
       SageInterface::getEnclosingFunctionDefinition(outerScope, true);
@@ -14034,6 +13608,7 @@ void BuildVisitor::Build(parser::BlockConstruct &x) {
   Walk(execution);
   CloseRexOpenMPDirectiveScope(block, endStmt.source);
   SageBuilder::popScopeStack();
+  SageInterface::appendStatement(block, outerScope);
 
   if (!block->get_is_fortran_block_construct() ||
       block->get_parent() != outerScope || block->get_scope() != outerScope ||
@@ -14045,9 +13620,6 @@ void BuildVisitor::Build(parser::BlockConstruct &x) {
 }
 
 void BuildVisitor::Build(parser::DoConstruct &x) {
-  //  std::tuple<Statement<NonLabelDoStmt>, Block, Statement<EndDoStmt>> t;
-  //  bool IsDoNormal() const;  bool IsDoWhile() const; bool IsDoConcurrent()
-  //  const;
   using namespace Fortran::parser;
 
   SgWhileStmt *whileStmt{nullptr};
@@ -14123,21 +13695,6 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
     }
     SetFortranEndLabelReference(stmt, labelValue, labelScope);
   };
-  auto applyHeaderLabel = [&](SgStatement *stmt, SgScopeStatement *outerScope) {
-    ASSERT_not_null(stmt);
-    ASSERT_not_null(outerScope);
-    if (!beginStmt.label) {
-      return;
-    }
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: DO header has no "
-                   "exact program-unit scope\n";
-      ROSE_ABORT();
-    }
-    ApplyFortranBoundaryLabels(stmt, labelScope, beginStmt.label, std::nullopt);
-  };
   auto &loopControl = std::get<2>(std::get<0>(x.t).statement.t);
   if (loopControl) {
     if (auto *concurrent =
@@ -14201,21 +13758,20 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
         doConcurrent->setCaseInsensitive(true);
       }
 
-      doConcurrent->set_body(body);
-      body->set_parent(doConcurrent);
-      header->set_parent(doConcurrent);
       builder.setSourcePosition(doConcurrent, srcBegin, srcEnd);
       builder.setSourcePosition(body, srcBegin, srcEnd);
 
-      SageInterface::appendStatement(doConcurrent, outerScope);
+      doConcurrent->set_parent(outerScope);
       body->consume_forall_construction(doConcurrent, outerScope);
-      applyHeaderLabel(doConcurrent, outerScope);
+      ApplyFortranBoundaryLabels(doConcurrent, outerScope, beginStmt.label,
+                                 endStmt.label);
 
       SageBuilder::pushScopeStack(body);
       Walk(bodyBlock);
       CloseRexOpenMPDirectiveScope(body, directiveScopeEndSource);
       applyCanonicalLabelTermination(doConcurrent);
       SageBuilder::popScopeStack();
+      SageInterface::appendStatement(doConcurrent, outerScope);
       return;
     }
   }
@@ -14240,8 +13796,9 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
     if (!doName.empty()) {
       whileStmt->set_string_label(doName);
     }
-    SageInterface::appendStatement(whileStmt, outerScope);
-    applyHeaderLabel(whileStmt, outerScope);
+    whileStmt->set_parent(outerScope);
+    ApplyFortranBoundaryLabels(whileStmt, outerScope, beginStmt.label,
+                               endStmt.label);
     SageBuilder::pushScopeStack(body);
   } else {
     builder.Enter(doStmt, control.initialization, control.bound,
@@ -14254,24 +13811,24 @@ void BuildVisitor::Build(parser::DoConstruct &x) {
     if (!doName.empty()) {
       doStmt->set_string_label(doName);
     }
-    SageInterface::appendStatement(doStmt, outerScope);
-    applyHeaderLabel(doStmt, outerScope);
+    doStmt->set_parent(outerScope);
+    ApplyFortranBoundaryLabels(doStmt, outerScope, beginStmt.label,
+                               endStmt.label);
     SageBuilder::pushScopeStack(body);
   }
 
-  // Traverse the body
   Walk(bodyBlock);
   CloseRexOpenMPDirectiveScope(SageBuilder::topScopeStack(),
                                directiveScopeEndSource);
 
-  // Leave SageTreeBuilder
   if (control.isWhile) {
     applyCanonicalLabelTermination(whileStmt);
-    builder.Leave(whileStmt,
-                  /*hasEndDo*/ !canonicalLabelTerminal.has_value());
+    builder.Leave(whileStmt);
+    SageInterface::appendStatement(whileStmt, outerScope);
   } else {
     applyCanonicalLabelTermination(doStmt);
     builder.Leave(doStmt);
+    SageInterface::appendStatement(doStmt, outerScope);
   }
 }
 
@@ -14282,6 +13839,10 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
   auto &elseIfBlocks = std::get<std::list<IfConstruct::ElseIfBlock>>(x.t);
   auto &optElse = std::get<std::optional<IfConstruct::ElseBlock>>(x.t);
   auto &endIfStmt = std::get<Statement<EndIfStmt>>(x.t);
+  SgScopeStatement *outerScope = SageBuilder::topScopeStack();
+  SgFunctionDefinition *labelScope =
+      SageInterface::getEnclosingFunctionDefinition(outerScope, true);
+  ASSERT_not_null(labelScope);
   BeginStatementSource(ifStmt.source);
   PublishSemanticNamesBeforeStatement(ifStmt.statement);
   SgExpression *condition =
@@ -14289,16 +13850,17 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
   ASSERT_not_null(condition);
   EndStatementSource();
 
-  std::vector<Rose::builder::Token> comments{};
   SgBasicBlock *trueBody = SageBuilder::buildBasicBlock_nfi();
   ASSERT_not_null(trueBody);
   if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
     trueBody->setCaseInsensitive(true);
   }
   SgIfStmt *ifNode{nullptr};
-  builder.Enter(ifNode, condition, trueBody, /*false_body*/ nullptr, comments,
-                /*is_ifthen*/ true, /*has_end_stmt*/ true,
+  builder.Enter(ifNode, condition, trueBody, /*is_ifthen*/ true,
+                /*has_end_stmt*/ true,
                 /*is_else_if*/ false);
+  if (const auto &name = std::get<std::optional<Name>>(ifStmt.statement.t))
+    ifNode->set_string_label(name->ToString());
   SourcePosition srcBegin{BuildSourcePosition(ifStmt, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(endIfStmt, Order::end)};
   SourcePosition trueBodyEnd =
@@ -14322,7 +13884,8 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
                             BuildSourcePosition(ifStmt, Order::begin),
                             BuildSourcePosition(ifStmt, Order::end));
   SetBlockSourceRange(trueBody, srcBegin, trueBodyEnd);
-  builder.Leave(ifNode);
+  ifNode->set_parent(outerScope);
+  ApplyFortranBoundaryLabels(ifNode, labelScope, ifStmt.label, endIfStmt.label);
 
   PopulateStructuredBlock(
       std::get<Block>(x.t), trueBody,
@@ -14349,9 +13912,12 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
     if (SageBuilder::topScopeStack()->isCaseInsensitive()) {
       elseIfBody->setCaseInsensitive(true);
     }
-    builder.Enter(elseIfNode, elseIfCond, elseIfBody, /*false_body*/ nullptr,
-                  comments, /*is_ifthen*/ true, /*has_end_stmt*/ false,
+    builder.Enter(elseIfNode, elseIfCond, elseIfBody, /*is_ifthen*/ true,
+                  /*has_end_stmt*/ false,
                   /*is_else_if*/ true);
+    if (const auto &name =
+            std::get<std::optional<Name>>(elseIfStmt.statement.t))
+      elseIfNode->set_string_label(name->ToString());
     SourcePosition elseIfBegin{BuildSourcePosition(elseIfStmt, Order::begin)};
     SourcePosition elseIfEnd{BuildSourcePosition(elseIfStmt, Order::end)};
     SourcePosition elseIfBodyEnd =
@@ -14376,6 +13942,10 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
 
     currentIf->set_false_body(elseIfNode);
     elseIfNode->set_parent(currentIf);
+    if (elseIfStmt.label)
+      SageInterface::setFortranNumericLabel(
+          currentIf, static_cast<int>(*elseIfStmt.label),
+          SgLabelSymbol::e_else_label_type, labelScope);
     PopulateStructuredBlock(
         std::get<Block>(elseIfBlock.t), elseIfBody,
         std::next(elseIfIter) != elseIfBlocks.end()
@@ -14396,9 +13966,17 @@ void BuildVisitor::Build(parser::IfConstruct &x) {
     SetBlockSourceRange(elseBody, elseBegin, srcEnd);
     currentIf->set_false_body(elseBody);
     elseBody->set_parent(currentIf);
+    const auto &elseStmt = std::get<Statement<ElseStmt>>(optElse->t);
+    if (const auto &name = elseStmt.statement.v)
+      currentIf->set_else_construct_name(name->ToString());
+    if (elseStmt.label)
+      SageInterface::setFortranNumericLabel(
+          currentIf, static_cast<int>(*elseStmt.label),
+          SgLabelSymbol::e_else_label_type, labelScope);
     PopulateStructuredBlock(std::get<Block>(optElse->t), elseBody,
                             endIfStmt.source);
   }
+  builder.Leave(ifNode);
 }
 
 void BuildVisitor::Build(parser::CaseConstruct &x) {
@@ -14446,41 +14024,10 @@ void BuildVisitor::Build(parser::CaseConstruct &x) {
   builder.setSourcePosition(selectorStmt, srcBegin, selectorEnd);
   SetBlockSourceRange(body, srcBegin, srcEnd);
 
-  SageInterface::appendStatement(switchStmt, outerScope);
+  switchStmt->set_parent(outerScope);
 
-  auto set_label = [&](const std::optional<Label> &label,
-                       SgLabelSymbol::label_type_enum label_type) {
-    if (!label) {
-      return;
-    }
-    const int labelValue = static_cast<int>(label.value());
-    if (labelValue <= 0 || labelValue > 99999) {
-      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: SELECT has invalid "
-                   "label "
-                << labelValue << "\n";
-      ROSE_ABORT();
-    }
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: SELECT has no exact "
-                   "program-unit label scope\n";
-      ROSE_ABORT();
-    }
-    SageInterface::setFortranNumericLabel(switchStmt, labelValue, label_type,
-                                          labelScope);
-  };
-
-  set_label(selectStmt.label, SgLabelSymbol::e_start_label_type);
-  if (switchStmt->has_end_numeric_label()) {
-    set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
-  }
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(switchStmt,
-                                                  force_case_insensitive);
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+  ApplyFortranBoundaryLabels(switchStmt, outerScope, selectStmt.label,
+                             endStmt.label);
 
   for (auto caseIter = cases.begin(); caseIter != cases.end(); ++caseIter) {
     auto &caseEntry = *caseIter;
@@ -14540,13 +14087,40 @@ void BuildVisitor::Build(parser::CaseConstruct &x) {
 
     builder.setSourcePosition(caseNode, caseBegin, clauseEnd);
     SetBlockSourceRange(caseBody, caseBegin, clauseEnd);
-    SageInterface::appendStatement(caseNode, body);
+    caseNode->set_parent(body);
+    ApplyFortranBoundaryLabels(caseNode, outerScope, caseStmt.label,
+                               std::nullopt);
     PopulateStructuredBlock(
         caseBlock, caseBody,
         std::next(caseIter) != cases.end()
             ? std::get<Statement<CaseStmt>>(std::next(caseIter)->t).source
             : endStmt.source);
+    SageInterface::appendStatement(caseNode, body);
   }
+  SageInterface::appendStatement(switchStmt, outerScope);
+}
+
+void BuildVisitor::Build(parser::ChangeTeamConstruct &) {
+  std::cerr << "REX_FLANG_UNSUPPORTED[change-team]: CHANGE TEAM has no AST "
+               "builder\n";
+  ROSE_ABORT();
+}
+
+void BuildVisitor::Build(parser::CriticalConstruct &) {
+  std::cerr << "REX_FLANG_UNSUPPORTED[critical]: CRITICAL has no AST builder\n";
+  ROSE_ABORT();
+}
+
+void BuildVisitor::Build(parser::SelectRankConstruct &) {
+  std::cerr << "REX_FLANG_UNSUPPORTED[select-rank]: SELECT RANK has no AST "
+               "builder\n";
+  ROSE_ABORT();
+}
+
+void BuildVisitor::Build(parser::SelectTypeConstruct &) {
+  std::cerr << "REX_FLANG_UNSUPPORTED[select-type]: SELECT TYPE has no AST "
+               "builder\n";
+  ROSE_ABORT();
 }
 
 void BuildVisitor::Build(parser::WhereConstruct &x) {
@@ -14571,21 +14145,9 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
 
   SgBasicBlock *body = SageBuilder::buildBasicBlock_nfi();
   ASSERT_not_null(body);
-
-  SgWhereStatement *whereStatement =
-      new SgWhereStatement(condition, body, nullptr);
-  ASSERT_not_null(whereStatement);
-
-  whereStatement->set_has_end_statement(true);
   if (outerScope->isCaseInsensitive()) {
     body->setCaseInsensitive(true);
   }
-  if (auto &optName = std::get<std::optional<Name>>(whereStmt.statement.t)) {
-    whereStatement->set_string_label(optName->ToString());
-  }
-
-  condition->set_parent(whereStatement);
-  body->set_parent(whereStatement);
 
   SourcePosition srcBegin{BuildSourcePosition(whereStmt, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
@@ -14598,42 +14160,7 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     whereBodyEnd = BuildSourcePosition(
         std::get<Statement<ElsewhereStmt>>(optElsewhere->t), Order::begin);
   }
-  builder.setSourcePosition(whereStatement, srcBegin, srcEnd);
   builder.setSourcePosition(body, srcBegin, whereBodyEnd);
-
-  SageInterface::appendStatement(whereStatement, outerScope);
-
-  auto set_label = [&](SgStatement *stmt, const std::optional<Label> &label,
-                       SgLabelSymbol::label_type_enum label_type) {
-    if (!label || stmt == nullptr) {
-      return;
-    }
-    const int labelValue = static_cast<int>(label.value());
-    if (labelValue <= 0 || labelValue > 99999) {
-      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: WHERE has invalid "
-                   "label "
-                << labelValue << "\n";
-      ROSE_ABORT();
-    }
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: WHERE has no exact "
-                   "program-unit label scope\n";
-      ROSE_ABORT();
-    }
-    SageInterface::setFortranNumericLabel(stmt, labelValue, label_type,
-                                          labelScope);
-  };
-
-  set_label(whereStatement, whereStmt.label, SgLabelSymbol::e_start_label_type);
-  if (whereStatement->has_end_numeric_label()) {
-    set_label(whereStatement, endStmt.label, SgLabelSymbol::e_end_label_type);
-  }
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
 
   auto populate_where_body = [&](std::list<WhereBodyConstruct> &constructs,
                                  SgBasicBlock *target) {
@@ -14657,9 +14184,17 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
     SageBuilder::popScopeStack();
   };
 
-  populate_where_body(bodyConstructs, body);
-
-  SgElseWhereStatement *currentElse = nullptr;
+  struct ElsewhereClause {
+    SgExpression *condition;
+    SgBasicBlock *body;
+    std::list<WhereBodyConstruct> *constructs;
+    SourcePosition begin;
+    SourcePosition end;
+    std::optional<Label> label;
+    SgElseWhereStatement *statement = nullptr;
+  };
+  std::vector<ElsewhereClause> clauses;
+  clauses.reserve(maskedElsewheres.size() + (optElsewhere ? 1 : 0));
   for (auto maskedIter = maskedElsewheres.begin();
        maskedIter != maskedElsewheres.end(); ++maskedIter) {
     auto &masked = *maskedIter;
@@ -14679,16 +14214,6 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
       elseBody->setCaseInsensitive(true);
     }
 
-    SgElseWhereStatement *elseStmt =
-        new SgElseWhereStatement(mask, elseBody, nullptr);
-    ASSERT_not_null(elseStmt);
-    if (auto &optName = std::get<std::optional<Name>>(maskedStmt.statement.t)) {
-      (void)optName;
-    }
-
-    mask->set_parent(elseStmt);
-    elseBody->set_parent(elseStmt);
-
     SourcePosition elseBegin{BuildSourcePosition(maskedStmt, Order::begin)};
     SourcePosition clauseEnd{srcEnd};
     if (auto nextMaskedIter = std::next(maskedIter);
@@ -14701,20 +14226,8 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
           std::get<Statement<ElsewhereStmt>>(optElsewhere->t), Order::begin);
     }
     builder.setSourcePosition(elseBody, elseBegin, clauseEnd);
-
-    set_label(elseStmt, maskedStmt.label, SgLabelSymbol::e_start_label_type);
-
-    if (currentElse == nullptr) {
-      whereStatement->set_elsewhere(elseStmt);
-      elseStmt->set_parent(whereStatement);
-    } else {
-      currentElse->set_elsewhere(elseStmt);
-      elseStmt->set_parent(currentElse);
-    }
-    currentElse = elseStmt;
-
-    populate_where_body(maskedBody, elseBody);
-    builder.setSourcePosition(elseStmt, elseBegin, clauseEnd);
+    clauses.push_back(
+        {mask, elseBody, &maskedBody, elseBegin, clauseEnd, maskedStmt.label});
   }
 
   if (optElsewhere) {
@@ -14733,33 +14246,40 @@ void BuildVisitor::Build(parser::WhereConstruct &x) {
       elseBody->setCaseInsensitive(true);
     }
 
-    SgElseWhereStatement *elseStmt =
-        new SgElseWhereStatement(nullExpr, elseBody, nullptr);
-    ASSERT_not_null(elseStmt);
-    if (auto &optName = elsewhereStmt.statement.v) {
-      (void)optName;
-    }
-
-    nullExpr->set_parent(elseStmt);
-    elseBody->set_parent(elseStmt);
-
     SourcePosition elseBegin{BuildSourcePosition(elsewhereStmt, Order::begin)};
     builder.setSourcePosition(elseBody, elseBegin, srcEnd);
-
-    set_label(elseStmt, elsewhereStmt.label, SgLabelSymbol::e_start_label_type);
-
-    if (currentElse == nullptr) {
-      whereStatement->set_elsewhere(elseStmt);
-      elseStmt->set_parent(whereStatement);
-    } else {
-      currentElse->set_elsewhere(elseStmt);
-      elseStmt->set_parent(currentElse);
-    }
-    currentElse = elseStmt;
-
-    populate_where_body(elsewhereBody, elseBody);
-    builder.setSourcePosition(elseStmt, elseBegin, srcEnd);
+    clauses.push_back({nullExpr, elseBody, &elsewhereBody, elseBegin, srcEnd,
+                       elsewhereStmt.label});
   }
+
+  SgElseWhereStatement *elsewhere = nullptr;
+  for (auto clause = clauses.rbegin(); clause != clauses.rend(); ++clause) {
+    clause->statement =
+        new SgElseWhereStatement(clause->condition, clause->body, elsewhere);
+    ASSERT_not_null(clause->statement);
+    builder.setSourcePosition(clause->statement, clause->begin, clause->end);
+    elsewhere = clause->statement;
+  }
+
+  SgWhereStatement *whereStatement =
+      new SgWhereStatement(condition, body, elsewhere);
+  ASSERT_not_null(whereStatement);
+  whereStatement->set_has_end_statement(true);
+  if (auto &optName = std::get<std::optional<Name>>(whereStmt.statement.t)) {
+    whereStatement->set_string_label(optName->ToString());
+  }
+  builder.setSourcePosition(whereStatement, srcBegin, srcEnd);
+  whereStatement->set_parent(outerScope);
+  ApplyFortranBoundaryLabels(whereStatement, outerScope, whereStmt.label,
+                             endStmt.label);
+
+  populate_where_body(bodyConstructs, body);
+  for (ElsewhereClause &clause : clauses) {
+    ApplyFortranBoundaryLabels(clause.statement, outerScope, clause.label,
+                               std::nullopt);
+    populate_where_body(*clause.constructs, clause.body);
+  }
+  SageInterface::appendStatement(whereStatement, outerScope);
 }
 
 void BuildVisitor::Build(parser::ForallConstruct &x) {
@@ -14798,8 +14318,6 @@ void BuildVisitor::Build(parser::ForallConstruct &x) {
       new SgForAllStatement(headerExprList, body);
   ASSERT_not_null(forallStatement);
 
-  forallStatement->set_forall_statement_kind(
-      SgForAllStatement::e_forall_statement);
   forallStatement->set_has_end_statement(true);
   if (outerScope->isCaseInsensitive()) {
     forallStatement->setCaseInsensitive(true);
@@ -14808,51 +14326,16 @@ void BuildVisitor::Build(parser::ForallConstruct &x) {
     forallStatement->set_string_label(optName->ToString());
   }
 
-  forallStatement->set_body(body);
-  body->set_parent(forallStatement);
-  headerExprList->set_parent(forallStatement);
-
   SourcePosition srcBegin{BuildSourcePosition(forallStmt, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(endStmt, Order::end)};
   builder.setSourcePosition(forallStatement, srcBegin, srcEnd);
   builder.setSourcePosition(body, srcBegin, srcEnd);
 
-  SageInterface::appendStatement(forallStatement, outerScope);
+  forallStatement->set_parent(outerScope);
   body->consume_forall_construction(forallStatement, outerScope);
 
-  auto set_label = [&](const std::optional<Label> &label,
-                       SgLabelSymbol::label_type_enum label_type) {
-    if (!label) {
-      return;
-    }
-    const int labelValue = static_cast<int>(label.value());
-    if (labelValue <= 0 || labelValue > 99999) {
-      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: FORALL has invalid "
-                   "label "
-                << labelValue << "\n";
-      ROSE_ABORT();
-    }
-    SgScopeStatement *labelScope =
-        SageInterface::getEnclosingFunctionDefinition(outerScope, true);
-    if (labelScope == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[label-scope]: FORALL has no exact "
-                   "program-unit label scope\n";
-      ROSE_ABORT();
-    }
-    SageInterface::setFortranNumericLabel(forallStatement, labelValue,
-                                          label_type, labelScope);
-  };
-
-  set_label(forallStmt.label, SgLabelSymbol::e_start_label_type);
-  if (forallStatement->has_end_numeric_label()) {
-    set_label(endStmt.label, SgLabelSymbol::e_end_label_type);
-  }
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(forallStatement,
-                                                  force_case_insensitive);
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
+  ApplyFortranBoundaryLabels(forallStatement, outerScope, forallStmt.label,
+                             endStmt.label);
 
   auto populate_forall_body = [&](std::list<ForallBodyConstruct> &constructs,
                                   SgBasicBlock *target) {
@@ -14881,6 +14364,7 @@ void BuildVisitor::Build(parser::ForallConstruct &x) {
   };
 
   populate_forall_body(bodyConstructs, body);
+  SageInterface::appendStatement(forallStatement, outerScope);
 }
 
 void BuildVisitor::Build(parser::IfStmt &x) {
@@ -14901,10 +14385,9 @@ void BuildVisitor::Build(parser::IfStmt &x) {
     trueBody->setCaseInsensitive(true);
   }
 
-  std::vector<Rose::builder::Token> comments{};
   SgIfStmt *ifNode{nullptr};
-  builder.Enter(ifNode, condition, trueBody, /*false_body*/ nullptr, comments,
-                /*is_ifthen*/ false, /*has_end_stmt*/ false,
+  builder.Enter(ifNode, condition, trueBody, /*is_ifthen*/ false,
+                /*has_end_stmt*/ false,
                 /*is_else_if*/ false);
   SgExprStatement *conditionStatement =
       isSgExprStatement(ifNode->get_conditional());
@@ -14918,14 +14401,15 @@ void BuildVisitor::Build(parser::IfStmt &x) {
   ApplyCurrentStatementSource(ifNode);
   ApplyCurrentStatementSource(conditionStatement);
   ApplyCurrentStatementSource(trueBody);
+  ifNode->set_parent(outerScope);
   ApplyStatementLabel(ifNode, outerScope);
-  SageInterface::appendStatement(ifNode, outerScope);
 
   SageBuilder::pushScopeStack(trueBody);
   label_ = std::nullopt;
   Walk(std::get<UnlabeledStatement<ActionStmt>>(x.t));
   label_ = saved_label;
   SageBuilder::popScopeStack();
+  SageInterface::appendStatement(ifNode, outerScope);
 }
 
 void BuildVisitor::Build(parser::WhereStmt &x) {
@@ -14945,22 +14429,14 @@ void BuildVisitor::Build(parser::WhereStmt &x) {
       new SgWhereStatement(condition, body, nullptr);
   ASSERT_not_null(whereStatement);
 
-  whereStatement->set_has_end_statement(false);
   if (outerScope->isCaseInsensitive()) {
     body->setCaseInsensitive(true);
   }
 
-  condition->set_parent(whereStatement);
-  body->set_parent(whereStatement);
-
   ApplyCurrentStatementSource(whereStatement);
   ApplyCurrentStatementSource(body);
+  whereStatement->set_parent(outerScope);
   ApplyStatementLabel(whereStatement, outerScope);
-  SageInterface::appendStatement(whereStatement, outerScope);
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
 
   auto saved_label = label_;
   label_ = std::nullopt;
@@ -14968,6 +14444,7 @@ void BuildVisitor::Build(parser::WhereStmt &x) {
   Walk(std::get<AssignmentStmt>(x.t));
   SageBuilder::popScopeStack();
   label_ = saved_label;
+  SageInterface::appendStatement(whereStatement, outerScope);
 }
 
 void BuildVisitor::Build(parser::ForallStmt &x) {
@@ -14997,28 +14474,15 @@ void BuildVisitor::Build(parser::ForallStmt &x) {
       new SgForAllStatement(headerExprList, body);
   ASSERT_not_null(forallStatement);
 
-  forallStatement->set_forall_statement_kind(
-      SgForAllStatement::e_forall_statement);
-  forallStatement->set_has_end_statement(false);
   if (outerScope->isCaseInsensitive()) {
     forallStatement->setCaseInsensitive(true);
   }
 
-  forallStatement->set_body(body);
-  body->set_parent(forallStatement);
-  headerExprList->set_parent(forallStatement);
-
   ApplyCurrentStatementSource(forallStatement);
   ApplyCurrentStatementSource(body);
+  forallStatement->set_parent(outerScope);
   ApplyStatementLabel(forallStatement, outerScope);
-  SageInterface::appendStatement(forallStatement, outerScope);
   body->consume_forall_construction(forallStatement, outerScope);
-
-  const bool force_case_insensitive =
-      SageInterface::is_language_case_insensitive();
-  SageInterface::ensureCaseInsensitiveSymbolTable(forallStatement,
-                                                  force_case_insensitive);
-  SageInterface::ensureCaseInsensitiveSymbolTable(body, force_case_insensitive);
 
   auto saved_label = label_;
   label_ = std::nullopt;
@@ -15026,6 +14490,30 @@ void BuildVisitor::Build(parser::ForallStmt &x) {
   Walk(std::get<UnlabeledStatement<ForallAssignmentStmt>>(x.t));
   SageBuilder::popScopeStack();
   label_ = saved_label;
+  SageInterface::appendStatement(forallStatement, outerScope);
+}
+
+namespace {
+[[noreturn]] void RejectUnsupportedAction(const char *name) {
+  std::cerr << "REX_FLANG_UNSUPPORTED_ACTION: " << name << '\n';
+  ROSE_ABORT();
+}
+} // namespace
+
+void BuildVisitor::Build(parser::ActionStmt &x) {
+  static_assert(std::variant_size_v<decltype(x.u)> == 42);
+  common::visit(
+      common::visitors{[&](common::Indirection<parser::EventPostStmt> &) {
+                         RejectUnsupportedAction("EVENT POST");
+                       },
+                       [&](common::Indirection<parser::EventWaitStmt> &) {
+                         RejectUnsupportedAction("EVENT WAIT");
+                       },
+                       [&](common::Indirection<parser::NotifyWaitStmt> &) {
+                         RejectUnsupportedAction("NOTIFY WAIT");
+                       },
+                       [&](auto &action) { Walk(action); }},
+      x.u);
 }
 
 void BuildVisitor::Build(parser::Statement<parser::ActionStmt> &x) {
@@ -15079,8 +14567,7 @@ void BuildVisitor::Build(parser::ArithmeticIfStmt &x) {
   RegisterPendingFortranArithmeticIf(stmt, lessLabel, equalLabel, greaterLabel,
                                      labelScope);
 
-  auto labels = getLabels();
-  builder.Leave(stmt, labels);
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::AssignStmt &x) {
@@ -15205,15 +14692,11 @@ void BuildVisitor::Build(parser::LabelDoStmt &x) {
 
     doConcurrent->set_forall_statement_kind(
         SgForAllStatement::e_do_concurrent_statement);
-    doConcurrent->set_has_end_statement(false);
     if (outerScope->isCaseInsensitive()) {
       doConcurrent->setCaseInsensitive(true);
       body->setCaseInsensitive(true);
     }
 
-    doConcurrent->set_body(body);
-    body->set_parent(doConcurrent);
-    header->set_parent(doConcurrent);
     ApplyCurrentStatementSource(doConcurrent);
     ApplyCurrentStatementSource(body);
 
@@ -15328,7 +14811,7 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
     } else {
       auto *whileStmt = isSgWhileStmt(frame.stmt);
       ASSERT_not_null(whileStmt);
-      builder.Leave(whileStmt, /*hasEndDo*/ false);
+      builder.Leave(whileStmt);
     }
   }
 }
@@ -15780,8 +15263,7 @@ void CollectFortranOpenMPSubexpressionTypes(
     return;
   }
   SgType *resultType = expression->get_type();
-  if (resultType == nullptr || isSgTypeUnknown(resultType) != nullptr ||
-      isSgTypeDefault(resultType) != nullptr) {
+  if (SageInterface::containsUnknownType(resultType)) {
     std::cerr << "REX_FLANG_INVARIANT[openmp-expression-result-type]: "
                  "typed OpenMP operation "
               << expression->class_name()
@@ -15825,9 +15307,8 @@ SgExpression *BuildFortranOpenMPSemanticExpressionTree(
     SgExpression *rhs = nullptr;
     WalkExpr(std::get<Fortran::parser::Variable>(record.assignment->t), lhs);
     WalkExpr(std::get<Fortran::parser::Expr>(record.assignment->t), rhs);
-    if (lhs == nullptr || rhs == nullptr || lhs->get_type() == nullptr ||
-        isSgTypeUnknown(lhs->get_type()) != nullptr ||
-        isSgTypeDefault(lhs->get_type()) != nullptr) {
+    if (lhs == nullptr || rhs == nullptr ||
+        SageInterface::containsUnknownType(lhs->get_type())) {
       std::cerr << "REX_FLANG_INVARIANT[openmp-expression-result-type]: "
                    "typed OpenMP assignment has no exact Flang lhs type\n";
       ROSE_ABORT();
@@ -15977,9 +15458,8 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
           &record.name->symbol->GetUltimate();
       const auto [position, inserted] =
           directiveLocalTypes.emplace(ultimate, type);
-      if ((!inserted && position->second != type) || type == nullptr ||
-          isSgTypeUnknown(type) != nullptr ||
-          isSgTypeDefault(type) != nullptr) {
+      if ((!inserted && position->second != type) ||
+          SageInterface::containsUnknownType(type)) {
         std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-local]: "
                      "directive-local name has no unique exact semantic "
                      "type\n";
@@ -16267,8 +15747,7 @@ void BuildVisitor::Done() {
   }
   if (!stmt_source_stack_.empty() || current_stmt_source_.source.has_value() ||
       current_stmt_source_.positions.has_value() ||
-      current_stmt_source_.lexical_owner != nullptr ||
-      current_stmt_source_.character_literal_substring_cursor != nullptr) {
+      current_stmt_source_.lexical_owner != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[statement-source-stack]: parser "
                  "statement traversal ended with an unbalanced typed source "
                  "frame\n";
@@ -16295,23 +15774,11 @@ void BuildVisitor::Done() {
               : nullptr;
       if (includeStart == nullptr || includeStart->get_line() <= 0 ||
           includeStart->get_col() <= 0 || include.includer_path.empty() ||
-          NormalizeSourcePath(includeStart->get_physical_filename()) !=
-              include.includer_path) {
+          includeStart->get_physical_filename() != include.includer_path) {
         std::cerr << "REX_FLANG_INVARIANT[include-spelling]: materialized "
                      "INCLUDE has no exact physical source position\n";
         ROSE_ABORT();
       }
-
-      // Comment/directive attachment runs as enclosing parser constructs
-      // leave the builder.  It can therefore attach the raw INCLUDE token
-      // after MaybeInsertIncludeLine has already replaced that token with the
-      // typed SgFortranIncludeLine.  Reconcile the two representations at the
-      // frontend transaction boundary, after every program unit is complete,
-      // so the backend sees exactly one producer-owned INCLUDE surface.
-      ConsumeRawFortranIncludeDirective(
-          sourceFile,
-          SourcePosition{include.includer_path, includeStart->get_line(),
-                         includeStart->get_col()});
     }
     const std::size_t includeOwnerCount = std::count(
         includePaths.begin(), includePaths.end(), include.included_path);
@@ -16376,7 +15843,6 @@ void BuildVisitor::BeginSemanticPredeclarationSource(
   current_stmt_source_ = StatementSourceFrame{};
   current_stmt_source_.lexical_owner = lexicalOwner;
   current_stmt_source_.source = source;
-  current_stmt_source_.character_literal_substring_cursor = source.begin();
 
   const SourcePosition begin =
       BuildRequiredStatementSourcePosition(source, Order::begin);
@@ -16453,20 +15919,18 @@ void BuildVisitor::MaybeInsertIncludeLine(
     return;
   }
 
-  const std::optional<std::string> rawIncludedPath =
-      GetSourceFilePathForProvenance(sources, statementRange->start(),
-                                     /*topLevel=*/false);
+  const auto physicalIncludedPath =
+      GetPhysicalSourcePathForProvenance(sources, statementRange->start());
   const std::optional<SourcePosition> statementPosition =
       BuildSourcePositionFromProvenance(sources, statementRange->start());
-  const std::string includedPath =
-      rawIncludedPath ? NormalizeSourcePath(*rawIncludedPath) : std::string{};
-  if (includedPath.empty() || !statementPosition ||
-      statementPosition->path != includedPath) {
+  if (!physicalIncludedPath || !statementPosition ||
+      statementPosition->path != *physicalIncludedPath) {
     std::cerr << "REX_FLANG_INVARIANT[include-provenance]: included parser "
                  "statement has missing or disagreeing physical filename "
                  "provenance\n";
     ROSE_ABORT();
   }
+  const std::string &includedPath = *physicalIncludedPath;
 
   SgSourceFile *sourceFile = builder.getSourceFile();
   if (sourceFile == nullptr) {
@@ -16522,23 +15986,21 @@ void BuildVisitor::MaybeInsertIncludeLine(
     ROSE_ABORT();
   }
 
-  const std::optional<std::string> rawIncluderPath =
-      GetSourceFilePathForProvenance(sources, inclusionRange->start(),
-                                     /*topLevel=*/false);
+  const auto physicalIncluderPath =
+      GetPhysicalSourcePathForProvenance(sources, inclusionRange->start());
   const std::optional<SourcePosition> startPosition =
       BuildSourcePositionFromProvenance(sources, inclusionRange->start());
   const std::optional<SourcePosition> endPosition =
       BuildSourcePositionFromProvenance(sources, inclusionRange->NextAfter());
-  const std::string includerPath =
-      rawIncluderPath ? NormalizeSourcePath(*rawIncluderPath) : std::string{};
-  if (includerPath.empty() || !startPosition || !endPosition ||
-      startPosition->path != includerPath ||
-      endPosition->path != includerPath) {
+  if (!physicalIncluderPath || !startPosition || !endPosition ||
+      startPosition->path != *physicalIncluderPath ||
+      endPosition->path != *physicalIncluderPath) {
     std::cerr << "REX_FLANG_INVARIANT[include-provenance]: INCLUDE directive "
                  "has missing or disagreeing physical filename/range "
                  "provenance\n";
     ROSE_ABORT();
   }
+  const std::string &includerPath = *physicalIncluderPath;
 
   const std::string sourceFilename =
       ExtractIncludeFilenameFromRange(sources, *inclusionRange);
@@ -16569,9 +16031,10 @@ void BuildVisitor::MaybeInsertIncludeLine(
   SgFortranIncludeLine *includeLine =
       SageBuilder::buildFortranIncludeLine_nfi(sourceFilename);
   ASSERT_not_null(includeLine);
-  builder.setSourcePosition(includeLine, *startPosition, *endPosition);
+  SourcePosition includeBegin = *startPosition;
+  includeBegin.cooked_source_order = RequireFlangCookedSourceOrder(source);
+  builder.setSourcePosition(includeLine, includeBegin, *endPosition);
 
-  ConsumeRawFortranIncludeDirective(sourceFile, *startPosition);
   SageInterface::appendStatement(includeLine, lexicalOwner);
   if (includeLine->get_parent() != lexicalOwner) {
     std::cerr << "REX_FLANG_INVARIANT[include-lexical-owner]: typed INCLUDE "
@@ -16859,36 +16322,6 @@ void BuildVisitor::RegisterPendingFortranIoErr(SgIOStatement *statement,
                                        statement, 0, labelValue, labelScope);
 }
 
-static SgLabelRefExp *GetFortranEndLabelReference(SgStatement *statement) {
-  ASSERT_not_null(statement);
-  switch (statement->variantT()) {
-  case V_SgIfStmt:
-    return isSgIfStmt(statement)->get_end_numeric_label();
-  case V_SgWhileStmt:
-    return isSgWhileStmt(statement)->get_end_numeric_label();
-  case V_SgSwitchStatement:
-    return isSgSwitchStatement(statement)->get_end_numeric_label();
-  case V_SgFortranDo:
-    return isSgFortranDo(statement)->get_end_numeric_label();
-  case V_SgForAllStatement:
-    return isSgForAllStatement(statement)->get_end_numeric_label();
-  case V_SgInterfaceStatement:
-    return isSgInterfaceStatement(statement)->get_end_numeric_label();
-  case V_SgDerivedTypeStatement:
-    return isSgDerivedTypeStatement(statement)->get_end_numeric_label();
-  case V_SgModuleStatement:
-    return isSgModuleStatement(statement)->get_end_numeric_label();
-  case V_SgProgramHeaderStatement:
-    return isSgProgramHeaderStatement(statement)->get_end_numeric_label();
-  case V_SgProcedureHeaderStatement:
-    return isSgProcedureHeaderStatement(statement)->get_end_numeric_label();
-  case V_SgWhereStatement:
-    return isSgWhereStatement(statement)->get_end_numeric_label();
-  default:
-    return nullptr;
-  }
-}
-
 void BuildVisitor::ResolvePendingFortranLabelReferences(
     SgScopeStatement *labelScope, const char *boundary) {
   if (labelScope == nullptr || boundary == nullptr ||
@@ -16914,9 +16347,11 @@ void BuildVisitor::ResolvePendingFortranLabelReferences(
     SgStatement *target =
         symbol != nullptr ? symbol->get_fortran_statement() : nullptr;
     SgLabelRefExp *targetRef = nullptr;
-    if (target != nullptr && symbol != nullptr) {
+    if (target != nullptr) {
       SgLabelRefExp *startRef = target->get_numeric_label();
-      SgLabelRefExp *endRef = GetFortranEndLabelReference(target);
+      SgLabelRefExp *endRef = target->has_end_numeric_label()
+                                  ? target->get_end_numeric_label()
+                                  : nullptr;
       const bool hasExactStart =
           startRef != nullptr && startRef->get_symbol() == symbol;
       const bool hasExactEnd =
@@ -17215,10 +16650,8 @@ void BuildVisitor::ApplyCurrentStatementSource(SgLocatedNode *node) {
     Sg_File_Info *start = node->get_startOfConstruct();
     Sg_File_Info *end = node->get_endOfConstruct();
     if (start == nullptr || end == nullptr ||
-        NormalizeSourcePath(start->get_filenameString()) !=
-            std::get<0>(pair).path ||
-        NormalizeSourcePath(end->get_filenameString()) !=
-            std::get<1>(pair).path) {
+        start->get_physical_filename() != std::get<0>(pair).path ||
+        end->get_physical_filename() != std::get<1>(pair).path) {
       std::cerr << "REX_FLANG_INVARIANT[statement-source-owner]: "
                 << node->class_name()
                 << " did not retain its exact physical parser source range\n";
@@ -17243,34 +16676,6 @@ BuildVisitor::RequireCurrentStatementSource(const char *producer) const {
     ROSE_ABORT();
   }
   return *current_stmt_source_.source;
-}
-
-const char *BuildVisitor::RequireCharacterLiteralSubstringSearchBegin() const {
-  const Fortran::parser::CharBlock &source = RequireCurrentStatementSource(
-      "Fortran character literal substring source cursor");
-  const char *cursor = current_stmt_source_.character_literal_substring_cursor;
-  if (cursor == nullptr || cursor < source.begin() || cursor > source.end()) {
-    std::cerr << "REX_FLANG_INVARIANT[substring-source-cursor]: current "
-                 "statement has no exact ordered character-literal substring "
-                 "cursor\n";
-    ROSE_ABORT();
-  }
-  return cursor;
-}
-
-void BuildVisitor::ConsumeCharacterLiteralSubstringSource(
-    const Fortran::parser::CharBlock &source) {
-  const Fortran::parser::CharBlock &statement = RequireCurrentStatementSource(
-      "Fortran character literal substring source consumption");
-  const char *cursor = RequireCharacterLiteralSubstringSearchBegin();
-  if (source.empty() || !statement.Contains(source) ||
-      source.begin() < cursor || source.end() <= source.begin()) {
-    std::cerr << "REX_FLANG_INVARIANT[substring-source-cursor]: character "
-                 "literal substring source is missing or retrograde in its "
-                 "exact statement transaction\n";
-    ROSE_ABORT();
-  }
-  current_stmt_source_.character_literal_substring_cursor = source.end();
 }
 
 namespace {
@@ -17551,8 +16956,6 @@ BuildAllocationExpr(parser::Allocation &x,
     ASSERT_not_null(coExpr);
     SageBuilder::requireFreshNfiExpressionSourceState(
         coExpr, "Flang allocation coarray expression");
-    result->set_parent(coExpr);
-    coshapes->set_parent(coExpr);
     result = coExpr;
     resultSource = parser::CharBlock(objectSource.begin(), closingBracket + 1);
     SetExactFlangAllocationSourcePosition(result, resultSource, statementSource,
@@ -17564,23 +16967,21 @@ BuildAllocationExpr(parser::Allocation &x,
 
 void ApplyStatOrErrmsg(parser::StatOrErrmsg &x, SgExpression *&statExpr,
                        SgExpression *&errmsgExpr) {
-  common::visit(
-      common::visitors{
-          [&](parser::StatVariable &y) {
-            if (statExpr != nullptr) {
-              std::cerr << "Duplicate STAT spec in allocate/deallocate.\n";
-              ROSE_ABORT();
-            }
-            WalkExpr(y.v, statExpr);
-          },
-          [&](parser::MsgVariable &y) {
-            if (errmsgExpr != nullptr) {
-              std::cerr << "Duplicate ERRMSG spec in allocate/deallocate.\n";
-              ROSE_ABORT();
-            }
-            WalkExpr(y.v, errmsgExpr);
-          }},
-      x.u);
+  common::visit(common::visitors{[&](parser::StatVariable &y) {
+                                   if (statExpr != nullptr) {
+                                     std::cerr << "Duplicate STAT spec.\n";
+                                     ROSE_ABORT();
+                                   }
+                                   WalkExpr(y.v, statExpr);
+                                 },
+                                 [&](parser::MsgVariable &y) {
+                                   if (errmsgExpr != nullptr) {
+                                     std::cerr << "Duplicate ERRMSG spec.\n";
+                                     ROSE_ABORT();
+                                   }
+                                   WalkExpr(y.v, errmsgExpr);
+                                 }},
+                x.u);
 }
 
 } // namespace
@@ -17588,9 +16989,6 @@ void ApplyStatOrErrmsg(parser::StatOrErrmsg &x, SgExpression *&statExpr,
 // ActionStmt(s)
 //
 void BuildVisitor::Build(parser::AllocateStmt &x) {
-  SgAllocateStatement *stmt = new SgAllocateStatement();
-  ASSERT_not_null(stmt);
-  ApplyCurrentStatementSource(stmt);
   if (!current_stmt_source_.source) {
     std::cerr << "REX_FLANG_INVARIANT[allocate-source]: ALLOCATE statement "
                  "has no exact active parser source transaction\n";
@@ -17677,8 +17075,6 @@ void BuildVisitor::Build(parser::AllocateStmt &x) {
   SetExactFlangAllocationSourcePosition(exprList, *expressionListSource,
                                         statementSource,
                                         "allocate expression list");
-  stmt->set_expr_list(exprList);
-  exprList->set_parent(stmt);
 
   SgExpression *statExpr{nullptr};
   SgExpression *errmsgExpr{nullptr};
@@ -17723,31 +17119,11 @@ void BuildVisitor::Build(parser::AllocateStmt &x) {
                   opt.u);
   }
 
-  if (statExpr != nullptr) {
-    stmt->set_stat_expression(statExpr);
-    statExpr->set_parent(stmt);
-  }
-  if (errmsgExpr != nullptr) {
-    stmt->set_errmsg_expression(errmsgExpr);
-    errmsgExpr->set_parent(stmt);
-  }
-  if (sourceExpr != nullptr) {
-    stmt->set_source_expression(sourceExpr);
-    sourceExpr->set_parent(stmt);
-  }
-  if (moldExpr != nullptr) {
-    stmt->set_mold_expression(moldExpr);
-    moldExpr->set_parent(stmt);
-  }
-  if (streamExpr != nullptr) {
-    stmt->set_stream_expression(streamExpr);
-    streamExpr->set_parent(stmt);
-  }
-  if (pinnedExpr != nullptr) {
-    stmt->set_pinned_expression(pinnedExpr);
-    pinnedExpr->set_parent(stmt);
-  }
-
+  SgAllocateStatement *stmt =
+      new SgAllocateStatement(exprList, statExpr, errmsgExpr, sourceExpr,
+                              moldExpr, streamExpr, pinnedExpr);
+  ASSERT_not_null(stmt);
+  ApplyCurrentStatementSource(stmt);
   ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
   SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
@@ -17756,7 +17132,7 @@ void BuildVisitor::Build(parser::ContinueStmt &) {
   SgFortranContinueStmt *stmt{nullptr};
   builder.Enter(stmt);
   ApplyCurrentStatementSource(stmt);
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::CycleStmt &x) {
@@ -17766,13 +17142,10 @@ void BuildVisitor::Build(parser::CycleStmt &x) {
   if (x.v) {
     stmt->set_do_string_label(x.v->ToString());
   }
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::DeallocateStmt &x) {
-  SgDeallocateStatement *stmt = new SgDeallocateStatement();
-  ASSERT_not_null(stmt);
-  ApplyCurrentStatementSource(stmt);
   if (!current_stmt_source_.source) {
     std::cerr << "REX_FLANG_INVARIANT[allocate-source]: DEALLOCATE statement "
                  "has no exact active parser source transaction\n";
@@ -17805,8 +17178,6 @@ void BuildVisitor::Build(parser::DeallocateStmt &x) {
   SetExactFlangAllocationSourcePosition(exprList, *expressionListSource,
                                         statementSource,
                                         "deallocate expression list");
-  stmt->set_expr_list(exprList);
-  exprList->set_parent(stmt);
 
   SgExpression *statExpr{nullptr};
   SgExpression *errmsgExpr{nullptr};
@@ -17814,24 +17185,142 @@ void BuildVisitor::Build(parser::DeallocateStmt &x) {
     ApplyStatOrErrmsg(opt, statExpr, errmsgExpr);
   }
 
-  if (statExpr != nullptr) {
-    stmt->set_stat_expression(statExpr);
-    statExpr->set_parent(stmt);
-  }
-  if (errmsgExpr != nullptr) {
-    stmt->set_errmsg_expression(errmsgExpr);
-    errmsgExpr->set_parent(stmt);
-  }
+  SgDeallocateStatement *stmt =
+      new SgDeallocateStatement(exprList, statExpr, errmsgExpr);
+  ASSERT_not_null(stmt);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
 
+void BuildVisitor::Build(parser::FormTeamStmt &x) {
+  SgExpression *number = nullptr;
+  SgExpression *team = nullptr;
+  SgExpression *index = nullptr;
+  SgExpression *stat = nullptr;
+  SgExpression *message = nullptr;
+  WalkExpr(std::get<parser::ScalarIntExpr>(x.t), number);
+  WalkExpr(std::get<parser::TeamVariable>(x.t), team);
+  for (auto &spec :
+       std::get<std::list<parser::FormTeamStmt::FormTeamSpec>>(x.t)) {
+    common::visit(common::visitors{[&](parser::ScalarIntExpr &value) {
+                                     ROSE_ASSERT(index == nullptr);
+                                     WalkExpr(value, index);
+                                   },
+                                   [&](parser::StatOrErrmsg &value) {
+                                     ApplyStatOrErrmsg(value, stat, message);
+                                   }},
+                  spec.u);
+  }
+  ROSE_ASSERT(number != nullptr && team != nullptr);
+  auto *stmt = new SgFormTeamStatement(number, team, index, stat, message);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  stmt->validate_operands();
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::SyncAllStmt &x) {
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::StatOrErrmsg &spec : x.v) {
+    ApplyStatOrErrmsg(spec, stat, errMsg);
+  }
+  auto *stmt = new SgSyncAllStatement(stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::SyncImagesStmt &x) {
+  SgExpression *imageSet = nullptr;
+  bool allImages = false;
+  common::visit(common::visitors{
+                    [&](parser::IntExpr &value) { WalkExpr(value, imageSet); },
+                    [&](parser::Star &) { allImages = true; }},
+                std::get<parser::SyncImagesStmt::ImageSet>(x.t).u);
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::StatOrErrmsg &spec :
+       std::get<std::list<parser::StatOrErrmsg>>(x.t))
+    ApplyStatOrErrmsg(spec, stat, errMsg);
+  auto *stmt = new SgSyncImagesStatement(imageSet, allImages, stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::SyncMemoryStmt &x) {
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::StatOrErrmsg &spec : x.v) {
+    ApplyStatOrErrmsg(spec, stat, errMsg);
+  }
+  auto *stmt = new SgSyncMemoryStatement(stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::SyncTeamStmt &x) {
+  SgExpression *teamValue = nullptr;
+  WalkExpr(std::get<parser::TeamValue>(x.t), teamValue);
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::StatOrErrmsg &spec :
+       std::get<std::list<parser::StatOrErrmsg>>(x.t))
+    ApplyStatOrErrmsg(spec, stat, errMsg);
+  auto *stmt = new SgSyncTeamStatement(teamValue, stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::LockStmt &x) {
+  SgExpression *lockVariable = nullptr;
+  WalkExpr(std::get<parser::LockVariable>(x.t), lockVariable);
+  SgExpression *acquiredLock = nullptr;
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::LockStmt::LockStat &spec :
+       std::get<std::list<parser::LockStmt::LockStat>>(x.t)) {
+    common::visit(
+        common::visitors{
+            [&](parser::Scalar<parser::Logical<parser::Variable>> &value) {
+              ROSE_ASSERT(acquiredLock == nullptr);
+              WalkExpr(value, acquiredLock);
+            },
+            [&](parser::StatOrErrmsg &value) {
+              ApplyStatOrErrmsg(value, stat, errMsg);
+            }},
+        spec.u);
+  }
+  auto *stmt = new SgLockStatement(lockVariable, acquiredLock, stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
+  ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
+  SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
+}
+
+void BuildVisitor::Build(parser::UnlockStmt &x) {
+  SgExpression *lockVariable = nullptr;
+  WalkExpr(std::get<parser::LockVariable>(x.t), lockVariable);
+  SgExpression *stat = nullptr;
+  SgExpression *errMsg = nullptr;
+  for (parser::StatOrErrmsg &spec :
+       std::get<std::list<parser::StatOrErrmsg>>(x.t))
+    ApplyStatOrErrmsg(spec, stat, errMsg);
+  auto *stmt = new SgUnlockStatement(lockVariable, stat, errMsg);
+  ApplyCurrentStatementSource(stmt);
   ApplyStatementLabel(stmt, SageBuilder::topScopeStack());
   SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
 void BuildVisitor::Build(parser::FailImageStmt &) {
   SgProcessControlStatement *stmt{nullptr};
-  builder.Enter(stmt, "fail_image", std::nullopt, std::nullopt);
+  builder.Enter(stmt, ProcessControlKind::fail_image, std::nullopt,
+                std::nullopt);
   ApplyCurrentStatementSource(stmt);
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::ExitStmt &x) {
@@ -17841,16 +17330,7 @@ void BuildVisitor::Build(parser::ExitStmt &x) {
   if (x.v) {
     stmt->set_do_string_label(x.v->ToString());
   }
-  builder.Leave(stmt, getLabels());
-}
-
-void Build(parser::FunctionStmt &x, std::list<std::string> &dummy_arg_name_list,
-           std::string &name, std::string &result_name,
-           LanguageTranslation::FunctionModifierList &function_modifiers,
-           SgType *&type) {
-  using namespace Fortran::parser;
-  info(x, "Rose::builder::Build(FunctionStmt)");
-  ABORT_NO_IMPL;
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::PrintStmt &x) {
@@ -17869,7 +17349,6 @@ void BuildVisitor::Build(parser::PrintStmt &x) {
 
   SgPrintStatement *stmt = new SgPrintStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_print);
   ApplyCurrentStatementSource(stmt);
   AttachFortranFormat(std::get<parser::Format>(x.t), stmt);
   SgExprListExp *ioList = SageBuilderCpp17::buildExprListExp_nfi(items);
@@ -17882,11 +17361,11 @@ void BuildVisitor::Build(parser::PrintStmt &x) {
       ioList, std::get<1>(x.t),
       RequireCurrentStatementSource("Fortran PRINT output list"),
       "Fortran PRINT output list");
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 namespace {
-void PublishFortranParameterEntityType(const Fortran::parser::Name &name,
+void RequireFortranParameterEntityType(const Fortran::parser::Name &name,
                                        SgExpression *reference) {
   SgVarRefExp *variableReference = isSgVarRefExp(reference);
   SgVariableSymbol *variable =
@@ -17906,21 +17385,12 @@ void PublishFortranParameterEntityType(const Fortran::parser::Name &name,
       scope == nullptr || declaration->get_scope() != scope ||
       CurrentBuildVisitor().LookupSemanticObjectSymbol(semantic, scope) !=
           variable ||
-      SageInterface::isConstType(type)) {
+      !SageInterface::isConstType(type) || variable->get_type() != type) {
     std::cerr << "REX_FLANG_INVARIANT[parameter-entity-publication]: named "
                  "constant '"
               << name.ToString()
-              << "' does not identify one fresh producer-published object "
+              << "' does not identify one producer-published constant object "
                  "type\n";
-    ROSE_ABORT();
-  }
-
-  declaration->set_type(SageBuilder::buildConstType(type));
-  if (!SageInterface::isConstType(declaration->get_type()) ||
-      variable->get_type() != declaration->get_type()) {
-    std::cerr << "REX_FLANG_INVARIANT[parameter-entity-publication]: "
-                 "PARAMETER statement did not publish constness on '"
-              << name.ToString() << "'\n";
     ROSE_ABORT();
   }
 }
@@ -17958,7 +17428,7 @@ void BuildVisitor::Build(
     SgExpression *lhs = BuildFortranNameReference(named.v);
     ASSERT_not_null(lhs);
     SetExactFlangExpressionSourcePosition(lhs, named.v.source, named.v.source);
-    PublishFortranParameterEntityType(named.v, lhs);
+    RequireFortranParameterEntityType(named.v, lhs);
     SgExpression *rhs{nullptr};
     Rose::builder::Build(constant, rhs);
     ASSERT_not_null(rhs);
@@ -18025,7 +17495,7 @@ void BuildVisitor::Build(
     SgExpression *lhs = BuildFortranNameReference(named.v);
     ASSERT_not_null(lhs);
     SetExactFlangExpressionSourcePosition(lhs, named.v.source, named.v.source);
-    PublishFortranParameterEntityType(named.v, lhs);
+    RequireFortranParameterEntityType(named.v, lhs);
     SgExpression *rhs{nullptr};
     Rose::builder::Build(constant, rhs);
     ASSERT_not_null(rhs);
@@ -18146,9 +17616,13 @@ void BuildVisitor::Build(
   struct ExactFormatString {
     char delimiter;
     std::string value;
+    bool derived_type_tag = false;
   };
+  // Flang retains literal values but drops delimiters and empty DT tag
+  // presence.
+  std::vector<bool> derivedTypeTags;
   auto scanExactFormatStrings =
-      [](const parser::CharBlock &source) -> std::vector<ExactFormatString> {
+      [&](const parser::CharBlock &source) -> std::vector<ExactFormatString> {
     const std::string text = source.ToString();
     std::vector<ExactFormatString> strings;
     std::size_t index = text.find('(');
@@ -18180,6 +17654,33 @@ void BuildVisitor::Build(
         continue;
       }
       if (ch != '\'' && ch != '"') {
+        if (std::isalpha(static_cast<unsigned char>(ch))) {
+          std::size_t next = index + 1;
+          while (next < text.size() &&
+                 std::isspace(static_cast<unsigned char>(text[next])))
+            ++next;
+          constexpr const char *compoundDescriptors[] = {
+              "BN", "BZ", "DC", "DP", "DT", "EN", "ES", "EX", "RC",
+              "RD", "RN", "RP", "RU", "RZ", "SP", "SS", "TL", "TR"};
+          for (const char *descriptor : compoundDescriptors) {
+            if (next == text.size() ||
+                std::toupper(static_cast<unsigned char>(ch)) != descriptor[0] ||
+                std::toupper(static_cast<unsigned char>(text[next])) !=
+                    descriptor[1])
+              continue;
+            index = next;
+            if (descriptor[0] == 'D' && descriptor[1] == 'T') {
+              ++next;
+              while (next < text.size() &&
+                     std::isspace(static_cast<unsigned char>(text[next])))
+                ++next;
+              derivedTypeTags.push_back(
+                  next < text.size() &&
+                  (text[next] == '\'' || text[next] == '"'));
+            }
+            break;
+          }
+        }
         if (std::isdigit(static_cast<unsigned char>(ch))) {
           const std::size_t countBegin = index;
           std::size_t markerIndex = index;
@@ -18189,13 +17690,6 @@ void BuildVisitor::Build(
           }
           if (markerIndex < text.size() &&
               (text[markerIndex] == 'H' || text[markerIndex] == 'h')) {
-            if (markerIndex - countBegin > 1 && text[countBegin] == '0') {
-              std::cerr
-                  << "REX_FLANG_INVARIANT[format-hollerith-source]: "
-                     "Hollerith character count is not in canonical decimal "
-                     "source form\n";
-              ROSE_ABORT();
-            }
             std::size_t count = 0;
             const std::from_chars_result parsed = std::from_chars(
                 text.data() + countBegin, text.data() + markerIndex, count);
@@ -18222,6 +17716,17 @@ void BuildVisitor::Build(
       }
 
       ExactFormatString exact{ch, {}};
+      std::size_t prefix = index;
+      auto precedingCharacter = [&]() {
+        while (prefix > 0 &&
+               std::isspace(static_cast<unsigned char>(text[prefix - 1])))
+          --prefix;
+        return prefix == 0 ? '\0' : text[--prefix];
+      };
+      const char last = precedingCharacter();
+      const char first = precedingCharacter();
+      exact.derived_type_tag =
+          (last == 'T' || last == 't') && (first == 'D' || first == 'd');
       bool terminated = false;
       while (++index < text.size()) {
         const char literalCharacter = text[index];
@@ -18255,164 +17760,227 @@ void BuildVisitor::Build(
   const std::vector<ExactFormatString> exactStrings =
       scanExactFormatStrings(x.source);
   std::size_t exactStringIndex = 0;
-  auto consumeExactString = [&](const std::string &semanticValue,
-                                const char *kind) -> ExactFormatString {
+  std::size_t derivedTypeIndex = 0;
+  auto consumeExactString =
+      [&](const std::string &semanticValue,
+          bool derivedTypeTag) -> SgFormatItem::Character {
     if (exactStringIndex >= exactStrings.size()) {
-      std::cerr << "REX_FLANG_INVARIANT[format-string-source]: " << kind
-                << " has no exact lexical string token\n";
+      std::cerr << "REX_FLANG_INVARIANT[format-string-source]: descriptor "
+                   "has no exact lexical string token\n";
       ROSE_ABORT();
     }
     const ExactFormatString &exact = exactStrings[exactStringIndex++];
-    if (exact.value != semanticValue) {
-      std::cerr << "REX_FLANG_INVARIANT[format-string-source]: " << kind
-                << " semantic value disagrees with its exact lexical token\n";
+    if (exact.value != semanticValue ||
+        exact.derived_type_tag != derivedTypeTag) {
+      std::cerr << "REX_FLANG_INVARIANT[format-string-source]: descriptor "
+                   "disagrees with its exact lexical token or owner\n";
       ROSE_ABORT();
     }
-    return exact;
-  };
-
-  SgFormatItemList *itemList = new SgFormatItemList();
-  ASSERT_not_null(itemList);
-
-  auto buildData = [](SgFormatItem *item, const std::string &text,
-                      std::optional<char> delimiter) {
-    ASSERT_not_null(item);
-    SgStringVal *data = SageBuilder::buildStringVal_nfi(text);
-    ASSERT_not_null(data);
-    // Flang's format library publishes semantic descriptor records without
-    // source ranges. This expression is the typed AST payload for the exact
-    // descriptor kind. Character edit descriptors additionally retain their
-    // source delimiter below.
-    SageBuilder::initializeSemanticExpressionSourceProvenance(data);
-    data->set_usesSingleQuotes(delimiter == '\'');
-    data->set_usesDoubleQuotes(delimiter == '"');
-    data->set_stringDelimiter(delimiter.value_or(0));
-    data->set_parent(item);
-    item->set_data(data);
-  };
-
-  std::function<SgFormatItem *(const Fortran::format::FormatItem &)> buildItem;
-  buildItem = [&](const Fortran::format::FormatItem &sourceItem) {
-    SgFormatItem *item = new SgFormatItem();
-    ASSERT_not_null(item);
-    if (sourceItem.repeatCount) {
-      if (*sourceItem.repeatCount == 0 ||
-          *sourceItem.repeatCount >
-              static_cast<std::uint64_t>(std::numeric_limits<int>::max())) {
-        std::cerr << "REX_FLANG_INVARIANT[format-repeat]: exact repeat count "
-                     "is outside the Sage positive-int domain\n";
-        ROSE_ABORT();
-      }
-      item->set_repeat_specification(static_cast<int>(*sourceItem.repeatCount));
-    } else {
-      item->set_repeat_specification(-1);
+    using Delimiter = SgFormatItem::Character::Delimiter;
+    switch (exact.delimiter) {
+    case '\'':
+      return {exact.value, Delimiter::single_quote};
+    case '"':
+      return {exact.value, Delimiter::double_quote};
+    case 'H':
+      return {exact.value, Delimiter::hollerith_upper};
+    case 'h':
+      return {exact.value, Delimiter::hollerith_lower};
     }
+    ROSE_ABORT();
+  };
 
-    common::visit(
+  std::function<SgFormatItemList *(
+      const std::list<Fortran::format::FormatItem> &)>
+      buildList;
+  std::function<SgFormatItem *(const Fortran::format::FormatItem &)> buildItem;
+  buildItem =
+      [&](const Fortran::format::FormatItem &sourceItem) -> SgFormatItem * {
+    SgFormatItemList *nestedList = nullptr;
+    const auto descriptor = common::visit(
         common::visitors{
-            [&](const Fortran::format::IntrinsicTypeDataEditDesc &) {
-              buildData(item, FormatItemToString(sourceItem), std::nullopt);
-            },
-            [&](const Fortran::format::DerivedTypeDataEditDesc &descriptor) {
-              if (!descriptor.type.empty()) {
-                (void)consumeExactString(descriptor.type,
-                                         "derived-type edit descriptor");
+            [&](const Fortran::format::IntrinsicTypeDataEditDesc &source)
+                -> SgFormatItem::Descriptor {
+              using NativeKind =
+                  Fortran::format::IntrinsicTypeDataEditDesc::Kind;
+              using Kind = SgFormatItem::Intrinsic::Kind;
+              Kind kind;
+              switch (source.kind) {
+              case NativeKind::I:
+                kind = Kind::I;
+                break;
+              case NativeKind::B:
+                kind = Kind::B;
+                break;
+              case NativeKind::O:
+                kind = Kind::O;
+                break;
+              case NativeKind::Z:
+                kind = Kind::Z;
+                break;
+              case NativeKind::F:
+                kind = Kind::F;
+                break;
+              case NativeKind::E:
+                kind = Kind::E;
+                break;
+              case NativeKind::EN:
+                kind = Kind::EN;
+                break;
+              case NativeKind::ES:
+                kind = Kind::ES;
+                break;
+              case NativeKind::EX:
+                kind = Kind::EX;
+                break;
+              case NativeKind::G:
+                kind = Kind::G;
+                break;
+              case NativeKind::L:
+                kind = Kind::L;
+                break;
+              case NativeKind::A:
+                kind = Kind::A;
+                break;
+              case NativeKind::D:
+                kind = Kind::D;
+                break;
+              default:
+                ROSE_ABORT();
               }
-              buildData(item, FormatItemToString(sourceItem), std::nullopt);
+              return {SgFormatItem::Intrinsic{kind, source.width, source.digits,
+                                              source.exponentWidth}};
             },
-            [&](const Fortran::format::ControlEditDesc &) {
-              buildData(item, FormatItemToString(sourceItem), std::nullopt);
+            [&](const Fortran::format::DerivedTypeDataEditDesc &source)
+                -> SgFormatItem::Descriptor {
+              std::optional<SgFormatItem::Character> tag;
+              ROSE_ASSERT(derivedTypeIndex < derivedTypeTags.size());
+              if (derivedTypeTags[derivedTypeIndex++])
+                tag = consumeExactString(source.type, true);
+              else
+                ROSE_ASSERT(source.type.empty());
+              return {SgFormatItem::Derived{
+                  tag, {source.parameters.begin(), source.parameters.end()}}};
             },
-            [&](const std::string &value) {
-              const ExactFormatString exact =
-                  consumeExactString(value, "character edit descriptor");
-              buildData(item, value, exact.delimiter);
-            },
-            [&](const std::list<Fortran::format::FormatItem> &nested) {
-              SgFormatItemList *nestedList = new SgFormatItemList();
-              ASSERT_not_null(nestedList);
-              nestedList->set_parent(item);
-              item->set_format_item_list(nestedList);
-              for (const Fortran::format::FormatItem &nestedItem : nested) {
-                SgFormatItem *child = buildItem(nestedItem);
-                child->set_parent(nestedList);
-                nestedList->get_format_item_list().push_back(child);
+            [&](const Fortran::format::ControlEditDesc &source)
+                -> SgFormatItem::Descriptor {
+              using NativeKind = Fortran::format::ControlEditDesc::Kind;
+              using Kind = SgFormatItem::Control::Kind;
+              Kind kind;
+              switch (source.kind) {
+              case NativeKind::T:
+                kind = Kind::T;
+                break;
+              case NativeKind::TL:
+                kind = Kind::TL;
+                break;
+              case NativeKind::TR:
+                kind = Kind::TR;
+                break;
+              case NativeKind::X:
+                kind = Kind::X;
+                break;
+              case NativeKind::Slash:
+                kind = Kind::Slash;
+                break;
+              case NativeKind::Colon:
+                kind = Kind::Colon;
+                break;
+              case NativeKind::SS:
+                kind = Kind::SS;
+                break;
+              case NativeKind::SP:
+                kind = Kind::SP;
+                break;
+              case NativeKind::S:
+                kind = Kind::S;
+                break;
+              case NativeKind::P:
+                kind = Kind::P;
+                break;
+              case NativeKind::BN:
+                kind = Kind::BN;
+                break;
+              case NativeKind::BZ:
+                kind = Kind::BZ;
+                break;
+              case NativeKind::RU:
+                kind = Kind::RU;
+                break;
+              case NativeKind::RD:
+                kind = Kind::RD;
+                break;
+              case NativeKind::RZ:
+                kind = Kind::RZ;
+                break;
+              case NativeKind::RN:
+                kind = Kind::RN;
+                break;
+              case NativeKind::RC:
+                kind = Kind::RC;
+                break;
+              case NativeKind::RP:
+                kind = Kind::RP;
+                break;
+              case NativeKind::DC:
+                kind = Kind::DC;
+                break;
+              case NativeKind::DP:
+                kind = Kind::DP;
+                break;
+              case NativeKind::Dollar:
+                kind = Kind::Dollar;
+                break;
+              case NativeKind::Backslash:
+                kind = Kind::Backslash;
+                break;
+              default:
+                ROSE_ABORT();
               }
+              return {SgFormatItem::Control{kind, source.count}};
+            },
+            [&](const std::string &value) -> SgFormatItem::Descriptor {
+              return {consumeExactString(value, false)};
+            },
+            [&](const std::list<Fortran::format::FormatItem> &nested)
+                -> SgFormatItem::Descriptor {
+              nestedList = buildList(nested);
+              return {SgFormatItem::Group::nested};
             }},
         sourceItem.u);
-    if ((item->get_data() == nullptr) ==
-        (item->get_format_item_list() == nullptr)) {
-      std::cerr << "REX_FLANG_INVARIANT[format-item-owner]: exact format item "
-                   "must own either descriptor data or one nested list\n";
-      ROSE_ABORT();
-    }
-    return item;
+    return new SgFormatItem(descriptor, sourceItem.repeatCount, nestedList);
   };
-
-  auto appendItem = [&](const Fortran::format::FormatItem &sourceItem) {
-    SgFormatItem *item = buildItem(sourceItem);
-    item->set_parent(itemList);
-    itemList->get_format_item_list().push_back(item);
+  buildList = [&](const std::list<Fortran::format::FormatItem> &source) {
+    SgFormatItemPtrList items;
+    for (const auto &item : source)
+      items.push_back(buildItem(item));
+    return new SgFormatItemList(items);
   };
-
-  for (const auto &item : formatStmt.v.items) {
-    appendItem(item);
-  }
+  SgFormatItemPtrList items;
+  for (const auto &item : formatStmt.v.items)
+    items.push_back(buildItem(item));
   if (!formatStmt.v.unlimitedItems.empty()) {
-    SgFormatItem *unlimited = new SgFormatItem();
-    ASSERT_not_null(unlimited);
-    unlimited->set_repeat_specification(-1);
-    buildData(unlimited,
-              "*(" + FormatItemsToString(formatStmt.v.unlimitedItems) + ")",
-              std::nullopt);
-    unlimited->set_parent(itemList);
-    itemList->get_format_item_list().push_back(unlimited);
-    std::function<void(const std::list<Fortran::format::FormatItem> &)>
-        validateUnlimitedStrings;
-    validateUnlimitedStrings =
-        [&](const std::list<Fortran::format::FormatItem> &items) {
-          for (const Fortran::format::FormatItem &sourceItem : items) {
-            common::visit(
-                common::visitors{
-                    [&](const Fortran::format::IntrinsicTypeDataEditDesc &) {},
-                    [&](const Fortran::format::DerivedTypeDataEditDesc
-                            &descriptor) {
-                      if (!descriptor.type.empty()) {
-                        (void)consumeExactString(
-                            descriptor.type,
-                            "unlimited derived-type edit descriptor");
-                      }
-                    },
-                    [&](const Fortran::format::ControlEditDesc &) {},
-                    [&](const std::string &value) {
-                      (void)consumeExactString(
-                          value, "unlimited character edit descriptor");
-                    },
-                    [&](const std::list<Fortran::format::FormatItem> &nested) {
-                      validateUnlimitedStrings(nested);
-                    }},
-                sourceItem.u);
-          }
-        };
-    validateUnlimitedStrings(formatStmt.v.unlimitedItems);
+    items.push_back(new SgFormatItem({SgFormatItem::Group::unlimited},
+                                     std::nullopt,
+                                     buildList(formatStmt.v.unlimitedItems)));
   }
   if (exactStringIndex != exactStrings.size()) {
     std::cerr << "REX_FLANG_INVARIANT[format-string-source]: lexical FORMAT "
                  "string token has no exact semantic descriptor owner\n";
     ROSE_ABORT();
   }
+  ROSE_ASSERT(derivedTypeIndex == derivedTypeTags.size());
 
-  SgFormatStatement *stmt = new SgFormatStatement(itemList);
+  SgFormatStatement *stmt = new SgFormatStatement(new SgFormatItemList(items));
   ASSERT_not_null(stmt);
   stmt->set_definingDeclaration(stmt);
   stmt->set_firstNondefiningDeclaration(stmt);
-  itemList->set_parent(stmt);
 
   SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
   builder.setSourcePosition(stmt, srcBegin, srcEnd);
 
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 namespace {
@@ -18438,30 +18006,42 @@ BuildStatementFunctionStatement(parser::StmtFunctionStmt &definition,
     ROSE_ABORT();
   }
 
+  SgSymbol *mapped = CurrentBuildVisitor().LookupSemanticProcedureSymbol(
+      semanticName.symbol, scope);
+  SgFunctionSymbol *declared = isSgFunctionSymbol(mapped);
+  SgProcedureHeaderStatement *sourceDeclaration =
+      declared != nullptr
+          ? isSgProcedureHeaderStatement(declared->get_declaration())
+          : nullptr;
+  bool hasExactOwner = mapped == nullptr;
+  if (sourceDeclaration != nullptr && sourceDeclaration->get_scope() == scope) {
+    switch (sourceDeclaration->get_fortran_procedure_source_form()) {
+    case SgProcedureHeaderStatement::
+        e_fortran_procedure_source_form_type_declaration:
+      hasExactOwner = sourceDeclaration->get_parent() == scope &&
+                      scope->statementExistsInScope(sourceDeclaration);
+      break;
+    case SgProcedureHeaderStatement::
+        e_fortran_procedure_source_form_semantic_only:
+      RequireFortranAuxiliaryDeclarationOwner(sourceDeclaration, scope);
+      hasExactOwner = sourceDeclaration->get_firstNondefiningDeclaration() ==
+                          sourceDeclaration &&
+                      sourceDeclaration->get_definingDeclaration() == nullptr;
+      break;
+    default:
+      break;
+    }
+  }
+  if (!hasExactOwner) {
+    std::cerr << "REX_FLANG_INVARIANT[statement-function-source-type]: '"
+              << funcName
+              << "' has no exact preceding typed procedure declaration\n";
+    ROSE_ABORT();
+  }
+
   SgType *returnType =
       BuildFortranSemanticFunctionResultType(details->result());
   ASSERT_not_null(returnType);
-  if (SgVariableSymbol *placeholder =
-          CurrentBuildVisitor().ConsumeStatementFunctionTypePlaceholder(
-              semanticName.symbol, scope)) {
-    SgInitializedName *declaration = placeholder->get_declaration();
-    ASSERT_not_null(declaration);
-    if (!EquivalentFortranSemanticObjectType(declaration->get_type(),
-                                             returnType)) {
-      std::cerr << "REX_FLANG_INVARIANT[statement-function-result-type]: "
-                   "source declaration of '"
-                << funcName
-                << "' does not match its exact Flang semantic result type\n";
-      ROSE_ABORT();
-    }
-    scope->remove_symbol(placeholder);
-    if (scope->find_symbol_from_declaration(declaration) != nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[statement-function-placeholder]: "
-                   "consumed type placeholder for '"
-                << funcName << "' remained in the Sage symbol table\n";
-      ROSE_ABORT();
-    }
-  }
 
   std::list<std::string> dummyArgs;
   for (parser::Name &dummy : std::get<std::list<parser::Name>>(definition.t)) {
@@ -18470,8 +18050,7 @@ BuildStatementFunctionStatement(parser::StmtFunctionStmt &definition,
   SgFunctionParameterList *paramList{nullptr};
   SgScopeStatement *paramScope{nullptr};
   bool isDefDecl{false};
-  builder.Enter(paramList, paramScope, funcName, /*function_type=*/nullptr,
-                isDefDecl);
+  builder.Enter(paramList, paramScope, funcName, isDefDecl);
   DeclareFortranSemanticDummyArguments(paramScope, *details, dummyArgs);
 
   SgExpression *rhs{nullptr};
@@ -18486,7 +18065,6 @@ BuildStatementFunctionStatement(parser::StmtFunctionStmt &definition,
   ASSERT_not_null(stmt);
   stmt->set_definingDeclaration(stmt);
   stmt->set_firstNondefiningDeclaration(stmt);
-  rhs->set_parent(stmt);
 
   SgProcedureHeaderStatement *funcDecl =
       SageBuilder::buildNondefiningProcedureHeaderStatement(
@@ -18497,12 +18075,17 @@ BuildStatementFunctionStatement(parser::StmtFunctionStmt &definition,
           SgProcedureHeaderStatement::e_fortran_procedure_source_form_header,
           scope);
   ASSERT_not_null(funcDecl);
+  SageInterface::publishGeneratedSubtreeOutputOwner(
+      paramScope, isSgFunctionParameterScope(paramScope)
+                      ->get_construction_physical_output_owner());
   SageInterface::completeDetachedFunctionParameterScopeConstruction(
       funcDecl, isSgFunctionParameterScope(paramScope));
   SgFunctionSymbol *published =
       scope->lookup_function_symbol(funcDecl->get_name(), funcDecl->get_type());
-  if (published == nullptr || published->get_declaration() !=
-                                  funcDecl->get_firstNondefiningDeclaration()) {
+  if (published == nullptr ||
+      published->get_declaration() !=
+          funcDecl->get_firstNondefiningDeclaration() ||
+      (declared != nullptr && published != declared)) {
     std::cerr << "REX_FLANG_INVARIANT[statement-function-publication]: '"
               << funcName
               << "' was not published through its exact Sage function "
@@ -18541,13 +18124,16 @@ void BuildVisitor::Build(
   builder.setSourcePosition(stmt, srcBegin, srcEnd);
   SgProcedureHeaderStatement *function =
       isSgProcedureHeaderStatement(stmt->get_function());
+  SgProcedureHeaderStatement *canonical =
+      function != nullptr ? isSgProcedureHeaderStatement(
+                                function->get_firstNondefiningDeclaration())
+                          : nullptr;
   if (function == nullptr || function->get_parent() != stmt ||
-      function->get_firstNondefiningDeclaration() != function ||
-      function->get_definingDeclaration() != nullptr) {
+      canonical == nullptr || function->get_definingDeclaration() != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[statement-function-owner]: statement "
                  "function '"
               << funcName
-              << "' does not directly own its canonical procedure\n";
+              << "' does not own an exact procedure redeclaration\n";
     ROSE_ABORT();
   }
   builder.setFortranProcedureDeclarationSourcePosition(function, srcBegin,
@@ -18635,7 +18221,7 @@ void BuildVisitor::Build(parser::CallStmt &x) {
   }
 
   SgExprStatement *stmt{nullptr};
-  auto labels = getLabels();
+  const std::optional<int> label = getLabel();
   if (x.chevrons) {
     const auto &chevrons = x.chevrons.value();
     SgExpression *gridExpr{nullptr};
@@ -18676,7 +18262,7 @@ void BuildVisitor::Build(parser::CallStmt &x) {
                                           callExpressionSource);
     stmt = SageBuilder::buildExprStatement_nfi(call_expr);
     ApplyCurrentStatementSource(stmt);
-    builder.Leave(stmt, labels);
+    builder.Leave(stmt, label);
     return;
   }
 
@@ -18696,13 +18282,13 @@ void BuildVisitor::Build(parser::CallStmt &x) {
                                         callExpressionSource);
   stmt = SageBuilder::buildExprStatement_nfi(callExpr);
   ApplyCurrentStatementSource(stmt);
-  builder.Leave(stmt, labels);
+  builder.Leave(stmt, label);
 }
 
 void BuildVisitor::Build(parser::WriteStmt &x) {
-  SgWriteStatement *stmt = new SgWriteStatement();
+  SgWriteStatement *stmt =
+      new SgWriteStatement(BuildFortranNamelistIoBinding(x.controls));
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_write);
   ApplyCurrentStatementSource(stmt);
   const parser::CharBlock statementSource =
       RequireCurrentStatementSource("Fortran WRITE statement");
@@ -18743,9 +18329,9 @@ void BuildVisitor::Build(parser::WriteStmt &x) {
 }
 
 void BuildVisitor::Build(parser::ReadStmt &x) {
-  SgReadStatement *stmt = new SgReadStatement();
+  SgReadStatement *stmt =
+      new SgReadStatement(BuildFortranNamelistIoBinding(x.controls));
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_read);
   ApplyCurrentStatementSource(stmt);
   const parser::CharBlock statementSource =
       RequireCurrentStatementSource("Fortran READ statement");
@@ -18787,7 +18373,6 @@ void BuildVisitor::Build(parser::ReadStmt &x) {
 void BuildVisitor::Build(parser::OpenStmt &x) {
   SgOpenStatement *stmt = new SgOpenStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_open);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -18801,7 +18386,6 @@ void BuildVisitor::Build(parser::OpenStmt &x) {
 void BuildVisitor::Build(parser::CloseStmt &x) {
   SgCloseStatement *stmt = new SgCloseStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_close);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -18815,7 +18399,6 @@ void BuildVisitor::Build(parser::CloseStmt &x) {
 void BuildVisitor::Build(parser::RewindStmt &x) {
   SgRewindStatement *stmt = new SgRewindStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_rewind);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -18829,7 +18412,6 @@ void BuildVisitor::Build(parser::RewindStmt &x) {
 void BuildVisitor::Build(parser::BackspaceStmt &x) {
   SgBackspaceStatement *stmt = new SgBackspaceStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_backspace);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -18843,7 +18425,6 @@ void BuildVisitor::Build(parser::BackspaceStmt &x) {
 void BuildVisitor::Build(parser::EndfileStmt &x) {
   SgEndfileStatement *stmt = new SgEndfileStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_endfile);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -18857,7 +18438,6 @@ void BuildVisitor::Build(parser::EndfileStmt &x) {
 void BuildVisitor::Build(parser::FlushStmt &x) {
   SgFlushStatement *stmt = new SgFlushStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_flush);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -19022,7 +18602,6 @@ void ValidateFlangWaitStatement(SgWaitStatement *statement) {
 void BuildVisitor::Build(parser::WaitStmt &x) {
   SgWaitStatement *stmt = new SgWaitStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_wait);
   ApplyCurrentStatementSource(stmt);
 
   for (auto &spec : x.v) {
@@ -19073,7 +18652,6 @@ void BuildVisitor::Build(parser::WaitStmt &x) {
 void BuildVisitor::Build(parser::InquireStmt &x) {
   SgInquireStatement *stmt = new SgInquireStatement();
   ASSERT_not_null(stmt);
-  stmt->set_io_statement(SgIOStatement::e_inquire);
   ApplyCurrentStatementSource(stmt);
 
   common::visit(
@@ -19326,15 +18904,10 @@ void BuildVisitor::Build(parser::PointerAssignmentStmt &x) {
   assign->set_parent(stmt);
   ApplyCurrentStatementSource(stmt);
 
-  auto labels = getLabels();
-  builder.Leave(stmt, labels);
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::NullifyStmt &x) {
-  SgNullifyStatement *stmt = new SgNullifyStatement();
-  ASSERT_not_null(stmt);
-  ApplyCurrentStatementSource(stmt);
-
   SgExprListExp *list = SageBuilder::buildExprListExp_nfi();
   ASSERT_not_null(list);
   const parser::CharBlock &statementSource =
@@ -19395,9 +18968,9 @@ void BuildVisitor::Build(parser::NullifyStmt &x) {
     ROSE_ABORT();
   }
   SetExactFlangExpressionSourcePosition(list, *listSource, *listSource);
-  stmt->set_pointer_list(list);
-  list->set_parent(stmt);
-
+  SgNullifyStatement *stmt = new SgNullifyStatement(list);
+  ASSERT_not_null(stmt);
+  ApplyCurrentStatementSource(stmt);
   SageInterface::appendStatement(stmt, SageBuilder::topScopeStack());
 }
 
@@ -19495,14 +19068,6 @@ void ApplyCudaSubprogramAttrs(
       break;
     }
   }
-}
-
-void BuildSuffix(parser::Suffix &x, std::string &resultName) {
-  if (x.resultName) {
-    resultName = x.resultName.value().ToString();
-  }
-
-  // TODO: handle LanguageBindingSpec in suffix when needed.
 }
 
 namespace {
@@ -19611,7 +19176,14 @@ void Build(const parser::DataRef &x, SgExpression *&expr) {
             Build(y.value(), expr);
           },
           [&](const common::Indirection<parser::ArrayElement> &y) {
-            Build(y.value(), expr);
+            const auto semantic = semantics::AnalyzeExpr(
+                CurrentBuildVisitor().semanticContext(), x);
+            if (!semantic) {
+              std::cerr << "REX_FLANG_INVARIANT[array-reference-semantics]: "
+                           "array designator has no exact Flang expression\n";
+              ROSE_ABORT();
+            }
+            Build(y.value(), *semantic, expr);
           },
           [&](const common::Indirection<parser::CoindexedNamedObject> &y) {
             Build(y.value(), expr);
@@ -19694,7 +19266,7 @@ void Build(const parser::Call &x, std::list<SgExpression *> &arg_list,
       // this syntax-only pass.  That producer registers the preserved logical
       // argument position in the program-unit label transaction.
     } else {
-      ABORT_NO_IMPL;
+      ROSE_ABORT();
     }
   }
 }
@@ -19757,23 +19329,8 @@ void Build(const parser::ProcComponentRef &x, SgExpression *&expr) {
   Build(x.v.thing, expr);
 }
 
-void Build(const parser::ActualArgSpec &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(ActualArgSpec)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(const parser::Keyword &x, SgExpression *&expr) {
-  info(x, "Rose::builder::Build(Keyword)");
-  ABORT_NO_IMPL;
-}
-
 void Build(const parser::NamedConstant &x, SgExpression *&expr) {
   expr = BuildFortranNameReference(x.v);
-}
-
-void Build(const parser::Expr::IntrinsicBinary &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(IntrinsicBinary)\n";
-  ABORT_NO_IMPL;
 }
 
 // LiteralConstant(s)
@@ -19784,11 +19341,8 @@ void BuildImpl(const parser::HollerithLiteralConstant &x, SgExpression *&expr) {
   expr = literal;
 }
 
-// KindParam - for now create a string (seems that a Sage value expression
-// should have Fortran kind
 void BuildImpl(const std::optional<Fortran::parser::KindParam> &x,
-               std::uint64_t &ikind, std::string &strVal) {
-  // std::variant<> = std::uint64_t, Scalar<Integer<Constant<Name>>>
+               std::string &strVal) {
   using namespace Fortran::parser;
 
   if (x) {
@@ -19801,8 +19355,7 @@ void BuildImpl(const std::optional<Fortran::parser::KindParam> &x,
                                        "Sage signed 64-bit value range\n";
                           ROSE_ABORT();
                         }
-                        ikind = y;
-                        strVal = std::to_string(ikind);
+                        strVal = std::to_string(y);
                       },
                       [&](const Scalar<Integer<Constant<Name>>> &y) {
                         strVal = y.thing.thing.thing.ToString();
@@ -19811,226 +19364,202 @@ void BuildImpl(const std::optional<Fortran::parser::KindParam> &x,
   }
 }
 
-void BuildImpl(const Fortran::parser::KindParam &x, SgExpression *&expr) {
-  // std::variant<> = std::uint64_t, Scalar<Integer<Constant<Name>>>
-  using namespace Fortran::parser;
-
-  ASSERT_require(expr == nullptr);
-  common::visit(common::visitors{
-                    [&](const std::uint64_t &y) {
-                      if (y > static_cast<std::uint64_t>(
-                                  std::numeric_limits<long long>::max())) {
-                        std::cerr << "REX_FLANG_INVARIANT[kind-param-range]: "
-                                     "unsigned KIND parameter exceeds the "
-                                     "Sage signed 64-bit value range\n";
-                        ROSE_ABORT();
-                      }
-                      const std::string value = std::to_string(y);
-                      expr = SageBuilder::buildLongLongIntVal_nfi(
-                          static_cast<long long>(y), value);
-                    },
-                    [&](const Scalar<Integer<Constant<Name>>> &y) {
-                      expr = BuildFortranNameReference(y.thing.thing.thing);
-                    }},
-                x.u);
-}
-
-void BuildImpl(const parser::IntLiteralConstant &x, SgExpression *&expr) {
-  // std::tuple<> - CharBlock, std::optional<KindParam>
-  using namespace Fortran::parser;
-
-  // Use long long as integer representation because we don't really know
-  // except for default integer and kind param (compiler dependent).
-  long long llVal;
-  std::string strVal{std::get<CharBlock>(x.t).ToString()};
-
-  if (strVal.empty() ||
-      !std::all_of(strVal.begin(), strVal.end(),
-                   [](unsigned char ch) { return std::isdigit(ch) != 0; })) {
-    std::cerr << "REX_FLANG_INVARIANT[integer-literal-spelling]: signed "
-                 "integer token '"
-              << strVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-
-  try {
-    std::size_t consumed = 0;
-    llVal = std::stoll(strVal, &consumed, 10);
-    if (consumed != strVal.size()) {
-      std::cerr << "REX_FLANG_INVARIANT[integer-literal-spelling]: signed "
-                   "integer token was not consumed exactly\n";
-      ROSE_ABORT();
-    }
-  } catch (const std::out_of_range &) {
-    std::cerr << "REX_FLANG_INVARIANT[integer-literal-range]: signed integer '"
-              << strVal << "' exceeds the Sage 64-bit value range\n";
-    ROSE_ABORT();
-  } catch (const std::invalid_argument &) {
-    std::cerr << "REX_FLANG_INVARIANT[integer-literal-spelling]: signed "
-                 "integer token '"
-              << strVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-
-  if (std::get<1>(x.t)) {
-    std::string kind{};
-    uint64_t ikind{0};
-    BuildImpl(std::get<1>(x.t), ikind, kind);
-    strVal += "_" + kind;
-  }
-
-  // The value node is only the storage carrier; BuildExactFortranLiteral
-  // attaches the exact Flang semantic type. Use the narrow carrier whenever
-  // the source value is representable so ordinary default INTEGER literals
-  // retain their canonical SgIntVal shape without truncating larger values.
-  if (llVal >= std::numeric_limits<int>::min() &&
-      llVal <= std::numeric_limits<int>::max()) {
-    expr = SageBuilder::buildIntVal_nfi(static_cast<int>(llVal), strVal);
-  } else {
-    expr = SageBuilder::buildLongLongIntVal_nfi(llVal, strVal);
-  }
-}
-
-void BuildImpl(const parser::UnsignedLiteralConstant &x, SgExpression *&expr) {
-  // std::tuple<> - CharBlock, std::optional<KindParam>
-  using namespace Fortran::parser;
-
-  unsigned long long ullVal;
-  std::string strVal{std::get<CharBlock>(x.t).ToString()};
-
-  if (strVal.empty() ||
-      !std::all_of(strVal.begin(), strVal.end(),
-                   [](unsigned char ch) { return std::isdigit(ch) != 0; })) {
-    std::cerr << "REX_FLANG_INVARIANT[unsigned-literal-spelling]: unsigned "
-                 "integer token '"
-              << strVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-
-  try {
-    std::size_t consumed = 0;
-    ullVal = std::stoull(strVal, &consumed, 10);
-    if (consumed != strVal.size()) {
-      std::cerr << "REX_FLANG_INVARIANT[unsigned-literal-spelling]: unsigned "
-                   "integer token was not consumed exactly\n";
-      ROSE_ABORT();
-    }
-  } catch (const std::out_of_range &) {
-    std::cerr << "REX_FLANG_INVARIANT[unsigned-literal-range]: unsigned "
-                 "integer '"
-              << strVal << "' exceeds the Sage 64-bit value range\n";
-    ROSE_ABORT();
-  } catch (const std::invalid_argument &) {
-    std::cerr << "REX_FLANG_INVARIANT[unsigned-literal-spelling]: unsigned "
-                 "integer token '"
-              << strVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-
-  if (std::get<1>(x.t)) {
-    std::string kind{};
-    uint64_t ikind{0};
-    BuildImpl(std::get<1>(x.t), ikind, kind);
-    strVal += "_" + kind;
-  }
-
-  if (ullVal <= std::numeric_limits<unsigned int>::max()) {
-    expr = SageBuilder::buildUnsignedIntVal_nfi(
-        static_cast<unsigned int>(ullVal), strVal);
-  } else {
-    expr = SageBuilder::buildUnsignedLongLongIntVal_nfi(ullVal, strVal);
-  }
-}
-
-void BuildImpl(const parser::SignedIntLiteralConstant &x, SgExpression *&expr) {
-  // std::tuple<> - CharBlock, std::optional<KindParam>
-  std::string strVal = std::get<0>(x.t).ToString();
-  std::string parsedVal;
-  parsedVal.reserve(strVal.size());
-  for (char ch : strVal) {
-    if (ch == '_' || std::isspace(static_cast<unsigned char>(ch))) {
-      continue;
-    }
-    parsedVal.push_back(ch);
-  }
-
-  const std::size_t firstDigit =
-      !parsedVal.empty() &&
-              (parsedVal.front() == '+' || parsedVal.front() == '-')
-          ? 1
-          : 0;
-  if (firstDigit == parsedVal.size() ||
-      !std::all_of(parsedVal.begin() + firstDigit, parsedVal.end(),
-                   [](unsigned char ch) { return std::isdigit(ch) != 0; })) {
-    std::cerr << "REX_FLANG_INVARIANT[signed-integer-literal-spelling]: signed "
-                 "integer token '"
-              << parsedVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-
-  long long llVal;
-  try {
-    std::size_t consumed = 0;
-    llVal = std::stoll(parsedVal, &consumed, 10);
-    if (consumed != parsedVal.size()) {
-      std::cerr << "REX_FLANG_INVARIANT[signed-integer-literal-spelling]: "
-                   "signed integer token was not consumed exactly\n";
-      ROSE_ABORT();
-    }
-  } catch (const std::out_of_range &) {
-    std::cerr << "REX_FLANG_INVARIANT[signed-integer-literal-range]: signed "
-                 "integer '"
-              << parsedVal << "' exceeds the Sage 64-bit value range\n";
-    ROSE_ABORT();
-  } catch (const std::invalid_argument &) {
-    std::cerr << "REX_FLANG_INVARIANT[signed-integer-literal-spelling]: signed "
-                 "integer token '"
-              << parsedVal << "' is invalid\n";
-    ROSE_ABORT();
-  }
-  if (std::get<1>(x.t)) {
-    std::string kind{};
-    uint64_t ikind{0};
-    BuildImpl(std::get<1>(x.t), ikind, kind);
-    strVal += "_" + kind;
-  }
-  if (llVal >= std::numeric_limits<int>::min() &&
-      llVal <= std::numeric_limits<int>::max()) {
-    expr = SageBuilder::buildIntVal_nfi(static_cast<int>(llVal), strVal);
-  } else {
-    expr = SageBuilder::buildLongLongIntVal_nfi(llVal, strVal);
-  }
-}
-
 namespace {
+template <typename Literal>
+std::string FormatIntegerLiteralConstant(const Literal &x) {
+  std::string spelling = std::get<0>(x.t).ToString();
+  if constexpr (std::is_same_v<Literal, parser::UnsignedLiteralConstant>) {
+    spelling += "u";
+  }
+  if (std::get<1>(x.t)) {
+    std::string kind;
+    BuildImpl(std::get<1>(x.t), kind);
+    spelling += "_" + kind;
+  }
+  return spelling;
+}
+
+SgValueExp *
+BuildIntegerLiteralValue(evaluate::Expr<evaluate::SomeType> semantic,
+                         const std::string &spelling) {
+  const auto type = semantic.GetType();
+  ROSE_ASSERT(type && type->category() == common::TypeCategory::Integer &&
+              semantic.Rank() == 0);
+  auto folded = evaluate::Fold(CurrentBuildVisitor().foldingContext(),
+                               std::move(semantic));
+  const auto *integer =
+      evaluate::UnwrapExpr<evaluate::Expr<evaluate::SomeInteger>>(folded);
+  ASSERT_not_null(integer);
+  SgValueExp *value = common::visit(
+      [&](const auto &expression) -> SgValueExp * {
+        using Type = evaluate::ResultType<decltype(expression)>;
+        const auto *constant =
+            evaluate::UnwrapExpr<evaluate::Constant<Type>>(expression);
+        ASSERT_not_null(constant);
+        const auto scalar = constant->GetScalarValue();
+        ROSE_ASSERT(scalar.has_value());
+        const auto narrow =
+            evaluate::value::Integer<64>::ConvertSigned(*scalar);
+        if (narrow.overflow) {
+          ROSE_ASSERT(type->kind() == 16);
+          auto *wide = new SgInteger128Val(Rose::Integer128Value::fromBits(
+              {scalar->IBITS(0, 64).ToUInt64(),
+               scalar->IBITS(64, 64).ToUInt64()},
+              false));
+          SageInterface::setOneSourcePositionNull(wide);
+          wide->set_literal_spelling_form(
+              SgValueExp::e_literal_canonical_generated);
+          return wide;
+        }
+        const auto number = narrow.value.ToInt64();
+        if (number >= std::numeric_limits<int>::min() &&
+            number <= std::numeric_limits<int>::max()) {
+          return SageBuilder::buildIntVal_nfi(static_cast<int>(number),
+                                              spelling);
+        }
+        return SageBuilder::buildLongLongIntVal_nfi(number, spelling);
+      },
+      integer->u);
+  ASSERT_not_null(value);
+  ROSE_ASSERT(value->get_literal_type() == nullptr);
+  return value;
+}
+
+SgValueExp *BuildSignedIntegerLiteral(const parser::SignedIntLiteralConstant &x,
+                                      SgType *expectedType) {
+  auto semantic =
+      semantics::AnalyzeExpr(CurrentBuildVisitor().semanticContext(), x);
+  ROSE_ASSERT(semantic.has_value());
+  const auto type = semantic->GetType();
+  ROSE_ASSERT(type && type->category() == common::TypeCategory::Integer &&
+              semantic->Rank() == 0);
+  SgType *semanticType = BuildFortranSemanticExpressionType(*semantic);
+  ROSE_ASSERT(expectedType == nullptr ||
+              SageInterface::isEquivalentType(expectedType, semanticType));
+  SgValueExp *value = BuildIntegerLiteralValue(std::move(*semantic),
+                                               FormatIntegerLiteralConstant(x));
+  value->set_literal_type(semanticType);
+  return value;
+}
+
 std::string FormatRealLiteralConstant(const parser::RealLiteralConstant &x) {
   std::string value = x.real.source.ToString();
   if (x.kind) {
     std::string kind{};
-    uint64_t ikind{0};
-    BuildImpl(x.kind, ikind, kind);
+    BuildImpl(x.kind, kind);
     if (!kind.empty()) {
       value += "_" + kind;
     }
   }
   return value;
 }
-} // namespace
 
-void BuildImpl(const parser::RealLiteralConstant &x, SgExpression *&expr) {
-  expr = SageBuilder::buildFloatVal_nfi(FormatRealLiteralConstant(x));
+template <int KIND>
+SgValueExp *
+BuildRealLiteralValue(const evaluate::Expr<evaluate::SomeType> &literal,
+                      const std::string &spelling) {
+  using Real =
+      evaluate::Scalar<evaluate::Type<common::TypeCategory::Real, KIND>>;
+  const auto *constant = evaluate::UnwrapExpr<
+      evaluate::Constant<evaluate::Type<common::TypeCategory::Real, KIND>>>(
+      literal);
+  ASSERT_not_null(constant);
+  const std::optional<Real> scalar = constant->GetScalarValue();
+  ROSE_ASSERT(scalar.has_value());
+  const Real &value = *scalar;
+
+  if constexpr (KIND == 2 || KIND == 3 || KIND == 4) {
+    using Float =
+        evaluate::Scalar<evaluate::Type<common::TypeCategory::Real, 4>>;
+    const Float carrier = Float::Convert(value).value;
+    const std::uint32_t bits =
+        static_cast<std::uint32_t>(carrier.RawBits().ToUInt64());
+    float native;
+    std::memcpy(&native, &bits, sizeof(native));
+    if constexpr (KIND == 2) {
+      return SageBuilder::buildFloat16Val_nfi(native, spelling);
+    } else if constexpr (KIND == 3) {
+      return SageBuilder::buildBFloat16Val_nfi(native, spelling);
+    } else {
+      return SageBuilder::buildFloatVal_nfi(native, spelling);
+    }
+  } else if constexpr (KIND == 8) {
+    const std::uint64_t bits = value.RawBits().ToUInt64();
+    double native;
+    std::memcpy(&native, &bits, sizeof(native));
+    return SageBuilder::buildDoubleVal_nfi(native, spelling);
+  } else {
+    const auto bits = value.RawBits();
+    Rose::FloatingValue::Words words{bits.IBITS(0, 64).ToUInt64(),
+                                     bits.IBITS(64, 64).ToUInt64()};
+    if constexpr (KIND == 10) {
+      return SageBuilder::buildFloat80Val_nfi(
+          Rose::FloatingValue::fromBits(
+              Rose::FloatingValue::Format::x87_binary80, words),
+          spelling);
+    } else {
+      return SageBuilder::buildFloat128Val_nfi(
+          Rose::FloatingValue::fromBits(Rose::FloatingValue::Format::binary128,
+                                        words),
+          spelling);
+    }
+  }
 }
+
+SgExpression *BuildRealLiteral(evaluate::Expr<evaluate::SomeType> semantic,
+                               const std::string &spelling) {
+  const auto type = semantic.GetType();
+  ROSE_ASSERT(type && type->category() == common::TypeCategory::Real &&
+              semantic.Rank() == 0);
+  const int kind = type->kind();
+  auto constant = evaluate::Fold(CurrentBuildVisitor().foldingContext(),
+                                 std::move(semantic));
+  SgValueExp *value = nullptr;
+  switch (kind) {
+  case 2:
+    value = BuildRealLiteralValue<2>(constant, spelling);
+    break;
+  case 3:
+    value = BuildRealLiteralValue<3>(constant, spelling);
+    break;
+  case 4:
+    value = BuildRealLiteralValue<4>(constant, spelling);
+    break;
+  case 8:
+    value = BuildRealLiteralValue<8>(constant, spelling);
+    break;
+  case 10:
+    value = BuildRealLiteralValue<10>(constant, spelling);
+    break;
+  case 16:
+    value = BuildRealLiteralValue<16>(constant, spelling);
+    break;
+  default:
+    std::cerr << "REX_FLANG_INVARIANT[real-literal-kind]: unsupported "
+                 "Flang REAL KIND "
+              << kind << "\n";
+    ROSE_ABORT();
+  }
+
+  SgExpression *kindExpression = SageBuilder::buildIntVal_nfi(kind);
+  SageBuilder::initializeSemanticExpressionSourceProvenance(kindExpression);
+  value->set_literal_type(SageBuilder::buildFloatType(kindExpression));
+  return value;
+}
+} // namespace
 
 void BuildImpl(const parser::SignedRealLiteralConstant &x,
                SgExpression *&expr) {
-  // std::tuple<std::optional<Sign>, RealLiteralConstant> t;
-  std::string value = FormatRealLiteralConstant(std::get<1>(x.t));
-  if (std::get<0>(x.t)) {
-    if (std::get<0>(x.t).value() == parser::Sign::Negative) {
-      value = "-" + value;
-    }
+  const parser::RealLiteralConstant &literal = std::get<1>(x.t);
+  const bool negative = std::get<0>(x.t) == parser::Sign::Negative;
+  std::string spelling = FormatRealLiteralConstant(literal);
+  if (negative) {
+    spelling.insert(spelling.begin(), '-');
   }
-  expr = SageBuilder::buildFloatVal_nfi(value);
+  auto semantic =
+      semantics::AnalyzeExpr(CurrentBuildVisitor().semanticContext(), x);
+  ROSE_ASSERT(semantic.has_value());
+  expr = BuildRealLiteral(std::move(*semantic), spelling);
 }
 
 namespace detail {
@@ -20065,9 +19594,8 @@ SgType *RequireComplexLiteralSemanticBase(SgType *semanticType) {
   SgTypeComplex *complexType = isSgTypeComplex(stripped);
   SgType *baseType =
       complexType != nullptr ? complexType->get_base_type() : nullptr;
-  if (semanticType == nullptr || isSgTypeUnknown(semanticType) != nullptr ||
-      complexType == nullptr || baseType == nullptr ||
-      isSgTypeUnknown(baseType) != nullptr) {
+  if (SageInterface::containsUnknownType(semanticType) ||
+      complexType == nullptr || SageInterface::containsUnknownType(baseType)) {
     std::cerr << "REX_FLANG_INVARIANT[complex-literal-type]: complex literal "
                  "has no exact complex semantic type\n";
     ROSE_ABORT();
@@ -20075,45 +19603,11 @@ SgType *RequireComplexLiteralSemanticBase(SgType *semanticType) {
   return baseType;
 }
 
-SgType *DeriveComplexLiteralBaseFromValueParts(SgExpression *realPart,
-                                               SgExpression *imagPart) {
-  ASSERT_not_null(realPart);
-  ASSERT_not_null(imagPart);
-  SgType *realType = StripModifierType(realPart->get_type());
-  SgType *imagType = StripModifierType(imagPart->get_type());
-  ASSERT_not_null(realType);
-  ASSERT_not_null(imagType);
-
-  auto isRealType = [](SgType *type) { return type->isFloatType(); };
-  const bool realIsReal = isRealType(realType);
-  const bool imagIsReal = isRealType(imagType);
-  if (realIsReal && imagIsReal) {
-    if (!SageInterface::isEquivalentType(realType, imagType)) {
-      std::cerr << "REX_FLANG_INVARIANT[complex-literal-type]: real parts of "
-                   "a complex literal have different kinds without a Flang "
-                   "semantic result type\n";
-      ROSE_ABORT();
-    }
-    return realType;
-  }
-  if (realIsReal) {
-    return realType;
-  }
-  if (imagIsReal) {
-    return imagType;
-  }
-  if (realType->isIntegerType() && imagType->isIntegerType()) {
-    return SageBuilder::buildFloatType();
-  }
-
-  std::cerr << "REX_FLANG_INVARIANT[complex-literal-type]: literal value "
-               "parts are not exact integer or real values\n";
-  ROSE_ABORT();
-}
-
 void BuildComplexLiteralConstant(const parser::ComplexLiteralConstant &x,
                                  SgType *semanticType,
                                  SgExpression *&expression) {
+  ASSERT_not_null(semanticType);
+  SgType *precisionType = RequireComplexLiteralSemanticBase(semanticType);
   struct BuiltComplexPart {
     SgExpression *expression;
     parser::CharBlock firstSource;
@@ -20131,7 +19625,7 @@ void BuildComplexLiteralConstant(const parser::ComplexLiteralConstant &x,
     common::visit(
         common::visitors{
             [&](const parser::SignedIntLiteralConstant &value) {
-              BuildImpl(value, partExpression);
+              partExpression = BuildSignedIntegerLiteral(value, nullptr);
               firstSource = value.source;
               lastSource = value.source;
             },
@@ -20177,82 +19671,23 @@ void BuildComplexLiteralConstant(const parser::ComplexLiteralConstant &x,
   const BuiltComplexPart imaginary = buildComplexPart(std::get<1>(x.t));
   SgExpression *realPart = real.expression;
   SgExpression *imagPart = imaginary.expression;
-  SgType *resultType = semanticType;
-  SgType *precisionType = nullptr;
-  if (resultType != nullptr) {
-    precisionType = RequireComplexLiteralSemanticBase(resultType);
-  } else {
-    precisionType = DeriveComplexLiteralBaseFromValueParts(realPart, imagPart);
-    resultType = SgTypeComplex::createType(precisionType);
-    ASSERT_not_null(resultType);
-  }
   ASSERT_not_null(precisionType);
-  expression = SageBuilder::buildComplexVal_nfi(realPart, imagPart,
-                                                precisionType, std::string());
+  expression =
+      SageBuilder::buildComplexVal_nfi(realPart, imagPart, precisionType);
   ASSERT_not_null(expression);
-  if (semanticType != nullptr) {
-    SgComplexVal *complexValue = isSgComplexVal(expression);
-    ASSERT_not_null(complexValue);
-    if (complexValue->get_literal_type() != nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[complex-literal-type]: complex "
-                   "literal producer attempted to replace an existing exact "
-                   "semantic type\n";
-      ROSE_ABORT();
-    }
-    complexValue->set_literal_type(resultType);
+  SgComplexVal *complexValue = isSgComplexVal(expression);
+  ASSERT_not_null(complexValue);
+  if (complexValue->get_literal_type() != nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[complex-literal-type]: complex "
+                 "literal producer attempted to replace an existing exact "
+                 "semantic type\n";
+    ROSE_ABORT();
   }
+  complexValue->set_literal_type(semanticType);
 }
 } // namespace
 
-void BuildImpl(const parser::ComplexLiteralConstant &x, SgExpression *&expr) {
-  BuildComplexLiteralConstant(x, /*semanticType=*/nullptr, expr);
-}
-
-void BuildImpl(const parser::SignedComplexLiteralConstant &x,
-               SgExpression *&expr) {
-  // std::tuple<Sign, ComplexLiteralConstant> t;
-  SgExpression *complexExpr{nullptr};
-  BuildImpl(std::get<1>(x.t), complexExpr);
-  ASSERT_not_null(complexExpr);
-  if (std::get<0>(x.t) == parser::Sign::Negative) {
-    expr = SageBuilder::buildMinusOp_nfi(complexExpr, complexExpr->get_type());
-  } else {
-    expr = complexExpr;
-  }
-}
-
-void BuildImpl(const parser::BOZLiteralConstant &x, SgExpression *&expr) {
-  std::string value = x.v;
-  int base = 10;
-  if (!value.empty()) {
-    char prefix = std::toupper(value.front());
-    if (prefix == 'B') {
-      base = 2;
-    } else if (prefix == 'O') {
-      base = 8;
-    } else if (prefix == 'Z') {
-      base = 16;
-    }
-  }
-  auto start = value.find_first_of("'\"");
-  auto end = value.find_last_of("'\"");
-  std::string digits = value;
-  if (start != std::string::npos && end != std::string::npos && end > start) {
-    digits = value.substr(start + 1, end - start - 1);
-  }
-  digits.erase(
-      std::remove_if(digits.begin(), digits.end(),
-                     [](char c) { return c == '_' || std::isspace(c); }),
-      digits.end());
-  long long llVal = 0;
-  if (!digits.empty()) {
-    llVal = std::stoll(digits, nullptr, base);
-  }
-  expr = SageBuilder::buildLongLongIntVal_nfi(llVal, value);
-}
-
 void BuildImpl(const parser::CharLiteralConstant &x, SgExpression *&expr) {
-  // std::tuple<std::optional<KindParam>, std::string> t;
   // Flang publishes the decoded character payload: doubled source delimiters
   // have already been reduced to one character.  Sage stores that decoded
   // value and the unparser performs the one required source-encoding step.
@@ -20263,39 +19698,22 @@ void BuildImpl(const parser::CharLiteralConstant &x, SgExpression *&expr) {
   stringVal->set_usesSingleQuotes(true);
   stringVal->set_usesDoubleQuotes(false);
   expr = stringVal;
-  if (std::get<0>(x.t)) {
-    SgExpression *kindExpr{nullptr};
-    BuildImpl(std::get<0>(x.t).value(), kindExpr);
-  }
 }
 
 void BuildImpl(const parser::LogicalLiteralConstant &x, SgExpression *&expr) {
-  // std::tuple<> bool, std::optional<KindParam>
   expr = SageBuilder::buildBoolValExp_nfi(std::get<0>(x.t));
-  if (std::get<1>(x.t)) {
-    SgExpression *kindExpr{nullptr};
-    BuildImpl(std::get<1>(x.t).value(), kindExpr);
-  }
 }
 
 void BuildImpl(const parser::KindSelector::StarSize &x, SgExpression *&expr) {
-  // StarSize std::uint64_t v
-  uint64_t kind{x.v};
-  std::string strVal{std::to_string(kind)};
   const std::int64_t signedKind =
-      RequireFortranUnsignedSelectorValue(kind, "source-kind-star-selector");
-  expr = SageBuilder::buildLongLongIntVal_nfi(signedKind, strVal);
-  SetFortranUnsignedSelectorValue(x.v, expr, "source-kind-star-selector");
+      RequireFortranUnsignedSelectorValue(x.v, "source-kind-star-selector");
+  expr = SageBuilder::buildLongLongIntVal_nfi(signedKind, std::to_string(x.v));
+  SetFortranIntegerSelectorValue(expr, signedKind, "source-kind-star-selector");
 }
 
 void BuildImpl(const parser::TypeParamValue &x, SgExpression *&expr) {
-  // TypeParamValue std::variant<ScalarIntExpr, Star, Deferred> u;
-  // Star is "*", Deferred is ":"
   common::visit(
       common::visitors{[&](const parser::ScalarIntExpr &y) {
-                         // Walking inside of a visitor not fully
-                         // explored, for now make sure no previous
-                         // value for expr
                          ASSERT_require(expr == nullptr);
                          BuildExprTreeWithoutSourcePosition(y, expr);
                          SetFortranFoldedSelectorValueIfAvailable(
@@ -20313,23 +19731,22 @@ void BuildImpl(const parser::TypeParamValue &x, SgExpression *&expr) {
 }
 
 void BuildImpl(const parser::CharLength &x, SgExpression *&expr) {
-  // CharLength std::variant<TypeParamValue, std::uint64_t> u;
   using namespace Fortran;
 
   common::visit(
-      common::visitors{[&](const std::uint64_t &y) {
-                         std::string strVal{std::to_string(y)};
-                         const std::int64_t signedLength =
-                             RequireFortranUnsignedSelectorValue(
-                                 y, "source-character-length-selector");
-                         expr = SageBuilder::buildLongLongIntVal_nfi(
-                             signedLength, strVal);
-                         SetFortranUnsignedSelectorValue(
-                             y, expr, "source-character-length-selector");
-                       },
-                       [&](const parser::TypeParamValue &y) {
-                         BuildExprTreeWithoutSourcePosition(y, expr);
-                       }},
+      common::visitors{
+          [&](const std::uint64_t &y) {
+            const std::string spelling = std::to_string(y);
+            const std::int64_t signedLength =
+                RequireFortranUnsignedSelectorValue(
+                    y, "source-character-length-selector");
+            expr = SageBuilder::buildLongLongIntVal_nfi(signedLength, spelling);
+            SetFortranIntegerSelectorValue(expr, signedLength,
+                                           "source-character-length-selector");
+          },
+          [&](const parser::TypeParamValue &y) {
+            BuildExprTreeWithoutSourcePosition(y, expr);
+          }},
       x.u);
   SageBuilder::requireFreshNfiExpressionSourceState(
       expr, "Flang CharLength expression producer");
@@ -20382,8 +19799,8 @@ void BuildFortranCharacterLength(const parser::CharLength &length,
                     value, "source-character-length-selector");
             expression =
                 SageBuilder::buildLongLongIntVal_nfi(signedLength, spelling);
-            SetFortranUnsignedSelectorValue(value, expression,
-                                            "source-character-length-selector");
+            SetFortranIntegerSelectorValue(expression, signedLength,
+                                           "source-character-length-selector");
             RequirePendingFlangSourceSelector(
                 expression, "Flang CHARACTER digit-string length selector");
           }},
@@ -20420,7 +19837,7 @@ void BuildVisitor::BuildPredeclarationSourceType(
   BeginSemanticPredeclarationSource(statementSource);
   BuildType(type, result);
   EndStatementSource();
-  if (result == nullptr || isSgTypeUnknown(result) != nullptr) {
+  if (SageInterface::containsUnknownType(result)) {
     std::cerr << "REX_FLANG_INVARIANT[predeclaration-source-type]: exact "
                  "source type producer did not build a resolved type\n";
     ROSE_ABORT();
@@ -20586,201 +20003,142 @@ void BuildImpl(const parser::ExplicitShapeSpec &x, SgExpression *&expr) {
   }
 }
 
-void BuildImpl(parser::UseStmt &x) {
-  std::cout << "BuildImpl(UseStmt)\n";
-  ABORT_NO_TEST;
-}
-
-void BuildImpl(const parser::InternalSubprogramPart &x) {
-  // std::tuple<> - Statement<ContainsStmt>, std::list<InternalSubprogram>
-  std::cout << "Rose::builder::Build(InternalSubprogramPart)\n";
-  ABORT_NO_TEST;
-}
-
-void Build(
-    std::list<parser::ImplicitSpec> &x,
-    std::list<std::tuple<SgType *, SgSymbol *, FortranImplicitTypeSpecKind,
-                         std::list<std::tuple<char, std::optional<char>>>>>
-        &implicit_spec_list) {
-  for (auto &spec : x) {
-    SgType *type{nullptr};
-    SgSymbol *sourceDerivedTypeSymbol{nullptr};
-    FortranImplicitTypeSpecKind fortranTypeSpec =
-        FortranImplicitTypeSpecKind::intrinsic;
-    std::list<std::tuple<char, std::optional<char>>> letter_spec_list;
-    Build(spec, type, sourceDerivedTypeSymbol, fortranTypeSpec,
-          letter_spec_list);
-    ASSERT_not_null(type);
-    implicit_spec_list.push_back(std::make_tuple(
-        type, sourceDerivedTypeSymbol, fortranTypeSpec, letter_spec_list));
-  }
-}
-
-void Build(parser::ImplicitSpec &x, SgType *&type,
-           SgSymbol *&sourceDerivedTypeSymbol,
-           FortranImplicitTypeSpecKind &fortranTypeSpec,
-           std::list<std::tuple<char, std::optional<char>>> &letter_spec_list) {
-  // std::tuple<DeclarationTypeSpec, std::list<LetterSpec>> t;
+namespace {
+const char *BuildFortranImplicitRanges(parser::ImplicitSpec &x,
+                                       SgFortranImplicitRangePtrList &ranges,
+                                       const parser::CharBlock &statementSource,
+                                       const char *typeBegin) {
+  SgType *type = nullptr;
   parser::DeclarationTypeSpec &sourceTypeSpec =
       std::get<parser::DeclarationTypeSpec>(x.t);
   CurrentBuildVisitor().BuildType(sourceTypeSpec, type);
-  const parser::CharBlock &statementSource =
-      CurrentBuildVisitor().RequireCurrentStatementSource(
-          "Fortran IMPLICIT type specification");
   const auto &letters = std::get<std::list<parser::LetterSpec>>(x.t);
   const char *firstLetter =
       !letters.empty() ? std::get<0>(letters.front().t) : nullptr;
-  if (firstLetter == nullptr || firstLetter < statementSource.begin() ||
-      firstLetter >= statementSource.end()) {
+  if (firstLetter == nullptr || typeBegin < statementSource.begin() ||
+      typeBegin >= firstLetter || firstLetter >= statementSource.end()) {
     std::cerr << "REX_FLANG_INVARIANT[implicit-type-source]: IMPLICIT type "
                  "specification has no exact parser-owned letter anchor\n";
     ROSE_ABORT();
   }
 
-  const char *implicitKeyword =
-      SkipFortranSourceSpace(statementSource.begin(), statementSource.end());
-  constexpr char implicitSpelling[] = "implicit";
-  constexpr size_t implicitSpellingLength = sizeof(implicitSpelling) - 1;
-  if (implicitKeyword + implicitSpellingLength > firstLetter ||
-      !std::equal(implicitSpelling, implicitSpelling + implicitSpellingLength,
-                  implicitKeyword, [](char expected, char source) {
-                    return expected == static_cast<char>(std::tolower(
-                                           static_cast<unsigned char>(source)));
-                  })) {
-    std::cerr << "REX_FLANG_INVARIANT[implicit-type-source]: IMPLICIT "
-                 "statement has no exact leading keyword surface\n";
-    ROSE_ABORT();
-  }
-  // Flang's cooked character stream removes insignificant blanks, so the
-  // first type keyword is immediately adjacent to IMPLICIT.  Begin the
-  // implicit-spec surface after the parser-proven statement keyword; treating
-  // the whole statement as a type surface makes the trailing 't' of IMPLICIT
-  // falsely hide REAL/INTEGER from keyword-boundary validation.
-  const char *implicitSpecBegin = implicitKeyword + implicitSpellingLength;
-  int parenthesisDepth = 0;
-  char quote = '\0';
-  for (const char *cursor = statementSource.begin(); cursor < firstLetter;
-       ++cursor) {
-    const char character = *cursor;
-    if (quote != '\0') {
-      if (character == quote) {
-        if (cursor + 1 < firstLetter && cursor[1] == quote) {
-          ++cursor;
-        } else {
-          quote = '\0';
-        }
-      }
-      continue;
-    }
-    if (character == '\'' || character == '"') {
-      quote = character;
-    } else if (character == '(') {
-      ++parenthesisDepth;
-    } else if (character == ')') {
-      --parenthesisDepth;
-    } else if (character == ',' && parenthesisDepth == 0) {
-      implicitSpecBegin = cursor + 1;
-    }
-    if (parenthesisDepth < 0) {
-      std::cerr << "REX_FLANG_INVARIANT[implicit-type-source]: IMPLICIT type "
-                   "specification has retrograde source delimiters\n";
-      ROSE_ABORT();
-    }
-  }
-  if (quote != '\0' || parenthesisDepth != 1) {
-    std::cerr << "REX_FLANG_INVARIANT[implicit-type-source]: IMPLICIT type "
-                 "specification has no exact letter-list delimiter\n";
-    ROSE_ABORT();
-  }
-  while (implicitSpecBegin < firstLetter &&
-         std::isspace(static_cast<unsigned char>(*implicitSpecBegin)) != 0) {
-    ++implicitSpecBegin;
-  }
-  const parser::CharBlock implicitSpecSource(implicitSpecBegin, firstLetter);
+  const parser::CharBlock implicitSpecSource(typeBegin, firstLetter);
   PublishExactFortranStarKindSelector(type, implicitSpecSource, firstLetter);
   PublishExactFortranCharacterSelector(type, implicitSpecSource, firstLetter);
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
-  sourceDerivedTypeSymbol =
+  SgSymbol *sourceDerivedTypeSymbol =
       RequireFortranSourceDerivedTypeSymbol(sourceTypeSpec, scope, type);
+  SgFortranImplicitRange::type_spec_enum fortranTypeSpec =
+      SgFortranImplicitRange::e_intrinsic;
   if (std::holds_alternative<parser::DeclarationTypeSpec::Type>(
           sourceTypeSpec.u)) {
-    fortranTypeSpec = FortranImplicitTypeSpecKind::type;
+    fortranTypeSpec = SgFortranImplicitRange::e_type;
   } else if (std::holds_alternative<parser::DeclarationTypeSpec::Class>(
                  sourceTypeSpec.u)) {
-    fortranTypeSpec = FortranImplicitTypeSpecKind::class_type;
+    fortranTypeSpec = SgFortranImplicitRange::e_class;
   } else if (std::holds_alternative<parser::DeclarationTypeSpec::TypeStar>(
                  sourceTypeSpec.u)) {
-    fortranTypeSpec = FortranImplicitTypeSpecKind::type_star;
+    fortranTypeSpec = SgFortranImplicitRange::e_type_star;
   } else if (std::holds_alternative<parser::DeclarationTypeSpec::ClassStar>(
                  sourceTypeSpec.u)) {
-    fortranTypeSpec = FortranImplicitTypeSpecKind::class_star;
+    fortranTypeSpec = SgFortranImplicitRange::e_class_star;
   }
-  Build(std::get<std::list<parser::LetterSpec>>(x.t), letter_spec_list);
-}
-
-void Build(std::list<parser::LetterSpec> &x,
-           std::list<std::tuple<char, std::optional<char>>> &letter_spec_list) {
-  for (auto &spec : x) {
-    std::tuple<char, std::optional<char>> letter_spec;
-    Build(spec, letter_spec);
-    letter_spec_list.push_back(letter_spec);
-  }
-}
-
-void Build(parser::LetterSpec &x,
-           std::tuple<char, std::optional<char>> &letter_spec) {
-  // std::tuple<Location, std::optional<Location>> t;
-  // using Location = const char *;
-  char first = '\0';
-  if (const char *loc = std::get<0>(x.t)) {
-    first = *loc;
-  }
-  std::optional<char> second = std::nullopt;
-  if (std::get<1>(x.t)) {
-    if (const char *loc = std::get<1>(x.t).value()) {
-      second = *loc;
+  for (const parser::LetterSpec &letter : letters) {
+    const char *first = std::get<0>(letter.t);
+    const std::optional<const char *> &last = std::get<1>(letter.t);
+    if (first == nullptr || first < statementSource.begin() ||
+        first >= statementSource.end() ||
+        (last && (*last == nullptr || *last < first ||
+                  *last >= statementSource.end()))) {
+      std::cerr << "REX_FLANG_INVARIANT[implicit-range-source]: IMPLICIT "
+                   "letter range has no exact parser-owned endpoints\n";
+      ROSE_ABORT();
     }
+    auto *range = new SgFortranImplicitRange(
+        *first, last ? std::optional<char>(**last) : std::nullopt, type,
+        fortranTypeSpec, sourceDerivedTypeSymbol);
+    const SourcePosition begin = BuildRequiredStatementSourcePosition(
+        parser::CharBlock(first, first + 1), Order::begin);
+    const char *end = last.value_or(first);
+    const SourcePosition finish = BuildRequiredStatementSourcePosition(
+        parser::CharBlock(end, end + 1), Order::end);
+    builder.setSourcePosition(range, begin, finish);
+    ranges.push_back(range);
   }
-  letter_spec = std::make_tuple(first, second);
+  const parser::LetterSpec &lastRange = letters.back();
+  const char *lastLetter =
+      std::get<1>(lastRange.t).value_or(std::get<0>(lastRange.t));
+  const char *closing =
+      SkipFortranSourceSpace(lastLetter + 1, statementSource.end());
+  ROSE_ASSERT(closing < statementSource.end() && *closing == ')');
+  return SkipFortranSourceSpace(closing + 1, statementSource.end());
 }
+} // namespace
 
 void BuildVisitor::Build(parser::ImplicitStmt &x) {
-  // std::variant<> std::list<ImplicitSpec>, std::list<ImplicitNoneNameSpec>
   using namespace Fortran::parser;
-  bool implicitNone{false}, implicitExternal{false}, implicitType{false};
-
+  SgFortranImplicitRangePtrList ranges;
+  SgImplicitStatement::implicit_spec_enum implicitSpec =
+      SgImplicitStatement::e_none;
   common::visit(
       common::visitors{
           [&](std::list<ImplicitSpec> &y) {
-            std::list<
-                std::tuple<SgType *, SgSymbol *, FortranImplicitTypeSpecKind,
-                           std::list<std::tuple<char, std::optional<char>>>>>
-                implicit_spec_list;
-            Rose::builder::Build(y, implicit_spec_list);
-            SgImplicitStatement *stmt{nullptr};
-            builder.Enter(stmt, implicit_spec_list);
-            ApplyCurrentStatementSource(stmt);
-            builder.Leave(stmt);
+            implicitSpec = SgImplicitStatement::e_has_implicit_spec_list;
+            const parser::CharBlock &source = RequireCurrentStatementSource(
+                "Fortran IMPLICIT type specification");
+            const char *typeBegin =
+                SkipFortranSourceSpace(source.begin(), source.end());
+            constexpr char keyword[] = "implicit";
+            constexpr size_t keywordLength = sizeof(keyword) - 1;
+            ROSE_ASSERT(static_cast<size_t>(source.end() - typeBegin) >=
+                        keywordLength);
+            ROSE_ASSERT(std::equal(
+                keyword, keyword + keywordLength, typeBegin,
+                [](char expected, char sourceCharacter) {
+                  return expected ==
+                         static_cast<char>(std::tolower(
+                             static_cast<unsigned char>(sourceCharacter)));
+                }));
+            typeBegin += keywordLength;
+            for (auto spec = y.begin(); spec != y.end(); ++spec) {
+              if (spec != y.begin()) {
+                ROSE_ASSERT(typeBegin < source.end() && *typeBegin == ',');
+                ++typeBegin;
+              }
+              typeBegin =
+                  BuildFortranImplicitRanges(*spec, ranges, source, typeBegin);
+            }
           },
           [&](const std::list<ImplicitStmt::ImplicitNoneNameSpec> &y) {
-            // ENUM_CLASS(ImplicitNoneNameSpec, External, Type) // R866
-            implicitNone = true;
+            bool implicitExternal = false, implicitType = false;
             for (const auto &spec : y) {
-              if (spec == ImplicitStmt::ImplicitNoneNameSpec::External)
+              switch (spec) {
+              case ImplicitStmt::ImplicitNoneNameSpec::External:
+                ROSE_ASSERT(!implicitExternal);
                 implicitExternal = true;
-              if (spec == ImplicitStmt::ImplicitNoneNameSpec::Type)
+                break;
+              case ImplicitStmt::ImplicitNoneNameSpec::Type:
+                ROSE_ASSERT(!implicitType);
                 implicitType = true;
+                break;
+              default:
+                ROSE_ABORT();
+              }
             }
+            if (implicitExternal && implicitType)
+              implicitSpec = SgImplicitStatement::e_none_external_and_type;
+            else if (implicitExternal)
+              implicitSpec = SgImplicitStatement::e_none_external;
+            else if (implicitType)
+              implicitSpec = SgImplicitStatement::e_none_type;
           }},
       x.u);
-
-  if (implicitNone) {
-    SgImplicitStatement *stmt{nullptr};
-    builder.Enter(stmt, implicitExternal, implicitType);
-    ApplyCurrentStatementSource(stmt);
-    builder.Leave(stmt);
-  }
+  auto *statement = new SgImplicitStatement(implicitSpec, ranges);
+  statement->set_definingDeclaration(statement);
+  statement->set_firstNondefiningDeclaration(statement);
+  ApplyCurrentStatementSource(statement);
+  SageInterface::appendStatement(statement, SageBuilder::topScopeStack());
 }
 
 namespace {
@@ -20860,12 +20218,11 @@ SgScopeStatement *NextFortranSemanticScope(SgScopeStatement *scope,
   return next;
 }
 
-SgSymbol *RequireFortranSourceDerivedTypeSymbol(
-    const parser::DerivedTypeSpec &derivedSpec, SgScopeStatement *useScope,
-    SgType *sourceType) {
+SgSymbol *RequireFortranSourceDerivedTypeSymbol(const parser::Name &sourceName,
+                                                SgScopeStatement *useScope,
+                                                SgType *sourceType) {
   ASSERT_not_null(useScope);
   ASSERT_not_null(sourceType);
-  const parser::Name &sourceName = std::get<parser::Name>(derivedSpec.t);
   const SgName visibleName(sourceName.ToString());
   if (sourceName.symbol == nullptr || visibleName.getString().empty()) {
     std::cerr << "REX_FLANG_INVARIANT[source-derived-type-binding]: source "
@@ -20959,6 +20316,13 @@ SgSymbol *RequireFortranSourceDerivedTypeSymbol(
 }
 
 SgSymbol *RequireFortranSourceDerivedTypeSymbol(
+    const parser::DerivedTypeSpec &derivedSpec, SgScopeStatement *useScope,
+    SgType *sourceType) {
+  return RequireFortranSourceDerivedTypeSymbol(
+      std::get<parser::Name>(derivedSpec.t), useScope, sourceType);
+}
+
+SgSymbol *RequireFortranSourceDerivedTypeSymbol(
     const parser::DeclarationTypeSpec &sourceSpec, SgScopeStatement *useScope,
     SgType *sourceType) {
   const parser::DerivedTypeSpec *derived = SourceDerivedTypeSpec(sourceSpec);
@@ -21024,16 +20388,13 @@ FortranSemanticModuleSource RequireFortranSemanticModuleSource(
       provenance->start(), nullptr, /*topLevel=*/false);
   const Fortran::parser::SourceFile *endFile =
       allSources.GetSourceFile(provenance->Last(), nullptr, /*topLevel=*/false);
-  const std::string moduleFile = startFile != nullptr
-                                     ? NormalizeSourcePath(startFile->path())
-                                     : std::string{};
-  if (startFile == nullptr || endFile == nullptr || startFile != endFile ||
-      moduleFile.empty()) {
+  if (startFile == nullptr || endFile == nullptr || startFile != endFile) {
     std::cerr << "REX_FLANG_INVARIANT[semantic-module-nature]: " << context
               << " module '" << ultimate.name().ToString()
               << "' does not map to one exact physical module file\n";
     ROSE_ABORT();
   }
+  const std::string moduleFile = RequirePhysicalSourcePath(*startFile);
 
   const FlangModuleInfo::ModuleNature sourceNature =
       FlangModuleInfo::requireModuleNatureForSourceFile(
@@ -21081,41 +20442,18 @@ SgClassSymbol *RequireFortranSemanticDerivedTypeSymbol(
     ROSE_ABORT();
   }
 
-  SgSymbol *mapped = visitor.LookupSemanticSymbol(&semanticType);
-  if (mapped == nullptr && &ultimate != &semanticType) {
-    mapped = visitor.LookupSemanticSymbol(&ultimate);
-  }
-  if (mapped != nullptr) {
-    SgClassSymbol *classSymbol =
-        ResolveFortranClassSymbol(mapped, sourceVisibleName);
-    if (classSymbol == nullptr || classSymbol->get_declaration() == nullptr ||
-        classSymbol->get_declaration()->get_type() == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[semantic-derived-type]: Flang type '"
-                << sourceVisibleName
-                << "' maps to a non-class or incomplete Sage symbol\n";
-      ROSE_ABORT();
-    }
-    if (visitor.IsSemanticDerivedTypeForward(classSymbol->get_declaration()) &&
-        classSymbol->get_declaration()->get_scope() != declarationScope) {
-      visitor.RelocateSemanticDerivedTypeForward(classSymbol, declarationScope);
-    }
-    visitor.RegisterSemanticSymbol(&ultimate, classSymbol);
-    if (&semanticType != &ultimate) {
-      visitor.RegisterSemanticSymbol(&semanticType, classSymbol);
-    }
-    return classSymbol;
-  }
-
+  // Semantic identity is independent of whether a type's source name is
+  // visible at this use. A function-local result type can reach its caller
+  // without exporting that type name into the caller's scope.
   SgClassSymbol *canonical =
-      visitor.LookupSemanticClassSymbol(&semanticType, declarationScope);
-  if (canonical == nullptr && &ultimate != &semanticType) {
-    canonical = visitor.LookupSemanticClassSymbol(&ultimate, declarationScope);
-  }
+      visitor.LookupCanonicalSemanticClassSymbol(&ultimate);
   if (canonical != nullptr) {
     if (visitor.IsSemanticDerivedTypeForward(canonical->get_declaration()) &&
         canonical->get_declaration()->get_scope() != declarationScope) {
       visitor.RelocateSemanticDerivedTypeForward(canonical, declarationScope);
     }
+    // A visible alias establishes type identity, but dependency consumers also
+    // require the exact producer binding in the producer's own scope.
     visitor.RegisterSemanticSymbol(&ultimate, canonical);
     if (&semanticType != &ultimate) {
       visitor.RegisterSemanticSymbol(&semanticType, canonical);
@@ -21437,8 +20775,10 @@ SgType *BuildFortranSemanticObjectType(const Fortran::semantics::Symbol &symbol,
     } else if (length.isDeferred()) {
       lengthExpression = SageBuilder::buildColonShapeExp_nfi();
     } else if (length.GetExplicit()) {
+      auto exactLength = *length.GetExplicit();
       const std::optional<std::int64_t> lengthValue =
-          Fortran::evaluate::ToInt64(*length.GetExplicit());
+          evaluate::ToInt64(evaluate::Fold(
+              CurrentBuildVisitor().foldingContext(), std::move(exactLength)));
       if (lengthValue && *lengthValue < 0) {
         std::cerr << "REX_FLANG_INVARIANT[semantic-object-character]: "
                      "semantic object '"
@@ -21501,7 +20841,12 @@ SgType *BuildFortranSemanticObjectType(const Fortran::semantics::Symbol &symbol,
     type = SgTypeFortranUnlimitedPolymorphic::createType();
     break;
   }
-  ASSERT_not_null(type);
+  if (SageInterface::containsUnknownType(type)) {
+    std::cerr << "REX_FLANG_INVARIANT[semantic-object-type]: semantic object '"
+              << ultimate.name().ToString()
+              << "' produced an unresolved type before shape construction\n";
+    ROSE_ABORT();
+  }
 
   if (const auto *object =
           ultimate.detailsIf<Fortran::semantics::ObjectEntityDetails>()) {
@@ -21554,7 +20899,8 @@ SgType *
 BuildFortranSemanticObjectOwnerType(const Fortran::semantics::Symbol &symbol,
                                     BuildVisitor &visitor) {
   const Fortran::semantics::Symbol &ultimate = symbol.GetUltimate();
-  SgType *type = BuildFortranSemanticObjectType(ultimate, visitor);
+  SgType *semanticType = BuildFortranSemanticObjectType(ultimate, visitor);
+  SgType *type = semanticType;
   ASSERT_not_null(type);
   if (HasFortranPointerTypeWrapper(type) || SageInterface::isConstType(type)) {
     std::cerr << "REX_FLANG_INVARIANT[semantic-object-owner-type]: base "
@@ -21567,13 +20913,12 @@ BuildFortranSemanticObjectOwnerType(const Fortran::semantics::Symbol &symbol,
     type = SageBuilder::buildPointerType(type);
     ASSERT_not_null(type);
   }
-  if (HasFortranPointerTypeWrapper(type) !=
-      Fortran::semantics::IsPointer(ultimate)) {
-    std::cerr << "REX_FLANG_INVARIANT[semantic-object-owner-type]: object '"
-              << ultimate.name().ToString()
-              << "' did not acquire its exact semantic POINTER attribute\n";
-    ROSE_ABORT();
+  if (ultimate.attrs().test(Fortran::semantics::Attr::PARAMETER)) {
+    type = SageBuilder::buildConstType(type);
+    ASSERT_not_null(type);
   }
+  RequireFortranSemanticObjectProducerType(type, semanticType, ultimate,
+                                           SgName(ultimate.name().ToString()));
   return type;
 }
 
@@ -21631,15 +20976,7 @@ SgVariableSymbol *PublishFortranSemanticUseObject(
   RequireFortranSemanticUseObjectTypeDependency(ultimate, scope);
   SgType *semanticType = BuildFortranSemanticObjectType(ultimate);
   ASSERT_not_null(semanticType);
-  SgType *type = semanticType;
-  if (Fortran::semantics::IsPointer(ultimate)) {
-    type = SageBuilder::buildPointerType(type);
-    ASSERT_not_null(type);
-  }
-  if (ultimate.attrs().test(Fortran::semantics::Attr::PARAMETER)) {
-    type = SageBuilder::buildConstType(type);
-    ASSERT_not_null(type);
-  }
+  SgType *type = BuildFortranSemanticObjectOwnerType(ultimate);
   SgVariableDeclaration *declaration =
       SageBuilder::buildVariableDeclaration_nfi(localName, type,
                                                 /*initializer=*/nullptr, scope);
@@ -21858,20 +21195,8 @@ void BuildVisitor::Build(
     ROSE_ABORT();
   }
 
-  SgUseStatement *useStmt = new SgUseStatement(moduleName, hasOnly, "");
-  ASSERT_not_null(useStmt);
-  useStmt->set_definingDeclaration(useStmt);
-  useStmt->set_firstNondefiningDeclaration(useStmt);
-
-  if (useStmtNode.nature) {
-    std::string nature{UseStmt::EnumToString(*useStmtNode.nature)};
-    useStmt->set_module_nature(nature);
-  }
-
   SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
   SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  builder.setSourcePosition(useStmt, srcBegin, srcEnd);
-
   SgModuleStatement *moduleStmt =
       semanticModuleSource.nature == FlangModuleInfo::ModuleNature::nonintrinsic
           ? lookupModuleStatement(moduleName)
@@ -21892,7 +21217,14 @@ void BuildVisitor::Build(
   }
 
   ASSERT_not_null(moduleStmt);
-  useStmt->set_module(moduleStmt);
+  const std::string moduleNature{
+      useStmtNode.nature ? UseStmt::EnumToString(*useStmtNode.nature) : ""};
+  SgUseStatement *useStmt =
+      new SgUseStatement(moduleName, hasOnly, moduleNature, moduleStmt);
+  ASSERT_not_null(useStmt);
+  useStmt->set_definingDeclaration(useStmt);
+  useStmt->set_firstNondefiningDeclaration(useStmt);
+  builder.setSourcePosition(useStmt, srcBegin, srcEnd);
 
   std::vector<SgRenamePair *> renamePairs;
   if (hasOnly) {
@@ -22460,433 +21792,142 @@ void BuildVisitor::Build(
     return name;
   };
 
-  auto resolveModuleNamelistGroups =
-      [&](const ExactUseAssociation &association) {
-        if (association.kind != UseAssociationKind::namelist ||
-            association.ultimate_target
-                    ->detailsIf<Fortran::semantics::NamelistDetails>() ==
-                nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[use-namelist-identity]: "
-                       "non-NAMELIST association reached NAMELIST AST "
-                       "resolution\n";
-          ROSE_ABORT();
-        }
-        const SgName astLookupName = moduleAstLookupName(association);
-        std::vector<SgNameGroup *> groups;
-        for (SgStatement *statement :
-             classDefinition->generateStatementList()) {
-          SgNamelistStatement *namelist = isSgNamelistStatement(statement);
-          if (namelist == nullptr) {
-            continue;
-          }
-          if (namelist->get_parent() != classDefinition ||
-              namelist->get_scope() != classDefinition) {
-            std::cerr << "REX_FLANG_INVARIANT[use-namelist-owner]: module "
-                         "NAMELIST statement is not owned by its exact "
-                         "module definition\n";
-            ROSE_ABORT();
-          }
-          for (SgNameGroup *group : namelist->get_group_list()) {
-            if (group == nullptr || group->get_parent() != namelist) {
-              std::cerr << "REX_FLANG_INVARIANT[use-namelist-owner]: "
-                           "module NAMELIST contains a detached group\n";
-              ROSE_ABORT();
-            }
-            if (NamesMatch(group->get_group_name(), astLookupName.getString(),
-                           /*case_insensitive=*/true)) {
-              groups.push_back(group);
-            }
-          }
-        }
-        if (groups.empty()) {
-          std::cerr << "REX_FLANG_INVARIANT[use-namelist-identity]: module '"
-                    << moduleName << "' has no exact Sage NAMELIST group '"
-                    << astLookupName << "'\n";
-          ROSE_ABORT();
-        }
-        return groups;
-      };
-
-  auto bridgeModuleDerivedTypeDependency = [&](const Fortran::semantics::Symbol
-                                                   &semanticType,
-                                               const Fortran::semantics::Symbol
-                                                   &dependentEntity,
-                                               const Fortran::semantics::Symbol
-                                                   &owningProcedure,
-                                               const SgName &procedureName) {
-    const Fortran::semantics::Symbol &ultimate = semanticType.GetUltimate();
-    if (ultimate.detailsIf<Fortran::semantics::DerivedTypeDetails>() ==
-        nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                   "dependency]: Flang symbol '"
-                << semanticType.name().ToString()
-                << "' is not an exact derived type\n";
-      ROSE_ABORT();
-    }
-
-    SgClassSymbol *semanticCanonical =
-        CurrentBuildVisitor().LookupSemanticClassSymbol(&semanticType,
-                                                        classDefinition);
-    SgClassSymbol *ultimateCanonical =
-        CurrentBuildVisitor().LookupSemanticClassSymbol(&ultimate,
-                                                        classDefinition);
-    if (semanticCanonical != nullptr && ultimateCanonical != nullptr &&
-        semanticCanonical != ultimateCanonical) {
-      std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                   "dependency]: derived type '"
-                << ultimate.name().ToString()
-                << "' has inconsistent exact semantic and ultimate Sage "
-                   "class identities\n";
-      ROSE_ABORT();
-    }
-    SgClassSymbol *canonical =
-        semanticCanonical != nullptr ? semanticCanonical : ultimateCanonical;
-
-    std::vector<const Fortran::semantics::Symbol *> moduleBindings;
-    for (const Fortran::semantics::SymbolRef &symbolRef :
-         semanticModuleScope->GetSymbols()) {
-      const Fortran::semantics::Symbol &candidate = symbolRef.get();
-      if (&candidate.GetUltimate() == &ultimate) {
-        moduleBindings.push_back(&candidate);
-      }
-    }
-    if (moduleBindings.empty()) {
-      const Fortran::semantics::Symbol *localAssociation = nullptr;
-      if (semanticType.detailsIf<Fortran::semantics::UseDetails>() != nullptr) {
-        localAssociation = &semanticType;
-      }
-      for (const Fortran::semantics::SymbolRef &symbolRef :
-           dependentEntity.owner().GetSymbols()) {
-        const Fortran::semantics::Symbol &candidate = symbolRef.get();
-        const auto *use = candidate.detailsIf<Fortran::semantics::UseDetails>();
-        if (use == nullptr || &use->symbol().GetUltimate() != &ultimate) {
-          continue;
-        }
-        if (localAssociation != nullptr && localAssociation != &candidate) {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: derived type '"
-                    << ultimate.name().ToString()
-                    << "' has multiple exact USE associations in the "
-                       "dependent procedure scope\n";
-          ROSE_ABORT();
-        }
-        localAssociation = &candidate;
-      }
-
-      const auto *use =
-          localAssociation != nullptr
-              ? localAssociation->detailsIf<Fortran::semantics::UseDetails>()
-              : nullptr;
-      const Fortran::semantics::Symbol &procedureUltimate =
-          owningProcedure.GetUltimate();
-      const auto *procedureDetails =
-          procedureUltimate.detailsIf<Fortran::semantics::SubprogramDetails>();
-      const Fortran::semantics::Scope *procedureScope =
-          procedureDetails != nullptr ? procedureUltimate.scope() : nullptr;
-      const bool exactDependentProcedureOwner =
-          (procedureScope != nullptr &&
-           procedureScope->Contains(dependentEntity.owner())) ||
-          (procedureUltimate
-                   .detailsIf<Fortran::semantics::ProcEntityDetails>() !=
-               nullptr &&
-           &dependentEntity.GetUltimate() == &procedureUltimate);
-      const bool exactProcedureAssociation =
-          localAssociation != nullptr && use != nullptr &&
-          &localAssociation->owner() == &dependentEntity.owner() &&
-          &use->symbol().GetUltimate() == &ultimate &&
-          (semanticModuleScope->Contains(dependentEntity.owner()) ||
-           exactDependentProcedureOwner) &&
-          !semanticModuleScope->Contains(ultimate.owner());
-      if (canonical == nullptr && exactProcedureAssociation) {
-        std::set<SgClassSymbol *> signatureClasses;
-        std::set<SgType *> visitedTypes;
-        std::function<void(SgType *)> collectSignatureClass;
-        collectSignatureClass = [&](SgType *type) {
-          if (type == nullptr || !visitedTypes.insert(type).second) {
-            return;
-          }
-          if (SgModifierType *modifier = isSgModifierType(type)) {
-            collectSignatureClass(modifier->get_base_type());
-            return;
-          }
-          if (SgPointerType *pointer = isSgPointerType(type)) {
-            collectSignatureClass(pointer->get_base_type());
-            return;
-          }
-          if (SgArrayType *array = isSgArrayType(type)) {
-            collectSignatureClass(array->get_base_type());
-            return;
-          }
-          if (SgFunctionType *function = isSgFunctionType(type)) {
-            collectSignatureClass(function->get_return_type());
-            for (SgType *argument : function->get_arguments()) {
-              collectSignatureClass(argument);
-            }
-            return;
-          }
-
-          SgClassType *classType = isSgClassType(type);
-          SgClassDeclaration *declaration =
-              classType != nullptr
-                  ? isSgClassDeclaration(classType->get_declaration())
-                  : nullptr;
-          if (declaration == nullptr ||
-              !NamesMatch(declaration->get_name().getString(),
-                          ultimate.name().ToString(),
-                          /*caseInsensitive=*/true)) {
-            return;
-          }
-
-          SgScopeStatement *declarationScope = declaration->get_scope();
-          SgSymbolTable *symbols = declarationScope != nullptr
-                                       ? declarationScope->get_symbol_table()
-                                       : nullptr;
-          SgSymbolTable::BaseHashType *entries =
-              symbols != nullptr ? symbols->get_table() : nullptr;
-          if (entries == nullptr) {
-            std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                         "dependency]: module procedure signature "
-                         "class has no exact declaration scope\n";
-            ROSE_ABORT();
-          }
-
-          SgClassSymbol *signatureClass = nullptr;
-          for (const auto &entry : *entries) {
-            SgClassSymbol *candidate = ResolveFortranClassSymbol(
-                entry.second, declaration->get_name());
-            if (candidate == nullptr ||
-                candidate->get_declaration() == nullptr ||
-                candidate->get_declaration()->get_type() != classType) {
-              continue;
-            }
-            if (signatureClass != nullptr && signatureClass != candidate) {
-              std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                           "dependency]: one module procedure "
-                           "signature class type has multiple exact "
-                           "Sage symbols\n";
-              ROSE_ABORT();
-            }
-            signatureClass = candidate;
-          }
-          if (signatureClass == nullptr) {
-            std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                         "dependency]: module procedure signature "
-                         "class is absent from its exact symbol table\n";
-            ROSE_ABORT();
-          }
-          signatureClasses.insert(signatureClass);
-        };
-
-        for (const auto &entry : *moduleEntries) {
-          if (!moduleEntries->key_eq()(entry.first, procedureName)) {
-            continue;
-          }
-          SgSymbol *procedure = resolveProcedureAssociation(entry.second);
-          collectSignatureClass(procedureAssociationType(procedure));
-        }
-        if (signatureClasses.size() > 1) {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: derived type '"
-                    << ultimate.name().ToString()
-                    << "' maps to multiple exact Sage classes in "
-                       "module procedure '"
-                    << procedureName << "'\n";
-          ROSE_ABORT();
-        }
-        if (signatureClasses.size() == 1) {
-          canonical = *signatureClasses.begin();
-        }
-      }
-      if (canonical == nullptr || canonical->get_declaration() == nullptr ||
-          canonical->get_declaration()->get_type() == nullptr ||
-          !exactProcedureAssociation) {
-        std::cerr
-            << "REX_FLANG_INVARIANT[use-procedure-type-"
-               "dependency]: derived type '"
-            << ultimate.name().ToString() << "' used by procedure entity '"
-            << dependentEntity.name().ToString() << "' from module '"
-            << moduleName
-            << "' has neither an exact module binding nor one "
-               "canonical procedure-local USE association: "
-               "semantic="
-            << &semanticType << " ultimate=" << &ultimate
-            << " association=" << localAssociation << " canonical=" << canonical
-            << " exact-association=" << (exactProcedureAssociation ? 1 : 0)
-            << " owner-match="
-            << (localAssociation != nullptr &&
-                        &localAssociation->owner() == &dependentEntity.owner()
-                    ? 1
-                    : 0)
-            << " ultimate-match="
-            << (use != nullptr && &use->symbol().GetUltimate() == &ultimate ? 1
-                                                                            : 0)
-            << " dependent-in-module="
-            << (semanticModuleScope->Contains(dependentEntity.owner()) ? 1 : 0)
-            << " dependent-in-procedure="
-            << (exactDependentProcedureOwner ? 1 : 0) << " ultimate-in-module="
-            << (semanticModuleScope->Contains(ultimate.owner()) ? 1 : 0)
-            << "\n";
-        ROSE_ABORT();
-      }
-
-      CurrentBuildVisitor().RegisterSemanticSymbol(localAssociation, canonical);
-      if (&semanticType != localAssociation) {
-        CurrentBuildVisitor().RegisterSemanticSymbol(&semanticType, canonical);
-      }
-      CurrentBuildVisitor().RegisterSemanticSymbol(&ultimate, canonical);
-      return;
-    }
-
-    SgClassSymbol *moduleCanonical = nullptr;
-    for (const Fortran::semantics::Symbol *binding : moduleBindings) {
-      const SgName bindingName(binding->name().ToString());
-      SgClassSymbol *bindingClass = nullptr;
-      for (const auto &entry : *moduleEntries) {
-        if (!moduleEntries->key_eq()(entry.first, bindingName)) {
-          continue;
-        }
-        SgClassSymbol *candidate =
-            ResolveFortranClassSymbol(entry.second, bindingName);
-        if (candidate == nullptr) {
-          continue;
-        }
-        if (bindingClass != nullptr && bindingClass != candidate) {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: module binding '"
-                    << bindingName
-                    << "' resolves to multiple Sage class identities\n";
-          ROSE_ABORT();
-        }
-        bindingClass = candidate;
-      }
-      if (bindingClass == nullptr ||
-          bindingClass->get_declaration() == nullptr ||
-          bindingClass->get_declaration()->get_type() == nullptr) {
-        std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                     "dependency]: module binding '"
-                  << bindingName << "' for derived type '"
-                  << ultimate.name().ToString()
-                  << "' has no exact Sage class identity\n";
-        ROSE_ABORT();
-      }
-      if (moduleCanonical != nullptr && moduleCanonical != bindingClass) {
-        std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                     "dependency]: derived type '"
-                  << ultimate.name().ToString()
-                  << "' maps to multiple canonical Sage classes in "
-                     "module '"
-                  << moduleName << "'\n";
-        ROSE_ABORT();
-      }
-      moduleCanonical = bindingClass;
-    }
-    ASSERT_not_null(moduleCanonical);
-
-    if (canonical != nullptr && canonical != moduleCanonical) {
-      std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                   "dependency]: derived type '"
-                << ultimate.name().ToString()
-                << "' was already mapped to a different Sage class\n";
-      ROSE_ABORT();
-    }
-    canonical = moduleCanonical;
-    for (const Fortran::semantics::Symbol *binding : moduleBindings) {
-      CurrentBuildVisitor().RegisterSemanticSymbol(binding, canonical);
-    }
-    CurrentBuildVisitor().RegisterSemanticSymbol(&semanticType, canonical);
-    CurrentBuildVisitor().RegisterSemanticSymbol(&ultimate, canonical);
+  auto resolveNamelistAssociation = [](SgSymbol *symbol) {
+    if (auto *alias = isSgAliasSymbol(symbol))
+      symbol = alias->get_base();
+    return isSgNamelistSymbol(symbol);
   };
 
   auto bridgeModuleObjectTypeDependency =
-      [&](const Fortran::semantics::Symbol &object,
-          const Fortran::semantics::Symbol &owningProcedure,
-          const SgName &procedureName) {
-        const Fortran::semantics::DeclTypeSpec *type =
-            object.GetUltimate().GetType();
-        if (type == nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: procedure entity '"
-                    << object.name().ToString()
-                    << "' has no exact semantic type\n";
-          ROSE_ABORT();
+      [&](const Fortran::semantics::Symbol &object, SgType *publishedType) {
+        const auto *semanticType = object.GetUltimate().GetType();
+        ASSERT_not_null(semanticType);
+        ASSERT_not_null(publishedType);
+        if (semanticType->category() !=
+                Fortran::semantics::DeclTypeSpec::TypeDerived &&
+            semanticType->category() !=
+                Fortran::semantics::DeclTypeSpec::ClassDerived)
+          return;
+
+        const auto &typeSymbol = semanticType->derivedTypeSpec().typeSymbol();
+        const auto &ultimate = typeSymbol.GetUltimate();
+        ASSERT_require(
+            ultimate.detailsIf<Fortran::semantics::DerivedTypeDetails>() !=
+            nullptr);
+        std::set<SgType *> visited;
+        SgType *base = publishedType;
+        while (true) {
+          ASSERT_not_null(base);
+          ASSERT_require(visited.insert(base).second);
+          if (auto *modifier = isSgModifierType(base))
+            base = modifier->get_base_type();
+          else if (auto *pointer = isSgPointerType(base))
+            base = pointer->get_base_type();
+          else if (auto *array = isSgArrayType(base))
+            base = array->get_base_type();
+          else
+            break;
         }
-        if (type->category() == Fortran::semantics::DeclTypeSpec::TypeDerived ||
-            type->category() ==
-                Fortran::semantics::DeclTypeSpec::ClassDerived) {
-          bridgeModuleDerivedTypeDependency(
-              type->derivedTypeSpec().typeSymbol(), object.GetUltimate(),
-              owningProcedure, procedureName);
+        auto *classType = isSgClassType(base);
+        ASSERT_not_null(classType);
+        auto *declaration =
+            isSgDerivedTypeStatement(classType->get_declaration());
+        ASSERT_not_null(declaration);
+        ASSERT_require(declaration->get_type() == classType);
+        ASSERT_require(declaration->get_firstNondefiningDeclaration() ==
+                       declaration);
+        auto *scope = declaration->get_scope();
+        ASSERT_not_null(scope);
+        ASSERT_not_null(scope->get_symbol_table());
+        auto *entries = scope->get_symbol_table()->get_table();
+        ASSERT_not_null(entries);
+        SgClassSymbol *canonical = nullptr;
+        for (const auto &entry : *entries) {
+          auto *candidate = isSgClassSymbol(entry.second);
+          if (candidate == nullptr ||
+              candidate->get_declaration() != declaration)
+            continue;
+          ASSERT_require(canonical == nullptr || canonical == candidate);
+          canonical = candidate;
         }
+        ASSERT_not_null(canonical);
+        auto *existing =
+            CurrentBuildVisitor().LookupCanonicalSemanticClassSymbol(&ultimate);
+        ASSERT_require(existing == nullptr ||
+                       existing->get_declaration()->get_type() == classType);
+        CurrentBuildVisitor().RegisterSemanticSymbol(&ultimate, canonical);
+        if (&typeSymbol != &ultimate)
+          CurrentBuildVisitor().RegisterSemanticSymbol(&typeSymbol, canonical);
+        CurrentBuildVisitor().PublishImportedDerivedTypeComponents(ultimate,
+                                                                   canonical);
       };
 
-  std::function<void(const Fortran::semantics::Symbol &,
-                     std::set<const Fortran::semantics::Symbol *> &,
-                     const SgName &)>
+  // Pair semantic result and dummy entities with the same positions in the
+  // completed producer signature. Type identity does not require an exported
+  // type name, and nested procedure interfaces retain their own exact pairing.
+  std::function<void(const Fortran::semantics::Symbol &, SgFunctionType *,
+                     std::set<const Fortran::semantics::Symbol *> &)>
       bridgeModuleProcedureTypeDependencies;
   bridgeModuleProcedureTypeDependencies =
       [&](const Fortran::semantics::Symbol &procedure,
-          std::set<const Fortran::semantics::Symbol *> &active,
-          const SgName &procedureName) {
-        const Fortran::semantics::Symbol &ultimate = procedure.GetUltimate();
-        if (!active.insert(&ultimate).second) {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: procedure '"
-                    << ultimate.name().ToString()
-                    << "' contains a recursive signature dependency\n";
-          ROSE_ABORT();
-        }
-
+          SgFunctionType *published,
+          std::set<const Fortran::semantics::Symbol *> &active) {
+        const auto &ultimate = procedure.GetUltimate();
+        ASSERT_not_null(published);
+        ASSERT_require(active.insert(&ultimate).second);
         if (const auto *details =
                 ultimate.detailsIf<Fortran::semantics::SubprogramDetails>()) {
-          if (details->isFunction()) {
-            bridgeModuleObjectTypeDependency(details->result(), ultimate,
-                                             procedureName);
-          }
-          for (const Fortran::semantics::Symbol *dummy : details->dummyArgs()) {
+          if (details->isFunction())
+            bridgeModuleObjectTypeDependency(details->result(),
+                                             published->get_return_type());
+          else
+            ASSERT_require(isSgTypeVoid(published->get_return_type()) !=
+                           nullptr);
+          ASSERT_require(details->dummyArgs().size() ==
+                         published->get_arguments().size());
+          std::size_t index = 0;
+          for (const auto *dummy : details->dummyArgs()) {
+            SgType *argument = published->get_arguments()[index++];
+            ASSERT_not_null(argument);
             if (dummy == nullptr) {
+              ASSERT_require(isSgTypeLabel(argument) != nullptr);
               continue;
             }
-            const Fortran::semantics::Symbol &dummyUltimate =
-                dummy->GetUltimate();
+            const auto &dummyUltimate = dummy->GetUltimate();
             if (dummyUltimate
                         .detailsIf<Fortran::semantics::SubprogramDetails>() !=
                     nullptr ||
                 dummyUltimate
                         .detailsIf<Fortran::semantics::ProcEntityDetails>() !=
                     nullptr) {
-              bridgeModuleProcedureTypeDependencies(*dummy, active,
-                                                    procedureName);
+              auto *signature = isSgFunctionType(
+                  StripPointerType(StripModifierType(argument)));
+              ASSERT_not_null(signature);
+              bridgeModuleProcedureTypeDependencies(*dummy, signature, active);
             } else {
-              bridgeModuleObjectTypeDependency(*dummy, ultimate, procedureName);
+              bridgeModuleObjectTypeDependency(*dummy, argument);
             }
           }
         } else if (const auto *entity =
                        ultimate.detailsIf<
                            Fortran::semantics::ProcEntityDetails>()) {
-          if (const Fortran::semantics::Symbol *interface =
-                  entity->procInterface()) {
-            bridgeModuleProcedureTypeDependencies(*interface, active,
-                                                  procedureName);
-          } else if (ultimate.GetType() != nullptr) {
-            bridgeModuleObjectTypeDependency(ultimate, ultimate, procedureName);
-          }
+          if (const auto *interface = entity->procInterface())
+            bridgeModuleProcedureTypeDependencies(*interface, published,
+                                                  active);
+          else if (ultimate.GetType() != nullptr)
+            bridgeModuleObjectTypeDependency(ultimate,
+                                             published->get_return_type());
         } else {
-          std::cerr << "REX_FLANG_INVARIANT[use-procedure-type-"
-                       "dependency]: semantic entity '"
-                    << ultimate.name().ToString()
-                    << "' is not an exact procedure\n";
+          std::cerr
+              << "REX_FLANG_INVARIANT[use-procedure-type-dependency]: "
+                 "signature dependency has no exact Flang procedure role\n";
           ROSE_ABORT();
         }
-        active.erase(&ultimate);
+        ASSERT_require(active.erase(&ultimate) == 1);
       };
 
   auto resolveModuleAstAssociation =
       [&](const ExactUseAssociation &association) -> SgSymbol * {
-    if (association.kind == UseAssociationKind::namelist) {
-      std::cerr << "REX_FLANG_INVARIANT[use-module-ast]: NAMELIST "
-                   "association reached Sage symbol resolution\n";
-      ROSE_ABORT();
-    }
     // A Fortran generic is a semantic overload set, not a declaration whose
     // name can be used as the symbol-table key for each specific procedure.
     // Direct specifics are published by their own producer names.  A
@@ -22896,9 +21937,50 @@ void BuildVisitor::Build(
 
     SgFunctionType *procedureType = nullptr;
     if (association.kind == UseAssociationKind::procedure) {
+      SgClassDefinition *specificProducerScope = nullptr;
+      if (association.generic_binding != nullptr) {
+        const auto *owner = &association.ultimate_target->owner();
+        std::set<const Fortran::semantics::Scope *> visited;
+        while (!owner->IsModule()) {
+          ASSERT_require(visited.insert(owner).second);
+          owner = &owner->parent();
+        }
+        ASSERT_not_null(owner->symbol());
+        const auto source = RequireFortranSemanticModuleSource(
+            *owner->symbol(), *owner, *semantic_context_,
+            "generic specific producer lookup");
+        auto *module = FlangModuleInfo::getModule(
+            owner->symbol()->name().ToString(), source.file, source.nature);
+        ASSERT_not_null(module);
+        specificProducerScope = module->get_definition();
+        ASSERT_not_null(specificProducerScope);
+      }
+      SgFunctionType *publishedSignature = nullptr;
+      for (const auto &entry : *moduleEntries) {
+        if (!moduleEntries->key_eq()(entry.first, astLookupName))
+          continue;
+        SgSymbol *producer = resolveProcedureAssociation(entry.second);
+        if (producer == nullptr)
+          continue;
+        // A re-exported generic stores each specific under the generic key.
+        // Resolve the specific's own declaration identity before pairing its
+        // result and dummies; the generic name does not identify a signature.
+        if (association.generic_binding != nullptr &&
+            (producer->get_scope() != specificProducerScope ||
+             !NamesMatch(producer->get_name().getString(),
+                         association.ultimate_target->name().ToString(),
+                         /*caseInsensitive=*/true)))
+          continue;
+        auto *candidate = procedureAssociationType(producer);
+        ASSERT_not_null(candidate);
+        ASSERT_require(publishedSignature == nullptr ||
+                       publishedSignature == candidate);
+        publishedSignature = candidate;
+      }
+      ASSERT_not_null(publishedSignature);
       std::set<const Fortran::semantics::Symbol *> activeDependencies;
-      bridgeModuleProcedureTypeDependencies(*association.ultimate_target,
-                                            activeDependencies, astLookupName);
+      bridgeModuleProcedureTypeDependencies(
+          *association.ultimate_target, publishedSignature, activeDependencies);
       std::set<const Fortran::semantics::Symbol *> activeProcedures;
       procedureType = BuildFortranSemanticProcedureType(
           *association.ultimate_target, activeProcedures);
@@ -22915,6 +21997,8 @@ void BuildVisitor::Build(
         candidate = resolveObjectAssociation(entry.second);
       } else if (association.kind == UseAssociationKind::derived_type) {
         candidate = ResolveFortranClassSymbol(entry.second, astLookupName);
+      } else if (association.kind == UseAssociationKind::namelist) {
+        candidate = resolveNamelistAssociation(entry.second);
       } else {
         SgSymbol *procedure = resolveProcedureAssociation(entry.second);
         SgFunctionType *candidateType = procedureAssociationType(procedure);
@@ -23054,9 +22138,8 @@ void BuildVisitor::Build(
       if (kind == UseAssociationKind::procedure) {
         return resolveProcedureAssociation(binding);
       }
-      std::cerr << "REX_FLANG_INVARIANT[use-module-bridge]: NAMELIST "
-                   "association reached Sage symbol bridge\n";
-      ROSE_ABORT();
+      ROSE_ASSERT(kind == UseAssociationKind::namelist);
+      return resolveNamelistAssociation(binding);
     };
 
     SgSymbol *moduleBinding = nullptr;
@@ -23096,6 +22179,10 @@ void BuildVisitor::Build(
       CurrentBuildVisitor().RegisterVisibleSemanticSymbol(
           semantic, moduleBinding, classDefinition);
     }
+    if (kind == UseAssociationKind::derived_type) {
+      CurrentBuildVisitor().PublishImportedDerivedTypeComponents(
+          *semantic, isSgClassSymbol(canonical));
+    }
   };
 
   // Nested module parsing owns a distinct BuildVisitor.  Re-establish the
@@ -23111,12 +22198,8 @@ void BuildVisitor::Build(
     const SgName moduleBindingName = moduleAstLookupName(association);
     registerModuleAstBridge(association.visible_target, canonical,
                             association.kind, moduleBindingName);
-    if (association.kind != UseAssociationKind::object ||
-        association.visible_target == association.ultimate_target ||
-        semanticModuleScope->Contains(association.ultimate_target->owner())) {
-      registerModuleAstBridge(association.ultimate_target, canonical,
-                              association.kind, moduleBindingName);
-    }
+    registerModuleAstBridge(association.ultimate_target, canonical,
+                            association.kind, moduleBindingName);
     bridgedAssociations.emplace(&association, canonical);
   }
 
@@ -23129,31 +22212,6 @@ void BuildVisitor::Build(
                 << association.use_name << "' is private in module '"
                 << moduleName << "'\n";
       ROSE_ABORT();
-    }
-    if (association.kind == UseAssociationKind::namelist) {
-      if (!association.publish_binding) {
-        std::cerr << "REX_FLANG_INVARIANT[use-namelist-identity]: imported "
-                     "NAMELIST has no exact local UseDetails binding\n";
-        ROSE_ABORT();
-      }
-      const std::vector<SgNameGroup *> groups =
-          resolveModuleNamelistGroups(association);
-      for (SgNameGroup *group : groups) {
-        CurrentBuildVisitor().RegisterSemanticNamelistGroup(
-            association.visible_target, classDefinition, group);
-        CurrentBuildVisitor().RegisterSemanticNamelistGroup(
-            association.ultimate_target, classDefinition, group);
-        CurrentBuildVisitor().RegisterSemanticNamelistGroup(
-            association.binding, currentScope, group);
-      }
-      if (!CurrentBuildVisitor().IsVisibleSemanticNamelist(association.binding,
-                                                           currentScope)) {
-        std::cerr << "REX_FLANG_INVARIANT[use-namelist-publication]: "
-                     "imported NAMELIST has no complete exact local "
-                     "semantic binding\n";
-        ROSE_ABORT();
-      }
-      continue;
     }
     SgSymbol *exactTarget = nullptr;
     const auto bridged = bridgedAssociations.find(&association);
@@ -23172,6 +22230,30 @@ void BuildVisitor::Build(
       }
     }
 
+    if (association.kind == UseAssociationKind::namelist) {
+      ROSE_ASSERT(association.publish_binding &&
+                  isSgNamelistSymbol(exactTarget) != nullptr);
+      auto *producer = CurrentBuildVisitor().LookupSemanticSymbol(
+          association.visible_target, classDefinition);
+      ROSE_ASSERT(producer != nullptr &&
+                  SgNamelistSymbol::resolve(producer) == exactTarget);
+      auto *visible = CurrentBuildVisitor().LookupSemanticSymbol(
+          association.binding, currentScope);
+      if (visible == nullptr) {
+        auto *alias = new SgAliasSymbol(
+            producer, association.local_name != producer->get_name(),
+            association.local_name);
+        alias->get_causal_nodes().push_back(useStmt);
+        currentScope->insert_symbol(association.local_name, alias);
+        visible = alias;
+      }
+      ROSE_ASSERT(SgNamelistSymbol::resolve(visible) == exactTarget &&
+                  visible->get_scope() == currentScope);
+      ROSE_ASSERT(isSgAliasSymbol(visible)->get_alias() == producer);
+      CurrentBuildVisitor().RegisterVisibleSemanticSymbol(
+          association.binding, visible, currentScope);
+      continue;
+    }
     if (association.kind == UseAssociationKind::object) {
       SgType *semanticType =
           BuildFortranSemanticObjectType(*association.ultimate_target);
@@ -23521,27 +22603,23 @@ void BuildVisitor::Build(
   ASSERT_not_null(currentScope);
 
   ImportStmt &importStmtNode = x.statement.value();
-  SgImportStatement *importStmt = new SgImportStatement();
-  ASSERT_not_null(importStmt);
-  importStmt->set_definingDeclaration(importStmt);
-  importStmt->set_firstNondefiningDeclaration(importStmt);
-
-  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
-  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
-  builder.setSourcePosition(importStmt, srcBegin, srcEnd);
-  if (importStmt->get_startOfConstruct() == nullptr ||
-      importStmt->get_endOfConstruct() == nullptr ||
-      NormalizeSourcePath(
-          importStmt->get_startOfConstruct()->get_filenameString()) !=
-          srcBegin.path ||
-      NormalizeSourcePath(
-          importStmt->get_endOfConstruct()->get_filenameString()) !=
-          srcEnd.path) {
-    std::cerr << "REX_FLANG_INVARIANT[import-source-owner]: IMPORT AST did "
-                 "not retain its exact physical parser source range\n";
+  SgImportStatement::fortran_import_kind_enum importKind;
+  switch (std::get<common::ImportKind>(importStmtNode.t)) {
+  case common::ImportKind::Default:
+    importKind = SgImportStatement::e_fortran_import_default;
+    break;
+  case common::ImportKind::Only:
+    importKind = SgImportStatement::e_fortran_import_only;
+    break;
+  case common::ImportKind::None:
+    importKind = SgImportStatement::e_fortran_import_none;
+    break;
+  case common::ImportKind::All:
+    importKind = SgImportStatement::e_fortran_import_all;
+    break;
+  default:
     ROSE_ABORT();
   }
-
   SgStringList importNames;
   for (const auto &name : std::get<std::list<parser::Name>>(importStmtNode.t)) {
     const std::string importName = name.ToString();
@@ -23551,7 +22629,26 @@ void BuildVisitor::Build(
     }
     importNames.push_back(importName);
   }
-  importStmt->set_import_list(importNames);
+  ROSE_ASSERT(SgImportStatement::is_valid_import_state(
+      SgName(), false, false, importNames, importKind));
+  SgImportStatement *importStmt =
+      new SgImportStatement(SgName(), false, false, importNames, importKind);
+  importStmt->set_definingDeclaration(importStmt);
+  importStmt->set_firstNondefiningDeclaration(importStmt);
+
+  SourcePosition srcBegin{BuildSourcePosition(x, Order::begin)};
+  SourcePosition srcEnd{BuildSourcePosition(x, Order::end)};
+  builder.setSourcePosition(importStmt, srcBegin, srcEnd);
+  if (importStmt->get_startOfConstruct() == nullptr ||
+      importStmt->get_endOfConstruct() == nullptr ||
+      importStmt->get_startOfConstruct()->get_physical_filename() !=
+          srcBegin.path ||
+      importStmt->get_endOfConstruct()->get_physical_filename() !=
+          srcEnd.path) {
+    std::cerr << "REX_FLANG_INVARIANT[import-source-owner]: IMPORT AST did "
+                 "not retain its exact physical parser source range\n";
+    ROSE_ABORT();
+  }
 
   SageInterface::appendStatement(importStmt, currentScope);
   if (importStmt->get_parent() != currentScope ||
@@ -23689,15 +22786,8 @@ void BuildVisitor::Build(parser::EquivalenceStmt &x) {
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
 
-  SgEquivalenceStatement *stmt = new SgEquivalenceStatement();
-  ASSERT_not_null(stmt);
-  stmt->set_definingDeclaration(stmt);
-  stmt->set_firstNondefiningDeclaration(stmt);
-
   SgExprListExp *setList = SageBuilder::buildExprListExp_nfi();
   ASSERT_not_null(setList);
-  stmt->set_equivalence_set_list(setList);
-  setList->set_parent(stmt);
 
   const parser::CharBlock &statementSource =
       RequireCurrentStatementSource("Fortran EQUIVALENCE statement");
@@ -23738,6 +22828,10 @@ void BuildVisitor::Build(parser::EquivalenceStmt &x) {
                                         lastSetSource->end());
   SetExactFlangExpressionSourcePosition(setList, setListSource, setListSource);
 
+  SgEquivalenceStatement *stmt = new SgEquivalenceStatement(setList);
+  ASSERT_not_null(stmt);
+  stmt->set_definingDeclaration(stmt);
+  stmt->set_firstNondefiningDeclaration(stmt);
   ApplyCurrentStatementSource(stmt);
   ApplyStatementLabel(stmt, scope);
   InsertFortranSpecificationStatement(stmt, scope);
@@ -23853,163 +22947,107 @@ RequireExactFortranDataRepeatSource(const parser::DataStmtRepeat &repeat,
 }
 } // namespace
 
-void BuildVisitor::Build(parser::DataStmt &x) {
-  // DataStmt std::list<DataStmtSet> v
-  // DataStmtSet std::tuple<std::list<DataStmtObject>, std::list<DataStmtValue>>
-  // t; DataStmtObject std::variant<common::Indirection<Variable>,
-  // DataImpliedDo> u; DataStmtValue mutable std::int64_t repetitions{1};
-  //   std::tuple<std::optional<DataStmtRepeat>, DataStmtConstant> t;
-  // DataStmtConstant
-  //   std::variant<> LiteralConstant, SignedIntLiteralConstant,
-  //   SignedRealLiteralConstant, SignedComplexLiteralConstant, NullInit,
-  //   common::Indirection<Designator>, StructureConstructor
-
-  SgAttributeSpecificationStatement *dataStmt =
-      SageBuilder::buildAttributeSpecificationStatement_nfi(
-          SgAttributeSpecificationStatement::e_dataStatement);
-  ASSERT_not_null(dataStmt);
-  ApplyCurrentStatementSource(dataStmt);
-  SageInterface::appendStatement(dataStmt, SageBuilder::topScopeStack());
-  if (!current_stmt_source_.source) {
-    std::cerr << "REX_FLANG_INVARIANT[data-source]: DATA statement has no "
-                 "exact parser source transaction\n";
+namespace {
+void PublishFortranDataExpression(SgExpression *expression,
+                                  const parser::CharBlock &source,
+                                  const char *producer) {
+  ASSERT_not_null(expression);
+  ASSERT_not_null(producer);
+  Sg_File_Info *start = expression->get_startOfConstruct();
+  Sg_File_Info *end = expression->get_endOfConstruct();
+  Sg_File_Info *operatorPosition = expression->get_operatorPosition();
+  const bool fresh =
+      start == nullptr && end == nullptr && operatorPosition == nullptr;
+  const bool complete =
+      start != nullptr && end != nullptr && operatorPosition != nullptr;
+  if (!fresh && !complete) {
+    std::cerr << "REX_FLANG_INVARIANT[data-source]: " << producer
+              << " produced partially initialized source information\n";
     ROSE_ABORT();
   }
-  const parser::CharBlock &statementSource = *current_stmt_source_.source;
+  if (fresh) {
+    SetExactFlangExpressionSourcePosition(expression, source, source);
+    return;
+  }
+  if (start->get_parent() != expression || end->get_parent() != expression ||
+      operatorPosition->get_parent() != expression || start->isShared() ||
+      end->isShared() || operatorPosition->isShared() ||
+      start->get_physical_file_id() < 0 ||
+      end->get_physical_file_id() != start->get_physical_file_id() ||
+      operatorPosition->get_physical_file_id() !=
+          start->get_physical_file_id()) {
+    std::cerr << "REX_FLANG_INVARIANT[data-source]: " << producer
+              << " has no exact owned physical source information\n";
+    ROSE_ABORT();
+  }
+}
 
-  auto publishFreshDataExpression = [&](SgExpression *expression,
-                                        const parser::CharBlock &source,
-                                        const char *producer) {
-    ASSERT_not_null(expression);
-    ASSERT_not_null(producer);
-    Sg_File_Info *start = expression->get_startOfConstruct();
-    Sg_File_Info *end = expression->get_endOfConstruct();
-    Sg_File_Info *operatorPosition = expression->get_operatorPosition();
-    const bool fresh =
-        start == nullptr && end == nullptr && operatorPosition == nullptr;
-    const bool complete =
-        start != nullptr && end != nullptr && operatorPosition != nullptr;
-    if (!fresh && !complete) {
-      std::cerr << "REX_FLANG_INVARIANT[data-source]: " << producer
-                << " produced partially initialized source information\n";
-      ROSE_ABORT();
+SgDataStatementValue *
+BuildFortranDataValue(parser::DataStmtValue &value,
+                      const parser::CharBlock &statementSource) {
+  auto &repeat = std::get<std::optional<parser::DataStmtRepeat>>(value.t);
+  auto &constant = std::get<parser::DataStmtConstant>(value.t);
+  const parser::CharBlock constantSource = RequireFlangParseTreeSourceRange(
+      constant, &statementSource, "DATA constant");
+  SgExpression *constantExpression = nullptr;
+  Rose::builder::Build(constant, constantExpression);
+  PublishFortranDataExpression(constantExpression, constantSource,
+                               "DATA constant expression");
+  SgExpression *repeatExpression = nullptr;
+  if (repeat) {
+    const parser::CharBlock repeatSource = RequireExactFortranDataRepeatSource(
+        *repeat, constantSource, statementSource);
+    Rose::builder::Build(*repeat, repeatExpression);
+    PublishFortranDataExpression(repeatExpression, repeatSource,
+                                 "DATA repeat expression");
+    if (repeatExpression->get_fortran_integer_constant_value_is_available()) {
+      ROSE_ASSERT(repeatExpression->get_fortran_integer_constant_value() ==
+                  value.repetitions);
+    } else {
+      SetFortranIntegerSelectorValue(repeatExpression, value.repetitions,
+                                     "data-repeat-value");
     }
-    if (fresh) {
-      SetExactFlangExpressionSourcePosition(expression, source, source);
-      return;
-    }
-    if (start->get_parent() != expression || end->get_parent() != expression ||
-        operatorPosition->get_parent() != expression || start->isShared() ||
-        end->isShared() || operatorPosition->isShared() ||
-        start->get_physical_file_id() < 0 ||
-        end->get_physical_file_id() != start->get_physical_file_id() ||
-        operatorPosition->get_physical_file_id() !=
-            start->get_physical_file_id()) {
-      std::cerr << "REX_FLANG_INVARIANT[data-source]: " << producer
-                << " has no exact owned physical source information\n";
-      ROSE_ABORT();
-    }
-  };
+  } else {
+    ROSE_ASSERT(value.repetitions == 1);
+  }
+  ROSE_ASSERT(SgDataStatementValue::is_valid_value(constantExpression,
+                                                   repeatExpression));
+  return new SgDataStatementValue(constantExpression, repeatExpression);
+}
+} // namespace
 
-  // An SgDataStatementGroup corresponds to a DataStmtSet
-  auto &groups{dataStmt->get_data_statement_group_list()};
+void BuildVisitor::Build(parser::DataStmt &x) {
+  const parser::CharBlock &statementSource =
+      RequireCurrentStatementSource("DATA statement");
+  SgDataStatementGroupPtrList groups;
 
   for (auto &set : x.v) {
-    SgDataStatementGroup *dataGroup = new SgDataStatementGroup();
-    ASSERT_not_null(dataGroup);
-    dataGroup->set_parent(dataStmt);
+    SgDataStatementObjectPtrList objects;
+    SgDataStatementValuePtrList values;
 
-    // Add data statement groups
     for (auto &setObject : std::get<0>(set.t)) {
       const parser::CharBlock objectSource = RequireFlangParseTreeSourceRange(
           setObject, &statementSource, "DATA object");
       SgExpression *expr{nullptr};
       Rose::builder::Build(setObject, expr);
       ASSERT_not_null(expr);
-      publishFreshDataExpression(expr, objectSource, "DATA object expression");
-
-      SgDataStatementObject *dataObject = new SgDataStatementObject();
-      ASSERT_not_null(dataObject);
-      if (!dataObject->get_variableReference_list()) {
-        dataObject->set_variableReference_list(
-            SageBuilder::buildExprListExp_nfi());
-      }
-
-      SgExprListExp *objectList = dataObject->get_variableReference_list();
-      ASSERT_not_null(objectList);
-      objectList->set_parent(dataObject);
-
+      PublishFortranDataExpression(expr, objectSource,
+                                   "DATA object expression");
+      SgExprListExp *objectList = SageBuilder::buildExprListExp_nfi();
       SageInterface::appendExpression(objectList, expr);
-      publishFreshDataExpression(objectList, objectSource, "DATA object list");
-
-      dataGroup->get_object_list().push_back(dataObject);
-      dataObject->set_parent(dataGroup);
+      PublishFortranDataExpression(objectList, objectSource,
+                                   "DATA object list");
+      objects.push_back(new SgDataStatementObject(objectList));
     }
 
-    // Add data statement values
-    for (auto &setValue : std::get<1>(set.t)) {
-      auto &repeatOpt =
-          std::get<std::optional<parser::DataStmtRepeat>>(setValue.t);
-      auto &constant = std::get<parser::DataStmtConstant>(setValue.t);
-      const parser::CharBlock constantSource = RequireFlangParseTreeSourceRange(
-          constant, &statementSource, "DATA constant");
-      std::optional<parser::CharBlock> repeatSource;
-      if (repeatOpt) {
-        repeatSource = RequireExactFortranDataRepeatSource(
-            repeatOpt.value(), constantSource, statementSource);
-      }
-      const parser::CharBlock valueSource =
-          repeatSource
-              ? parser::CharBlock(repeatSource->begin(), constantSource.end())
-              : constantSource;
-
-      SgDataStatementValue *dataValue = new SgDataStatementValue();
-      ASSERT_not_null(dataValue);
-      if (!dataValue->get_initializer_list()) {
-        SgExprListExp *exprList = SageBuilder::buildExprListExp_nfi();
-        ASSERT_not_null(exprList);
-        dataValue->set_initializer_list(exprList);
-        exprList->set_parent(dataValue);
-      }
-      SgExprListExp *initializerList = dataValue->get_initializer_list();
-      ASSERT_not_null(initializerList);
-      publishFreshDataExpression(initializerList, valueSource,
-                                 "DATA initializer list");
-
-      if (repeatOpt) {
-        dataValue->set_data_initialization_format(
-            SgDataStatementValue::e_implicit_list);
-        SgExpression *repeatExpr{nullptr};
-        Rose::builder::Build(repeatOpt.value(), repeatExpr);
-        ASSERT_not_null(repeatExpr);
-        publishFreshDataExpression(repeatExpr, *repeatSource,
-                                   "DATA repeat expression");
-        dataValue->set_repeat_expression(repeatExpr);
-        repeatExpr->set_parent(dataValue);
-
-        SgExpression *constExpr{nullptr};
-        Rose::builder::Build(constant, constExpr);
-        ASSERT_not_null(constExpr);
-        publishFreshDataExpression(constExpr, constantSource,
-                                   "DATA repeated constant expression");
-        dataValue->set_constant_expression(constExpr);
-        constExpr->set_parent(dataValue);
-      } else {
-        dataValue->set_data_initialization_format(
-            SgDataStatementValue::e_explict_list);
-        SgExpression *constExpr{nullptr};
-        Rose::builder::Build(constant, constExpr);
-        ASSERT_not_null(constExpr);
-        publishFreshDataExpression(constExpr, constantSource,
-                                   "DATA constant expression");
-        SageInterface::appendExpression(initializerList, constExpr);
-      }
-
-      dataGroup->get_value_list().push_back(dataValue);
-      dataValue->set_parent(dataGroup);
-    }
-    groups.push_back(dataGroup);
+    for (auto &value : std::get<1>(set.t))
+      values.push_back(BuildFortranDataValue(value, statementSource));
+    groups.push_back(new SgDataStatementGroup(objects, values));
   }
+  auto *dataStmt = SageBuilder::buildAttributeSpecificationStatement_nfi(
+      SgAttributeSpecificationStatement::e_dataStatement, groups);
+  ApplyCurrentStatementSource(dataStmt);
+  SageInterface::appendStatement(dataStmt, SageBuilder::topScopeStack());
 }
 
 void BuildVisitor::Build(parser::AllocatableStmt &x) {
@@ -24878,13 +23916,9 @@ void BuildVisitor::Build(parser::IntrinsicStmt &x) {
 }
 
 void BuildVisitor::Build(parser::NamelistStmt &x) {
-  SgNamelistStatement *stmt = new SgNamelistStatement();
-  ASSERT_not_null(stmt);
-  stmt->set_definingDeclaration(stmt);
-  stmt->set_firstNondefiningDeclaration(stmt);
-  ApplyCurrentStatementSource(stmt);
   const parser::CharBlock &statementSource =
       RequireCurrentStatementSource("Fortran NAMELIST statement");
+  SgNameGroupPtrList groups;
   std::vector<std::pair<const Fortran::semantics::Symbol *, SgNameGroup *>>
       semanticGroups;
 
@@ -24902,10 +23936,7 @@ void BuildVisitor::Build(parser::NamelistStmt &x) {
       ROSE_ABORT();
     }
 
-    SgNameGroup *nameGroup = new SgNameGroup();
-    ASSERT_not_null(nameGroup);
-    SageInterface::setSourcePosition(nameGroup);
-    nameGroup->set_group_name(groupName);
+    SgVarRefExpPtrList objects;
     for (auto &name : names) {
       if (name.ToString().empty() || name.symbol == nullptr ||
           name.source.empty() || !statementSource.Contains(name.source) ||
@@ -24917,13 +23948,23 @@ void BuildVisitor::Build(parser::NamelistStmt &x) {
                      "object identity\n";
         ROSE_ABORT();
       }
-      nameGroup->get_name_list().push_back(name.ToString());
+      auto *reference = isSgVarRefExp(BuildFortranNameReference(name));
+      ROSE_ASSERT(reference != nullptr);
+      SetExactFlangExpressionSourcePosition(reference, name.source,
+                                            name.source);
+      objects.push_back(reference);
     }
-    nameGroup->set_parent(stmt);
-    stmt->get_group_list().push_back(nameGroup);
+    auto *nameGroup = new SgNameGroup(groupName, objects);
+    SageInterface::setSourcePosition(nameGroup);
+    groups.push_back(nameGroup);
     semanticGroups.emplace_back(groupNameNode.symbol, nameGroup);
   }
 
+  SgNamelistStatement *stmt = new SgNamelistStatement(groups);
+  ASSERT_not_null(stmt);
+  stmt->set_definingDeclaration(stmt);
+  stmt->set_firstNondefiningDeclaration(stmt);
+  ApplyCurrentStatementSource(stmt);
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
   SageInterface::appendStatement(stmt, scope);
@@ -25121,6 +24162,28 @@ const char *FortranIntrinsicTypeKeyword(const SgType *type) {
   return nullptr;
 }
 
+void PublishExactFortranNumericSelectorToken(SgLongLongIntVal *value,
+                                             const parser::CharBlock &source) {
+  // LLVM 22 retains STAR/LEN digit-string values but drops their token spans
+  // and spelling. Match the located token to that typed value before
+  // publication.
+  ASSERT_not_null(value);
+  ROSE_ASSERT(!source.empty());
+  std::uint64_t tokenValue = 0;
+  const auto parsed = std::from_chars(source.begin(), source.end(), tokenValue);
+  if (parsed.ec != std::errc{} || parsed.ptr != source.end() ||
+      value->get_value() < 0 ||
+      tokenValue != static_cast<std::uint64_t>(value->get_value()) ||
+      !value->get_fortran_integer_constant_value_is_available() ||
+      value->get_fortran_integer_constant_value() != value->get_value()) {
+    std::cerr << "REX_FLANG_INVARIANT[type-source-selector]: source digit "
+                 "token disagrees with the typed selector value\n";
+    ROSE_ABORT();
+  }
+  value->set_valueString(source.ToString());
+  SetExactFlangExpressionSourcePosition(value, source, source);
+}
+
 void PublishExactFortranStarKindSelector(
     SgType *sourceType, const parser::CharBlock &statementSource,
     const char *typeSurfaceEnd) {
@@ -25182,17 +24245,12 @@ void PublishExactFortranStarKindSelector(
     ROSE_ABORT();
   }
   selector = SkipFortranSourceSpace(selector + 1, typeSurfaceEnd);
-  const std::string spelling = kind->get_valueString();
-  const char *selectorEnd = selector + spelling.size();
-  if (spelling.empty() || selectorEnd > typeSurfaceEnd ||
-      !std::equal(spelling.begin(), spelling.end(), selector)) {
-    std::cerr << "REX_FLANG_INVARIANT[type-source-selector]: legacy "
-                 "intrinsic KIND AST spelling does not match its exact "
-                 "source token\n";
-    ROSE_ABORT();
-  }
-  const parser::CharBlock source(selector, selectorEnd);
-  SetExactFlangExpressionSourcePosition(kind, source, source);
+  const char *selectorEnd = selector;
+  while (selectorEnd < typeSurfaceEnd && *selectorEnd >= '0' &&
+         *selectorEnd <= '9')
+    ++selectorEnd;
+  PublishExactFortranNumericSelectorToken(
+      kind, parser::CharBlock(selector, selectorEnd));
 }
 
 void PublishExactFortranCharacterSelector(
@@ -25231,22 +24289,16 @@ void PublishExactFortranCharacterSelector(
     ROSE_ABORT();
   }
 
-  std::string spelling;
+  SgLongLongIntVal *numericLength = isSgLongLongIntVal(lengthExpression);
+  char marker = '\0';
   if (isSgAsteriskShapeExp(lengthExpression) != nullptr) {
-    spelling = "*";
+    marker = '*';
   } else if (isSgColonShapeExp(lengthExpression) != nullptr) {
-    spelling = ":";
-  } else if (SgLongLongIntVal *value = isSgLongLongIntVal(lengthExpression)) {
-    spelling = value->get_valueString();
-  } else {
+    marker = ':';
+  } else if (numericLength == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[type-source-selector]: source "
                  "CHARACTER length has neither physical provenance nor a "
                  "punctuation/integer spelling\n";
-    ROSE_ABORT();
-  }
-  if (spelling.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[type-source-selector]: source "
-                 "CHARACTER length has an empty exact spelling\n";
     ROSE_ABORT();
   }
 
@@ -25285,13 +24337,21 @@ void PublishExactFortranCharacterSelector(
     }
   }
 
-  const char *selectorEnd = selectorBegin + spelling.size();
-  if (selectorEnd > typeSurfaceEnd ||
-      !std::equal(spelling.begin(), spelling.end(), selectorBegin)) {
+  if (numericLength != nullptr) {
+    const char *selectorEnd = selectorBegin;
+    while (selectorEnd < typeSurfaceEnd && *selectorEnd >= '0' &&
+           *selectorEnd <= '9')
+      ++selectorEnd;
+    PublishExactFortranNumericSelectorToken(
+        numericLength, parser::CharBlock(selectorBegin, selectorEnd));
+    return;
+  }
+  if (selectorBegin == typeSurfaceEnd || *selectorBegin != marker) {
     std::cerr << "REX_FLANG_INVARIANT[type-source-selector]: CHARACTER "
                  "length AST spelling does not match its exact source token\n";
     ROSE_ABORT();
   }
+  const char *selectorEnd = selectorBegin + 1;
   SetExactFlangExpressionSourcePosition(
       lengthExpression, parser::CharBlock(selectorBegin, selectorEnd),
       parser::CharBlock(selectorBegin, selectorEnd));
@@ -25547,7 +24607,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
     getAttrSpec(attr, modifiers, type);
   }
 
-  std::list<EntityDeclTuple> initInfo{};
+  std::list<EntityDeclInfo> initInfo{};
   EntityDecls(std::get<std::list<EntityDecl>>(x.t), initInfo, type,
               dimensionSpec,
               *current_stmt_source_.source); // std::list<EntityDecl>
@@ -25567,11 +24627,9 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
     EntityDecl &sourceEntity = *semanticEntity;
     Name &semanticName = std::get<Name>(sourceEntity.t);
     ++semanticEntity;
-    std::string name;
-    SgType *entitySemanticType{nullptr};
-    SgType *entitySourceType{nullptr};
-    SgExpression *initExpr{nullptr};
-    std::tie(name, entitySemanticType, entitySourceType, initExpr) = entry;
+    const std::string &name = entry.name;
+    SgType *entitySemanticType = entry.semantic_type;
+    SgType *entitySourceType = entry.source_type;
 
     if (entitySemanticType == nullptr || entitySourceType == nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[explicit-source-type]: explicitly "
@@ -25606,8 +24664,18 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
         semanticName.symbol->GetUltimate();
     const bool isProcedureEntity =
         ultimate.detailsIf<Fortran::semantics::ProcEntityDetails>() != nullptr;
-    if (isProcedureEntity) {
-      if (initExpr != nullptr) {
+    const auto *statementFunctionDetails =
+        ultimate.detailsIf<Fortran::semantics::SubprogramDetails>();
+    const bool isStatementFunction =
+        ultimate.test(Fortran::semantics::Symbol::Flag::StmtFunction);
+    if (isStatementFunction && (statementFunctionDetails == nullptr ||
+                                !statementFunctionDetails->isFunction())) {
+      std::cerr << "REX_FLANG_INVARIANT[statement-function-type]: '" << name
+                << "' has no exact Flang function details\n";
+      ROSE_ABORT();
+    }
+    if (isProcedureEntity || isStatementFunction) {
+      if (std::get<std::optional<Initialization>>(sourceEntity.t)) {
         std::cerr << "REX_FLANG_INVARIANT[procedure-type-initializer]: typed "
                      "procedure declaration '"
                   << name << "' has an object initializer\n";
@@ -25639,8 +24707,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
             new SgFunctionParameterTypeList();
         ASSERT_not_null(parameterTypes);
         for (SgType *argumentType : procedureType->get_arguments()) {
-          if (argumentType == nullptr ||
-              isSgTypeUnknown(argumentType) != nullptr) {
+          if (SageInterface::containsUnknownType(argumentType)) {
             std::cerr << "REX_FLANG_INVARIANT[procedure-type-contract]: typed "
                          "procedure '"
                       << name << "' has an incomplete semantic argument type\n";
@@ -25652,14 +24719,11 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
             SageBuilder::buildFunctionParameterList(parameterTypes);
         ASSERT_not_null(parameters);
         SgFunctionType *sourceSyntaxType =
-            new SgFunctionType(entitySourceType, false);
+            new SgFunctionType(entitySourceType, false, parameterTypes);
         ASSERT_not_null(sourceSyntaxType);
         sourceSyntaxType->set_fortran_source_syntax(true);
-        SgFunctionParameterTypeList *defaultArgumentTypes =
-            sourceSyntaxType->get_argument_list();
-        if (defaultArgumentTypes == nullptr ||
-            defaultArgumentTypes->get_parent() != sourceSyntaxType ||
-            parameterTypes->get_parent() != nullptr) {
+        if (sourceSyntaxType->get_argument_list() != parameterTypes ||
+            parameterTypes->get_parent() != sourceSyntaxType) {
           std::cerr << "REX_FLANG_INVARIANT[procedure-source-type]: typed "
                        "procedure declaration '"
                     << name
@@ -25667,12 +24731,6 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
                        "ownership\n";
           ROSE_ABORT();
         }
-        sourceSyntaxType->set_argument_list(parameterTypes);
-        parameterTypes->set_parent(sourceSyntaxType);
-        defaultArgumentTypes->set_parent(nullptr);
-        SageInterface::deleteAST(
-            defaultArgumentTypes,
-            SageInterface::DeleteAstMode::kSkipExternalReferences);
         if (sourceSyntaxType->get_return_type() == nullptr ||
             !SageInterface::fortranSourceFunctionResultMatchesSemanticResult(
                 sourceSyntaxType, procedureType)) {
@@ -25741,7 +24799,8 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
         declaration->set_fortran_source_derived_type_symbol(
             sourceDerivedTypeSymbol);
         ApplyFortranProcedureTypeDeclarationModifiers(declaration, modifiers);
-        applyLanguageBinding(declaration, languageBinding);
+        applyProcedureLanguageBinding(declaration, languageBinding,
+                                      semanticName);
         ApplyCurrentStatementSource(declaration);
 
         SgFunctionDeclaration *canonical = isSgFunctionDeclaration(
@@ -25786,18 +24845,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
     }
     const bool isCrayPointer =
         ultimate.test(Fortran::semantics::Symbol::Flag::CrayPointer);
-    const auto *statementFunctionDetails =
-        ultimate.detailsIf<Fortran::semantics::SubprogramDetails>();
-    const bool isStatementFunction =
-        statementFunctionDetails != nullptr &&
-        statementFunctionDetails->isFunction() &&
-        ultimate.test(Fortran::semantics::Symbol::Flag::StmtFunction);
-    SgSymbol *mapped =
-        isStatementFunction
-            ? static_cast<SgSymbol *>(
-                  LookupStatementFunctionTypePlaceholder(semanticName.symbol))
-            : static_cast<SgSymbol *>(
-                  LookupSemanticObjectSymbol(semanticName.symbol, scope));
+    SgSymbol *mapped = LookupSemanticObjectSymbol(semanticName.symbol, scope);
     SgVariableSymbol *published = isSgVariableSymbol(mapped);
     SgInitializedName *initName =
         published != nullptr ? published->get_declaration() : nullptr;
@@ -25898,7 +24946,14 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
             entitySourceType, semanticContractType,
             detail::FlangSourceTypeContract::explicit_object, name);
       }
-      initName->set_fortran_source_type(entitySourceType);
+      const bool sourcePointer =
+          std::find(
+              modifiers.begin(), modifiers.end(),
+              LanguageTranslation::ExpressionKind::e_type_modifier_pointer) !=
+          modifiers.end();
+      initName->set_fortran_source_type(
+          sourcePointer ? BuildFortranSourcePointerType(entitySourceType)
+                        : entitySourceType);
     }
     initName->set_fortran_type_spec(fortranTypeSpec);
     initName->set_fortran_source_derived_type_symbol(sourceDerivedTypeSymbol);
@@ -25915,24 +24970,20 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
                    "type\n";
       ROSE_ABORT();
     }
-    if (initExpr != nullptr) {
-      FinalizeFortranAggregateInitializerType(initExpr, finalSemanticOwnerType);
-      SgInitializer *initializer = SageBuilder::buildAssignInitializer_nfi(
-          initExpr, finalSemanticOwnerType);
-      ASSERT_not_null(initializer);
-      initName->set_initializer(initializer);
-      initializer->set_parent(initName);
-    }
+    if (auto &sourceInitializer =
+            std::get<std::optional<Initialization>>(sourceEntity.t))
+      initName->set_initializer(
+          BuildFortranInitializer(*sourceInitializer, finalSemanticOwnerType));
     if (SgInitializer *initializer = initName->get_initializer()) {
-      SgAssignInitializer *assignment = isSgAssignInitializer(initializer);
-      if (assignment == nullptr) {
+      if (isSgAssignInitializer(initializer) == nullptr &&
+          isSgFortranDataInitializer(initializer) == nullptr) {
         std::cerr << "REX_FLANG_INVARIANT[explicit-initializer-kind]: "
                      "explicitly declared entity '"
-                  << name << "' has a non-assignment initializer\n";
+                  << name << "' has an invalid typed initializer\n";
         ROSE_ABORT();
       }
-      if (assignment->get_type() == nullptr ||
-          !SageInterface::isEquivalentType(assignment->get_type(),
+      if (initializer->get_type() == nullptr ||
+          !SageInterface::isEquivalentType(initializer->get_type(),
                                            initName->get_type())) {
         std::cerr << "REX_FLANG_INVARIANT[explicit-initializer-type]: "
                      "explicitly declared entity '"
@@ -25951,7 +25002,6 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
       builder.setSourcePosition(initName, entityBegin, entityEnd);
 
       if (SgInitializer *initializer = initName->get_initializer()) {
-        SgAssignInitializer *assignment = isSgAssignInitializer(initializer);
         const auto &sourceInitializer =
             std::get<std::optional<Initialization>>(sourceEntity.t);
         const std::optional<CharBlock> initializerBegin =
@@ -25960,7 +25010,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
         const std::optional<CharBlock> initializerEnd =
             sourceInitializer ? parser::GetLastSource(*sourceInitializer)
                               : std::nullopt;
-        if (assignment == nullptr || !initializerBegin || !initializerEnd) {
+        if (!initializerBegin || !initializerEnd) {
           std::cerr << "REX_FLANG_INVARIANT[explicit-initializer-source]: "
                        "explicitly declared entity '"
                     << name
@@ -25968,7 +25018,7 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
           ROSE_ABORT();
         }
         builder.setSourcePosition(
-            assignment,
+            initializer,
             BuildRequiredStatementSourcePosition(*initializerBegin,
                                                  Order::begin),
             BuildRequiredStatementSourcePosition(*initializerEnd, Order::end));
@@ -25996,18 +25046,13 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
     }
 
     SgType *semanticType =
-        isStatementFunction ? BuildFortranSemanticFunctionResultType(
-                                  statementFunctionDetails->result())
-        : isProcedureEntity
+        isProcedureEntity
             ? static_cast<SgType *>(SageBuilder::buildPointerType(
                   RequireFortranSemanticProcedureType(
                       semanticName, "typed procedure pointer publication")))
             : BuildFortranSemanticObjectType(*semanticName.symbol);
     if (published->get_declaration()->get_type() == nullptr ||
-        (isStatementFunction ? LookupStatementFunctionTypePlaceholder(
-                                   semanticName.symbol) != published
-                             : LookupSemanticObjectSymbol(
-                                   semanticName.symbol, scope) != published) ||
+        LookupSemanticObjectSymbol(semanticName.symbol, scope) != published ||
         !EquivalentFortranSemanticObjectType(
             published->get_declaration()->get_type(), semanticType)) {
       std::cerr << "REX_FLANG_INVARIANT[explicit-semantic-publication]: "
@@ -26017,10 +25062,9 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
                    "and type identity\n";
       ROSE_ABORT();
     }
-    if (!isStatementFunction &&
-        HasFortranPointerTypeWrapper(
+    if (HasFortranPointerTypeWrapper(
             published->get_declaration()->get_type()) !=
-            Fortran::semantics::IsPointer(semanticName.symbol->GetUltimate())) {
+        Fortran::semantics::IsPointer(semanticName.symbol->GetUltimate())) {
       std::cerr << "REX_FLANG_INVARIANT[explicit-semantic-publication]: "
                    "explicitly declared entity '"
                 << name
@@ -26032,107 +25076,68 @@ void BuildVisitor::Build(parser::TypeDeclarationStmt &x) {
 }
 
 namespace {
-SgName BuildExactFortranProcedureInterface(
+void BuildFortranProcedureInterface(
     const std::optional<parser::ProcInterface> &interface,
-    const parser::CharBlock &statementSource) {
-  if (!interface) {
-    return {};
-  }
-
-  const char *opening = RequireExactFortranStatementPayloadBegin(
-      statementSource, "procedure", "Fortran PROCEDURE interface");
-  if (opening == statementSource.end() || *opening != '(') {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: "
-                 "PROCEDURE interface has no exact opening parenthesis\n";
-    ROSE_ABORT();
-  }
-  int depth = 0;
-  char quote = '\0';
-  const char *closing = nullptr;
-  for (const char *cursor = opening; cursor < statementSource.end(); ++cursor) {
-    const char character = *cursor;
-    if (quote != '\0') {
-      if (character == quote) {
-        if (cursor + 1 < statementSource.end() && cursor[1] == quote) {
-          ++cursor;
-        } else {
-          quote = '\0';
-        }
-      }
-      continue;
-    }
-    if (character == '\'' || character == '"') {
-      quote = character;
-    } else if (character == '(') {
-      ++depth;
-    } else if (character == ')') {
-      --depth;
-      if (depth == 0) {
-        closing = cursor;
-        break;
-      }
-    }
-    if (depth < 0) {
-      std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: "
-                   "PROCEDURE interface has retrograde delimiters\n";
-      ROSE_ABORT();
-    }
-  }
-  if (closing == nullptr || quote != '\0' || depth != 0) {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: "
-                 "PROCEDURE interface has unbalanced delimiters or quotes\n";
-    ROSE_ABORT();
-  }
-  const char *sourceBegin = SkipFortranSourceSpace(opening + 1, closing);
-  const char *sourceEnd = closing;
-  while (sourceEnd > sourceBegin &&
-         std::isspace(static_cast<unsigned char>(sourceEnd[-1])) != 0) {
-    --sourceEnd;
-  }
-  if (sourceBegin == sourceEnd) {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: typed or "
-                 "named PROCEDURE interface has an empty source surface\n";
-    ROSE_ABORT();
-  }
-  const parser::CharBlock source(sourceBegin, sourceEnd);
-
+    const parser::CharBlock &statementSource, EntityDeclInfo &entity) {
+  if (!interface)
+    return;
   if (const auto *name = std::get_if<parser::Name>(&interface->u)) {
-    if (name->source.empty() || name->source.begin() != source.begin() ||
-        name->source.end() != source.end() || name->ToString().empty()) {
-      std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: named "
-                   "procedure interface has no exact statement-owned source "
-                   "identity\n";
-      ROSE_ABORT();
+    SgExpression *reference = nullptr;
+    if (name->symbol != nullptr && name->symbol->GetUltimate().attrs().test(
+                                       Fortran::semantics::Attr::INTRINSIC)) {
+      auto *type = isSgFunctionType(StripPointerType(entity.semantic_type));
+      ASSERT_not_null(type);
+      SgFunctionSymbol *symbol = PublishExactFortranProcedureSymbol(
+          *name, type, SageBuilder::topScopeStack());
+      reference = BuildPublishedFortranProcedureReference(
+          symbol, SgName(name->ToString()), type->get_return_type(),
+          isSgTypeVoid(type->get_return_type()) != nullptr,
+          /*isIntrinsic=*/true, name->symbol);
+    } else {
+      reference = BuildFortranNameReference(*name);
     }
-    return SgName(name->ToString());
+    ROSE_ASSERT(isSgFunctionRefExp(reference) != nullptr ||
+                isSgVarRefExp(reference) != nullptr);
+    SetExactFlangExpressionSourcePosition(reference, name->source,
+                                          name->source);
+    entity.procedure_interface = reference;
+    return;
   }
-
-  const auto *type = std::get_if<parser::DeclarationTypeSpec>(&interface->u);
-  if (type == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-interface-source]: typed "
-                 "procedure interface has no declaration type-spec AST\n";
-    ROSE_ABORT();
-  }
-  return SgName(source.ToString());
+  const auto *specification =
+      std::get_if<parser::DeclarationTypeSpec>(&interface->u);
+  ASSERT_not_null(specification);
+  SgType *type = nullptr;
+  CurrentBuildVisitor().BuildType(
+      const_cast<parser::DeclarationTypeSpec &>(*specification), type);
+  ROSE_ASSERT(!SageInterface::containsUnknownType(type));
+  using Spec = parser::DeclarationTypeSpec;
+  if (std::holds_alternative<Spec::Type>(specification->u))
+    entity.type_spec = SgInitializedName::e_fortran_type_spec_type;
+  else if (std::holds_alternative<Spec::Class>(specification->u))
+    entity.type_spec = SgInitializedName::e_fortran_type_spec_class;
+  else if (std::holds_alternative<Spec::TypeStar>(specification->u))
+    entity.type_spec = SgInitializedName::e_fortran_type_spec_type_star;
+  else if (std::holds_alternative<Spec::ClassStar>(specification->u))
+    entity.type_spec = SgInitializedName::e_fortran_type_spec_class_star;
+  entity.source_derived_type_symbol = RequireFortranSourceDerivedTypeSymbol(
+      *specification, SageBuilder::topScopeStack(), type);
+  SgExpression *expression = SageBuilder::buildTypeExpression_nfi(type);
+  SetExactFlangExpressionSourcePosition(expression, statementSource,
+                                        statementSource);
+  entity.procedure_interface = expression;
 }
 } // namespace
 
 // SpecificationConstruct
 //
 void BuildVisitor::Build(parser::DerivedTypeDef &x) {
-  // std::tuple<> Statement<DerivedTypeStmt>,
-  // std::list<Statement<TypeParamDefStmt>>,
-  //              std::list<Statement<PrivateOrSequence>>,
-  //              std::list<Statement<ComponentDefStmt>>,
-  //              std::optional<TypeBoundProcedurePart>, Statement<EndTypeStmt>
   using namespace Fortran::parser;
 
   auto &stmt{std::get<Statement<DerivedTypeStmt>>(x.t)};
   auto &end{std::get<Statement<EndTypeStmt>>(x.t)};
   MaybeInsertIncludeLine(stmt.source);
+  HeaderComments comments = CaptureHeaderComments(stmt);
 
-  // DerivedTypeStmt std::tuple<std::list<TypeAttrSpec>, Name, std::list<Name>>
-  // t;
   Name &semanticName = std::get<Name>(stmt.statement.t);
   std::string name{semanticName.ToString()};
   if (semanticName.symbol == nullptr) {
@@ -26147,6 +25152,28 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
   ASSERT_not_null(declarationScope);
   const Fortran::semantics::Symbol &ultimateSemanticType =
       semanticName.symbol->GetUltimate();
+  SgClassSymbol *baseSymbol = nullptr;
+  SgSymbol *sourceBaseSymbol = nullptr;
+  for (auto &attr : std::get<0>(stmt.statement.t)) {
+    if (auto *extends = std::get_if<parser::TypeAttrSpec::Extends>(&attr.u)) {
+      const auto *parent = ultimateSemanticType.GetParentTypeSpec();
+      if (baseSymbol != nullptr || extends->v.symbol == nullptr ||
+          parent == nullptr ||
+          &parent->typeSymbol().GetUltimate() !=
+              &extends->v.symbol->GetUltimate()) {
+        std::cerr << "REX_FLANG_INVARIANT[derived-type-parent]: EXTENDS has "
+                     "no unique exact Flang parent identity\n";
+        ROSE_ABORT();
+      }
+      baseSymbol = RequireFortranSemanticDerivedTypeSymbol(
+          *extends->v.symbol, SgName(extends->v.ToString()), declarationScope,
+          *this);
+      sourceBaseSymbol = RequireFortranSourceDerivedTypeSymbol(
+          extends->v, declarationScope, baseSymbol->get_type());
+    }
+  }
+  ASSERT_require((ultimateSemanticType.GetParentTypeSpec() != nullptr) ==
+                 (baseSymbol != nullptr));
   SgClassSymbol *canonicalForward = LookupSemanticClassSymbolInExactScope(
       &ultimateSemanticType, declarationScope);
   if (canonicalForward == nullptr &&
@@ -26186,6 +25213,44 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
   SgClassDefinition *classDef = derived->get_definition();
   ASSERT_not_null(classDef);
   builder.setSourcePosition(classDef, srcBegin, srcEnd);
+  builder.attachComments(derived, comments);
+  if (baseSymbol != nullptr) {
+    SageBuilder::buildBaseClass(
+        baseSymbol->get_declaration(), baseSymbol->get_type(), classDef,
+        /*isVirtual=*/false, /*isDirect=*/true, sourceBaseSymbol);
+  }
+  SgDeclarationModifier &declarationModifier =
+      derived->get_declarationModifier();
+  for (auto &attr : std::get<0>(stmt.statement.t)) {
+    common::visit(common::visitors{
+                      [&](Abstract &) {
+                        declarationModifier.get_typeModifier().setAbstract();
+                      },
+                      [&](AccessSpec &access) {
+                        switch (access.v) {
+                        case AccessSpec::Kind::Public:
+                          declarationModifier.get_accessModifier().setPublic();
+                          break;
+                        case AccessSpec::Kind::Private:
+                          declarationModifier.get_accessModifier().setPrivate();
+                          break;
+                        default:
+                          ROSE_ABORT();
+                        }
+                      },
+                      [&](TypeAttrSpec::BindC &) {
+                        declarationModifier.get_typeModifier().setBind();
+                      },
+                      [&](TypeAttrSpec::Extends &) {}},
+                  attr.u);
+  }
+  for (auto &specStmt :
+       std::get<std::list<Statement<PrivateOrSequence>>>(x.t)) {
+    common::visit(common::visitors{
+                      [&](PrivateStmt &) { classDef->set_isPrivate(true); },
+                      [&](SequenceStmt &) { classDef->set_isSequence(true); }},
+                  specStmt.statement.u);
+  }
   SageBuilder::publishExactSourceLexicalDeclaration(derived, declarationScope);
   SgSymbolTable *declarationSymbols = declarationScope->get_symbol_table();
   ASSERT_not_null(declarationSymbols);
@@ -26207,46 +25272,6 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
 
   ApplyFortranBoundaryLabels(derived, derived->get_scope(), stmt.label,
                              end.label);
-
-  std::list<LanguageTranslation::ExpressionKind> modifiers;
-  for (auto &attr : std::get<0>(stmt.statement.t)) {
-    if (auto *extends = std::get_if<parser::TypeAttrSpec::Extends>(&attr.u)) {
-      const std::string baseName = extends->v.ToString();
-      SgScopeStatement *lookupScope = derived->get_scope();
-      SgClassSymbol *baseSymbol =
-          lookupDerivedTypeSymbol(baseName, lookupScope);
-      if (baseSymbol == nullptr) {
-        SgDerivedTypeStatement *forward =
-            SageBuilder::buildNondefiningDerivedTypeStatement(
-                SageBuilder::declaration_ownership::semanticAuxiliary(),
-                baseName, lookupScope);
-        ASSERT_not_null(forward);
-        baseSymbol = lookupScope->lookup_class_symbol(baseName);
-      }
-      if (baseSymbol != nullptr && baseSymbol->get_declaration() != nullptr) {
-        SgClassDefinition *def = derived->get_definition();
-        ASSERT_not_null(def);
-        SgBaseClass *base = SageBuilder::buildBaseClass(
-            baseSymbol->get_declaration(), baseSymbol->get_type(), def,
-            /*isVirtual*/ false,
-            /*isDirect*/ true);
-        ASSERT_not_null(base);
-      }
-      continue;
-    }
-
-    LanguageTranslation::ExpressionKind m;
-    getModifiers(attr, m);
-    modifiers.push_back(m);
-  }
-
-  for (auto &specStmt :
-       std::get<std::list<Statement<PrivateOrSequence>>>(x.t)) {
-    common::visit(common::visitors{
-                      [&](PrivateStmt &) { classDef->set_isPrivate(true); },
-                      [&](SequenceStmt &) { classDef->set_isSequence(true); }},
-                  specStmt.statement.u);
-  }
 
   for (auto &componentStmt :
        std::get<std::list<Statement<ComponentDefStmt>>>(x.t)) {
@@ -26270,28 +25295,41 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
               SgScopeStatement *scope = SageBuilder::topScopeStack();
               ASSERT_not_null(scope);
 
-              const SgName procedureInterface =
-                  BuildExactFortranProcedureInterface(optInterface,
-                                                      componentStmt.source);
-
               std::list<LanguageTranslation::ExpressionKind> modifiers{};
+              using PassKind = SgInitializedName::FortranProcedurePassKind;
+              using Binding =
+                  SgInitializedName::FortranProcedureComponentBinding;
+              PassKind passKind = PassKind::implicit_pass;
+              const parser::Name *writtenPassName = nullptr;
               for (auto &attr : attrSpecs) {
                 common::visit(
-                    common::visitors{[&](AccessSpec &spec) {
-                                       LanguageTranslation::ExpressionKind m;
-                                       getModifiers(spec, m);
-                                       modifiers.push_back(m);
-                                     },
-                                     [&](const NoPass &) {}, [&](Pass &) {},
-                                     [&](const Pointer &) {
-                                       modifiers.push_back(
-                                           LanguageTranslation::ExpressionKind::
-                                               e_type_modifier_pointer);
-                                     }},
+                    common::visitors{
+                        [&](AccessSpec &spec) {
+                          LanguageTranslation::ExpressionKind m;
+                          getModifiers(spec, m);
+                          modifiers.push_back(m);
+                        },
+                        [&](const NoPass &) {
+                          ROSE_ASSERT(passKind == PassKind::implicit_pass);
+                          passKind = PassKind::no_pass;
+                        },
+                        [&](const Pass &pass) {
+                          ROSE_ASSERT(passKind == PassKind::implicit_pass);
+                          passKind = pass.v ? PassKind::named_pass
+                                            : PassKind::explicit_pass;
+                          if (pass.v)
+                            writtenPassName = &*pass.v;
+                        },
+                        [&](const Pointer &) {
+                          modifiers.push_back(
+                              LanguageTranslation::ExpressionKind::
+                                  e_type_modifier_pointer);
+                        }},
                     attr.u);
               }
 
-              std::list<EntityDeclTuple> initInfo{};
+              std::list<EntityDeclInfo> initInfo{};
+              std::optional<Binding> componentBinding;
               const bool sourcePointer =
                   std::find(modifiers.begin(), modifiers.end(),
                             LanguageTranslation::ExpressionKind::
@@ -26349,18 +25387,56 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
                         ? static_cast<SgType *>(
                               SageBuilder::buildPointerType(procType))
                         : static_cast<SgType *>(procType);
+                SgType *sourceType =
+                    sourcePointer ? BuildFortranSourcePointerType(procType)
+                                  : static_cast<SgType *>(procType);
+                const Fortran::semantics::Symbol &semantic =
+                    componentName.symbol->GetUltimate();
+                const auto *entity =
+                    semantic.detailsIf<Fortran::semantics::ProcEntityDetails>();
+                ASSERT_not_null(entity);
+                ROSE_ASSERT(
+                    semantic.attrs().test(Fortran::semantics::Attr::NOPASS) ==
+                    (passKind == PassKind::no_pass));
+                std::optional<unsigned int> passedIndex;
+                if (passKind != PassKind::no_pass) {
+                  const auto characteristics =
+                      Fortran::evaluate::characteristics::Procedure::
+                          Characterize(semantic, foldingContext());
+                  ROSE_ASSERT(characteristics.has_value());
+                  const std::optional<parser::CharBlock> sourcePassName =
+                      writtenPassName != nullptr
+                          ? std::optional<parser::CharBlock>(
+                                writtenPassName->source)
+                          : std::nullopt;
+                  const std::optional<int> index =
+                      characteristics->FindPassIndex(sourcePassName);
+                  ROSE_ASSERT(index && *index >= 0);
+                  ROSE_ASSERT(index == characteristics->FindPassIndex(
+                                           entity->passName()));
+                  passedIndex = static_cast<unsigned int>(*index);
+                }
+                Binding binding{passKind, passedIndex,
+                                writtenPassName != nullptr
+                                    ? SgName(writtenPassName->ToString())
+                                    : SgName()};
+                ROSE_ASSERT(binding.isValidForType(declarationType));
+                ROSE_ASSERT(!componentBinding ||
+                            (componentBinding->kind == binding.kind &&
+                             componentBinding->passed_object_index ==
+                                 binding.passed_object_index &&
+                             componentBinding->written_dummy_name ==
+                                 binding.written_dummy_name));
+                componentBinding = binding;
                 initInfo.push_back(
-                    std::make_tuple(name, declarationType, procType, initExpr));
+                    {name, declarationType, sourceType, initExpr});
+                BuildFortranProcedureInterface(
+                    optInterface, componentStmt.source, initInfo.back());
               }
 
-              if (initInfo.empty()) {
-                return;
-              }
-
+              ROSE_ASSERT(!initInfo.empty());
               SgVariableDeclaration *varDecl{nullptr};
-              SgType *declarationBaseType = std::get<1>(initInfo.front());
-              ASSERT_not_null(declarationBaseType);
-              builder.Enter(varDecl, declarationBaseType, initInfo);
+              builder.Enter(varDecl, initInfo, componentBinding);
               builder.Leave(varDecl, modifiers);
               auto semanticComponent = decls.begin();
               for (SgInitializedName *initName : varDecl->get_variables()) {
@@ -26414,7 +25490,6 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
                   ROSE_ABORT();
                 }
                 RegisterSemanticSymbol(componentName.symbol, componentSymbol);
-                initName->set_fortran_procedure_interface(procedureInterface);
                 if (componentName.source.empty()) {
                   std::cerr
                       << "REX_FLANG_INVARIANT[component-source-publication]: "
@@ -26468,7 +25543,7 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
             [&](common::Indirection<CompilerDirective> &y) {
               Build(y.value());
             },
-            [&](ErrorRecovery &) { ABORT_NO_IMPL; }},
+            [&](ErrorRecovery &) { ROSE_ABORT(); }},
         componentStmt.statement.u);
     if (builtStmt != nullptr) {
       builder.setSourcePosition(builtStmt, componentBegin, componentEnd);
@@ -26486,8 +25561,7 @@ void BuildVisitor::Build(parser::DerivedTypeDef &x) {
     EndStatementSource();
   }
 
-  // Leave SageTreeBuilder for SgDerivedTypeStmt
-  builder.Leave(derived, modifiers);
+  builder.Leave(derived);
 }
 
 void BuildVisitor::Build(parser::DimensionStmt &x) {
@@ -26552,15 +25626,8 @@ void BuildVisitor::Build(parser::DimensionStmt &x) {
     }
 
     SgType *semanticType = BuildFortranSemanticObjectType(*semanticName.symbol);
-    if (!EquivalentFortranSemanticObjectType(initName->get_type(),
-                                             semanticType)) {
-      std::cerr << "REX_FLANG_INVARIANT[dimension-semantic-type]: Flang "
-                   "object '"
-                << name
-                << "' was published with a Sage type that does not match its "
-                   "semantic type\n";
-      ROSE_ABORT();
-    }
+    RequireFortranSemanticObjectProducerType(
+        initName->get_type(), semanticType, *semanticName.symbol, SgName(name));
     SgType *semanticSurface = StripModifierType(semanticType);
     SgArrayType *semanticArray = isSgArrayType(semanticSurface);
     SgExprListExp *semanticDimensions =
@@ -26586,10 +25653,6 @@ void BuildVisitor::Build(parser::DimensionStmt &x) {
                 << "' is already owned by another DIMENSION statement\n";
       ROSE_ABORT();
     }
-    // The symbol retains Flang's rank-only semantic shape. Exact written
-    // bounds belong exclusively to the DIMENSION statement parameter below.
-    initName->set_type(semanticType);
-
     SgVarRefExp *ref = isSgVarRefExp(BuildFortranNameReference(semanticName));
     ASSERT_not_null(ref);
     if (semanticName.source.empty() ||
@@ -26638,9 +25701,8 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
   auto &attrSpecs = std::get<std::list<ProcAttrSpec>>(x.t);
   auto &decls = std::get<std::list<ProcDecl>>(x.t);
 
-  const SgName procedureInterface = BuildExactFortranProcedureInterface(
-      optInterface,
-      RequireCurrentStatementSource("Fortran PROCEDURE declaration"));
+  const parser::CharBlock statementSource =
+      RequireCurrentStatementSource("Fortran PROCEDURE declaration");
 
   SgScopeStatement *scope = SageBuilder::topScopeStack();
   ASSERT_not_null(scope);
@@ -26688,12 +25750,11 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
               modifiers.push_back(
                   LanguageTranslation::ExpressionKind::e_type_modifier_save);
             },
-            [&](const ErrorRecovery &) { ABORT_NO_IMPL; }},
+            [&](const ErrorRecovery &) { ROSE_ABORT(); }},
         attr.u);
   }
 
-  std::list<EntityDeclTuple> initInfo{};
-  std::vector<SgInitializedName *> priorDeclarations;
+  std::list<EntityDeclInfo> initInfo{};
   const bool sourcePointer =
       std::find(modifiers.begin(), modifiers.end(),
                 LanguageTranslation::ExpressionKind::e_type_modifier_pointer) !=
@@ -26782,96 +25843,24 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
           optInit->u);
     }
 
-    // The structural shape of an initialized name is selected by its type at
-    // construction time: function-valued declarations have no variable
-    // definition, while procedure pointers are variables and must own one.
-    // Build the exact semantic pointer type before invoking the declaration
-    // builder instead of changing the type later while applying source
-    // modifiers.
     SgType *declarationType =
         semanticPointer
             ? static_cast<SgType *>(SageBuilder::buildPointerType(procType))
             : static_cast<SgType *>(procType);
+    SgType *sourceType = sourcePointer ? BuildFortranSourcePointerType(procType)
+                                       : static_cast<SgType *>(procType);
     initInfo.push_back(
-        std::make_tuple(name, declarationType, procType, initExpr));
-    priorDeclarations.push_back(prior);
+        {name, declarationType, sourceType, initExpr, nullptr, prior});
+    BuildFortranProcedureInterface(optInterface, statementSource,
+                                   initInfo.back());
   }
 
   if (initInfo.empty()) {
     return;
   }
 
-  if (priorDeclarations.size() != initInfo.size()) {
-    std::cerr << "REX_FLANG_INVARIANT[procedure-redeclaration-identity]: "
-                 "procedure source and prior-declaration counts differ\n";
-    ROSE_ABORT();
-  }
-
   SgVariableDeclaration *varDecl{nullptr};
-  auto prior = priorDeclarations.begin();
-  for (auto entity = initInfo.begin(); entity != initInfo.end();
-       ++entity, ++prior) {
-    const std::string &name = std::get<0>(*entity);
-    SgType *semanticType = std::get<1>(*entity);
-    SgType *sourceType = std::get<2>(*entity);
-    SgExpression *initializerExpression = std::get<3>(*entity);
-    ASSERT_not_null(semanticType);
-    ASSERT_not_null(sourceType);
-
-    SgAssignInitializer *initializer =
-        initializerExpression != nullptr
-            ? SageBuilder::buildAssignInitializer_nfi(initializerExpression,
-                                                      semanticType)
-            : nullptr;
-    SgInitializedName *initialized = nullptr;
-    if (varDecl == nullptr) {
-      varDecl =
-          *prior != nullptr
-              ? SageBuilder::buildVariableRedeclaration_nfi(
-                    SgName(name), semanticType, initializer, scope, *prior)
-              : SageBuilder::buildVariableDeclaration_nfi(
-                    SgName(name), semanticType, initializer, scope);
-      ASSERT_not_null(varDecl);
-      initialized = varDecl->get_variables().size() == 1
-                        ? varDecl->get_variables().front()
-                        : nullptr;
-      if (varDecl->get_definingDeclaration() == nullptr) {
-        varDecl->set_definingDeclaration(varDecl);
-      }
-      if (varDecl->get_definingDeclaration() == varDecl &&
-          varDecl->get_firstNondefiningDeclaration() == varDecl) {
-        varDecl->set_firstNondefiningDeclaration(nullptr);
-      }
-    } else {
-      initialized = SageBuilder::buildInitializedName_nfi(
-          SgName(name), semanticType, initializer);
-      ASSERT_not_null(initialized);
-      if (*prior != nullptr) {
-        initialized->set_prev_decl_item(*prior);
-      }
-      varDecl->append_variable(initialized, initializer);
-      initialized->set_declptr(varDecl);
-      initialized->set_parent(varDecl);
-      initialized->set_scope(scope);
-      if (initializer != nullptr) {
-        initializer->set_parent(initialized);
-      }
-    }
-    if (initialized == nullptr || initialized->get_parent() != varDecl ||
-        initialized->get_scope() != scope ||
-        initialized->get_prev_decl_item() != *prior) {
-      std::cerr << "REX_FLANG_INVARIANT[procedure-source-construction]: "
-                   "procedure entity '"
-                << name
-                << "' was not built with its exact physical and semantic "
-                   "ownership\n";
-      ROSE_ABORT();
-    }
-    initialized->set_fortran_source_type(sourceType);
-  }
-  ASSERT_not_null(varDecl);
-  SageInterface::fixVariableDeclaration(varDecl, scope);
-  SageBuilder::initializePendingSourceVariableDeclarationProvenance(varDecl);
+  builder.Enter(varDecl, initInfo);
   ApplyCurrentStatementSource(varDecl);
   builder.Leave(varDecl, modifiers);
   applyLanguageBinding(varDecl, languageBinding);
@@ -26882,7 +25871,7 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
     ROSE_ABORT();
   }
   auto semanticDecl = decls.begin();
-  prior = priorDeclarations.begin();
+  auto entity = initInfo.begin();
   for (SgInitializedName *initName : varDecl->get_variables()) {
     ASSERT_not_null(initName);
     if (semanticDecl == decls.end()) {
@@ -26893,7 +25882,8 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
     ProcDecl &sourceDecl = *semanticDecl;
     Name &semanticName = std::get<Name>(sourceDecl.t);
     ++semanticDecl;
-    ASSERT_require(prior != priorDeclarations.end());
+    ASSERT_require(entity != initInfo.end());
+    SgInitializedName *prior = entity->prior_declaration;
     SgVariableSymbol *published =
         isSgVariableSymbol(initName->search_for_symbol_from_symbol_table());
     SgFunctionType *semanticType = RequireFortranSemanticProcedureType(
@@ -26909,8 +25899,8 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
                                 ? declarationPointer->get_base_type()
                                 : declarationType;
     if (published == nullptr || canonical == nullptr ||
-        canonical != (*prior != nullptr ? *prior : initName) ||
-        initName->get_prev_decl_item() != *prior ||
+        canonical != (prior != nullptr ? prior : initName) ||
+        initName->get_prev_decl_item() != prior ||
         published->get_scope() != scope || initName->get_scope() != scope ||
         initName->get_type() == nullptr ||
         (declarationPointer != nullptr) != semanticPointer ||
@@ -26925,8 +25915,7 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
       ROSE_ABORT();
     }
     RegisterSemanticSymbol(semanticName.symbol, published);
-    ++prior;
-    initName->set_fortran_procedure_interface(procedureInterface);
+    ++entity;
     if (semanticName.source.empty()) {
       std::cerr << "REX_FLANG_INVARIANT[procedure-source-publication]: "
                    "procedure declaration '"
@@ -26968,7 +25957,7 @@ void BuildVisitor::Build(parser::ProcedureDeclarationStmt &x) {
     }
   }
   ASSERT_require(semanticDecl == decls.end());
-  ASSERT_require(prior == priorDeclarations.end());
+  ASSERT_require(entity == initInfo.end());
   SageBuilder::publishExactSourceLexicalDeclaration(varDecl, scope);
 }
 
@@ -27003,16 +25992,9 @@ SgType *BuildDerivedTypeSpec(const parser::DerivedTypeSpec &derivedSpec) {
 }
 
 SgVariableSymbol *resolveUseAssociatedVariableSymbol(SgSymbol *symbol) {
-  if (symbol == nullptr) {
-    return nullptr;
-  }
-  if (auto *varSymbol = isSgVariableSymbol(symbol)) {
-    return varSymbol;
-  }
-  if (auto *aliasSymbol = isSgAliasSymbol(symbol)) {
-    return isSgVariableSymbol(aliasSymbol->get_alias());
-  }
-  return nullptr;
+  if (auto *alias = isSgAliasSymbol(symbol))
+    symbol = alias->get_base();
+  return isSgVariableSymbol(symbol);
 }
 
 SgClassDefinition *findClassDefinition(SgType *type) {
@@ -27065,8 +26047,6 @@ SgVariableSymbol *findComponentSymbol(SgClassDefinition *def,
 } // namespace
 
 void BuildVisitor::Build(parser::DeclarationTypeSpec::Type &x) {
-  // Type DerivedTypeSpec derived;
-  //      DerivedTypeSpec std::tuple<Name, std::list<TypeParamSpec>> t;
   SgType *type = BuildDerivedTypeSpec(x.v);
   ASSERT_not_null(type);
   this->set(type);
@@ -27093,11 +26073,10 @@ void BuildVisitor::Build(parser::DeclarationTypeSpec::ClassStar &x) {
   this->set(type);
 }
 
-void BuildVisitor::Build(parser::DeclarationTypeSpec::Record &x) {
-  SgType *type{nullptr};
-  Rose::builder::Build(x, type);
-  ASSERT_not_null(type);
-  this->set(type);
+void BuildVisitor::Build(parser::DeclarationTypeSpec::Record &) {
+  fprintf(stderr, "REX_FLANG_INVARIANT[record-type]: unsupported RECORD "
+                  "declaration reached Sage type construction\n");
+  ROSE_ABORT();
 }
 
 void Build(parser::DeclarationTypeSpec &x, SgType *&type) {
@@ -27118,16 +26097,6 @@ void Build(parser::DeclarationTypeSpec::ClassStar &x, SgType *&type) {
   type = new SgTypeFortranUnlimitedPolymorphic();
   ASSERT_not_null(type);
   type->set_fortran_source_syntax(true);
-}
-
-void Build(parser::DeclarationTypeSpec::Record &x, SgType *&type) {
-  std::string name = x.v.ToString();
-  type = SgTypeDefault::createType(name);
-}
-
-void Build(parser::AttrSpec &x, LanguageTranslation::ExpressionKind &modifier) {
-  std::cout << "Rose::builder::Build(AttrSpec)\n";
-  ABORT_NO_IMPL;
 }
 
 void BuildVisitor::Build(parser::IntegerTypeSpec &x) {
@@ -27181,20 +26150,6 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::Complex &x) {
   type = BuildFortranSourceComplexType(expr, hasKindStar);
   this->set(type); // synthesized attribute
 }
-
-#if DEPRECATED
-void BuildVisitor::Build(parser::CharLength &x) {
-  // CharLength std::variant<TypeParamValue, std::uint64_t> u;
-  SgExpression *expr{nullptr};
-  WalkExpr(x, expr);
-}
-
-void BuildVisitor::Build(parser::LengthSelector &x) {
-  // CharLength std::variant<TypeParamValue, std::uint64_t> u;
-  SgExpression *expr{nullptr};
-  WalkExpr(x, expr);
-}
-#endif
 
 void BuildVisitor::Build(parser::IntrinsicTypeSpec::Character &x) {
   SgType *type{nullptr};
@@ -27250,42 +26205,12 @@ void BuildVisitor::Build(parser::IntrinsicTypeSpec::DoubleComplex &x) {
   this->set(type); // synthesized attribute
 }
 
-void Build(parser::VectorTypeSpec &x, SgType *&type) {
-  std::cout << "Rose::builder::Build(VectorTypeSpec)\n";
-  ABORT_NO_IMPL;
-}
-
-#if DEPRECATED
-void Build(parser::LengthSelector &x, SgExpression *&expr) {
-  // std::variant<TypeParamValue, CharLength> u;
-  std::cout << "Rose::builder::Build(LengthSelector)\n";
-  ABORT_NO_IMPL;
-}
-#endif
-
-#if DEPRECATED
-void Build(parser::CharSelector::LengthAndKind &x, SgExpression *&expr) {
-  //    std::optional<TypeParamValue> length;
-  //    ScalarIntConstantExpr kind;
-  std::cout << "Rose::builder::Build(LengthAndKind)\n";
-  ABORT_NO_IMPL;
-}
-#endif
-
-#if DEPRECATED
-void Build(parser::TypeParamValue &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(TypeParamVale)\n";
-  ABORT_NO_IMPL;
-}
-#endif
-
 void EntityDecls(std::list<Fortran::parser::EntityDecl> &x,
-                 std::list<EntityDeclTuple> &entityDecls, SgType *baseType,
+                 std::list<EntityDeclInfo> &entityDecls, SgType *baseType,
                  Fortran::parser::ArraySpec *dimensionSpec,
                  const Fortran::parser::CharBlock &statementSource) {
   for (auto &entity : x) {
     SgType *type{nullptr};
-    SgExpression *init{nullptr};
     std::string name{std::get<0>(entity.t).ToString()};
     SgType *entityBase = baseType;
 
@@ -27309,10 +26234,7 @@ void EntityDecls(std::list<Fortran::parser::EntityDecl> &x,
     }
     type = entityType != nullptr ? entityType : entityBase;
     MarkFortranSourceSyntaxType(type);
-    if (auto &opt = std::get<4>(entity.t)) { // Initialization
-      Build(opt.value(), init, type);
-    }
-    entityDecls.push_back(std::make_tuple(name, type, type, init));
+    entityDecls.push_back({name, type, type, nullptr});
   }
 }
 
@@ -27474,17 +26396,6 @@ SgExprListExp *BuildCoarraySpecExprList(Fortran::parser::CoarraySpec &x) {
 
 // ArraySpec
 void Build(const parser::ArraySpec &x, SgType *&type, SgType *baseType) {
-  // std::variant<> - std::list<ExplicitShapeSpec>, std::list<AssumedShapeSpec>,
-  //                  DeferredShapeSpecList, AssumedSizeSpec, ImpliedShapeSpec,
-  //                  AssumedRankSpec
-  //
-  // ExplicitShapeSpec - std::tuple<std::optional<SpecificationExpr>,
-  // SpecificationExpr> t; AssumedShapeSpec - std::optional<SpecificationExpr>
-  // v; DeferredShapeSpecList - int v; AssumedSizeSpec -
-  // std::tuple<std::list<ExplicitShapeSpec>, AssumedImpliedSpec> t;
-  // ImpliedShapeSpec - std::list<AssumedImpliedSpec> v;
-  // AssumedRankSpec - using EmptyTrait = std::true_type;
-  //
   SgExprListExp *dimInfo = BuildArraySpecExprList(x);
   type = SageBuilder::buildArrayType(baseType, dimInfo);
   ASSERT_not_null(type);
@@ -27540,25 +26451,14 @@ void Build(parser::Initialization &x, SgExpression *&expr,
             publishRootSource(y, "initial data target");
           },
           [&](std::list<common::Indirection<DataStmtValue>> &y) {
-            std::list<SgExpression *> values;
-            for (auto &value : y) {
-              SgExpression *valueExpr{nullptr};
-              Build(value.value(), valueExpr);
-              ASSERT_not_null(valueExpr);
-              values.push_back(valueExpr);
-            }
-
-            SgExprListExp *exprList =
-                SageBuilderCpp17::buildExprListExp_nfi(values);
-            for (SgExpression *item : exprList->get_expressions()) {
-              if (item) {
-                item->set_parent(exprList);
-              }
-            }
-            expr = SageBuilder::buildAggregateInitializer_nfi(
-                exprList, semanticOwnerType,
-                SgAggregateInitializer::e_aggregate_initializer_source_fortran);
-            publishRootSource(x, "aggregate initializer");
+            const auto &statementSource =
+                CurrentBuildVisitor().RequireCurrentStatementSource(
+                    "DATA initializer");
+            SgDataStatementValuePtrList values;
+            for (auto &value : y)
+              values.push_back(
+                  BuildFortranDataValue(value.value(), statementSource));
+            expr = new SgFortranDataInitializer(values, semanticOwnerType);
           }},
       x.u);
   ASSERT_not_null(expr);
@@ -27581,12 +26481,6 @@ void Build(parser::ConstantExpr &x, SgExpression *&expr) {
 }
 
 // DeclarationConstruct
-
-void BuildImpl(parser::FormatStmt &x) {
-  // FormatStmt format::FormatSpecification v;
-  std::cout << "BuildImpl(FormatStmt)\n";
-  ABORT_NO_IMPL;
-}
 
 SgEntryStatement *BuildImpl(parser::EntryStmt &x) {
   // EntryStmt std::tuple<> Name, std::list<DummyArg>, std::optional<Suffix>
@@ -27656,7 +26550,7 @@ SgEntryStatement *BuildImpl(parser::EntryStmt &x) {
     ROSE_ABORT();
   }
   SgEntryStatement *entryStmt = new SgEntryStatement(
-      SgName(entryName), functionType, /*definition*/ nullptr);
+      SgName(entryName), functionType, /*definition*/ nullptr, nullptr);
   entryStmt->set_definingDeclaration(entryStmt);
   entryStmt->set_firstNondefiningDeclaration(entryStmt);
   entryStmt->set_scope(currentScope);
@@ -27687,7 +26581,8 @@ SgEntryStatement *BuildImpl(parser::EntryStmt &x) {
           "*", SgTypeLabel::createType(), /*initializer=*/nullptr);
       ASSERT_not_null(label);
       SageInterface::setSourcePositionAsTransformation(label);
-      label->set_parent(paramList);
+      label->set_declptr(entryStmt);
+      label->set_scope(currentScope);
       paramList->append_arg(label);
       continue;
     }
@@ -27715,8 +26610,9 @@ SgEntryStatement *BuildImpl(parser::EntryStmt &x) {
         declInit->get_name(), declInit->get_type(), /*initializer=*/nullptr);
     SageInterface::setSourcePositionAsTransformation(paramInit);
     paramInit->get_storageModifier() = declInit->get_storageModifier();
+    paramInit->set_declptr(entryStmt);
+    paramInit->set_scope(currentScope);
     paramList->append_arg(paramInit);
-    paramInit->set_parent(paramList);
   }
 
   if (semanticResult) {
@@ -27759,22 +26655,6 @@ SgEntryStatement *BuildImpl(parser::EntryStmt &x) {
     entryStmt->set_result_name(result);
   }
   return entryStmt;
-}
-
-void BuildImpl(parser::StmtFunctionStmt &x) {
-  SgScopeStatement *scope = SageBuilder::topScopeStack();
-  ASSERT_not_null(scope);
-
-  SgStatementFunctionStatement *stmt =
-      BuildStatementFunctionStatement(x, scope);
-  ASSERT_not_null(stmt);
-  SageInterface::setSourcePosition(stmt);
-  SageInterface::appendStatement(stmt, scope);
-}
-
-void BuildImpl(parser::ErrorRecovery &x) {
-  std::cout << "BuildImpl(ErrorRecovery)\n";
-  ABORT_NO_IMPL;
 }
 
 void Build(parser::DataStmtObject &x, SgExpression *&expr) {
@@ -28081,11 +26961,6 @@ void Build(parser::DataImpliedDo &x, SgExpression *&expr) {
 
   SgExprListExp *objectList =
       SageBuilderCpp17::buildExprListExp_nfi(object_items);
-  for (SgExpression *item : objectList->get_expressions()) {
-    if (item) {
-      item->set_parent(objectList);
-    }
-  }
 
   SgExpression *init{nullptr};
   SgExpression *upper{nullptr};
@@ -28099,37 +26974,21 @@ void Build(parser::DataImpliedDo &x, SgExpression *&expr) {
   PublishExactFortranImpliedDoSource(isSgImpliedDo(expr), x, std::get<0>(x.t));
 }
 
-// DataStmt
-void Build(parser::DataStmtValue &x, SgExpression *&expr) {
-  // std::tuple<std::optional<DataStmtRepeat>, DataStmtConstant> t;
-  auto &constant = std::get<parser::DataStmtConstant>(x.t);
-  Build(constant, expr);
-}
-
 void Build(parser::DataStmtConstant &x, SgExpression *&expr) {
-  //     std::variant<LiteralConstant, SignedIntLiteralConstant,
-  //      SignedRealLiteralConstant, SignedComplexLiteralConstant, NullInit,
-  //      common::Indirection<Designator>, StructureConstructor>  u;
   using namespace Fortran::parser;
-
+  auto build_literal = [&](const auto &literal) {
+    if (!x.typedExpr || !x.typedExpr->v) {
+      std::cerr << "REX_FLANG_INVARIANT[data-literal-type]: DATA literal "
+                   "has no exact Flang semantic expression\n";
+      ROSE_ABORT();
+    }
+    BuildExprVisitor visitor{x.typedExpr};
+    visitor.Walk(literal);
+    visitor.get(expr);
+    ASSERT_not_null(expr);
+  };
   common::visit(
       common::visitors{
-          [&](LiteralConstant &y) {
-            common::visit(
-                common::visitors{
-                    [&](HollerithLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](IntLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](RealLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](ComplexLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](BOZLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](CharLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](LogicalLiteralConstant &z) { BuildImpl(z, expr); },
-                    [&](UnsignedLiteralConstant &z) { BuildImpl(z, expr); }},
-                y.u);
-          },
-          [&](SignedIntLiteralConstant &y) { BuildImpl(y, expr); },
-          [&](SignedRealLiteralConstant &y) { BuildImpl(y, expr); },
-          [&](SignedComplexLiteralConstant &y) { BuildImpl(y, expr); },
           [&](NullInit &y) { WalkExpr(y.v, expr); },
           [&](common::Indirection<CharLiteralConstantSubstring> &y) {
             if (!x.typedExpr || !x.typedExpr->v) {
@@ -28138,92 +26997,47 @@ void Build(parser::DataStmtConstant &x, SgExpression *&expr) {
                            "result type\n";
               ROSE_ABORT();
             }
-            SgType *substringType =
-                BuildFortranSemanticExpressionType(x.typedExpr);
-            ASSERT_not_null(substringType);
-            Build(y.value(), substringType, expr);
+            Build(y, x.typedExpr, x.source, expr);
           },
           [&](common::Indirection<Designator> &y) { Build(y.value(), expr); },
           [&](StructureConstructor &y) { Build(y, expr); },
-          [&](UnsignedLiteralConstant &y) { BuildImpl(y, expr); }},
+          [&](const auto &literal) { build_literal(literal); }},
       x.u);
 }
 
 void Build(parser::DataStmtRepeat &x, SgExpression *&expr) {
-  // std::variant<IntLiteralConstant, Scalar<Integer<ConstantSubobject>>> u;
   using namespace Fortran::parser;
   common::visit(
-      common::visitors{[&](IntLiteralConstant &y) { BuildImpl(y, expr); },
-                       [&](Scalar<Integer<ConstantSubobject>> &y) {
-                         auto &designator = y.thing.thing.thing.value();
-                         Build(designator, expr);
-                       }},
+      common::visitors{
+          [&](IntLiteralConstant &y) {
+            // Flang exposes signed-literal analysis publicly;
+            // ordinary tokens and KIND use the same structure.
+            std::optional<KindParam> kind;
+            if (const auto &sourceKind = std::get<1>(y.t)) {
+              kind = common::visit(
+                  common::visitors{
+                      [](std::uint64_t value) {
+                        return KindParam{std::uint64_t{value}};
+                      },
+                      [](const Scalar<Integer<Constant<Name>>> &value) {
+                        Name name = value.thing.thing.thing;
+                        Constant<Name> constant{std::move(name)};
+                        Integer<Constant<Name>> integer{std::move(constant)};
+                        return KindParam{Scalar<Integer<Constant<Name>>>{
+                            std::move(integer)}};
+                      }},
+                  sourceKind->u);
+            }
+            SignedIntLiteralConstant literal{CharBlock{std::get<0>(y.t)},
+                                             std::move(kind)};
+            literal.source = std::get<0>(y.t);
+            expr = BuildSignedIntegerLiteral(literal, nullptr);
+          },
+          [&](Scalar<Integer<ConstantSubobject>> &y) {
+            auto &designator = y.thing.thing.thing.value();
+            Build(designator, expr);
+          }},
       x.u);
-}
-
-// ActionStmt
-
-void BuildImpl(parser::AllocateStmt &x) {
-  std::cout << "BuildImpl(AllocateStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::BackspaceStmt &x) {
-  std::cout << "BuildImpl(BackspaceStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::CallStmt &x) {
-  std::cout << "BuildImpl(CallStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::CloseStmt &x) {
-  std::cout << "BuildImpl(CloseStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::CycleStmt &x, const OptLabel &label) {
-  std::cout << "Rose::builder::Build(CycleStmt)\n";
-  ABORT_NO_IMPL;
-
-  // A Fortran CycleStmt is semantically similar to a C/C++ continue statement
-}
-
-void Build(parser::DeallocateStmt &x) {
-  std::cout << "Rose::builder::Build(DeallocateStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::EndfileStmt &x) {
-  std::cout << "Rose::builder::Build(EndfileStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::EventPostStmt &x) {
-  std::cout << "Rose::builder::Build(EventPostStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::EventWaitStmt &x) {
-  std::cout << "Rose::builder::Build(EventWaitStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::ExitStmt &x) {
-  // std::optional<Name> v;
-  std::cout << "Rose::builder::Build(ExitStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::FlushStmt &x) {
-  std::cout << "Rose::builder::Build(FlustStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::FormTeamStmt &x) {
-  std::cout << "Rose::builder::Build(FormTeamStmt)\n";
-  ABORT_NO_IMPL;
 }
 
 void BuildVisitor::Build(parser::GotoStmt &x) {
@@ -28244,11 +27058,11 @@ void BuildVisitor::Build(parser::GotoStmt &x) {
     ROSE_ABORT();
   }
   SgGotoStatement *stmt =
-      new SgGotoStatement(static_cast<SgLabelStatement *>(nullptr));
+      new SgGotoStatement(static_cast<SgLabelStatement *>(nullptr), nullptr);
   ASSERT_not_null(stmt);
   ApplyCurrentStatementSource(stmt);
   RegisterPendingFortranGoto(stmt, labelValue, labelScope);
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::ComputedGotoStmt &x) {
@@ -28303,37 +27117,6 @@ void BuildVisitor::Build(parser::ComputedGotoStmt &x) {
   ApplyCurrentStatementSource(stmt);
   ApplyStatementLabel(stmt, scope);
   SageInterface::appendStatement(stmt, scope);
-}
-
-void Build(parser::IfStmt &x) {
-  //  std::tuple<ScalarLogicalExpr, UnlabeledStatement<ActionStmt>> t;
-  std::cout << "Rose::builder::Build(IfStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::InquireStmt &x) {
-  std::cout << "Rose::builder::Build(InquireStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::LockStmt &x) {
-  std::cout << "Rose::builder::Build(LockStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(const parser::NullifyStmt &x) {
-  std::cout << "BuildImpl(NullifyStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(const parser::OpenStmt &x) {
-  std::cout << "BuildImpl(OpenStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::PointerAssignmentStmt &x) {
-  std::cout << "BuildImpl(PointerAssignmentStmt)\n";
-  ABORT_NO_IMPL;
 }
 
 void Build(parser::DefaultCharExpr &x, SgExpression *&expr) {
@@ -28406,11 +27189,6 @@ void Build(parser::OutputImpliedDo &x, SgExpression *&expr) {
 
   SgExprListExp *objectList =
       SageBuilderCpp17::buildExprListExp_nfi(object_items);
-  for (SgExpression *item : objectList->get_expressions()) {
-    if (item) {
-      item->set_parent(objectList);
-    }
-  }
 
   SgExpression *init{nullptr};
   SgExpression *upper{nullptr};
@@ -28438,11 +27216,6 @@ void Build(parser::InputImpliedDo &x, SgExpression *&expr) {
 
   SgExprListExp *objectList =
       SageBuilderCpp17::buildExprListExp_nfi(object_items);
-  for (SgExpression *item : objectList->get_expressions()) {
-    if (item) {
-      item->set_parent(objectList);
-    }
-  }
 
   SgExpression *init{nullptr};
   SgExpression *upper{nullptr};
@@ -28457,217 +27230,6 @@ void Build(parser::InputImpliedDo &x, SgExpression *&expr) {
 }
 
 namespace {
-std::string QuoteFortranString(const std::string &value) {
-  std::string result;
-  result.reserve(value.size() + 2);
-  result.push_back('\'');
-  for (char ch : value) {
-    if (ch == '\'') {
-      result.push_back('\'');
-    }
-    result.push_back(ch);
-  }
-  result.push_back('\'');
-  return result;
-}
-
-std::string FormatIntrinsicTypeToString(
-    const Fortran::format::IntrinsicTypeDataEditDesc &desc) {
-  using Kind = Fortran::format::IntrinsicTypeDataEditDesc::Kind;
-
-  std::string result;
-  switch (desc.kind) {
-  case Kind::I:
-    result = "I";
-    break;
-  case Kind::B:
-    result = "B";
-    break;
-  case Kind::O:
-    result = "O";
-    break;
-  case Kind::Z:
-    result = "Z";
-    break;
-  case Kind::F:
-    result = "F";
-    break;
-  case Kind::E:
-    result = "E";
-    break;
-  case Kind::EN:
-    result = "EN";
-    break;
-  case Kind::ES:
-    result = "ES";
-    break;
-  case Kind::EX:
-    result = "EX";
-    break;
-  case Kind::G:
-    result = "G";
-    break;
-  case Kind::L:
-    result = "L";
-    break;
-  case Kind::A:
-    result = "A";
-    break;
-  case Kind::D:
-    result = "D";
-    break;
-  }
-
-  auto append_int = [&](const std::optional<int> &value) {
-    if (value) {
-      result += std::to_string(*value);
-    }
-  };
-
-  if (desc.kind == Kind::L || desc.kind == Kind::A) {
-    append_int(desc.width);
-    return result;
-  }
-
-  append_int(desc.width);
-  if (desc.digits) {
-    result += ".";
-    result += std::to_string(*desc.digits);
-  }
-  if (desc.exponentWidth) {
-    result += "E";
-    result += std::to_string(*desc.exponentWidth);
-  }
-  return result;
-}
-
-std::string FormatDerivedTypeToString(
-    const Fortran::format::DerivedTypeDataEditDesc &desc) {
-  std::string result = "DT";
-  if (!desc.type.empty()) {
-    result += QuoteFortranString(desc.type);
-  }
-  if (!desc.parameters.empty()) {
-    result += "(";
-    bool first = true;
-    for (const auto &param : desc.parameters) {
-      if (!first) {
-        result += ",";
-      }
-      result += std::to_string(param);
-      first = false;
-    }
-    result += ")";
-  }
-  return result;
-}
-
-std::string
-FormatControlEditToString(const Fortran::format::ControlEditDesc &desc) {
-  using Kind = Fortran::format::ControlEditDesc::Kind;
-  switch (desc.kind) {
-  case Kind::T:
-    return "T" + std::to_string(desc.count);
-  case Kind::TL:
-    return "TL" + std::to_string(desc.count);
-  case Kind::TR:
-    return "TR" + std::to_string(desc.count);
-  case Kind::X:
-    return std::to_string(desc.count) + "X";
-  case Kind::Slash:
-    return "/";
-  case Kind::Colon:
-    return ":";
-  case Kind::SS:
-    return "SS";
-  case Kind::SP:
-    return "SP";
-  case Kind::S:
-    return "S";
-  case Kind::P:
-    return std::to_string(desc.count) + "P";
-  case Kind::BN:
-    return "BN";
-  case Kind::BZ:
-    return "BZ";
-  case Kind::RU:
-    return "RU";
-  case Kind::RD:
-    return "RD";
-  case Kind::RZ:
-    return "RZ";
-  case Kind::RN:
-    return "RN";
-  case Kind::RC:
-    return "RC";
-  case Kind::RP:
-    return "RP";
-  case Kind::DC:
-    return "DC";
-  case Kind::DP:
-    return "DP";
-  case Kind::Dollar:
-    return "$";
-  case Kind::Backslash:
-    return "\\";
-  }
-  return "";
-}
-
-std::string
-FormatItemsToString(const std::list<Fortran::format::FormatItem> &items);
-
-std::string FormatItemToString(const Fortran::format::FormatItem &item) {
-  std::string body;
-  common::visit(
-      common::visitors{
-          [&](const Fortran::format::IntrinsicTypeDataEditDesc &desc) {
-            body = FormatIntrinsicTypeToString(desc);
-          },
-          [&](const Fortran::format::DerivedTypeDataEditDesc &desc) {
-            body = FormatDerivedTypeToString(desc);
-          },
-          [&](const Fortran::format::ControlEditDesc &desc) {
-            body = FormatControlEditToString(desc);
-          },
-          [&](const std::string &value) { body = QuoteFortranString(value); },
-          [&](const std::list<Fortran::format::FormatItem> &nested) {
-            body = "(" + FormatItemsToString(nested) + ")";
-          }},
-      item.u);
-
-  if (item.repeatCount) {
-    return std::to_string(*item.repeatCount) + body;
-  }
-  return body;
-}
-
-std::string
-FormatItemsToString(const std::list<Fortran::format::FormatItem> &items) {
-  std::string result;
-  bool first = true;
-  for (const auto &item : items) {
-    if (!first) {
-      result += ",";
-    }
-    result += FormatItemToString(item);
-    first = false;
-  }
-  return result;
-}
-
-std::string
-FormatSpecificationToString(const Fortran::format::FormatSpecification &spec) {
-  std::string result = FormatItemsToString(spec.items);
-  if (!spec.unlimitedItems.empty()) {
-    if (!result.empty()) {
-      result += ",";
-    }
-    result += "*(" + FormatItemsToString(spec.unlimitedItems) + ")";
-  }
-  return result;
-}
-
 bool NamesMatch(const std::string &left, const std::string &right,
                 bool case_insensitive) {
   if (!case_insensitive) {
@@ -28690,124 +27252,6 @@ void AppendExpr(SgExprListExp *list, SgExpression *expr) {
   ASSERT_not_null(expr);
   list->get_expressions().push_back(expr);
   expr->set_parent(list);
-}
-
-SgType *GetFunctionResultType(SgFunctionSymbol *symbol) {
-  if (symbol == nullptr) {
-    return nullptr;
-  }
-  SgType *symbolType = symbol->get_type();
-  if (auto *functionType = isSgFunctionType(symbolType)) {
-    return functionType->get_return_type();
-  }
-  if (auto *memberFunctionType = isSgMemberFunctionType(symbolType)) {
-    return memberFunctionType->get_return_type();
-  }
-  return nullptr;
-}
-
-namespace {
-SgFunctionSymbol *ResolveInterfaceProcedureSymbol(SgInterfaceBody *body,
-                                                  SgScopeStatement *scope) {
-  if (body == nullptr || scope == nullptr) {
-    return nullptr;
-  }
-
-  if (SgFunctionDeclaration *decl = body->get_functionDeclaration()) {
-    if (SgFunctionSymbol *symbol =
-            isSgFunctionSymbol(decl->get_symbol_from_symbol_table())) {
-      return symbol;
-    }
-    if (SgFunctionSymbol *symbol =
-            SageInterface::lookupFunctionSymbolInParentScopes(decl->get_name(),
-                                                              scope)) {
-      return symbol;
-    }
-  }
-
-  const SgName functionName = body->get_function_name();
-  if (!functionName.is_null() && !functionName.getString().empty()) {
-    if (SgFunctionSymbol *symbol =
-            SageInterface::lookupFunctionSymbolInParentScopes(functionName,
-                                                              scope)) {
-      return symbol;
-    }
-  }
-
-  return nullptr;
-}
-
-SgFunctionSymbol *LookupDefinedOperatorSymbolInScope(const SgName &operatorName,
-                                                     SgScopeStatement *scope) {
-  if (scope == nullptr) {
-    return nullptr;
-  }
-
-  const bool caseInsensitive = scope->isCaseInsensitive() ||
-                               SageInterface::is_language_case_insensitive();
-  for (SgStatement *stmt : scope->generateStatementList()) {
-    SgInterfaceStatement *interfaceStmt = isSgInterfaceStatement(stmt);
-    if (interfaceStmt == nullptr) {
-      continue;
-    }
-    if (interfaceStmt->get_generic_spec() !=
-        SgInterfaceStatement::e_operator_interface_type) {
-      continue;
-    }
-    if (!NamesMatch(interfaceStmt->get_name().str(), operatorName.str(),
-                    caseInsensitive)) {
-      continue;
-    }
-    for (SgInterfaceBody *body : interfaceStmt->get_interface_body_list()) {
-      if (SgFunctionSymbol *symbol =
-              ResolveInterfaceProcedureSymbol(body, scope)) {
-        return symbol;
-      }
-    }
-  }
-
-  return nullptr;
-}
-} // namespace
-
-SgFunctionSymbol *LookupDefinedOperatorSymbol(const SgName &operatorName,
-                                              SgScopeStatement *scope) {
-  std::set<SgScopeStatement *> visitedScopes;
-  auto lookupInScope =
-      [&](SgScopeStatement *candidateScope) -> SgFunctionSymbol * {
-    if (candidateScope == nullptr ||
-        !visitedScopes.insert(candidateScope).second) {
-      return nullptr;
-    }
-    return LookupDefinedOperatorSymbolInScope(operatorName, candidateScope);
-  };
-
-  for (SgScopeStatement *current = scope; current != nullptr;
-       current = isSgGlobal(current) ? nullptr : current->get_scope()) {
-    if (SgFunctionSymbol *symbol = lookupInScope(current)) {
-      return symbol;
-    }
-
-    for (SgStatement *stmt : current->generateStatementList()) {
-      SgUseStatement *useStmt = isSgUseStatement(stmt);
-      if (useStmt == nullptr) {
-        continue;
-      }
-      SgModuleStatement *moduleStmt = useStmt->get_module();
-      if (moduleStmt == nullptr) {
-        continue;
-      }
-      SgClassDefinition *moduleDef = moduleStmt->get_definition();
-      if (moduleDef == nullptr) {
-        continue;
-      }
-      if (SgFunctionSymbol *symbol = lookupInScope(moduleDef)) {
-        return symbol;
-      }
-    }
-  }
-
-  return nullptr;
 }
 
 enum class IoAsteriskRole { unit, format };
@@ -29191,19 +27635,39 @@ void AttachFortranFormat(const parser::Format &x, SgStatement *statement) {
   expression->set_parent(statement);
 }
 
-void ApplyIoStatementCommon(SgIOStatement *stmt, const parser::IoControlSpec &x,
-                            SgExpression *expr) {
-  ASSERT_not_null(stmt);
-  ASSERT_not_null(expr);
-  if (auto *ioUnit = std::get_if<parser::IoUnit>(&x.u)) {
-    stmt->set_unit(expr);
-  } else if (auto *msgVar = std::get_if<parser::MsgVariable>(&x.u)) {
-    stmt->set_iomsg(expr);
-  } else if (auto *statVar = std::get_if<parser::StatVariable>(&x.u)) {
-    stmt->set_iostat(expr);
-  } else if (auto *errLabel = std::get_if<parser::ErrLabel>(&x.u)) {
-    stmt->set_err(expr);
+SgSymbol *BuildFortranNamelistIoBinding(
+    const std::list<parser::IoControlSpec> &controls) {
+  SgSymbol *binding = nullptr;
+  for (const auto &control : controls) {
+    const auto *name = std::get_if<parser::Name>(&control.u);
+    if (name == nullptr)
+      continue;
+    SgScopeStatement *scope = SageBuilder::topScopeStack();
+    const auto &source = CurrentBuildVisitor().RequireCurrentStatementSource(
+        "Fortran NAMELIST I/O control");
+    auto *visible =
+        CurrentBuildVisitor().LookupSemanticSymbol(name->symbol, scope);
+    if (binding != nullptr || name->ToString().empty() ||
+        name->symbol == nullptr || name->source.empty() ||
+        !source.Contains(name->source) || scope == nullptr ||
+        name->symbol->GetUltimate()
+                .detailsIf<Fortran::semantics::NamelistDetails>() == nullptr ||
+        visible == nullptr) {
+      std::cerr << "REX_FLANG_INVARIANT[namelist-io-identity]: NML control "
+                   "has no exact visible semantic NAMELIST binding\n";
+      ROSE_ABORT();
+    }
+    auto *namelist = SgNamelistSymbol::resolve(visible);
+    std::size_t objectCount = 0;
+    for (auto *group : namelist->get_declarations())
+      objectCount += group->get_objects().size();
+    ROSE_ASSERT(objectCount == name->symbol->GetUltimate()
+                                   .get<Fortran::semantics::NamelistDetails>()
+                                   .objects()
+                                   .size());
+    binding = visible;
   }
+  return binding;
 }
 
 void ApplyIoControlSpec(const parser::IoControlSpec &x,
@@ -29223,29 +27687,11 @@ void ApplyIoControlSpec(const parser::IoControlSpec &x,
           },
           [&](const parser::Format &y) { AttachFortranFormat(y, ioStmt); },
           [&](const parser::Name &y) {
-            std::string name = y.ToString();
-            SgScopeStatement *scope = SageBuilder::topScopeStack();
-            const parser::CharBlock &statementSource =
-                CurrentBuildVisitor().RequireCurrentStatementSource(
-                    "Fortran NAMELIST I/O control");
-            if (name.empty() || y.symbol == nullptr || y.source.empty() ||
-                !statementSource.Contains(y.source) || scope == nullptr ||
-                y.symbol->GetUltimate()
-                        .detailsIf<Fortran::semantics::NamelistDetails>() ==
-                    nullptr ||
-                !CurrentBuildVisitor().IsVisibleSemanticNamelist(y.symbol,
-                                                                 scope)) {
-              std::cerr << "REX_FLANG_INVARIANT[namelist-io-identity]: NML "
-                           "control has no exact visible semantic NAMELIST "
-                           "binding\n";
-              ROSE_ABORT();
-            }
-            if (readStmt) {
-              readStmt->set_namelist(name);
-            }
-            if (writeStmt) {
-              writeStmt->set_namelist(name);
-            }
+            auto *binding = readStmt != nullptr ? readStmt->get_namelist()
+                                                : writeStmt->get_namelist();
+            ROSE_ASSERT(binding != nullptr &&
+                        binding == CurrentBuildVisitor().LookupSemanticSymbol(
+                                       y.symbol, SageBuilder::topScopeStack()));
           },
           [&](const parser::IoControlSpec::CharExpr &y) {
             SgExpression *expr{nullptr};
@@ -29396,7 +27842,7 @@ void ApplyIoControlSpec(const parser::IoControlSpec &x,
               expr->set_parent(writeStmt);
             }
           },
-          [&](const parser::ErrorRecovery &) { ABORT_NO_IMPL; }},
+          [&](const parser::ErrorRecovery &) { ROSE_ABORT(); }},
       x.u);
 }
 
@@ -29572,11 +28018,6 @@ void ApplyPositionOrFlushSpec(const parser::PositionOrFlushSpec &x,
 }
 } // namespace
 
-void BuildImpl(parser::ReadStmt &x) {
-  std::cout << "BuildImpl(ReadStmt)\n";
-  ABORT_NO_IMPL;
-}
-
 void BuildVisitor::Build(parser::ReturnStmt &x) {
   SgReturnStmt *stmt{nullptr};
   std::optional<SgExpression *> code{std::nullopt};
@@ -29602,46 +28043,39 @@ void BuildVisitor::Build(parser::ReturnStmt &x) {
         SageTreeBuilder::GeneratedSourceAnchorKind::
             syntactic_absence_expression);
   }
-  builder.Leave(stmt, getLabels());
-}
-
-void BuildImpl(parser::RewindStmt &x) {
-  // RewindStmt std::list<PositionOrFlushSpec> v;
-  std::cout << "BuildImpl(RewindStmt)\n";
-  ABORT_NO_IMPL;
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::StopStmt &x) {
-  // std::tuple<Kind, std::optional<StopCode>, std::optional<ScalarLogicalExpr>>
-  // t;
   SgProcessControlStatement *stmt{nullptr};
   std::optional<SgExpression *> code{std::nullopt}, quiet{std::nullopt};
-  std::string_view kind{parser::StopStmt::EnumToString(std::get<0>(x.t))};
-
-  // change strings to match builder function
-  if (kind == "Stop") {
-    kind = "stop";
-  } else if (kind == "ErrorStop") {
-    kind = "error_stop";
+  ProcessControlKind kind;
+  switch (std::get<0>(x.t)) {
+  case parser::StopStmt::Kind::Stop:
+    kind = ProcessControlKind::stop;
+    break;
+  case parser::StopStmt::Kind::ErrorStop:
+    kind = ProcessControlKind::error_stop;
+    break;
+  default:
+    ROSE_ABORT();
   }
 
-  // stop code
   if (std::get<1>(x.t)) {
     SgExpression *expr{nullptr};
     WalkExpr(std::get<1>(x.t), expr);
     code = expr;
   }
 
-  // quiet
   if (std::get<2>(x.t)) {
     SgExpression *expr{nullptr};
     WalkExpr(std::get<2>(x.t), expr);
     quiet = expr;
   }
 
-  builder.Enter(stmt, std::string{kind}, code, quiet);
+  builder.Enter(stmt, kind, code, quiet);
   ApplyCurrentStatementSource(stmt);
-  builder.Leave(stmt, getLabels());
+  builder.Leave(stmt, getLabel());
 }
 
 void BuildVisitor::Build(parser::PauseStmt &x) {
@@ -29654,74 +28088,9 @@ void BuildVisitor::Build(parser::PauseStmt &x) {
     code = expr;
   }
 
-  builder.Enter(stmt, std::string{"pause"}, code, std::nullopt);
+  builder.Enter(stmt, ProcessControlKind::pause, code, std::nullopt);
   ApplyCurrentStatementSource(stmt);
-  builder.Leave(stmt, getLabels());
-}
-
-void BuildImpl(parser::SyncAllStmt &x) {
-  std::cout << "BuildImpl(SyncAllStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::SyncImagesStmt &x) {
-  std::cout << "BuildImpl(SyncImagesStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::SyncMemoryStmt &x) {
-  std::cout << "BuildImpl(SyncMemoryStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::SyncTeamStmt &x) {
-  std::cout << "BuildImpl(SyncTeamStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::UnlockStmt &x) {
-  std::cout << "BuildImpl(UnlockStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::WaitStmt &x) {
-  std::cout << "BuildImpl(WaitStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::WhereStmt &x) {
-  std::cout << "BuildImpl(WhereStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::WriteStmt &x) {
-  std::cout << "BuildImpl(WriteStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::ForallStmt &x) {
-  std::cout << "BuildImpl(ForallStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::PauseStmt &x) {
-  std::cout << "BuildImpl(PauseStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::NamelistStmt &x) {
-  std::cout << "BuildImpl(NamelistStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::ParameterStmt &x) {
-  std::cout << "BuildImpl(ParameterStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void BuildImpl(parser::OldParameterStmt &x) {
-  std::cout << "BuildImpl(OldParameterStmt)\n";
-  ABORT_NO_IMPL;
+  builder.Leave(stmt, getLabel());
 }
 
 // Expr
@@ -29733,171 +28102,113 @@ struct ExactFortranCharacterLiteralSubstringSource {
 };
 
 ExactFortranCharacterLiteralSubstringSource
-ConsumeExactFortranCharacterLiteralSubstringSource(
+RequireExactFortranCharacterLiteralSubstringSource(
     const parser::CharLiteralConstantSubstring &substring,
-    const parser::CharBlock &statementSource) {
-  const parser::CharLiteralConstant &literal =
-      std::get<parser::CharLiteralConstant>(substring.t);
-  const parser::SubstringRange &range =
-      std::get<parser::SubstringRange>(substring.t);
-  const auto &lower = std::get<0>(range.t);
-  const auto &upper = std::get<1>(range.t);
+    const parser::CharBlock &whole, const parser::CharBlock &statementSource) {
+  auto requireSource = [](bool valid) {
+    if (!valid) {
+      std::cerr << "REX_FLANG_INVARIANT[substring-source]: character literal "
+                   "substring has no exact parser-owned source range\n";
+      ROSE_ABORT();
+    }
+  };
+  requireSource(!whole.empty() && statementSource.Contains(whole));
+  const char *begin = SkipFortranSourceSpace(whole.begin(), whole.end());
+  auto trimEnd = [&](const char *end) {
+    while (end > begin &&
+           std::isspace(static_cast<unsigned char>(end[-1])) != 0) {
+      --end;
+    }
+    return end;
+  };
+  const char *end = trimEnd(whole.end());
+  requireSource(end > begin && end[-1] == ')');
+  const char *closing = end - 1;
+
+  const auto &range = std::get<parser::SubstringRange>(substring.t);
   auto boundSource =
       [&](const std::optional<parser::ScalarIntExpr> &bound,
           const char *producer) -> std::optional<parser::CharBlock> {
-    if (!bound) {
+    if (!bound)
       return std::nullopt;
-    }
     return RequireExactFlangExpressionSourceRange(bound->thing.thing.value(),
-                                                  statementSource, producer);
+                                                  whole, producer);
   };
-  const std::optional<parser::CharBlock> lowerSource =
-      boundSource(lower, "Fortran character literal substring lower bound");
-  const std::optional<parser::CharBlock> upperSource =
-      boundSource(upper, "Fortran character literal substring upper bound");
-
-  const char *search =
-      CurrentBuildVisitor().RequireCharacterLiteralSubstringSearchBegin();
-  const std::optional<parser::KindParam> &kind = std::get<0>(literal.t);
-  for (const char *quote = search; quote < statementSource.end(); ++quote) {
-    if (*quote != '\'' && *quote != '"') {
-      continue;
-    }
-    const char delimiter = *quote;
-    std::string decoded;
-    const char *literalClosing = nullptr;
-    for (const char *cursor = quote + 1; cursor < statementSource.end();
-         ++cursor) {
-      if (*cursor == delimiter) {
-        if (cursor + 1 < statementSource.end() && cursor[1] == delimiter) {
-          decoded.push_back(delimiter);
-          ++cursor;
-          continue;
-        }
-        literalClosing = cursor;
-        break;
-      }
-      if (*cursor == '\\' && cursor + 1 < statementSource.end() &&
-          (cursor[1] == '\'' || cursor[1] == '"' || cursor[1] == '\\')) {
-        decoded.push_back('\\');
-        decoded.push_back(cursor[1]);
-        ++cursor;
-        continue;
-      }
-      decoded.push_back(*cursor);
-    }
-    if (literalClosing == nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[substring-source]: statement "
-                   "contains an unterminated character literal\n";
-      ROSE_ABORT();
-    }
-    if (decoded != literal.GetString()) {
-      quote = literalClosing;
-      continue;
-    }
-
-    const char *baseBegin = quote;
-    if (kind) {
-      const char *underscore = quote;
-      while (underscore > statementSource.begin() &&
-             std::isspace(static_cast<unsigned char>(underscore[-1])) != 0) {
-        --underscore;
-      }
-      if (underscore == statementSource.begin() || underscore[-1] != '_') {
-        quote = literalClosing;
-        continue;
-      }
-      --underscore;
-      const std::optional<parser::CharBlock> kindSource =
-          parser::GetSource(*kind);
-      if (kindSource && !kindSource->empty()) {
-        if (!statementSource.Contains(*kindSource) ||
-            kindSource->end() > underscore) {
-          quote = literalClosing;
-          continue;
-        }
-        const char *between = kindSource->end();
-        while (between < underscore &&
-               std::isspace(static_cast<unsigned char>(*between)) != 0) {
-          ++between;
-        }
-        if (between != underscore) {
-          quote = literalClosing;
-          continue;
-        }
-        baseBegin = kindSource->begin();
-      } else {
-        const auto *numeric = std::get_if<std::uint64_t>(&kind->u);
-        const char *digitsEnd = underscore;
-        while (digitsEnd > statementSource.begin() &&
-               std::isspace(static_cast<unsigned char>(digitsEnd[-1])) != 0) {
-          --digitsEnd;
-        }
-        const char *digitsBegin = digitsEnd;
-        while (digitsBegin > statementSource.begin() &&
-               std::isdigit(static_cast<unsigned char>(digitsBegin[-1])) != 0) {
-          --digitsBegin;
-        }
-        std::uint64_t sourceKind = 0;
-        const auto parsed = std::from_chars(digitsBegin, digitsEnd, sourceKind);
-        if (numeric == nullptr || digitsBegin == digitsEnd ||
-            parsed.ec != std::errc() || parsed.ptr != digitsEnd ||
-            sourceKind != *numeric) {
-          quote = literalClosing;
-          continue;
-        }
-        baseBegin = digitsBegin;
-      }
-    } else if (quote > statementSource.begin() && quote[-1] == '_') {
-      quote = literalClosing;
-      continue;
-    }
-
-    const char *opening =
-        SkipFortranSourceSpace(literalClosing + 1, statementSource.end());
-    if (opening == statementSource.end() || *opening != '(') {
-      quote = literalClosing;
-      continue;
-    }
-    const char *closing = RequireExactFortranClosingParenthesis(
-        statementSource, opening,
-        "Fortran character literal substring source transaction");
-    parser::CharBlock rangeSource(opening + 1, closing);
-    const char *rangeBegin =
-        SkipFortranSourceSpace(rangeSource.begin(), rangeSource.end());
-    const char *rangeEnd = rangeSource.end();
-    while (rangeEnd > rangeBegin &&
-           std::isspace(static_cast<unsigned char>(rangeEnd[-1])) != 0) {
-      --rangeEnd;
-    }
-    rangeSource = parser::CharBlock(rangeBegin, rangeEnd);
-    const auto containsBound =
-        [&](const std::optional<parser::CharBlock> &bound) {
-          return !bound || rangeSource.Contains(*bound);
-        };
-    if (rangeSource.empty() || !containsBound(lowerSource) ||
-        !containsBound(upperSource) ||
-        CountExactFortranTopLevelColons(
-            rangeSource, "Fortran character literal substring range") != 1) {
-      quote = literalClosing;
-      continue;
-    }
-
-    const parser::CharBlock base(baseBegin, literalClosing + 1);
-    const parser::CharBlock whole(baseBegin, closing + 1);
-    CurrentBuildVisitor().ConsumeCharacterLiteralSubstringSource(whole);
-    return ExactFortranCharacterLiteralSubstringSource{base, rangeSource};
+  const auto lower = boundSource(
+      std::get<0>(range.t), "Fortran character literal substring lower bound");
+  const auto upper = boundSource(
+      std::get<1>(range.t), "Fortran character literal substring upper bound");
+  const char *rangeEnd = upper ? upper->end() : closing;
+  requireSource(rangeEnd <= closing &&
+                SkipFortranSourceSpace(rangeEnd, closing) == closing);
+  const char *colonEnd = trimEnd(upper ? upper->begin() : closing);
+  requireSource(colonEnd > begin && colonEnd[-1] == ':');
+  const char *colon = colonEnd - 1;
+  if (lower) {
+    requireSource(lower->end() <= colon &&
+                  SkipFortranSourceSpace(lower->end(), colon) == colon);
   }
-
-  std::cerr << "REX_FLANG_INVARIANT[substring-source]: character literal "
-               "substring has no exact ordered source occurrence in its "
-               "statement\n";
-  ROSE_ABORT();
+  const char *openingEnd = trimEnd(lower ? lower->begin() : colon);
+  requireSource(openingEnd > begin && openingEnd[-1] == '(');
+  const char *opening = openingEnd - 1;
+  const char *baseEnd = trimEnd(opening);
+  requireSource(baseEnd > begin && (baseEnd[-1] == '\'' || baseEnd[-1] == '"'));
+  const parser::CharBlock rangeSource(
+      SkipFortranSourceSpace(opening + 1, closing), trimEnd(closing));
+  requireSource(!rangeSource.empty() &&
+                (!lower || rangeSource.Contains(*lower)) &&
+                (!upper || rangeSource.Contains(*upper)));
+  return {parser::CharBlock(begin, baseEnd), rangeSource};
 }
 } // namespace
 
-void Build(const parser::CharLiteralConstantSubstring &x, SgType *substringType,
-           SgExpression *&expr) {
+void Build(
+    const common::Indirection<parser::CharLiteralConstantSubstring> &syntax,
+    const parser::TypedExpr &typed, const parser::CharBlock &wholeSource,
+    SgExpression *&expr) {
+  const auto &x = syntax.value();
+  const parser::CharBlock &statementSource =
+      CurrentBuildVisitor().RequireCurrentStatementSource(
+          "Fortran character literal substring range");
+  const ExactFortranCharacterLiteralSubstringSource source =
+      RequireExactFortranCharacterLiteralSubstringSource(x, wholeSource,
+                                                         statementSource);
+  ROSE_ASSERT(typed && typed->v);
+  const auto dynamicType = typed->v->GetType();
+  ROSE_ASSERT(dynamicType &&
+              dynamicType->category() == common::TypeCategory::Character);
+  const auto &target =
+      CurrentBuildVisitor().foldingContext().targetCharacteristics();
+  ROSE_ASSERT(target.IsTypeEnabled(common::TypeCategory::Character,
+                                   dynamicType->kind()));
+  const auto characterBytes =
+      target.GetByteSize(common::TypeCategory::Character, dynamicType->kind());
+  ROSE_ASSERT(characterBytes > 0 &&
+              characterBytes <= std::numeric_limits<long long>::max() / 8);
+  const long long characterStrideBits =
+      static_cast<long long>(characterBytes) * 8;
+  const auto semantic =
+      semantics::AnalyzeExpr(CurrentBuildVisitor().semanticContext(), syntax);
+  ROSE_ASSERT(semantic);
+  const auto semanticType = semantic->GetType();
+  ROSE_ASSERT(semanticType &&
+              semanticType->category() == common::TypeCategory::Character &&
+              semanticType->kind() == dynamicType->kind() &&
+              semantic->Rank() == typed->v->Rank());
+  const auto substring = evaluate::ExtractSubstring(*semantic);
+  ROSE_ASSERT(substring);
+  const auto *literalData =
+      substring->GetParentIf<evaluate::StaticDataObject::Pointer>();
+  ROSE_ASSERT(literalData != nullptr && *literalData);
+  ROSE_ASSERT((*literalData)->itemBytes() > 0 &&
+              static_cast<std::size_t>((*literalData)->itemBytes()) ==
+                  characterBytes);
+  const auto literalBytes = (*literalData)->data().size();
+  ROSE_ASSERT(literalBytes % characterBytes == 0);
+  const auto literalCharacters = literalBytes / characterBytes;
+  ROSE_ASSERT(literalCharacters <= std::numeric_limits<long long>::max());
+  SgType *substringType = BuildFortranSemanticExpressionType(typed);
+  const auto resultSize = MeasureFortranExpressionStorage(typed);
   SgTypeString *semanticSubstring =
       isSgTypeString(StripModifierType(substringType));
   if (semanticSubstring == nullptr ||
@@ -29909,9 +28220,8 @@ void Build(const parser::CharLiteralConstantSubstring &x, SgType *substringType,
   }
   const parser::CharLiteralConstant &literal =
       std::get<parser::CharLiteralConstant>(x.t);
-  const std::string literalValue = literal.GetString();
   SgExpression *literalLength =
-      SageBuilder::buildIntVal_nfi(std::to_string(literalValue.size()));
+      SageBuilder::buildIntVal_nfi(std::to_string(literalCharacters));
   ASSERT_not_null(literalLength);
   SageBuilder::initializeSemanticExpressionSourceProvenance(literalLength);
   SgExpression *literalKind =
@@ -29919,11 +28229,6 @@ void Build(const parser::CharLiteralConstantSubstring &x, SgType *substringType,
   SgTypeString *literalType =
       SgTypeString::createType(literalLength, literalKind);
   ASSERT_not_null(literalType);
-  const parser::CharBlock &statementSource =
-      CurrentBuildVisitor().RequireCurrentStatementSource(
-          "Fortran character literal substring range");
-  const ExactFortranCharacterLiteralSubstringSource source =
-      ConsumeExactFortranCharacterLiteralSubstringSource(x, statementSource);
   SgExpression *base{nullptr};
   BuildExprTreeWithExpectedLiteralType(literal, literalType, base);
   ASSERT_not_null(base);
@@ -29935,26 +28240,16 @@ void Build(const parser::CharLiteralConstantSubstring &x, SgType *substringType,
   SgExpression *lower{nullptr};
   SgExpression *upper{nullptr};
   auto buildBound = [&](const std::optional<parser::ScalarIntExpr> &bound,
-                        SgExpression *&built, const char *producer) {
+                        SgExpression *&built) {
     if (!bound) {
       return;
     }
     const parser::Expr &syntax = bound->thing.thing.value();
     WalkExpr(syntax, built);
     ASSERT_not_null(built);
-    const parser::CharBlock boundSource =
-        RequireExactFlangExpressionSourceRange(syntax, statementSource,
-                                               producer);
-    if (!rangeSource.Contains(boundSource)) {
-      std::cerr << "REX_FLANG_INVARIANT[substring-source]: " << producer
-                << " is outside its exact character literal substring\n";
-      ROSE_ABORT();
-    }
   };
-  buildBound(std::get<0>(range.t), lower,
-             "Fortran character literal substring lower bound");
-  buildBound(std::get<1>(range.t), upper,
-             "Fortran character literal substring upper bound");
+  buildBound(std::get<0>(range.t), lower);
+  buildBound(std::get<1>(range.t), upper);
   if (lower == nullptr) {
     lower = SageBuilderCpp17::buildNullExpression_nfi(
         SgNullExpression::e_null_expression_syntactic_absence);
@@ -29972,8 +28267,8 @@ void Build(const parser::CharLiteralConstantSubstring &x, SgType *substringType,
       SageBuilderCpp17::buildSubscriptExpression_nfi(lower, upper, stride);
   ASSERT_not_null(subscript);
   SetExactFlangExpressionSourcePosition(subscript, rangeSource, rangeSource);
-  expr =
-      SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscript, substringType);
+  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(
+      base, subscript, substringType, resultSize, {characterStrideBits});
   ASSERT_not_null(expr);
 }
 
@@ -30088,11 +28383,6 @@ void Build(const parser::AcImpliedDo &x, SgExpression *&expr) {
 
   SgExprListExp *objectList =
       SageBuilderCpp17::buildExprListExp_nfi(object_items);
-  for (SgExpression *item : objectList->get_expressions()) {
-    if (item) {
-      item->set_parent(objectList);
-    }
-  }
 
   SgExpression *init{nullptr};
   SgExpression *upper{nullptr};
@@ -30146,7 +28436,7 @@ namespace {
 void BuildFortranArrayConstructor(const parser::AcSpec &x, SgType *semanticType,
                                   const parser::CharBlock &source,
                                   SgExpression *&expr) {
-  if (semanticType == nullptr || isSgTypeUnknown(semanticType) != nullptr ||
+  if (SageInterface::containsUnknownType(semanticType) ||
       isSgArrayType(StripModifierType(semanticType)) == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[array-constructor-type]: resolved "
                  "Fortran array constructor has no exact array semantic "
@@ -30164,16 +28454,11 @@ void BuildFortranArrayConstructor(const parser::AcSpec &x, SgType *semanticType,
   SgExprListExp *exprList = SageBuilderCpp17::buildExprListExp_nfi(values);
   ASSERT_not_null(exprList);
   SetExactFlangExpressionSourcePosition(exprList, source, source);
-  for (SgExpression *item : exprList->get_expressions()) {
-    if (item) {
-      item->set_parent(exprList);
-    }
-  }
   SgType *explicitType{nullptr};
   SgSymbol *explicitDerivedTypeSymbol{nullptr};
   if (const auto &type = std::get<std::optional<parser::TypeSpec>>(x.t)) {
     explicitType = BuildTypeSpec(*type);
-    if (explicitType == nullptr || isSgTypeUnknown(explicitType) != nullptr) {
+    if (SageInterface::containsUnknownType(explicitType)) {
       std::cerr << "REX_FLANG_INVARIANT[array-constructor-source-type]: "
                    "explicit Fortran array-constructor type was not built "
                    "exactly\n";
@@ -30317,18 +28602,6 @@ void Build(const parser::Expr::Parentheses &x, SgExpression *&expr) {
   }
 }
 
-void Build(const parser::Expr::UnaryPlus &x, SgExpression *&expr) {
-  WalkExpr(x.v.value(), expr);
-}
-
-void Build(const parser::Expr::Negate &x, SgExpression *&expr) {
-  SgExpression *operand{nullptr};
-  WalkExpr(x.v.value(), operand);
-  ASSERT_not_null(operand);
-  expr = SageBuilderCpp17::buildMinusOp_nfi(operand, operand->get_type(),
-                                            /*is_prefix*/ true);
-}
-
 namespace {
 SgType *RequireFlangOperatorResultType(const BuildExprVisitor &visitor,
                                        const char *operator_name) {
@@ -30339,19 +28612,15 @@ SgType *RequireFlangOperatorResultType(const BuildExprVisitor &visitor,
               << operator_name << " has no exact semantic expression\n";
     ROSE_ABORT();
   }
-  SgType *result = BuildFortranSemanticExpressionType(*semantic);
-  if (result == nullptr || isSgTypeUnknown(result) != nullptr ||
-      isSgTypeDefault(result) != nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[operator-result-type]: operator "
-              << operator_name << " has no exact semantic result type\n";
-    ROSE_ABORT();
-  }
-  return result;
+  return BuildFortranSemanticExpressionType(*semantic);
 }
 } // namespace
 
 void BuildExprVisitor::Build(
     const parser::Expr::NOT &x /*, SgExpression* &expr*/) {
+  if (BuildResolvedUserDefinedUnaryOperator(*this, x.v.value(),
+                                            SgName(".NOT.")))
+    return;
   SgType *resultType = RequireFlangOperatorResultType(*this, ".NOT.");
   SgExpression *operand{nullptr};
   WalkExprWithExpectedLiteralType(x.v.value(), resultType, operand);
@@ -30360,6 +28629,8 @@ void BuildExprVisitor::Build(
 }
 
 void BuildExprVisitor::Build(const parser::Expr::UnaryPlus &x) {
+  if (BuildResolvedUserDefinedUnaryOperator(*this, x.v.value(), SgName("+")))
+    return;
   SgType *resultType = RequireFlangOperatorResultType(*this, "+");
   SgExpression *operand{nullptr};
   WalkExprWithExpectedLiteralType(x.v.value(), resultType, operand);
@@ -30368,7 +28639,41 @@ void BuildExprVisitor::Build(const parser::Expr::UnaryPlus &x) {
 }
 
 void BuildExprVisitor::Build(const parser::Expr::Negate &x) {
+  if (BuildResolvedUserDefinedUnaryOperator(*this, x.v.value(), SgName("-")))
+    return;
   SgType *resultType = RequireFlangOperatorResultType(*this, "-");
+  const auto *literal = std::get_if<parser::LiteralConstant>(&x.v.value().u);
+  const auto *integerLiteral =
+      literal ? std::get_if<parser::IntLiteralConstant>(&literal->u) : nullptr;
+  if (integerLiteral && isSgTypeInt(StripModifierType(resultType))) {
+    auto semantic = RequireFortranLiteralSemantics(*this);
+    auto folded = evaluate::Fold(CurrentBuildVisitor().foldingContext(),
+                                 std::move(semantic));
+    const auto *integer =
+        evaluate::UnwrapExpr<evaluate::Expr<evaluate::SomeInteger>>(folded);
+    ASSERT_not_null(integer);
+    const bool minimum = common::visit(
+        [](const auto &expression) {
+          using Type = evaluate::ResultType<decltype(expression)>;
+          const auto *constant =
+              evaluate::UnwrapExpr<evaluate::Constant<Type>>(expression);
+          ASSERT_not_null(constant);
+          const auto scalar = constant->GetScalarValue();
+          ROSE_ASSERT(scalar.has_value());
+          return scalar->Negate().overflow;
+        },
+        integer->u);
+    if (minimum) {
+      // The complete signed literal is valid; its positive magnitude cannot
+      // be analyzed or represented independently in the same signed KIND.
+      auto *value = BuildIntegerLiteralValue(
+          std::move(folded),
+          "-" + FormatIntegerLiteralConstant(*integerLiteral));
+      value->set_literal_type(resultType);
+      this->set(value);
+      return;
+    }
+  }
   SgExpression *operand{nullptr};
   WalkExprWithExpectedLiteralType(x.v.value(), resultType, operand);
   ASSERT_not_null(operand);
@@ -30376,20 +28681,6 @@ void BuildExprVisitor::Build(const parser::Expr::Negate &x) {
 }
 
 namespace {
-SgFunctionSymbol *ResolveFortranFunctionSymbol(SgSymbol *symbol,
-                                               const SgName &name) {
-  std::set<SgAliasSymbol *> aliases;
-  while (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
-    if (!aliases.insert(alias).second) {
-      std::cerr << "REX_FLANG_INVARIANT[operator-alias-cycle]: procedure '"
-                << name << "' contains an alias cycle\n";
-      ROSE_ABORT();
-    }
-    symbol = alias->get_alias();
-  }
-  return isSgFunctionSymbol(symbol);
-}
-
 SgFunctionSymbol *ResolveFortranSemanticProcedureSymbol(
     const Fortran::semantics::Symbol &semanticProcedure,
     SgScopeStatement *scope) {
@@ -30418,7 +28709,9 @@ SgFunctionSymbol *ResolveFortranSemanticProcedureSymbol(
 
   if (SgSymbol *mapped = CurrentBuildVisitor().LookupSemanticProcedureSymbol(
           &semanticProcedure, scope)) {
-    SgFunctionSymbol *visible = ResolveFortranFunctionSymbol(mapped, name);
+    if (auto *alias = isSgAliasSymbol(mapped))
+      mapped = alias->get_base();
+    SgFunctionSymbol *visible = isSgFunctionSymbol(mapped);
     if (visible == nullptr || visible->get_declaration() == nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[operator-procedure-symbol]: Flang "
                    "procedure '"
@@ -30457,6 +28750,30 @@ GetUserDefinedOperatorProcedure(const Fortran::parser::Expr &expression) {
     ROSE_ABORT();
   }
   return procedure;
+}
+
+bool BuildResolvedUserDefinedUnaryOperator(BuildExprVisitor &visitor,
+                                           const Fortran::parser::Expr &operand,
+                                           const SgName &operatorName) {
+  const Fortran::parser::Expr *semanticExpression =
+      visitor.semanticExpression();
+  ASSERT_not_null(semanticExpression);
+  const Fortran::evaluate::ProcedureRef *procedure =
+      GetUserDefinedOperatorProcedure(*semanticExpression);
+  if (procedure == nullptr)
+    return false;
+  SgFunctionSymbol *symbol = ResolveFortranSemanticProcedureSymbol(
+      *procedure->proc().GetSymbol(), SageBuilder::topScopeStack());
+  SgExpression *argument = nullptr;
+  WalkExpr(operand, argument);
+  ASSERT_not_null(argument);
+  SgType *resultType = BuildFortranSemanticExpressionType(*semanticExpression);
+  auto *expression = new SgUserDefinedUnaryOp(
+      argument, resultType, SgUnaryOp::prefix, operatorName, symbol);
+  SageBuilder::requireFreshNfiExpressionSourceState(
+      expression, "Flang resolved user-defined unary operator");
+  visitor.set(expression);
+  return true;
 }
 
 SgUserDefinedBinaryOp *BuildResolvedUserDefinedBinaryOperator(
@@ -30700,81 +29017,10 @@ void BuildExprVisitor::Build(const parser::Expr::NEQV &x) {
       lhs, rhs, RequireFlangOperatorResultType(*this, ".NEQV.")));
 }
 
-void Build(const parser::Expr::DefinedBinary &x, SgExpression *&expr) {
-  SgExpression *lhs{nullptr};
-  SgExpression *rhs{nullptr};
-  WalkExpr(std::get<1>(x.t).value(), lhs);
-  WalkExpr(std::get<2>(x.t).value(), rhs);
-  ASSERT_not_null(lhs);
-  ASSERT_not_null(rhs);
-  SgName operatorName{std::get<0>(x.t).v.ToString()};
-  SgFunctionSymbol *symbol =
-      LookupDefinedOperatorSymbol(operatorName, SageBuilder::topScopeStack());
-  SgType *resultType = GetFunctionResultType(symbol);
-  if (resultType == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[operator-procedure-symbol]: defined "
-                 "binary operator '"
-              << operatorName << "' has no exact Sage procedure result type\n";
-    ROSE_ABORT();
-  }
-  expr = new SgUserDefinedBinaryOp(lhs, rhs, resultType, operatorName, symbol);
-  ASSERT_not_null(expr);
-  SageBuilder::requireFreshNfiExpressionSourceState(
-      expr, "Flang defined binary operator");
-}
-
-void Build(const parser::Expr::DefinedUnary &x, SgExpression *&expr) {
-  SgExpression *arg{nullptr};
-  WalkExpr(std::get<1>(x.t).value(), arg);
-  ASSERT_not_null(arg);
-  SgName operatorName{std::get<0>(x.t).v.ToString()};
-  SgFunctionSymbol *symbol =
-      LookupDefinedOperatorSymbol(operatorName, SageBuilder::topScopeStack());
-  SgType *resultType = GetFunctionResultType(symbol);
-  if (resultType == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[operator-procedure-symbol]: defined "
-                 "unary operator '"
-              << operatorName << "' has no exact Sage procedure result type\n";
-    ROSE_ABORT();
-  }
-  expr = new SgUserDefinedUnaryOp(arg, resultType, operatorName, symbol);
-  ASSERT_not_null(expr);
-  SageBuilder::requireFreshNfiExpressionSourceState(
-      expr, "Flang defined unary operator");
-}
-
-void Build(const parser::Expr::NOT &x, SgExpression *&expr) {
-  SgExpression *operand{nullptr};
-  WalkExpr(x.v.value(), operand);
-  ASSERT_not_null(operand);
-  expr = SageBuilder::buildNotOp_nfi(operand, operand->get_type());
-  ASSERT_not_null(expr);
-}
-
 namespace {
 parser::CharBlock
 RequireExactFortranDataRefSource(const parser::DataRef &dataRef,
                                  const parser::CharBlock &statementSource);
-}
-
-template <typename T>
-void SetExactFlangParsedExpressionSourcePosition(SgExpression *expression,
-                                                 const T &syntax,
-                                                 const char *producer) {
-  ASSERT_not_null(expression);
-  ASSERT_not_null(producer);
-  const std::optional<parser::CharBlock> firstSource =
-      parser::GetSource(syntax);
-  const std::optional<parser::CharBlock> lastSource =
-      parser::GetLastSource(syntax);
-  if (!firstSource || !lastSource || firstSource->empty() ||
-      lastSource->empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[expression-component-source]: "
-              << producer
-              << " has no exact first and last physical source span\n";
-    ROSE_ABORT();
-  }
-  SetExactFlangExpressionSourcePosition(expression, *firstSource, *lastSource);
 }
 
 void Build(const parser::StructureComponent &x, SgExpression *&expr) {
@@ -31119,10 +29365,18 @@ void BuildExactFortranSectionSubscript(
 }
 } // namespace
 
-void Build(const parser::ArrayElement &x, SgExpression *&expr) {
+void Build(const parser::ArrayElement &x,
+           const evaluate::Expr<evaluate::SomeType> &semantic,
+           SgExpression *&expr) {
   SgExpression *base{nullptr};
   Build(x.base, base);
   ASSERT_not_null(base);
+  SgType *resultType = BuildFortranSemanticExpressionType(semantic);
+  const auto resultSize = MeasureFortranExpressionStorage(semantic);
+  const auto *baseSymbol = parser::GetLastName(x.base).symbol;
+  ASSERT_not_null(baseSymbol);
+  const auto strides = MeasureFortranSubscriptStrides(semantic, *baseSymbol,
+                                                      x.subscripts.size());
 
   SgExprListExp *subscripts = SageBuilder::buildExprListExp_nfi();
   ASSERT_not_null(subscripts);
@@ -31166,8 +29420,8 @@ void Build(const parser::ArrayElement &x, SgExpression *&expr) {
   const parser::CharBlock listSource(opening, closing + 1);
   SetExactFlangExpressionSourcePosition(subscripts, listSource, listSource);
 
-  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(
-      base, subscripts, RequireFortranArrayElementType(base, "array element"));
+  expr = SageBuilderCpp17::buildPntrArrRefExp_nfi(base, subscripts, resultType,
+                                                  resultSize, strides);
   ASSERT_not_null(expr);
 }
 
@@ -31193,9 +29447,6 @@ void Build(const parser::CoindexedNamedObject &x, SgExpression *&expr) {
   ASSERT_not_null(coExpr);
   SageBuilder::requireFreshNfiExpressionSourceState(
       coExpr, "Flang coindexed named object");
-
-  base->set_parent(coExpr);
-  selector->set_parent(coExpr);
 
   expr = coExpr;
 }
@@ -31263,17 +29514,6 @@ void Build(const parser::ImageSelector &x, SgExpression *&expr) {
   SageBuilder::requireFreshNfiExpressionSourceState(selector,
                                                     "Flang image selector");
 
-  exprList->set_parent(selector);
-  if (statExpr != nullptr) {
-    statExpr->set_parent(selector);
-  }
-  if (teamExpr != nullptr) {
-    teamExpr->set_parent(selector);
-  }
-  if (teamNumberExpr != nullptr) {
-    teamNumberExpr->set_parent(selector);
-  }
-
   const std::optional<parser::CharBlock> firstSource = parser::GetSource(x);
   const std::optional<parser::CharBlock> lastSource = parser::GetLastSource(x);
   if (!firstSource || !lastSource || firstSource->empty() ||
@@ -31333,31 +29573,6 @@ void Build(const parser::SubscriptTriplet &x, SgExpression *&expr) {
       RequireExactFlangExpressionSourceRange(x, statementSource,
                                              "Fortran subscript triplet");
   SetExactFlangExpressionSourcePosition(expr, tripletSource, tripletSource);
-}
-
-// ExecutableConstruct
-//
-void Build(parser::AssociateConstruct &x) {
-  info(x, "Rose::builder::Build(AssiciateConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::BlockConstruct &x) {
-  // std::tuple<Statement<BlockStmt>, BlockSpecificationPart, Block,
-  // Statement<EndBlockStmt>>
-  info(x, "Rose::builder::Build(BlockConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::CaseConstruct &x) {
-  info(x, "Rose::builder::Build(CaseConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::CaseConstruct::Case &x, SgStatement *&stmt) {
-  // std::tuple<Statement<CaseStmt>, Block> t;
-  info(x, "Rose::builder::Build(CaseConstruct)");
-  ABORT_NO_IMPL;
 }
 
 void Build(parser::CaseStmt &x, std::list<SgExpression *> &case_list) {
@@ -31420,135 +29635,11 @@ void Build(parser::CaseValueRange::Range &x, SgExpression *&range) {
   SetExactFlangExpressionSourcePosition(range, *firstSource, *lastSource);
 }
 
-void Build(parser::ChangeTeamConstruct &x) {
-  info(x, "Rose::builder::Build(ChangeTeamConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::CriticalConstruct &x) {
-  info(x, "Rose::builder::Build(CriticalConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::LabelDoStmt &x) {
-  info(x, "Rose::builder::Build(CriticalConstruct)");
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::EndDoStmt &x) {
-  std::cout << "Rose::builder::Build(EndDoStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::IfConstruct &x) {
-  // std::tuple<>
-  //   Statement<IfThenStmt>, Block, std::list<ElseIfBlock>,
-  //   std::optional<ElseBlock>, Statement<EndIfStmt>
-  std::cout << "Rose::builder::Build(IfConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::IfThenStmt &x, SgExpression *&expr) {
-  // std::tuple<std::optional<Name>, ScalarLogicalExpr> t;
-  std::cout << "Rose::builder::Build(IfThenStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::IfConstruct::ElseBlock &x, SgBasicBlock *&false_body) {
-  // std::tuple<Statement<ElseStmt>, Block> t;
-  std::cout << "Rose::builder::Build(ElseBlock)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(std::list<parser::IfConstruct::ElseIfBlock> &x,
-           SgBasicBlock *&else_if_block, SgIfStmt *&else_if_stmt) {
-  std::cout << "Rose::builder::Build(std::list<ElseIfBlock>)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::SelectRankConstruct &x) {
-  std::cout << "Rose::builder::Build(SelectRankConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::SelectTypeConstruct &x) {
-  std::cout << "Rose::builder::Build(SelectTypeConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::WhereConstruct &x) {
-  std::cout << "Rose::builder::Build(WhereConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::ForallConstruct &x) {
-  std::cout << "Rose::builder::Build(ForallConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::OpenMPConstruct &x) {
-  std::cerr << "[WARN] Rose::builder::Build(OpenMPConstruct) unimplemented\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::OpenACCConstruct &x) {
-  BuildVisitor &visitor = CurrentBuildVisitor();
-
-  common::visit(
-      common::visitors{
-          [&](parser::OpenACCBlockConstruct &y) {
-            visitor.Walk(std::get<parser::Block>(y.t));
-          },
-          [&](parser::OpenACCCombinedConstruct &y) {
-            if (auto &doConstruct =
-                    std::get<std::optional<parser::DoConstruct>>(y.t)) {
-              visitor.Walk(doConstruct.value());
-            }
-          },
-          [&](parser::OpenACCLoopConstruct &y) {
-            if (auto &doConstruct =
-                    std::get<std::optional<parser::DoConstruct>>(y.t)) {
-              visitor.Walk(doConstruct.value());
-            }
-          },
-          [&](parser::OpenACCStandaloneConstruct &y) { static_cast<void>(y); },
-          [&](parser::OpenACCCacheConstruct &y) { static_cast<void>(y); },
-          [&](parser::OpenACCWaitConstruct &y) { static_cast<void>(y); },
-          [&](parser::OpenACCAtomicConstruct &y) {
-            common::visit(
-                common::visitors{
-                    [&](parser::AccAtomicRead &atom) {
-                      visitor.Walk(
-                          std::get<parser::Statement<parser::AssignmentStmt>>(
-                              atom.t));
-                    },
-                    [&](parser::AccAtomicWrite &atom) {
-                      visitor.Walk(
-                          std::get<parser::Statement<parser::AssignmentStmt>>(
-                              atom.t));
-                    },
-                    [&](parser::AccAtomicUpdate &atom) {
-                      visitor.Walk(
-                          std::get<parser::Statement<parser::AssignmentStmt>>(
-                              atom.t));
-                    },
-                    [&](parser::AccAtomicCapture &atom) {
-                      visitor.Walk(
-                          std::get<parser::AccAtomicCapture::Stmt1>(atom.t).v);
-                      visitor.Walk(
-                          std::get<parser::AccAtomicCapture::Stmt2>(atom.t).v);
-                    }},
-                y.u);
-          },
-          [&](parser::OpenACCEndConstruct &y) { static_cast<void>(y); }},
-      x.u);
-}
-
 void BuildVisitor::Build(parser::CompilerDirective &x) {
   if (QueueCollectedFortranDirective(x.source)) {
     return;
   }
-  AppendDirectivePragmasFromParserSource(x.source, "");
+  AppendDirectivePragmasFromParserSource(x.source);
 }
 
 void BuildVisitor::Before(parser::OpenMPDeclareSimdConstruct &x) {
@@ -31812,48 +29903,6 @@ void BuildVisitor::Before(parser::OpenACCAtomicConstruct &x) {
   RequireTypedFlangDirective(x.source, FlangDirectiveGroup::Family::openacc);
 }
 
-void Build(parser::AccEndCombinedDirective &x) { static_cast<void>(x); }
-
-// CUFKernelDoConstruct
-void Build(parser::CUFKernelDoConstruct &x) {
-  BuildVisitor &visitor = CurrentBuildVisitor();
-
-  if (auto &doConstruct = std::get<std::optional<parser::DoConstruct>>(x.t)) {
-    visitor.Walk(doConstruct.value());
-  }
-}
-
-void Build(parser::OmpEndLoopDirective &x) {
-  std::cerr << "[WARN] Rose::builder::Build(Build(OmpEndLoopDirective) "
-               "unimplemented\n";
-  ABORT_NO_IMPL;
-}
-
-// DoConstructf3037
-void Build(parser::NonLabelDoStmt &x, SgExpression *&name,
-           SgExpression *&control) {
-  std::cout << "Rose::builder::Build(NonLabelDoStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::LoopControl::Concurrent &x, SgExpression *&expr) {
-  std::cout << "Rose::builder::Build(LoopControl::Concurrent)\n";
-  ABORT_NO_IMPL;
-
-  // x.t (tuple)
-  // [0] parser::ConcurrentHeader
-  // [1] [LocalitySpec (a list)]
-}
-
-// SpecificationConstruct
-//
-void Build(parser::DerivedTypeStmt &x, std::string &name,
-           std::list<LanguageTranslation::ExpressionKind> &modifiers) {
-  // std::tuple<std::list<TypeAttrSpec>, Name, std::list<Name>> t;
-  std::cout << "Rose::builder::Build(DerivedTypeStmt)\n";
-  ABORT_NO_IMPL;
-}
-
 void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
            const parser::CharBlock &statementSource) {
   // std::tuple<> DeclarationTypeSpec, std::list<ComponentAttrSpec>,
@@ -31907,11 +29956,16 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
     getComponentAttrSpec(attr, modifiers, type);
   }
 
-  std::list<EntityDeclTuple> initInfo{};
+  std::list<EntityDeclInfo> initInfo{};
+  const bool sourcePointer =
+      std::find(modifiers.begin(), modifiers.end(),
+                LanguageTranslation::ExpressionKind::e_type_modifier_pointer) !=
+      modifiers.end();
   for (auto &item : sourceComponents) {
     common::visit(
         common::visitors{[&](ComponentDecl &decl) {
-                           Build(decl, initInfo, type, statementSource);
+                           Build(decl, initInfo, type, statementSource,
+                                 sourcePointer);
                          },
                          [&](FillDecl &) { /* No ROSE equivalent */ }},
         item.u);
@@ -31921,22 +29975,14 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
     return;
   }
 
-  std::vector<SgExpression *> componentInitializers;
-  componentInitializers.reserve(initInfo.size());
-  for (EntityDeclTuple &entity : initInfo) {
-    componentInitializers.push_back(std::get<3>(entity));
-    std::get<3>(entity) = nullptr;
-  }
-
   SgVariableDeclaration *varDecl{nullptr};
-  builder.Enter(varDecl, type, initInfo);
+  builder.Enter(varDecl, initInfo);
   builder.Leave(varDecl, modifiers);
   SgScopeStatement *componentScope = SageBuilder::topScopeStack();
   ASSERT_not_null(componentScope);
   SgSymbol *sourceDerivedTypeSymbol = RequireFortranSourceDerivedTypeSymbol(
       declarationTypeSpec, componentScope, type);
   auto sageComponent = varDecl->get_variables().begin();
-  auto componentInitializer = componentInitializers.begin();
   for (auto &item : std::get<std::list<ComponentOrFill>>(x.t)) {
     ComponentDecl *componentDecl = std::get_if<ComponentDecl>(&item.u);
     if (componentDecl == nullptr) {
@@ -31952,8 +29998,6 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
       ROSE_ABORT();
     }
     SgInitializedName *componentDeclaration = *sageComponent++;
-    ASSERT_require(componentInitializer != componentInitializers.end());
-    SgExpression *initializerExpression = *componentInitializer++;
     componentDeclaration->set_fortran_source_derived_type_symbol(
         sourceDerivedTypeSymbol);
     if (componentName.symbol == nullptr) {
@@ -31976,8 +30020,8 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
     SgType *semanticType = componentDeclaration->get_type();
     SgType *sourceType = componentDeclaration->get_fortran_source_type();
     MarkFortranSourceSyntaxType(sourceType);
-    SgType *expectedSemanticType = ApplyFortranSemanticTypeWrappers(
-        sourceType, BuildFortranSemanticObjectType(*componentName.symbol));
+    SgType *expectedSemanticType =
+        BuildFortranSemanticObjectOwnerType(*componentName.symbol);
     if (semanticType == nullptr || sourceType == nullptr ||
         expectedSemanticType == nullptr ||
         !SageInterface::isEquivalentType(semanticType, expectedSemanticType)) {
@@ -31987,17 +30031,12 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
                 << "' has no exact semantic/source type pair\n";
       ROSE_ABORT();
     }
-    if (initializerExpression != nullptr) {
-      FinalizeFortranAggregateInitializerType(initializerExpression,
-                                              semanticType);
-      SgAssignInitializer *initializer =
-          SageBuilder::buildAssignInitializer_nfi(initializerExpression,
-                                                  semanticType);
+    if (auto &sourceInitializer =
+            std::get<std::optional<Initialization>>(componentDecl->t)) {
+      SgInitializer *initializer =
+          BuildFortranInitializer(*sourceInitializer, semanticType);
       ASSERT_not_null(initializer);
       componentDeclaration->set_initializer(initializer);
-      initializer->set_parent(componentDeclaration);
-      const auto &sourceInitializer =
-          std::get<std::optional<Initialization>>(componentDecl->t);
       const std::optional<CharBlock> initializerBegin =
           sourceInitializer ? parser::GetSource(*sourceInitializer)
                             : std::nullopt;
@@ -32018,24 +30057,18 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
           initializer,
           BuildRequiredStatementSourcePosition(*initializerBegin, Order::begin),
           BuildRequiredStatementSourcePosition(*initializerEnd, Order::end));
-    } else if (std::get<std::optional<Initialization>>(componentDecl->t)) {
-      std::cerr << "REX_FLANG_INVARIANT[component-initializer-source]: "
-                   "derived component '"
-                << componentName.ToString()
-                << "' lost its parser-owned initializer expression\n";
-      ROSE_ABORT();
     }
     if (SgInitializer *initializer = componentDeclaration->get_initializer()) {
-      SgAssignInitializer *assignment = isSgAssignInitializer(initializer);
-      if (assignment == nullptr) {
+      if (isSgAssignInitializer(initializer) == nullptr &&
+          isSgFortranDataInitializer(initializer) == nullptr) {
         std::cerr << "REX_FLANG_INVARIANT[component-initializer-kind]: derived "
                      "component '"
                   << componentName.ToString()
-                  << "' has a non-assignment initializer\n";
+                  << "' has an invalid typed initializer\n";
         ROSE_ABORT();
       }
-      if (assignment->get_type() == nullptr ||
-          !SageInterface::isEquivalentType(assignment->get_type(),
+      if (initializer->get_type() == nullptr ||
+          !SageInterface::isEquivalentType(initializer->get_type(),
                                            semanticType)) {
         std::cerr << "REX_FLANG_INVARIANT[component-initializer-type]: "
                      "derived component '"
@@ -32049,7 +30082,6 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
                                                  componentSymbol);
   }
   ASSERT_require(sageComponent == varDecl->get_variables().end());
-  ASSERT_require(componentInitializer == componentInitializers.end());
   for (SgInitializedName *initName : varDecl->get_variables()) {
     ASSERT_not_null(initName);
     initName->set_fortran_type_spec(fortranTypeSpec);
@@ -32058,12 +30090,14 @@ void Build(parser::DataComponentDefStmt &x, SgStatement *&stmt,
 }
 
 void Build(Fortran::parser::ComponentDecl &x,
-           std::list<EntityDeclTuple> &componentDecls, SgType *baseType,
-           const parser::CharBlock &statementSource) {
+           std::list<EntityDeclInfo> &componentDecls, SgType *baseType,
+           const parser::CharBlock &statementSource, bool sourcePointer) {
   std::string name;
-  SgExpression *init{nullptr};
   SgType *sourceType{nullptr};
-  Build(x, name, init, sourceType, baseType, statementSource);
+  Build(x, name, sourceType, baseType, statementSource);
+  if (sourcePointer) {
+    sourceType = BuildFortranSourcePointerType(sourceType);
+  }
   Fortran::parser::Name &componentName = std::get<Fortran::parser::Name>(x.t);
   if (componentName.symbol == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[component-semantic-symbol]: derived "
@@ -32071,8 +30105,8 @@ void Build(Fortran::parser::ComponentDecl &x,
               << name << "' has no Flang semantic symbol\n";
     ROSE_ABORT();
   }
-  SgType *semanticType = ApplyFortranSemanticTypeWrappers(
-      sourceType, BuildFortranSemanticObjectType(*componentName.symbol));
+  SgType *semanticType =
+      BuildFortranSemanticObjectOwnerType(*componentName.symbol);
   MarkFortranSourceSyntaxType(sourceType);
   if (sourceType == nullptr || semanticType == nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[component-semantic-type]: derived "
@@ -32084,8 +30118,7 @@ void Build(Fortran::parser::ComponentDecl &x,
   detail::RequireFlangSourceTypeContract(
       sourceType, semanticType, detail::FlangSourceTypeContract::component,
       name);
-  componentDecls.push_back(
-      std::make_tuple(name, semanticType, sourceType, init));
+  componentDecls.push_back({name, semanticType, sourceType, nullptr});
 }
 
 namespace detail {
@@ -32093,13 +30126,10 @@ void PublishExactFortranEntityCharacterLength(
     SgExpression *length, const parser::CharLength &sourceLength,
     const parser::Name &componentName,
     const parser::CharBlock &statementSource) {
-  // LLVM 22 deliberately lowers a digit-string CharLength to uint64_t and
-  // represents '*' and ':' as empty marker alternatives, so GetSource() has
-  // no terminal CharBlock to return.  Recover that discarded terminal at the
-  // earliest typed ComponentDecl producer, bounded by its exact Name and
-  // enclosing ComponentDefStmt source.  The grammar-bounded scan below must
-  // identify exactly one complete entity-length token; it is never an
-  // unparser-side spelling repair.
+  // LLVM 22 stores a digit-string CharLength as uint64_t without its token
+  // range. Recover the token within this exact declarator and require its
+  // numeric value to match Flang's typed value. Remove the scan when Flang
+  // retains the terminal range in its parse tree.
   ASSERT_not_null(length);
   if (componentName.source.empty() ||
       !statementSource.Contains(componentName.source)) {
@@ -32113,6 +30143,7 @@ void PublishExactFortranEntityCharacterLength(
   int parenthesisDepth = 0;
   int bracketDepth = 0;
   char quote = '\0';
+  std::vector<const char *> lengthMarkers;
   for (const char *cursor = surfaceBegin; cursor < surfaceEnd; ++cursor) {
     const char character = *cursor;
     if (quote != '\0') {
@@ -32135,6 +30166,8 @@ void PublishExactFortranEntityCharacterLength(
       ++bracketDepth;
     } else if (character == ']') {
       --bracketDepth;
+    } else if (character == '*' && parenthesisDepth == 0 && bracketDepth == 0) {
+      lengthMarkers.push_back(cursor);
     } else if ((character == ',' || character == '=') &&
                parenthesisDepth == 0 && bracketDepth == 0) {
       surfaceEnd = cursor;
@@ -32214,8 +30247,7 @@ void PublishExactFortranEntityCharacterLength(
     auto matches = [](const Sg_File_Info *actual,
                       const SourcePosition &expected, int columnAdjustment) {
       return actual != nullptr &&
-             NormalizeSourcePath(actual->get_filenameString()) ==
-                 expected.path &&
+             actual->get_physical_filename() == expected.path &&
              actual->get_line() == expected.line &&
              actual->get_col() == expected.column + columnAdjustment;
     };
@@ -32236,73 +30268,47 @@ void PublishExactFortranEntityCharacterLength(
     ROSE_ABORT();
   }
 
-  std::string spelling;
+  const auto *numericLength = std::get_if<std::uint64_t>(&sourceLength.u);
+  char marker = '\0';
   if (SgLongLongIntVal *value = isSgLongLongIntVal(length)) {
-    spelling = value->get_valueString();
-  } else if (isSgAsteriskShapeExp(length) != nullptr) {
-    spelling = "*";
-  } else if (isSgColonShapeExp(length) != nullptr) {
-    spelling = ":";
+    if (numericLength == nullptr || value->get_value() < 0 ||
+        static_cast<std::uint64_t>(value->get_value()) != *numericLength) {
+      std::cerr << "REX_FLANG_INVARIANT[component-character-length-source]: "
+                   "numeric length disagrees with Flang's typed value\n";
+      ROSE_ABORT();
+    }
+  } else if (numericLength == nullptr &&
+             isSgAsteriskShapeExp(length) != nullptr) {
+    marker = '*';
+  } else if (numericLength == nullptr && isSgColonShapeExp(length) != nullptr) {
+    marker = ':';
   } else {
     std::cerr << "REX_FLANG_INVARIANT[component-character-length-source]: "
                  "unpublished component length is not one typed terminal\n";
     ROSE_ABORT();
   }
-  if (spelling.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[component-character-length-source]: "
-                 "component length has no exact terminal spelling\n";
-    ROSE_ABORT();
-  }
 
   std::vector<parser::CharBlock> candidates;
-  parenthesisDepth = 0;
-  bracketDepth = 0;
-  quote = '\0';
-  for (const char *cursor = surfaceBegin; cursor < surfaceEnd; ++cursor) {
-    const char character = *cursor;
-    if (quote != '\0') {
-      if (character == quote) {
-        if (cursor + 1 < surfaceEnd && cursor[1] == quote) {
-          ++cursor;
-        } else {
-          quote = '\0';
-        }
-      }
-      continue;
-    }
-    if (character == '\'' || character == '"') {
-      quote = character;
-      continue;
-    }
-    if (character == '(') {
-      ++parenthesisDepth;
-      continue;
-    }
-    if (character == ')') {
-      --parenthesisDepth;
-      continue;
-    }
-    if (character == '[') {
-      ++bracketDepth;
-      continue;
-    }
-    if (character == ']') {
-      --bracketDepth;
-      continue;
-    }
-    if (character != '*' || parenthesisDepth != 0 || bracketDepth != 0) {
-      continue;
-    }
+  for (const char *cursor : lengthMarkers) {
     const char *tokenBegin = SkipFortranSourceSpace(cursor + 1, surfaceEnd);
     bool parenthesized = false;
     if (tokenBegin < surfaceEnd && *tokenBegin == '(') {
       parenthesized = true;
       tokenBegin = SkipFortranSourceSpace(tokenBegin + 1, surfaceEnd);
     }
-    const char *tokenEnd = tokenBegin + spelling.size();
-    if (tokenEnd > surfaceEnd ||
-        !std::equal(spelling.begin(), spelling.end(), tokenBegin)) {
-      continue;
+    const char *tokenEnd = tokenBegin;
+    if (numericLength != nullptr) {
+      while (tokenEnd < surfaceEnd && *tokenEnd >= '0' && *tokenEnd <= '9')
+        ++tokenEnd;
+      std::uint64_t tokenValue = 0;
+      const auto parsed = std::from_chars(tokenBegin, tokenEnd, tokenValue);
+      if (parsed.ec != std::errc{} || parsed.ptr != tokenEnd ||
+          tokenValue != *numericLength)
+        continue;
+    } else {
+      if (tokenBegin == surfaceEnd || *tokenBegin != marker)
+        continue;
+      ++tokenEnd;
     }
     const char *afterToken = SkipFortranSourceSpace(tokenEnd, surfaceEnd);
     if (parenthesized) {
@@ -32324,21 +30330,23 @@ void PublishExactFortranEntityCharacterLength(
               << "' does not have one exact entity length token\n";
     ROSE_ABORT();
   }
-  SetExactFlangExpressionSourcePosition(length, candidates.front(),
-                                        candidates.front());
+  if (SgLongLongIntVal *value = isSgLongLongIntVal(length)) {
+    PublishExactFortranNumericSelectorToken(value, candidates.front());
+  } else {
+    SetExactFlangExpressionSourcePosition(length, candidates.front(),
+                                          candidates.front());
+  }
 }
 } // namespace detail
 
-void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
-           SgType *&type, SgType *base_type,
-           const parser::CharBlock &statementSource) {
+void Build(parser::ComponentDecl &x, std::string &name, SgType *&type,
+           SgType *base_type, const parser::CharBlock &statementSource) {
   //  std::tuple<> Name, std::optional<ComponentArraySpec>,
   //  std::optional<CoarraySpec>, std::optional<CharLength>,
   //               std::optional<Initialization>
   using namespace Fortran::parser;
 
   name = std::get<Name>(x.t).ToString();
-  init = nullptr;
   type = nullptr;
 
   SgType *localBase = base_type;
@@ -32362,10 +30370,6 @@ void Build(parser::ComponentDecl &x, std::string &name, SgExpression *&init,
   }
 
   type = entityType;
-
-  if (auto &opt = std::get<std::optional<Initialization>>(x.t)) {
-    Build(opt.value(), init, type);
-  }
 }
 
 void BuildVisitor::Build(parser::EnumDef &x) {
@@ -32451,7 +30455,7 @@ void BuildVisitor::Build(parser::EnumDef &x) {
       }
 
       std::int64_t value = 0;
-      const auto &explicitExpr =
+      auto &explicitExpr =
           std::get<std::optional<ScalarIntConstantExpr>>(enumerator.t);
       if (explicitExpr) {
         const Fortran::semantics::SomeExpr *semanticExpr =
@@ -32476,31 +30480,6 @@ void BuildVisitor::Build(parser::EnumDef &x) {
         value = *nextImplicitValue;
       }
 
-      const std::size_t sizeBefore = enumDecl->get_enumerators().size();
-      SgEnumVal *enumValue = nullptr;
-      builder.Enter(enumValue, name, enumDecl, value,
-                    SourcePositionPair{stmtBegin, stmtEnd});
-      if (enumValue == nullptr ||
-          enumDecl->get_enumerators().size() != sizeBefore + 1) {
-        std::cerr << "REX_FRONTEND_INVARIANT[fortran-enum]: builder did not "
-                     "append exactly one enumerator for '"
-                  << name << "'\n";
-        ROSE_ABORT();
-      }
-      SgInitializedName *initializedName = enumDecl->get_enumerators().back();
-      SgAssignInitializer *initializer =
-          initializedName != nullptr
-              ? isSgAssignInitializer(initializedName->get_initializer())
-              : nullptr;
-      if (initializedName == nullptr ||
-          initializedName->get_parent() != enumDecl ||
-          initializedName->get_scope() != scope || initializer == nullptr ||
-          initializer->get_operand_i() != enumValue) {
-        std::cerr << "REX_FRONTEND_INVARIANT[fortran-enum]: malformed AST "
-                     "ownership for enumerator '"
-                  << name << "'\n";
-        ROSE_ABORT();
-      }
       const Fortran::semantics::Symbol *semantic = namedConstant.v.symbol;
       SgType *semanticType =
           semantic != nullptr
@@ -32523,6 +30502,33 @@ void BuildVisitor::Build(parser::EnumDef &x) {
                      "type\n";
         ROSE_ABORT();
       }
+      SgExpression *sourceInitializer = nullptr;
+      if (explicitExpr) {
+        BeginStatementSource(enumeratorStmt.source);
+        PublishSemanticNamesBeforeStatement(*explicitExpr);
+        WalkExpr(*explicitExpr, sourceInitializer);
+        ASSERT_not_null(sourceInitializer);
+        EndStatementSource();
+      }
+      SgEnumType *enumType = enumDecl->get_type();
+      ROSE_ASSERT(SageInterface::isExactTagTypeIdentity(enumType, firstNondef));
+      SgAssignInitializer *initializer =
+          sourceInitializer != nullptr
+              ? SageBuilder::buildAssignInitializer_nfi(sourceInitializer,
+                                                        enumType)
+              : nullptr;
+      auto *initializedName =
+          SageBuilder::buildInitializedName_nfi(name, enumType, initializer);
+      initializedName->set_scope(scope);
+      initializedName->set_declptr(enumDecl);
+      initializedName->set_enum_constant_source_ownership(
+          SgInitializedName::e_enum_constant_source_body);
+      initializedName->set_enum_constant_value(value);
+      if (initializer != nullptr)
+        builder.setSourcePosition(initializer, stmtBegin, stmtEnd);
+      builder.setSourcePosition(initializedName, stmtBegin, stmtEnd);
+      enumDecl->append_enumerator(initializedName);
+      scope->insert_symbol(name, new SgEnumFieldSymbol(initializedName));
       SgEnumFieldSymbol *field =
           scope->get_symbol_table()->find_enum_field(name);
       if (semantic == nullptr || field == nullptr ||
@@ -32538,9 +30544,6 @@ void BuildVisitor::Build(parser::EnumDef &x) {
                   << name << "' did not retain its exact semantic identity\n";
         ROSE_ABORT();
       }
-      builder.setSourcePosition(initializer, stmtBegin, stmtEnd);
-      builder.setSourcePosition(initializedName, stmtBegin, stmtEnd);
-
       ++enumeratorCount;
       nextImplicitValue = value == std::numeric_limits<std::int64_t>::max()
                               ? std::nullopt
@@ -32570,11 +30573,13 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
   auto &specs = std::get<std::list<InterfaceSpecification>>(x.t);
   auto &end = std::get<Statement<EndInterfaceStmt>>(x.t);
   MaybeInsertIncludeLine(stmt.source);
+  HeaderComments comments = CaptureHeaderComments(stmt);
 
   SgInterfaceStatement::generic_spec_enum kind =
       SgInterfaceStatement::e_unnamed_interface_type;
   SgName interfaceName;
   const Fortran::semantics::Symbol *interfaceSemantic = nullptr;
+  Fortran::semantics::GenericKind interfaceKind;
 
   if (auto *optGeneric =
           std::get_if<std::optional<GenericSpec>>(&stmt.statement.u)) {
@@ -32591,54 +30596,59 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                 kind = SgInterfaceStatement::e_operator_interface_type;
                 auto operatorName = [&](const DefinedOperator &op) {
                   using IntrinsicOp = DefinedOperator::IntrinsicOperator;
+                  using Numeric = Fortran::common::NumericOperator;
+                  using Logical = Fortran::common::LogicalOperator;
+                  using Relational = Fortran::common::RelationalOperator;
+                  auto intrinsicName = [&](auto semanticOperator) {
+                    interfaceKind = semanticOperator;
+                    return std::string(
+                        Fortran::common::AsFortran(semanticOperator));
+                  };
                   return common::visit(
                       common::visitors{
                           [&](const DefinedOpName &name) {
-                            std::string opName = name.v.ToString();
-                            if (!opName.empty() && opName.front() != '.') {
-                              opName.insert(opName.begin(), '.');
-                            }
-                            if (!opName.empty() && opName.back() != '.') {
-                              opName.push_back('.');
-                            }
-                            return opName;
+                            interfaceKind = Fortran::semantics::GenericKind::
+                                OtherKind::DefinedOp;
+                            return name.v.ToString();
                           },
                           [&](IntrinsicOp opKind) {
                             switch (opKind) {
                             case IntrinsicOp::Power:
-                              return std::string("**");
+                              return intrinsicName(Numeric::Power);
                             case IntrinsicOp::Multiply:
-                              return std::string("*");
+                              return intrinsicName(Numeric::Multiply);
                             case IntrinsicOp::Divide:
-                              return std::string("/");
+                              return intrinsicName(Numeric::Divide);
                             case IntrinsicOp::Add:
-                              return std::string("+");
+                              return intrinsicName(Numeric::Add);
                             case IntrinsicOp::Subtract:
-                              return std::string("-");
+                              return intrinsicName(Numeric::Subtract);
                             case IntrinsicOp::Concat:
+                              interfaceKind = Fortran::semantics::GenericKind::
+                                  OtherKind::Concat;
                               return std::string("//");
                             case IntrinsicOp::LT:
-                              return std::string(".LT.");
+                              return intrinsicName(Relational::LT);
                             case IntrinsicOp::LE:
-                              return std::string(".LE.");
+                              return intrinsicName(Relational::LE);
                             case IntrinsicOp::EQ:
-                              return std::string(".EQ.");
+                              return intrinsicName(Relational::EQ);
                             case IntrinsicOp::NE:
-                              return std::string(".NE.");
+                              return intrinsicName(Relational::NE);
                             case IntrinsicOp::GE:
-                              return std::string(".GE.");
+                              return intrinsicName(Relational::GE);
                             case IntrinsicOp::GT:
-                              return std::string(".GT.");
+                              return intrinsicName(Relational::GT);
                             case IntrinsicOp::NOT:
-                              return std::string(".NOT.");
+                              return intrinsicName(Logical::Not);
                             case IntrinsicOp::AND:
-                              return std::string(".AND.");
+                              return intrinsicName(Logical::And);
                             case IntrinsicOp::OR:
-                              return std::string(".OR.");
+                              return intrinsicName(Logical::Or);
                             case IntrinsicOp::EQV:
-                              return std::string(".EQV.");
+                              return intrinsicName(Logical::Eqv);
                             case IntrinsicOp::NEQV:
-                              return std::string(".NEQV.");
+                              return intrinsicName(Logical::Neqv);
                             }
                             ROSE_ABORT();
                           }},
@@ -32651,36 +30661,82 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
               },
               [&](GenericSpec::Assignment &) {
                 kind = SgInterfaceStatement::e_assignment_interface_type;
+                interfaceKind =
+                    Fortran::semantics::GenericKind::OtherKind::Assignment;
                 interfaceName = SgName("=");
               },
               [&](GenericSpec::ReadFormatted &) {
                 kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceKind = Fortran::common::DefinedIo::ReadFormatted;
                 interfaceName = SgName(generic.source.ToString());
               },
               [&](GenericSpec::ReadUnformatted &) {
                 kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceKind = Fortran::common::DefinedIo::ReadUnformatted;
                 interfaceName = SgName(generic.source.ToString());
               },
               [&](GenericSpec::WriteFormatted &) {
                 kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceKind = Fortran::common::DefinedIo::WriteFormatted;
                 interfaceName = SgName(generic.source.ToString());
               },
               [&](GenericSpec::WriteUnformatted &) {
                 kind = SgInterfaceStatement::e_named_interface_type;
+                interfaceKind = Fortran::common::DefinedIo::WriteUnformatted;
                 interfaceName = SgName(generic.source.ToString());
               }},
           generic.u);
     }
   }
 
+  if (kind != SgInterfaceStatement::e_unnamed_interface_type) {
+    if (interfaceSemantic == nullptr && !interfaceKind.IsName() &&
+        !interfaceKind.IsDefinedOperator()) {
+      ASSERT_not_null(semantic_context_);
+      const Fortran::semantics::Scope &semanticScope =
+          semantic_context_->FindScope(stmt.source);
+      for (const Fortran::semantics::SymbolRef &symbolRef :
+           semanticScope.GetSymbols()) {
+        const Fortran::semantics::Symbol &candidate = symbolRef.get();
+        const auto *generic =
+            candidate.GetUltimate()
+                .detailsIf<Fortran::semantics::GenericDetails>();
+        if (generic == nullptr || generic->kind().u != interfaceKind.u)
+          continue;
+        if (interfaceSemantic != nullptr &&
+            &interfaceSemantic->GetUltimate() != &candidate.GetUltimate()) {
+          std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
+                       "interface has multiple exact generic producers\n";
+          ROSE_ABORT();
+        }
+        interfaceSemantic = &candidate;
+      }
+    }
+    const auto *generic =
+        interfaceSemantic != nullptr
+            ? interfaceSemantic->GetUltimate()
+                  .detailsIf<Fortran::semantics::GenericDetails>()
+            : nullptr;
+    if (generic == nullptr || generic->kind().u != interfaceKind.u) {
+      std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
+                   "interface '"
+                << interfaceName << "' has no exact typed generic producer\n";
+      ROSE_ABORT();
+    }
+  }
+
   SgInterfaceStatement *interfaceStmt =
       new SgInterfaceStatement(interfaceName, kind);
   ASSERT_not_null(interfaceStmt);
+  if (std::holds_alternative<Abstract>(stmt.statement.u)) {
+    interfaceStmt->get_declarationModifier().get_typeModifier().setAbstract();
+  }
   interfaceStmt->set_definingDeclaration(interfaceStmt);
   interfaceStmt->set_firstNondefiningDeclaration(interfaceStmt);
   builder.setSourcePosition(interfaceStmt,
                             BuildSourcePosition(stmt, Order::begin),
                             BuildSourcePosition(end, Order::end));
+  builder.attachComments(interfaceStmt, comments);
   SageInterface::appendStatement(interfaceStmt, SageBuilder::topScopeStack());
 
   ApplyFortranBoundaryLabels(interfaceStmt, interfaceStmt->get_scope(),
@@ -32699,126 +30755,8 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
           specificSemantic->GetUltimate();
       if (const auto *namedGeneric =
               namedUltimate.detailsIf<Fortran::semantics::GenericDetails>()) {
-        if (interfaceSemantic == nullptr) {
-          interfaceSemantic = specificSemantic;
-        }
-        const Fortran::semantics::Symbol *resolvedSpecific = nullptr;
-        auto considerSpecific =
-            [&](const Fortran::semantics::Symbol *candidate) {
-              if (candidate == nullptr ||
-                  !NamesMatch(candidate->name().ToString(),
-                              semanticName.ToString(),
-                              /*caseInsensitive=*/true)) {
-                return;
-              }
-              const Fortran::semantics::Symbol &candidateUltimate =
-                  candidate->GetUltimate();
-              if (candidateUltimate
-                          .detailsIf<Fortran::semantics::SubprogramDetails>() ==
-                      nullptr &&
-                  candidateUltimate
-                          .detailsIf<Fortran::semantics::ProcEntityDetails>() ==
-                      nullptr) {
-                return;
-              }
-              if (resolvedSpecific != nullptr &&
-                  &resolvedSpecific->GetUltimate() != &candidateUltimate) {
-                std::cerr << "REX_FLANG_INVARIANT[interface-generic-"
-                             "publication]: same-name generic interface '"
-                          << interfaceName
-                          << "' contains multiple exact semantic procedure "
-                             "members matching source body '"
-                          << semanticName.ToString() << "'\n";
-                ROSE_ABORT();
-              }
-              resolvedSpecific = candidate;
-            };
-        considerSpecific(namedGeneric->specific());
-        for (const Fortran::semantics::SymbolRef &specific :
-             namedGeneric->specificProcs()) {
-          considerSpecific(&specific.get());
-        }
-        if (resolvedSpecific == nullptr) {
-          std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
-                       "same-name generic interface '"
-                    << interfaceName
-                    << "' has no exact semantic procedure member matching "
-                       "source body '"
-                    << semanticName.ToString() << "'\n";
-          ROSE_ABORT();
-        }
-        specificSemantic = resolvedSpecific;
+        specificSemantic = namedGeneric->specific();
       }
-    }
-    if (interfaceSemantic == nullptr && specificSemantic != nullptr) {
-      const Fortran::semantics::Symbol *specificUltimate =
-          &specificSemantic->GetUltimate();
-      const Fortran::semantics::Symbol *resolvedGeneric = nullptr;
-      auto genericKindMatchesSource =
-          [&](const Fortran::semantics::GenericKind &semanticKind) {
-            const std::string source = interfaceName.getString();
-            if (kind == SgInterfaceStatement::e_assignment_interface_type) {
-              return semanticKind.IsAssignment();
-            }
-            if (NamesMatch(semanticKind.ToString(), source,
-                           /*caseInsensitive=*/true)) {
-              return true;
-            }
-            static const std::map<std::string, std::string> operatorKinds{
-                {"**", "Power"},  {"*", "Multiply"}, {"/", "Divide"},
-                {"+", "Add"},     {"-", "Subtract"}, {"//", "Concat"},
-                {".LT.", "LT"},   {".LE.", "LE"},    {".EQ.", "EQ"},
-                {".NE.", "NE"},   {".GE.", "GE"},    {".GT.", "GT"},
-                {".NOT.", "NOT"}, {".AND.", "AND"},  {".OR.", "OR"},
-                {".EQV.", "EQV"}, {".NEQV.", "NEQV"}};
-            const auto expected = operatorKinds.find(source);
-            return expected != operatorKinds.end() &&
-                   NamesMatch(semanticKind.ToString(), expected->second,
-                              /*caseInsensitive=*/true);
-          };
-      ASSERT_not_null(semantic_context_);
-      for (const Fortran::semantics::Scope *semanticScope =
-               &semantic_context_->FindScope(stmt.source);
-           semanticScope != nullptr;) {
-        for (const Fortran::semantics::SymbolRef &symbolRef :
-             semanticScope->GetSymbols()) {
-          const Fortran::semantics::Symbol &candidate = symbolRef.get();
-          const Fortran::semantics::Symbol &candidateUltimate =
-              candidate.GetUltimate();
-          const auto *generic =
-              candidateUltimate.detailsIf<Fortran::semantics::GenericDetails>();
-          if (generic == nullptr ||
-              !genericKindMatchesSource(generic->kind())) {
-            continue;
-          }
-          const bool containsSpecific =
-              (generic->specific() != nullptr &&
-               &generic->specific()->GetUltimate() == specificUltimate) ||
-              std::any_of(generic->specificProcs().begin(),
-                          generic->specificProcs().end(),
-                          [&](const Fortran::semantics::SymbolRef &specific) {
-                            return &specific.get().GetUltimate() ==
-                                   specificUltimate;
-                          });
-          if (!containsSpecific) {
-            continue;
-          }
-          if (resolvedGeneric != nullptr &&
-              &resolvedGeneric->GetUltimate() != &candidateUltimate) {
-            std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
-                         "operator interface '"
-                      << interfaceName
-                      << "' maps to multiple exact semantic generics\n";
-            ROSE_ABORT();
-          }
-          resolvedGeneric = &candidate;
-        }
-        if (resolvedGeneric != nullptr || semanticScope->IsGlobal()) {
-          break;
-        }
-        semanticScope = &semanticScope->parent();
-      }
-      interfaceSemantic = resolvedGeneric;
     }
     if (interfaceSemantic == nullptr || specificSemantic == nullptr ||
         sourceBody == nullptr || scope == nullptr ||
@@ -32835,6 +30773,30 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                 << ", published-scope="
                 << (published != nullptr ? published->get_scope() : nullptr)
                 << ")\n";
+      ROSE_ABORT();
+    }
+    const auto &generic = interfaceSemantic->GetUltimate()
+                              .get<Fortran::semantics::GenericDetails>();
+    const auto *specificUltimate = &specificSemantic->GetUltimate();
+    if (specificUltimate->detailsIf<Fortran::semantics::SubprogramDetails>() ==
+            nullptr &&
+        specificUltimate->detailsIf<Fortran::semantics::ProcEntityDetails>() ==
+            nullptr) {
+      std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
+                   "interface specific is not a typed procedure\n";
+      ROSE_ABORT();
+    }
+    const bool containsSpecific =
+        (generic.specific() != nullptr &&
+         &generic.specific()->GetUltimate() == specificUltimate) ||
+        std::any_of(generic.specificProcs().begin(),
+                    generic.specificProcs().end(),
+                    [&](const Fortran::semantics::SymbolRef &specific) {
+                      return &specific.get().GetUltimate() == specificUltimate;
+                    });
+    if (!containsSpecific) {
+      std::cerr << "REX_FLANG_INVARIANT[interface-generic-publication]: "
+                   "interface specific does not belong to its typed generic\n";
       ROSE_ABORT();
     }
     if (published == nullptr) {
@@ -32961,6 +30923,8 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                       [&](InterfaceBody::Subroutine &subr) {
                         auto &subrStmt =
                             std::get<Statement<SubroutineStmt>>(subr.t);
+                        HeaderComments comments =
+                            CaptureHeaderComments(subrStmt);
                         auto &endStmt =
                             std::get<Statement<EndSubroutineStmt>>(subr.t);
                         std::list<std::string> dummyArgs;
@@ -32977,8 +30941,7 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                             std::get<common::Indirection<SpecificationPart>>(
                                 subr.t);
 
-                        builder.Enter(paramList, paramScope, name,
-                                      /*function_type*/ nullptr, isDefDecl);
+                        builder.Enter(paramList, paramScope, name, isDefDecl);
                         PrebuildFortranUseStatements(specPart.value());
                         DeclareFortranDummyArguments(
                             std::get<Name>(subrStmt.statement.t), paramScope,
@@ -33017,22 +30980,28 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                                 SgProcedureHeaderStatement::
                                     e_subroutine_subprogram_kind,
                                 FortranProcedureHeaderSourceForm(
-                                    declarationStart),
+                                    std::get<Name>(subrStmt.statement.t)),
                                 SageBuilder::topScopeStack());
                         ASSERT_not_null(procDecl);
 
                         const auto &languageBinding =
                             std::get<std::optional<LanguageBindingSpec>>(
                                 subrStmt.statement.t);
-                        applyLanguageBinding(procDecl, languageBinding
-                                                           ? &*languageBinding
-                                                           : nullptr);
+                        applyProcedureLanguageBinding(
+                            procDecl,
+                            languageBinding ? &*languageBinding : nullptr,
+                            std::get<Name>(subrStmt.statement.t));
+                        SageInterface::publishGeneratedSubtreeOutputOwner(
+                            paramScope,
+                            isSgFunctionParameterScope(paramScope)
+                                ->get_construction_physical_output_owner());
                         SageInterface::
                             completeDetachedFunctionParameterScopeConstruction(
                                 procDecl,
                                 isSgFunctionParameterScope(paramScope));
                         builder.setFortranProcedureDeclarationSourcePosition(
                             procDecl, declarationStart, declarationEnd);
+                        builder.attachComments(procDecl, comments);
 
                         if (bodyNode->get_functionDeclaration() != procDecl ||
                             procDecl->get_parent() != bodyNode ||
@@ -33049,6 +31018,8 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                       [&](InterfaceBody::Function &func) {
                         auto &funcStmt =
                             std::get<Statement<FunctionStmt>>(func.t);
+                        HeaderComments comments =
+                            CaptureHeaderComments(funcStmt);
                         auto &endStmt =
                             std::get<Statement<EndFunctionStmt>>(func.t);
                         std::list<std::string> dummyArgs;
@@ -33078,8 +31049,7 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                         auto &specPart =
                             std::get<common::Indirection<SpecificationPart>>(
                                 func.t);
-                        builder.Enter(paramList, paramScope, name,
-                                      /*function_type=*/nullptr, isDefDecl);
+                        builder.Enter(paramList, paramScope, name, isDefDecl);
                         PrebuildFortranUseStatements(specPart.value());
                         DeclareFortranDummyArguments(
                             std::get<Name>(funcStmt.statement.t), paramScope,
@@ -33139,20 +31109,27 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
                                 SgProcedureHeaderStatement::
                                     e_function_subprogram_kind,
                                 FortranProcedureHeaderSourceForm(
-                                    declarationStart),
+                                    std::get<Name>(funcStmt.statement.t)),
                                 SageBuilder::topScopeStack());
                         ASSERT_not_null(procDecl);
                         AttachFortranProcedurePrefixType(procDecl, prefixType);
 
-                        applyLanguageBinding(procDecl, suffix && suffix->binding
-                                                           ? &*suffix->binding
-                                                           : nullptr);
+                        applyProcedureLanguageBinding(
+                            procDecl,
+                            suffix && suffix->binding ? &*suffix->binding
+                                                      : nullptr,
+                            std::get<Name>(funcStmt.statement.t));
+                        SageInterface::publishGeneratedSubtreeOutputOwner(
+                            paramScope,
+                            isSgFunctionParameterScope(paramScope)
+                                ->get_construction_physical_output_owner());
                         SageInterface::
                             completeDetachedFunctionParameterScopeConstruction(
                                 procDecl,
                                 isSgFunctionParameterScope(paramScope));
                         builder.setFortranProcedureDeclarationSourcePosition(
                             procDecl, declarationStart, declarationEnd);
+                        builder.attachComments(procDecl, comments);
 
                         auto hasModifier =
                             [&](LanguageTranslation::FunctionModifier kind) {
@@ -33223,38 +31200,6 @@ void BuildVisitor::Build(parser::InterfaceBlock &x) {
   }
 }
 
-void Build(parser::StructureDef &x) {
-  std::cout << "Rose::builder::Build(StructureDef)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::GenericStmt &x) {
-  std::cout << "Rose::builder::Build(GenericStmt)\n";
-  ABORT_NO_IMPL;
-}
-
-void Build(parser::ProcedureDeclarationStmt &x) {
-  CurrentBuildVisitor().Build(x);
-}
-
-void Build(parser::OpenACCRoutineConstruct &x) { static_cast<void>(x); }
-
-// OpenACCDeclarativeConstruct
-void Build(parser::OpenMPDeclarativeConstruct &x) {
-  std::cout << "Rose::builder::Build(OpenMPDeclarativeConstruct)\n";
-  ABORT_NO_IMPL;
-}
-
-// OpenACCDeclarativeConstruct
-void Build(parser::OpenACCDeclarativeConstruct &x) {
-  common::visit(
-      common::visitors{[&](parser::OpenACCStandaloneDeclarativeConstruct &y) {
-                         static_cast<void>(y);
-                       },
-                       [&](parser::OpenACCRoutineConstruct &y) { Build(y); }},
-      x.u);
-}
-
 // AccessSpec
 void getModifiers(parser::AccessSpec &x,
                   LanguageTranslation::ExpressionKind &m) {
@@ -33321,24 +31266,6 @@ void appendCudaDataAttr(
   }
 }
 
-// TypeAttrSpec
-void getModifiers(parser::TypeAttrSpec &x,
-                  LanguageTranslation::ExpressionKind &m) {
-  // std::variant<> Abstract, AccessSpec, BindC, Extends
-  using namespace Fortran::parser;
-  using namespace LanguageTranslation;
-
-  common::visit(
-      common::visitors{
-          [&](Abstract &y) { m = ExpressionKind::e_type_modifier_abstract; },
-          [&](AccessSpec &y) { getModifiers(y, m); },
-          [&](TypeAttrSpec::BindC &y) {
-            m = ExpressionKind::e_type_modifier_bind_c;
-          },
-          [&](TypeAttrSpec::Extends &y) { m = ExpressionKind::e_unknown; }},
-      x.u);
-}
-
 void getComponentAttrSpec(
     parser::ComponentAttrSpec &x,
     std::list<LanguageTranslation::ExpressionKind> &modifiers,
@@ -33377,7 +31304,7 @@ void getComponentAttrSpec(
           [&](const common::CUDADataAttr &y) {
             appendCudaDataAttr(y, modifiers);
           },
-          [&](const ErrorRecovery &) { ABORT_NO_IMPL; }},
+          [&](const ErrorRecovery &) { ROSE_ABORT(); }},
       x.u);
 }
 
@@ -33469,7 +31396,7 @@ void getAttrSpec(parser::AttrSpec &x,
           [&](const Volatile &) {
             modifiers.push_back(ExpressionKind::e_type_modifier_volatile);
           },
-          [&](const auto &y) { ABORT_NO_IMPL; }},
+          [&](const auto &) { ROSE_ABORT(); }},
       x.u);
 }
 

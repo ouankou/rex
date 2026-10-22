@@ -26,6 +26,8 @@ const char *checkpointName(Checkpoint checkpoint);
 bool checkpointEnabled(const SgSourceFile *file, Checkpoint checkpoint);
 Options optionsFromCommandLine(const SgSourceFile *file);
 
+// Replaces the complete project file graph and deletes its original nodes.
+// Reacquire file and declaration pointers after successful replacement.
 SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint);
 SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
                                   const Options &options);

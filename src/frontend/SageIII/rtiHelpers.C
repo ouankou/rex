@@ -1,14 +1,5 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
-#include "sage3basic.h"
-
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT).
 #include "rtiHelpers.h"
-
-#include "rose_config.h"
-
-using namespace std;
+#include "sage3basic.h"
 
 std::ostream &operator<<(std::ostream &os, const SgName &n) {
   return os << "\"" << n.str() << "\"";
@@ -32,69 +23,4 @@ std::ostream &operator<<(std::ostream &os, const SgLabelSymbolPtrList &) {
 }
 std::ostream &operator<<(std::ostream &os, const SgFormatItemPtrList &) {
   return os;
-}
-
-static void doRTIDefinednessCheck(const char *fieldNameBase, void *fieldPtr,
-                                  size_t fieldSize, void *thisPtr,
-                                  const char *className,
-                                  const char *typeString) {
-#if ROSE_USE_VALGRIND
-  auto shouldCheckDefinedForType = [](const char *typeName) {
-    if (typeName == nullptr) {
-      return false;
-    }
-    const std::string type(typeName);
-    if (type.find('<') != std::string::npos ||
-        type.find("std::") != std::string::npos ||
-        type.find("Rose_STL_Container") != std::string::npos ||
-        type.find("List") != std::string::npos ||
-        type.find("Set") != std::string::npos ||
-        type.find("Map") != std::string::npos ||
-        type.find("SgName") != std::string::npos) {
-      return false;
-    }
-    if (type.find('*') != std::string::npos) {
-      return true;
-    }
-    if (type.find("enum") != std::string::npos) {
-      return true;
-    }
-    return type == "bool" || type == "char" || type == "signed char" ||
-           type == "unsigned char" || type == "short" ||
-           type == "unsigned short" || type == "int" ||
-           type == "unsigned int" || type == "long" ||
-           type == "unsigned long" || type == "long long" ||
-           type == "unsigned long long" || type == "size_t";
-  };
-
-  if (shouldCheckDefinedForType(typeString)) {
-    doUninitializedFieldCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr,
-                              className);
-  }
-#else
-  (void)fieldNameBase;
-  (void)fieldPtr;
-  (void)fieldSize;
-  (void)thisPtr;
-  (void)className;
-#endif
-  (void)typeString;
-}
-
-void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
-           void *thisPtr, const char *className, const char *typeString,
-           const char *fieldName, const std::string &fieldContents,
-           RTIMemberData &memberData) {
-  doRTIDefinednessCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className,
-                        typeString);
-  memberData = RTIMemberData(typeString, fieldName, fieldContents);
-}
-
-void doRTI(const char *fieldNameBase, void *fieldPtr, size_t fieldSize,
-           void *thisPtr, const char *className, const char *typeString,
-           const char *fieldName, const RTIValueDescriptor &fieldContents,
-           RTIMemberData &memberData) {
-  doRTIDefinednessCheck(fieldNameBase, fieldPtr, fieldSize, thisPtr, className,
-                        typeString);
-  memberData = RTIMemberData(typeString, fieldName, fieldContents);
 }

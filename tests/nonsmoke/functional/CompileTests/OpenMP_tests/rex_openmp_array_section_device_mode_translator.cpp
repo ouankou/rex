@@ -1,9 +1,68 @@
 #include "nodeQuery.h"
 #include "rose.h"
 
+#include <memory>
 #include <string>
 
+extern void copyStartFileInfo(SgNode *source, SgNode *destination);
+extern void copyEndFileInfo(SgNode *source, SgNode *destination);
+
 namespace {
+
+void requireCompleteSourcePositionCopy(bool reject_mixed_role = false) {
+  const auto positions = Sg_File_Info::numberOfNodes();
+  {
+    auto source = std::make_unique<SgNullStatement>();
+    auto destination = std::make_unique<SgNullStatement>();
+    auto location =
+        std::make_unique<Sg_File_Info>("rex_openmp_logical.c", 17, 3);
+    for (auto *statement : {source.get(), destination.get()}) {
+      SageInterface::setOneSourcePositionForTransformation(statement);
+      for (auto *info : {statement->get_startOfConstruct(),
+                         statement->get_endOfConstruct()}) {
+        *info = *location;
+        info->set_physical_line(17);
+      }
+    }
+    const int physical =
+        Sg_File_Info::addFilenameToMap("rex_openmp_physical.c");
+    for (auto *info :
+         {source->get_startOfConstruct(), source->get_endOfConstruct()}) {
+      info->set_physical_file_id(physical);
+      info->set_physical_line(29);
+      info->set_source_sequence_number(13);
+      info->setOutputInCodeGeneration();
+    }
+    if (reject_mixed_role) {
+      destination->get_startOfConstruct()->setTransformation();
+      copyEndFileInfo(source.get(), destination.get());
+      return;
+    }
+    for (bool empty : {false, true}) {
+      if (empty) {
+        delete destination->get_startOfConstruct();
+        delete destination->get_endOfConstruct();
+        destination->set_startOfConstruct(nullptr);
+        destination->set_endOfConstruct(nullptr);
+      }
+      copyStartFileInfo(source.get(), destination.get());
+      copyEndFileInfo(source.get(), destination.get());
+      for (auto *info : {destination->get_startOfConstruct(),
+                         destination->get_endOfConstruct()}) {
+        ROSE_ASSERT(info->get_parent() == destination.get());
+        ROSE_ASSERT(info->get_file_id() == location->get_file_id() &&
+                    info->get_line() == 17 && info->get_col() == 3);
+        ROSE_ASSERT(info->get_physical_file_id() == physical &&
+                    info->get_physical_line() == 29);
+        ROSE_ASSERT(info->get_source_sequence_number() == 13 &&
+                    info->isOutputInCodeGeneration());
+      }
+      ROSE_ASSERT(destination->get_file_info() ==
+                  destination->get_startOfConstruct());
+    }
+  }
+  ROSE_ASSERT(Sg_File_Info::numberOfNodes() == positions);
+}
 
 template <class Clause>
 Clause *requireClause(SgOmpClauseBodyStatement *statement) {
@@ -152,6 +211,11 @@ SgVarRefExp *requireSectionRoot(SgExpression *expression) {
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 2 && std::string(argv[1]) == "--reject-mixed-source-role") {
+    requireCompleteSourcePositionCopy(true);
+    return 0;
+  }
+  requireCompleteSourcePositionCopy();
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != nullptr);
 

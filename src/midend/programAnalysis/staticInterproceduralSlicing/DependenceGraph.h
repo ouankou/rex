@@ -1,9 +1,6 @@
 #ifndef _DEPENDENCEGRAPH_H_
 #define _DEPENDENCEGRAPH_H_
 
-#include "DebugTool.h"
-#define NEWDU
-
 #include "AstInterface.h"
 
 #include "CallGraph.h"
@@ -25,14 +22,10 @@
 #include <string>
 
 #include <utility>
-// #include "DominanceFrontier.h"
 
 #include "SimpleDirectedGraph.h"
 
-// #include "rose.h"
-
 #include "SDGLibraryExtender.h"
-// nclude "../newImDomImpl/filteredCFG.h"
 
 #include "DominanceFrontier.h"
 
@@ -40,23 +33,8 @@
 
 #include "filteredCFG.h"
 
-#include "virtualCFG.h"
-#ifdef NEWDU
-// #include "DefUseAnalysis.h"
-
 #include "EDefUse.h"
-#endif
-
-// DQ (12/30/2005): This is a Bad Bad thing to do (I can explain)
-// it hides names in the global namespace and causes errors in
-// otherwise valid and useful code. Where it is needed it should
-// appear only in *.C files (and only ones not included for template
-// instantiation reasons) else they effect user who use ROSE unexpectedly.
-// using namespace std;
-
-// CI (01/31/2007): DependenceGraph uses a deprecated graph structure, due to
-// time constraints, I was not able to refactor this to use the standart
-// rose-graphs, this might be done in the future!
+#include "virtualCFG.h"
 
 /* ! \class DependenceNode
 
@@ -69,8 +47,6 @@
    The use of this class requires that the file SimpleDirectedGraph.h exist.
 
 */
-using namespace VirtualCFG;
-using namespace ::DominatorTreesAndDominanceFrontiers;
 ROSE_DLL_API bool IsImportantForSliceSgFilter(SgNode *n);
 struct IsImportantForSliceCFGFilter;
 
@@ -118,16 +94,11 @@ NodeQuerySynthesizedAttributeType queryIsImportantForSliceType(SgNode *astNode);
 NodeQuerySynthesizedAttributeType
 queryIsImportantForSliceTypeWithCalls(SgNode *astNode);
 struct IsImportantForSliceCFGFilter {
-  bool operator()(CFGNode cfgn) const {
+  bool operator()(VirtualCFG::CFGNode cfgn) const {
     SgNode *n = cfgn.getNode();
     // modify the is interesting for for,while,do-while and if construct
     // the exit-branch of the cfg needs to be on the controling expression, this
     // if take care of that
-    /*    if (isSgWhileStmt(n) && cfgn.getIndex()!=0) return false;
-          else if (isSgForStatement(n) && cfgn.getIndex()!=1) return false;
-          else if (isSgDoWhileStmt(n) && cfgn.getIndex()!=1) return false;
-          else if (isSgIfStmt(n) && cfgn.getIndex()!=2) return false;*/
-
     // Jim Leek: 2/21/2009: Added to fix problem with dupicate nodes appearing
     // in Dominance Tree.
     if (isSgExprStatement(n)) {
@@ -137,10 +108,6 @@ struct IsImportantForSliceCFGFilter {
     if (isSgForStatement(n) || isSgDoWhileStmt(n) || isSgWhileStmt(n) ||
         isSgIfStmt(n)) {
       return false;
-      /*
-        if (cfgn.getIndex()!=0)
-        return false;*/
-      // else continue to the user-defined filter
     }
     // not a loop -> normal isInteresting
     else {
@@ -148,59 +115,18 @@ struct IsImportantForSliceCFGFilter {
         return false;
     }
     return IsImportantForSliceSgFilter(cfgn.getNode());
-    // return cfgn.isInteresting();
-    /*
-      // get rid of all beginning nodes
-      if (!cfgn.isInteresting())
-      return false;
-      SgNode *n = cfgn.getNode();
-      if (isSgStatement(n))
-      return true;
-      return false;
-      if (isSgExprStatement(n))
-      return true;
-      if (isSgReturnStmt(n))
-      return true;
-      // function calls are interesting, but ONLY if they are not yet shown in
-      another way.. if (isSgFunctionCallExp(n))
-      {
-
-      return true;
-      }
-      // the following should not be necessary
-      if (isSgFunctionDefinition(n))
-      return true;
-      // if (isSgStatement(n)) return true;
-      // check for for-loop incremental expression
-      if ((isSgBinaryOp(n) || isSgUnaryOp(n)) && isSgExpression(n))
-      {
-      // if the parent is a for statement, then true else false
-      SgNode *current = n;
-      while (isSgExpression(current->get_parent()))
-      {
-      current = current->get_parent();
-      }
-      if (isSgForStatement(current->get_parent()))
-      return true;
-      }
-      return false;
-    */
   };
 };
-typedef FilteredCFGEdge<IsImportantForSliceCFGFilter> SliceCFGEdge;
-typedef FilteredCFGNode<IsImportantForSliceCFGFilter> SliceCFGNode;
-// typedef TemplatedDominatorTree<int> SliceDominatorTree;
-typedef TemplatedDominatorTree<IsImportantForSliceCFGFilter> SliceDominatorTree;
-typedef TemplatedDominanceFrontier<IsImportantForSliceCFGFilter>
+typedef VirtualCFG::FilteredCFGEdge<IsImportantForSliceCFGFilter> SliceCFGEdge;
+typedef VirtualCFG::FilteredCFGNode<IsImportantForSliceCFGFilter> SliceCFGNode;
+typedef DominatorTreesAndDominanceFrontiers::TemplatedDominatorTree<
+    IsImportantForSliceCFGFilter>
+    SliceDominatorTree;
+typedef DominatorTreesAndDominanceFrontiers::TemplatedDominanceFrontier<
+    IsImportantForSliceCFGFilter>
     SliceDominanceFrontier;
 
 class ROSE_DLL_API DependenceNode : public SimpleDirectedGraphNode {
-  // Han: moved to lower
-  /*
-    protected:
-    bool highlight;
-  */
-
 public:
   // ! This enum notes what type of node this is
   enum NodeType // NO_STRINGIFY
@@ -378,49 +304,6 @@ public:
       break;
     }
     if (sgNode != NULL) {
-#ifdef DOT_OUT_VERBOSE
-      switch (depType) {
-      default:
-        os << sgNode->class_name() << "\\n";
-        if (isSgExpressionRoot(sgNode)) {
-          os << "["
-             << escapeString(dependenceDiagnosticNodeText(
-                    isSgExpressionRoot(sgNode)->get_operand()))
-             << "]";
-        } else if (isSgFunctionDeclaration(sgNode)) {
-          os << "[" << isSgFunctionDeclaration(sgNode)->get_name().str() << "]";
-        } else if (isSgFunctionDefinition(sgNode)) {
-          os << "Entry (" +
-                    isSgFunctionDefinition(sgNode)
-                        ->get_declaration()
-                        ->get_name()
-                        .getString() +
-                    ")";
-          //  os << name;
-          // os << "[" << isSgFunctionDeclaration(sgNode)->get_name().str() <<
-          // "]";
-        } else if (isSgInitializedName(sgNode)) {
-          os << "["
-             << isSgInitializedName(sgNode)->get_qualified_name().getString()
-             << "]";
-        } else {
-          //            std::cout <<"node"<<sgNode->class_name()<<std::endl;
-          os << "[" << escapeString(dependenceDiagnosticNodeText(sgNode))
-             << "]";
-        }
-        break;
-      case FORMALOUT: {
-        if (isSgFunctionDeclaration(sgNode))
-          // RETURN
-          os << "RETURN of"
-             << isSgFunctionDeclaration(sgNode)->get_name().str();
-        else if (isSgInitializedName(sgNode))
-          os << "["
-             << isSgInitializedName(sgNode)->get_qualified_name().getString()
-             << "]";
-      }
-      }
-#else
       if (isSgExpressionRoot(sgNode)) {
         os << escapeString(dependenceDiagnosticNodeText(
             isSgExpressionRoot(sgNode)->get_operand()));
@@ -431,17 +314,11 @@ public:
                   ->get_declaration()
                   ->get_name()
                   .getString();
-        //  os << name;
-        // os << "[" << isSgFunctionDeclaration(sgNode)->get_name().str() <<
-        // "]";
       } else if (isSgInitializedName(sgNode)) {
         os << isSgInitializedName(sgNode)->get_qualified_name().getString();
       } else {
-        //            std::cout <<"node"<<sgNode->class_name()<<std::endl;
         os << escapeString(dependenceDiagnosticNodeText(sgNode));
       }
-
-#endif
     }
   }
 
@@ -488,18 +365,9 @@ protected:
 */
 
 class ROSE_DLL_API DependenceGraph : public SimpleDirectedGraph {
-protected:
-  bool debugme;
-
 public:
-  DependenceGraph() { debugme = false; }
+  DependenceGraph() = default;
   virtual ~DependenceGraph();
-  void debugCoutNodeList() {
-    std::set<SimpleDirectedGraphNode *>::iterator i;
-    for (i = _nodes.begin(); i != _nodes.end(); i++) {
-      std::cout << "\t\t" << (*i) << "\n";
-    }
-  }
 
   /* ! \brief This enum marks what type of edge connects two DependenceNodes
 
@@ -521,8 +389,6 @@ public:
     // SYNTACTIC
     SYNTACTIC = 0xe,
 
-    //        RETURN          = 0x6,          /* !< An edge from formal-out
-    //        nodes to actual-in nodes */
     DATA_HELPER = 0x9,
     CONTROL_HELPER = 0xa,
     GLOBALVAR_HELPER = 0xb,
@@ -530,65 +396,12 @@ public:
     // nice, but completely useless
     BELONGS_TO = 0xd, /* shows for floating nodes, to which statement/node they
                          belong to*/
-    //      NUM_EDGE_TYPES  = 0x11   /* !< Set to be 1 more than the last entry,
-    //      to fix size of the name array */
-
     // Jim Leek, 2009/6/3: DO_NOT_FOLLOW is A special type of edge for
     // controlling reachability. It can keep an edge from being traversed by
     // _getReachable without changing the type of the edge
     DO_NOT_FOLLOW = 0x10,
   };
-  /* ! \brief an array of C-strings for each EdgeType
-     This array is initialized in DependenceGraph.C */
-  static const char *edgeNameArray[8];
   const char *getEdgeName(EdgeType type);
-  /*
-    static char *getEdgeName(EdgeType type)
-    {
-    int offset=0;
-    switch(type)
-    {
-    case CONTROL:
-    return "CONTROL";
-    case DATA:
-    return "DATA";
-    case SUMMARY:
-    return "SUMMARY";
-    `case CALL:
-    return "CALL";
-    case RETURN:
-    return "RETURN";
-    case PARAMETER_IN:
-    return "PARAMETER_IN";
-    case PARAMETER_OUT:
-    return "PARAMETER_OUT";
-    case DATA_HELPER:
-    return "DATA_HELPER
-    default:
-    return "UNKNOWN"
-    }
-    }*/
-  //    static char *edgeNames[NUM_EDGE_TYPES];
-
-  /* ! \brief create a new DependenceNode that is a copy of node
-
-     Params: - DependenceNode * node: the node we want to copy
-
-     Return: Either a newly created copy, or, if this has been copied
-     before, the previous copy
-
-     Side effects: If we created a new copy, we insert a mapping from node
-     to the newly created copy in _depnode_map. */
-  //    DependenceNode *createNode(DependenceNode * node);
-
-  /* ! \brief retrieve the DependenceNode associated with node
-
-     Params: - DependenceNode * node: the node we want to find a copy for
-
-     Return: If node exists in _depnode_map, we return the associated copy,
-     otherwise we return NULL. */
-  //    DependenceNode *getNode(DependenceNode * node);
-
   /* ! \brief create a new DependenceNode which contains node
 
      Params: - SgNode * node: the SgNode we want to wrap in a DependenceNode
@@ -596,8 +409,8 @@ public:
      Return: Either a new DependenceNode or, if we've already wrapped this
      SgNode, the existing DependenceNode containing node
 
-     Side effects: If we created a new DependenceNode, we insert a mapping
-     from node to the newly created DependenceNode in _sgnode_map. */
+     Side effects: If we created a new DependenceNode, we index it by node
+     and DependenceNode type. */
   DependenceNode *createNode(DependenceNode::NodeType type,
                              SgNode *identifyingNode);
   DependenceNode *createNode(SgNode *node);
@@ -608,23 +421,14 @@ public:
      Params: - SgNode * node: the SgNode for which we want to find the
      associated DependenceNode
 
-     Return: If there is a wrapper DependenceNode in _sgnode_map, we return
-     it. Otherwise, we return NULL. */
+     Return: The wrapper DependenceNode, if one exists. */
   DependenceNode *getNode(SgNode *node);
-  // (NodeType type, SgNode * node = NULL, std::string depName= "")
   DependenceNode *getNode(DependenceNode::NodeType type,
                           SgNode *identifyingNode);
 
   DependenceNode *getExistingNode(SgNode *node);
   DependenceNode *getExistingNode(DependenceNode::NodeType type,
                                   SgNode *identifyingNode);
-
-  // ! return the InterproceduralInfo object associated with the
-  // DependenceGraph
-  InterproceduralInfo *getInterprocedural() {
-    return NULL;
-    //!*!        return _interprocedural;
-  }
 
   /* ! \brief create an edge of type e between from and to
 
@@ -662,43 +466,20 @@ public:
 
   */
   std::set<EdgeType> edgeType(DependenceNode *from, DependenceNode *to);
-  /*    std::list <DependenceNode*> getParents(DependenceNode * current)
-        {
-        std::list <DependenceNode*> parentList;
-        return parentList;
-        }*/
   // ! writes a dot file representing this dependence graph to filename
-  virtual void writeDot(char *filename);
+  void writeDot(const char *filename) override;
 
 protected:
-  // ! Maps a DependenceNode to a copy unique to this DependenceGraph
-  //!*!    std::map < DependenceNode *, DependenceNode * >_depnode_map;
-  // ! Maps an SgNode to a DependenceNode unique to this DependenceGraph
-  //!*!    std::map < SgNode *, DependenceNode * >_sgnode_map;
-  std::map<SgNode *, DependenceNode *> sgNodeToDepNodeMap;
   std::map<DependenceNode::NodeType, std::map<SgNode *, DependenceNode *>>
       nodeTypeToDepNodeMapMap;
-
-  // ! The InterproceduralInfo associated with this DependenceGraph
-  //!*!    InterproceduralInfo *_interprocedural;
 
   typedef std::pair<DependenceNode *, DependenceNode *> Edge;
 
   // ! a map from EdgeType to all the edges of that type
   std::map<EdgeType, std::set<Edge>> edgeTypeMap;
 
-// DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
-// compile using ROSE). The error is: sage_gen_be.C:5286: SgEnumDeclaration*
-// sage_gen_enum_definition(a_type*, SgDeclarationStatement*&,
-// DataRequiredForComputationOfSourcePostionInformation*): Assertion
-// `forwardDeclaration->get_parent() != __null' failed.
-#ifndef USE_ROSE
-
   // ! a map from an edge to all the variants of that edge in the graph
   std::map<Edge, std::set<EdgeType>> edgeMap;
-#else
-  std::map<Edge, std::set<int>> edgeMap;
-#endif
 
   bool isLibraryFunction(SgFunctionDeclaration *sgFD) const {
     if (sgFD == NULL)
@@ -737,177 +518,46 @@ protected:
 class ControlDependenceGraph : public DependenceGraph {
 
 public:
-  /* ! \brief Contstructor for ControlDependenceGraph
+  explicit ControlDependenceGraph(SgFunctionDefinition *head);
 
-     Params: - SgNode * head: The root of the AST that you want to build the
-     CDG for - InterproceduralInfo * ii: the InterproceduralInfo object for
-     storing interprocedural information
-
-     Side effects: - initializes _interprocedural
-
-     If ii is NULL, we assume that we are not doing interprocedural
-     analysis. Otherwise, we assume that ii is a newly allocated (but not
-     yet initialized) object. */
-  ControlDependenceGraph(SgFunctionDefinition *head,
-                         InterproceduralInfo *ii = NULL);
-
-  /* ! \brief create a DependenceNode wrapping cnode
-
-     Params: - ControlNode * cnode: The ControlNode we want to wrap in a
-     DependenceNode
-
-     Return: If we have already wrapped this node, we return the existing
-     DependenceNode. Otherwise we create a new DependenceNode (of type
-     CONTROL) and return it.
-
-     Side effects: If a new DependenceNode is created, cnode is mapped to it
-     by _cnode_map.
-
-  */
-  //    DependenceNode *createNodeC(ControlNode * cnode);
-  // DependenceNode
-  // *createNodeC(DominatorTreesAndDominanceFrontiers::ControlNode * cnode);
-
-  // DependenceNode * getNode(SgNode * src);
-
-  // ! calls establishEdge with EdgeType defaulted to CONTROL
-  /*    virtual void establishEdge(DependenceNode * from, DependenceNode * to)
-        {
-        DependenceGraph::establishEdge(from, to, CONTROL);
-        }*/
   void computeInterproceduralInformation(InterproceduralInfo *ii);
   void computeAdditionalFunctioncallDepencencies();
 
 private:
   Rose_STL_Container<SgNode *> functionCalls;
-  void processDependence(int aID, int bID);
   void createSyntacticDependencies();
   // control-flow-graph for this function
   SliceCFGNode source, sink;
 
   SliceDominatorTree dominatorTree;
 
-  void addDependence(int source, int to, EdgeType edge = CONTROL);
+  void addDependence(int source, int to);
 
-  //    SliceDominanceFrontier dominanceFrontier;
   // ! The root of the AST that the ControlDependenceGraph represents
-  SgNode *head;
-  SgNode *decl, *def;
+  SgFunctionDefinition *head;
 
   void buildCDG();
-
-  // everzthing from here on is deprecated
-  //  ! builds the CDG
-  void _buildCDG();
-
-  // ! if we're performing interprocedural analysis, initializes the
-  // InterproceduralInfo object
-  void _buildInterprocedural();
-
-  // ! DEPRECATED. Not used anymore.
-  void _addDependence(SgNode *from, SgNode *to);
-
-  // ! The control flow graph for the AST
-  // DominatorTreesAndDominanceFrontiers::ControlFlowGraph * _cfg;
-  // ! The dominator tree for the CFG
-  //  DominatorTreesAndDominanceFrontiers::DominatorTree * _dt;
-  // ! The dominance frontier for nodes in the CFG
-  // DominatorTreesAndDominanceFrontiers::DominanceFrontier * _df;
-
-  // ! Maps ControlNodes (nodes in the CFG) to DependenceNodes unique to
-  // this CDG
-  // std::map < DominatorTreesAndDominanceFrontiers::ControlNode *,
-  // DependenceNode * >_cnode_map;
 };
 
 /* ! \class DataDependenceGraph
 
-   This class is a DependenceGraph which expresses data dependences for a
-   given procedure. Data dependences link statement that define variables with
-   the statements that may use those definitions. The implementation of this
-   class depends on the calculation of DefUseChains, and so must link against
-   librose.
-
-   If interprocedural analysis is specified (by passing in a non-null
-   InterproceduralInfo object which has been initialized by
-   ControlDependenceGraph), building this graph will create the appropriate
-   data dependences: - if a statement uses a variable defined in the parameter
-   list for the function, it is data dependent on the formal-in node - if a
-   statement defs a variable used as a function parameter in a call, the
-   actual-in node for the parameter is data dependent on the statement - if a
-   statement uses a variable returned from a function, it is data dependent on
-   the actual-out node - if a statement is a return statement, the formal-out
-   return is data dependent on it.
-
-   @todo Currently, there is no way to link defs that reach the end of the
-   function (other than return statements) to the appropriate actual-out nodes
-   (in the case of pass-by-reference arguments). */
+   Tracks definitions and uses within one function, including parameter and
+   return dependencies. Definitions that reach the end of a function without a
+   return statement are not linked to pass-by-reference actual-out nodes. */
 
 class DataDependenceGraph : public DependenceGraph {
 
 public:
-  /* ! \brief Contstructor for DataDependenceGraph
-
-     Params: - SgNode * head: The root of the AST that you want to build the
-     DDG for - InterproceduralInfo * ii: the InterproceduralInfo object for
-     storing interprocedural information
-
-     Side effects: - adds data dependence edges to nodes from
-     _interprocedural
-
-     If ii is NULL, we assume that we are not doing interprocedural
-     analysis. Otherwise, we assume that ii is an InterproceduralInfo object
-     that has been initialized by the CDG for the same procedure */
-#ifdef NEWDU
-  DataDependenceGraph(SgNode *head, EDefUse *du,
-                      InterproceduralInfo *ii = NULL);
-#else
-  DataDependenceGraph(SgNode *head, InterproceduralInfo *ii = NULL);
-#endif
-
-  // ! calls establishEdge with EdgeType defaulted to DATA
-  /*    virtual void establishEdge(DependenceNode * from, DependenceNode * to)
-        {
-        DependenceGraph::establishEdge(from, to, DATA);
-        }*/
-  void computeInterproceduralInformation(InterproceduralInfo *ii);
+  DataDependenceGraph(SgFunctionDefinition *head, EDefUse *du);
 
 private:
-#ifdef NEWDU
   EDefUse *defuse;
-#endif
-
-  SgFunctionDefinition *functionDef;
-  SgFunctionDeclaration *functionDecl;
-  // ! builds the def-use chains for the procedure
-  void _buildDefUseChains(SgFunctionDefinition *fD);
 
   // ! uses def-use chains to build the data dependence graph
   void buildDDG();
-  void _buildDDG();
-
-  // ! if doing interprocedural, adds the data dependences from return
-  // statements to formal-out statements
-  void _processReturns();
-
-  /* ! \brief Finds the function argument that use is in
-
-     Params: - SgNode * &funcArg: Placeholder for function argument that use
-     is in - SgNode * use: The variable use we are trying to find the
-     argument for
-
-     Return: If use was in a function argument, returns the function call
-     expression the argument was in. Otherwise returns NULL
-
-     Side effects: if returning non-NULL, funcArg is the function argument
-     that use was in. */
-  SgFunctionCallExp *_findArgExprFromRef(SgNode *&funcArg, SgNode *use);
 
   // ! The function that we are building the DDG for
   SgFunctionDefinition *_head;
-
-  // ! The def use chains for the function
-  DefaultDUchain _defuse;
 };
 
 /* ! \class MergedDependenceGraph
@@ -922,43 +572,12 @@ private:
 class MergedDependenceGraph : public DependenceGraph {
 
 public:
-  /* ! \brief creates a new dependence node that reflects the argument (not
-     a direct copy)
-
-     Params: - DependenceNode * node: The node we want to make a "copy" of
-
-     Return: If we've already "copied" the node, return the existing
-     DependenceNode. Otherwise create a new one.
-
-     Side effects: calls createNode appropriately to perform "copies," so
-     _sgnode_map or _depend_map may be updated.
-
-     If the node we are adding is an interprocedural node, we want to copy
-     the _interproc pointer, not node itself. If it's an SgNode, we want to
-     build the DependenceNode around that, as opposed to node. If it's
-     neither, we just copy the argument. */
-  DependenceNode *_importNode(DependenceNode *node);
-
-  /* ! \brief creates a backward slice starting from node
-
-     Params: - SgNode * node: the slicing criterion
-
-     Return: returns a set of SgNodes which belong in the slice with slicing
-     criterion node.
-
-     This function calls getSlice, and prunes the returned values to find
-     just the SgNodes. */
-  std::set<SgNode *> slice(SgNode *node);
-
   /* ! \brief creates a backward slice starting from node
 
      Params: - DependenceNode * node: the slicing criterion
 
      Return: returns a set of DependenceNodes which belong in the slice with
-     slicing criterion node.
-
-     This is a more general version of slice, which operates on any
-     DependenceNode. */
+     slicing criterion node. */
   virtual std::set<DependenceNode *> getSlice(DependenceNode *node) = 0;
 
 protected:
@@ -979,87 +598,13 @@ protected:
 
      Side effects: Any new nodes and edges from graph are added to the
      MergedDependenceGraph */
-  void _mergeGraph(DependenceGraph *graph);
   void mergeGraph(DependenceGraph *graph);
-};
-
-/* ! \class FunctionDependenceGraph
-
-   This is a MergedDependenceGraph which merges a ControlDependenceGraph and a
-   DataDependenceGraph for a specific procedure, thus representing a complete
-   DependenceGraph for one procedure. If we are planning on doing
-   interprocedural analysis (i.e. we've passed in a non-null
-   InterproceduralInfo object), then we also create summary edges between the
-   actual-in nodes for a call and the appropriate actual-out nodes.
-
-   @todo Right now, we assume that the function will have no side-effects, and
-   simply create a summary between all the actual-in nodes and the actual-out
-   node representing the return. This should be extended to create real
-   summary edges as defined in the paper by Horwitz et al. However, because we
-   can't correctly handle defs that reach the end of functions, we can't
-   properly summarize, and so we skip this for now.
-
-*/
-
-class FunctionDependenceGraph : public MergedDependenceGraph {
-
-public:
-  /* ! \brief Constructor for FunctionDependenceGraph, initialized with the
-     CDG and DDG for the function.
-
-     Params: - ControlDependenceGraph * cdg: a previously built CDG for the
-     function - DataDependenceGraph * ddg: a previously build DDG for the
-     function - InterproceduralInfo * ii: If NULL, we aren't doing
-     interprocedural. Otherwise, the fully initialized InterproceduralInfo
-     object for the function.
-
-  */
-  FunctionDependenceGraph(ControlDependenceGraph *cdg, DataDependenceGraph *ddg,
-                          InterproceduralInfo *ii = NULL);
-
-  /* ! \brief gets a slice with slicing criterion node
-
-     This simply does a backwards reachability across all edges to produce
-     the slice. */
-  std::set<DependenceNode *> getSlice(DependenceNode *node) override;
-
-private:
-  //! completes the FDG using the interprocedural-information
-  void completeFDG();
-
-  // ! DEPRECATED not used anymore
-  void _addCDG();
-  // ! DEPRECATED not used anymore
-  void _mergeDDG();
-
-  /* ! \brief creates summary edges for interprocedural analysis
-
-     Currently, this simply points all the actual-in edges of a call to the
-     actual-out return statement. This means we assume two things: # All
-     functions are pass-by-value (so actual-out nodes for parameters are
-     irrelevant) # Every parameter in the function is relevant (there are no
-     unused arguments).
-
-     @todo Should replace with attribute-grammar method for creating summary
-     edges (see Horwitz et al). There is a preliminary start at writing the
-     classes required to do this in the subdirectory summary/. However it is
-     not complete and possibly has some structural issues which would
-     require the entire thing to be rewritten. */
-  void _summarize();
-
-  // ! The ControlDependenceGraph for the function
-  ControlDependenceGraph *_cdg;
-  // ! The DataDependenceGraph for the function
-  DataDependenceGraph *_ddg;
 };
 
 /* ! \class SystemDependenceGraph
 
-   This class is a MergedGraph which merges together FunctionDependenceGraphs
-   representing all procedures in the program. It assumes that the merged
-   FunctionDependenceGraphs have defined InterproceduralInfo objects. A slice
-   performed on this graph is an interprocedural slice as defined in the paper
-   by Horwitz et al.
+   This class merges control and data dependence graphs for all procedures in
+   the program. A slice on this graph is interprocedural.
 
    @todo _getPossibleFuncs simply assumes that the AST correctly resolves
    every SgFunctionCallExp to a specific SgFunctionDeclaration with an
@@ -1076,7 +621,7 @@ public:
     if (le != NULL)
       libraryExtenders.push_back(le);
   }
-  SystemDependenceGraph() { debug = false; }
+  SystemDependenceGraph() = default;
   ~SystemDependenceGraph() override;
   SgNode *getMainFunction();
   void createSafeConfiguration(SgFunctionDeclaration *fDef);
@@ -1091,45 +636,24 @@ public:
   void computeSummaryEdges();
   void cleanUp(std::set<SgNode *> preserve);
 
-  /* ! \brief adds a PDG to our SDG
-
-     Params: - FunctionDependenceGraph * pdg: The PDG to add to the SDG
-
-     Side effects: Merges PDG in using _mergeGraph. Maps function PDG
-     represents to the PDG itself in _funcs_map. */
-  void addFunction(FunctionDependenceGraph *pdg);
   void createFunctionStub(InterproceduralInfo *info);
 
   void addFunction(ControlDependenceGraph *cdg, DataDependenceGraph *ddg);
 
   InterproceduralInfo *
   getInterproceduralInformation(SgFunctionDeclaration *dec) {
-    if (interproceduralInformation.count(dec) > 0) {
-      return (interproceduralInformation[dec]);
-    } else
-      return NULL;
+    auto found = interproceduralInformation.find(dec);
+    return found != interproceduralInformation.end() ? found->second : nullptr;
   }
   void addInterproceduralInformation(InterproceduralInfo *info) {
-    if (interproceduralInformation.count(info->getFunctionDeclaration()) > 0)
-      //  if (interproceduralInformation.count( info->foo() )>0)
-      std::cerr << "Warning: Interprocedural Information for this function "
-                   "already available"
-                << std::endl;
-    else {
-      interproceduralInformation[info->getFunctionDeclaration()] = info;
-      interproceduralInformationList.push_back(info);
-    }
+    ROSE_ASSERT(info != nullptr);
+    SgFunctionDeclaration *declaration = info->getFunctionDeclaration();
+    ROSE_ASSERT(declaration != nullptr);
+    ROSE_ASSERT(interproceduralInformation.count(declaration) == 0);
+    interproceduralInformation.emplace(declaration, info);
+    interproceduralInformationList.push_back(info);
   }
   void doInterproceduralConnections(InterproceduralInfo *ii);
-
-  /* ! \brief links all the functions together
-
-     After the PDGs have been merged into the SDG, each call site is linked
-     to the PDG associated with the function that it calls: - The callsite
-     node is linked to the entry node with a "call" edge - Each actual-in
-     node is linked to the formal-in node with a "call" edge - Each
-     formal-out node is linked to the actual-out node with a "return" edge */
-  void process();
 
   /* ! \brief performs a backwards slice with slicing criterion node
 
@@ -1142,27 +666,10 @@ public:
      slice. */
   std::set<DependenceNode *> getSlice(DependenceNode *node) override;
 
-  /* ! \brief retrieve the PDGs in the graph
-
-     Returns: a set of FunctionDependenceGraph that comprise the
-     SystemDependenceGraph */
-  std::set<FunctionDependenceGraph *> getPDGs();
-
 private:
   Rose_STL_Container<InterproceduralInfo *> interproceduralInformationList;
   std::map<SgFunctionDeclaration *, InterproceduralInfo *>
       interproceduralInformation;
-
-  /* ! \brief links the call sites in PDG to the PDGs of the function it
-     calls
-
-     Params: - FunctionDependenceGraph * pdg: the PDG whose call sites we
-     want to process
-
-     Side effects: The interprocedural nodes for the call sites are linked
-     to the interprocedural nodes for the appropriate entry sites */
-  void _processFunction(FunctionDependenceGraph *pdg);
-  bool debug;
 
   /* ! \brief get a list of functions that funcCall could be referring to
 
@@ -1178,12 +685,6 @@ private:
   Rose_STL_Container<SgFunctionDeclaration *>
   _getPossibleFuncs(SgFunctionCallExp *funcCall);
 
-  // ! a mapping of funciton declarations to the FunctionDependenceGraph
-  // that represents them
-  // CI (01/12/2007): This map is only used to access the Interprocedural
-  // information,
-  //  rewrite to use only interprocedural-information on the way
-  std::map<SgFunctionDeclaration *, FunctionDependenceGraph *> _funcs_map;
   // CI (01/12/2007): add
   std::map<SgFunctionDeclaration *, InterproceduralInfo *>
       functionToInterfunctionalMap;

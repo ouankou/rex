@@ -1,6 +1,3 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 18,5 MB to
-// 8,1MB
-
 #include "dfaToDot.h"
 
 #include "DFAFilter.h"
@@ -11,47 +8,18 @@
 
 using namespace std;
 
-static string escapeStringDFA(const string &s) {
-  string result;
-  for (unsigned int i = 0; i < s.length(); ++i) {
-    if (isprint(s[i]) && s[i] != '"' && s[i] != '\\') {
-      //    if (isprint(s[i])) {
-      result.push_back(s[i]);
-    } else if (s[i] == '\a') {
-      result += "\\a";
-    } else if (s[i] == '\f') {
-      result += "\\f";
-    } else if (s[i] == '\n') {
-      result += "\\n";
-    } else if (s[i] == '\r') {
-      result += "\\r";
-    } else if (s[i] == '\t') {
-      result += "\\t";
-    } else if (s[i] == '\v') {
-      result += "\\v";
-    } else {
-      ostringstream stream;
-      stream << '\\';
-      stream << setw(3) << setfill('0') << (unsigned int)(s[i]);
-      result += stream.str();
-    }
-  }
-  return result;
-}
-
 namespace VirtualCFG {
 
 template <typename T> std::string ToString(T t) {
-  std::ostringstream myStream; // creates an ostringstream object
-  myStream << t << std::flush;
-  return (myStream.str()); // returns the string form of the stringstream object
+  std::ostringstream stream;
+  stream << t;
+  return stream.str();
 }
 
 template <typename NodeT>
 std::string getNodeString(const NodeT &cfg, DefUseAnalysis *dfa) {
-  std::string retStr = "";
   SgNode *n = cfg.getNode();
-  retStr = " ( " + ToString(dfa->getIntForSgNode(n)) + " )  - [";
+  std::string retStr = " ( " + ToString(dfa->getIntForSgNode(n)) + " )  - [";
   retStr += "] ";
   SgInitializedName *init = isSgInitializedName(n);
   if (init) {
@@ -82,7 +50,6 @@ std::string getEdgeString(const EdgeT &e, DefUseAnalysis *dfa,
                           LivenessAnalysis *live) {
   std::string retStr = "";
   SgNode *n = e.source().getNode();
-  SgNode *t = e.target().getNode();
 
   if (live == NULL) {
     typedef std::vector<std::pair<SgInitializedName *, SgNode *>> multitype;
@@ -110,23 +77,11 @@ std::string getEdgeString(const EdgeT &e, DefUseAnalysis *dfa,
     }
   } else {
     ROSE_ASSERT(n);
-    ROSE_ASSERT(t);
-    std::vector<SgInitializedName *> in = live->getIn(t);
     std::vector<SgInitializedName *> out = live->getOut(n);
 
-    std::vector<SgInitializedName *>::iterator it = in.begin();
-    std::string inS = "in : ";
-    for (; it != in.end(); ++it) {
-      SgInitializedName *init = isSgInitializedName(*it);
-      ROSE_ASSERT(init);
-      inS += init->get_name().str();
-      inS += ",";
-    }
-
-    it = out.begin();
     std::string outS = "out : ";
-    for (; it != out.end(); ++it) {
-      SgInitializedName *init = isSgInitializedName(*it);
+    for (SgInitializedName *entry : out) {
+      SgInitializedName *init = isSgInitializedName(entry);
       ROSE_ASSERT(init);
       outS += init->get_name().str();
       outS += ",";
@@ -185,16 +140,15 @@ inline void printDFANode(ostream &o, const NodeT &n, DefUseAnalysis *dfa) {
                    ->get_declaration()
                    ->get_qualified_name();
   }
-  o << id << " [label=\"" << funcName << " : "
-    << escapeStringDFA(getNodeString(n, dfa) + n.toStringForDebugging())
-    << "\", color=\"" << nodeColor << "\", style=\""
-    << (n.isInteresting() ? "solid" : "dotted") << "\"];\n";
+  const std::string label =
+      funcName + " : " + getNodeString(n, dfa) + n.toStringForDebugging();
+  o << id << " [label=\"" << escapeString(label) << "\", color=\"" << nodeColor
+    << "\", style=\"" << (n.isInteresting() ? "solid" : "dotted") << "\"];\n";
 }
 
 template <typename EdgeT>
 inline void printDFAEdge(ostream &o, const EdgeT &e, bool isInEdge,
                          DefUseAnalysis *dfa, LivenessAnalysis *live) {
-  // cout << " printDFAEdge: label: " << getEdgeString(e) << endl;
   string nodeColor = "black";
   SgNode *ns = e.source().getNode();
   if (isSgIfStmt(ns)) {
@@ -217,15 +171,6 @@ void printDFANodePlusEdges(ostream &o, NodeT n, DefUseAnalysis *dfa,
   for (unsigned int i = 0; i < outEdges.size(); ++i) {
     printDFAEdge<EdgeT>(o, outEdges[i], false, dfa, live);
   }
-  if (/* Debug */ isSgFunctionCallExp(n.getNode()) && n.getIndex() == 3) {
-    vector<EdgeT> inEdges = n.inEdges();
-    for (unsigned int i = 0; i < inEdges.size(); ++i) {
-      printDFAEdge<EdgeT>(o, inEdges[i], false, dfa, live);
-    }
-    printDFAEdge<EdgeT>(o,
-                        CFGPath(CFGEdge(CFGNode(n.getNode(), 2), n.toNode())),
-                        false, dfa, live);
-  }
 }
 
 template <typename NodeT, typename EdgeT> class DfaToDotImpl {
@@ -246,7 +191,6 @@ public:
 template <typename NodeT, typename EdgeT>
 void DfaToDotImpl<NodeT, EdgeT>::explore(NodeT n) {
   ROSE_ASSERT(n.getNode());
-  // std::cerr << n.toStringForDebugging() << std::endl;
 
   // search through the multimap to make sure CFGNode is not visited before, if
   // so,  return.
@@ -273,9 +217,6 @@ void DfaToDotImpl<NodeT, EdgeT>::explore(NodeT n) {
     ROSE_ASSERT(inEdges[i].target() == n);
     explore(inEdges[i].source());
   }
-  if (getenv("BUGGY_INTERPROCEDURAL_CFG") && isSgFunctionCallExp(n.getNode()) &&
-      n.getIndex() == 2)
-    explore(CFGNode(n.getNode(), 3));
 }
 
 template <typename NodeT, typename EdgeT>

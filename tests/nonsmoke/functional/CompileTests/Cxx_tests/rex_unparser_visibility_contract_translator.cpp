@@ -63,6 +63,21 @@ int main(int argc, char **argv) {
     if (expected_visibility == expected.end()) {
       continue;
     }
+    if (auto *constructor = isSgMemberFunctionDeclaration(declaration)) {
+      ROSE_ASSERT(constructor->get_specialFunctionModifier().isConstructor());
+      ROSE_ASSERT(constructor->get_frontend_declaration_origin() ==
+                  SgFunctionDeclaration::e_frontend_declaration_implicit);
+      auto *owner =
+          isSgClassDeclaration(constructor->get_associatedClassDeclaration());
+      ROSE_ASSERT(owner != nullptr && owner->get_name().getString() == name);
+      ROSE_ASSERT(declaration->get_declarationModifier()
+                      .get_gnu_attribute_visibility() ==
+                  SgDeclarationModifier::e_unspecified_visibility);
+      ROSE_ASSERT(
+          declaration->get_declarationModifier().get_gnu_type_visibility() ==
+          SgDeclarationModifier::e_unspecified_visibility);
+      continue;
+    }
     ROSE_ASSERT(
         declaration->get_declarationModifier().get_gnu_attribute_visibility() ==
         expected_visibility->second.declaration);

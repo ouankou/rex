@@ -1,8 +1,6 @@
 #ifndef __CXX_SDGLIBRARY_EXTENDER
 #define __CXX_SDGLIBRARY_EXTENDER
-// #include "rose.h"
-
-#include "DependenceGraph.h"
+class SgFunctionDeclaration;
 class SystemDependenceGraph;
 class SDGLibraryExtender {
 public:

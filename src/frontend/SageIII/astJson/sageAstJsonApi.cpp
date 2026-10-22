@@ -20,6 +20,7 @@ void normalizeSubtreeComparison(JsonValue &value) {
   // header occurrences necessarily receive different values even when their
   // complete typed surface is equivalent.
   value.object.erase("source_sequence");
+  value.object.erase("physical_file_occurrence_id");
   value.object.erase("translation_unit_source_order");
   for (auto &entry : value.object) {
     normalizeSubtreeComparison(entry.second);
@@ -89,49 +90,6 @@ void retainLexicalSubtreeGraph(JsonValue &json) {
   json.object.erase("node_count");
 }
 
-void appendCanonicalJson(std::ostream &out, const JsonValue &value) {
-  switch (value.kind) {
-  case JsonValue::Kind::Null:
-    out << "null";
-    return;
-  case JsonValue::Kind::Bool:
-    out << (value.bool_value ? "true" : "false");
-    return;
-  case JsonValue::Kind::Number:
-    out << value.text;
-    return;
-  case JsonValue::Kind::String:
-    out << jsonString(value.text);
-    return;
-  case JsonValue::Kind::Array:
-    out << '[';
-    for (size_t index = 0; index < value.array.size(); ++index) {
-      if (index != 0) {
-        out << ',';
-      }
-      appendCanonicalJson(out, value.array[index]);
-    }
-    out << ']';
-    return;
-  case JsonValue::Kind::Object:
-    out << '{';
-    {
-      bool first = true;
-      for (const auto &entry : value.object) {
-        if (!first) {
-          out << ',';
-        }
-        out << jsonString(entry.first) << ':';
-        appendCanonicalJson(out, entry.second);
-        first = false;
-      }
-    }
-    out << '}';
-    return;
-  }
-  ROSE_ABORT();
-}
-
 } // namespace
 
 const char *checkpointName(Checkpoint checkpoint) {
@@ -162,12 +120,20 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint) {
 
 SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
                                   const Options &options) {
-  if (file == nullptr || !checkpointEnabled(file, checkpoint)) {
-    return file;
-  }
+  ASSERT_not_null(file);
 
   const std::filesystem::path path = checkpointPath(file, checkpoint, options);
-  const std::string original_json = buildJson(file, checkpoint, file);
+  SgProject *project = owningProject(file);
+  ROSE_ASSERT(project != nullptr);
+  SgFileList *project_files = isSgFileList(file->get_parent());
+  ROSE_ASSERT(project_files != nullptr &&
+              project_files->get_parent() == project);
+  NodeMap original_nodes;
+  // Source files can share imported declarations and canonical types. Snapshot
+  // and replace their complete graph in one transaction so no surviving input
+  // can retain a semantic edge into a detached checkpoint file.
+  const std::string original_json =
+      buildJson(file, checkpoint, file, project_files, &original_nodes);
   writeFile(path, original_json);
 
   const std::string parsed_json = readFile(path);
@@ -185,19 +151,14 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
                              read_error_path.string() + ": " + e.what());
   }
 
-  // Type interning is project-wide for global named types.  The source file
-  // being replaced is still the active project owner while its replacement is
-  // reconstructed, so retaining its cached type entries would bind the new
-  // declarations to type nodes whose declaration edge points into the old
-  // file.  Remove every cache entry that reaches the old file before creating
-  // any replacement type; reconstructSourceFile must then publish the new
-  // canonical owners itself.
-  purgeStaleCheckpointTypeCaches(file);
-  SgSourceFile *copy = reconstructSourceFile(ast, file);
-  replaceFileInProject(file, copy);
+  NodeMap restored_nodes;
+  SgNode::SourceStateConstruction construction;
+  SgSourceFile *copy = reconstructSourceFile(ast, file, &restored_nodes);
 
   if (options.compareCanonicalRoundTrip) {
-    const std::string copied_json = buildJson(copy, checkpoint, copy);
+    const std::string copied_json =
+        buildJson(copy, checkpoint, copy,
+                  nodeByIdAs<SgFileList>(restored_nodes, ast.project_files_id));
     AstFileRecord copied_ast;
     try {
       copied_ast = parseAstFileJson(copied_json, checkpointName(checkpoint));
@@ -234,6 +195,7 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
     }
   }
 
+  replaceProjectFiles(project, ast, original_nodes, restored_nodes);
   return copy;
 }
 

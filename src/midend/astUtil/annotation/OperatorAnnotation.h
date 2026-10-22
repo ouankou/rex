@@ -112,35 +112,6 @@ public:
   }
 };
 
-class OperatorInlineAnnotation
-    : public OperatorAnnotCollection<OperatorInlineDescriptor> {
-  virtual bool read_annot_name(const std::string &annotName) const {
-    return annotName == "inline";
-  }
-  static OperatorInlineAnnotation *inst;
-  OperatorInlineAnnotation() {}
-
-public:
-  static OperatorInlineAnnotation *get_inst() {
-    if (inst == 0)
-      inst = new OperatorInlineAnnotation();
-    return inst;
-  }
-  static void release_inst();
-  void Dump() const {
-    std::cerr << "inline: \n";
-    OperatorAnnotCollection<OperatorInlineDescriptor>::Dump();
-  }
-  bool known_operator(AstInterface &fa, const AstNodePtr &exp,
-                      SymbolicVal *val = 0);
-  void register_annot() {
-    ReadAnnotation::get_inst()->add_OperatorCollection(this);
-  }
-  // Check if an operator has a 'inline {this.operator_2(dim)' record.
-  // If yes, store the semantically equivalent operator into val
-  bool get_inline(AstInterface &fa, const AstNodePtr &h, SymbolicVal *val = 0);
-};
-
 class OperatorModInfoCollection
     : public OperatorAnnotCollection<OperatorSideEffectDescriptor> {
   virtual bool read_annot_name(const std::string &annotname) const {
@@ -359,25 +330,4 @@ public:
     op->add_OperatorCollection(&allowaliasInfo);
   }
 };
-//! Replace an operator with another equivalent operation, which is specified by
-//! "inline" annotation
-// e.g: operator floatArray::operator() (int index) {  inline { this.elem(index)
-// }; }
-//      All ..array(index).. will be replaced by array.elem(index) in the code
-class OperatorInlineRewrite : public TransformAstTree {
-public:
-  virtual bool operator()(AstInterface &fa, const AstNodePtr &n,
-                          AstNodePtr &result) {
-    SymbolicVal r;
-    if (OperatorInlineAnnotation::get_inst()->get_inline(fa, n, &r)) {
-      result = r.CodeGen(fa);
-      return true;
-    }
-    return false;
-  }
-  AstNodePtr operator()(AstInterface &fa, const AstNodePtr &r) {
-    return TransformAstTraverse(fa, r, *this);
-  }
-};
-
 #endif

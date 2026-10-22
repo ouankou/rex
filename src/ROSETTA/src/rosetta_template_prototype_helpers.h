@@ -36,11 +36,13 @@ inline void addSFINAEPrototypes(AstNodeClass &target) {
                           NO_TRAVERSAL, NO_DELETE);
 }
 
-inline void addTemplateInstantiationPrototypes(AstNodeClass &target) {
+inline void addTemplateInstantiationPrototypes(AstNodeClass &target,
+                                               bool constructDeduced = false) {
   // REX: Store deduced template arguments (distinct from written/pattern args).
   target.setDataPrototype(
       "SgTemplateArgumentPtrList", "deducedTemplateArguments",
-      "= SgTemplateArgumentPtrList()", NO_CONSTRUCTOR_PARAMETER,
+      "= SgTemplateArgumentPtrList()",
+      constructDeduced ? CONSTRUCTOR_PARAMETER : NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   // REX: Track the specialized template (primary or partial) chosen by Clang.
   target.setDataPrototype("SgDeclarationStatement*",

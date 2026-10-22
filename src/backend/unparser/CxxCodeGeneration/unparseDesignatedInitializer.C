@@ -5,16 +5,9 @@
 
 #include "rose_config.h"
 
-#define DEBUG__unparseDesignatedInitializer 0
-
 void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
                                                     SgUnparse_Info &info) {
   SgDesignatedInitializer *design_init = isSgDesignatedInitializer(expr);
-#if DEBUG__unparseDesignatedInitializer
-  printf("Enter unparseDesignatedInitializer()\n");
-  printf("  design_init = %p = %s\n", design_init,
-         design_init->class_name().c_str());
-#endif
   ASSERT_not_null(design_init);
   SgExprListExp *designator_list = design_init->get_designatorList();
   if (designator_list == nullptr ||
@@ -35,10 +28,6 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
             "initializer has no exact owned typed member initializer\n");
     ROSE_ABORT();
   }
-#if DEBUG__unparseDesignatedInitializer
-  printf("  initializer = %p = %s\n", initializer,
-         initializer ? initializer->class_name().c_str() : "");
-#endif
   const SgExpressionPtrList &designators = designator_list->get_expressions();
   for (size_t index = 0; index < designators.size(); ++index) {
     SgDesignator *designator = isSgDesignator(designators[index]);
@@ -97,7 +86,4 @@ void Unparse_ExprStmt::unparseDesignatedInitializer(SgExpression *expr,
 
   curprint(" = ");
   unparseExpression(initializer, info);
-#if DEBUG__unparseDesignatedInitializer
-  printf("Leave unparseDesignatedInitializer()\n");
-#endif
 }

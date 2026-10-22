@@ -21,8 +21,8 @@ int main(int argc, char *argv[]) {
         << filename << ".dot.\n";
   }
 
-  generateWholeGraphOfAST(
-      filename, new CustomMemoryPoolDOTGeneration::s_Filter_Flags(argvList));
+  CustomMemoryPoolDOTGeneration::s_Filter_Flags flags(argvList);
+  generateWholeGraphOfAST(filename, &flags);
 
   return 0;
 }

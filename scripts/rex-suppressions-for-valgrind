@@ -1,472 +1,53 @@
-{
-   alloc_shareable_constant__value
-   Memcheck:Value4
-   fun:_Z24alloc_shareable_constantP10a_constant
-}
+# AUD-186 / EXT-UTILITY-LIFETIMES: docs/codebase-audit/external-exceptions.md.
+# Do not suppress allocations solely by executable basename. A caller-owned leaking
+# program remains a failing control even when named bash, grep, or another tool.
+# EXT-CLANG-PACKAGED-DEFINEDNESS / AUD-137:
+# docs/codebase-audit/external-exceptions.md. Do not restore library-wide,
+# parser-wide, or instantiation-boundary masks: an undefined caller allocation
+# consumed inside two libclang frames must remain observable. The external
+# boundary contract checks this with the configured suppressions.
 
+# EXT-CLANG-RECORD-FIELD-FLAG: the same verified packed-byte increment
+# reaches HasFlexibleArrayMember through an instantiated record field.
+# Limit this condition to the three adjacent stock-Clang instantiation frames.
+# The real Sema caller-owned undefined-flag control remains an error at the
+# same branch. See docs/codebase-audit/external-exceptions.md.
 {
-   alloc_shareable_constant__jump
-   Memcheck:Cond
-   fun:_Z24alloc_shareable_constantP10a_constant
-}
-
-{
-   perl_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:/usr/bin/perl
-}
-
-{
-   perl_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:/usr/bin/perl
-}
-
-{
-   perl_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:/usr/bin/perl
-}
-
-{
-   perl_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:/usr/bin/perl
-}
-
-{
-   bash_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/bash
-}
-
-{
-   bash_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/bash
-}
-
-{
-   bash_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/bash
-}
-
-{
-   bash_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/bash
-}
-
-{
-   dash_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/dash
-}
-
-{
-   dash_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/dash
-}
-
-{
-   dash_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/dash
-}
-
-{
-   dash_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/dash
-}
-
-{
-   grep_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/grep
-}
-
-{
-   grep_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/grep
-}
-
-{
-   grep_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/grep
-}
-
-{
-   grep_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/grep
-}
-
-{
-   cmp_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/cmp
-}
-
-{
-   cmp_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/cmp
-}
-
-{
-   cmp_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/cmp
-}
-
-{
-   cmp_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/cmp
-}
-
-{
-   mktemp_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/mktemp
-}
-
-{
-   mktemp_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/mktemp
-}
-
-{
-   mktemp_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/mktemp
-}
-
-{
-   mktemp_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/mktemp
-}
-
-{
-   awk_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/awk
-}
-
-{
-   awk_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/awk
-}
-
-{
-   awk_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/awk
-}
-
-{
-   awk_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/awk
-}
-
-{
-   gawk_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/gawk
-}
-
-{
-   gawk_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/gawk
-}
-
-{
-   gawk_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/gawk
-}
-
-{
-   gawk_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/gawk
-}
-
-{
-   find_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/find
-}
-
-{
-   find_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/find
-}
-
-{
-   find_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/find
-}
-
-{
-   find_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/find
-}
-
-{
-   jvm_malloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_realloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:realloc
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_new_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:operator new*
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_invalid_write
-   Memcheck:Addr4
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_cond_uninit
-   Memcheck:Cond
-   ...
-   obj:*/libjvm.so
-}
-
-{
-   jvm_libjimage_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   ...
-   obj:*/libjimage.so
-}
-
-{
-   jvm_libjimage_leak_any
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   ...
-   obj:*/libjimage.so
-}
-
-{
-   ld_open_path_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   fun:open_path
-   ...
-}
-
-{
-   ld_new_object_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   ...
-   fun:_dl_new_object
-   ...
-}
-
-{
-   ld_add_to_global_resize_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:malloc
-   ...
-   fun:add_to_global_resize
-   ...
-}
-
-{
-   ld_check_map_versions_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   fun:_dl_check_map_versions
-   ...
-}
-
-{
-   ld_new_object_calloc_leak
-   Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:calloc
-   ...
-   fun:_dl_new_object
-   ...
-}
-
-{
-   rex_upstream_clang22_act_on_fields_uninit_cond
+   rex_clang22_instantiated_record_field_condition
    Memcheck:Cond
    fun:_ZN5clang4Sema11ActOnFieldsEPNS_5ScopeENS_14SourceLocationEPNS_4DeclEN4llvm8ArrayRefIS5_EES3_S3_RKNS_20ParsedAttributesViewE
-   fun:_ZN5clang6Parser20ParseStructUnionBodyENS_14SourceLocationENS_17TypeSpecifierTypeEPNS_10RecordDeclE
-   fun:_ZN5clang6Parser19ParseClassSpecifierENS_3tok9TokenKindENS_14SourceLocationERNS_8DeclSpecERNS0_18ParsedTemplateInfoENS_15AccessSpecifierEbNS0_15DeclSpecContextERNS_16ParsedAttributesE
-   obj:*/libclang-cpp.so.*
+   fun:_ZN5clang4Sema20InstantiateClassImplENS_14SourceLocationEPNS_13CXXRecordDeclES3_RKNS_30MultiLevelTemplateArgumentListENS_26TemplateSpecializationKindEb
+   fun:_ZN5clang4Sema38InstantiateClassTemplateSpecializationENS_14SourceLocationEPNS_31ClassTemplateSpecializationDeclENS_26TemplateSpecializationKindEbb
+   obj:*/libclang-cpp.so.22.1
+}
+
+# EXT-CLANG-RECORD-ARRAY-FLAG: RecordDecl's packed-byte increment loses
+# definedness in Valgrind despite not carrying into HasFlexibleArrayMember.
+# Only the independently reproduced global/parameter declarator paths qualify.
+# Disassembly and actual Sema caller-owned controls are documented in
+# docs/codebase-audit/external-exceptions.md. No caller field is annotated.
+{
+   rex_clang22_record_array_global_condition
+   Memcheck:Cond
+   fun:_ZN5clang4Sema14BuildArrayTypeENS_8QualTypeENS_17ArraySizeModifierEPNS_4ExprEjNS_11SourceRangeENS_15DeclarationNameE
+   obj:*/libclang-cpp.so.22.1
+   fun:_ZN5clang4Sema20GetTypeForDeclaratorERNS_10DeclaratorE
+   fun:_ZN5clang4Sema16HandleDeclaratorEPNS_5ScopeERNS_10DeclaratorEN4llvm15MutableArrayRefIPNS_21TemplateParameterListEEE
 }
 
 {
-   rex_upstream_clang22_act_on_fields_cxx_uninit_cond
+   rex_clang22_record_array_parameter_condition
    Memcheck:Cond
-   fun:_ZN5clang4Sema11ActOnFieldsEPNS_5ScopeENS_14SourceLocationEPNS_4DeclEN4llvm8ArrayRefIS5_EES3_S3_RKNS_20ParsedAttributesViewE
-   fun:_ZN5clang4Sema33ActOnFinishCXXMemberSpecificationEPNS_5ScopeENS_14SourceLocationEPNS_4DeclES3_S3_RKNS_20ParsedAttributesViewE
-   fun:_ZN5clang6Parser27ParseCXXMemberSpecificationENS_14SourceLocationES1_RNS_16ParsedAttributesEjPNS_4DeclE
-   obj:*/libclang-cpp.so.*
+   fun:_ZN5clang4Sema14BuildArrayTypeENS_8QualTypeENS_17ArraySizeModifierEPNS_4ExprEjNS_11SourceRangeENS_15DeclarationNameE
+   obj:*/libclang-cpp.so.22.1
+   fun:_ZN5clang4Sema20GetTypeForDeclaratorERNS_10DeclaratorE
+   fun:_ZN5clang4Sema20ActOnParamDeclaratorEPNS_5ScopeERNS_10DeclaratorENS_14SourceLocationE
 }
 
+# EXT-CLANG-FUNCTION-PROTO-COMPARE: the packaged constructor compares the
+# complete bitfield word to 2^48. Lower padding bits cannot affect this
+# parameter-count test. Exact package/disassembly, standalone controls and
+# caller-owned negative controls: docs/codebase-audit/external-exceptions.md.
 {
    rex_upstream_clang22_function_proto_uninit_cond_c1
    Memcheck:Cond
@@ -483,1257 +64,532 @@
    obj:*/libclang-cpp.so.*
 }
 
-{
-   rex_upstream_clang22_init_list_checker_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN12_GLOBAL__N_115InitListChecker*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_init_list_checker_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN12_GLOBAL__N_115InitListChecker*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_init_list_expr_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang12InitListExpr*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_init_list_expr_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang12InitListExpr*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_check_base_specifier_uninit_cond
-   Memcheck:Cond
-   fun:_ZN5clang4Sema18CheckBaseSpecifierEPNS_13CXXRecordDeclENS_11SourceRangeEbNS_15AccessSpecifierEPNS_14TypeSourceInfoENS_14SourceLocationE
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_convert_arguments_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang4Sema23ConvertArgumentsForCallEPNS_8CallExprEPNS_4ExprEPNS_12FunctionDeclEPKNS_17FunctionProtoTypeEN4llvm8ArrayRefIS4_EENS_14SourceLocationEb
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_convert_arguments_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang4Sema23ConvertArgumentsForCallEPNS_8CallExprEPNS_4ExprEPNS_12FunctionDeclEPKNS_17FunctionProtoTypeEN4llvm8ArrayRefIS4_EENS_14SourceLocationEb
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_check_function_call_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang4Sema17CheckFunctionCallEPNS_12FunctionDeclEPNS_8CallExprEPKNS_17FunctionProtoTypeE
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_compound_literal_initialization_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang22InitializationSequence7PerformERNS_4SemaERKNS_17InitializedEntityERKNS_18InitializationKindEN4llvm15MutableArrayRefIPNS_4ExprEEEPNS_8QualTypeE
-   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_compound_literal_initialization_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang22InitializationSequence7PerformERNS_4SemaERKNS_17InitializedEntityERKNS_18InitializationKindEN4llvm15MutableArrayRefIPNS_4ExprEEEPNS_8QualTypeE
-   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_compound_literal_build_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
-   fun:_ZN5clang4Sema20ActOnCompoundLiteralENS_14SourceLocationENS_9OpaquePtrINS_8QualTypeEEES1_PNS_4ExprE
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_compound_literal_build_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang4Sema24BuildCompoundLiteralExprENS_14SourceLocationEPNS_14TypeSourceInfoES1_PNS_4ExprE
-   fun:_ZN5clang4Sema20ActOnCompoundLiteralENS_14SourceLocationENS_9OpaquePtrINS_8QualTypeEEES1_PNS_4ExprE
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_process_decl_attribute_list_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_process_decl_attribute_list_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_process_decl_attribute_list_top_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema24ProcessDeclAttributeListEPNS_5ScopeEPNS_4DeclERKNS_20ParsedAttributesViewERKNS0_27ProcessDeclAttributeOptionsE
-}
-
-{
-   rex_upstream_clang22_self_reference_checker_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN12_GLOBAL__N_120SelfReferenceChecker9CheckExprEPN5clang4ExprE
-   ...
-   fun:_ZN12_GLOBAL__N_118CheckSelfReferenceERN5clang4SemaEPNS0_4DeclEPNS0_4ExprEb
-   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_self_reference_checker_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN12_GLOBAL__N_120SelfReferenceChecker9CheckExprEPN5clang4ExprE
-   ...
-   fun:_ZN12_GLOBAL__N_118CheckSelfReferenceERN5clang4SemaEPNS0_4DeclEPNS0_4ExprEb
-   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_external_frontend_uninit_cond
-   Memcheck:Cond
-   obj:*/libclang-cpp.so.*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_external_frontend_uninit_value8
-   Memcheck:Value8
-   obj:*/libclang-cpp.so.*
-   ...
-   obj:*/libclang-cpp.so.*
-}
-
-{
-   rex_upstream_clang22_parser_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang6Parser17ParseTopLevelDeclERNS_9OpaquePtrINS_12DeclGroupRefEEERNS_4Sema17ModuleImportStateE
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_parser_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang6Parser17ParseTopLevelDeclERNS_9OpaquePtrINS_12DeclGroupRefEEERNS_4Sema17ModuleImportStateE
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_template_instantiation_uninit_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_template_instantiation_uninit_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_act_on_finish_full_expr_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema19ActOnFinishFullExprEPNS_4ExprENS_14SourceLocationEbbb
-}
-
-{
-   rex_upstream_clang22_int_expr_evaluator_binary_operator_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_116IntExprEvaluator19VisitBinaryOperatorEPKN5clang14BinaryOperatorE
-}
-
-{
-   rex_upstream_clang22_lvalue_expr_evaluator_compound_literal_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_119LValueExprEvaluator24VisitCompoundLiteralExprEPKN5clang19CompoundLiteralExprE
-   obj:*
-   obj:*
-}
-
-{
-   rex_upstream_clang22_handle_aligned_attr_uninit_value8
-   Memcheck:Value8
-   fun:_ZL17handleAlignedAttrRN5clang4SemaEPNS_4DeclERKNS_10ParsedAttrE
-}
-
-{
-   rex_upstream_clang22_diagnose_use_of_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema17DiagnoseUseOfDeclEPNS_9NamedDeclEN4llvm8ArrayRefINS_14SourceLocationEEEPKNS_17ObjCInterfaceDeclEbbPS7_b
-   obj:*
-}
-
-{
-   rex_upstream_clang22_diagnose_use_of_decl_top_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema17DiagnoseUseOfDeclEPNS_9NamedDeclEN4llvm8ArrayRefINS_14SourceLocationEEEPKNS_17ObjCInterfaceDeclEbbPS7_b
-}
-
-{
-   rex_upstream_clang22_decl_context_dependent_context_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang11DeclContext18isDependentContextEv
-}
-
-{
-   rex_upstream_clang22_decl_availability_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang4Decl15getAvailabilityEPNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEEN4llvm12VersionTupleEPNS8_9StringRefE
-}
-
-{
-   rex_upstream_clang22_expr_evaluate_constant_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang4Expr22EvaluateAsConstantExprERNS0_10EvalResultERKNS_10ASTContextENS0_16ConstantExprKindE
-}
-
-{
-   rex_upstream_clang22_check_variable_declaration_type_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema28CheckVariableDeclarationTypeEPNS_7VarDeclE
-}
-
-{
-   rex_upstream_clang22_add_initializer_to_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema20AddInitializerToDeclEPNS_4DeclEPNS_4ExprEb
-}
-
-{
-   rex_upstream_clang22_finalize_declaration_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema19FinalizeDeclarationEPNS_4DeclE
-}
-
-{
-   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_insert_uninit_value8
-   Memcheck:Value8
-   fun:SetNextInBucket
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_insert_uninit_cond
-   Memcheck:Cond
-   fun:SetNextInBucket
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_subst_function_decl_type_typesourceinfo_memmove_uninit_value8
-   Memcheck:Value8
-   fun:memmove
-   fun:getTypeSourceInfo
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_subst_function_decl_type_typesourceinfo_memmove_uninit_cond
-   Memcheck:Cond
-   fun:memmove
-   fun:getTypeSourceInfo
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_template_instantiation_typesourceinfo_memmove_uninit_value8
-   Memcheck:Value8
-   fun:memmove
-   fun:getTypeSourceInfo
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_typesourceinfo_memmove_uninit_cond
-   Memcheck:Cond
-   fun:memmove
-   fun:getTypeSourceInfo
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_folding_setnext_uninit_value8
-   Memcheck:Value8
-   fun:SetNextInBucket
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
+# EXT-FLANG-SYMBOL-ARENA: docs/codebase-audit/external-exceptions.md
+# Removed the nine semantic possible-leak exceptions: repeated standalone
+# parsing demonstrates growing retained symbol storage, not a bounded cache.
+# Keep reports visible until a supported lifetime integration is established.
 
+# EXT-FLANG-INACTIVE-DATAREF: docs/codebase-audit/external-exceptions.md
+# Debian LLVM/Flang 22.1.8, x86_64, Valgrind 3.27.1. The packaged optional
+# overload speculates a read of an inactive variant tag, then selects nullptr
+# using the initialized optional engagement flag. Source and assembly checked
+# in both standalone flang and librose. Match only these reproduced call paths;
+# no semantic fields or REX allocations are marked defined. Recheck the focused
+# reproducer unsuppressed when the dependency, package build, or tool changes.
 {
-   rex_upstream_clang22_template_instantiation_folding_setnext_uninit_cond
-   Memcheck:Cond
-   fun:SetNextInBucket
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
+  llvm22_flang_inactive_dataref_assumed_rank
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefIPKNS0_4ExprINS0_8SomeTypeEEEEEPKNS_9semantics6SymbolERKT_
+  fun:_ZN7Fortran8evaluate16ArgumentAnalyzer19CheckForAssumedRankEPKc
 }
-
-{
-   rex_upstream_clang22_template_instantiation_folding_find_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_folding_find_uninit_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_folding_insert_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_folding_insert_uninit_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZN5clang4Sema21SubstFunctionDeclTypeEPNS_14TypeSourceInfoERKNS_30MultiLevelTemplateArgumentListENS_14SourceLocationENS_15DeclarationNameEPNS_13CXXRecordDeclENS_10QualifiersEb
-   ...
-   fun:_ZN5clang24TemplateDeclInstantiator17VisitFunctionDeclEPNS_12FunctionDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_parse_attribute_argument_list_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang6Parser26ParseAttributeArgumentListERKNS_14IdentifierInfoERN4llvm15SmallVectorImplIPNS_4ExprEEENS_34ParsedAttributeArgumentsPropertiesEj
-}
-
-{
-   rex_upstream_clang22_act_on_init_list_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema13ActOnInitListENS_14SourceLocationEN4llvm15MutableArrayRefIPNS_4ExprEEES1_
-}
-
-{
-   rex_upstream_clang22_init_list_check_designated_initializer_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_115InitListChecker26CheckDesignatedInitializerERKN5clang17InitializedEntityEPNS1_12InitListExprEPNS1_18DesignatedInitExprEjRNS1_8QualTypeEPNS1_11DeclContext22specific_decl_iteratorINS1_9FieldDeclEEEPN4llvm6APSIntERjS6_SJ_bb
-}
-
-{
-   rex_upstream_clang22_check_return_val_expr_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema18CheckReturnValExprEPNS_4ExprENS_8QualTypeENS_14SourceLocationEbPKN4llvm11SmallVectorIPNS_4AttrELj4EEEPKNS_12FunctionDeclE
-}
-
-{
-   rex_upstream_clang22_act_on_finish_function_body_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema23ActOnFinishFunctionBodyEPNS_4DeclEPNS_4StmtEbb
-}
-
-{
-   rex_upstream_clang22_astcontext_tagtype_folding_insert_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   fun:InsertNode
-   fun:_ZNK5clang10ASTContext10getTagTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_7TagDeclEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_astcontext_tagtype_folding_find_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZNK5clang10ASTContext10getTagTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_7TagDeclEb
-   ...
-   fun:_Z10clang_mainiPPcR12SgSourceFilePKc
-}
-
-{
-   rex_upstream_clang22_expr_null_pointer_constant_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang4Expr21isNullPointerConstantERNS_10ASTContextENS0_34NullPointerConstantValueDependenceE
-}
-
-{
-   rex_upstream_clang22_expr_null_pointer_constant_uninit_cond
-   Memcheck:Cond
-   fun:_ZNK5clang4Expr21isNullPointerConstantERNS_10ASTContextENS0_34NullPointerConstantValueDependenceE
-}
-
-{
-   rex_upstream_clang22_default_lvalue_conversion_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema23DefaultLvalueConversionEPNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_default_lvalue_conversion_uninit_cond
-   Memcheck:Cond
-   fun:_ZN5clang4Sema23DefaultLvalueConversionEPNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_check_compare_operands_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema20CheckCompareOperandsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_18BinaryOperatorKindE
-}
-
-{
-   rex_upstream_clang22_act_on_finish_function_body_uninit_cond
-   Memcheck:Cond
-   fun:_ZN5clang4Sema23ActOnFinishFunctionBodyEPNS_4DeclEPNS_4StmtEbb
-}
-
-{
-   rex_upstream_clang22_usual_unary_conversions_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema21UsualUnaryConversionsEPNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_finish_template_argument_deduction_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema31FinishTemplateArgumentDeductionEPNS_20FunctionTemplateDeclERN4llvm15SmallVectorImplINS_23DeducedTemplateArgumentEEEjRPNS_12FunctionDeclERNS_4sema21TemplateDeductionInfoEPKNS4_INS0_15OriginalCallArgEEEbbbNS3_12function_refIFbbEEE
-}
-
-{
-   rex_upstream_clang22_check_call_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema9checkCallEPNS_9NamedDeclEPKNS_17FunctionProtoTypeEPKNS_4ExprEN4llvm8ArrayRefIS8_EEbNS_14SourceLocationENS_11SourceRangeENS_16VariadicCallTypeE
-}
-
-{
-   rex_upstream_clang22_check_type_support_uninit_value8
-   Memcheck:Value8
-   fun:_ZZN5clang4Sema16checkTypeSupportENS_8QualTypeENS_14SourceLocationEPNS_9ValueDeclEENK3$_1clES1_b
-}
-
-{
-   rex_upstream_clang22_build_return_stmt_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema15BuildReturnStmtENS_14SourceLocationEPNS_4ExprEb
-}
-
-{
-   rex_upstream_clang22_build_resolved_call_expr_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
-}
-
-{
-   rex_upstream_clang22_expr_evaluate_initializer_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang4Expr21EvaluateAsInitializerERNS_7APValueERKNS_10ASTContextEPKNS_7VarDeclERN4llvm15SmallVectorImplISt4pairINS_14SourceLocationENS_17PartialDiagnosticEEEEb
-}
-
-{
-   rex_upstream_clang22_expr_unused_result_warning_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang4Expr22isUnusedResultAWarningERPKS0_RNS_14SourceLocationERNS_11SourceRangeES7_RNS_10ASTContextE
-}
-
-{
-   rex_upstream_clang22_constexpr_evaluate_uninit_value8
-   Memcheck:Value8
-   fun:_ZL8EvaluateRN5clang7APValueERN12_GLOBAL__N_18EvalInfoEPKNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_evaluate_var_decl_init_uninit_value8
-   Memcheck:Value8
-   fun:_ZL19evaluateVarDeclInitRN12_GLOBAL__N_18EvalInfoEPKN5clang4ExprEPKNS2_7VarDeclEPNS_14CallStackFrameEjRPNS2_7APValueE
-}
-
-{
-   rex_upstream_clang22_find_complete_object_uninit_value8
-   Memcheck:Value8
-   fun:_ZL18findCompleteObjectRN12_GLOBAL__N_18EvalInfoEPKN5clang4ExprENS2_11AccessKindsERKNS_6LValueENS2_8QualTypeE
-}
-
-{
-   rex_upstream_clang22_paren_list_expr_ctor_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang13ParenListExprC1ENS_14SourceLocationEN4llvm8ArrayRefIPNS_4ExprEEES1_
-}
-
-{
-   rex_upstream_clang22_deduce_variable_declaration_type_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema29DeduceVariableDeclarationTypeEPNS_7VarDeclEbPNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_cxx_record_added_member_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang13CXXRecordDecl11addedMemberEPNS_4DeclE
-}
-
-{
-   rex_upstream_clang22_require_complete_type_impl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema23RequireCompleteTypeImplENS_14SourceLocationENS_8QualTypeENS0_16CompleteTypeKindEPNS0_13TypeDiagnoserE
-}
-
-{
-   rex_upstream_clang22_cxx_ctor_is_copy_or_move_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang18CXXConstructorDecl23isCopyOrMoveConstructorERj
-}
-
-{
-   rex_upstream_clang22_declare_implicit_copy_constructor_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema30DeclareImplicitCopyConstructorEPNS_13CXXRecordDeclE
-}
-
-{
-   rex_upstream_clang22_declare_implicit_move_constructor_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema30DeclareImplicitMoveConstructorEPNS_13CXXRecordDeclE
-}
-
-{
-   rex_upstream_clang22_cxx_ctor_is_specialization_copying_object_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang18CXXConstructorDecl29isSpecializationCopyingObjectEv
-}
-
 {
-   rex_upstream_clang22_complete_constructor_call_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema23CompleteConstructorCallEPNS_18CXXConstructorDeclENS_8QualTypeEN4llvm15MutableArrayRefIPNS_4ExprEEENS_14SourceLocationERNS4_15SmallVectorImplIS7_EEbb
+  llvm22_flang_inactive_dataref_assignment
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZN7Fortran8evaluate18ExpressionAnalyzer7AnalyzeERKNS_6parser14AssignmentStmtE
 }
-
-{
-   rex_upstream_clang22_itanium_record_layout_field_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_126ItaniumRecordLayoutBuilder11LayoutFieldEPKN5clang9FieldDeclEb
-}
-
-{
-   rex_upstream_clang22_visit_function_call_arguments_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4semaL26visitFunctionCallArgumentsERN4llvm15SmallVectorImplINS0_12_GLOBAL__N_122IndirectLocalPathEntryEEEPNS_4ExprENS1_12function_refIFbS6_S8_NS3_13ReferenceKindEEEE
-}
-
-{
-   rex_upstream_clang22_check_addition_operands_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema21CheckAdditionOperandsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_18BinaryOperatorKindEPNS_8QualTypeE
-}
-
-{
-   rex_upstream_clang22_act_on_start_function_def_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema23ActOnStartOfFunctionDefEPNS_5ScopeEPNS_4DeclEPNS_12SkipBodyInfoENS0_10FnBodyKindE
-}
-
-{
-   rex_upstream_clang22_template_argument_list_create_copy_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang20TemplateArgumentList10CreateCopyERNS_10ASTContextEN4llvm8ArrayRefINS_16TemplateArgumentEEE
-}
-
 {
-   rex_upstream_clang22_diagnose_tautological_comparison_uninit_value8
-   Memcheck:Value8
-   fun:_ZL30diagnoseTautologicalComparisonRN5clang4SemaENS_14SourceLocationEPNS_4ExprES4_NS_18BinaryOperatorKindE
+  llvm22_flang_inactive_dataref_argument_rank
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZN7Fortran9semantics13IsAssumedRankINS_8evaluate4ExprINS2_8SomeTypeEEEEEbRKT_
 }
 
+# EXT-FLANG-INACTIVE-DATAREF / AUD-273: association analysis constructs this
+# local optional in stock Flang. Its disengaged variant tag is speculatively
+# read before the initialized engagement flag selects nullptr. Exact source,
+# instruction and caller-boundary evidence: docs/codebase-audit/external-exceptions.md.
 {
-   rex_upstream_clang22_sequence_checker_note_post_use_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_115SequenceChecker11notePostUseEPKN5clang9NamedDeclEPKNS1_4ExprE
+  llvm22_flang_inactive_dataref_association_rank
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZN7Fortran9semantics13IsAssumedRankISt8optionalINS_8evaluate4ExprINS3_8SomeTypeEEEEEEbRKT_
+  fun:_ZN7Fortran9semantics16ConstructVisitor4PostERKNS_6parser13AssociateStmtE
 }
 
+# EXT-FLANG-INACTIVE-DATAREF: the standalone KIND intrinsic reproducer
+# verifies this additional exact caller; see external-exceptions.md.
 {
-   rex_upstream_clang22_sequence_checker_note_post_mod_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_115SequenceChecker11notePostModEPKN5clang9NamedDeclEPKNS1_4ExprENS0_9UsageKindE
+  llvm22_flang_inactive_dataref_intrinsic_match
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZNK7Fortran8evaluate18IntrinsicInterface5MatchERKNS0_19CallCharacteristicsERKNS_6common25IntrinsicTypeDefaultKindsERSt6vectorISt8optionalINS0_14ActualArgumentEESaISC_EERNS0_14FoldingContextEPKNS_9semantics5ScopeE
 }
 
+# EXT-FLANG-INACTIVE-DATAREF: the standalone array-intrinsic reproducer and
+# matching packaged instructions verify this exact interface-checking path.
+# Only the inactive optional-tag condition is covered; memory leaks and reads
+# in the callers remain visible. See docs/codebase-audit/external-exceptions.md.
 {
-   rex_upstream_llvm22_ieeefloat_part_count_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK4llvm6detail9IEEEFloat9partCountEv
+  llvm22_flang_inactive_dataref_explicit_interface
+  Memcheck:Cond
+  fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
+  fun:_ZN7Fortran9semantics22CheckExplicitInterfaceERKNS_8evaluate15characteristics9ProcedureERSt6vectorISt8optionalINS1_14ActualArgumentEESaIS9_EERNS0_16SemanticsContextEPKNS0_5ScopeEPKNS1_17SpecificIntrinsicEbbb
+  fun:_ZN7Fortran9semantics14CheckArgumentsERKNS_8evaluate15characteristics9ProcedureERSt6vectorISt8optionalINS1_14ActualArgumentEESaIS9_EERNS0_16SemanticsContextERKNS0_5ScopeEbbPKNS1_17SpecificIntrinsicE
 }
 
+# EXT-GREP-PATTERN-ARRAY: docs/codebase-audit/external-exceptions.md.
+# GNU grep 3.12 retains patterns as an interior pointer into its pattern array.
+# Require every allocation frame and the owning executable; debug symbols are
+# required. Never replace an unavailable frame with an allocator-wide mask.
 {
-   rex_upstream_llvm_timergroup_managed_static_leak
+   rex_external_grep312_pattern_array_interior
    Memcheck:Leak
-   match-leak-kinds: definite,indirect,possible,reachable
-   fun:*llvm::cl::Option::addArgument*
-   ...
-   fun:*llvm::TimerGroup::~TimerGroup*
-   obj:*/libLLVM.so.*
+   match-leak-kinds: possible
+   fun:realloc
+   fun:rpl_realloc
+   fun:xrealloc
+   fun:xpalloc
+   fun:GEAcompile
+   obj:*/grep
 }
 
+# EXT-GREP-DFA-STATE-TABLES: docs/codebase-audit/external-exceptions.md.
+# GNU grep owns its transition tables through d->trans = allocation + 2.
+# These exact single-byte DFA paths retain possible leak reports at exit;
+# dfafree releases the tables and the original allocation. Preserve other
+# allocation paths and leak kinds as errors. Debian/Ubuntu debug frames differ.
 {
-   rex_upstream_llvm22_timergroup_managed_static_reachable_new
+   rex_external_grep312_dfa_table_debian
    Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:_Znwm*
-   ...
-   fun:_ZNK4llvm17ManagedStaticBase21RegisterManagedStaticEPFPvvEPFvS1_E
-   fun:_ZN4llvm10TimerGroupD1Ev
-   ...
-   obj:*/libLLVM.so.*
+   match-leak-kinds: possible
+   fun:malloc
+   fun:xmalloc
+   fun:build_state
+   fun:dfaexec_main
+   fun:dfaexec_sb
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
 }
 
 {
-   rex_upstream_llvm22_timergroup_managed_static_reachable_calloc
+   rex_external_grep312_dfa_array_debian
    Memcheck:Leak
-   match-leak-kinds: reachable
-   fun:calloc
-   fun:_ZN4llvm13StringMapImpl15LookupBucketForENS_9StringRefEj
-   ...
-   fun:_ZN4llvm2cl6Option11addArgumentEv
-   ...
-   fun:_ZN4llvm10TimerGroupD1Ev
-   ...
-   obj:*/libLLVM.so.*
+   match-leak-kinds: possible
+   fun:realloc
+   fun:rpl_realloc
+   fun:xrealloc
+   fun:xpalloc
+   fun:realloc_trans_if_necessary
+   fun:build_state
+   fun:dfaexec_main
+   fun:dfaexec_sb
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
 }
 
 {
-   rex_upstream_clang22_make_deduction_failure_info_leak
+   rex_external_grep312_dfa_table_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:xmalloc
+   fun:build_state
+   fun:dfaexec_main
+   fun:dfaexec_sb.lto_priv.0
+   fun:dfaexec
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
+}
+
+{
+   rex_external_grep312_dfa_array_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:realloc
+   fun:rpl_realloc
+   fun:xrealloc
+   fun:xpalloc
+   fun:realloc_trans_if_necessary
+   fun:build_state
+   fun:dfaexec_main
+   fun:dfaexec_sb.lto_priv.0
+   fun:dfaexec
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
+}
+
+# The initial array is allocated directly by dfaexec_main before build_state.
+# Its exact owner and possible-only classification are the same as above.
+{
+   rex_external_grep312_dfa_initial_array_debian
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:realloc
+   fun:rpl_realloc
+   fun:xrealloc
+   fun:xpalloc
+   fun:realloc_trans_if_necessary
+   fun:dfaexec_main
+   fun:dfaexec_sb
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
+}
+
+{
+   rex_external_grep312_dfa_initial_array_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:realloc
+   fun:rpl_realloc
+   fun:xrealloc
+   fun:xpalloc
+   fun:realloc_trans_if_necessary
+   fun:dfaexec_main
+   fun:dfaexec_sb.lto_priv.0
+   fun:dfaexec
+   fun:EGexecute
+   fun:grepbuf
+   fun:grep
+   fun:grepdesc
+   fun:grepfile
+   fun:grep_command_line_arg
+   obj:*/grep
+}
+
+# EXT-MAWK-BUILTIN-ARENA: docs/codebase-audit/external-exceptions.md.
+# The builtin-variable initialization allocates one pooled chunk whose live
+# subobjects retain interior pointers. This is not a general zmalloc exception.
+{
+   rex_external_mawk134_builtin_symbol_arena
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:zmalloc
+   fun:insert
+   fun:bi_vars_init
+   fun:initialize
+   obj:*/mawk
+}
+
+# EXT-COREUTILS-MKTEMP-FILENAMES: docs/codebase-audit/external-exceptions.md.
+# GNU mktemp retains its template and diagnostic copy until process exit.
+# Both exact allocation paths require mktemp as their immediate caller.
+{
+   rex_external_coreutils910_mktemp_filename
    Memcheck:Leak
    match-leak-kinds: definite
    fun:malloc
-   fun:_ZN4llvm15SmallVectorBaseIjE8grow_podEPvmm
-   ...
-   fun:_ZN5clang24MakeDeductionFailureInfoERNS_10ASTContextENS_23TemplateDeductionResultERNS_4sema21TemplateDeductionInfoE
-   obj:*/libclang-cpp.so.*
+   fun:mfile_name_concat
+   fun:file_name_concat
+   obj:*/mktemp
 }
 
 {
-   rex_upstream_clang22_template_instantiation_typeloc_memmove_cond
-   Memcheck:Cond
-   fun:memmove
-   fun:getTypeLocInContext
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+   rex_external_coreutils910_mktemp_diagnostic_filename
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:xstrdup
+   obj:*/mktemp
+}
+
+# EXT-COREUTILS-MKTEMP-FILENAMES: Ubuntu 26.04's gnu-coreutils 9.7
+# installs the standalone binary as gnumktemp, with additional inlined allocator
+# frames. Preserve that exact path; do not wildcard the intervening callers.
+{
+   rex_external_coreutils97_gnumktemp_filename
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:mfile_name_concat
+   fun:file_name_concat
+   obj:*/gnumktemp
+}
+{
+   rex_external_coreutils97_gnumktemp_diagnostic_filename
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:xmalloc
+   fun:xmemdup
+   fun:xstrdup
+   obj:*/gnumktemp
+}
+
+# EXT-BASH-TERMINAL-COMMAND: docs/codebase-audit/external-exceptions.md.
+# Bash 5.3's reader_loop clears current_command on EXITBLTIN/EXITPROG before
+# dispose_command. The terminal command and its parser-owned children survive
+# until process exit; one/10,000-iteration controls retain identical storage,
+# while ordinary completion is clean. These exact Debian/Ubuntu allocation
+# paths require debug symbols and the owning Bash executable. Never replace
+# their parser callers or compiler-generated frame variants with ellipses.
+{
+   rex_external_bash53_terminal_if_node
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:xmalloc
+   fun:make_command
+   fun:make_if_command
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_template_instantiation_typeloc_memmove_value8
-   Memcheck:Value8
-   fun:memmove
-   fun:getTypeLocInContext
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+   rex_external_bash53_terminal_connection_payload
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:command_connect
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_template_instantiation_nested_name_spec_cond
-   Memcheck:Cond
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+   rex_external_bash53_terminal_simple_command
+   Memcheck:Leak
+   match-leak-kinds: definite,indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_bare_simple_command
+   fun:make_simple_command
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_template_instantiation_nested_name_spec_value8
-   Memcheck:Value8
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
+   rex_external_bash53_terminal_connection_node
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_command
+   fun:command_connect
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_nested_name_spec_builder_cond
-   Memcheck:Cond
-   fun:memmove
-   fun:_ZNK5clang29NestedNameSpecifierLocBuilder19getWithLocInContextERNS_10ASTContextE
+   rex_external_bash53_terminal_conditional_command_debian
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_command
+   fun:parse_cond_command
+   fun:read_token.part.0
+   fun:read_token
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_nested_name_spec_builder_value8
-   Memcheck:Value8
-   fun:memmove
-   fun:_ZNK5clang29NestedNameSpecifierLocBuilder19getWithLocInContextERNS_10ASTContextE
+   rex_external_bash53_terminal_conditional_and_debian
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_node
+   fun:cond_and
+   fun:cond_or
+   fun:cond_expr
+   fun:parse_cond_command
+   fun:read_token.part.0
+   fun:read_token
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_template_instantiator_transform_type_sourceinfo_cond
-   Memcheck:Cond
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+   rex_external_bash53_terminal_conditional_term_debian
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_node
+   fun:cond_term
+   fun:cond_and
+   fun:cond_or
+   fun:cond_expr
+   fun:parse_cond_command
+   fun:read_token.part.0
+   fun:read_token
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_template_instantiator_transform_type_sourceinfo_value8
-   Memcheck:Value8
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
+   rex_external_bash53_terminal_if_payload
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_if_command
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_find_uninit_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   rex_external_bash53_terminal_redirection
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_redirection
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_find_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
+   rex_external_bash53_terminal_cached_arithmetic_word_debian
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_word_list
+   fun:make_arith_for_expr.part.0
+   fun:make_arith_for_expr
+   fun:make_arith_for_command
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_insert_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
+   rex_external_bash53_terminal_conditional_command_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_command
+   fun:parse_cond_command
+   fun:read_token.constprop.0
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_get_or_insert_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase15GetOrInsertNodeEPNS0_4NodeERKNS0_14FoldingSetInfoE
+   rex_external_bash53_terminal_conditional_and_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_node
+   fun:cond_and
+   fun:cond_or.lto_priv.0
+   fun:cond_expr
+   fun:parse_cond_command
+   fun:read_token.constprop.0
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_grow_bucket_count_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBase15GrowBucketCountEjRKNS0_14FoldingSetInfoE
+   rex_external_bash53_terminal_conditional_term_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_cond_node
+   fun:cond_term
+   fun:cond_and
+   fun:cond_or.lto_priv.0
+   fun:cond_expr
+   fun:parse_cond_command
+   fun:read_token.constprop.0
+   fun:yylex
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
 {
-   rex_upstream_clang22_folding_destructor_uninit_value8
-   Memcheck:Value8
-   fun:_ZN4llvm14FoldingSetBaseD1Ev
+   rex_external_bash53_terminal_cached_arithmetic_word_ubuntu
+   Memcheck:Leak
+   match-leak-kinds: indirect
+   fun:malloc
+   fun:xmalloc
+   fun:make_word_list
+   fun:make_arith_for_expr
+   fun:make_arith_for_expr
+   fun:make_arith_for_command
+   fun:yyparse
+   fun:parse_command
+   fun:read_command
+   fun:reader_loop
+   obj:*/bash
 }
 
+# EXT-GIT-INIT-CHDIR-LIST: docs/codebase-audit/external-exceptions.md.
+# chdir_notify_register always owns its fixed-size entry through the static
+# interior-pointer callback list. Caller-provided payloads are not allocated here.
 {
-   rex_upstream_clang22_usual_arithmetic_conversions_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema26UsualArithmeticConversionsERNS_12ActionResultIPNS_4ExprELb1EEES5_NS_14SourceLocationENS_13ArithConvKindE
-}
-
-{
-   rex_upstream_clang22_instantiate_class_impl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema20InstantiateClassImplENS_14SourceLocationEPNS_13CXXRecordDeclES3_RKNS_30MultiLevelTemplateArgumentListENS_26TemplateSpecializationKindEb
-}
-
-{
-   rex_upstream_clang22_check_complete_variable_declaration_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema32CheckCompleteVariableDeclarationEPNS_7VarDeclE
-}
-
-{
-   rex_upstream_clang22_act_on_uninitialized_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Sema22ActOnUninitializedDeclEPNS_4DeclE
-}
-
-{
-   rex_upstream_clang22_decl_set_attrs_impl_uninit_cond
-   Memcheck:Cond
-   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
-}
-
-{
-   rex_upstream_clang22_decl_set_attrs_impl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
-}
-
-{
-   rex_upstream_clang22_template_decl_instantiator_visit_var_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang24TemplateDeclInstantiator12VisitVarDeclEPNS_7VarDeclEbPN4llvm8ArrayRefIPNS_11BindingDeclEEE
-}
-
-{
-   rex_upstream_clang22_astcontext_decltype_type_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang10ASTContext15getDecltypeTypeEPNS_4ExprENS_8QualTypeE
-}
-
-{
-   rex_upstream_clang22_decl_ref_expr_source_range_uninit_value8
-   Memcheck:Value8
-   fun:_ZN12_GLOBAL__N_118getSourceRangeImplIN5clang11DeclRefExprEEENS1_11SourceRangeEPKNS1_4StmtEMS4_KFS3_vE
-}
-
-{
-   rex_upstream_clang22_try_static_cast_uninit_value8
-   Memcheck:Value8
-   fun:_ZL13TryStaticCastRN5clang4SemaERNS_12ActionResultIPNS_4ExprELb1EEENS_8QualTypeENS_21CheckedConversionKindEN12_GLOBAL__N_113CastOperation11OpRangeTypeERjRNS_8CastKindERN4llvm11SmallVectorIPNS_16CXXBaseSpecifierELj4EEEb
-}
-
-{
-   rex_upstream_clang22_visit_cxx_method_decl_uninit_value8
-   Memcheck:Value8
-   fun:_ZN5clang24TemplateDeclInstantiator18VisitCXXMethodDeclEPNS_13CXXMethodDeclEPNS_21TemplateParameterListENS0_11RewriteKindE
-}
-
-{
-   rex_upstream_clang22_set_eligible_methods_uninit_value8
-   Memcheck:Value8
-   fun:_ZL18SetEligibleMethodsRN5clang4SemaEPNS_13CXXRecordDeclEN4llvm8ArrayRefIPNS_13CXXMethodDeclEEENS_20CXXSpecialMemberKindE
-}
-
-{
-   rex_upstream_clang22_astcontext_template_specialization_type_uninit_value8
-   Memcheck:Value8
-   fun:_ZNK5clang10ASTContext29getTemplateSpecializationTypeENS_21ElaboratedTypeKeywordENS_12TemplateNameEN4llvm8ArrayRefINS_16TemplateArgumentEEES6_NS_8QualTypeE
-}
-
-{
-   rex_upstream_clang22_decl_set_attrs_impl_stl_copy_uninit_cond
-   Memcheck:Cond
-   fun:memmove
-   ...
-   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
-}
-
-{
-   rex_upstream_clang22_decl_set_attrs_impl_stl_copy_uninit_value8
-   Memcheck:Value8
-   fun:memmove
-   ...
-   fun:_ZN5clang4Decl12setAttrsImplERKN4llvm11SmallVectorIPNS_4AttrELj4EEERNS_10ASTContextE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_nested_name_memmove_cond
-   Memcheck:Cond
-   fun:memmove
-   ...
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_nested_name_memmove_value8
-   Memcheck:Value8
-   fun:memmove
-   ...
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE31TransformNestedNameSpecifierLocENS_22NestedNameSpecifierLocENS_8QualTypeEPNS_9NamedDeclE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_transform_type_any_cond
-   Memcheck:Cond
-   ...
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
-}
-
-{
-   rex_upstream_clang22_template_instantiation_transform_type_any_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN5clang13TreeTransformIN12_GLOBAL__N_120TemplateInstantiatorEE13TransformTypeEPNS_14TypeSourceInfoE
-}
-
-{
-   rex_upstream_clang22_astcontext_auto_type_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext19getAutoTypeInternalENS_8QualTypeENS_15AutoTypeKeywordEbbPNS_12TemplateDeclEN4llvm8ArrayRefINS_16TemplateArgumentEEEb
-}
-
-{
-   rex_upstream_clang22_astcontext_lvalue_reference_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext22getLValueReferenceTypeENS_8QualTypeEb
-}
-
-{
-   rex_upstream_clang22_astcontext_rvalue_reference_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext22getRValueReferenceTypeENS_8QualTypeE
-}
-
-{
-   rex_upstream_clang22_astcontext_function_type_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
-}
-
-{
-   rex_upstream_clang22_astcontext_function_type_folding_direct_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZNK5clang10ASTContext23getFunctionTypeInternalENS_8QualTypeEN4llvm8ArrayRefIS1_EERKNS_17FunctionProtoType12ExtProtoInfoEb
-}
-
-{
-   rex_upstream_clang22_special_member_exception_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZN5clang4Sema19LookupSpecialMemberEPNS_13CXXRecordDeclENS_20CXXSpecialMemberKindEbbbbb
-   fun:lookupCallFromSpecialMember
-   fun:lookupIn
-   fun:_ZN12_GLOBAL__N_130SpecialMemberExceptionSpecInfo19visitClassSubobjectEPN5clang13CXXRecordDeclEN4llvm12PointerUnionIJPNS1_16CXXBaseSpecifierEPNS1_9FieldDeclEEEEj
-}
-
-{
-   rex_upstream_clang22_template_this_scope_pointer_type_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
-   fun:_ZN5clang4Sema16CXXThisScopeRAIIC1ERS0_PNS_4DeclENS_10QualifiersEb
-   fun:_ZN5clang4Sema16InstantiateAttrsERKNS_30MultiLevelTemplateArgumentListEPKNS_4DeclEPS4_PN4llvm11SmallVectorINS0_25LateInstantiatedAttributeELj1EEEPNS_23LocalInstantiationScopeE
-}
-
-{
-   rex_upstream_clang22_build_resolved_call_pointer_type_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
-   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
-   fun:_ZL24FinishOverloadedCallExprRN5clang4SemaEPNS_5ScopeEPNS_4ExprEPNS_20UnresolvedLookupExprENS_14SourceLocationEN4llvm15MutableArrayRefIS5_EES8_S5_PNS_20OverloadCandidateSetEPPNS_17OverloadCandidateENS_17OverloadingResultEb
-}
-
-{
-   rex_upstream_clang22_build_call_pointer_type_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
-   fun:_ZN5clang4Sema21BuildResolvedCallExprEPNS_4ExprEPNS_9NamedDeclENS_14SourceLocationEN4llvm8ArrayRefIS2_EES5_S2_bNS_8CallExpr11ADLCallKindE
-   fun:_ZN5clang4Sema13BuildCallExprEPNS_5ScopeEPNS_4ExprENS_14SourceLocationEN4llvm15MutableArrayRefIS4_EES5_S4_bb
-}
-
-{
-   rex_upstream_clang22_lookup_destructor_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   fun:FindNodeOrInsertPos
-   fun:_ZN5clang4Sema19LookupSpecialMemberEPNS_13CXXRecordDeclENS_20CXXSpecialMemberKindEbbbbb
-   fun:_ZN5clang4Sema16LookupDestructorEPNS_13CXXRecordDeclE
-   fun:_ZN5clang4Sema20MaybeBindToTemporaryEPNS_4ExprE
-}
-
-{
-   rex_upstream_clang22_astcontext_dependent_name_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext20getDependentNameTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_14IdentifierInfoE
-}
-
-{
-   rex_upstream_clang22_astcontext_subst_template_typeparm_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext28getSubstTemplateTypeParmTypeENS_8QualTypeEPNS_4DeclEjNS_14UnsignedOrNoneEb
-}
-
-# Clang 22 leaves padding in FoldingSetNodeID inputs undefined while parsing
-# template type-ids.  Directly running the Ubuntu Clang 22 driver under
-# MemCheck on the preprocessed libstdc++ constructor-family fixture reproduces
-# this ASTContext/FoldingSet defect without REX.  REX's exact written-type
-# transaction legitimately reaches the same Clang parser path after the
-# translation-unit parse.  Keep these suppressions restricted to the exact
-# upstream type constructors, ParseTypeName, and REX's typed translation
-# boundary; memory errors in REX-owned frames remain unsuppressed.
-# The first ellipsis accounts for the optional inlined FoldingSet wrapper that
-# source-built LLVM reports separately but the Ubuntu shared library folds
-# into the next mandatory ASTContext constructor frame.
-{
-   rex_upstream_clang22_parse_type_name_subst_typeparm_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZNK5clang10ASTContext28getSubstTemplateTypeParmTypeENS_8QualTypeEPNS_4DeclEjNS_14UnsignedOrNoneEb
-   ...
-   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
-   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
-}
-
-{
-   rex_upstream_clang22_parse_type_name_pointer_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZNK5clang10ASTContext14getPointerTypeENS_8QualTypeE
-   fun:_ZN5clang4Sema16BuildPointerTypeENS_8QualTypeENS_14SourceLocationENS_15DeclarationNameE
-   ...
-   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
-   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
-}
-
-{
-   rex_upstream_clang22_parse_type_name_lvalue_reference_folding_cond
-   Memcheck:Cond
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:_ZNK5clang10ASTContext22getLValueReferenceTypeENS_8QualTypeEb
-   fun:_ZN5clang4Sema18BuildReferenceTypeENS_8QualTypeEbNS_14SourceLocationENS_15DeclarationNameE
-   ...
-   fun:_ZN5clang6Parser13ParseTypeNameEPNS_11SourceRangeENS_17DeclaratorContextENS_15AccessSpecifierEPPNS_4DeclEPNS_16ParsedAttributesE
-   fun:*ClangToSageTranslator*translateFunctionDeclCommon*
-}
-
-{
-   rex_upstream_clang22_astcontext_typedef_type_folding_cond
-   Memcheck:Cond
-   fun:bcmp
-   ...
-   fun:_ZNK4llvm16FoldingSetNodeIDeqERKS0_
-   ...
-   fun:_ZNK5clang10ASTContext14getTypedefTypeENS_21ElaboratedTypeKeywordENS_19NestedNameSpecifierEPKNS_15TypedefNameDeclENS_8QualTypeESt8optionalIbE
-}
-
-{
-   rex_upstream_clang22_folding_find_clang_astcontext_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN4llvm14FoldingSetBase19FindNodeOrInsertPosERKNS_16FoldingSetNodeIDERPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:*clang*
-}
-
-{
-   rex_upstream_clang22_folding_insert_clang_astcontext_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN4llvm14FoldingSetBase10InsertNodeEPNS0_4NodeEPvRKNS0_14FoldingSetInfoE
-   ...
-   fun:*clang*
-}
-
-{
-   rex_upstream_clang22_folding_grow_bucket_clang_astcontext_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN4llvm14FoldingSetBase15GrowBucketCountEjRKNS0_14FoldingSetInfoE
-   ...
-   fun:*clang*
-}
-
-{
-   rex_upstream_clang22_folding_get_or_insert_clang_astcontext_value8
-   Memcheck:Value8
-   ...
-   fun:_ZN4llvm14FoldingSetBase15GetOrInsertNodeEPNS0_4NodeERKNS0_14FoldingSetInfoE
-   ...
-   fun:*clang*
-}
-
-{
-   rex_upstream_flang22_unwrap_whole_symbol_data_ref_cond
-   Memcheck:Cond
-   fun:_ZN7Fortran8evaluate24UnwrapWholeSymbolDataRefERKSt8optionalINS0_7DataRefEE
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_module_reader_owned_semantics_leak
+   rex_external_git_chdir_callback_entry
    Memcheck:Leak
    match-leak-kinds: possible
-   fun:_Znwm
-   ...
-   fun:_ZN7Fortran9semantics13ModFileReader4ReadENS_6parser9CharBlockESt8optionalIbEPNS0_5ScopeEb
-}
-
-# LLVM 22's Flang semantic resolver retains interior pointers to the following
-# allocations at process exit, so MemCheck classifies them as "possibly lost".
-# Directly instrumenting `/usr/lib/llvm-22/bin/flang -fc1` reproduces every
-# allocation family below without REX.  Keep these entries anchored both to the
-# exact upstream allocation site and to REX's synchronous CompileFortran call;
-# REX-owned builder allocations occur after Semantics::Perform and therefore
-# remain hard MemCheck errors.
-{
-   rex_upstream_flang22_semantics_integer32_constant_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZN7Fortran8evaluate12ConstantBaseINS0_4TypeILNS_6common12TypeCategoryE0ELi4EEENS0_5value7IntegerILi32ELb1ELi32EjmLi32EEEEC2ERKS9_
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_integer64_constant_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZN7Fortran8evaluate12ConstantBaseINS0_4TypeILNS_6common12TypeCategoryE0ELi8EEENS0_5value7IntegerILi64ELb1ELi32EjmLi64EEEEC2ERKS9_
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_fold_operation_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:*Fortran*evaluate*FoldOperation*
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_derived_component_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZN7Fortran9semantics18DerivedTypeDetails13add_componentERKNS0_6SymbolE
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_dummy_argument_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZN7Fortran9semantics17SubprogramVisitor19CreateDummyArgumentERNS0_17SubprogramDetailsERKNS_6parser4NameE
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_shape_storage_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZNSt6vectorIN7Fortran9semantics9ShapeSpecESaIS2_EE17_M_realloc_appendIJRKS2_EEEvDpOT_
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_bind_name_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZNSt15__new_allocatorIcE8allocateEmPKv
-   ...
-   fun:_ZN7Fortran9semantics12AttrsVisitor13SetBindNameOnERNS0_6SymbolE
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
-}
-
-{
-   rex_upstream_flang22_semantics_common_block_possible_leak
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:_Znwm
-   fun:_ZN7Fortran9semantics19ResolveNamesVisitor24CreateCommonBlockSymbolsERKNS_6parser10CommonStmtE
-   ...
-   fun:_ZN7Fortran9semantics9Semantics7PerformEv
-   fun:_Z14CompileFortranRKNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEERKN7Fortran6parser7OptionsERK13DriverOptionsS6_
+   fun:malloc
+   fun:do_xmalloc
+   fun:xmalloc
+   fun:chdir_notify_register
+   obj:*/git
 }

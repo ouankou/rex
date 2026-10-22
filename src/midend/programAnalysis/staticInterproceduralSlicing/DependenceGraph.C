@@ -1,26 +1,13 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 20,9 MB to
-// 10,7MB
 #include "sage3basic.h"
-
-#define SIMPLE_FILTER
 
 #include "DependenceGraph.h"
 
-#include <iostream>
 using namespace std;
 const char *DependenceNode::typeNames[DependenceNode::NUM_NODE_TYPES] = {
     "CONTROL",  "SGNODE",    "CALLSITE", "ACTUALIN",     "ACTUALOUT",
     "FORMALIN", "FORMALOUT", "ENTRY",    "ACTUALRETURN", "FORMALRETURN"};
 
-const char *DependenceGraph::edgeNameArray[8] = {
-    /*    "", "CONTROL", "DATA", "", "SUMMARY", "", "", "", "CALL", "", "", "",
-       "",
-        "", "", "", "RETURN"*/
-    "UNKNOWN", "CONTROL", "DATA",         "SUMMARY",
-    "CALL",    "RETURN",  "PARAMETER_IN", "PARAMETER_OUT"};
-
 const char *DependenceGraph::getEdgeName(EdgeType type) {
-  // int offset=0;
   switch (type) {
   case SYNTACTIC:
     return "SYNTACTIC";
@@ -32,8 +19,6 @@ const char *DependenceGraph::getEdgeName(EdgeType type) {
     return "SUMMARY";
   case CALL:
     return "CALL";
-    //              case RETURN:
-    //                      return "RETURN";
   case PARAMETER_IN:
     return "PARAMETER_IN";
   case PARAMETER_OUT:
@@ -56,7 +41,6 @@ const char *DependenceGraph::getEdgeName(EdgeType type) {
 DependenceGraph::~DependenceGraph() {
   edgeTypeMap.clear();
   edgeMap.clear();
-  sgNodeToDepNodeMap.clear();
   nodeTypeToDepNodeMapMap.clear();
 
   std::set<SimpleDirectedGraphNode *> nodes;
@@ -66,128 +50,94 @@ DependenceGraph::~DependenceGraph() {
   }
 }
 
-/*
-DependenceNode *DependenceGraph::createNode(DependenceNode * node)
-{
-    DependenceNode *newNode = getNode(node);
-
-    // If the node isn't in the map, create it.
-    if (newNode == NULL)
-    {
-        newNode = new DependenceNode(node);
-        _depnode_map[node] = newNode;
-        addNode(newNode);
-    }
-
-    return newNode;
-}
-*/
 DependenceNode *DependenceGraph::createNode(SgNode *node) {
-  DependenceNode *depNode = new DependenceNode(DependenceNode::SGNODE, node);
-  nodeTypeToDepNodeMapMap[DependenceNode::SGNODE][node] = depNode;
-  //      DependenceNode *depNode = new DependenceNode(node);
-  //      sgNodeToDepNodeMap[node]=depNode;
-  addNode(depNode);
-  return depNode;
+  return createNode(DependenceNode::SGNODE, node);
 }
-/*
-    edgeTypeMap[e].insert(Edge(from, to));
-    edgeMap[Edge(from, to)].insert(e);*/
+
 void DependenceGraph::deleteNode(DependenceNode *node) {
-  // to be save, check for edges...
-  std::set<SimpleDirectedGraphNode *> tmp = node->getSuccessors();
-  for (std::set<SimpleDirectedGraphNode *>::iterator i = tmp.begin();
-       i != tmp.end(); i++) {
-    removeLink(node, *i);
+  for (SimpleDirectedGraphNode *successor : node->getSuccessors()) {
+    auto *to = static_cast<DependenceNode *>(successor);
+    const auto types = edgeType(node, to);
+    ROSE_ASSERT(!types.empty());
+    for (EdgeType type : types)
+      removeEdge(node, to, type);
   }
-  tmp = node->getPredecessors();
-  for (std::set<SimpleDirectedGraphNode *>::iterator i = tmp.begin();
-       i != tmp.end(); i++) {
-    removeLink(*i, node);
+  for (SimpleDirectedGraphNode *predecessor : node->getPredecessors()) {
+    auto *from = static_cast<DependenceNode *>(predecessor);
+    const auto types = edgeType(from, node);
+    ROSE_ASSERT(!types.empty());
+    for (EdgeType type : types)
+      removeEdge(from, node, type);
   }
-  // now it is safe to remove this node
   DependenceNode::NodeType type = node->getType();
   SgNode *identifyingNode = node->getSgNode();
-  nodeTypeToDepNodeMapMap[type].erase(identifyingNode);
+  auto typeIt = nodeTypeToDepNodeMapMap.find(type);
+  ROSE_ASSERT(typeIt != nodeTypeToDepNodeMapMap.end());
+  auto nodeIt = typeIt->second.find(identifyingNode);
+  ROSE_ASSERT(nodeIt != typeIt->second.end() && nodeIt->second == node);
+  typeIt->second.erase(nodeIt);
+  if (typeIt->second.empty())
+    nodeTypeToDepNodeMapMap.erase(typeIt);
   removeNode(node);
   delete node;
 }
 
 DependenceNode *DependenceGraph::createNode(DependenceNode::NodeType type,
                                             SgNode *identifyingNode) {
+  ROSE_ASSERT(identifyingNode != nullptr);
+  auto &nodes = nodeTypeToDepNodeMapMap[type];
+  auto found = nodes.find(identifyingNode);
+  if (found != nodes.end())
+    return found->second;
+
   DependenceNode *depNode = new DependenceNode(type, identifyingNode);
-  nodeTypeToDepNodeMapMap[type][identifyingNode] = depNode;
+  nodes.emplace(identifyingNode, depNode);
   addNode(depNode);
   return depNode;
 }
 DependenceNode *DependenceGraph::getNode(DependenceNode::NodeType type,
                                          SgNode *identifyingNode) {
-  if (nodeTypeToDepNodeMapMap.count(type) &&
-      nodeTypeToDepNodeMapMap[type].count(identifyingNode))
-    return nodeTypeToDepNodeMapMap[type][identifyingNode];
-  else
-    return createNode(type, identifyingNode);
+  return createNode(type, identifyingNode);
 }
 
 DependenceNode *DependenceGraph::getExistingNode(DependenceNode::NodeType type,
                                                  SgNode *identifyingNode) {
-  if (identifyingNode == NULL)
-    return NULL;
-  if (nodeTypeToDepNodeMapMap.count(type) &&
-      nodeTypeToDepNodeMapMap[type].count(identifyingNode))
-    return nodeTypeToDepNodeMapMap[type][identifyingNode];
-  else
-    return NULL;
+  if (identifyingNode == nullptr)
+    return nullptr;
+  auto typeIt = nodeTypeToDepNodeMapMap.find(type);
+  if (typeIt == nodeTypeToDepNodeMapMap.end())
+    return nullptr;
+  auto nodeIt = typeIt->second.find(identifyingNode);
+  return nodeIt == typeIt->second.end() ? nullptr : nodeIt->second;
 }
 
 DependenceNode *DependenceGraph::getExistingNode(SgNode *identifyingNode) {
   return getExistingNode(DependenceNode::SGNODE, identifyingNode);
 }
 
-/*
-DependenceNode *DependenceGraph::getNode(DependenceNode * node)
-{
-        if (sgNodeToDepNodeMap.count(node))
-        {
-                return sgNodeToDepNodeMap[node];
-        }
-        else return createNode(node);
-}
-
-*/
 DependenceNode *DependenceGraph::getNode(SgNode *node) {
-
-  if (node == NULL)
+  if (node == nullptr)
     ROSE_ABORT();
   return getNode(DependenceNode::SGNODE, node);
-  DependenceNode *retVal;
-  //              cout << "\tgetNode for "<<node->unparseToString()<<"\t";
-  if (sgNodeToDepNodeMap.count(node)) {
-    retVal = sgNodeToDepNodeMap[node];
-    //                              cout << "returning existing node
-    //                              Ptr("<<retVal<<")\n";
-    return retVal;
-  } else {
-    retVal = createNode(node);
-    //                              cout << "creating new node
-    //                              Ptr("<<retVal<<")\n";
-    return retVal;
-  }
 }
+
 void DependenceGraph::removeEdge(DependenceNode *from, DependenceNode *to,
                                  EdgeType e) {
-  if (!edgeTypeMap.count(e)) {
-    std::cerr << "EdgeType does not exist" << endl;
-    exit(-1);
+  const Edge edge(from, to);
+  auto typeIt = edgeTypeMap.find(e);
+  auto edgeIt = edgeMap.find(edge);
+  ROSE_ASSERT(typeIt != edgeTypeMap.end() && typeIt->second.count(edge) == 1);
+  ROSE_ASSERT(edgeIt != edgeMap.end() && edgeIt->second.count(e) == 1);
+
+  typeIt->second.erase(edge);
+  if (typeIt->second.empty())
+    edgeTypeMap.erase(typeIt);
+
+  edgeIt->second.erase(e);
+  if (edgeIt->second.empty()) {
+    edgeMap.erase(edgeIt);
+    removeLink(from, to);
   }
-  if (!edgeTypeMap[e].count(Edge(from, to))) {
-    std::cerr << "Edge does not exist" << endl;
-    exit(-1);
-  }
-  // cout <<"removing in edgeTypeMap"<<endl;
-  edgeTypeMap[e].erase(Edge(from, to));
-  // cout <<"removing in edgeMap"<<endl;
-  edgeMap[Edge(from, to)].erase(e);
 }
 void DependenceGraph::establishEdge(DependenceNode *from, DependenceNode *to,
                                     EdgeType e) {
@@ -200,7 +150,8 @@ void DependenceGraph::establishEdge(DependenceNode *from, DependenceNode *to,
 
 bool DependenceGraph::edgeExists(DependenceNode *from, DependenceNode *to,
                                  EdgeType e) {
-  return edgeTypeMap[e].count(Edge(from, to));
+  auto typeIt = edgeTypeMap.find(e);
+  return typeIt != edgeTypeMap.end() && typeIt->second.count(Edge(from, to));
 }
 bool DependenceGraph::hasOutgingEdge(DependenceNode *src, EdgeType compare) {
   set<SimpleDirectedGraphNode *> successors = src->getSuccessors();
@@ -216,20 +167,14 @@ bool DependenceGraph::hasOutgingEdge(DependenceNode *src, EdgeType compare) {
 
 std::set<DependenceGraph::EdgeType>
 DependenceGraph::edgeType(DependenceNode *from, DependenceNode *to) {
-// DQ (8/30/2009): Debugging ROSE compiling ROSE (this statement does not
-// compile using ROSE). This is part of an error in DependenceGraph.h that is
-// also commented out when ROSE is used to compile ROSE.
-#ifndef USE_ROSE
-  return edgeMap[Edge(from, to)];
-#else
-  return std::set<DependenceGraph::EdgeType>();
-#endif
+  auto edgeIt = edgeMap.find(Edge(from, to));
+  return edgeIt == edgeMap.end() ? std::set<EdgeType>() : edgeIt->second;
 }
 
-void DependenceGraph::writeDot(char *filename) {
-
+void DependenceGraph::writeDot(const char *filename) {
   std::vector<std::string> styles;
   std::ofstream f(filename);
+  f.exceptions(std::ios::failbit | std::ios::badbit);
 
   f << "digraph \"G" << filename << "\" {" << std::endl;
   // output all of the nodes
@@ -268,7 +213,6 @@ void DependenceGraph::writeDot(char *filename) {
       f << ",shape=box";
       break;
     default:
-      //      f<<"shape=box";
       break;
     }
     f << ",style=\"";
@@ -297,113 +241,61 @@ void DependenceGraph::writeDot(char *filename) {
       snprintf(buf1, sizeof(buf1), "%p", d1);
       snprintf(buf2, sizeof(buf2), "%p", d2);
 
-      f << "\"" << buf1 << "\" -> \"" << buf2 << "\"";
-      std::set<EdgeType> ets = edgeType(d1, d2);
-      EdgeType et = *(ets.begin());
+      const std::set<EdgeType> ets = edgeType(d1, d2);
+      ROSE_ASSERT(!ets.empty());
 
-      bool highlightEdge = false;
-      if (d1->isHighlighted() && d2->isHighlighted()) {
-        highlightEdge = true;
-      }
+      const bool highlightEdge = d1->isHighlighted() && d2->isHighlighted();
 
-      f << "[";
-      f << "label=\"" << getEdgeName(et) << "\"";
-      if (!highlightEdge)
-        switch (et) {
-        case SUMMARY:
-          f << ",color=cyan";
-          break;
-        case CONTROL:
-          f << ",color=blue";
-          break;
-        case DATA:
-          f << ",color=green";
-          break;
-        case CALL:
-          f << ",color=gold1";
-          break;
-        case SYNTACTIC:
-          f << ",color=gray";
-        default:
-          break;
+      for (EdgeType et : ets) {
+        f << "\"" << buf1 << "\" -> \"" << buf2 << "\"";
+        f << "[";
+        f << "label=\"" << getEdgeName(et) << "\"";
+        if (!highlightEdge) {
+          switch (et) {
+          case SUMMARY:
+            f << ",color=cyan";
+            break;
+          case CONTROL:
+            f << ",color=blue";
+            break;
+          case DATA:
+            f << ",color=green";
+            break;
+          case CALL:
+            f << ",color=gold1";
+            break;
+          case SYNTACTIC:
+            f << ",color=gray";
+            break;
+          default:
+            break;
+          }
+        } else {
+          f << ",style=bold";
+          f << ",color=red";
         }
-      else {
-        f << ",style=bold";
-        f << ",color=red";
+        f << "];" << std::endl;
       }
-      f << "];" << std::endl;
     }
   }
 
   f << "}" << std::endl;
+  f.close();
 }
 
 bool IsImportantForSliceSgFilter(SgNode *n) {
-
-  // statements are intersting, but not the FunctionparameterList or
-  // SgExprStatements
-  // Jim Leek: 2/21/2009: Defuse now ignores SgExprStatements, so we should too.
-  // Added to fix problem with dupicate nodes appearing in Dominance Tree.
   if (isSgExprStatement(n)) {
     return false;
   }
-  // function calls are now always interesting, since we ignore
-  // sgExprStatements.
   if (isSgFunctionCallExp(n)) {
     return true;
   }
 
-  // get rid of all beginning nodes
-#ifdef SIMPLE_FILTER
   if (isSgStatement(n))
     return true;
-  // JJW
   if (isSgExpression(n) && !isSgExpression(n->get_parent()))
     return true;
   return false;
-#else
-  /*              if (isSgForStatement(n))
-                          return false;*/
-  // statements are intersting, but not the FunctionparameterList
-  if (isSgStatement(n))
-    if (!isSgFunctionParameterList(n))
-      return true;
-  if (isSgInitializedName(n)) {
-    if (!isSgVariableDeclaration(n->get_parent()))
-      return true;
-  }
-  // function calls are interesting, but ONLY if they are not yet shown in
-  // another way..
-  if (isSgFunctionCallExp(n)) {
-    if (!isSgExprStatement(n->get_parent()))
-      //                      if (!isSgStatement(n->get_parent()))
-      return true;
-  }
-  // check for for-loop incremental expression
-  if ((isSgBinaryOp(n) || isSgUnaryOp(n)) && isSgExpression(n)) {
-    // if the parent is a for statement, then true else false
-    SgNode *current = n;
-    while (isSgExpression(current->get_parent())) {
-      current = current->get_parent();
-    }
-    if (isSgForStatement(current->get_parent()))
-      return true;
-  }
-
-  return false;
-#endif
-
-  /*
-  if (isSgExprStatement(n))
-          return true;
-  if (isSgReturnStmt(n))
-          return true;
-  // the following should not be necessary
-  if (isSgFunctionDefinition(n))
-          return true;
-  // if (isSgStatement(n)) return true;
-  return false;
-*/
 }
 
 NodeQuerySynthesizedAttributeType
@@ -417,7 +309,7 @@ queryIsImportantForSliceType(SgNode *astNode) {
 NodeQuerySynthesizedAttributeType
 queryIsImportantForSliceTypeWithCalls(SgNode *astNode) {
   NodeQuerySynthesizedAttributeType retVal;
-  if (IsImportantForSliceSgFilter(astNode) || isSgFunctionCallExp(astNode))
+  if (IsImportantForSliceSgFilter(astNode))
     retVal.push_back(astNode);
   return retVal;
 }

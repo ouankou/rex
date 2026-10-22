@@ -1,7 +1,4 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
-
-#include "checkIsModifiedFlag.h"
 
 #if ROSE_WITH_LIBHARU
 #include "AstPDFGeneration.h"
@@ -19,19 +16,14 @@
 
 #include "plugin.h"
 
+#include <filesystem>
 #include <time.h>
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
+#include "rex-backend-link-options.h"
 #include "rose_config.h"
 #include "rose_path_resolver.h"
-// DQ (9/8/2017): Debugging ROSE_ASSERT. Call sighandler_t signal(int signum,
-// sighandler_t handler);
 #include <signal.h>
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 using namespace Rose;
 
@@ -55,105 +47,43 @@ void rosePhaseTrace(const char *phase) {
     fflush(stderr);
   }
 }
+
+int reportBackendFilesystemError(
+    SgProject *project, const std::filesystem::filesystem_error &error) {
+  // Filesystem failures terminate the requested operation through the public
+  // backend status API. Normal unwinding releases the exception and AST state.
+  fprintf(stderr, "REX_BACKEND_ERROR[filesystem]: %s\n", error.what());
+  project->set_backendErrorCode(1);
+  rosePhaseTrace("backend.end");
+  return 1;
+}
 } // namespace
 
 // global variable for turning on and off internal debugging.
 int ROSE_DEBUG = 0;
 
-// DQ (3/6/2017): Adding ROSE options data structure to support frontend and
-// backend options (see header file for details).
 Rose::Options Rose::global_options;
-Rose::Options::Options() {
-  // DQ (3/6/2017): Default option value to minimize the chattyness of ROSE
-  // based tools.
-  frontend_notes = false;
-  frontend_warnings = false;
-  backend_notes = false;
-  backend_warnings = false;
-}
+Rose::Options::Options() = default;
 
-// DQ (3/6/2017): Adding ROSE options data structure to support frontend and
-// backend options (see header file for details).
-Rose::Options::Options(const Options &X) {
-  // DQ (3/6/2017): Default option value to minimize the chattyness of ROSE
-  // based tools.
-  frontend_notes = X.frontend_notes;
-  frontend_warnings = X.frontend_warnings;
-  backend_notes = X.backend_notes;
-  backend_warnings = X.backend_warnings;
-}
+Rose::Options::Options(const Options &) = default;
 
-// DQ (3/6/2017): Adding ROSE options data structure to support frontend and
-// backend options (see header file for details).
-Options &Rose::Options::operator=(const Options &X) {
-  // DQ (3/6/2017): Default option value to minimize the chattyness of ROSE
-  // based tools.
-  frontend_notes = X.frontend_notes;
-  frontend_warnings = X.frontend_warnings;
-  backend_notes = X.backend_notes;
-  backend_warnings = X.backend_warnings;
-
-  return *this;
-}
-
-bool Rose::Options::get_frontend_notes() { return frontend_notes; }
-
-void Rose::Options::set_frontend_notes(bool flag) { frontend_notes = flag; }
-
-bool Rose::Options::get_frontend_warnings() { return frontend_warnings; }
-
-void Rose::Options::set_frontend_warnings(bool flag) {
-  frontend_warnings = flag;
-}
-
-bool Rose::Options::get_backend_notes() { return backend_notes; }
-
-void Rose::Options::set_backend_notes(bool flag) { backend_notes = flag; }
+Options &Rose::Options::operator=(const Options &) = default;
 
 bool Rose::Options::get_backend_warnings() { return backend_warnings; }
 
 void Rose::Options::set_backend_warnings(bool flag) { backend_warnings = flag; }
 
-#define OUTPUT_TO_FILE true
-#define DEBUG_COPY_EDIT false
-
-// DQ (9/27/2018): We need to build multiple maps, one for each file (to support
-// token based unparsing for multiple files, such as what is required when using
-// the unparsing header files feature). DQ (10/28/2013): Put the token sequence
-// map here, it is set and accessed via member functions on the SgSourceFile IR
-// node. std::map<SgNode*,TokenStreamSequenceToNodeMapping*>
-// Rose::tokenSubsequenceMap;
-// std::set<int,std::map<SgNode*,TokenStreamSequenceToNodeMapping*> >
-// Rose::tokenSubsequenceMapSet;
-std::map<int, std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>
-    Rose::tokenSubsequenceMapOfMaps;
-
-// DQ (1/19/2021): This is part of moving to a new map that uses the
-// SgSourceFile pointer instead of the file_id.
+// Nonowning index of the token maps owned by live source-file nodes.
 std::map<SgSourceFile *,
          std::map<SgNode *, TokenStreamSequenceToNodeMapping *> *>
     Rose::tokenSubsequenceMapOfMapsBySourceFile;
 
-// DQ (11/20/2015): Provide a statement to use as a key in the token sequence
-// map to get representative whitespace.
-// std::map<SgScopeStatement*,SgStatement*>
-// Rose::representativeWhitespaceStatementMap;
 std::map<int, std::map<SgScopeStatement *, SgStatement *> *>
     Rose::representativeWhitespaceStatementMapOfMaps;
 
-// DQ (11/30/2015): Provide a statement to use as a key in the macro expansion
-// map to get info about macro expansions.
-// std::map<SgStatement*,MacroExpansion*> Rose::macroExpansionMap;
 std::map<int, std::map<SgStatement *, MacroExpansion *> *>
     Rose::macroExpansionMapOfMaps;
 
-// DQ (10/29/2018): Build a map for the unparser to use to locate SgIncludeFile
-// IR nodes.
-
-// DQ (11/25/2020): These are the boolean variables that are computed in the
-// function compute_language_kind() and inlined via the
-// SageInterface::is_<language kind>_language() functions.  See more details
-// comment in the header file.
 bool Rose::is_C_language = false;
 bool Rose::is_OpenMP_language = false;
 bool Rose::is_C99_language = false;
@@ -163,11 +93,6 @@ bool Rose::is_CAF_language = false;
 bool Rose::is_Cuda_language = false;
 bool Rose::is_OpenCL_language = false;
 
-// DQ (3/24/2016): Adding Robb's message logging mechanism to contrl output
-// debug message from the legacy frontend/ROSE connection code.
-
-// DQ (4/17/2010): This function must be defined if C++ support in ROSE is
-// disabled. REX: legacy frontend has been replaced with Clang/LLVM frontend
 std::string frontendVersionString() {
 #ifdef ROSE_BUILD_CXX_LANGUAGE_SUPPORT
   string frontend_version = "Clang/LLVM 22 (experimental)";
@@ -177,8 +102,6 @@ std::string frontendVersionString() {
   return frontend_version;
 }
 
-// DQ (11/1/2009): replaced "version()" with separate "version_number()" and
-// "version_message()" functions.
 std::string version_message() {
   std::ostringstream ss;
 
@@ -239,20 +162,14 @@ std::string version_message() {
   // Information related to C/C++ analysis.
   //-----------------------------------------------------------------------
 
-#if defined(ROSE_BUILD_CPP_LANGUAGE_SUPPORT) ||                                \
-    defined(ROSE_BUILD_C_LANGUAGE_SUPPORT)
+#ifdef ROSE_BUILD_C_LANGUAGE_SUPPORT
   ss << "  --- C/C++ analysis:             enabled\n";
   extern string frontendVersionString();
   ss << "  ---   C/C++ front-end:          " << frontendVersionString() << "\n";
 
-  // This prints (originally and still now) the version of the C++ compiler
-  // instead of the C compiler. This is fine for the normal case where both
-  // compilers come from the same compiler collection, but would be wrong, for
-  // instance, if the user configured ROSE to use a C compiler from GCC and a
-  // C++ compiler from LLVM. [Robb Matzke 2021-08-18]
   ss << "  ---   C back-end:               "
-     << BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER << "."
-     << BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER << " ("
+     << BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER << "."
+     << BACKEND_C_COMPILER_MINOR_VERSION_NUMBER << " ("
      << BACKEND_C_COMPILER_NAME_WITH_PATH << ")\n";
 
   ss << "  ---   C++ back-end:             "
@@ -283,11 +200,7 @@ std::string version_message() {
 #endif
 
   //-----------------------------------------------------------------------
-  // Information related to other language analysis, alphabetically. These
-  // CPP symbols with weird and inconsistent names come from ROSE's
-  // configure-time checks. If you remove them from this list because they're
-  // not supported anymore, then kindly also remove them from the rest of the
-  // ROSE library source code and tests!
+  // Information related to other language analysis.
   //-----------------------------------------------------------------------
 
 #ifdef ROSE_BUILD_CUDA_LANGUAGE_SUPPORT
@@ -296,58 +209,10 @@ std::string version_message() {
   ss << "  --- CUDA analysis:              disabled\n";
 #endif
 
-#ifdef ROSE_BUILD_OPENCL_LANGUAGE_SUPPORT
-  ss << "  --- OpenCL analysis:            enabled\n";
-#else
-  ss << "  --- OpenCL analysis:            disabled\n";
-#endif
-
   return ss.str();
 }
 
-// DQ (11/1/2009): replaced "version()" with separate "version_number()" and
-// "version_message()" functions.
-std::string version_number() {
-#ifdef ROSE_PACKAGE_VERSION
-  // The ROSE_VERSION file is the single source of truth for package and tool
-  // versions. This avoids the generic VERSION macro that historical CMake
-  // builds left hard-coded at 0.9.10.
-  return ROSE_PACKAGE_VERSION;
-#else
-  ROSE_ASSERT(!"Expected CPP macro ROSE_PACKAGE_VERSION to be defined");
-#endif
-}
-
-// DQ (4/17/2010): This function must be defined if C++ support in ROSE is
-// disabled.
-void outputPredefinedMacros() {
-  printf("Output of relevant pre-defined macros in ROSE: \n");
-#ifdef __GNUC__
-  printf("   macro: __GNUC__ = %d \n", __GNUC__);
-#endif
-#ifdef __GNUC_MINOR__
-  printf("   macro: __GNUC_MINOR__ = %d \n", __GNUC_MINOR__);
-#endif
-#ifdef __VERSION__
-  printf("   macro: __VERSION__ = %s \n", __VERSION__);
-#endif
-#ifdef __GNUC_PATCHLEVEL__
-  printf("   macro: __GNUC_PATCHLEVEL__ = %d \n", __GNUC_PATCHLEVEL__);
-#endif
-#ifdef __GNUC__
-  printf("   macro: __GNUC__*10000 + __GNUC_MINOR__*100 + __GNUC_PATCHLEVEL__ "
-         "= %d \n",
-         __GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__);
-#endif
-#ifdef __GXX_EXPERIMENTAL_CXX0X__
-  printf("   macro: __GXX_EXPERIMENTAL_CXX0X__ = %d \n",
-         __GXX_EXPERIMENTAL_CXX0X__);
-#endif
-
-#ifdef XXX
-  printf("   macro: XXX = %d \n", XXX);
-#endif
-}
+std::string version_number() { return ROSE_PACKAGE_VERSION; }
 
 /*! \brief Call to frontend, processes commandline and generates a SgProject
    object.
@@ -381,7 +246,6 @@ SgProject *frontend(int argc, char **argv,
 
 SgProject *frontend(const std::vector<std::string> &argv,
                     SgProject::constant_folding_enum frontendConstantFolding) {
-  // DQ (6/14/2007): Added support for timing of high level frontend function.
   SgProject *project = nullptr;
   bool skip_postprocessing = false;
   {
@@ -394,43 +258,29 @@ SgProject *frontend(const std::vector<std::string> &argv,
     std::vector<std::string> argv2 = argv; // workaround const argv
     Rose::processPluginCommandLine(argv2);
 
-    // Separate the creation of a new project with building the AST. The default
-    // constructor initializes the object and then parse is used to build the
-    // AST (in a separate step). The current constructors that conflate object
-    // creation with parsing should be deprecated. [Rasmussen, 2024.04.03]
-    project = new SgProject;
-    ASSERT_not_null(project);
-    project->set_frontendConstantFolding(frontendConstantFolding);
-    SageInterface::registerAstTeardownProject(project);
-
-    // Ensure teardown hooks are registered before parsing so early exits get
-    // cleanup.
-    SageInterface::registerAstTeardownAtExit();
-
-    // Create the AST by setting command-line options and then parsing all files
-    // from the command line
-    rosePhaseTrace("project.parse.begin");
-    project->parse(argv2);
-    rosePhaseTrace("project.parse.end");
+    {
+      SgNode::SourceStateConstruction construction;
+      project = new SgProject;
+      ASSERT_not_null(project);
+      project->set_frontendConstantFolding(frontendConstantFolding);
+      SageInterface::registerAstTeardownProject(project);
+      SageInterface::registerAstTeardownAtExit();
+      rosePhaseTrace("project.parse.begin");
+      project->parse(argv2);
+      rosePhaseTrace("project.parse.end");
+    }
     int frontend_status = project->get_frontendErrorCode();
     if (frontend_status != 0) {
       skip_postprocessing = true;
     }
 
     if (!skip_postprocessing) {
-      // DQ (1/27/2017): Comment this out so that we can generate the dot graph
-      // to debug symbol with null basis.
-      unsetNodesMarkedAsModified(project);
-
       // Set the mode to be transformation, mostly for Fortran. Liao 8/1/2013
       if (SageBuilder::SourcePositionClassificationMode ==
           SageBuilder::e_sourcePositionFrontendConstruction) {
         SageBuilder::setSourcePositionClassificationMode(
             SageBuilder::e_sourcePositionTransformation);
       }
-
-      // Rose::AST::cmdline::graphviz.frontend.exec(project);
-      // Rose::AST::cmdline::checker.frontend.exec(project);
 
       // Connect to Ast Plugin Mechanism
       rosePhaseTrace("plugins.begin");
@@ -824,34 +674,13 @@ void enforceTokenUnparseContract(SgProject *project) {
   enforceTokenUnparseContractImpl(project);
 }
 
-/*! \brief Call to backend, generates either object file or executable.
-
-    This function operates in two modes:
-        1) If source files were specified on the command line, then it calls
-           unparser and compiles generated file.
-        2) If no source files are present then it operates as a linker
-   processing all specified object files. If no source files or object files
-   are specified then we return a error.
-
-    This function represents a simple interface to the use of ROSE as a
-   library.
-
-     At this point in the control flow we have returned from the processing
-   via the legacy frontend frontend (or skipped it if that option was
-   specified). The following has been done or explicitly skipped if such
-   options were specified on the commandline: 1) The application program has
-   been parsed 2) All AST's have been build (one for each grammar) 3) The
-   transformations have been edited into the C++ AST 4) The C++ AST has been
-   unparsed to form the final output file (all code has been generated into a
-   different filename "rose_<original file name>.C")
-
-    \internal The error code is returned, but it might be appropriate to make
-              it more similar to the frontend() function and its handling of
-              the error code.
+/** Generate source from the AST and compile it, or link an object-only project.
+ * Frontend failures are returned before any output is generated. Filesystem
+ * failures stop the operation and are reported as a nonzero backend status.
  */
 int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
-            UnparseDelegate *unparseDelegate) {
-  // DQ (7/12/2005): Introduce tracking of performance of ROSE.
+            UnparseDelegate *unparseDelegate) try {
+  ROSE_ASSERT(project != nullptr);
   TimingPerformance timer("AST Object Code Generation (backend):");
   rosePhaseTrace("backend.begin");
 
@@ -868,23 +697,7 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
     printf("Inside of backend(SgProject*) \n");
   }
 
-  // Rose::AST::cmdline::graphviz.backend.exec(project);
-  // Rose::AST::cmdline::checker.backend.exec(project);
-
-  // printf ("   project->get_useBackendOnly() = %s
-  // \n",project->get_useBackendOnly() ? "true" : "false");
   if (project->get_useBackendOnly() == false) {
-    // Add forward references for instantiated template functions and member
-    // functions (which are by default defined at the bottom of the file (but
-    // should be declared at the top once we know what instantiations should be
-    // built)).  They must be defined at the bottom since they could call other
-    // functions not yet declared in the file.  Note that this fixup is required
-    // since we have skipped the class template definitions which would contain
-    // the declarations that we are generating.  We might need that as a
-    // solution at some point if this fails to be sufficently robust. if (
-    // SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL-2 )
-    //      printf ("Calling fixupInstantiatedTemplates() \n");
-    // generate C++ source code
     if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL) {
       cout << "Calling project->unparse()\n";
     }
@@ -914,43 +727,13 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
       printf("   project->get_compileOnly() = %s \n",
              project->get_compileOnly() ? "true" : "false");
 
-    // DQ (5/20/2005): If we have not permitted templates to be
-    // instantiated during initial compilation then we have to do the
-    // prelink step (this is however still new and somewhat problematic
-    // (buggy?)).  It relies upon the legacy frontend mechansisms which
-    // are not well understood.
-    bool callTemplateInstantation =
-        (project->get_template_instantiation_mode() == SgProject::e_none);
-
-    if (callTemplateInstantation == true) {
-      // DQ (9/6/2005): I think that this is no longer needed
-      printf(
-          "I don't think we need to call instantiateTemplates() any more! \n");
-      ROSE_ABORT();
-
-      // The instantiation of templates can cause new projects (sets of source
-      // files) to be generated, but since the object files are already
-      // processed this is not an issue here.  A project might, additionally,
-      // keep track of the ASTs associated with the different phases of
-      // instantions of templates.
-      if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
-        printf("Calling instantiateTemplates() \n");
-
-      printf("Skipping template support in backend(SgProject*) \n");
-      // instantiateTemplates (project);
-    }
-
     if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
       printf("Calling project->link() \n");
 
-    // DQ (10/15/2005): Trap out case of C programs where we want to make sure
-    // that we don't use the C++ compiler to do our linking! This could be done
-    // in the
     if (project->get_C_only() == true) {
       printf(
           "Link using the C language linker (when handling C programs) = %s \n",
           BACKEND_C_COMPILER_NAME_WITH_PATH);
-      // finalCombinedExitStatus = project->link("gcc");
       rosePhaseTrace("backend.link.begin");
       finalCombinedExitStatus =
           project->link(BACKEND_C_COMPILER_NAME_WITH_PATH);
@@ -964,7 +747,6 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
           project->link(BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
       rosePhaseTrace("backend.link.end");
     } else {
-      // Use the default name for C++ compiler (defined at configure time)
       if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
         printf("Link using the default linker (when handling non-C programs) = "
                "%s \n",
@@ -974,13 +756,8 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
           project->link(BACKEND_CXX_COMPILER_NAME_WITH_PATH);
       rosePhaseTrace("backend.link.end");
     }
-
-    // printf ("DONE with link! \n");
   }
 
-  // Message from backend to user.
-  // Avoid all I/O to stdout if useBackendOnly == true.
-  // if (project->get_useBackendOnly() == false)
   if (SgProject::get_verbose() >= 1)
     cout << "source file(s) compiled with vendor compiler. (exit status = "
          << finalCombinedExitStatus << ").\n"
@@ -992,26 +769,19 @@ int backend(SgProject *project, UnparseFormatHelp *unparseFormatHelp,
 
   rosePhaseTrace("backend.end");
   return backendStatus;
+} catch (const std::filesystem::filesystem_error &error) {
+  return reportBackendFilesystemError(project, error);
 }
 
-int backendCompilesUsingOriginalInputFile(SgProject *project,
-                                          bool compile_with_USE_ROSE_macro) {
-  // DQ (8/24/2009):
-  // To work with existing makefile systems, we want to force an object file to
-  // be generated. So we want to call the backend compiler on the original input
-  // file (instead of generating an new file from the AST and running it through
-  // the backend).  The whole point is to gnerate a object file.  The effect is
-  // that this does a less agressive test of ROSE but test only the parts
-  // required for analysis tools instead of transformation tools. This avoids
-  // some programs in the name qualification support that is called by the
-  // backend and permits testing of the parts of ROSE relevant for analysis
-  // tools (e.g. Compass). Of course we eventually want everything to work, but
-  // I want to test the compilation of ROSE using ROSE as part of test to get
-  // Compass running regularly on ROSE.
-
-  // Note that the command generated may have to be fixup later to include more
-  // subtle details required to link libraries, etc.  At present this function
-  // only handles the support required to build an object file.
+int backendCompilesUsingOriginalInputFile(
+    SgProject *project, bool compile_with_USE_ROSE_macro) try {
+  ROSE_ASSERT(project != nullptr);
+  const int frontendStatus = frontendExitStatus(project);
+  if (frontendStatus != 0) {
+    project->set_backendErrorCode(frontendStatus);
+    return frontendStatus;
+  }
+  // Analysis tools compile the original sources without unparsing the AST.
   SgStringList commandLineToGenerateObjectFile;
 
   enum language_enum {
@@ -1098,16 +868,22 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
 
   switch (language) {
   case e_c:
-    commandLineToGenerateObjectFile.push_back(
-        BACKEND_C_COMPILER_NAME_WITH_PATH);
+    commandLineToGenerateObjectFile.insert(
+        commandLineToGenerateObjectFile.end(),
+        RexBackend::cCompilerCommand.begin(),
+        RexBackend::cCompilerCommand.end());
     break;
   case e_cxx:
-    commandLineToGenerateObjectFile.push_back(
-        BACKEND_CXX_COMPILER_NAME_WITH_PATH);
+    commandLineToGenerateObjectFile.insert(
+        commandLineToGenerateObjectFile.end(),
+        RexBackend::cxxCompilerCommand.begin(),
+        RexBackend::cxxCompilerCommand.end());
     break;
   case e_fortran:
-    commandLineToGenerateObjectFile.push_back(
-        BACKEND_FORTRAN_COMPILER_NAME_WITH_PATH);
+    commandLineToGenerateObjectFile.insert(
+        commandLineToGenerateObjectFile.end(),
+        RexBackend::fortranCompilerCommand.begin(),
+        RexBackend::fortranCompilerCommand.end());
     break;
 
   default: {
@@ -1118,11 +894,6 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
   }
 
   if (compile_with_USE_ROSE_macro == true) {
-    // DQ (11/3/2011): Mark this as being called from ROSE (even though the
-    // backend compiler is being used). This will help us detect where strings
-    // handed in using -D options may have lost some outer quotes. There may
-    // also be a better fix to detect quoted strings and requote them, so this
-    // should be considered also.
     commandLineToGenerateObjectFile.push_back("-DUSE_ROSE");
   }
 
@@ -1131,11 +902,10 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     SgStringList originalCommandLineArgumentList =
         project->get_originalCommandLineArgumentList();
 
-    // DQ (2/20/2010): Added filtering of options that should not be passed to
-    // the vendor compiler.
     SgFile::stripRoseCommandLineOptions(originalCommandLineArgumentList);
     if (language == e_fortran) {
-      SgFile::stripFortranCommandLineOptions(originalCommandLineArgumentList);
+      SgFile::validateFortranCommandLineOptions(
+          originalCommandLineArgumentList);
     }
 
     struct MixedSourceLanguageState {
@@ -1147,8 +917,7 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
       for (const SgFile *file : project->get_fileList()) {
         ASSERT_not_null(file);
         const std::string sourcePath =
-            StringUtility::getAbsolutePathFromRelativePath(file->getFileName(),
-                                                           true);
+            StringUtility::getAbsolutePathFromRelativePath(file->getFileName());
         using CommandlineProcessing::ClangLanguageFamily;
         const CommandlineProcessing::ClangLanguageSelection selection =
             CommandlineProcessing::clangLanguageSelectionForSource(
@@ -1246,9 +1015,10 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
       }
 
       if (!mixedSourceLanguages.empty() &&
-          (afterDoubleDash || argument.empty() || argument.front() != '-')) {
+          (afterDoubleDash || argument.empty() || argument.front() != '-') &&
+          std::filesystem::exists(argument)) {
         const std::string operandPath =
-            StringUtility::getAbsolutePathFromRelativePath(argument, true);
+            StringUtility::getAbsolutePathFromRelativePath(argument);
         const auto languageIt = mixedSourceLanguages.find(operandPath);
         if (languageIt != mixedSourceLanguages.end()) {
           if (afterDoubleDash) {
@@ -1301,12 +1071,6 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
       }
     }
 
-    // DQ (12/28/2010): If we specified to NOT compile the input code then don't
-    // do so even when it is the original code. This is important for Fortran
-    // 2003 test codes that are not compiled by the backend compiler and for
-    // which the tests/nonsmoke/functional/testTokenGeneration.C translator
-    // uses this function to generate object files. finalCombinedExitStatus =
-    // system (commandLineToGenerateObjectFile.c_str());
     if (project->get_skipfinalCompileStep() == false) {
       finalCombinedExitStatus =
           systemFromVector(commandLineToGenerateObjectFile);
@@ -1323,35 +1087,32 @@ int backendCompilesUsingOriginalInputFile(SgProject *project,
     finalCombinedExitStatus = project->link(commandLineToGenerateObjectFile[0]);
   }
 
+  project->set_backendErrorCode(finalCombinedExitStatus);
   return finalCombinedExitStatus;
+} catch (const std::filesystem::filesystem_error &error) {
+  return reportBackendFilesystemError(project, error);
 }
 
 int backendGeneratesSourceCodeButCompilesUsingOriginalInputFile(
-    SgProject *project) {
-  // DQ (2/6/2010): This function is a step between calling the backend()
-  // and calling backendCompilesUsingOriginalInputFile().  It it used
-  // the test the generation of the source code, but not the compilation of
-  // it using the backend (vendor) compiler.  This is used to test ROSE.
-
-  // Users are likely to either want to use backend() to generate the source
-  // code for there project and it compiled (e.g. for optimization) or call
-  // backendCompilesUsingOriginalInputFile() to process the input code and
-  // then generate object files or executables from the original code
-  // (e.g for analysis).
-
-  // This instance of complexity is why this needs to be a separate backend
-  // function. Note that file->get_skip_unparse() will be false when the "-E"
-  // option, and the unparse() function will properly assert that it should be
-  // true.
+    SgProject *project) try {
+  ROSE_ASSERT(project != nullptr);
+  const int frontendStatus = frontendExitStatus(project);
+  if (frontendStatus != 0) {
+    project->set_backendErrorCode(frontendStatus);
+    return frontendStatus;
+  }
+  // Exercise source generation, then compile the original input for tools
+  // whose transformations are not intended to produce executable output.
   if (project->get_skip_unparse() == false) {
     project->unparse();
   }
 
   return backendCompilesUsingOriginalInputFile(project);
+} catch (const std::filesystem::filesystem_error &error) {
+  return reportBackendFilesystemError(project, error);
 }
 
 void generatePDF(const SgProject &project) {
-  // DQ (6/14/2007): Added support for timing of the generatePDF() function.
   TimingPerformance timer("ROSE generatePDF():");
 
   if (SgProject::get_verbose() >= BACKEND_VERBOSE_LEVEL)
@@ -1370,21 +1131,11 @@ void generatePDF(const SgProject &project) {
 
 void generateDOT(const SgProject &project, std::string filenamePostfix,
                  bool excludeTemplateInstantiations) {
-  // DQ (7/4/2008): Added default parameter to support the filenamePostfix
-  // mechanism in AstDOTGeneration
-
-  // DQ (6/14/2007): Added support for timing of the generateDOT() function.
   TimingPerformance timer("ROSE generateDOT():");
 
   AstDOTGeneration astdotgen;
   SgProject &nonconstProject = (SgProject &)project;
 
-  // DQ (12/14/2018): The number of nodes is computed globally, but the graph is
-  // genereated only for the input file. So this can suppress the generation of
-  // the graph when there are a large number of IR nodes from header files.
-  // Multiplied the previous value by 10 to support building the smaller graph
-  // of the input file. DQ (2/18/2013): Generating a DOT file of over a million
-  // IR nodes is too much. int maxSize = 1000000;
   int maxSize = 10000000;
 
   int numberOfASTnodes = numberOfNodes();
@@ -1393,18 +1144,7 @@ void generateDOT(const SgProject &project, std::string filenamePostfix,
     printf("In generateDOT(): numberOfASTnodes = %d maxSize = %d \n",
            numberOfASTnodes, maxSize);
 
-  // DQ (2/18/2013): Compute the number of IR nodes for the AST and limit the
-  // size of these graphs (take too long to generate and the graphs are not
-  // useful).
   if (numberOfASTnodes < maxSize) {
-    // Note that the use of generateInputFiles causes the graph to be generated
-    // for only the input source file and not any included header files. The
-    // result is a much smaller file (and generally a more useful one).
-    // DQ (9/1/2008): This is the default for the last long while, but the
-    // SgProject IR nodes is not being processed (which appears to be a bug).
-    // This is because in the implementation of the generateInputFiles the
-    // function traverseInputFiles is called.
-    // astdotgen.generateInputFiles(&nonconstProject,DOTGeneration<SgNode*>::TOPDOWNBOTTOMUP,filenamePostfix);
     astdotgen.generateInputFiles(
         &nonconstProject, DOTGeneration<SgNode *>::TOPDOWNBOTTOMUP,
         filenamePostfix, excludeTemplateInstantiations);
@@ -1417,21 +1157,11 @@ void generateDOT(const SgProject &project, std::string filenamePostfix,
 }
 
 void generateDOT(SgNode *node, std::string filename) {
-  // DQ (9/22/2017): This function is being provided to support the generation
-  // of a dot file from any subtree. The more imediate use for this function is
-  // to support generation of dot files from trees built using the ROSE Untyped
-  // nodes.
-
-  // DQ (6/14/2007): Added support for timing of the generateDOT() function.
   TimingPerformance timer("ROSE generateDOT():");
 
   AstDOTGeneration astdotgen;
-
-  // This used to be the default, but it would output too much data (from
-  // include files). std::string filenamePostfix = ".dot";
-  std::string filenamePostfix = "";
   astdotgen.generate(node, filename, DOTGeneration<SgNode *>::TOPDOWNBOTTOMUP,
-                     filenamePostfix);
+                     "");
 }
 
 void generateDOT_withIncludes(const SgProject &project,
@@ -1441,37 +1171,19 @@ void generateDOT_withIncludes(const SgProject &project,
   AstDOTGeneration astdotgen;
   SgProject &nonconstProject = (SgProject &)project;
 
-  // Note that the use of generateInputFiles causes the graph to be generated
-  // for only the input source file and not any included header files. The
-  // result is a much smaller file (and generally a more useful one).
-  // This used to be the default, but it would output too much data (from
-  // include files). It is particularly useful when handling multiple files on
-  // the command line and traversing the files included from each file.
-  // astdotgen.generate(&nonconstProject);
-  // DOTGeneration::traversalType tt = TOPDOWNBOTTOMUP;
-  AstDOTGeneration::traversalType tt = AstDOTGeneration::TOPDOWNBOTTOMUP;
-  astdotgen.generate(&nonconstProject, tt, filenamePostfix);
+  astdotgen.generate(&nonconstProject, AstDOTGeneration::TOPDOWNBOTTOMUP,
+                     filenamePostfix);
 }
 
 void generateDOTforMultipleFile(const SgProject &project,
                                 std::string filenamePostfix) {
   TimingPerformance timer("ROSE generateDOTforMultipleFile():");
 
-  // This is the best way to handle generation of DOT files where multiple files
-  // are specified on the command line.  Later we may be able to filter out the
-  // include files (but this is a bit difficult until generateInputFiles() can
-  // be implemetned to call the evaluation of inherited and synthesized
-  // attributes.
   generateDOT_withIncludes(project, filenamePostfix);
 }
 
 void generateAstGraph(const SgProject *project, int maxSize,
-                      std::string filenameSuffix)
-// void generateAstGraph ( const SgProject* project, int maxSize, std::string
-// filenameSuffix, CustomMemoryPoolDOTGeneration::s_Filter_Flags* filter_flags)
-{
-  // DQ (6/14/2007): Added support for timing of the generateAstGraph()
-  // function.
+                      std::string filenameSuffix) {
   TimingPerformance timer("ROSE generateAstGraph():");
 
   // Generate a name from all the files on the command line
@@ -1489,12 +1201,7 @@ void generateAstGraph(const SgProject *project, int maxSize,
            "= %s \n",
            numberOfASTnodes, maxSize, filename.c_str());
 
-  // Compute the number of IR nodes for the AST
   if (numberOfASTnodes < maxSize) {
-    // generateWholeGraphOfAST(filename);
-
-    // Added support to handle options to control filtering of Whole AST graphs.
-    // std::vector<std::string>  argvList (argv, argv+ argc);
     std::vector<std::string> argvList =
         project->get_originalCommandLineArgumentList();
     CustomMemoryPoolDOTGeneration::s_Filter_Flags filter_flags(argvList);
@@ -1507,72 +1214,6 @@ void generateAstGraph(const SgProject *project, int maxSize,
   }
 }
 
-int Rose::getLineNumber(SgLocatedNode *locatedNodePointer) {
-  // Get the line number from the Sage II statement object
-  ROSE_ASSERT(locatedNodePointer != NULL);
-  int lineNumber = -1;
-  // Sometimes the locatedNode doesn't have a SgFile object
-  // (likely because it is part of a parent statement object)
-  if (locatedNodePointer->get_file_info() != NULL) {
-    ROSE_ASSERT(locatedNodePointer->get_file_info() != NULL);
-    ROSE_ASSERT(locatedNodePointer->get_file_info()->get_filename() != NULL);
-    Sg_File_Info *fileInfo = locatedNodePointer->get_file_info();
-    lineNumber = fileInfo->get_line();
-  }
-
-  return lineNumber;
-}
-int Rose::getColumnNumber(SgLocatedNode *locatedNodePointer) {
-  // Get the line number from the Sage II statement object
-  ROSE_ASSERT(locatedNodePointer != NULL);
-  int columnNumber = -1;
-  // Sometimes the locatedNode doesn't have a SgFile object
-  // (likely because it is part of a parent statement object)
-  if (locatedNodePointer->get_file_info() != NULL) {
-    ROSE_ASSERT(locatedNodePointer->get_file_info() != NULL);
-    ROSE_ASSERT(locatedNodePointer->get_file_info()->get_filename() != NULL);
-    Sg_File_Info *fileInfo = locatedNodePointer->get_file_info();
-    columnNumber = fileInfo->get_col();
-  }
-
-  return columnNumber;
-}
-std::string Rose::getFileName(SgLocatedNode *locatedNodePointer) {
-  // Get the filename from the Sage II statement object
-  ROSE_ASSERT(locatedNodePointer != NULL);
-  std::string fileName = "NO NAME FILE";
-  // Sometimes the locatedNode doesn't have a SgFile object
-  // (likely because it is part of a parent statement object)
-  if (locatedNodePointer->get_file_info() != NULL) {
-    ROSE_ASSERT(locatedNodePointer->get_file_info() != NULL);
-    // printf ("In Rose::getFileName(): locatedNodePointer->get_file_info() = %p
-    // \n",locatedNodePointer->get_file_info());
-    Sg_File_Info *fileInfo = locatedNodePointer->get_file_info();
-    fileName = fileInfo->get_filenameString();
-  }
-
-  return fileName;
-}
-bool Rose::isPartOfTransformation(SgLocatedNode *locatedNodePointer) {
-  bool result = false;
-  Sg_File_Info *fileInfo = locatedNodePointer->get_file_info();
-  if (fileInfo != 0)
-    result = fileInfo->get_isPartOfTransformation();
-  return result;
-}
-
-std::string Rose::getFileNameWithoutPath(SgStatement *statementPointer) {
-  // Get the filename from the Sage III statement object
-  ROSE_ASSERT(statementPointer != NULL);
-  ROSE_ASSERT(statementPointer->get_file_info() != NULL);
-
-  // char* fileName = getFileName(statementPointer);
-  std::string fileName =
-      statementPointer->get_file_info()->get_filenameString();
-
-  return utility_stripPathFromFileName(fileName);
-}
-
 std::string
 Rose::utility_stripPathFromFileName(const std::string &fileNameWithPath) {
   size_t pos = fileNameWithPath.rfind('/');
@@ -1583,102 +1224,25 @@ Rose::utility_stripPathFromFileName(const std::string &fileNameWithPath) {
   }
 }
 
-// DQ (3/15/2005): New, simpler and better implementation suggested function
-// from Tom, thanks Tom!
 string Rose::getPathFromFileName(const string fileName) {
   size_t pos = fileName.rfind('/');
   if (pos == std::string::npos) {
     return ".";
-  } else {
-    return fileName.substr(0, pos);
   }
+  if (pos == 0) {
+    return "/";
+  }
+  return fileName.substr(0, pos);
 }
 
-// Later I expect we will move these functions to be SgFile member functions
-
-//! get the source directory (requires an input string currently)
-string Rose::getSourceDirectory(string fileNameWithPath) {
-  return getPathFromFileName(fileNameWithPath);
-}
-
-//! get the current directory
 string Rose::getWorkingDirectory() {
-  // DQ (9/5/2006): Increase the buffer size
-  // const int maxPathNameLength = 1024;
-  const unsigned int maxPathNameLength = 10000;
-  char *currentDirectory = new char[maxPathNameLength + 1];
-  const char *getcwdResult = getcwd(currentDirectory, maxPathNameLength);
-
-  if (!getcwdResult) {
-    perror("getcwd: ");
-    ROSE_ABORT();
-  }
-  string returnString = getcwdResult;
-  delete[] currentDirectory;
-  currentDirectory = NULL;
-  return returnString;
-}
-
-SgName Rose::concatenate(const SgName &X, const SgName &Y) { return X + Y; }
-
-// DQ (9/5/2008): Try to remove this function!
-string Rose::getFileNameByTraversalBackToFileNode(const SgNode *astNode) {
-  string returnString;
-
-  ROSE_ASSERT(astNode != NULL);
-
-  // Make sure this is not a project node (since the SgFile exists below
-  // the project and could not be found by a traversal of the parent list)
-  if (isSgProject(astNode) == NULL) {
-    const SgNode *parent = astNode;
-    while ((parent != NULL) && (isSgFile(parent) == NULL)) {
-      // printf ("In getFileNameByTraversalBackToFileNode(): parent = %p = %s
-      // \n",parent,parent->class_name().c_str());
-      parent = parent->get_parent();
-    }
-
-    if (!parent) {
-      const SgLocatedNode *ln = isSgLocatedNode(astNode);
-      ROSE_ASSERT(ln);
-      return ln->get_file_info()->get_filenameString();
-    }
-    // ROSE_ASSERT (parent != NULL);
-    const SgFile *file = isSgFile(parent);
-    ROSE_ASSERT(file != NULL);
-    if (file != NULL) {
-      // returnString = Rose::getFileName(file);
-      returnString = file->getFileName();
-    }
-
-    // ROSE_ASSERT (returnString.length() > 0);
-    ROSE_ASSERT(returnString.empty() == false);
-  }
-
-  return returnString;
+  return std::filesystem::current_path().string();
 }
 
 void Rose::usage() { SgFile::usage(); }
 
-int Rose::containsString(const std::string &masterString,
-                         const std::string &targetString) {
-  return masterString.find(targetString) != string::npos;
-}
-
-void Rose::filterInputFile(const string inputFileName,
-                           const string outputFileName) {
-  // This function filters the input file to remove ^M characters and expand
-  // tabs etc. Any possible processing of the input file, before being compiled,
-  // should be done by this function.
-
-  // This function is implemented in the ROSE/dqDevelopmentDirectory directory.
-}
-
 SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
   ROSE_ASSERT(currentStatement != NULL);
-  // CI (1/3/2007): This used to be not implemented ,,, here is my try
-  //! get next statement will return the next statement in a function or method.
-  //! if at the end or outside, it WILL return NULL
-
   // A source declaration group is the lexical owner of an ordered sequence of
   // semantic declarations.  Its members are deliberately absent from the
   // surrounding scope list, so iteration must first advance within that exact
@@ -1773,7 +1337,7 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
             << "Its scope is " << label_scope->class_name() << endl;
         MLOG_FATAL_CXX("sageSupport")
             << label_scope->get_file_info()->displayString() << endl;
-        ROSE_ASSERT("!ROSE::getNextStatement label not found");
+        ROSE_ABORT();
       }
 
       ++i;
@@ -1781,8 +1345,6 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
     }
   }
 
-  // DQ (9/18/2010): If we try to get the next statement from SgGlobal, then
-  // return NULL.
   if (isSgGlobal(currentStatement) != NULL)
     return NULL;
 
@@ -1801,21 +1363,16 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
 
   switch (currentStatement->variantT()) {
   case V_SgForInitStatement:
-  // case V_SgBasicBlock: // Liao 10/20/2010, We should allow users to get a
-  // statement immediately AFTER a block.
   case V_SgClassDefinition:
   case V_SgFunctionDefinition:
   case V_SgStatement:
   case V_SgFunctionParameterList: {
     ROSE_ABORT();
-    // not specified
   }
 
-    // DQ (11/8/2015): Added support for SgLabelStatement (see testcode
-    // tests/nonsmoke/functional/roseTests/astInterfaceTests/inputmoveDeclarationToInnermostScope_test2015_134.C)
   case V_SgLabelStatement: {
-    SgLabelStatement *lableStatement = isSgLabelStatement(currentStatement);
-    nextStatement = lableStatement->get_statement();
+    SgLabelStatement *labelStatement = isSgLabelStatement(currentStatement);
+    nextStatement = labelStatement->get_statement();
     ROSE_ASSERT(nextStatement != NULL);
     break;
   }
@@ -1825,8 +1382,7 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
     // SgDeclarationStatementPtrList separately
     if (isSgDeclarationScope(scope))
       return nullptr;
-    if (scope->containsOnlyDeclarations() == true ||
-        (isSgDeclarationScope(scope))) {
+    if (scope->containsOnlyDeclarations()) {
       // Usually a global scope or class declaration scope
       SgDeclarationStatementPtrList &declarationList =
           scope->getDeclarationList();
@@ -1852,13 +1408,8 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
     } else {
       SgStatementPtrList &statementList = scope->getStatementList();
       Rose_STL_Container<SgStatement *>::iterator i;
-      // Liao, 11/18/2009, Handle the rare case that current statement is not
-      // found in its scope's statement list
       for (i = statementList.begin();
            i != statementList.end() && (*i) != currentStatement; i++) {
-        //  SgStatement* cur_stmt = *i;
-        //  cout<<"Skipping current statement: "<<cur_stmt->class_name()<<endl;
-        //  cout<<cur_stmt->get_file_info()->displayString()<<endl;
       }
 
       // currentStatement is not found in the list
@@ -1869,22 +1420,18 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
             << endl;
         MLOG_FATAL_CXX("sageSupport") << "current statement is "
                                       << currentStatement->class_name() << endl;
-        //~ MLOG_FATAL_CXX("sageSupport") <<"code: " <<
-        // currentStatement->unparseToString()<<endl;
         MLOG_FATAL_CXX("sageSupport")
             << currentStatement->get_file_info()->displayString() << endl;
         MLOG_FATAL_CXX("sageSupport")
             << "Its scope is " << scope->class_name() << endl;
         MLOG_FATAL_CXX("sageSupport")
             << scope->get_file_info()->displayString() << endl;
-        ROSE_ASSERT("!ROSE::getNextStatement not found");
+        ROSE_ABORT();
       }
 
       // now i == currentStatement
       ROSE_ASSERT(*i == currentStatement);
 
-      // DQ (7/19/2015): Added assertion that should be true, else i++ is not
-      // defined.
       ROSE_ASSERT(i != statementList.end());
 
       i++;
@@ -1894,25 +1441,12 @@ SgStatement *Rose::getNextStatement(SgStatement *currentStatement) {
         nextStatement = *i;
     }
 
-    // If the target statement was the last statement in a scope then
-    if (nextStatement == NULL) {
-      // Someone might think of a better answer than NULL
-    }
-
     break;
   }
   }
 
-  // This assertion does not make sense.
-  // Since a trailing statement within a scope can have null next statement,
-  // and  the statement can be not global scope statement, Liao 3/12/2009
-  // ROSE_ASSERT (isSgGlobal(currentStatement) != NULL || nextStatement !=
-  // NULL);
-
   return nextStatement;
 }
-
-#define DEBUG_PREVIOUS_STATEMENT 0
 
 static SgStatement *getPreviousStatement_support_for_declaration_list(
     SgScopeStatement *parent_scope, SgStatement *targetStatement,
@@ -1926,12 +1460,6 @@ static SgStatement *getPreviousStatement_support_for_declaration_list(
   ROSE_ASSERT(parent_scope->containsOnlyDeclarations() == true);
 
   SgStatement *previousStatement = NULL;
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("In getPreviousStatement_support_for_declaration_list(): "
-         "targetStatement = %p = %s \n",
-         targetStatement, targetStatement->class_name().c_str());
-#endif
 
   // Usually a global scope or class declaration scope
   SgDeclarationStatementPtrList &declarationList =
@@ -1961,19 +1489,8 @@ static SgStatement *getPreviousStatement_support_for_declaration_list(
         previousStatementIterator = --targetIterator;
     previousStatement = *previousStatementIterator;
 
-    // DQ (3/12/2024): This should always be true.
     ROSE_ASSERT(previousStatement != targetStatement);
   }
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("@@@@@ previousStatement = %p \n", previousStatement);
-  if (previousStatement != NULL) {
-    printf("@@@@@ previousStatement = %p = %s \n", previousStatement,
-           previousStatement->class_name().c_str());
-    // printf ("@@@@@ previousStatement->unparseToString() = %s
-    // \n",previousStatement->unparseToString().c_str());
-  }
-#endif
 
   if (climbOutScope) {
     ROSE_ASSERT(isSgGlobal(targetStatement) != NULL ||
@@ -1995,12 +1512,6 @@ getPreviousStatement_support_for_statement_list(SgScopeStatement *parent_scope,
   ROSE_ASSERT(parent_scope->containsOnlyDeclarations() == false);
 
   SgStatement *previousStatement = NULL;
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("In getPreviousStatement_support_for_statement_list(): "
-         "targetStatement = %p = %s \n",
-         targetStatement, targetStatement->class_name().c_str());
-#endif
 
   // Usually a SgBasicBlock scope
   SgStatementPtrList &statementList = parent_scope->getStatementList();
@@ -2029,19 +1540,8 @@ getPreviousStatement_support_for_statement_list(SgScopeStatement *parent_scope,
         --targetIterator;
     previousStatement = *previousStatementIterator;
 
-    // DQ (3/12/2024): This should always be true.
     ROSE_ASSERT(previousStatement != targetStatement);
   }
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("@@@@@ previousStatement = %p \n", previousStatement);
-  if (previousStatement != NULL) {
-    printf("@@@@@ previousStatement = %p = %s \n", previousStatement,
-           previousStatement->class_name().c_str());
-    // printf ("@@@@@ previousStatement->unparseToString() = %s
-    // \n",previousStatement->unparseToString().c_str());
-  }
-#endif
 
   if (climbOutScope) {
     ROSE_ASSERT(isSgGlobal(targetStatement) != NULL ||
@@ -2107,33 +1607,9 @@ SgStatement *Rose::getPreviousStatement(SgStatement *targetStatement,
     return climbOutScope ? for_init : nullptr;
   }
 
-  // DQ (3/15/2024): We don't need this variable now.
-  // SgScopeStatement *scope             = targetStatement->get_scope();
-  // ROSE_ASSERT (scope != NULL);
-
-  // DQ (9/18/2010): If we try to get the previous statement from SgGlobal, then
-  // return NULL.
   if (isSgGlobal(targetStatement) != NULL) {
     return NULL;
   }
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("@@@@@ In Rose::getPreviousStatement(): targetStatement = %p = %s "
-         "climbOutScope = %s \n",
-         targetStatement, targetStatement->class_name().c_str(),
-         climbOutScope ? "true" : "false");
-  // printf ("@@@@@ In Rose::getPreviousStatement(): targetStatement = %s
-  // \n",targetStatement->class_name().c_str());
-  printf("@@@@@ In Rose::getPreviousStatement(): "
-         "targetStatement->unparseToString() = %s \n",
-         targetStatement->unparseToString().c_str());
-  printf("@@@@@ In Rose::getPreviousStatement(): scope = %s \n",
-         scope->class_name().c_str());
-  // printf ("@@@@@ In Rose::getPreviousStatement(): scope->unparseToString() =
-  // %s \n",scope->unparseToString().c_str());
-#endif
-
-  // DQ (3/15/2024): This is the new version of this function.
 
   SgStatement *const parentStatement =
       isSgStatement(targetStatement->get_parent());
@@ -2181,16 +1657,6 @@ SgStatement *Rose::getPreviousStatement(SgStatement *targetStatement,
       ROSE_ASSERT(previousStatement != NULL);
     }
   }
-
-#if DEBUG_PREVIOUS_STATEMENT
-  printf("@@@@@ previousStatement = %p \n", previousStatement);
-  if (previousStatement != NULL) {
-    printf("@@@@@ previousStatement = %p = %s \n", previousStatement,
-           previousStatement->class_name().c_str());
-    // printf ("@@@@@ previousStatement->unparseToString() = %s
-    // \n",previousStatement->unparseToString().c_str());
-  }
-#endif
 
   if (climbOutScope) {
     ROSE_ASSERT(isSgGlobal(targetStatement) != NULL ||

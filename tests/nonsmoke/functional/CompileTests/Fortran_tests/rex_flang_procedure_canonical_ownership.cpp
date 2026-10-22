@@ -1,9 +1,25 @@
 #include "rose.h"
 
 #include <algorithm>
+#include <fstream>
 #include <string>
 
 namespace {
+
+void verifyHeaderComments(SgLocatedNode *node, const char *prefix,
+                          const char *header) {
+  ROSE_ASSERT(node != nullptr);
+  const auto *comments = node->getAttachedPreprocessingInfo();
+  ROSE_ASSERT(comments != nullptr && comments->size() == 2);
+  ROSE_ASSERT(comments->front()->getString() == prefix);
+  ROSE_ASSERT(comments->front()->getRelativePosition() ==
+              PreprocessingInfo::before);
+  ROSE_ASSERT(comments->back()->getString() == header);
+  ROSE_ASSERT(comments->back()->getRelativePosition() ==
+              PreprocessingInfo::after_syntax);
+  ROSE_ASSERT(comments->back()->getOutputPlacement() ==
+              PreprocessingInfo::attached_output_trailing_line);
+}
 
 SgProgramHeaderStatement *findProgramDefinition(SgProject *project) {
   SgProgramHeaderStatement *program = nullptr;
@@ -244,6 +260,7 @@ struct ProcedureOwners {
   SgProcedureHeaderStatement *implicitCanonical = nullptr;
   SgProcedureHeaderStatement *interfaceSubroutine = nullptr;
   SgProcedureHeaderStatement *interfaceFunction = nullptr;
+  SgProcedureHeaderStatement *statementFunctionCanonical = nullptr;
   SgProcedureHeaderStatement *statementFunction = nullptr;
 };
 
@@ -305,6 +322,13 @@ ProcedureOwners verifyOwners(SgProject *project) {
   }
   ROSE_ASSERT(owners.interfaceSubroutine != nullptr);
   ROSE_ASSERT(owners.interfaceFunction != nullptr);
+  const std::vector<SgDeclarationStatement *> expectedOrder{
+      program, owners.interfaceSubroutine, owners.interfaceFunction,
+      owners.internalDefinition};
+  std::vector<SgDeclarationStatement *> reversedOrder = expectedOrder;
+  std::reverse(reversedOrder.begin(), reversedOrder.end());
+  ROSE_ASSERT(SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(
+                  reversedOrder) == expectedOrder);
   verifyCompletedParameterScope(owners.interfaceSubroutine, owners.host);
   verifyCompletedParameterScope(owners.interfaceFunction, owners.host);
 
@@ -320,35 +344,83 @@ ProcedureOwners verifyOwners(SgProject *project) {
   ROSE_ASSERT(owners.statementFunction != nullptr);
   ROSE_ASSERT(owners.statementFunction->get_parent() == statementFunction);
   ROSE_ASSERT(owners.statementFunction->get_scope() == owners.host);
-  ROSE_ASSERT(owners.statementFunction->get_firstNondefiningDeclaration() ==
-              owners.statementFunction);
+  owners.statementFunctionCanonical = isSgProcedureHeaderStatement(
+      owners.statementFunction->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(owners.statementFunctionCanonical != nullptr);
+  ROSE_ASSERT(owners.statementFunctionCanonical != owners.statementFunction);
+  ROSE_ASSERT(owners.statementFunctionCanonical->get_parent() == owners.host);
+  ROSE_ASSERT(owners.statementFunctionCanonical->get_scope() == owners.host);
+  ROSE_ASSERT(
+      owners.host->statementExistsInScope(owners.statementFunctionCanonical));
+  ROSE_ASSERT(owners.statementFunctionCanonical->get_type() ==
+              owners.statementFunction->get_type());
+  ROSE_ASSERT(owners.statementFunctionCanonical->get_definingDeclaration() ==
+              nullptr);
+  ROSE_ASSERT(
+      owners.statementFunctionCanonical->get_fortran_procedure_source_form() ==
+      SgProcedureHeaderStatement::
+          e_fortran_procedure_source_form_type_declaration);
+  ROSE_ASSERT(owners.host->lookup_variable_symbol("rex_statement_function") ==
+              nullptr);
   ROSE_ASSERT(owners.statementFunction->get_definingDeclaration() == nullptr);
   ROSE_ASSERT(
       owners.statementFunction->get_fortran_procedure_source_form() ==
       SgProcedureHeaderStatement::e_fortran_procedure_source_form_header);
   verifyProcedureParameterSourceClassification(owners.statementFunction,
                                                /*compilerGenerated=*/false);
-  verifyProcedureSymbol(owners.statementFunction, owners.host);
+  verifyProcedureSymbol(owners.statementFunctionCanonical, owners.host);
   verifyCompletedParameterScope(owners.statementFunction, owners.host);
+  verifyHeaderComments(owners.internalDefinition, "! rex_procedure_prefix",
+                       "! rex_procedure_header");
+  ROSE_ASSERT(owners.internalDefinition->getAttachedPreprocessingInfo()
+                  ->back()
+                  ->getLineNumber() ==
+              owners.internalDefinition->get_startOfConstruct()->get_line() +
+                  1);
+  for (SgProcedureHeaderStatement *procedure :
+       {owners.interfaceSubroutine, owners.interfaceFunction}) {
+    const auto *header = procedure->getAttachedPreprocessingInfo();
+    verifyHeaderComments(procedure, "! rex_interface_procedure_prefix",
+                         "! rex_interface_header");
+    ROSE_ASSERT(header->back()->getLineNumber() ==
+                procedure->get_startOfConstruct()->get_line() + 1);
+  }
+  auto *interfaceBody =
+      isSgInterfaceBody(owners.interfaceSubroutine->get_parent());
+  ROSE_ASSERT(interfaceBody != nullptr);
+  auto *interfaceBlock = isSgInterfaceStatement(interfaceBody->get_parent());
+  ROSE_ASSERT(interfaceBlock != nullptr);
+  verifyHeaderComments(interfaceBlock, "! rex_interface_block_prefix",
+                       "! rex_interface_block_header");
+  bool sawModule = false;
+  for (SgNode *node : NodeQuery::querySubTree(project, V_SgModuleStatement)) {
+    auto *module = isSgModuleStatement(node);
+    ROSE_ASSERT(module != nullptr);
+    if (module->get_definition() == nullptr) {
+      continue;
+    }
+    ROSE_ASSERT(!sawModule);
+    ROSE_ASSERT(module->get_name() == "rex_procedure_comment_module");
+    verifyHeaderComments(module, "! rex_module_prefix", "! rex_module_header");
+    bool sawType = false;
+    for (SgDeclarationStatement *member :
+         module->get_definition()->get_members()) {
+      auto *derived = isSgDerivedTypeStatement(member);
+      if (derived == nullptr) {
+        continue;
+      }
+      ROSE_ASSERT(!sawType && derived->get_name() == "rex_header_type");
+      verifyHeaderComments(derived, "! rex_type_prefix", "! rex_type_header");
+      ROSE_ASSERT(
+          derived->getAttachedPreprocessingInfo()->back()->getLineNumber() ==
+          derived->get_startOfConstruct()->get_line() + 1);
+      sawType = true;
+    }
+    ROSE_ASSERT(sawType);
+    sawModule = true;
+  }
+  ROSE_ASSERT(sawModule);
   return owners;
-}
-
-void rebuildHostSymbols(const ProcedureOwners &owners) {
-  ROSE_ASSERT(owners.host != nullptr);
-  SgSymbolTable *table = owners.host->get_symbol_table();
-  ROSE_ASSERT(table != nullptr);
-  ROSE_ASSERT(table->get_table() != nullptr);
-  table->get_table()->clear();
-  table->set_symbolSet(SgNodeSet());
-  table->clear_functionSymbolExactIndex();
-  ROSE_ASSERT(table->size() == 0);
-  SageInterface::rebuildSymbolTable(owners.host);
-
-  verifyProcedureSymbol(owners.internalCanonical, owners.host);
-  verifyProcedureSymbol(owners.implicitCanonical, owners.host);
-  verifyProcedureSymbol(owners.interfaceSubroutine, owners.host);
-  verifyProcedureSymbol(owners.interfaceFunction, owners.host);
-  verifyProcedureSymbol(owners.statementFunction, owners.host);
 }
 
 } // namespace
@@ -356,8 +428,66 @@ void rebuildHostSymbols(const ProcedureOwners &owners) {
 int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   project->skipfinalCompileStep(true);
-  const ProcedureOwners owners = verifyOwners(project);
+  verifyOwners(project);
   AstTests::runAllTests(project);
-  rebuildHostSymbols(owners);
+  ROSE_ASSERT(backend(project) == 0);
+  auto *file = isSgSourceFile(project->get_fileList().front());
+  ROSE_ASSERT(file != nullptr);
+  std::ifstream output(file->get_unparse_output_filename());
+  ROSE_ASSERT(output.is_open());
+  int headerComments = 0;
+  int interfacePrefixes = 0;
+  std::string line;
+  while (std::getline(output, line)) {
+    if (line.find("! rex_procedure_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("SUBROUTINE rex_internal_worker") !=
+                  std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_program_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("PROGRAM rex_procedure_canonical_ownership") !=
+                  std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_interface_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("SUBROUTINE rex_interface_subroutine") !=
+                      std::string::npos ||
+                  line.find("FUNCTION rex_interface_function") !=
+                      std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_module_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("MODULE rex_procedure_comment_module") !=
+                  std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_type_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("TYPE ") != std::string::npos);
+      ROSE_ASSERT(line.find(":: rex_header_type") != std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_interface_block_header") != std::string::npos) {
+      ROSE_ASSERT(line.find("INTERFACE ") != std::string::npos);
+      ROSE_ASSERT(line.find("END") == std::string::npos);
+      ++headerComments;
+    }
+    if (line.find("! rex_interface_procedure_prefix") != std::string::npos) {
+      ++interfacePrefixes;
+    }
+  }
+  ROSE_ASSERT(headerComments == 7);
+  ROSE_ASSERT(interfacePrefixes == 2);
+  SgProject *copy = SageInterface::deepCopy(project);
+  ROSE_ASSERT(copy != nullptr && copy != project);
+  verifyOwners(copy);
+  AstTests::runAllTests(copy);
+  SageInterface::deepDelete(copy);
+  verifyOwners(project);
+  AstTests::runAllTests(project);
   return 0;
 }

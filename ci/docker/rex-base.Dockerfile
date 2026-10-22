@@ -19,7 +19,6 @@ RUN apt-get update \
       flex \
       g++ \
       gdb \
-      ghostscript \
       git \
       graphviz \
       lld-${LLVM_VERSION} \
@@ -30,7 +29,6 @@ RUN apt-get update \
       libflang-${LLVM_VERSION}-dev \
       libhpdf-dev \
       libomp-${LLVM_VERSION}-dev \
-      libtool \
       lldb-${LLVM_VERSION} \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \

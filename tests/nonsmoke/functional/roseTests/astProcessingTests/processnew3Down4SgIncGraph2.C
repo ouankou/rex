@@ -1,8 +1,8 @@
 #include <iostream>
 
 #include <fstream>
-// #include <rose.h>
 
+#include "rose.h"
 #include "SgGraphTemplate.h"
 
 #include "graphProcessing.h"
@@ -72,13 +72,12 @@ int main(int argc, char *argv[]) {
   string dotFileName1 =
       fileName + "." + mainDef->get_declaration()->get_name() + ".dot";
 
-  cfgToDot(mainDef, dotFileName1);
+  VirtualCFG::cfgToDot(mainDef, dotFileName1);
   // cfg->buildFullCFG();
   SgIncidenceDirectedGraph *g = cfg.getGraph();
   auto mg = instantiateGraph(g, cfg);
   vis->tltnodes = 0;
   vis->paths = 0;
-  // vis->firstPrepGraph(constcfg);
   t1 = getCPUTime();
   vis->constructPathAnalyzer(mg.get(), true, 0, 0, true);
   t2 = getCPUTime();

@@ -1,3 +1,4 @@
+#include "AstInterface_ROSE.h"
 #include "rose.h"
 
 #include <iostream>
@@ -6,6 +7,27 @@ using namespace std;
 
 int main(int argc, char **argv) {
   SgProject *proj = frontend(argc, argv);
+  auto *sourceFile = isSgSourceFile(proj->get_fileList().front());
+  ASSERT_not_null(sourceFile);
+  auto *arraySymbol =
+      sourceFile->get_globalScope()->lookup_variable_symbol(SgName("array2"));
+  ASSERT_not_null(arraySymbol);
+  auto *reference = SageBuilder::buildVarRefExp(arraySymbol);
+  ROSE_ASSERT(reference->get_parent() == nullptr);
+  AstInterfaceImpl implementation(sourceFile->get_globalScope());
+  AstInterface interface(&implementation);
+  const int upperBounds[] = {4, 9, 6};
+  for (int dimension = 0; dimension < 3; ++dimension) {
+    int lower, upper;
+    ROSE_ASSERT(interface.GetArrayBound(reference, dimension, lower, upper));
+    if (lower != 0 || upper != upperBounds[dimension]) {
+      cerr << "REX_TEST_ERROR[array-bound]: dimension=" << dimension
+           << " lower=" << lower << " upper=" << upper
+           << " expected-upper=" << upperBounds[dimension] << '\n';
+      ROSE_ABORT();
+    }
+  }
+  SageInterface::deleteAST(reference);
   // Set up the struct layout chain
   I386PrimitiveTypeLayoutGenerator gen1_i386(NULL);
   NonpackedTypeLayoutGenerator gen_i386(&gen1_i386);

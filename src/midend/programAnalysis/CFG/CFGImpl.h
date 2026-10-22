@@ -80,16 +80,7 @@ public:
   CFGEdgeImpl(EdgeType val, MultiGraphCreate *c) : MultiGraphElem(c), t(val) {}
   EdgeType GetEdgeType() const { return t; }
   virtual std::string toString() const {
-    switch (t) {
-    case CFGConfig::COND_TRUE:
-      return "true";
-    case CFGConfig::COND_FALSE:
-      return "false";
-    case CFGConfig::ALWAYS:
-      return "always";
-    default:
-      ROSE_ABORT();
-    }
+    return CFGConfig::EdgeType2String(t);
   }
   virtual void write(std::ostream &out) const {
     out << toString() << std::endl;

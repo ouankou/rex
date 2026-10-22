@@ -176,16 +176,4 @@ public:
   }
 };
 
-class OperatorInlineDescriptor
-    : public OPDescriptorTemp<
-          CloseDescriptor<SymbolicValDescriptor, '{', '}'>> {
-  typedef OPDescriptorTemp<CloseDescriptor<SymbolicValDescriptor, '{', '}'>>
-      BaseClass;
-
-public:
-  void replace_val(MapObject<SymbolicVal, SymbolicVal> &repl) {
-    CloseDescriptor<SymbolicValDescriptor, '{', '}'>::replace_val(repl);
-  }
-};
-
 #endif

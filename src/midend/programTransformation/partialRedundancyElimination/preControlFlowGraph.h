@@ -1,29 +1,16 @@
 #ifndef CONTROLFLOWGRAPH_H
 #define CONTROLFLOWGRAPH_H
 
-// #include "config.h"
-
 #include "CFG.h"
-
-#include <sstream>
 
 class SgFunctionDefinition;
 class SgNode;
 
 namespace legacy {
 
-// DQ (3/21/2006): Added namespace to separate the
-// PRE specific work (and it's use of the type named
-// ControlFlowGraph which conflicts with the OTHER
-// ControlFlowGraph in:
-//    src/midend/programAnalysis/dominatorTreesAndDominanceFrontiers
 namespace PRE {
 
 typedef int Vertex;
-typedef int Edge;
-typedef std::vector<std::vector<SgNode *>> NodeStatementsMap;
-typedef std::vector<CFGConfig::EdgeType> EdgeTypeMap;
-typedef std::vector<std::pair<SgNode *, bool>> EdgeInsertionPointMap;
 typedef const std::vector<int> &Vertices;
 typedef const std::vector<int> &Edges;
 typedef std::vector<int>::const_iterator VertexIter;
@@ -79,9 +66,6 @@ struct myControlFlowGraph {
   std::vector<std::pair<SgNode *, bool>> edge_insertion_point;
 };
 
-// DQ (3/21/2006): We put this is it's own namespace because it conflicted with
-// the ControlFlowGraph built in
-// dominatorTreesAndDominanceFrontiers/ControlFlowGraph.h
 typedef myControlFlowGraph ControlFlowGraph;
 
 //! Make the control flow graph for a given node
@@ -92,9 +76,6 @@ void makeCfg(SgFunctionDefinition *n, ControlFlowGraph &graph);
 //! is true for inserting before the given node and false for inserting after
 //! it.
 void addEdgeInsertionPoints(ControlFlowGraph &controlflow);
-
-//! Print out a CFG as a dot file
-void printCfgAsDot(std::ostream &dotfile, const ControlFlowGraph &controlflow);
 
 // closing scope of namespace: PRE
 } // namespace PRE

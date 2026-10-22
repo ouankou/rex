@@ -157,10 +157,8 @@ public:
   bool operator()(LoopTreeNode *const &n) const {
     if (n == node->GetRestrLoop())
       return true;
-    if (n->LoopTreeGetClassName() != node->LoopTreeGetClassName())
-      return false;
-    LoopTreeRestrLoopRange *that = static_cast<LoopTreeRestrLoopRange *>(n);
-    return that->GetRestrLoop() == node->GetRestrLoop();
+    auto *that = dynamic_cast<LoopTreeRestrLoopRange *>(n);
+    return that != nullptr && that->GetRestrLoop() == node->GetRestrLoop();
   }
 };
 
@@ -198,9 +196,9 @@ bool LoopTreeRestrLoopRange ::MergeSibling(int opt) {
   LoopTreeNode *p2 = FindSibling(p1, opt);
   for (LoopTreeNode *that = p2; that != 0;
        that = (that->ChildCount() == 1) ? that->FirstChild() : 0) {
-    if (that->LoopTreeGetClassName() != LoopTreeGetClassName())
+    auto *n = dynamic_cast<LoopTreeRestrLoopRange *>(that);
+    if (n == nullptr)
       continue;
-    LoopTreeRestrLoopRange *n = static_cast<LoopTreeRestrLoopRange *>(that);
     if (n->GetRestrLoop() == GetRestrLoop()) {
       if ((b.lb.IsNIL() || n->b.lb.IsNIL()) &&
           (b.ub.IsNIL() || n->b.ub.IsNIL()))
@@ -292,9 +290,9 @@ bool LoopTreeRelateLoopIvar ::MergeSibling(int opt) {
   LoopTreeNode *p2 = FindSibling(p1, opt);
   for (LoopTreeNode *that = p2; that != 0;
        that = (that->ChildCount() == 1) ? that->FirstChild() : 0) {
-    if (that->LoopTreeGetClassName() != LoopTreeGetClassName())
+    auto *n = dynamic_cast<LoopTreeRelateLoopIvar *>(that);
+    if (n == nullptr)
       continue;
-    LoopTreeRelateLoopIvar *n = static_cast<LoopTreeRelateLoopIvar *>(that);
     if (n->GetLoop1() == GetLoop1() && n->GetLoop2() == GetLoop2() &&
         GetAlign() == n->GetAlign()) {
       while (n->Parent()->ChildCount() == 1)
@@ -345,21 +343,13 @@ bool LoopTreeReplLoopVar ::SelfRemove() {
   if (ChildCount() == 1) {
     for (LoopTreeNode *n1 = FirstChild(); n1->ChildCount() == 1;
          n1 = n1->FirstChild()) {
-      if (n1->LoopTreeGetClassName() != LoopTreeGetClassName())
+      auto *tmp = dynamic_cast<LoopTreeReplLoopVar *>(n1);
+      if (tmp == nullptr)
         continue;
-      LoopTreeReplLoopVar *tmp = static_cast<LoopTreeReplLoopVar *>(n1);
       if (tmp->GetNewVal() == GetOldVar()) {
         tmp->newval = newval;
         tmp->align = 0;
         return false;
-        /*
-                      while (FirstChild() != tmp)
-                         LoopTreeSwapNodePos()( this, FirstChild() );
-                      tmp->newval = newval;
-                      tmp->align = 0;
-                      RemoveSelf();
-                      return true;
-        */
       }
     }
   }
@@ -392,12 +382,12 @@ std::string LoopTreeReplAst::toString() const {
          AstInterface::AstToString(repl);
 }
 
-AstNodePtr LoopTreeReplAst::CodeGen() const {
+AstNodePtr LoopTreeReplAst::CodeGen(const AstNodePtr &body) const {
   AstInterface &ai = LoopTransformInterface::getAstInterface();
-  ai.ReplaceAst(orig, repl);
-  AstNodePtr r = LoopTreeNode::CodeGen();
-  ai.ReplaceAst(repl, orig);
-  return r;
+  AstNodePtr target = ai.GetCopySource(orig);
+  ASSERT_require(target != orig);
+  ASSERT_require(ai.ReplaceAst(target, ai.CopyAstTree(repl)));
+  return body;
 }
 
 AstNodePtr LoopTreeCopyArray::CodeGen(const AstNodePtr &c) const {

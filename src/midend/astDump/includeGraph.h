@@ -12,8 +12,6 @@ void insertGraphNode(void *node);
 
 void graph_include_files(SgProject *project);
 
-// void graph_include_files( SgFileList* fileList );
-
 void graph_include_files(SgSourceFile *sourceFile);
 
 void graph_include_files(SgIncludeFile *includeFile);

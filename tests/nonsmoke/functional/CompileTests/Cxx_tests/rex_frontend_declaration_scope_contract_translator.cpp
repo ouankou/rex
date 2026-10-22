@@ -167,6 +167,71 @@ int main(int argc, char **argv) {
 
   SgSourceFile *sourceFile = findMainFile(project);
   ROSE_ASSERT(sourceFile != nullptr);
+  unsigned adjustedFriends = 0;
+  unsigned adjustedTemplateFriends = 0;
+  unsigned adjustedMemberFriends = 0;
+  unsigned adjustedSpecializationFriends = 0;
+  unsigned headerMemberFriends = 0;
+  for (auto *node : NodeQuery::querySubTree(project, V_SgFunctionDeclaration)) {
+    auto *function = isSgFunctionDeclaration(node);
+    if (function->get_name() == "what" &&
+        function->get_declarationModifier().isFriend()) {
+      auto *member = isSgMemberFunctionDeclaration(function);
+      ROSE_ASSERT(member != nullptr);
+      auto *canonical = member->get_firstNondefiningDeclaration();
+      ROSE_ASSERT(canonical != nullptr && canonical != member);
+      ROSE_ASSERT(isSgAuxiliaryDeclarationList(canonical->get_parent()) !=
+                  nullptr);
+      ROSE_ASSERT(canonical->get_scope() == member->get_scope());
+      ++headerMemberFriends;
+    }
+    const bool templateFriend =
+        function->get_name() == "rex_friend_template_adjusted_parameter";
+    const bool memberFriend =
+        function->get_name() == "rex_friend_adjusted_member";
+    auto *specialization = isSgTemplateInstantiationFunctionDecl(function);
+    const bool specializationFriend =
+        specialization != nullptr &&
+        specialization->get_templateName() ==
+            "rex_friend_specialization_adjusted_parameter";
+    if ((!templateFriend && !memberFriend && !specializationFriend &&
+         function->get_name() != "rex_friend_adjusted_parameter") ||
+        !function->get_declarationModifier().isFriend())
+      continue;
+    ROSE_ASSERT((isSgTemplateFunctionDeclaration(function) != nullptr) ==
+                templateFriend);
+    ROSE_ASSERT((isSgMemberFunctionDeclaration(function) != nullptr) ==
+                memberFriend);
+    ROSE_ASSERT((isSgTemplateInstantiationFunctionDecl(function) != nullptr) ==
+                specializationFriend);
+    auto *parameters = function->get_parameterList();
+    auto *written = function->get_parameterList_syntax();
+    ROSE_ASSERT(parameters != nullptr && parameters->get_args().size() == 1);
+    ROSE_ASSERT(isSgPointerType(parameters->get_args().front()->get_type()) !=
+                nullptr);
+    ROSE_ASSERT(function->get_type()->get_arguments().size() == 1);
+    ROSE_ASSERT(isSgPointerType(
+                    function->get_type()->get_arguments().front()) != nullptr);
+    ROSE_ASSERT(written != nullptr && written != parameters &&
+                written->get_parent() == function &&
+                written->get_args().size() == 1);
+    auto *array = isSgArrayType(written->get_args().front()->get_type());
+    auto *bound = array != nullptr ? isSgIntVal(array->get_index()) : nullptr;
+    ROSE_ASSERT(bound != nullptr && bound->get_value() == 3);
+    if (templateFriend)
+      ++adjustedTemplateFriends;
+    else if (memberFriend)
+      ++adjustedMemberFriends;
+    else if (specializationFriend)
+      ++adjustedSpecializationFriends;
+    else
+      ++adjustedFriends;
+  }
+  ROSE_ASSERT(adjustedFriends == 1);
+  ROSE_ASSERT(adjustedTemplateFriends == 1);
+  ROSE_ASSERT(adjustedMemberFriends == 1);
+  ROSE_ASSERT(adjustedSpecializationFriends == 1);
+  ROSE_ASSERT(headerMemberFriends == 1);
   SgGlobal *global = sourceFile->get_globalScope();
   ROSE_ASSERT(global != nullptr);
 
@@ -218,6 +283,10 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(
       isClassLikeScope(isSgScopeStatement(lexicalFriend->get_parent())));
   ROSE_ASSERT(lexicalFriend->get_scope() == global);
+  ROSE_ASSERT(lexicalFriend->get_parameterList()->get_args().size() == 1);
+  SgInitializedName *lexicalFriendParameter =
+      lexicalFriend->get_parameterList()->get_args().front();
+  ROSE_ASSERT(lexicalFriendParameter->get_scope() == global);
   ROSE_ASSERT(lexicalFriend->get_firstNondefiningDeclaration() ==
               globalForward);
   ROSE_ASSERT(lexicalFriend->get_definingDeclaration() == globalDefinition);
@@ -249,6 +318,35 @@ int main(int argc, char **argv) {
               namespaceForward);
   ROSE_ASSERT(namespaceTargetSymbols.front()->get_parent() ==
               namespaceSymbolScope->get_symbol_table());
+
+  std::vector<SgFunctionSymbol *> qualifiedNamespaceSymbols =
+      findDirectFunctionSymbols(namespaceSymbolScope, "rex_namespace_target");
+  ROSE_ASSERT(qualifiedNamespaceSymbols.size() == 1);
+  SgFunctionDeclaration *qualifiedNamespaceCanonical =
+      qualifiedNamespaceSymbols.front()->get_declaration();
+  std::vector<SgFunctionDeclaration *> qualifiedNamespaceTargets =
+      findFunctions(collector, sourceFile, "rex_namespace_target");
+  ROSE_ASSERT(qualifiedNamespaceTargets.size() == 2);
+  for (SgFunctionDeclaration *function : qualifiedNamespaceTargets) {
+    ROSE_ASSERT(function->get_scope() == namespaceSymbolScope);
+    ROSE_ASSERT(function->get_firstNondefiningDeclaration() ==
+                qualifiedNamespaceCanonical);
+    if (function->get_declarationModifier().isFriend()) {
+      ROSE_ASSERT(function->get_parent() == lexicalFriend->get_parent());
+      ROSE_ASSERT(function->get_source_name_qualification_present());
+      ROSE_ASSERT(function->get_source_name_global_qualification());
+      ROSE_ASSERT(function->get_source_name_qualification_tokens() ==
+                  SgStringList{"RexScopeContract::"});
+    } else {
+      ROSE_ASSERT(function == qualifiedNamespaceCanonical);
+    }
+  }
+  ROSE_ASSERT(
+      findDirectFunctionSymbols(global, "rex_namespace_target").empty());
+  ROSE_ASSERT(
+      findDirectFunctionSymbols(isSgScopeStatement(lexicalFriend->get_parent()),
+                                "rex_namespace_target")
+          .empty());
 
   std::vector<SgFunctionDeclaration *> memberTemplates =
       findFunctions(collector, sourceFile, "rex_member");
@@ -305,6 +403,19 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(isClassLikeScope(
       isSgScopeStatement(friendTemplateLexical->get_parent())));
   ROSE_ASSERT(friendTemplateLexical->get_scope() == global);
+  SgFunctionParameterScope *friendTemplateParameterScope =
+      friendTemplateLexical->get_functionParameterScope();
+  ROSE_ASSERT(friendTemplateParameterScope != nullptr);
+  ROSE_ASSERT(friendTemplateParameterScope->get_parent() ==
+              friendTemplateLexical);
+  ROSE_ASSERT(friendTemplateParameterScope->get_scope() == global);
+  ROSE_ASSERT(friendTemplateLexical->get_parameterList()->get_args().size() ==
+              1);
+  SgInitializedName *friendTemplateParameter =
+      friendTemplateLexical->get_parameterList()->get_args().front();
+  ROSE_ASSERT(friendTemplateParameter->get_declptr() == friendTemplateLexical);
+  ROSE_ASSERT(friendTemplateParameter->get_scope() ==
+              friendTemplateParameterScope);
   ROSE_ASSERT(friendTemplateLexical->get_firstNondefiningDeclaration() ==
               friendTemplateForward);
   ROSE_ASSERT(friendTemplateForward->get_templateParameters().size() == 1);
@@ -526,15 +637,40 @@ int main(int argc, char **argv) {
   SgTemplateInstantiationDecl *templateArgumentInstantiation =
       templateInstantiationForVariable(collector,
                                        "rex_exact_template_argument_identity");
-  ROSE_ASSERT(templateArgumentInstantiation->get_templateArguments().size() ==
-              1);
+  ROSE_ASSERT(
+      templateArgumentInstantiation->get_semanticTemplateArguments().size() ==
+      1);
   SgTemplateArgument *allocatorArgument =
-      templateArgumentInstantiation->get_templateArguments().front();
+      templateArgumentInstantiation->get_semanticTemplateArguments().front();
   ROSE_ASSERT(allocatorArgument != nullptr);
   ROSE_ASSERT(allocatorArgument->get_argumentType() ==
               SgTemplateArgument::template_template_argument);
   ROSE_ASSERT(canonicalTemplateClass(exactTemplateClassIdentity(
                   allocatorArgument->get_templateDeclaration())) ==
+              allocatorIdentity);
+  ROSE_ASSERT(allocatorArgument->get_parent() == templateArgumentInstantiation);
+  SgInitializedName *templateArgumentVariable =
+      findVariable(collector, "rex_exact_template_argument_identity");
+  ROSE_ASSERT(templateArgumentVariable != nullptr);
+  ROSE_ASSERT(templateArgumentVariable->get_cxx_source_type() != nullptr);
+  SgNonrealType *writtenTemplateType = isSgNonrealType(
+      templateArgumentVariable->get_cxx_source_type()->findBaseType());
+  ROSE_ASSERT(writtenTemplateType != nullptr);
+  SgNonrealDecl *writtenTemplateDeclaration =
+      isSgNonrealDecl(writtenTemplateType->get_declaration());
+  ROSE_ASSERT(writtenTemplateDeclaration != nullptr);
+  ROSE_ASSERT(writtenTemplateDeclaration->get_templateDeclaration() ==
+              templateArgumentInstantiation);
+  ROSE_ASSERT(writtenTemplateDeclaration->get_tpl_args().size() == 1);
+  SgTemplateArgument *writtenAllocatorArgument =
+      writtenTemplateDeclaration->get_tpl_args().front();
+  ROSE_ASSERT(writtenAllocatorArgument != allocatorArgument);
+  ROSE_ASSERT(writtenAllocatorArgument->get_parent() ==
+              writtenTemplateDeclaration);
+  ROSE_ASSERT(writtenAllocatorArgument->get_argumentType() ==
+              SgTemplateArgument::template_template_argument);
+  ROSE_ASSERT(canonicalTemplateClass(exactTemplateClassIdentity(
+                  writtenAllocatorArgument->get_templateDeclaration())) ==
               allocatorIdentity);
 
   SgTemplateClassDeclaration *leftTarget = nullptr;

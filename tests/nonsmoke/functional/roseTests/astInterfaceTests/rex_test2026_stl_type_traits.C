@@ -17,38 +17,6 @@ static bool hasTemplateInstantiation(SgProject *project,
   return false;
 }
 
-static bool hasTemplateInstantiationTypedef(SgProject *project,
-                                            const std::string &name) {
-  Rose_STL_Container<SgNode *> nodes = NodeQuery::querySubTree(
-      project, V_SgTemplateInstantiationTypedefDeclaration);
-  for (SgNode *node : nodes) {
-    SgTemplateInstantiationTypedefDeclaration *decl =
-        isSgTemplateInstantiationTypedefDeclaration(node);
-    if (decl != nullptr && decl->get_templateName().getString() == name) {
-      SgTemplateTypedefDeclaration *source_template =
-          decl->get_templateDeclaration();
-      ROSE_ASSERT(source_template != nullptr);
-      ROSE_ASSERT(decl->get_specializedTemplateDeclaration() ==
-                  source_template);
-      ROSE_ASSERT(source_template->get_firstNondefiningDeclaration() !=
-                  nullptr);
-
-      SgScopeStatement *scope = decl->get_scope();
-      ROSE_ASSERT(scope != nullptr);
-      SgAuxiliaryDeclarationList *auxiliary =
-          isSgAuxiliaryDeclarationList(decl->get_parent());
-      ROSE_ASSERT(auxiliary != nullptr);
-      ROSE_ASSERT(auxiliary->get_parent() == scope);
-      ROSE_ASSERT(scope->get_auxiliary_declarations() == auxiliary);
-      ROSE_ASSERT(!scope->statementExistsInScope(decl));
-      ROSE_ASSERT(std::count(auxiliary->get_declarations().begin(),
-                             auxiliary->get_declarations().end(), decl) == 1);
-      return true;
-    }
-  }
-  return false;
-}
-
 static bool hasSourceSpelledAliasTemplateUse(SgProject *project,
                                              const std::string &name) {
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgNonrealDecl)) {
@@ -103,6 +71,17 @@ static void requireDistinctScopedAliasTemplates(SgProject *project) {
                 source_template);
     ROSE_ASSERT(source_template->get_firstNondefiningDeclaration() != nullptr);
     ROSE_ASSERT(source_template->get_scope() != nullptr);
+    SgScopeStatement *scope = declaration->get_scope();
+    ROSE_ASSERT(scope != nullptr);
+    SgAuxiliaryDeclarationList *auxiliary =
+        isSgAuxiliaryDeclarationList(declaration->get_parent());
+    ROSE_ASSERT(auxiliary != nullptr);
+    ROSE_ASSERT(auxiliary->get_parent() == scope);
+    ROSE_ASSERT(scope->get_auxiliary_declarations() == auxiliary);
+    ROSE_ASSERT(!scope->statementExistsInScope(declaration));
+    ROSE_ASSERT(std::count(auxiliary->get_declarations().begin(),
+                           auxiliary->get_declarations().end(),
+                           declaration) == 1);
     source_templates.insert(source_template);
     source_scopes.insert(source_template->get_scope());
   }
@@ -118,7 +97,7 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(hasTemplateInstantiation(project, "integral_constant"));
   ROSE_ASSERT(hasTemplateInstantiation(project, "remove_all_pointers"));
 
-  ROSE_ASSERT(hasTemplateInstantiationTypedef(project, "add_pointer_t"));
+  ROSE_ASSERT(hasSourceSpelledAliasTemplateUse(project, "add_pointer_t"));
   ROSE_ASSERT(hasSourceSpelledAliasTemplateUse(project, "remove_reference_t"));
   requireDistinctScopedAliasTemplates(project);
 

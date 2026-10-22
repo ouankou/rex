@@ -5,13 +5,6 @@
 
 #include "rose_config.h"
 
-#include <algorithm>
-#define DEBUG__unparse_alignas 0
-#define DEBUG__setup_decl_item_type_unparse_infos 0
-#define DEBUG__build_decl_item_name 0
-#define DEBUG__build_decl_item_asm_register 0
-#define DEBUG__unparseVarDeclStmt 0
-
 namespace {
 bool typeUsesDeclaratorPunctuation(const SgType *type) {
   if (type == nullptr) {
@@ -29,62 +22,10 @@ bool typeUsesDeclaratorPunctuation(const SgType *type) {
          isSgReferenceType(type) != nullptr ||
          isSgRvalueReferenceType(type) != nullptr ||
          isSgArrayType(type) != nullptr || isSgFunctionType(type) != nullptr ||
-         isSgPartialFunctionType(type) != nullptr ||
          isSgMemberFunctionType(type) != nullptr;
 }
 
-SgNode *lexicalDeclarationParent(SgDeclarationStatement *declaration) {
-  ASSERT_not_null(declaration);
-  SgNode *parent = declaration->get_parent();
-  if (SgDeclarationGroupStatement *group =
-          isSgDeclarationGroupStatement(parent)) {
-    group->validate();
-    if (group->get_parent() == nullptr ||
-        std::count(group->get_declarations().begin(),
-                   group->get_declarations().end(), declaration) != 1) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[source-declaration-group]: member=%p/%s "
-              "has no exact typed lexical owner\n",
-              static_cast<void *>(declaration),
-              declaration->class_name().c_str());
-      ROSE_ABORT();
-    }
-    parent = group->get_parent();
-  }
-  return parent;
-}
-
 } // namespace
-
-void unparse_alignas(SgInitializedName *decl_item, Unparse_ExprStmt &unparser,
-                     SgUnparse_Info &info) {
-  ASSERT_not_null(decl_item);
-#if DEBUG__unparse_alignas
-  printf("Enter unparse_alignas()\n");
-  printf("  decl_item = %p = %s\n", decl_item, decl_item->class_name().c_str());
-#endif
-  if (decl_item->get_using_C11_Alignas_keyword()) {
-    unparser.curprint("_Alignas(");
-    SgNode *constant_or_type =
-        decl_item->get_constant_or_type_argument_for_Alignas_keyword();
-    SgType *type_operand = isSgType(constant_or_type);
-    SgExpression *constant_operand = isSgExpression(constant_or_type);
-    if (type_operand != nullptr) {
-      unparser.unp->u_type->unparseType(type_operand, info);
-    } else if (constant_operand != nullptr) {
-      unparser.unparseExpression(constant_operand, info);
-    } else {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[alignas-operand]: _Alignas has no exact "
-              "type or constant-expression operand\n");
-      ROSE_ABORT();
-    }
-    unparser.curprint(")");
-  }
-#if DEBUG__unparse_alignas
-  printf("Leave DEBUG__build_decl_item_name()\n");
-#endif
-}
 
 static bool setup_decl_item_type_unparse_infos(Unparser *unparser,
                                                SgUnparse_Info &ninfo_for_type,
@@ -96,12 +37,6 @@ static bool setup_decl_item_type_unparse_infos(Unparser *unparser,
   ASSERT_not_null(vdecl);
   ASSERT_not_null(decl_item);
   ASSERT_not_null(decl_type);
-#if DEBUG__setup_decl_item_type_unparse_infos
-  printf("Enter setup_decl_item_type_unparse_infos()\n");
-  printf("  vdecl     = %p = %s\n", vdecl, vdecl->class_name().c_str());
-  printf("  decl_item = %p = %s\n", decl_item, decl_item->class_name().c_str());
-  printf("  decl_type = %p = %s\n", decl_type, decl_type->class_name().c_str());
-#endif
   bool need_unparse = false;
   SgDeclarationStatement *declStmt = nullptr;
   SgNamedType *namedType = isSgNamedType(decl_type->findBaseType());
@@ -121,10 +56,6 @@ static bool setup_decl_item_type_unparse_infos(Unparser *unparser,
   if (vdecl->skipElaborateType() && declStmt &&
       !isSgTypedefDeclaration(declStmt)) {
     ninfo_for_type.set_SkipClassSpecifier();
-  }
-
-  if (decl_item->get_hasArrayTypeWithEmptyBracketSyntax()) {
-    ninfo_for_type.set_supressArrayBound();
   }
 
   if (vdecl->get_baseTypeDefiningDeclaration() != nullptr) {
@@ -199,10 +130,6 @@ static bool setup_decl_item_type_unparse_infos(Unparser *unparser,
       need_unparse = true;
     }
   }
-#if DEBUG__setup_decl_item_type_unparse_infos
-  printf("  need_unparse = %s\n", need_unparse ? "true" : "false");
-  printf("Leave DEBUG__build_decl_item_name()\n");
-#endif
   return need_unparse;
 }
 
@@ -267,34 +194,16 @@ std::string build_decl_item_name(SgInitializedName *decl_item,
   }
 
   std::string decl_name = decl_item->get_name().getString();
-#if DEBUG__build_decl_item_name
-  printf("Enter build_decl_item_name()\n");
-  printf("  decl_item = %p = %s\n", decl_item, decl_item->class_name().c_str());
-  printf("  decl_name = %s\n", decl_name.c_str());
-#endif
   const bool is_anonymous = decl_item->get_name().is_null();
-#if DEBUG__build_decl_item_name
-  printf("  is_anonymous = %s \n", is_anonymous ? "true" : "false");
-#endif
   std::string unparse_name{""};
   if (!is_anonymous) {
-    if (SageInterface::is_Cxx_language()) {
-      unparse_name += qualified_name;
-    }
+    unparse_name += qualified_name;
     unparse_name += decl_name;
   }
-#if DEBUG__build_decl_item_name
-  printf("  unparse_name = %s\n", unparse_name.c_str());
-  printf("Leave DEBUG__build_decl_item_name()\n");
-#endif
   return unparse_name;
 }
 
 std::string build_decl_item_asm_register(SgInitializedName *decl_item) {
-#if DEBUG__build_decl_item_asm_register
-  printf("Enter build_decl_item_asm_register()\n");
-  printf("  decl_item = %p = %s\n", decl_item, decl_item->class_name().c_str());
-#endif
 
   bool need_asm_register = !decl_item->get_register_name_string().empty();
   std::string decl_name = decl_item->get_name().getString();
@@ -311,14 +220,9 @@ std::string build_decl_item_asm_register(SgInitializedName *decl_item) {
         unparse_asm_label_name(decl_item->get_register_name_string());
     asm_register += "\")";
   }
-#if DEBUG__build_decl_item_asm_register
-  printf("  asm_register = %s\n", asm_register.c_str());
-  printf("Leave DEBUG__build_decl_item_name()\n");
-#endif
   return asm_register;
 }
 
-#define DEBUG__need_assign_and_initializer_unparsed 0
 
 static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
                                                  bool &need_assign_op,
@@ -331,14 +235,6 @@ static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
     ROSE_ABORT();
   }
   SgInitializer *decl_init = decl_item->get_initializer();
-#if DEBUG__need_assign_and_initializer_unparsed
-  printf("Enter need_assign_and_initializer_unparsed()\n");
-  printf("  decl_item = %p = %s\n", decl_item, decl_item->class_name().c_str());
-  printf("  decl_init = %p = %s\n", decl_init,
-         decl_init ? decl_init->class_name().c_str() : "");
-  printf("  unparse_info.SkipInitializer() = %s \n",
-         unparse_info.SkipInitializer() ? "true" : "false");
-#endif
   if (!decl_init || unparse_info.SkipInitializer())
     return;
 
@@ -353,7 +249,9 @@ static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
     SgAggregateInitializer *aggr_init = isSgAggregateInitializer(decl_init);
 
     if (aggr_init)
-      need_assign_op = true;
+      need_assign_op =
+          !decl_item->get_is_braced_initialized() ||
+          decl_item->get_using_assignment_copy_constructor_syntax();
     if (assign_init) {
       switch (assign_init->get_source_form()) {
       case SgAssignInitializer::e_assignment_initializer_source_ast:
@@ -405,11 +303,6 @@ static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
       }
     }
   }
-#if DEBUG__need_assign_and_initializer_unparsed
-  printf("  need_assign_op   = %s\n", need_assign_op ? "true" : "false");
-  printf("  need_initializer = %s\n", need_initializer ? "true" : "false");
-  printf("Leave need_assign_and_initializer_unparsed()\n");
-#endif
 }
 
 /**
@@ -422,10 +315,6 @@ static void need_assign_and_initializer_unparsed(SgInitializedName *decl_item,
  */
 void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
                                           SgUnparse_Info &info) {
-#if DEBUG__unparseVarDeclStmt
-  printf("Enter unparseVarDeclStmt()\n");
-  printf("  stmt = %p = %s\n", stmt, stmt->class_name().c_str());
-#endif
 
   SgVariableDeclaration *vardecl_stmt = isSgVariableDeclaration(stmt);
   ASSERT_not_null(vardecl_stmt);
@@ -438,26 +327,11 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     ROSE_ABORT();
   }
 
-#if DEBUG__unparseVarDeclStmt
-  auto &decl_mod = vardecl_stmt->get_declarationModifier();
-  printf("  - isStatic()  = %s \n",
-         decl_mod.get_storageModifier().isStatic() ? "true" : "false");
-  printf("  - isExtern()  = %s \n",
-         decl_mod.get_storageModifier().isExtern() ? "true" : "false");
-  printf("  - isMutable() = %s \n",
-         decl_mod.get_storageModifier().isMutable() ? "true" : "false");
-  printf("    ->get_is_thread_local  = %s \n",
-         vardecl_stmt->get_is_thread_local() ? "true" : "false");
-#endif
 
   ROSE_ASSERT(!info.unparsedPartiallyUsingTokenStream());
   ROSE_ASSERT(info.SkipClassDefinition() == info.SkipEnumDefinition());
 
   SgUnparse_Info ninfo(info);
-#if DEBUG__unparseVarDeclStmt
-  printf("  ninfo.SkipBaseType() = %s \n",
-         ninfo.SkipBaseType() ? "true" : "false");
-#endif
   ninfo.set_declstatement_ptr(vardecl_stmt);
   ninfo.unset_isPointerToSomething();
   ninfo.unset_isReferenceToSomething();
@@ -481,25 +355,8 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
 
   unparse_enclosing_template_headers();
 
-  // Recompute access-specifier emission for each declaration.
-  // This prevents CheckAccess state inherited from class-member contexts from
-  // leaking into function-local declarations (which would unparse `public:` in
-  // local blocks).
-  ninfo.unset_CheckAccess();
-  SgClassDefinition *classDefinition =
-      isSgClassDefinition(lexicalDeclarationParent(vardecl_stmt));
-  if (classDefinition != nullptr &&
-      classDefinition->get_declaration()->get_class_type() ==
-          SgClassDeclaration::e_class &&
-      !info.skipCheckAccess()) {
-    ninfo.set_CheckAccess();
-  }
-
-  unp->u_sage->printSpecifier1(vardecl_stmt, ninfo);
-
   SgUnparse_Info saved_ninfo(ninfo);
 
-  ninfo.unset_CheckAccess();
   info.set_access_attribute(ninfo.get_access_attribute());
 
   if (ninfo.inEnumDecl()) {
@@ -517,8 +374,6 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     decl_item_entries.push_back({vardecl_stmt, decl_item});
   }
   ROSE_ASSERT(!decl_item_entries.empty());
-
-  unparse_alignas(decl_item_entries.front().init, *this, info);
 
   for (size_t decl_item_index = 0; decl_item_index < decl_item_entries.size();
        ++decl_item_index) {
@@ -564,25 +419,11 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     SgType *decl_type =
         source_decl_type != nullptr ? source_decl_type : semantic_decl_type;
     ASSERT_not_null(decl_type);
-    SgName decl_name = decl_item->get_name();
     SgInitializer *decl_init = decl_item->get_initializer();
 
-#if DEBUG__unparseVarDeclStmt
-    printf("  - decl_item = %p = %s\n", decl_item,
-           decl_item->class_name().c_str());
-    printf("    decl_type = %p = %s\n", decl_type,
-           decl_type->class_name().c_str());
-    printf("    decl_name = %s\n", decl_name.str());
-    printf("    decl_init = %p = %s\n", decl_init,
-           decl_init ? decl_init->class_name().c_str() : "");
-#endif
     if (decl_item->get_auto_decltype() != nullptr)
       decl_type = decl_item->get_auto_decltype();
     ASSERT_not_null(decl_type);
-#if DEBUG__unparseVarDeclStmt
-    printf("    decl_type = %p = %s\n", decl_type,
-           decl_type->class_name().c_str());
-#endif
 
     bool is_first_decl_item = decl_item_index == 0;
     const bool is_list_continuation =
@@ -602,8 +443,12 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     }
 
     if (is_first_decl_item && !ninfo.SkipBaseType()) {
-      // FIXME block below before while loop: does it break preprocessor
-      // unparsing?
+      unp->u_sage->printAlignmentSpecifiers(
+          decl_item, ninfo, Unparse_MOD_SAGE::AlignmentPosition::Prefix);
+      SgVariableDefinition *definition = decl_item->get_definition();
+      if (definition != nullptr && definition->get_has_no_unique_address()) {
+        curprint("[[no_unique_address]] ");
+      }
       unp->u_sage->printSpecifier2(vardecl_stmt, saved_ninfo);
       if (vardecl_stmt->get_is_thread_local()) {
         SgSourceFile *file =
@@ -665,7 +510,7 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
       curprint(decl_item->get_name().getString());
     } else {
       std::string qualifier;
-      if (SageInterface::is_Cxx_language()) {
+      if (ninfo.get_language() == SgFile::e_Cxx_language) {
         SgStatement *useSite = SageInterface::getEnclosingStatement(decl_item);
         if (useSite == nullptr) {
           fprintf(stderr,
@@ -754,7 +599,4 @@ void Unparse_ExprStmt::unparseVarDeclStmt(SgStatement *stmt,
     curprint(";");
   }
 
-#if DEBUG__unparseVarDeclStmt
-  printf("Leaving unparseVarDeclStmt()\n");
-#endif
 }

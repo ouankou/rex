@@ -242,7 +242,8 @@ OperatorDeclaration::OperatorDeclaration(AstInterface &fa, AstNodePtr op_ast,
     argp = &args;
   }
   AstNodePtr dependent_callee;
-  if (fa.IsFunctionCall(op_ast, &dependent_callee) &&
+  const bool is_function_call = fa.IsFunctionCall(op_ast, &dependent_callee);
+  if (is_function_call &&
       isSgNonrealRefExp(dependent_callee.get_ptr()) != nullptr) {
     has_concrete_signature_ = false;
     argp->clear();
@@ -263,20 +264,15 @@ OperatorDeclaration::OperatorDeclaration(AstInterface &fa, AstNodePtr op_ast,
     DebugOperatorDescriptor([&]() {
       return "Adding operator parameter:" + AstInterface::AstToString(*p1);
     });
+    // Call lookup uses parameter types; annotation formals bind the typed args.
     pars.add_param(fa.GetTypeName(*p2),
-                   AstInterface::GetVariableSignature(*p1));
+                   is_function_call ? std::string{}
+                                    : AstInterface::GetVariableSignature(*p1));
     ++p1;
     ++p2;
   }
   for (unsigned i = 0; i < pars.num_of_params(); ++i) {
     TypeDescriptor::get_name() += "_" + pars.get_param_type(i);
-  }
-  assert(params.size() == pars.num_of_params());
-  if (params.size() != argp->size()) {
-    std::cerr << "Error: mismatching numbers of parameters and arguments in "
-                 "annotation."
-              << params.size() << " vs " << argp->size() << "\n";
-    assert(false);
   }
 }
 

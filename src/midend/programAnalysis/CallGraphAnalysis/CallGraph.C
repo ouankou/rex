@@ -1,24 +1,15 @@
+#include "AstNodes/Expression/ExpressionTypeClassification.h"
 #include "sage3basic.h"
 
-// This fixed a reported bug which caused conflicts with configure-time macros
-// (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the list of
-// include files.
 #include "CallGraph.h"
 
 #include "rose_config.h"
 
-#include "sageGeneric.h"
-
-#include <err.h>
 #include <mutex>
 #include <set>
 
 using namespace std;
 using namespace Rose;
-
-/***************************************************
- * Get the vector of base types for the current type
- **************************************************/
 
 static bool
 isUninstantiatedTemplateFunctionPattern(SgFunctionDeclaration *fdecl) {
@@ -187,172 +178,6 @@ bool callGraphDeclHasIndependentCallableIdentity(SgFunctionDeclaration *fdecl) {
   return canonicalCallableFunctionDecl(fdecl) != NULL;
 }
 
-static SgType *skipTypeAliases(SgType *ty) {
-  ASSERT_not_null(ty);
-
-  return ty->stripType(SgType::STRIP_TYPEDEF_TYPE);
-}
-
-static SgMemberFunctionType *
-memberFunctionTypeFromMemberPointerType(SgType *type) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  if (SgMemberFunctionType *memberFunctionType = isSgMemberFunctionType(type)) {
-    return memberFunctionType;
-  }
-
-  if (SgPointerMemberType *memberPointerType = isSgPointerMemberType(type)) {
-    return memberFunctionTypeFromMemberPointerType(
-        memberPointerType->get_base_type());
-  }
-
-  SgType *baseType = type->findBaseType();
-  if (baseType != NULL && baseType != type) {
-    return memberFunctionTypeFromMemberPointerType(baseType);
-  }
-
-  return NULL;
-}
-
-static SgPointerMemberType *pointerMemberTypeFromType(SgType *type) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  if (SgPointerMemberType *memberPointerType = isSgPointerMemberType(type)) {
-    return memberPointerType;
-  }
-
-  SgType *stripped = type->stripTypedefsAndModifiers();
-  if (stripped != NULL && stripped != type) {
-    return pointerMemberTypeFromType(stripped);
-  }
-
-  return NULL;
-}
-
-static SgDeclarationStatementPtrList *
-memberScopeDeclarationListForFunctionRef(SgScopeStatement *scope) {
-  if (scope == NULL)
-    return NULL;
-  if (SgClassDefinition *class_def = isSgClassDefinition(scope))
-    return &class_def->get_members();
-  if (SgTemplateClassDefinition *template_def =
-          isSgTemplateClassDefinition(scope))
-    return &template_def->get_members();
-  if (SgTemplateInstantiationDefn *inst_def =
-          isSgTemplateInstantiationDefn(scope))
-    return &inst_def->get_members();
-  return NULL;
-}
-
-static SgScopeStatement *enclosingMemberScopeForFunctionRef(SgNode *node) {
-  for (SgNode *cursor = node; cursor != NULL; cursor = cursor->get_parent()) {
-    if (SgScopeStatement *scope = isSgScopeStatement(cursor)) {
-      if (memberScopeDeclarationListForFunctionRef(scope) != NULL)
-        return scope;
-    }
-  }
-  return NULL;
-}
-
-static SgMemberFunctionDeclaration *
-canonicalMemberFunctionDeclForRef(SgMemberFunctionDeclaration *decl) {
-  if (decl == NULL)
-    return NULL;
-  if (SgMemberFunctionDeclaration *first_nondef = isSgMemberFunctionDeclaration(
-          decl->get_firstNondefiningDeclaration()))
-    return first_nondef;
-  return decl;
-}
-
-static SgTemplateMemberFunctionDeclaration *
-canonicalTemplateMemberPatternDecl(SgDeclarationStatement *decl) {
-  SgTemplateMemberFunctionDeclaration *pattern =
-      isSgTemplateMemberFunctionDeclaration(decl);
-  if (pattern == NULL) {
-    return NULL;
-  }
-
-  if (SgTemplateMemberFunctionDeclaration *first_nondef =
-          isSgTemplateMemberFunctionDeclaration(
-              pattern->get_firstNondefiningDeclaration())) {
-    return first_nondef;
-  }
-
-  if (SgTemplateMemberFunctionDeclaration *defining =
-          isSgTemplateMemberFunctionDeclaration(
-              pattern->get_definingDeclaration())) {
-    if (SgTemplateMemberFunctionDeclaration *first_nondef =
-            isSgTemplateMemberFunctionDeclaration(
-                defining->get_firstNondefiningDeclaration())) {
-      return first_nondef;
-    }
-    return defining;
-  }
-
-  return pattern;
-}
-
-static bool memberFunctionDeclMatchesRefType(SgMemberFunctionDeclaration *decl,
-                                             SgMemberFunctionRefExp *ref) {
-  if (decl == NULL || ref == NULL)
-    return false;
-  SgType *decl_type = decl->get_type();
-  SgType *ref_type = ref->get_type();
-  if (decl_type == NULL || ref_type == NULL)
-    return false;
-  return decl_type == ref_type ||
-         SageInterface::isEquivalentType(decl_type, ref_type);
-}
-
-static SgMemberFunctionDeclaration *
-resolveMemberFunctionDeclarationFromRef(SgMemberFunctionRefExp *ref) {
-  if (ref == NULL)
-    return NULL;
-
-  SgMemberFunctionSymbol *symbol = ref->get_symbol();
-  if (symbol != NULL) {
-    if (SgMemberFunctionDeclaration *decl =
-            isSgMemberFunctionDeclaration(symbol->get_declaration()))
-      return decl;
-  }
-
-  if (symbol == NULL)
-    return NULL;
-
-  SgScopeStatement *member_scope = enclosingMemberScopeForFunctionRef(ref);
-  SgDeclarationStatementPtrList *members =
-      memberScopeDeclarationListForFunctionRef(member_scope);
-  if (members == NULL)
-    return NULL;
-
-  const SgName target_name = symbol->get_name();
-  std::vector<SgMemberFunctionDeclaration *> name_matches;
-  std::vector<SgMemberFunctionDeclaration *> type_matches;
-  std::set<SgMemberFunctionDeclaration *> seen;
-
-  for (SgDeclarationStatement *stmt : *members) {
-    SgMemberFunctionDeclaration *candidate =
-        canonicalMemberFunctionDeclForRef(isSgMemberFunctionDeclaration(stmt));
-    if (candidate == NULL || candidate->get_name() != target_name ||
-        !seen.insert(candidate).second)
-      continue;
-
-    name_matches.push_back(candidate);
-    if (memberFunctionDeclMatchesRefType(candidate, ref))
-      type_matches.push_back(candidate);
-  }
-
-  if (type_matches.size() == 1)
-    return type_matches.front();
-  if (name_matches.size() == 1)
-    return name_matches.front();
-  return NULL;
-}
-
 static SgMemberFunctionDeclaration *
 resolveTemplateMemberFunctionDeclarationFromRef(
     SgTemplateMemberFunctionRefExp *ref) {
@@ -368,7 +193,7 @@ resolveTemplateMemberFunctionDeclarationFromRef(
 static SgMemberFunctionDeclaration *
 resolveMemberFunctionDeclarationFromExpression(SgExpression *expr) {
   if (SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(expr)) {
-    return resolveMemberFunctionDeclarationFromRef(ref);
+    return ref->getAssociatedMemberFunctionDeclaration();
   }
 
   if (SgTemplateMemberFunctionRefExp *ref =
@@ -396,8 +221,6 @@ static bool memberFunctionRefNeedsQualifier(SgExpression *expr) {
 
   return true;
 }
-
-static bool is_types_equal(SgType *t1, SgType *t2);
 
 static SgClassType *
 getClassTypeFromDeclaration(SgClassDeclaration *class_decl) {
@@ -494,1024 +317,29 @@ canonicalClassDeclaration(SgClassDeclaration *class_decl) {
   return class_decl;
 }
 
-struct TemplateInstantiationAnalysisContext {
-  SgFunctionDeclaration *instantiation = NULL;
-  SgFunctionDeclaration *templateFunction = NULL;
-  std::vector<SgTemplateParameter *> templateParameters;
-  std::vector<SgTemplateArgument *> templateArguments;
-
-  bool empty() const {
-    return instantiation == NULL || templateFunction == NULL ||
-           templateParameters.empty() ||
-           templateParameters.size() != templateArguments.size();
+static SgType *receiverBindingType(SgExpression *expression) {
+  ASSERT_not_null(expression);
+  SgBinaryOp *access = isSgDotExp(expression);
+  if (access == NULL)
+    access = isSgArrowExp(expression);
+  if (access != NULL) {
+    if (auto *field = isSgVarRefExp(access->get_rhs_operand()))
+      return field->get_type();
   }
-};
-
-static SgClassType *
-resolveClassTypeFromScopeLookup(SgScopeStatement *scope,
-                                SgNonrealDecl *nonreal_decl) {
-  if (scope == NULL || nonreal_decl == NULL) {
-    return NULL;
+  if (auto *call = isSgFunctionCallExp(expression)) {
+    ASSERT_not_null(call->get_function());
+    ASSERT_not_null(call->get_function()->get_type());
+    auto *signature =
+        isSgFunctionType(call->get_function()->get_type()->findBaseType());
+    ASSERT_not_null(signature);
+    return signature->get_return_type();
   }
-
-  const bool is_template_id = nonreal_decl->get_nonreal_template_role() ==
-                              SgNonrealDecl::e_nonreal_template_id;
-  SgTemplateArgumentPtrList *tpl_args =
-      is_template_id ? &nonreal_decl->get_tpl_args() : NULL;
-  SgName symbol_name = nonreal_decl->get_semantic_name();
-  if (symbol_name.is_null() ||
-      (is_template_id &&
-       symbol_name.getString().find('<') == std::string::npos)) {
-    std::cerr << "REX_AST_INVARIANT[nonreal-template-name]: SgNonrealDecl has "
-                 "no complete semantic name\n";
-    ROSE_ABORT();
-  }
-
-  SgClassSymbol *class_symbol =
-      scope->lookup_class_symbol(symbol_name, tpl_args);
-  if (class_symbol == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *class_decl = canonicalClassDeclaration(
-      isSgClassDeclaration(class_symbol->get_declaration()));
-  return getClassTypeFromDeclaration(class_decl);
+  return expression->get_type();
 }
 
-static SgClassType *resolveClassTypeFromType(
-    SgType *type,
-    const TemplateInstantiationAnalysisContext *templateContext = NULL) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  if (SgClassType *class_type = isSgClassType(type)) {
-    return class_type;
-  }
-
-  SgNonrealType *nonreal_type = isSgNonrealType(type);
-  if (nonreal_type == NULL) {
-    return NULL;
-  }
-
-  SgNonrealDecl *nonreal_decl =
-      isSgNonrealDecl(nonreal_type->get_declaration());
-  if (nonreal_decl == NULL) {
-    return NULL;
-  }
-
-  if (SgClassDeclaration *class_decl =
-          isSgClassDeclaration(nonreal_decl->get_templateDeclaration())) {
-    if (isSgTemplateClassDeclaration(class_decl) != NULL &&
-        !nonreal_decl->get_tpl_args().empty()) {
-      std::vector<SgTemplateParameter *> tpl_params;
-      std::vector<SgTemplateArgument *> tpl_args;
-      if (templateContext != NULL && !templateContext->empty()) {
-        tpl_params = templateContext->templateParameters;
-        tpl_args = templateContext->templateArguments;
-      }
-
-      bool requiresInstantiationContext = false;
-      for (SgTemplateArgument *argument : nonreal_decl->get_tpl_args()) {
-        if (argument == NULL) {
-          std::cerr << "REX_CALLGRAPH_INVARIANT[dependent-class-type]: "
-                       "template-id contains a null template argument"
-                    << std::endl;
-          ROSE_ABORT();
-        }
-        if (argument->get_argumentType() == SgTemplateArgument::type_argument &&
-            callGraphTypeContainsDependentTemplateType(argument->get_type())) {
-          requiresInstantiationContext = true;
-        }
-      }
-
-      if (!requiresInstantiationContext ||
-          (templateContext != NULL && !templateContext->empty())) {
-        if (SgClassType *instantiated_type =
-                isSgClassType(Rose::Builder::Templates::instantiateNonrealTypes(
-                    nonreal_type, tpl_params, tpl_args,
-                    templateContext != NULL &&
-                            templateContext->instantiation != NULL
-                        ? templateContext->instantiation->get_scope()
-                        : NULL))) {
-          return instantiated_type;
-        }
-      }
-    }
-
-    // A dependent template-id outside a concrete instantiation context names
-    // the primary template's semantic class.  Resolving members against that
-    // typed definition is exact; fabricating an empty specialization argument
-    // list is not.
-    return getClassTypeFromDeclaration(class_decl);
-  }
-
-  if (!nonreal_decl->get_tpl_args().empty()) {
-    std::set<SgScopeStatement *> visited_scopes;
-    for (SgNode *cursor = nonreal_decl->get_scope(); cursor != NULL;
-         cursor = cursor->get_parent()) {
-      SgScopeStatement *scope = isSgScopeStatement(cursor);
-      if (scope == NULL || !visited_scopes.insert(scope).second) {
-        continue;
-      }
-
-      if (SgClassType *resolved_type =
-              resolveClassTypeFromScopeLookup(scope, nonreal_decl)) {
-        return resolved_type;
-      }
-    }
-  }
-
-  return NULL;
-}
-
-static SgName templateParameterName(SgTemplateParameter *parameter) {
-  if (parameter == NULL) {
-    return SgName();
-  }
-
-  if (SgInitializedName *name = parameter->get_initializedName()) {
-    return name->get_name();
-  }
-
-  if (SgType *type = parameter->get_type()) {
-    if (SgTemplateType *templateType = isSgTemplateType(type)) {
-      return templateType->get_name();
-    }
-  }
-
-  return SgName();
-}
-
-static SgTemplateArgument *templateArgumentForParameterName(
-    const TemplateInstantiationAnalysisContext *context, const SgName &name) {
-  if (context == NULL || context->empty() || name.is_null()) {
-    return NULL;
-  }
-
-  const std::vector<SgTemplateParameter *> &parameters =
-      context->templateParameters;
-  for (size_t i = 0;
-       i < parameters.size() && i < context->templateArguments.size(); ++i) {
-    if (templateParameterName(parameters[i]) == name) {
-      return context->templateArguments[i];
-    }
-  }
-
-  return NULL;
-}
-
-static SgTemplateArgument *templateArgumentForTemplateType(
-    SgTemplateType *type, const TemplateInstantiationAnalysisContext *context) {
-  if (type == NULL || context == NULL) {
-    return NULL;
-  }
-
-  if (SgTemplateParameter *parameter = type->get_template_parameter()) {
-    for (size_t index = 0; index < context->templateParameters.size();
-         ++index) {
-      if (context->templateParameters[index] == parameter) {
-        return context->templateArguments[index];
-      }
-    }
-  }
-
-  if (SgTemplateArgument *argument =
-          templateArgumentForParameterName(context, type->get_name())) {
-    return argument;
-  }
-
-  const int position = type->get_template_parameter_position();
-  if (position >= 0 &&
-      static_cast<size_t>(position) < context->templateArguments.size()) {
-    return context->templateArguments[position];
-  }
-
-  if (SgTemplateParameter *parameter = type->get_template_parameter()) {
-    return templateArgumentForParameterName(context,
-                                            templateParameterName(parameter));
-  }
-
-  return NULL;
-}
-
-static SgTemplateArgument *templateArgumentForNonrealType(
-    SgNonrealType *type, const TemplateInstantiationAnalysisContext *context) {
-  if (type == NULL || context == NULL) {
-    return NULL;
-  }
-
-  SgNonrealDecl *decl = isSgNonrealDecl(type->get_declaration());
-  return decl != NULL
-             ? templateArgumentForParameterName(context, decl->get_name())
-             : NULL;
-}
-
-static SgType *substituteTemplateParameterType(
-    SgType *type, const TemplateInstantiationAnalysisContext *context) {
-  if (type == NULL || context == NULL || context->empty()) {
-    return type;
-  }
-
-  SgType *stripped = type->stripType(
-      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
-      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
-  if (stripped == NULL) {
-    return type;
-  }
-
-  SgTemplateArgument *argument = NULL;
-  if (SgTemplateType *templateType = isSgTemplateType(stripped)) {
-    argument = templateArgumentForTemplateType(templateType, context);
-  } else if (SgNonrealType *nonrealType = isSgNonrealType(stripped)) {
-    argument = templateArgumentForNonrealType(nonrealType, context);
-  }
-
-  if (argument != NULL &&
-      argument->get_argumentType() == SgTemplateArgument::type_argument &&
-      argument->get_type() != NULL) {
-    return argument->get_type();
-  }
-
-  return type;
-}
-
-static TemplateInstantiationAnalysisContext
-buildTemplateInstantiationAnalysisContext(
-    SgFunctionDeclaration *instantiation) {
-  TemplateInstantiationAnalysisContext context;
-  if (instantiation == NULL) {
-    return context;
-  }
-
-  auto appendMappings = [&](const SgTemplateParameterPtrList &parameters,
-                            const SgTemplateArgumentPtrList &arguments,
-                            const char *ownerKind) {
-    if (parameters.empty() && arguments.empty()) {
-      return;
-    }
-    size_t packIndex = parameters.size();
-    for (size_t i = 0; i < parameters.size(); ++i) {
-      if (parameters[i] == NULL) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[template-analysis-context]: "
-                  << ownerKind << " contains a null template parameter"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-      if (!parameters[i]->get_is_parameter_pack()) {
-        continue;
-      }
-      if (packIndex != parameters.size() || i + 1 != parameters.size()) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[template-analysis-context]: "
-                  << ownerKind
-                  << " has multiple or non-trailing template parameter packs"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-      packIndex = i;
-    }
-    const size_t fixedParameterCount =
-        packIndex == parameters.size() ? parameters.size() : packIndex;
-    if (arguments.size() < fixedParameterCount ||
-        (packIndex == parameters.size() &&
-         arguments.size() != parameters.size())) {
-      std::cerr
-          << "REX_CALLGRAPH_INVARIANT[template-analysis-context]: " << ownerKind
-          << " parameter/argument counts disagree "
-          << "(instantiation=" << instantiation << "/"
-          << instantiation->class_name()
-          << " name=" << instantiation->get_name().getString()
-          << " parameters=" << parameters.size()
-          << " arguments=" << arguments.size() << " explicit-arguments="
-          << (isSgTemplateInstantiationFunctionDecl(instantiation)
-                  ? isSgTemplateInstantiationFunctionDecl(instantiation)
-                        ->get_templateArguments()
-                        .size()
-                  : isSgTemplateInstantiationMemberFunctionDecl(instantiation)
-                        ->get_templateArguments()
-                        .size())
-          << " deduced-arguments="
-          << (isSgTemplateInstantiationFunctionDecl(instantiation)
-                  ? isSgTemplateInstantiationFunctionDecl(instantiation)
-                        ->get_deducedTemplateArguments()
-                        .size()
-                  : isSgTemplateInstantiationMemberFunctionDecl(instantiation)
-                        ->get_deducedTemplateArguments()
-                        .size())
-          << ")" << std::endl;
-      ROSE_ABORT();
-    }
-    for (size_t i = 0; i < fixedParameterCount; ++i) {
-      context.templateParameters.push_back(parameters[i]);
-      context.templateArguments.push_back(arguments[i]);
-    }
-    if (packIndex != parameters.size()) {
-      for (size_t i = packIndex; i < arguments.size(); ++i) {
-        context.templateParameters.push_back(parameters[packIndex]);
-        context.templateArguments.push_back(arguments[i]);
-      }
-    }
-  };
-
-  if (SgTemplateInstantiationFunctionDecl *functionInstantiation =
-          isSgTemplateInstantiationFunctionDecl(instantiation)) {
-    SgTemplateFunctionDeclaration *sourceTemplate =
-        isSgTemplateFunctionDeclaration(
-            functionInstantiation->get_templateDeclaration());
-    if (sourceTemplate == NULL) {
-      std::cerr
-          << "REX_CALLGRAPH_INVARIANT[template-analysis-context]: function "
-             "instantiation="
-          << functionInstantiation
-          << " name=" << functionInstantiation->get_name().getString()
-          << " has no exact source template declaration" << std::endl;
-      ROSE_ABORT();
-    }
-    SgTemplateArgumentPtrList arguments =
-        functionInstantiation->get_templateArguments();
-    if (arguments.empty()) {
-      arguments = functionInstantiation->get_deducedTemplateArguments();
-    }
-    context.instantiation = functionInstantiation;
-    context.templateFunction = sourceTemplate;
-    appendMappings(sourceTemplate->get_templateParameters(), arguments,
-                   "function template");
-    return context;
-  }
-
-  SgTemplateInstantiationMemberFunctionDecl *memberInstantiation =
-      isSgTemplateInstantiationMemberFunctionDecl(instantiation);
-  if (memberInstantiation == NULL) {
-    return context;
-  }
-  SgTemplateMemberFunctionDeclaration *sourceMember =
-      memberInstantiation->get_templateDeclaration();
-  if (sourceMember == NULL) {
-    if (memberInstantiation->get_specialization() ==
-        SgDeclarationStatement::e_specialization) {
-      // An explicitly specialized member has its own concrete source body.
-      // Its instantiation node kind reflects the specialized class owner; it
-      // is not itself a member-function template and has no pattern edge.
-      return context;
-    }
-    std::cerr << "REX_CALLGRAPH_INVARIANT[template-analysis-context]: member "
-                 "function instantiation="
-              << memberInstantiation
-              << " name=" << memberInstantiation->get_name().getString()
-              << " associated-class="
-              << memberInstantiation->get_associatedClassDeclaration()
-              << " has no exact source template declaration" << std::endl;
-    ROSE_ABORT();
-  }
-
-  context.instantiation = memberInstantiation;
-  context.templateFunction = sourceMember;
-
-  SgTemplateInstantiationDefn *receiverDefinition =
-      isSgTemplateInstantiationDefn(memberInstantiation->get_scope());
-  SgTemplateInstantiationDecl *receiverDeclaration =
-      receiverDefinition != NULL
-          ? isSgTemplateInstantiationDecl(receiverDefinition->get_parent())
-          : NULL;
-  SgTemplateClassDeclaration *sourceClass =
-      receiverDeclaration != NULL
-          ? receiverDeclaration->get_templateDeclaration()
-          : NULL;
-  if (receiverDeclaration != NULL && sourceClass != NULL) {
-    appendMappings(sourceClass->get_templateParameters(),
-                   receiverDeclaration->get_templateArguments(),
-                   "class template receiver");
-  }
-
-  SgTemplateArgumentPtrList memberArguments =
-      memberInstantiation->get_templateArguments();
-  if (memberArguments.empty()) {
-    memberArguments = memberInstantiation->get_deducedTemplateArguments();
-  }
-  appendMappings(sourceMember->get_templateParameters(), memberArguments,
-                 "member function template");
-
-  return context;
-}
-
-static SgType *expressionTypeInTemplateInstantiation(
-    SgExpression *expression,
-    const TemplateInstantiationAnalysisContext *context) {
-  if (expression == NULL || expression->get_type() == NULL || context == NULL ||
-      context->instantiation == NULL || context->templateFunction == NULL) {
-    return expression != NULL ? expression->get_type() : NULL;
-  }
-
-  while (SgCastExp *conversion = isSgCastExp(expression)) {
-    expression = conversion->get_operand();
-    if (expression == NULL) {
-      return NULL;
-    }
-  }
-
-  if (SgFunctionCallExp *call = isSgFunctionCallExp(expression)) {
-    SgMemberFunctionDeclaration *member =
-        resolveMemberFunctionDeclarationFromExpression(call->get_function());
-    SgMemberFunctionType *memberType =
-        member != NULL ? isSgMemberFunctionType(member->get_type()) : NULL;
-    if (memberType != NULL && memberType->get_return_type() != NULL) {
-      return substituteTemplateParameterType(memberType->get_return_type(),
-                                             context);
-    }
-  }
-
-  if (SgVarRefExp *reference = isSgVarRefExp(expression)) {
-    SgInitializedName *genericName =
-        reference->get_symbol() != NULL
-            ? reference->get_symbol()->get_declaration()
-            : NULL;
-    SgFunctionParameterList *genericParameters =
-        context->templateFunction->get_parameterList();
-    SgFunctionParameterList *instantiatedParameters =
-        context->instantiation->get_parameterList();
-    if (genericName != NULL && genericParameters != NULL &&
-        instantiatedParameters != NULL) {
-      const SgInitializedNamePtrList &genericArgs =
-          genericParameters->get_args();
-      const SgInitializedNamePtrList &instantiatedArgs =
-          instantiatedParameters->get_args();
-      if (genericArgs.size() != instantiatedArgs.size()) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[template-parameter-map]: "
-                     "generic and instantiated parameter lists disagree"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-      size_t matchingIndex = genericArgs.size();
-      for (size_t index = 0; index < genericArgs.size(); ++index) {
-        if (genericArgs[index] == genericName ||
-            (genericArgs[index] != NULL && !genericName->get_name().is_null() &&
-             genericArgs[index]->get_name() == genericName->get_name())) {
-          if (matchingIndex != genericArgs.size()) {
-            std::cerr << "REX_CALLGRAPH_INVARIANT[template-parameter-map]: "
-                         "generic parameter identity is ambiguous"
-                      << std::endl;
-            ROSE_ABORT();
-          }
-          matchingIndex = index;
-        }
-      }
-      if (matchingIndex != genericArgs.size()) {
-        if (instantiatedArgs[matchingIndex] == NULL ||
-            instantiatedArgs[matchingIndex]->get_type() == NULL) {
-          std::cerr << "REX_CALLGRAPH_INVARIANT[template-parameter-map]: "
-                       "instantiated parameter has no exact type"
-                    << std::endl;
-          ROSE_ABORT();
-        }
-        return instantiatedArgs[matchingIndex]->get_type();
-      }
-    }
-  }
-
-  SgBinaryOp *memberAccess = isSgDotExp(expression);
-  if (memberAccess == NULL) {
-    memberAccess = isSgArrowExp(expression);
-  }
-  if (memberAccess != NULL) {
-    SgType *baseType = expressionTypeInTemplateInstantiation(
-        memberAccess->get_lhs_operand(), context);
-    SgClassType *receiverClass =
-        baseType != NULL
-            ? resolveClassTypeFromType(baseType->findBaseType(), context)
-            : NULL;
-    SgNonrealRefExp *memberReference =
-        isSgNonrealRefExp(memberAccess->get_rhs_operand());
-    SgNonrealSymbol *memberSymbol =
-        memberReference != NULL ? memberReference->get_symbol() : NULL;
-    SgVarRefExp *variableMemberReference =
-        isSgVarRefExp(memberAccess->get_rhs_operand());
-    SgVariableSymbol *variableMemberSymbol =
-        variableMemberReference != NULL ? variableMemberReference->get_symbol()
-                                        : NULL;
-    SgName memberName = memberSymbol != NULL ? memberSymbol->get_name()
-                        : variableMemberSymbol != NULL
-                            ? variableMemberSymbol->get_name()
-                            : SgName();
-    SgClassDeclaration *receiverDeclaration =
-        receiverClass != NULL
-            ? isSgClassDeclaration(receiverClass->get_declaration())
-            : NULL;
-    receiverDeclaration =
-        receiverDeclaration != NULL
-            ? isSgClassDeclaration(
-                  receiverDeclaration->get_definingDeclaration())
-            : NULL;
-    SgClassDefinition *receiverDefinition =
-        receiverDeclaration != NULL ? receiverDeclaration->get_definition()
-                                    : NULL;
-    if (!memberName.is_null() && receiverDefinition != NULL) {
-      auto findField = [&](SgClassDefinition *definition) {
-        SgInitializedName *matchedField =
-            static_cast<SgInitializedName *>(NULL);
-        if (definition == NULL) {
-          return matchedField;
-        }
-        for (SgDeclarationStatement *member : definition->get_members()) {
-          SgVariableDeclaration *variable = isSgVariableDeclaration(member);
-          if (variable == NULL) {
-            continue;
-          }
-          for (SgInitializedName *field : variable->get_variables()) {
-            if (field == NULL || field->get_name() != memberName) {
-              continue;
-            }
-            if (matchedField != NULL && matchedField != field) {
-              std::cerr << "REX_CALLGRAPH_INVARIANT[dependent-member-type]: "
-                           "receiver has multiple same-named fields"
-                        << std::endl;
-              ROSE_ABORT();
-            }
-            matchedField = field;
-          }
-        }
-        return matchedField;
-      };
-      SgInitializedName *matchedField = findField(receiverDefinition);
-      if (matchedField == NULL) {
-        if (SgTemplateInstantiationDecl *instantiation =
-                isSgTemplateInstantiationDecl(receiverDeclaration)) {
-          SgTemplateClassDeclaration *sourceTemplate =
-              instantiation->get_templateDeclaration();
-          SgClassDeclaration *definingTemplate =
-              sourceTemplate != NULL
-                  ? isSgClassDeclaration(
-                        sourceTemplate->get_definingDeclaration())
-                  : NULL;
-          matchedField = findField(definingTemplate != NULL
-                                       ? definingTemplate->get_definition()
-                                       : NULL);
-        }
-      }
-      if (matchedField != NULL) {
-        if (matchedField->get_type() == NULL) {
-          std::cerr << "REX_CALLGRAPH_INVARIANT[dependent-member-type]: "
-                       "instantiated field has no exact type"
-                    << std::endl;
-          ROSE_ABORT();
-        }
-        return substituteTemplateParameterType(matchedField->get_type(),
-                                               context);
-      }
-    }
-  }
-
-  return substituteTemplateParameterType(expression->get_type(), context);
-}
-
-static bool templateArgumentsAreEquivalent(SgTemplateArgument *lhs,
-                                           SgTemplateArgument *rhs) {
-  if (lhs == NULL || rhs == NULL) {
-    return false;
-  }
-
-  if (lhs->get_argumentType() != rhs->get_argumentType()) {
-    return false;
-  }
-
-  switch (lhs->get_argumentType()) {
-  case SgTemplateArgument::type_argument:
-    return lhs->get_type() != NULL && rhs->get_type() != NULL &&
-           is_types_equal(skipTypeAliases(lhs->get_type()),
-                          skipTypeAliases(rhs->get_type()));
-
-  case SgTemplateArgument::template_template_argument:
-    return lhs->get_templateDeclaration() != NULL &&
-           lhs->get_templateDeclaration() == rhs->get_templateDeclaration();
-
-  case SgTemplateArgument::nontype_argument:
-    return lhs->get_initializedName() != NULL &&
-           lhs->get_initializedName() == rhs->get_initializedName();
-
-  case SgTemplateArgument::start_of_pack_expansion_argument:
-    return true;
-
-  case SgTemplateArgument::argument_undefined:
-  default:
-    return false;
-  }
-}
-
-static bool
-templateArgumentListsAreEquivalent(const SgTemplateArgumentPtrList &lhs,
-                                   const SgTemplateArgumentPtrList &rhs) {
-  if (lhs.size() != rhs.size()) {
-    return false;
-  }
-
-  for (size_t i = 0; i < lhs.size(); ++i) {
-    if (!templateArgumentsAreEquivalent(lhs[i], rhs[i])) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static SgTemplateInstantiationMemberFunctionDecl *
-resolveMemberFunctionInstantiationFromNonrealType(
-    SgNonrealType *nonreal_type,
-    SgMemberFunctionDeclaration *memberFunctionDeclaration) {
-  if (nonreal_type == NULL || memberFunctionDeclaration == NULL) {
-    return NULL;
-  }
-
-  SgNonrealDecl *nonreal_decl =
-      isSgNonrealDecl(nonreal_type->get_declaration());
-  if (nonreal_decl == NULL || nonreal_decl->get_tpl_args().empty()) {
-    return NULL;
-  }
-
-  SgTemplateMemberFunctionDeclaration *template_pattern =
-      isSgTemplateMemberFunctionDeclaration(memberFunctionDeclaration);
-  if (template_pattern == NULL) {
-    return NULL;
-  }
-
-  VariantVector variants(V_SgTemplateInstantiationMemberFunctionDecl);
-  Rose_STL_Container<SgNode *> instantiations =
-      NodeQuery::queryMemoryPool(variants);
-  for (Rose_STL_Container<SgNode *>::const_iterator it = instantiations.begin();
-       it != instantiations.end(); ++it) {
-    SgTemplateInstantiationMemberFunctionDecl *candidate =
-        isSgTemplateInstantiationMemberFunctionDecl(*it);
-    if (candidate == NULL) {
-      continue;
-    }
-
-    if (candidate->get_templateDeclaration() != template_pattern &&
-        candidate->get_specializedTemplateDeclaration() != template_pattern) {
-      continue;
-    }
-
-    SgTemplateInstantiationMemberFunctionDecl *candidate_nondef =
-        isSgTemplateInstantiationMemberFunctionDecl(
-            candidate->get_firstNondefiningDeclaration());
-    if (candidate_nondef != NULL) {
-      candidate = candidate_nondef;
-    }
-
-    SgTemplateInstantiationDecl *associated_class =
-        isSgTemplateInstantiationDecl(
-            candidate->get_associatedClassDeclaration());
-    if (associated_class == NULL) {
-      continue;
-    }
-
-    if (SgTemplateInstantiationDecl *associated_nondef =
-            isSgTemplateInstantiationDecl(
-                associated_class->get_firstNondefiningDeclaration())) {
-      associated_class = associated_nondef;
-    }
-
-    SgName template_name = associated_class->get_templateName();
-    if (template_name.is_null() &&
-        associated_class->get_templateDeclaration() != NULL) {
-      template_name = associated_class->get_templateDeclaration()->get_name();
-    }
-    if (template_name != nonreal_decl->get_name()) {
-      continue;
-    }
-
-    if (!templateArgumentListsAreEquivalent(
-            associated_class->get_templateArguments(),
-            nonreal_decl->get_tpl_args())) {
-      continue;
-    }
-
-    return candidate;
-  }
-
-  return NULL;
-}
-
-namespace {
-template <class SageNode> SgType *genericUnderType(SageNode *ty) {
-  ASSERT_not_null(ty);
-
-  return ty->get_base_type();
-}
-
-SgType *getUnderType(SgType *ty) { return NULL /* base case */; }
-SgType *getUnderType(SgModifierType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgPointerType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgReferenceType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgRvalueReferenceType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgArrayType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgTypedefType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgQualifiedNameType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgTypeComplex *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgTypeImaginary *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgDeclType *ty) { return genericUnderType(ty); }
-SgType *getUnderType(SgTypeOfType *ty) { return genericUnderType(ty); }
-} // namespace
-
-static std::vector<SgType *> get_type_vector(SgType *currentType) {
-  std::vector<SgType *> returnVector;
-
-  while (true) {
-    ASSERT_not_null(currentType);
-
-    returnVector.push_back(currentType);
-
-    if (SgModifierType *modType = isSgModifierType(currentType)) {
-      currentType = getUnderType(modType);
-    } else if (SgReferenceType *refType = isSgReferenceType(currentType)) {
-      currentType = getUnderType(refType);
-    } else if (SgRvalueReferenceType *rvRefType =
-                   isSgRvalueReferenceType(currentType)) {
-      currentType = getUnderType(rvRefType);
-    } else if (SgPointerType *pointType = isSgPointerType(currentType)) {
-      currentType = getUnderType(pointType);
-    } else if (SgArrayType *arrayType = isSgArrayType(currentType)) {
-      currentType = getUnderType(arrayType);
-    } else if (SgTypedefType *typedefType = isSgTypedefType(currentType)) {
-      // DQ (6/21/2005): Added support for typedef types to be uncovered by
-      // findBaseType()
-
-      currentType = getUnderType(typedefType);
-      returnVector.pop_back(); // PP (29/01/20) typedef types should be used for
-                               // comparisons
-    } else if (SgQualifiedNameType *qualifiedType =
-                   isSgQualifiedNameType(currentType)) {
-      currentType = getUnderType(qualifiedType);
-      returnVector.pop_back();
-    } else if (SgTypeComplex *complexType = isSgTypeComplex(currentType)) {
-      currentType = getUnderType(complexType);
-    } else if (SgTypeImaginary *imaginaryType =
-                   isSgTypeImaginary(currentType)) {
-      currentType = getUnderType(imaginaryType);
-    } else if (SgDeclType *declType = isSgDeclType(currentType)) {
-      currentType = getUnderType(declType);
-    } else if (SgTypeOfType *typeOfType = isSgTypeOfType(currentType)) {
-      currentType = getUnderType(typeOfType);
-    } else {
-      // \todo PP: templated types, using aliases
-
-      // Exit the while(true){} loop!
-      break;
-    }
-  }
-
-  return returnVector;
-};
-
-static bool is_functions_types_equal(SgFunctionType *f1, SgFunctionType *f2);
-static bool is_types_equal(SgType *t1, SgType *t2);
-
-static bool typeEquality(SgType *, SgType *) { return false; }
-
-static bool typeEquality(SgNamedType *type1, SgNamedType *type2) {
-  ASSERT_not_null(type1);
-  ASSERT_not_null(type2);
-
-  SgDeclarationStatement &decl1 = SG_DEREF(type1->get_declaration());
-  SgDeclarationStatement &decl2 = SG_DEREF(type2->get_declaration());
-
-  return decl1.get_firstNondefiningDeclaration() ==
-         decl2.get_firstNondefiningDeclaration();
-}
-
-static bool typeEquality(SgFunctionType *type1, SgFunctionType *type2) {
-  ASSERT_not_null(type1);
-  ASSERT_not_null(type2);
-
-  return is_functions_types_equal(type1, type2);
-}
-
-static bool typeEquality(SgModifierType *type1, SgModifierType *type2) {
-  ASSERT_not_null(type1);
-  ASSERT_not_null(type2);
-
-  bool types_are_equal = true;
-  SgTypeModifier &typeModifier1 = type1->get_typeModifier();
-  SgTypeModifier &typeModifier2 = type2->get_typeModifier();
-
-  if (typeModifier1.get_modifierVector() != typeModifier2.get_modifierVector())
-    types_are_equal = false;
-
-  if (typeModifier1.get_constVolatileModifier().get_modifier() !=
-      typeModifier2.get_constVolatileModifier().get_modifier())
-    types_are_equal = false;
-
-  if (typeModifier1.get_elaboratedTypeModifier().get_modifier() !=
-      typeModifier2.get_elaboratedTypeModifier().get_modifier())
-    types_are_equal = false;
-
-  return types_are_equal;
-}
-
-static bool typeEquality(SgPointerMemberType *type1,
-                         SgPointerMemberType *type2) {
-  ASSERT_not_null(type1);
-  ASSERT_not_null(type2);
-  return is_types_equal(type1->get_class_type(), type2->get_class_type());
-}
-
-static bool typeEquality(SgArrayType *type1, SgArrayType *type2) {
-  ASSERT_not_null(type1);
-  ASSERT_not_null(type2);
-  if (type1->get_rank() != type2->get_rank() ||
-      type1->get_number_of_elements() != type2->get_number_of_elements() ||
-      type1->get_is_variable_length_array() !=
-          type2->get_is_variable_length_array()) {
-    return false;
-  }
-  SgExpression *index1 = type1->get_index();
-  SgExpression *index2 = type2->get_index();
-  if (index1 == index2) {
-    return true;
-  }
-  if (index1 == NULL || index2 == NULL) {
-    return false;
-  }
-  const SageInterface::const_int_expr_t value1 =
-      SageInterface::evaluateConstIntegerExpression(index1);
-  const SageInterface::const_int_expr_t value2 =
-      SageInterface::evaluateConstIntegerExpression(index2);
-  return value1.hasValue_ && value2.hasValue_ && value1.value_ == value2.value_;
-}
-
-static bool isPayloadFreeTypeLeaf(SgType *type) {
+static SgClassType *receiverClassType(SgType *type) {
   ASSERT_not_null(type);
-  switch (type->variantT()) {
-  case V_SgTypeBool:
-  case V_SgTypeChar:
-  case V_SgTypeChar8:
-  case V_SgTypeChar16:
-  case V_SgTypeChar32:
-  case V_SgTypeDouble:
-  case V_SgTypeEllipse:
-  case V_SgTypeFloat:
-  case V_SgTypeFloat16:
-  case V_SgTypeFp16:
-  case V_SgTypeBFloat16:
-  case V_SgTypeFloat32:
-  case V_SgTypeFloat32x:
-  case V_SgTypeFloat64:
-  case V_SgTypeFloat64x:
-  case V_SgTypeFloat80:
-  case V_SgTypeFloat128:
-  case V_SgTypeGlobalVoid:
-  case V_SgTypeLabel:
-  case V_SgTypeLong:
-  case V_SgTypeLongDouble:
-  case V_SgTypeLongLong:
-  case V_SgTypeNullptr:
-  case V_SgTypeShort:
-  case V_SgTypeSigned128bitInteger:
-  case V_SgTypeSignedChar:
-  case V_SgTypeSignedInt:
-  case V_SgTypeSignedLong:
-  case V_SgTypeSignedLongLong:
-  case V_SgTypeSignedShort:
-  case V_SgTypeUnsigned128bitInteger:
-  case V_SgTypeUnsignedChar:
-  case V_SgTypeUnsignedInt:
-  case V_SgTypeUnsignedLong:
-  case V_SgTypeUnsignedLongLong:
-  case V_SgTypeUnsignedShort:
-  case V_SgTypeVoid:
-  case V_SgTypeWchar:
-    return true;
-  default:
-    return false;
-  }
-}
-
-static bool is_types_equal(SgType *t1, SgType *t2) {
-  if (t1 == t2)
-    return true;
-  if (t1 == NULL || t2 == NULL)
-    return false;
-
-  bool types_are_equal = true;
-  std::vector<SgType *> f1_vec = get_type_vector(t1);
-  std::vector<SgType *> f2_vec = get_type_vector(t2);
-
-  if (f1_vec.size() == f2_vec.size()) {
-    for (size_t i = 0; i < f1_vec.size(); i++) {
-      if (f1_vec[i]->variantT() == f2_vec[i]->variantT()) {
-        bool exactPayloadCompared = false;
-        // The named types do not point to the same declaration
-        if (isSgNamedType(f1_vec[i]) != NULL) {
-          if (!typeEquality(isSgNamedType(f1_vec[i]), isSgNamedType(f2_vec[i])))
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        if (isSgModifierType(f1_vec[i]) != NULL) {
-          if (!typeEquality(isSgModifierType(f1_vec[i]),
-                            isSgModifierType(f2_vec[i])))
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        if (isSgPointerMemberType(f1_vec[i]) != NULL) {
-          if (!typeEquality(isSgPointerMemberType(f1_vec[i]),
-                            isSgPointerMemberType(f2_vec[i])))
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        if (isSgArrayType(f1_vec[i]) != NULL) {
-          if (!typeEquality(isSgArrayType(f1_vec[i]), isSgArrayType(f2_vec[i])))
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        // Function types are not the same
-        if (isSgFunctionType(f1_vec[i]) != NULL) {
-          if (!typeEquality(isSgFunctionType(f1_vec[i]),
-                            isSgFunctionType(f2_vec[i])))
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        if (f1_vec[i]->variantT() == V_SgTypeInt) {
-          if (isSgTypeInt(f1_vec[i])->get_field_size() !=
-              isSgTypeInt(f2_vec[i])->get_field_size())
-            types_are_equal = false;
-          exactPayloadCompared = true;
-        }
-
-        const bool structuralWrapper =
-            isSgPointerType(f1_vec[i]) != NULL ||
-            isSgReferenceType(f1_vec[i]) != NULL ||
-            isSgRvalueReferenceType(f1_vec[i]) != NULL ||
-            isSgQualifiedNameType(f1_vec[i]) != NULL ||
-            isSgTypeComplex(f1_vec[i]) != NULL ||
-            isSgTypeImaginary(f1_vec[i]) != NULL ||
-            isSgDeclType(f1_vec[i]) != NULL ||
-            isSgTypeOfType(f1_vec[i]) != NULL;
-        if (!exactPayloadCompared && !structuralWrapper &&
-            !isPayloadFreeTypeLeaf(f1_vec[i]))
-          types_are_equal = false;
-      } else {
-        // Variant is different
-        types_are_equal = false;
-      }
-
-      if (types_are_equal == false)
-        break;
-    }
-
-  } else {
-    // The size of the type vectors are not the same
-    types_are_equal = false;
-  }
-
-  return types_are_equal;
-};
-
-static bool is_functions_types_equal(SgFunctionType *f1, SgFunctionType *f2) {
-  bool functions_are_equal = false;
-
-  // Optimization: Function type objects are the same for functions that
-  // have exactly the same signature
-  if (f1 == f2)
-    return true;
-
-  SgMemberFunctionType *member1 = isSgMemberFunctionType(f1);
-  SgMemberFunctionType *member2 = isSgMemberFunctionType(f2);
-  if ((member1 == NULL) != (member2 == NULL))
-    return false;
-  if (member1 != NULL &&
-      (member1->get_mfunc_specifier() != member2->get_mfunc_specifier() ||
-       !is_types_equal(member1->get_class_type(), member2->get_class_type())))
-    return false;
-
-  if (f1->get_has_ellipses() != f2->get_has_ellipses())
-    return false;
-
-  // See if the function types match
-  if (is_types_equal(f1->get_return_type(), f2->get_return_type())) {
-    const SgTypePtrList &args_f1 = f1->get_arguments();
-    const SgTypePtrList &args_f2 = f2->get_arguments();
-
-    // See if the arguments match
-
-    if (args_f1.size() == args_f2.size()) {
-      functions_are_equal = true;
-
-      for (size_t i = 0; i < args_f1.size(); i++) {
-        if (is_types_equal(args_f1[i], args_f2[i]) == false) {
-          functions_are_equal = false;
-          break;
-        }
-      }
-    } // Different number of arguments
-  }
-
-  // std::cout << "is_functions_types_equal: " << f1->unparseToString() << " "
-  // << f2->unparseToString() <<  ( functions_are_equal == true ? " true " : "
-  // false " ) << std::endl;
-
-  return functions_are_equal;
+  return Rose::AST::resolvedClassType(type, true);
 }
 
 static bool is_callable_signatures_equal(SgFunctionType *expected,
@@ -1520,7 +348,7 @@ static bool is_callable_signatures_equal(SgFunctionType *expected,
   ASSERT_not_null(expected);
   ASSERT_not_null(candidate);
   if (!erase_static_member_owner) {
-    return is_functions_types_equal(expected, candidate);
+    return SageInterface::isEquivalentFunctionType(expected, candidate);
   }
 
   SgMemberFunctionType *expected_member = isSgMemberFunctionType(expected);
@@ -1541,360 +369,90 @@ static bool is_callable_signatures_equal(SgFunctionType *expected,
     }
   }
   if (expected->get_has_ellipses() != candidate->get_has_ellipses() ||
-      !is_types_equal(expected->get_return_type(),
-                      candidate->get_return_type()))
+      !SageInterface::isEquivalentType(expected->get_return_type(),
+                                       candidate->get_return_type()))
     return false;
 
   const SgTypePtrList &expected_arguments = expected->get_arguments();
   const SgTypePtrList &candidate_arguments = candidate->get_arguments();
   return expected_arguments.size() == candidate_arguments.size() &&
          std::equal(expected_arguments.begin(), expected_arguments.end(),
-                    candidate_arguments.begin(), is_types_equal);
+                    candidate_arguments.begin(),
+                    SageInterface::isEquivalentType);
 }
 
-struct CovarianceChecker : sg::DispatchHandler<bool> {
-  explicit CovarianceChecker(SgType &baseType,
-                             ClassHierarchyWrapper *hierarchy = NULL)
-      : base(&baseType), chw(hierarchy) {}
-
-  template <class T>
-  static bool typeChk(T &derived, T &base, ClassHierarchyWrapper *) {
-    return ::typeEquality(&derived, &base);
-  }
-
-  static bool typeChk(SgNamedType &derived, SgNamedType &base,
-                      ClassHierarchyWrapper *chw) {
-    typedef ClassHierarchyWrapper::ClassDefSet ClassDefSet;
-
-    const bool sameTypes = ::typeEquality(&derived, &base);
-    if (!chw || sameTypes)
-      return sameTypes;
-
-    SgClassType *derivedClass = isSgClassType(&derived);
-    if (!derivedClass)
-      return false;
-
-    SgClassType *baseClass = isSgClassType(&base);
-    if (!baseClass)
-      return false;
-
-    SgClassDeclaration &derivedDcl0 = SG_ASSERT_TYPE(
-        SgClassDeclaration, SG_DEREF(derivedClass->get_declaration()));
-    SgClassDeclaration &baseDcl0 = SG_ASSERT_TYPE(
-        SgClassDeclaration, SG_DEREF(baseClass->get_declaration()));
-    SgClassDeclaration *derivedDcl =
-        isSgClassDeclaration(derivedDcl0.get_definingDeclaration());
-    SgClassDeclaration *baseDcl =
-        isSgClassDeclaration(baseDcl0.get_definingDeclaration());
-    if (!derivedDcl || !baseDcl)
-      return false;
-
-    SgClassDefinition *derivedDef = derivedDcl->get_definition();
-    SgClassDefinition *baseDef = baseDcl->get_definition();
-    const ClassDefSet &ancestors = chw->getAncestorClasses(derivedDef);
-
-    return ancestors.find(baseDef) != ancestors.end();
-  }
-
-  template <class T>
-  static bool underChk(T &derived, T &base, ClassHierarchyWrapper *chw) {
-    SgType *derived_base = getUnderType(&derived);
-
-    // if there is no underlying type and everything matched up to
-    //   here, we have found a winner.
-    if (!derived_base)
-      return true;
-
-    return isCovariantType(derived_base, &base, chw);
-  }
-
-  ReturnType descend(SgType *ty) const { return sg::dispatch(*this, ty); }
-
-  /// generic template routine to check for covariance
-  /// if @chw is null, the check tests for strict equality
-  template <class T>
-  bool check(T &derivedTy, ClassHierarchyWrapper *nextChw = NULL) {
-    base = skipTypeAliases(base);
-
-    // symmetric check for strict type equality
-    if (typeid(derivedTy) != typeid(*base))
-      return false;
-
-    T &baseTy = SG_ASSERT_TYPE(T, *base);
-
-    if (&derivedTy == &baseTy)
-      return true;
-
-    return (typeChk(derivedTy, baseTy, nextChw) &&
-            underChk(derivedTy, baseTy, nextChw));
-  }
-
-  void handle(SgNode &derived) { SG_UNEXPECTED_NODE(derived); }
-
-  void handle(SgType &derived) { res = check(derived); }
-
-  // skip typedefs
-  void handle(SgTypedefType &derived) { res = descend(getUnderType(&derived)); }
-
-  // check equality of underlying types
-  // @{
-  void handle(SgPointerType &derived) { res = check(derived); }
-  void handle(SgArrayType &derived) { res = check(derived); }
-  // @}
-
-  // covariance is only maintained through classes and modifiers
-  // @{
-  void handle(SgNamedType &derived) { res = check(derived, chw); }
-  void handle(SgModifierType &derived) { res = check(derived, chw); }
-  // @}
-
-  // should have been removed by PolymorphicRootsFinder
-  // @{
-  void handle(SgReferenceType &derived) { SG_UNEXPECTED_NODE(derived); }
-  void handle(SgRvalueReferenceType &derived) { SG_UNEXPECTED_NODE(derived); }
-  // @}
-
-private:
-  SgType *base;
-  ClassHierarchyWrapper *chw;
-};
-
-struct PolymorphicRootsFinder
-    : sg::DispatchHandler<std::pair<SgType *, SgType *>> {
-  explicit PolymorphicRootsFinder(SgType &baseType) : base(&baseType) {}
-
-  static bool typeChk(SgType &derived, SgType &base) { return true; }
-
-  static bool typeChk(SgModifierType &derived, SgModifierType &base) {
-    return ::typeEquality(&derived, &base);
-  }
-
-  ReturnType descend(SgType *ty) const { return sg::dispatch(*this, ty); }
-
-  /// generic template routine to check for covariance
-  /// if @chw is null, the check tests for strict equality
-  template <class T> ReturnType check(T &derivedTy) {
-    ReturnType res(NULL, NULL);
-
-    base = skipTypeAliases(base);
-
-    // symmetric check for strict type equality
-    if (derivedTy.variantT() != (*base).variantT())
-      return res;
-
-    T &baseTy = SG_ASSERT_TYPE(T, *base);
-
-    if (typeChk(derivedTy, baseTy)) {
-      res = ReturnType(getUnderType(&derivedTy), getUnderType(&baseTy));
-    }
-
-    return res;
-  }
-
-  void handle(SgNode &derived) { SG_UNEXPECTED_NODE(derived); }
-
-  void handle(SgType &derived) {}
-
-  // skip typedefs
-  void handle(SgTypedefType &derived) { res = descend(getUnderType(&derived)); }
-
-  // the modifiers must equal
-  void handle(SgModifierType &derived) { res = check(derived); }
-
-  // polymorphic root types (must also equal)
-  // @{
-  void handle(SgReferenceType &derived) { res = check(derived); }
-  void handle(SgRvalueReferenceType &derived) { res = check(derived); }
-  void handle(SgPointerType &derived) { res = check(derived); }
-  // @}
-private:
-  SgType *base;
-};
-
-/// tests if @derived is a covariant type of @base
-/// \param derived a non-null type
-/// \param base    a non-null type
-/// \param chw     the "unrolled" class hierarchy information
-/// \brief if chw is NULL, strict type equality is checked
-static bool isCovariantType(SgType *derived, SgType *base,
-                            ClassHierarchyWrapper *chw) {
-  // find polymorphic root (e.g., reference, pointer)
-  std::pair<SgType *, SgType *> rootTypes =
-      sg::dispatch(PolymorphicRootsFinder(SG_DEREF(base)), derived);
-
-  if (!rootTypes.first)
-    return sg::dispatch(CovarianceChecker(SG_DEREF(base)), derived);
-
-  // test if the roots are covariant
-  return sg::dispatch(CovarianceChecker(SG_DEREF(rootTypes.second), chw),
-                      rootTypes.first);
-}
-
-/// returns @derived is an overriding type of @base
-/// \param derived a function type of an overrider candidate
-/// \param base    a function type
-/// \param chw     a class hierarchy
-/// \pre derived != NULL && base != NULL
-/// \details
-///    isOverridingType checks if derived overrides base, meaning
-///    @derived's arguments must equal @base's argument, and @derived's
-///    return type may be covariabt with respect to @base's return type.
-static bool isOverridingType(SgMemberFunctionType *derived,
-                             SgMemberFunctionType *base,
-                             ClassHierarchyWrapper *chw) {
-  ASSERT_not_null(derived);
-  ASSERT_not_null(base);
-
-  if (derived == base)
-    return true;
-
-  if (derived->get_mfunc_specifier() != base->get_mfunc_specifier()
-      //~ || derived->get_ref_qualifiers()  != base->get_ref_qualifiers()
-      || derived->get_has_ellipses() != base->get_has_ellipses()) {
-    return false;
-  }
-
-  if (!isCovariantType(derived->get_return_type(), base->get_return_type(),
-                       chw))
-    return false;
-
-  const SgTypePtrList &args_derived = derived->get_arguments();
-  const SgTypePtrList &args_base = base->get_arguments();
-
-  // See if the arguments match
-  if (args_derived.size() != args_base.size())
-    return false;
-
-  SgTypePtrList::const_iterator derived_end = args_derived.end();
-
-  return std::mismatch(args_derived.begin(), derived_end, args_base.begin(),
-                       is_types_equal)
-             .first == derived_end;
-}
-
-/// tests if derived overrides base
 static bool isOverridingFunction(SgMemberFunctionDeclaration *candidate,
-                                 SgMemberFunctionDeclaration *member,
-                                 ClassHierarchyWrapper *chw) {
+                                 SgMemberFunctionDeclaration *member) {
   ASSERT_not_null(candidate);
   ASSERT_not_null(member);
+  if (!candidate->get_functionModifier().isVirtual() ||
+      candidate->get_name() != member->get_name())
+    return false;
 
-  return (candidate->get_name() == member->get_name() &&
-          isOverridingType(isSgMemberFunctionType(candidate->get_type()),
-                           isSgMemberFunctionType(member->get_type()), chw));
+  auto *derived = isSgMemberFunctionType(candidate->get_type());
+  auto *base = isSgMemberFunctionType(member->get_type());
+  ASSERT_not_null(derived);
+  ASSERT_not_null(base);
+  if (derived->get_mfunc_specifier() != base->get_mfunc_specifier() ||
+      derived->get_has_ellipses() != base->get_has_ellipses())
+    return false;
+
+  const auto &derivedArguments = derived->get_arguments();
+  const auto &baseArguments = base->get_arguments();
+  return derivedArguments.size() == baseArguments.size() &&
+         std::equal(derivedArguments.begin(), derivedArguments.end(),
+                    baseArguments.begin(), SageInterface::isEquivalentType);
+}
+
+static std::vector<SgMemberFunctionDeclaration *>
+classMemberFunctions(SgClassDefinition *definition) {
+  ASSERT_not_null(definition);
+  auto declarations = definition->get_members();
+  if (auto *auxiliary = definition->get_auxiliary_declarations()) {
+    ASSERT_require(auxiliary->get_parent() == definition);
+    for (auto *declaration : auxiliary->get_declarations()) {
+      ASSERT_not_null(declaration);
+      ASSERT_require(
+          declaration->get_scope() == definition &&
+          SageInterface::hasExactSemanticAuxiliaryOwnership(declaration));
+      declarations.push_back(declaration);
+    }
+  }
+  std::set<SgFunctionDeclaration *> seen;
+  std::vector<SgMemberFunctionDeclaration *> functions;
+  for (auto *declaration : declarations) {
+    if (auto *member = isSgMemberFunctionDeclaration(declaration)) {
+      if (seen.insert(canonicalFunctionDeclForCallGraph(member)).second)
+        functions.push_back(member);
+    }
+  }
+  return functions;
 }
 
 SgFunctionDeclaration *
 is_function_exists(SgClassDefinition *cls,
                    SgMemberFunctionDeclaration *memberFunctionDeclaration) {
-  SgFunctionDeclaration *resultDecl = NULL;
-  string f1 = memberFunctionDeclaration->get_name().getString();
-  string f2;
-
-  SgDeclarationStatementPtrList &clsMembers = cls->get_members();
-  for (SgDeclarationStatement *cls_mb : clsMembers) {
-    SgMemberFunctionDeclaration *cls_mb_decl =
-        isSgMemberFunctionDeclaration(cls_mb);
-    if (cls_mb_decl == NULL)
+  ASSERT_not_null(cls);
+  ASSERT_not_null(memberFunctionDeclaration);
+  for (auto *candidate : classMemberFunctions(cls)) {
+    if (!isOverridingFunction(candidate, memberFunctionDeclaration) ||
+        candidate->get_functionModifier().isPureVirtual())
       continue;
-
-    ASSERT_not_null(cls_mb_decl);
-    SgMemberFunctionType *funcType1 =
-        isSgMemberFunctionType(memberFunctionDeclaration->get_type());
-    SgMemberFunctionType *funcType2 =
-        isSgMemberFunctionType(cls_mb_decl->get_type());
-    f2 = cls_mb_decl->get_name().getString();
-
-    if (f1 != f2)
-      continue;
-    if (funcType1 == NULL || funcType2 == NULL)
-      continue;
-    if (is_functions_types_equal(funcType1, funcType2)) {
-      SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
-          cls_mb_decl->get_firstNondefiningDeclaration());
-      SgMemberFunctionDeclaration *defDecl =
-          isSgMemberFunctionDeclaration(cls_mb_decl->get_definingDeclaration());
-
-      // ROSE_ASSERT ( (!nonDefDecl && defDecl == cls_mb_decl) || (nonDefDecl ==
-      // cls_mb_decl && nonDefDecl) );
-
-      resultDecl = (nonDefDecl) ? nonDefDecl : defDecl;
-      ASSERT_not_null(resultDecl);
-      if (!(resultDecl->get_functionModifier().isPureVirtual())) {
-        return resultDecl;
-        // resultDecl = functionDeclarationInClass;
-        // functionList.push_back( functionDeclarationInClass );
-      }
-    }
+    return canonicalCallableFunctionDecl(candidate);
   }
-
-  return canonicalCallableFunctionDecl(resultDecl);
+  return nullptr;
 }
 
-bool dummyFilter::operator()(SgFunctionDeclaration *node) const {
-  return canonicalCallableFunctionDecl(node) != NULL;
-};
+bool dummyFilter::operator()(SgFunctionDeclaration *) const { return true; }
 
 bool builtinFilter::operator()(SgFunctionDeclaration *funcDecl) const {
-  funcDecl = canonicalCallableFunctionDecl(funcDecl);
   if (funcDecl == NULL) {
     return false;
   }
-
-  bool returnValue = true;
-  string filename = funcDecl->get_file_info()->get_filename();
-  std::string func_name = funcDecl->get_name().getString();
-  string stripped_file_name = StringUtility::stripPathFromFileName(filename);
-  // string::size_type loc;
-
-  // Filter out functions from the ROSE preinclude header file
-  if (filename.find("rose_required_macros_and_functions") != string::npos)
-    returnValue = false;
-  // Filter out compiler generated functions
-  else if (funcDecl->get_file_info()->isCompilerGenerated() == true)
-    returnValue = false;
-  // Filter out compiler generated functions
-  else if (funcDecl->get_file_info()->isFrontendSpecific() == true)
-    returnValue = false;
-  // filter out other built in functions
-  //      else if( func_name.find ("__",0)== 0);
-  //         returnValue = false;
-  // _IO_getc _IO_putc _IO_feof, etc.
-  // loc = func_name.find ("_IO_",0);
-  // if (loc == 0 ) returnValue = false;
-
-  // skip functions from standard system headers
-  // TODO Need more rigid check
-  else if (stripped_file_name == string("assert.h") ||
-           stripped_file_name == string("complex.h") ||
-           stripped_file_name == string("ctype.h") ||
-           stripped_file_name == string("errno.h") ||
-           stripped_file_name == string("float.h") ||
-
-           stripped_file_name == string("limits.h") ||
-           stripped_file_name == string("locale.h") ||
-           stripped_file_name == string("math.h") ||
-           stripped_file_name == string("setjmp.h") ||
-           stripped_file_name == string("signal.h") ||
-
-           stripped_file_name == string("stdarg.h") ||
-           stripped_file_name == string("stddef.h") ||
-
-           stripped_file_name == string("stdio.h") ||
-           stripped_file_name == string("stdlib.h") ||
-           stripped_file_name == string("string.h") ||
-           stripped_file_name == string("time.h") ||
-
-           // GCC specific ???
-           stripped_file_name == string("libio.h") ||
-           stripped_file_name == string("select.h") ||
-           stripped_file_name == string("mathcalls.h"))
-    returnValue = false;
-  if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL)
-    cout << "Debug: CallGraph.C ... " << func_name
-         << " from file:" << stripped_file_name
-         << " predicate function returns: " << returnValue << endl;
-  return returnValue;
+  const Sg_File_Info *fileInfo = funcDecl->get_file_info();
+  ASSERT_not_null(fileInfo);
+  return !fileInfo->isCompilerGenerated() && !fileInfo->isFrontendSpecific() &&
+         !SageInterface::insideSystemHeader(funcDecl);
 }
 
 bool FunctionData::isDefined() { return hasDefinition; }
@@ -1953,227 +511,85 @@ CallTargetSet::solveFunctionPointerCallsFunctional(
   return functionList;
 }
 
-/**
- * CallTargetSet::solveFunctionPointerCall
- *
- * \brief Finds all functions that match the function type of pointerDerefExp
- *
- * Resolving function pointer calls is hard, so the CallGraph generator doesn't
- * try very hard at it.  When asked to resolve a function pointer call, it
- *simply finds all functions that match that type in the memory pool a returns a
- *list of them.
- *
- * @param[in] pointerDerefExp : A function pointer dereference.
- * @return: A vector of all functionDeclarations that match the type of the
- *function dereferenced in pointerDerefExp
- **/
+static void appendFunctionPointerSignatureTargets(
+    SgExpression *expression, const char *context,
+    Rose_STL_Container<SgFunctionDeclaration *> &functionList);
+
 std::vector<SgFunctionDeclaration *>
 CallTargetSet::solveFunctionPointerCall(SgPointerDerefExp *pointerDerefExp) {
-  SgFunctionType *fctType =
-      isSgFunctionType(pointerDerefExp->get_type()->findBaseType());
-  ASSERT_not_null(fctType);
-
-  // SgUnparse_Info ui;
-  // string type1str = fctType->get_mangled( ui ).str();
-  // string type1str = fctType->get_mangled().str();
-  // cout << "Return type of function pointer " << type1str << "\n";
-  // cout << " Line: " << pointerDerefExp->get_file_info()->get_filenameString()
-  // <<
-  //  " l" << pointerDerefExp->get_file_info()->get_line() <<
-  //  " c" << pointerDerefExp->get_file_info()->get_col()  << std::endl;
-  // getting all possible functions with the same type
-
-  // DQ (1/31/2006): Changed name and made global function type symbol table a
-  // static data member.
-  ASSERT_not_null(SgNode::get_globalFunctionTypeTable());
-
-  // if there are multiple forward declarations of the same function
-  // there will be multiple nodes in the AST containing them
-  // but just one link in the call graph
-
-  // AS (09/23/06) Query the memory pool instead of subtree of project
-  // AS (10/2/06)  Modified query to only query for functions or function
-  // templates
-  VariantVector vv;
-  vv.push_back(V_SgFunctionDeclaration);
-  vv.push_back(V_SgTemplateInstantiationFunctionDecl);
-  vv.push_back(V_SgMemberFunctionDeclaration);
-  vv.push_back(V_SgTemplateInstantiationMemberFunctionDecl);
-
-  // Replaced deprecated functions std::bind2nd and std::ptr_fun [Rasmussen,
-  // 2023.08.07]
-  std::function<Rose_STL_Container<SgFunctionDeclaration *>(SgNode *,
-                                                            SgFunctionType *)>
-      ptrFun = solveFunctionPointerCallsFunctional;
-
-  return AstQueryNamespace::queryMemoryPool(
-      std::bind(ptrFun, std::placeholders::_1, fctType), &vv);
-}
-
-static std::vector<SgFunctionDeclaration *>
-solveMemberFunctionPointerCallWithTemplateContext(
-    SgExpression *functionExp, ClassHierarchyWrapper *classHierarchy,
-    const TemplateInstantiationAnalysisContext *templateContext) {
-  ASSERT_require(isSgArrowStarOp(functionExp) || isSgDotStarOp(functionExp));
-
-  SgBinaryOp *binaryExp = isSgBinaryOp(functionExp);
-
-  SgExpression *left = NULL, *right = NULL;
-  SgClassType *classType = NULL;
-  SgClassDefinition *classDefinition = NULL;
-  std::vector<SgFunctionDeclaration *> functionList;
-  SgMemberFunctionType *memberFunctionType = NULL;
-
-  left = binaryExp->get_lhs_operand();
-  right = binaryExp->get_rhs_operand();
-  ASSERT_not_null(left->get_type());
-
-  SgType *leftBase = substituteTemplateParameterType(
-      left->get_type()->findBaseType(), templateContext);
-  SgType *rightType =
-      expressionTypeInTemplateInstantiation(right, templateContext);
-  SgType *rightBase = rightType != NULL ? rightType->findBaseType() : NULL;
-  const bool dependentMemberPointerType =
-      isSgTemplateType(rightBase) || isSgNonrealType(rightBase);
-  if (isSgTypeUnknown(rightBase)) {
-    ASSERT_require(functionList.empty());
-    return functionList;
-  }
-
-  classType = resolveClassTypeFromType(leftBase, templateContext);
-
-  if (!dependentMemberPointerType) {
-    // right side of the concrete expression should have member function type
-    memberFunctionType = memberFunctionTypeFromMemberPointerType(rightType);
-    ASSERT_not_null(memberFunctionType);
-
-    if (SgPointerMemberType *memberPointerType =
-            pointerMemberTypeFromType(rightType)) {
-      if (SgClassDeclaration *memberPointerClassDecl = isSgClassDeclaration(
-              memberPointerType->get_class_declaration_of())) {
-        if (SgClassDeclaration *memberPointerDefiningDecl =
-                isSgClassDeclaration(
-                    memberPointerClassDecl->get_definingDeclaration())) {
-          if (memberPointerDefiningDecl->get_definition() != NULL) {
-            classType = getClassTypeFromDeclaration(memberPointerClassDecl);
-            classDefinition = memberPointerDefiningDecl->get_definition();
-          }
-        }
-      }
-    }
-  }
-
-  // In CFE-built ASTs, expressions that produce the object for `.*`/`->*`
-  // can retain a dependent/nonreal type after template-library traversal
-  // (e.g. `vector<T>::iterator::operator*`). The member-pointer type still
-  // carries the exact declaring class, so use it as the semantic owner.
-  if (classType == NULL) {
-    ASSERT_require(functionList.empty());
-    return functionList;
-  }
-  ASSERT_not_null(classType->get_declaration());
-  ASSERT_not_null(classType->get_declaration()->get_definingDeclaration());
-
-  SgClassDeclaration *definingClassDeclaration = isSgClassDeclaration(
-      classType->get_declaration()->get_definingDeclaration());
-  ASSERT_not_null(definingClassDeclaration);
-
-  classDefinition = definingClassDeclaration->get_definition();
-  ASSERT_not_null(classDefinition);
-
-  SgDeclarationStatementPtrList &allMembers = classDefinition->get_members();
-  for (SgDeclarationStatementPtrList::iterator it = allMembers.begin();
-       it != allMembers.end(); it++) {
-    SgMemberFunctionDeclaration *memberFunctionDeclaration =
-        isSgMemberFunctionDeclaration(*it);
-    if (memberFunctionDeclaration) {
-      SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
-          memberFunctionDeclaration->get_firstNondefiningDeclaration());
-      if (nonDefDecl)
-        memberFunctionDeclaration = nonDefDecl;
-
-      // The receiver class has already selected the exact ownership domain.
-      // Compare the pointer-to-member callable surface without requiring the
-      // generic source owner type to equal its instantiated receiver type.
-      if (dependentMemberPointerType ||
-          is_callable_signatures_equal(
-              memberFunctionType,
-              isSgMemberFunctionType(memberFunctionDeclaration->get_type()),
-              /*erase_static_member_owner=*/true)) {
-        if (!(memberFunctionDeclaration->get_functionModifier()
-                  .isPureVirtual())) {
-          functionList.push_back(memberFunctionDeclaration);
-        }
-      }
-
-      // for virtual functions in polymorphic calls, we need to search down in
-      // the hierarchy of classes and retrieve all declarations of member
-      // functions with the same type
-      if ((memberFunctionDeclaration->get_functionModifier().isVirtual() ||
-           memberFunctionDeclaration->get_functionModifier().isPureVirtual())) {
-        const ClassHierarchyWrapper::ClassDefSet &subclasses =
-            classHierarchy->getSubclasses(classDefinition);
-        // cout << "Virtual function " <<
-        // memberFunctionDeclaration->get_mangled_name().str() << "\n";
-        for (ClassHierarchyWrapper::ClassDefSet::const_iterator it_cls =
-                 subclasses.begin();
-             it_cls != subclasses.end(); it_cls++) {
-          SgClassDefinition *cls = isSgClassDefinition(*it_cls);
-          SgDeclarationStatementPtrList &clsMembers = cls->get_members();
-
-          for (SgDeclarationStatementPtrList::iterator it_cls_mb =
-                   clsMembers.begin();
-               it_cls_mb != clsMembers.end(); it_cls_mb++) {
-            SgMemberFunctionDeclaration *cls_mb_decl =
-                isSgMemberFunctionDeclaration(*it_cls_mb);
-
-            // TV (10/26/2018): cannot expect that all class members would be
-            // methods FIXME ROSE-1487
-            if (cls_mb_decl == NULL)
-              continue;
-
-            if (dependentMemberPointerType ||
-                is_callable_signatures_equal(
-                    memberFunctionType,
-                    isSgMemberFunctionType(cls_mb_decl->get_type()),
-                    /*erase_static_member_owner=*/true)) {
-              SgMemberFunctionDeclaration *nonDefDecl =
-                  isSgMemberFunctionDeclaration(
-                      cls_mb_decl->get_firstNondefiningDeclaration());
-              SgMemberFunctionDeclaration *defDecl =
-                  isSgMemberFunctionDeclaration(
-                      cls_mb_decl->get_definingDeclaration());
-
-              // TV (10/26/2018): this case happens in generated docs, not sure
-              // it is valid... FIXME ROSE-1487 ROSE_ASSERT((!nonDefDecl &&
-              // defDecl == cls_mb_decl) || (nonDefDecl == cls_mb_decl &&
-              // nonDefDecl));
-
-              if (nonDefDecl) {
-                if (!(nonDefDecl->get_functionModifier().isPureVirtual()) &&
-                    nonDefDecl->get_functionModifier().isVirtual()) {
-                  functionList.push_back(nonDefDecl);
-                }
-              } else if (!(defDecl->get_functionModifier().isPureVirtual()) &&
-                         defDecl->get_functionModifier().isVirtual()) {
-                functionList.push_back(defDecl);
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-
-  // cout << "Function list size: " << functionList.size() << "\n";
-  return functionList;
+  std::vector<SgFunctionDeclaration *> functions;
+  appendFunctionPointerSignatureTargets(pointerDerefExp, "dereference",
+                                        functions);
+  return functions;
 }
 
 std::vector<SgFunctionDeclaration *>
 CallTargetSet::solveMemberFunctionPointerCall(
     SgExpression *functionExp, ClassHierarchyWrapper *classHierarchy) {
-  return solveMemberFunctionPointerCallWithTemplateContext(
-      functionExp, classHierarchy, NULL);
+  ASSERT_require(isSgArrowStarOp(functionExp) || isSgDotStarOp(functionExp));
+  std::set<SgFunctionDeclaration *> functions;
+  if (auto *enclosing =
+          SageInterface::getEnclosingFunctionDeclaration(functionExp)) {
+    if (!callGraphDeclHasIndependentCallableIdentity(enclosing))
+      return {};
+  }
+
+  auto *access = isSgBinaryOp(functionExp);
+  ASSERT_not_null(access->get_rhs_operand());
+  ASSERT_not_null(access->get_rhs_operand()->get_type());
+  auto *pointer = isSgPointerMemberType(
+      access->get_rhs_operand()->get_type()->stripTypedefsAndModifiers());
+  ASSERT_not_null(pointer);
+  auto *signature = isSgMemberFunctionType(
+      pointer->get_base_type()->stripTypedefsAndModifiers());
+  ASSERT_not_null(signature);
+  auto *owner =
+      isSgClassType(pointer->get_class_type()->stripTypedefsAndModifiers());
+  ASSERT_not_null(owner);
+  ASSERT_not_null(owner->get_declaration());
+  auto *defining =
+      isSgClassDeclaration(owner->get_declaration()->get_definingDeclaration());
+  // A forward declaration has no declared member candidates in this project.
+  if (defining == nullptr)
+    return {};
+  auto *definition = defining->get_definition();
+  ASSERT_not_null(definition);
+
+  ASSERT_not_null(classHierarchy);
+  auto owners = classHierarchy->getAncestorClasses(definition);
+  owners.insert(definition);
+  auto dispatchClasses = classHierarchy->getSubclasses(definition);
+  dispatchClasses.insert(definition);
+  for (auto *candidateOwner : owners) {
+    for (auto *declaration : classMemberFunctions(candidateOwner)) {
+      auto *member = isSgMemberFunctionDeclaration(
+          canonicalCallableFunctionDecl(declaration));
+      if (member == nullptr)
+        continue;
+      auto *memberSignature = isSgMemberFunctionType(member->get_type());
+      ASSERT_not_null(memberSignature);
+      if (!is_callable_signatures_equal(signature, memberSignature,
+                                        /*erase_static_member_owner=*/true))
+        continue;
+      if (!member->get_functionModifier().isPureVirtual())
+        functions.insert(member);
+      if (!member->get_functionModifier().isVirtual())
+        continue;
+
+      for (auto *subclass : dispatchClasses) {
+        for (auto *overrider : classMemberFunctions(subclass)) {
+          if (!isOverridingFunction(overrider, member))
+            continue;
+          overrider = isSgMemberFunctionDeclaration(
+              canonicalCallableFunctionDecl(overrider));
+          ASSERT_not_null(overrider);
+          if (!overrider->get_functionModifier().isPureVirtual())
+            functions.insert(overrider);
+        }
+      }
+    }
+  }
+  return {functions.begin(), functions.end()};
 }
 
 static bool isPureVirtual(SgMemberFunctionDeclaration *dcl) {
@@ -2221,7 +637,7 @@ static bool callGraphProjectContainsSourceFile(SgProject *project,
   return false;
 }
 
-static std::optional<bool>
+std::optional<bool>
 callGraphFunctionHasUserSourceOwnership(SgFunctionDeclaration *declaration) {
   if (declaration == NULL) {
     return std::nullopt;
@@ -2384,415 +800,7 @@ callGraphMemberFunctionIsDefaultConstructor(SgMemberFunctionDeclaration *decl) {
     return false;
   }
 
-  for (SgInitializedName *param : decl->get_args()) {
-    if (param != NULL && param->get_initializer() == NULL) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static bool
-callGraphMemberFunctionIsUserProvided(SgMemberFunctionDeclaration *decl) {
-  if (decl == NULL) {
-    return false;
-  }
-
-  SgMemberFunctionDeclaration *firstNondef =
-      isSgMemberFunctionDeclaration(decl->get_firstNondefiningDeclaration());
-  if (firstNondef == NULL) {
-    firstNondef = decl;
-  }
-  SgMemberFunctionDeclaration *defining =
-      isSgMemberFunctionDeclaration(firstNondef->get_definingDeclaration());
-  if (defining != NULL &&
-      (defining->get_firstNondefiningDeclaration() != firstNondef ||
-       defining->get_definingDeclaration() != defining)) {
-    std::cerr << "REX_CALLGRAPH_INVARIANT[constructor-declaration-family]: "
-                 "default constructor has a contradictory declaration chain"
-              << std::endl;
-    ROSE_ABORT();
-  }
-
-  SgMemberFunctionDeclaration *sourceDecl =
-      defining != NULL ? defining : firstNondef;
-  if (sourceDecl->get_file_info() == NULL) {
-    return false;
-  }
-  Sg_File_Info *fileInfo = sourceDecl->get_file_info();
-  return !fileInfo->isCompilerGenerated() && !fileInfo->isFrontendSpecific();
-}
-
-static SgClassDeclaration *
-callGraphDefiningClassDeclaration(SgClassDeclaration *classDecl) {
-  if (classDecl == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *definingDecl =
-      isSgClassDeclaration(classDecl->get_definingDeclaration());
-  return definingDecl != NULL ? definingDecl : classDecl;
-}
-
-static SgClassDeclaration *
-callGraphClassDeclarationFromClassType(SgClassType *classType) {
-  if (classType == NULL) {
-    return NULL;
-  }
-
-  return callGraphDefiningClassDeclaration(
-      isSgClassDeclaration(classType->get_declaration()));
-}
-
-static SgClassDeclaration *
-callGraphClassDeclarationFromNonrealDecl(SgNonrealDecl *nonrealDecl) {
-  if (nonrealDecl == NULL) {
-    return NULL;
-  }
-
-  if (SgClassDeclaration *decl = callGraphClassDeclarationFromClassType(
-          resolveClassTypeFromType(nonrealDecl->get_type()))) {
-    return decl;
-  }
-
-  if (!nonrealDecl->get_tpl_args().empty()) {
-    for (SgNode *cursor = nonrealDecl->get_scope(); cursor != NULL;
-         cursor = cursor->get_parent()) {
-      SgScopeStatement *scope = isSgScopeStatement(cursor);
-      if (scope == NULL) {
-        continue;
-      }
-      if (SgClassDeclaration *decl = callGraphClassDeclarationFromClassType(
-              resolveClassTypeFromScopeLookup(scope, nonrealDecl))) {
-        return decl;
-      }
-    }
-  }
-
-  return callGraphDefiningClassDeclaration(
-      isSgClassDeclaration(nonrealDecl->get_templateDeclaration()));
-}
-
-static SgClassDeclaration *
-callGraphBaseClassDeclaration(SgBaseClass *baseClass) {
-  if (baseClass == NULL) {
-    return NULL;
-  }
-
-  if (SgClassDeclaration *decl = baseClass->get_base_class()) {
-    return callGraphDefiningClassDeclaration(decl);
-  }
-
-  if (SgNonrealBaseClass *nonrealBase = isSgNonrealBaseClass(baseClass)) {
-    return callGraphClassDeclarationFromNonrealDecl(
-        nonrealBase->get_base_class_nonreal());
-  }
-
-  return NULL;
-}
-
-static SgClassDeclaration *
-callGraphCanonicalClassDeclaration(SgClassDeclaration *classDecl) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL) {
-    return NULL;
-  }
-
-  if (SgClassDeclaration *firstNondef =
-          isSgClassDeclaration(classDecl->get_firstNondefiningDeclaration())) {
-    return firstNondef;
-  }
-
-  return classDecl;
-}
-
-static SgType *callGraphStripClassValueType(SgType *type) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  return type->stripType(
-      SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE |
-      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE);
-}
-
-static SgClassDeclaration *
-callGraphClassDeclarationFromValueType(SgType *type) {
-  type = callGraphStripClassValueType(type);
-  if (type == NULL) {
-    return NULL;
-  }
-
-  SgClassType *classType = isSgClassType(type);
-  if (classType == NULL) {
-    return NULL;
-  }
-
-  return callGraphCanonicalClassDeclaration(
-      isSgClassDeclaration(classType->get_declaration()));
-}
-
-static bool callGraphSameClassDeclaration(SgClassDeclaration *lhs,
-                                          SgClassDeclaration *rhs) {
-  lhs = callGraphCanonicalClassDeclaration(lhs);
-  rhs = callGraphCanonicalClassDeclaration(rhs);
-  return lhs != NULL && lhs == rhs;
-}
-
-static SgMemberFunctionDeclaration *
-callGraphCanonicalMemberFunctionDeclaration(SgMemberFunctionDeclaration *decl) {
-  if (decl == NULL) {
-    return NULL;
-  }
-
-  if (SgMemberFunctionDeclaration *firstNondef = isSgMemberFunctionDeclaration(
-          decl->get_firstNondefiningDeclaration())) {
-    return firstNondef;
-  }
-
-  if (SgMemberFunctionDeclaration *definingDecl =
-          isSgMemberFunctionDeclaration(decl->get_definingDeclaration())) {
-    return definingDecl;
-  }
-
-  return decl;
-}
-
-static SgClassDeclaration *
-callGraphCopyConstructorParameterClass(SgInitializedName *param) {
-  if (param == NULL || param->get_type() == NULL) {
-    return NULL;
-  }
-
-  SgType *paramType = param->get_type()->stripType(SgType::STRIP_MODIFIER_TYPE |
-                                                   SgType::STRIP_TYPEDEF_TYPE);
-  SgReferenceType *refType = isSgReferenceType(paramType);
-  if (refType == NULL) {
-    return NULL;
-  }
-
-  return callGraphClassDeclarationFromValueType(refType->get_base_type());
-}
-
-static bool callGraphTrailingConstructorParametersAreDefaulted(
-    const SgInitializedNamePtrList &params) {
-  for (size_t i = 1; i < params.size(); ++i) {
-    SgInitializedName *param = params[i];
-    if (param != NULL && param->get_initializer() == NULL) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-static SgMemberFunctionDeclaration *
-callGraphFindCopyConstructorForClass(SgClassDeclaration *classDecl) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL || classDecl->get_definition() == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *canonicalClass =
-      callGraphCanonicalClassDeclaration(classDecl);
-  for (SgDeclarationStatement *member :
-       classDecl->get_definition()->get_members()) {
-    SgMemberFunctionDeclaration *memberFunction =
-        isSgMemberFunctionDeclaration(member);
-    if (memberFunction == NULL ||
-        !memberFunction->get_specialFunctionModifier().isConstructor()) {
-      continue;
-    }
-
-    const SgInitializedNamePtrList &params = memberFunction->get_args();
-    if (params.empty() ||
-        !callGraphTrailingConstructorParametersAreDefaulted(params)) {
-      continue;
-    }
-
-    if (callGraphSameClassDeclaration(
-            callGraphCopyConstructorParameterClass(params.front()),
-            canonicalClass)) {
-      return callGraphCanonicalMemberFunctionDeclaration(memberFunction);
-    }
-  }
-
-  return NULL;
-}
-
-static SgMemberFunctionDeclaration *
-callGraphResolveSameClassCopyConstructor(SgConstructorInitializer *ctorInit) {
-  if (ctorInit == NULL || ctorInit->get_declaration() != NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *targetClass = ctorInit->get_class_decl();
-  if (targetClass == NULL) {
-    targetClass =
-        callGraphClassDeclarationFromValueType(ctorInit->get_expression_type());
-  }
-  if (targetClass == NULL) {
-    return NULL;
-  }
-
-  SgExprListExp *args = isSgExprListExp(ctorInit->get_args());
-  if (args == NULL || args->get_expressions().size() != 1) {
-    return NULL;
-  }
-
-  SgExpression *sourceExpression = args->get_expressions().front();
-  if (sourceExpression == NULL ||
-      !sourceExpression->has_semantic_value_type() ||
-      !callGraphSameClassDeclaration(
-          callGraphClassDeclarationFromValueType(sourceExpression->get_type()),
-          targetClass)) {
-    return NULL;
-  }
-
-  return callGraphFindCopyConstructorForClass(targetClass);
-}
-
-static SgClassDeclaration *
-callGraphConstructedClassDeclarationFromType(SgType *type) {
-  if (type == NULL) {
-    return NULL;
-  }
-
-  type = type->stripTypedefsAndModifiers();
-  while (SgArrayType *arrayType = isSgArrayType(type)) {
-    type = arrayType->get_base_type();
-    if (type != NULL) {
-      type = type->stripTypedefsAndModifiers();
-    }
-  }
-
-  if (type == NULL || isSgPointerType(type) != NULL ||
-      isSgReferenceType(type) != NULL ||
-      isSgRvalueReferenceType(type) != NULL) {
-    return NULL;
-  }
-
-  SgClassType *classType = isSgClassType(type);
-  if (classType == NULL) {
-    return NULL;
-  }
-
-  return callGraphDefiningClassDeclaration(
-      isSgClassDeclaration(classType->get_declaration()));
-}
-
-static bool callGraphClassHasNontrivialDefaultConstruction(
-    SgClassDeclaration *classDecl, std::set<SgClassDeclaration *> &active);
-
-static bool
-callGraphClassDefinitionHasVirtualMember(SgClassDefinition *classDefinition) {
-  if (classDefinition == NULL) {
-    return false;
-  }
-
-  for (SgDeclarationStatement *member : classDefinition->get_members()) {
-    SgMemberFunctionDeclaration *memberFunction =
-        isSgMemberFunctionDeclaration(member);
-    if (memberFunction == NULL) {
-      continue;
-    }
-
-    if (memberFunction->get_functionModifier().isVirtual() ||
-        memberFunction->get_functionModifier().isPureVirtual()) {
-      return true;
-    }
-  }
-
-  for (SgBaseClass *baseClass : classDefinition->get_inheritances()) {
-    SgClassDeclaration *baseDecl = callGraphBaseClassDeclaration(baseClass);
-    SgClassDeclaration *baseDefiningDecl =
-        callGraphDefiningClassDeclaration(baseDecl);
-    if (baseDefiningDecl != NULL && callGraphClassDefinitionHasVirtualMember(
-                                        baseDefiningDecl->get_definition())) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-static bool callGraphClassHasVirtualMember(SgClassDeclaration *classDecl) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL) {
-    return false;
-  }
-
-  return callGraphClassDefinitionHasVirtualMember(classDecl->get_definition());
-}
-
-static bool
-callGraphDefaultConstructorIsUserProvided(SgClassDeclaration *classDecl) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL) {
-    return false;
-  }
-
-  SgMemberFunctionDeclaration *defaultConstructor =
-      SageInterface::getDefaultConstructor(classDecl);
-  return callGraphMemberFunctionIsDefaultConstructor(defaultConstructor) &&
-         callGraphMemberFunctionIsUserProvided(defaultConstructor);
-}
-
-static bool callGraphClassHasNontrivialDefaultConstructedSubobject(
-    SgClassDeclaration *classDecl, std::set<SgClassDeclaration *> &active) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL || classDecl->get_definition() == NULL) {
-    return false;
-  }
-
-  SgClassDefinition *definition = classDecl->get_definition();
-  for (SgBaseClass *baseClass : definition->get_inheritances()) {
-    SgClassDeclaration *baseDecl = callGraphBaseClassDeclaration(baseClass);
-    if (callGraphClassHasNontrivialDefaultConstruction(baseDecl, active)) {
-      return true;
-    }
-  }
-
-  for (SgDeclarationStatement *member : definition->get_members()) {
-    SgVariableDeclaration *varDecl = isSgVariableDeclaration(member);
-    if (varDecl == NULL) {
-      continue;
-    }
-
-    for (SgInitializedName *initName : varDecl->get_variables()) {
-      SgClassDeclaration *memberClass =
-          initName == NULL ? NULL
-                           : callGraphConstructedClassDeclarationFromType(
-                                 initName->get_type());
-      if (callGraphClassHasNontrivialDefaultConstruction(memberClass, active)) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-static bool callGraphClassHasNontrivialDefaultConstruction(
-    SgClassDeclaration *classDecl, std::set<SgClassDeclaration *> &active) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL || !active.insert(classDecl).second) {
-    return false;
-  }
-
-  const bool result =
-      callGraphDefaultConstructorIsUserProvided(classDecl) ||
-      callGraphClassHasVirtualMember(classDecl) ||
-      callGraphClassHasNontrivialDefaultConstructedSubobject(classDecl, active);
-  active.erase(classDecl);
-  return result;
-}
-
-static bool
-callGraphClassHasNontrivialDefaultConstruction(SgClassDeclaration *classDecl) {
-  std::set<SgClassDeclaration *> active;
-  return callGraphClassHasNontrivialDefaultConstruction(classDecl, active);
+  return decl->get_functionModifier().isDefaultConstructor();
 }
 
 bool CallGraphBuilder::shouldMaterializeImplicitCallTarget(
@@ -2851,7 +859,7 @@ bool CallGraphBuilder::shouldMaterializeImplicitCallTarget(
     return true;
   }
   if (origin == SgFunctionDeclaration::e_frontend_declaration_implicit) {
-    return callGraphClassHasNontrivialDefaultConstruction(classDecl);
+    return !memberDecl->get_functionModifier().isTrivialSpecialMember();
   }
   if (userSource.has_value()) {
     fprintf(stderr,
@@ -2862,13 +870,13 @@ bool CallGraphBuilder::shouldMaterializeImplicitCallTarget(
             memberDecl->get_qualified_name().getString().c_str());
     ROSE_ABORT();
   }
-  return callGraphClassHasNontrivialDefaultConstruction(classDecl);
+  return !memberDecl->get_functionModifier().isTrivialSpecialMember();
 }
 
 bool CallGraphBuilder::shouldMaterializeResolvedCallTarget(
     SgFunctionDeclaration *fdecl) const {
   fdecl = canonicalCallableFunctionDecl(fdecl);
-  if (fdecl == NULL) {
+  if (fdecl == NULL || !callGraphNodeBelongsToProject(fdecl, project)) {
     return false;
   }
 
@@ -2928,85 +936,6 @@ bool CallGraphBuilder::shouldMaterializeResolvedCallTarget(
   return callGraphProjectContainsSourceFile(project, classFilename);
 }
 
-SgGraphNode *CallGraphBuilder::ensureGraphNodeForImplicitCallTarget(
-    SgFunctionDeclaration *fdecl) {
-  if (fdecl == NULL) {
-    return NULL;
-  }
-
-  SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
-  if (SgGraphNode *existing = getGraphNodeFor(unique)) {
-    return existing;
-  }
-
-  if (!shouldMaterializeImplicitCallTarget(unique)) {
-    return NULL;
-  }
-
-  std::string functionName = unique->get_qualified_name().getString();
-  SgGraphNode *graphNode = new SgGraphNode(functionName);
-  graphNode->set_SgNode(unique);
-  registerGraphNode(unique, graphNode);
-  graph->addNode(graphNode);
-  return graphNode;
-}
-
-SgGraphNode *CallGraphBuilder::ensureGraphNodeForResolvedCallTarget(
-    SgFunctionDeclaration *fdecl) {
-  if (fdecl == NULL) {
-    return NULL;
-  }
-
-  SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
-  if (SgGraphNode *existing = getGraphNodeFor(unique)) {
-    return existing;
-  }
-  if (SgFunctionDeclaration *sourcePattern = canonicalCallableFunctionDecl(
-          unique->get_templateInstantiationPattern())) {
-    SgGraphNode *patternNode = getGraphNodeFor(sourcePattern);
-    return patternNode;
-  }
-
-  if (!shouldMaterializeResolvedCallTarget(unique)) {
-    return NULL;
-  }
-
-  std::string functionName = unique->get_qualified_name().getString();
-  SgGraphNode *graphNode = new SgGraphNode(functionName);
-  graphNode->set_SgNode(unique);
-  registerGraphNode(unique, graphNode);
-  graph->addNode(graphNode);
-  return graphNode;
-}
-
-void CallGraphBuilder::materializeNonFunctionImplicitCallTargets(
-    ClassHierarchyWrapper *classHierarchy) {
-  ASSERT_not_null(classHierarchy);
-
-  VariantVector callSiteVariants;
-  callSiteVariants.push_back(V_SgConstructorInitializer);
-  Rose_STL_Container<SgNode *> callSites =
-      NodeQuery::querySubTree(project, callSiteVariants);
-
-  for (SgNode *callSite : callSites) {
-    SgExpression *callExpr = isSgExpression(callSite);
-    if (callExpr == NULL || SageInterface::getEnclosingFunctionDefinition(
-                                callExpr, false) != NULL) {
-      continue;
-    }
-
-    Rose_STL_Container<SgFunctionDeclaration *> targets;
-    CallTargetSet::getPropertiesForExpression(callExpr, classHierarchy,
-                                              targets);
-    for (SgFunctionDeclaration *target : targets) {
-      if (target != NULL) {
-        ensureGraphNodeForImplicitCallTarget(
-            canonicalFunctionDeclForCallGraph(target));
-      }
-    }
-  }
-}
-
 static void solveVirtualFunctionCall(
     SgClassType *crtClass, ClassHierarchyWrapper *classHierarchy,
     SgMemberFunctionDeclaration *memberFunctionDeclaration,
@@ -3045,32 +974,21 @@ static void solveVirtualFunctionCall(
   const ClassHierarchyWrapper::ClassDefSet &subclasses =
       classHierarchy->getSubclasses(crtClsDef);
 
-  std::string f1 = memberFunctionDeclaration->get_mangled_name().str();
-  ASSERT_require(!memberFunctionDeclaration->get_name().getString().empty());
-
+  ASSERT_require(!memberFunctionDeclaration->get_name().is_null());
   const bool isDestructor1 =
-      '~' == memberFunctionDeclaration->get_name().getString()[0];
+      memberFunctionDeclaration->get_specialFunctionModifier().isDestructor();
 
   for (ClassHierarchyWrapper::ClassDefSet::const_iterator sci =
            subclasses.begin();
        sci != subclasses.end(); ++sci) {
     SgClassDefinition *cls = isSgClassDefinition(*sci);
-    SgDeclarationStatementPtrList &clsMembers = cls->get_members();
-
-    for (SgDeclarationStatementPtrList::iterator cmi = clsMembers.begin();
-         cmi != clsMembers.end(); ++cmi) {
-      SgMemberFunctionDeclaration *cls_mb_decl =
-          isSgMemberFunctionDeclaration(*cmi);
-      if (cls_mb_decl == NULL)
-        continue;
-
-      ASSERT_require(!cls_mb_decl->get_name().getString().empty());
-
-      const bool isDestructor2 = '~' == cls_mb_decl->get_name().getString()[0];
+    for (auto *cls_mb_decl : classMemberFunctions(cls)) {
+      ASSERT_require(!cls_mb_decl->get_name().is_null());
+      const bool isDestructor2 =
+          cls_mb_decl->get_specialFunctionModifier().isDestructor();
       const bool keep =
           ((isDestructor1 && isDestructor2) ||
-           isOverridingFunction(cls_mb_decl, memberFunctionDeclaration,
-                                classHierarchy));
+           isOverridingFunction(cls_mb_decl, memberFunctionDeclaration));
 
       if (keep) {
         SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
@@ -3087,316 +1005,6 @@ static void solveVirtualFunctionCall(
           result.push_back(candidate);
       }
     }
-  }
-}
-
-static SgMemberFunctionDeclaration *findMemberDeclarationInReceiverClass(
-    SgClassType *crtClass,
-    SgMemberFunctionDeclaration *memberFunctionDeclaration) {
-  if (crtClass == NULL || memberFunctionDeclaration == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *class_decl =
-      isSgClassDeclaration(crtClass->get_declaration());
-  if (class_decl == NULL) {
-    return NULL;
-  }
-
-  SgClassDeclaration *defining_class_decl =
-      isSgClassDeclaration(class_decl->get_definingDeclaration());
-  if (defining_class_decl == NULL ||
-      defining_class_decl->get_definition() == NULL) {
-    return NULL;
-  }
-
-  SgMemberFunctionDeclaration *pattern_decl = memberFunctionDeclaration;
-  if (SgMemberFunctionDeclaration *first_nondef = isSgMemberFunctionDeclaration(
-          memberFunctionDeclaration->get_firstNondefiningDeclaration())) {
-    pattern_decl = first_nondef;
-  }
-
-  SgTemplateMemberFunctionDeclaration *template_pattern =
-      canonicalTemplateMemberPatternDecl(pattern_decl);
-  SgTemplateInstantiationMemberFunctionDecl *template_instantiation =
-      isSgTemplateInstantiationMemberFunctionDecl(pattern_decl);
-  SgDeclarationStatementPtrList &members =
-      defining_class_decl->get_definition()->get_members();
-  for (SgDeclarationStatementPtrList::iterator it = members.begin();
-       it != members.end(); ++it) {
-    SgMemberFunctionDeclaration *candidate = isSgMemberFunctionDeclaration(*it);
-    if (candidate == NULL) {
-      continue;
-    }
-
-    if (SgMemberFunctionDeclaration *first_nondef =
-            isSgMemberFunctionDeclaration(
-                candidate->get_firstNondefiningDeclaration())) {
-      candidate = first_nondef;
-    }
-
-    if (candidate->get_name() != pattern_decl->get_name()) {
-      continue;
-    }
-
-    if (template_instantiation != NULL) {
-      SgTemplateInstantiationMemberFunctionDecl *inst_candidate =
-          isSgTemplateInstantiationMemberFunctionDecl(candidate);
-      if (inst_candidate == NULL) {
-        continue;
-      }
-
-      SgTemplateMemberFunctionDeclaration *pattern_template =
-          canonicalTemplateMemberPatternDecl(
-              template_instantiation->get_templateDeclaration());
-      if (pattern_template != NULL &&
-          canonicalTemplateMemberPatternDecl(
-              inst_candidate->get_templateDeclaration()) != pattern_template) {
-        if (canonicalTemplateMemberPatternDecl(
-                inst_candidate->get_specializedTemplateDeclaration()) !=
-            pattern_template) {
-          continue;
-        }
-      }
-
-      if (!templateArgumentListsAreEquivalent(
-              inst_candidate->get_templateArguments(),
-              template_instantiation->get_templateArguments())) {
-        continue;
-      }
-
-      if (!template_instantiation->get_deducedTemplateArguments().empty() &&
-          !templateArgumentListsAreEquivalent(
-              inst_candidate->get_deducedTemplateArguments(),
-              template_instantiation->get_deducedTemplateArguments())) {
-        continue;
-      }
-
-      return candidate;
-    }
-
-    if (template_pattern != NULL) {
-      SgTemplateInstantiationMemberFunctionDecl *inst_candidate =
-          isSgTemplateInstantiationMemberFunctionDecl(candidate);
-      if (inst_candidate == NULL) {
-        continue;
-      }
-
-      SgTemplateMemberFunctionDeclaration *candidate_template =
-          canonicalTemplateMemberPatternDecl(
-              inst_candidate->get_templateDeclaration());
-      SgTemplateMemberFunctionDeclaration *candidate_specialized_template =
-          canonicalTemplateMemberPatternDecl(
-              inst_candidate->get_specializedTemplateDeclaration());
-
-      if (candidate_template == template_pattern ||
-          candidate_specialized_template == template_pattern) {
-        return candidate;
-      }
-
-      continue;
-    }
-
-    if (candidate == pattern_decl ||
-        candidate->get_type()->get_mangled() ==
-            pattern_decl->get_type()->get_mangled()) {
-      return candidate;
-    }
-  }
-
-  return NULL;
-}
-
-static void collectMemberFunctionDeclarationsByName(
-    SgClassDeclaration *classDecl, const SgName &name,
-    std::set<SgClassDeclaration *> &visitedClasses,
-    std::vector<SgMemberFunctionDeclaration *> &result) {
-  classDecl = callGraphDefiningClassDeclaration(classDecl);
-  if (classDecl == NULL || classDecl->get_definition() == NULL ||
-      !visitedClasses.insert(classDecl).second) {
-    return;
-  }
-
-  SgClassDefinition *definition = classDecl->get_definition();
-  std::vector<SgDeclarationStatement *> exactMembers(
-      definition->get_members().begin(), definition->get_members().end());
-  if (SgAuxiliaryDeclarationList *auxiliary =
-          definition->get_auxiliary_declarations()) {
-    if (auxiliary->get_parent() != definition) {
-      std::cerr << "REX_CALLGRAPH_INVARIANT[class-member-owner]: class="
-                << classDecl << " has a misowned auxiliary declaration list"
-                << std::endl;
-      ROSE_ABORT();
-    }
-    for (SgDeclarationStatement *member : auxiliary->get_declarations()) {
-      if (member == NULL || member->get_parent() != auxiliary ||
-          member->get_scope() != definition) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[class-member-owner]: class="
-                  << classDecl << " auxiliary member=" << member
-                  << " has no exact typed owner" << std::endl;
-        ROSE_ABORT();
-      }
-      exactMembers.push_back(member);
-    }
-  }
-
-  std::set<SgMemberFunctionDeclaration *> seenMembers;
-  for (SgDeclarationStatement *member : exactMembers) {
-    if (SgMemberFunctionDeclaration *memberFunction =
-            isSgMemberFunctionDeclaration(member)) {
-      memberFunction =
-          callGraphCanonicalMemberFunctionDeclaration(memberFunction);
-      if (memberFunction != NULL && memberFunction->get_name() == name &&
-          seenMembers.insert(memberFunction).second) {
-        result.push_back(memberFunction);
-      }
-    }
-  }
-
-  for (SgBaseClass *baseClass :
-       classDecl->get_definition()->get_inheritances()) {
-    if (baseClass == NULL) {
-      continue;
-    }
-
-    collectMemberFunctionDeclarationsByName(
-        isSgClassDeclaration(baseClass->get_base_class()), name, visitedClasses,
-        result);
-  }
-}
-
-static std::vector<SgMemberFunctionDeclaration *>
-resolveNonrealMemberFunctionDeclarations(SgExpression *memberRefExp,
-                                         SgClassType *receiverClass) {
-  std::vector<SgMemberFunctionDeclaration *> result;
-  SgNonrealRefExp *nonrealRef = isSgNonrealRefExp(memberRefExp);
-  if (nonrealRef == NULL || nonrealRef->get_symbol() == NULL ||
-      receiverClass == NULL) {
-    return result;
-  }
-
-  std::set<SgClassDeclaration *> visitedClasses;
-  collectMemberFunctionDeclarationsByName(
-      isSgClassDeclaration(receiverClass->get_declaration()),
-      nonrealRef->get_symbol()->get_name(), visitedClasses, result);
-  return result;
-}
-
-static void appendCallableClassTargets(
-    SgExpression *callableExpression, SgType *callableType,
-    ClassHierarchyWrapper *classHierarchy, bool includePureVirtualFunc,
-    Rose_STL_Container<SgFunctionDeclaration *> &functionList) {
-  ASSERT_not_null(callableExpression);
-  ASSERT_not_null(classHierarchy);
-
-  SgClassType *callableClass = resolveClassTypeFromType(callableType);
-  SgClassDeclaration *classDeclaration =
-      callableClass != NULL
-          ? isSgClassDeclaration(callableClass->get_declaration())
-          : NULL;
-  SgClassDeclaration *definingClass =
-      callGraphDefiningClassDeclaration(classDeclaration);
-  std::vector<SgMemberFunctionDeclaration *> callOperators;
-  if (definingClass != NULL) {
-    std::set<SgClassDeclaration *> visitedClasses;
-    collectMemberFunctionDeclarationsByName(definingClass, "operator()",
-                                            visitedClasses, callOperators);
-  }
-  if (callOperators.empty()) {
-    SgVarRefExp *variable = isSgVarRefExp(callableExpression);
-    SgVariableSymbol *symbol = variable != NULL ? variable->get_symbol() : NULL;
-    Sg_File_Info *source = callableExpression->get_file_info();
-    std::cerr << "REX_CALLGRAPH_INVARIANT[callable-class]: expression="
-              << callableExpression << "/" << callableExpression->class_name()
-              << " variable="
-              << (symbol != NULL ? symbol->get_name().getString()
-                                 : std::string("<none>"))
-              << " type=" << callableType << "/"
-              << (callableType != NULL ? callableType->class_name()
-                                       : std::string("<null>"))
-              << " class=" << classDeclaration << "/"
-              << (classDeclaration != NULL
-                      ? classDeclaration->get_name().getString()
-                      : std::string("<null>"))
-              << " first="
-              << (classDeclaration != NULL
-                      ? classDeclaration->get_firstNondefiningDeclaration()
-                      : NULL)
-              << " defining=" << definingClass << " definition="
-              << (definingClass != NULL ? definingClass->get_definition()
-                                        : NULL)
-              << " template="
-              << (classDeclaration != NULL
-                      ? isSgTemplateInstantiationDecl(classDeclaration)
-                      : NULL)
-              << " source="
-              << (source != NULL ? source->get_filenameString()
-                                 : std::string("<null>"))
-              << ":" << (source != NULL ? source->get_line() : 0) << ":"
-              << (source != NULL ? source->get_col() : 0)
-              << " has no exact call-operator declaration" << std::endl;
-    if (definingClass != NULL && definingClass->get_definition() != NULL) {
-      SgClassDefinition *definition = definingClass->get_definition();
-      std::cerr << "REX_CALLGRAPH_INVARIANT[callable-class-members]: lexical="
-                << definition->get_members().size() << " auxiliary="
-                << (definition->get_auxiliary_declarations() != NULL
-                        ? definition->get_auxiliary_declarations()
-                              ->get_declarations()
-                              .size()
-                        : 0)
-                << std::endl;
-      for (SgDeclarationStatement *member : definition->get_members()) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[callable-class-member]: owner="
-                  << definition << " member=" << member << "/"
-                  << (member != NULL ? member->class_name() : "<null>")
-                  << " name="
-                  << (member != NULL ? SageInterface::get_name(member)
-                                     : std::string("<null>"))
-                  << " parent="
-                  << (member != NULL ? member->get_parent() : NULL)
-                  << " scope=" << (member != NULL ? member->get_scope() : NULL)
-                  << std::endl;
-      }
-      if (SgAuxiliaryDeclarationList *auxiliary =
-              definition->get_auxiliary_declarations()) {
-        for (SgDeclarationStatement *member : auxiliary->get_declarations()) {
-          std::cerr << "REX_CALLGRAPH_INVARIANT[callable-class-member]: owner="
-                    << auxiliary << " member=" << member << "/"
-                    << (member != NULL ? member->class_name() : "<null>")
-                    << " name="
-                    << (member != NULL ? SageInterface::get_name(member)
-                                       : std::string("<null>"))
-                    << " parent="
-                    << (member != NULL ? member->get_parent() : NULL)
-                    << " scope="
-                    << (member != NULL ? member->get_scope() : NULL)
-                    << std::endl;
-        }
-      }
-    }
-    if (SgFunctionCallExp *nested = isSgFunctionCallExp(callableExpression)) {
-      SgExpression *nestedCallee = nested->get_function();
-      std::cerr << "REX_CALLGRAPH_INVARIANT[callable-class-nested-call]: "
-                   "nested="
-                << nested << " callee=" << nestedCallee << "/"
-                << (nestedCallee != NULL ? nestedCallee->class_name()
-                                         : "<null>")
-                << " parent=" << nested->get_parent() << "/"
-                << (nested->get_parent() != NULL
-                        ? nested->get_parent()->class_name()
-                        : "<null>")
-                << " original=" << nested->get_originalExpressionTree()
-                << std::endl;
-    }
-    ROSE_ABORT();
-  }
-
-  for (SgMemberFunctionDeclaration *callOperator : callOperators) {
-    std::vector<SgFunctionDeclaration *> targets =
-        CallTargetSet::solveMemberFunctionCall(
-            callableClass, classHierarchy, callOperator,
-            /*polymorphic=*/false, includePureVirtualFunc);
-    functionList.insert(functionList.end(), targets.begin(), targets.end());
   }
 }
 
@@ -3420,78 +1028,14 @@ std::vector<SgFunctionDeclaration *> CallTargetSet::solveMemberFunctionCall(
   }
   ASSERT_not_null(functionDeclarationInClass);
 
-  // We need the inclass declaration so we can determine if it is a virtual
-  // function
   if (functionDeclarationInClass->get_functionModifier().isVirtual() &&
       polymorphic) {
-    // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-    // -Werror=unused-but-set-variable. SgFunctionDefinition *functionDefinition
-    // = NULL;
-
-    // SgMemberFunctionDeclaration* memberFunctionDefDeclaration =
-    //     isSgMemberFunctionDeclaration(memberFunctionDeclaration->get_definingDeclaration());
-
-    // DQ (12/10/2016): Eliminating a warning that we want to be an error:
-    // -Werror=unused-but-set-variable. if (memberFunctionDefDeclaration !=
-    // NULL) {
-    //     functionDefinition = memberFunctionDefDeclaration->get_definition();
-    // }
     solveVirtualFunctionCall(
         crtClass, classHierarchy, memberFunctionDeclaration,
         functionDeclarationInClass, includePureVirtualFunc, functionList);
   } else {
-    // Non virtual (standard) member function or call not polymorphic (or both)
-    // Always pushing the in-class declaration, so we need to find that one
-    SgDeclarationStatement *nonDefDeclInClass =
-        memberFunctionDeclaration->get_firstNondefiningDeclaration();
-    SgMemberFunctionDeclaration *functionDeclarationInClass = NULL;
-    if (nonDefDeclInClass) {
-      // memberFunctionDeclaration is outside the class
-      functionDeclarationInClass =
-          isSgMemberFunctionDeclaration(nonDefDeclInClass);
-    } else {
-      // In class declaration, since there is no non-defining declaration
-      functionDeclarationInClass = memberFunctionDeclaration;
-    }
-    ASSERT_not_null(functionDeclarationInClass);
-    if (SgMemberFunctionDeclaration *resolved_decl =
-            findMemberDeclarationInReceiverClass(crtClass,
-                                                 functionDeclarationInClass)) {
-      functionDeclarationInClass = resolved_decl;
-    }
     functionList.push_back(functionDeclarationInClass);
   }
-  return functionList;
-}
-
-Rose_STL_Container<SgFunctionDeclaration *>
-solveFunctionPointerCallsFunctional(SgNode *node,
-                                    SgFunctionType *functionType) {
-  ASSERT_not_null(functionType);
-
-  Rose_STL_Container<SgFunctionDeclaration *> functionList;
-
-  SgFunctionDeclaration *fctDecl =
-      canonicalCallableFunctionDecl(isSgFunctionDeclaration(node));
-  if (fctDecl == NULL) {
-    return functionList;
-  }
-  SgMemberFunctionDeclaration *static_member =
-      isSgMemberFunctionDeclaration(fctDecl);
-  if (static_member != NULL) {
-    if (!static_member->get_declarationModifier()
-             .get_storageModifier()
-             .isStatic()) {
-      return functionList;
-    }
-  }
-  SgFunctionType *candidate_type = isSgFunctionType(fctDecl->get_type());
-  if (candidate_type != NULL &&
-      is_callable_signatures_equal(functionType, candidate_type,
-                                   static_member != NULL)) {
-    functionList.push_back(fctDecl);
-  }
-
   return functionList;
 }
 
@@ -3530,9 +1074,12 @@ static SgFunctionType *callableIndirectSignature(SgType *type) {
 }
 
 static void appendFunctionPointerSignatureTargets(
-    SgType *type, const char *context,
+    SgExpression *expression, const char *context,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList) {
-  SgFunctionType *signature = callableIndirectSignature(type);
+  ASSERT_not_null(expression);
+  SgProject *project = SageInterface::getProject(expression);
+  ASSERT_not_null(project);
+  SgFunctionType *signature = callableIndirectSignature(expression->get_type());
   if (signature == NULL) {
     std::cerr << "REX_CALLGRAPH_INVARIANT[indirect-call-type]: context="
               << (context != NULL ? context : "<null>")
@@ -3546,109 +1093,25 @@ static void appendFunctionPointerSignatureTargets(
   variants.push_back(V_SgTemplateInstantiationFunctionDecl);
   variants.push_back(V_SgMemberFunctionDeclaration);
   variants.push_back(V_SgTemplateInstantiationMemberFunctionDecl);
-  std::function<Rose_STL_Container<SgFunctionDeclaration *>(SgNode *,
-                                                            SgFunctionType *)>
-      predicate = solveFunctionPointerCallsFunctional;
   Rose_STL_Container<SgFunctionDeclaration *> matches =
       AstQueryNamespace::queryMemoryPool(
-          std::bind(predicate, std::placeholders::_1, signature), &variants);
+          [project, signature](SgNode *node) {
+            if (!callGraphNodeBelongsToProject(node, project))
+              return Rose_STL_Container<SgFunctionDeclaration *>();
+            return CallTargetSet::solveFunctionPointerCallsFunctional(
+                node, signature);
+          },
+          &variants);
   functionList.insert(functionList.end(), matches.begin(), matches.end());
 }
 
-/**
- * This function determines all the constructors called in a constructor
- * initializer.  For example:
- *   Bar::Bar() : foo() {}
- *   In this case, we need to list foo() as having been called, and the
- *constructors for all of foo's BaseClasses.  (These are returned as
- *SgFunctionDeclarations, in the props vector)
- **/
 std::vector<SgFunctionDeclaration *> CallTargetSet::solveConstructorInitializer(
     SgConstructorInitializer *sgCtorInit) {
-  std::vector<SgFunctionDeclaration *> props;
-  SgMemberFunctionDeclaration *memFunDecl = sgCtorInit->get_declaration();
-
-  // It's possible to have a null constructor declaration, in case of
-  // compiler-generated default constructors.  Since the below special handling
-  // is for
-  //      (memFunDecl->get_file_info()->isCompilerGenerated() &&
-  //      !isSgTemplateInstantiationMemberFunctionDecl(memFunDecl) &&
-  //      !isSgTemplateMemberFunctionDecl(memFunDecl))
-  if (memFunDecl != NULL) {
-    SgMemberFunctionDeclaration *decl =
-        callGraphCanonicalMemberFunctionDeclaration(memFunDecl);
-    ASSERT_not_null(decl);
-    props.push_back(decl);
-  } else if (SgMemberFunctionDeclaration *copyConstructor =
-                 callGraphResolveSameClassCopyConstructor(sgCtorInit)) {
-    props.push_back(copyConstructor);
-  }
-
-  // If there are superclasses, the constructors for those classes may have been
-  // called. We need to return them
-
-  // Sometimes constructor initializers appear for primitive types. (e.g. x() in
-  // a constructor initializer list)
-  if (sgCtorInit->get_class_decl() != NULL) {
-    // The worklist contains classes that are initialized through
-    // compiler-generated default constructors
-    vector<SgClassDeclaration *> worklist;
-    worklist.push_back(sgCtorInit->get_class_decl());
-
-    while (!worklist.empty()) {
-      SgClassDeclaration *currClassDecl = worklist.back();
-      worklist.pop_back();
-
-      SgClassDeclaration *defClassDecl =
-          isSgClassDeclaration(currClassDecl->get_definingDeclaration());
-      if (defClassDecl == NULL) { // Can get a NULL here if a primative type is
-                                  // being constructed.
-        continue;                 // For example, a pointer
-      }
-      SgClassDefinition *currClass = defClassDecl->get_definition();
-      if (currClass == NULL) { // Can get a NULL here if class is an anonymous
-                               // compiler generated BaseClass
-        continue;
-      }
-
-      for (SgBaseClass *baseClass : currClass->get_inheritances()) {
-        if (baseClass == NULL || baseClass->get_base_class() == NULL) {
-          // Clang translation can materialize placeholder inheritance entries
-          // for anonymous or otherwise unresolved bases. They do not denote a
-          // callable constructor target and should not abort call-graph
-          // discovery for the enclosing constructor initializer.
-          continue;
-        }
-
-        SgMemberFunctionDeclaration *constructorCalled =
-            SageInterface::getDefaultConstructor(baseClass->get_base_class());
-        if (constructorCalled != NULL) {
-          SgMemberFunctionDeclaration *constructorCalledUnique =
-              isSgMemberFunctionDeclaration(
-                  constructorCalled->get_firstNondefiningDeclaration());
-          props.push_back(constructorCalledUnique);
-        } else {
-          worklist.push_back(baseClass->get_base_class());
-        }
-      }
-    }
-  }
-
-  return props;
-}
-
-//
-// Add the declaration for functionCallExp to functionList. In the case of
-// function pointers and virtual functions, append the set of declarations
-// to functionList.
-void getPropertiesForSgConstructorInitializer(
-    SgConstructorInitializer *sgCtorInit, ClassHierarchyWrapper *classHierarchy,
-    Rose_STL_Container<SgFunctionDeclaration *> &functionList) {
-  // currently, all constructor initializers can be handled by
-  // solveConstructorInitializer
-  std::vector<SgFunctionDeclaration *> props =
-      CallTargetSet::solveConstructorInitializer(sgCtorInit);
-  functionList.insert(functionList.end(), props.begin(), props.end());
+  ASSERT_not_null(sgCtorInit);
+  auto *constructor = sgCtorInit->get_declaration();
+  if (constructor == nullptr)
+    return {};
+  return {canonicalFunctionDeclForCallGraph(constructor)};
 }
 
 /** Add the declaration for functionCallExp to functionList. In the case of
@@ -3848,8 +1311,7 @@ CallTargetSet::unwrapExactImplicitCalleeConversions(SgExpression *functionExp) {
 void getPropertiesForSgFunctionCallExp(
     SgFunctionCallExp *sgFunCallExp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList,
-    bool includePureVirtualFunc = false,
-    const TemplateInstantiationAnalysisContext *templateContext = NULL) {
+    bool includePureVirtualFunc = false) {
   SgExpression *functionExp =
       CallTargetSet::unwrapExactImplicitCalleeConversions(
           sgFunCallExp->get_function());
@@ -3868,158 +1330,79 @@ void getPropertiesForSgFunctionCallExp(
   case V_SgArrowStarOp:
   case V_SgDotStarOp: {
     std::vector<SgFunctionDeclaration *> fD =
-        solveMemberFunctionPointerCallWithTemplateContext(
-            functionExp, classHierarchy, templateContext);
+        CallTargetSet::solveMemberFunctionPointerCall(functionExp,
+                                                      classHierarchy);
     functionList.insert(functionList.end(), fD.begin(), fD.end());
     break;
   }
 
   case V_SgDotExp:
   case V_SgArrowExp: {
-    ASSERT_not_null(isSgBinaryOp(functionExp));
-
-    SgExpression *leftSide = isSgBinaryOp(functionExp)->get_lhs_operand();
-    SgType *const receiverType =
-        expressionTypeInTemplateInstantiation(leftSide, templateContext);
-    if (receiverType == NULL) {
-      std::cerr << "REX_CALLGRAPH_INVARIANT[member-receiver-type]: member "
-                   "call has no exact source or instantiated receiver type"
-                << std::endl;
-      ROSE_ABORT();
+    auto *access = isSgBinaryOp(functionExp);
+    ASSERT_not_null(access);
+    SgExpression *memberRefExp = access->get_rhs_operand();
+    ASSERT_not_null(memberRefExp);
+    if (isSgVarRefExp(memberRefExp) != nullptr) {
+      appendFunctionPointerSignatureTargets(functionExp, "member field",
+                                            functionList);
+      break;
     }
-    SgType *const leftType = receiverType->findBaseType();
-    SgClassType *crtClass = resolveClassTypeFromType(leftType, templateContext);
+    if (auto *qualified = isSgScopeOp(memberRefExp)) {
+      if (auto *pseudo =
+              isSgPseudoDestructorRefExp(qualified->get_rhs_operand())) {
+        auto *qualifier = isSgTypeExpression(qualified->get_lhs_operand());
+        ASSERT_not_null(qualifier);
+        ROSE_ASSERT(qualified->get_parent() == access);
+        ROSE_ASSERT(qualifier->get_parent() == qualified);
+        ROSE_ASSERT(pseudo->get_parent() == qualified);
+        ROSE_ASSERT(qualified->get_type() == pseudo->get_type());
+        ROSE_ASSERT(access->get_type() == pseudo->get_type());
+        memberRefExp = pseudo;
+      }
+    }
+    if (isSgPseudoDestructorRefExp(memberRefExp) != nullptr) {
+      ROSE_ASSERT(sgFunCallExp->get_args()->get_expressions().empty());
+      break;
+    }
+    if (auto *reference = isSgFunctionRefExp(memberRefExp)) {
+      auto *member = isSgMemberFunctionDeclaration(
+          reference->getAssociatedFunctionDeclaration());
+      ASSERT_not_null(member);
+      ROSE_ASSERT(
+          member->get_declarationModifier().get_storageModifier().isStatic());
+      auto *target = canonicalCallableFunctionDecl(member);
+      ASSERT_not_null(target);
+      functionList.push_back(target);
+      break;
+    }
 
-    SgExpression *memberRefExp = isSgBinaryOp(functionExp)->get_rhs_operand();
     SgMemberFunctionDeclaration *memberFunctionDeclaration =
         resolveMemberFunctionDeclarationFromExpression(memberRefExp);
-    if (memberFunctionDeclaration != NULL) {
-      // AS(122805) In the case of a constructor initializer it is possible that
-      // a call to a constructor initializer may return a type corresponding to
-      // an operator some-type() declared within the constructed class. An
-      // example is:
-      //   struct Foo {
-      //      operator  bool () const
-      //          { return true; }
-      //   };
-      //
-      //   struct Bar {
-      //      bool foobar()
-      //          { return Foo (); }
-      //   };
-      // where the call to the constructor of the class Foo will cause a call to
-      // the operator bool(), where bool corresponds type of the member function
-      // foobar declared within Bar.
-      if (isSgConstructorInitializer(leftSide)) {
-        SgClassDeclaration *constInit =
-            isSgConstructorInitializer(leftSide)->get_class_decl();
-        if (constInit) {
-          crtClass = constInit->get_type();
-        } else {
-          // AS(010306) A compiler constructed SgConstructorInitializer may wrap
-          // a function call which return a class type. In an dot or arrow
-          // expression this returned class type may be used as an expression
-          // left hand side. To handle this case the returned class type must be
-          // extracted from the expression list. An example demonstrating this
-          // is:
-          // class Vector3d {
-          //   public:
-          //    Vector3d(){};
-          //    Vector3d(const Vector3d &vector3d){};
-          //   Vector3d     cross() const
-          //        { return Vector3d();};
-          //   void   GetZ(){};
-          //};
-          // void foo(){
-          //  Vector3d vn1;
-          //  (vn1.cross()).GetZ();
-          //}
-          SgExprListExp *expLst =
-              isSgExprListExp(isSgConstructorInitializer(leftSide)->get_args());
-          ASSERT_not_null(expLst);
-          ASSERT_require(expLst->get_expressions().size() == 1);
-          SgClassType *lhsClassType = isSgClassType(
-              isSgFunctionCallExp(*expLst->get_expressions().begin())
-                  ->get_type()
-                  ->stripType(SgType::STRIP_TYPEDEF_TYPE));
-          crtClass = lhsClassType;
-        }
-        ASSERT_not_null(crtClass);
-      }
+    ASSERT_not_null(memberFunctionDeclaration);
+    SgType *receiverType = receiverBindingType(access->get_lhs_operand());
+    ASSERT_not_null(receiverType);
+    SgClassType *receiverClass = receiverClassType(receiverType);
+    ASSERT_not_null(receiverClass);
 
-      // Set function to first non-defining declaration
-      SgMemberFunctionDeclaration *nonDefDecl = isSgMemberFunctionDeclaration(
-          memberFunctionDeclaration->get_firstNondefiningDeclaration());
-      if (nonDefDecl)
-        memberFunctionDeclaration = nonDefDecl;
-
-      if (crtClass == NULL) {
-        if (SgTemplateInstantiationMemberFunctionDecl *instantiated_member =
-                resolveMemberFunctionInstantiationFromNonrealType(
-                    isSgNonrealType(leftType), memberFunctionDeclaration)) {
-          functionList.push_back(instantiated_member);
-          break;
-        }
-
-        crtClass = resolveClassTypeFromMemberDecl(memberFunctionDeclaration);
-      }
-
-      if (crtClass == NULL) {
-        std::cerr << "REX_CALLGRAPH_INVARIANT[member-call-owner]: bound member "
-                     "call has no exact receiver class"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-
-      ASSERT_not_null(crtClass);
-
-      // test if the memberFunctionRefExp is scope qualified
-      //   in which case the vcall is suppressed.
-      // \note to handle constructors correctly, we would need the assumed call
-      // stack.
-
-      SgType *const receiverBaseType =
-          receiverType->stripTypedefsAndModifiers();
-      const bool polymorphicType = (isSgPointerType(receiverBaseType) ||
-                                    isSgReferenceType(receiverBaseType) ||
-                                    isSgRvalueReferenceType(receiverBaseType) ||
-                                    isSgArrayType(receiverBaseType));
-
-      const bool polymorphicCall =
-          (polymorphicType && !memberFunctionRefNeedsQualifier(memberRefExp));
-
-      std::vector<SgFunctionDeclaration *> fD =
-          CallTargetSet::solveMemberFunctionCall(
-              crtClass, classHierarchy, memberFunctionDeclaration,
-              polymorphicCall, includePureVirtualFunc);
-      functionList.insert(functionList.end(), fD.begin(), fD.end());
-    } else if (isSgNonrealRefExp(memberRefExp) != NULL &&
-               templateContext != NULL && !templateContext->empty()) {
-      SgType *substitutedReceiverType =
-          substituteTemplateParameterType(leftType, templateContext);
-      SgClassType *substitutedClass =
-          resolveClassTypeFromType(substitutedReceiverType);
-      const bool polymorphicType =
-          isSgPointerType(receiverType->stripTypedefsAndModifiers()) != NULL ||
-          isSgReferenceType(receiverType->stripTypedefsAndModifiers()) !=
-              NULL ||
-          isSgRvalueReferenceType(receiverType->stripTypedefsAndModifiers()) !=
-              NULL ||
-          isSgArrayType(receiverType->stripTypedefsAndModifiers()) != NULL;
-      const bool polymorphicCall =
-          polymorphicType && !memberFunctionRefNeedsQualifier(memberRefExp);
-
-      std::vector<SgMemberFunctionDeclaration *> memberFunctions =
-          resolveNonrealMemberFunctionDeclarations(memberRefExp,
-                                                   substitutedClass);
-      for (SgMemberFunctionDeclaration *candidate : memberFunctions) {
-        std::vector<SgFunctionDeclaration *> fD =
-            CallTargetSet::solveMemberFunctionCall(
-                substitutedClass, classHierarchy, candidate, polymorphicCall,
-                includePureVirtualFunc);
-        functionList.insert(functionList.end(), fD.begin(), fD.end());
-      }
-    }
+    SgType *receiverBaseType = receiverType->stripTypedefsAndModifiers();
+    auto *receiverCast = isSgCastExp(access->get_lhs_operand());
+    const bool referenceCast =
+        receiverCast != nullptr && (receiverCast->get_value_category() ==
+                                        SgCastExp::e_value_category_lvalue ||
+                                    receiverCast->get_value_category() ==
+                                        SgCastExp::e_value_category_xvalue);
+    const bool polymorphicType = isSgPointerType(receiverBaseType) ||
+                                 isSgReferenceType(receiverBaseType) ||
+                                 isSgRvalueReferenceType(receiverBaseType) ||
+                                 isSgArrayType(receiverBaseType) ||
+                                 referenceCast;
+    const bool polymorphicCall =
+        polymorphicType && !memberFunctionRefNeedsQualifier(memberRefExp);
+    std::vector<SgFunctionDeclaration *> targets =
+        CallTargetSet::solveMemberFunctionCall(
+            receiverClass, classHierarchy, memberFunctionDeclaration,
+            polymorphicCall, includePureVirtualFunc);
+    functionList.insert(functionList.end(), targets.begin(), targets.end());
     break;
   }
 
@@ -4044,41 +1427,6 @@ void getPropertiesForSgFunctionCallExp(
                     << " does not have one exact unresolved callable identity"
                     << std::endl;
           ROSE_ABORT();
-        }
-
-        // A dependent operator call can acquire exact member candidates once
-        // this generic body is analyzed for a concrete function-template
-        // instantiation. The first operand is the implicit receiver for member
-        // operator candidates; substitute its template-parameter type before
-        // doing the exact class lookup.
-        if (templateContext != nullptr && !templateContext->empty() &&
-            symbol->get_name().getString().rfind("operator", 0) == 0) {
-          SgExprListExp *arguments = sgFunCallExp->get_args();
-          if (arguments == nullptr || arguments->get_expressions().empty() ||
-              arguments->get_expressions().front() == nullptr ||
-              arguments->get_expressions().front()->get_type() == nullptr) {
-            std::cerr << "REX_CALLGRAPH_INVARIANT[dependent-operator]: "
-                         "operator call has no exact typed receiver operand"
-                      << std::endl;
-            ROSE_ABORT();
-          }
-          SgType *receiverType = expressionTypeInTemplateInstantiation(
-              arguments->get_expressions().front(), templateContext);
-          SgClassType *receiverClass =
-              resolveClassTypeFromType(receiverType->findBaseType());
-          if (receiverClass != nullptr) {
-            std::vector<SgMemberFunctionDeclaration *> memberFunctions =
-                resolveNonrealMemberFunctionDeclarations(dependent,
-                                                         receiverClass);
-            for (SgMemberFunctionDeclaration *candidate : memberFunctions) {
-              std::vector<SgFunctionDeclaration *> targets =
-                  CallTargetSet::solveMemberFunctionCall(
-                      receiverClass, classHierarchy, candidate,
-                      /*polymorphic=*/false, includePureVirtualFunc);
-              functionList.insert(functionList.end(), targets.begin(),
-                                  targets.end());
-            }
-          }
         }
 
         // Without a concrete instantiation, ADL intentionally leaves no exact
@@ -4208,16 +1556,8 @@ void getPropertiesForSgFunctionCallExp(
     //    |}
     // We don't know what is being called, only its type.  So assume that all
     // functions whose type matches could be called. [Robb P. Matzke 2013-01-24]
-    SgType *calleeType =
-        expressionTypeInTemplateInstantiation(functionExp, templateContext);
-    if (callableIndirectSignature(calleeType) != NULL) {
-      appendFunctionPointerSignatureTargets(calleeType, "variable",
-                                            functionList);
-      break;
-    }
-
-    appendCallableClassTargets(functionExp, calleeType, classHierarchy,
-                               includePureVirtualFunc, functionList);
+    appendFunctionPointerSignatureTargets(functionExp, "variable",
+                                          functionList);
     break;
   }
 
@@ -4228,14 +1568,13 @@ void getPropertiesForSgFunctionCallExp(
     // them conservatively from the parameter's callable type, just like we do
     // for ordinary function-pointer calls.
     appendFunctionPointerSignatureTargets(
-        isSgTemplateParameterVal(functionExp)->get_type(),
-        "non-type template parameter", functionList);
+        functionExp, "non-type template parameter", functionList);
     break;
   }
 
   case V_SgPntrArrRefExp:
-    appendFunctionPointerSignatureTargets(functionExp->get_type(),
-                                          "indexed expression", functionList);
+    appendFunctionPointerSignatureTargets(functionExp, "indexed expression",
+                                          functionList);
     break;
 
   case V_SgCastExp: {
@@ -4248,8 +1587,7 @@ void getPropertiesForSgFunctionCallExp(
                 << std::endl;
       ROSE_ABORT();
     }
-    appendFunctionPointerSignatureTargets(cast->get_type(), "explicit cast",
-                                          functionList);
+    appendFunctionPointerSignatureTargets(cast, "explicit cast", functionList);
     break;
   }
 
@@ -4263,15 +1601,8 @@ void getPropertiesForSgFunctionCallExp(
   }
 
   case V_SgFunctionCallExp: {
-    SgType *resultType =
-        expressionTypeInTemplateInstantiation(functionExp, templateContext);
-    if (callableIndirectSignature(resultType) != NULL) {
-      appendFunctionPointerSignatureTargets(resultType, "nested call result",
-                                            functionList);
-    } else {
-      appendCallableClassTargets(functionExp, resultType, classHierarchy,
-                                 includePureVirtualFunc, functionList);
-    }
+    appendFunctionPointerSignatureTargets(functionExp, "nested call result",
+                                          functionList);
     break;
   }
 
@@ -4299,68 +1630,31 @@ void getPropertiesForSgFunctionCallExp(
   }
   }
 }
-// Add the declaration for functionCallExp to functionList. In the case of
-// function pointers and virtual functions, append the set of declarations
-// to functionList.
-
-static SgExpression *
-semanticCallExpressionForLoweredOperatorSyntax(SgExpression *expr) {
-  if (expr == NULL) {
-    return NULL;
-  }
-
-  SgExpression *original = expr->get_originalExpressionTree();
-  if (original == NULL || original == expr) {
-    return NULL;
-  }
-
-  if (isSgFunctionCallExp(original) != NULL ||
-      isSgConstructorInitializer(original) != NULL) {
-    return original;
-  }
-
-  return NULL;
-}
-
-static void getPropertiesForExpressionWithTemplateContext(
-    SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
-    Rose_STL_Container<SgFunctionDeclaration *> &functionList,
-    bool includePureVirtualFunc,
-    const TemplateInstantiationAnalysisContext *templateContext);
-
 void CallTargetSet::getPropertiesForExpression(
     SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &functionList,
     bool includePureVirtualFunc) {
-  getPropertiesForExpressionWithTemplateContext(
-      sgexp, classHierarchy, functionList, includePureVirtualFunc, NULL);
-}
-
-static void getPropertiesForExpressionWithTemplateContext(
-    SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
-    Rose_STL_Container<SgFunctionDeclaration *> &functionList,
-    bool includePureVirtualFunc,
-    const TemplateInstantiationAnalysisContext *templateContext) {
-  if (SgExpression *semantic_call =
-          semanticCallExpressionForLoweredOperatorSyntax(sgexp)) {
-    getPropertiesForExpressionWithTemplateContext(
-        semantic_call, classHierarchy, functionList, includePureVirtualFunc,
-        templateContext);
-  } else if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
+  const auto firstTarget = functionList.size();
+  if (SgFunctionCallExp *fncall = isSgFunctionCallExp(sgexp)) {
     getPropertiesForSgFunctionCallExp(fncall, classHierarchy, functionList,
-                                      includePureVirtualFunc, templateContext);
+                                      includePureVirtualFunc);
+  } else if (auto *destruction = isSgCxxSubobjectDestruction(sgexp)) {
+    destruction->validate();
+    functionList.push_back(destruction->get_destructor_declaration());
   } else if (SgConstructorInitializer *ctorini =
                  isSgConstructorInitializer(sgexp)) {
-    getPropertiesForSgConstructorInitializer(ctorini, classHierarchy,
-                                             functionList);
+    const auto constructors = solveConstructorInitializer(ctorini);
+    functionList.insert(functionList.end(), constructors.begin(),
+                        constructors.end());
   } else if (isSgPntrArrRefExp(sgexp) != NULL ||
              isSgPointerDerefExp(sgexp) != NULL) {
-    // Built-in subscripts/dereferences are not calls. Syntax-lowered overloaded
-    // operators are handled through their preserved semantic call above.
+    // Built-in subscripts/dereferences are not calls.
   } else {
     std::cerr << "Cannot determine Properties for " << sgexp->class_name()
               << std::endl;
   }
+  for (auto i = firstTarget; i < functionList.size(); ++i)
+    functionList[i] = canonicalFunctionDeclForCallGraph(functionList[i]);
 }
 
 void CallTargetSet::getDeclarationsForExpression(
@@ -4382,6 +1676,11 @@ void CallTargetSet::getDeclarationsForExpression(
 void CallTargetSet::getDefinitionsForExpression(
     SgExpression *sgexp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDefinition *> &defList) {
+  if (SgFunctionDefinition *owner =
+          SageInterface::getEnclosingProcedure(sgexp)) {
+    if (canonicalCallableFunctionDecl(owner->get_declaration()) == NULL)
+      return;
+  }
   Rose_STL_Container<SgFunctionDeclaration *> props;
   CallTargetSet::getPropertiesForExpression(sgexp, classHierarchy, props);
 
@@ -4401,38 +1700,70 @@ void CallTargetSet::getDefinitionsForExpression(
   }
 }
 
+bool CallTargetSet::isNonExecutableCallExpression(SgExpression *expression) {
+  ASSERT_not_null(expression);
+  for (SgNode *child = expression, *owner = child->get_parent();
+       owner != NULL && isSgFunctionDefinition(owner) == NULL;
+       child = owner, owner = owner->get_parent()) {
+    if (isSgDeclType(owner) != nullptr || isSgNoexceptOp(owner) != nullptr ||
+        isSgAlignOfOp(owner) != nullptr)
+      return true;
+    if (auto *size_of = isSgSizeOfOp(owner)) {
+      if (size_of->get_operand_expr() == child &&
+          !size_of->expression_operand_is_evaluated())
+        return true;
+    }
+    if (auto *type_id = isSgTypeIdOp(owner)) {
+      (void)type_id->get_type();
+      if (!type_id->get_operand_is_evaluated())
+        return true;
+    }
+    if (SgInitializedName *declaration = isSgInitializedName(owner)) {
+      if (declaration->get_initializer() != child)
+        continue;
+      if (isSgFunctionParameterList(declaration->get_parent()) != NULL)
+        return true;
+      if (auto *variable = isSgVariableDeclaration(declaration->get_parent())) {
+        if (isSgClassDefinition(variable->get_scope()) != NULL &&
+            !variable->get_declarationModifier()
+                 .get_storageModifier()
+                 .isStatic())
+          return true;
+      }
+    }
+  }
+  return false;
+}
+
 namespace {
 
 using DefinitionExpressionIndex =
     std::map<SgFunctionDefinition *, Rose_STL_Container<SgExpression *>>;
 
-std::mutex &definitionExpressionIndexInstallMutex() {
-  static std::mutex install_mutex;
-  return install_mutex;
-}
+} // namespace
 
-const std::string &definitionExpressionIndexAttributeName() {
-  static const std::string attribute_name =
-      "rose.callGraph.definitionExpressionIndex";
-  return attribute_name;
-}
-
-class DefinitionExpressionIndexAttribute : public AstAttribute {
-public:
+struct SgProject::CallGraphState {
   std::recursive_mutex mutex;
   DefinitionExpressionIndex index;
   bool initialized = false;
   uint64_t astModificationSequence = 0;
   const ClassHierarchyWrapper *classHierarchy = nullptr;
-
-  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
-  }
-
-  std::string attribute_class_name() const override {
-    return "DefinitionExpressionIndexAttribute";
-  }
 };
+
+SgProject::CallGraphState &SgProject::get_callGraphState() {
+  static std::mutex install_mutex;
+  std::lock_guard<std::mutex> install_guard(install_mutex);
+  if (p_callGraphState == nullptr)
+    p_callGraphState = new CallGraphState;
+  return *p_callGraphState;
+}
+
+void SgProject::release_callGraphState() {
+  delete p_callGraphState;
+  p_callGraphState = nullptr;
+}
+
+namespace {
 
 static void
 indexDefinitionExpression(SgExpression *exp,
@@ -4465,44 +1796,19 @@ public:
   }
 
   void visit(SgNode *node) override {
-    if (node == NULL) {
-      return;
-    }
-
     SgExpression *expression = isSgExpression(node);
-    if (semanticCallExpressionForLoweredOperatorSyntax(expression) != NULL) {
+    if (isSgFunctionCallExp(expression) != NULL ||
+        isSgConstructorInitializer(expression) != NULL ||
+        isSgCxxSubobjectDestruction(expression) != nullptr) {
+      if (CallTargetSet::isNonExecutableCallExpression(expression))
+        return;
       indexDefinitionExpression(expression, classHierarchy_, definitionIndex_);
-      return;
-    }
-
-    switch (node->variantT()) {
-    case V_SgFunctionCallExp:
-    case V_SgConstructorInitializer:
-      if (SgExpression *exp = isSgExpression(node)) {
-        indexDefinitionExpression(exp, classHierarchy_, definitionIndex_);
-      }
-      break;
-
-    default:
-      break;
     }
   }
 
 private:
   ClassHierarchyWrapper *classHierarchy_ = nullptr;
   DefinitionExpressionIndex &definitionIndex_;
-};
-
-class LoweredOperatorSyntaxCollector : public AstSimpleProcessing {
-public:
-  std::vector<SgExpression *> expressions;
-
-  void visit(SgNode *node) override {
-    SgExpression *expression = isSgExpression(node);
-    if (semanticCallExpressionForLoweredOperatorSyntax(expression) != NULL) {
-      expressions.push_back(expression);
-    }
-  }
 };
 
 static void
@@ -4518,48 +1824,27 @@ buildDefinitionExpressionIndex(SgProject *project,
   builder.traverse(project, preorder);
 }
 
-static DefinitionExpressionIndexAttribute *
-getOrCreateDefinitionExpressionIndexAttribute(SgProject *project) {
-  ASSERT_not_null(project);
-
-  std::lock_guard<std::mutex> install_guard(
-      definitionExpressionIndexInstallMutex());
-
-  const std::string &attribute_name = definitionExpressionIndexAttributeName();
-  AstAttribute *attribute = project->getAttribute(attribute_name);
-  if (attribute == NULL) {
-    project->addNewAttribute(attribute_name,
-                             new DefinitionExpressionIndexAttribute);
-    attribute = project->getAttribute(attribute_name);
-  }
-
-  ASSERT_not_null(attribute);
-  DefinitionExpressionIndexAttribute *index_attribute =
-      dynamic_cast<DefinitionExpressionIndexAttribute *>(attribute);
-  ASSERT_not_null(index_attribute);
-  return index_attribute;
-}
-
-static void
-appendExpressionsForDefinition(SgFunctionDefinition *targetDef,
-                               const DefinitionExpressionIndex &definitionIndex,
-                               Rose_STL_Container<SgExpression *> &exps) {
-  ASSERT_not_null(targetDef);
-
-  DefinitionExpressionIndex::const_iterator expressionIt =
-      definitionIndex.find(targetDef);
-  if (expressionIt == definitionIndex.end()) {
-    return;
-  }
-
-  for (SgExpression *exp : expressionIt->second) {
-    if (exp != NULL) {
-      exps.push_back(exp);
-    }
-  }
-}
-
 } // namespace
+
+std::vector<SgFunctionDeclaration *>
+CallGraphBuilder::collectNonFunctionConstructorTargets(
+    ClassHierarchyWrapper *classHierarchy) {
+  ASSERT_not_null(classHierarchy);
+  std::vector<SgFunctionDeclaration *> targets;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgConstructorInitializer)) {
+    auto *expression = isSgConstructorInitializer(node);
+    ASSERT_not_null(expression);
+    if (SageInterface::getEnclosingFunctionDefinition(expression, false) !=
+            nullptr ||
+        CallTargetSet::isNonExecutableCallExpression(expression)) {
+      continue;
+    }
+    CallTargetSet::getPropertiesForExpression(expression, classHierarchy,
+                                              targets);
+  }
+  return targets;
+}
 
 void CallTargetSet::getExpressionsForDefinition(
     SgFunctionDefinition *targetDef, ClassHierarchyWrapper *classHierarchy,
@@ -4570,21 +1855,21 @@ void CallTargetSet::getExpressionsForDefinition(
   SgProject *project = SageInterface::getProject(targetDef);
   ASSERT_not_null(project);
 
-  DefinitionExpressionIndexAttribute *index_attribute =
-      getOrCreateDefinitionExpressionIndexAttribute(project);
-  std::lock_guard<std::recursive_mutex> index_guard(index_attribute->mutex);
+  auto &state = project->get_callGraphState();
+  std::lock_guard<std::recursive_mutex> index_guard(state.mutex);
   uint64_t currentSequence = SgNode::get_globalAstModificationSequence();
-  if (index_attribute->initialized == false ||
-      index_attribute->astModificationSequence != currentSequence ||
-      index_attribute->classHierarchy != classHierarchy) {
-    buildDefinitionExpressionIndex(project, classHierarchy,
-                                   index_attribute->index);
-    index_attribute->initialized = true;
-    index_attribute->astModificationSequence = currentSequence;
-    index_attribute->classHierarchy = classHierarchy;
+  if (!state.initialized || state.astModificationSequence != currentSequence ||
+      state.classHierarchy != classHierarchy) {
+    buildDefinitionExpressionIndex(project, classHierarchy, state.index);
+    state.initialized = true;
+    state.astModificationSequence = currentSequence;
+    state.classHierarchy = classHierarchy;
   }
 
-  appendExpressionsForDefinition(targetDef, index_attribute->index, exps);
+  const auto expressions = state.index.find(targetDef);
+  if (expressions != state.index.end())
+    exps.insert(exps.end(), expressions->second.begin(),
+                expressions->second.end());
 }
 
 FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
@@ -4601,102 +1886,21 @@ FunctionData::FunctionData(SgFunctionDeclaration *inputFunctionDeclaration,
            : isSgFunctionDeclaration(
                  functionDeclaration->get_definingDeclaration()));
 
-  SgClassType *templateInstantiationReceiverClass = NULL;
-  TemplateInstantiationAnalysisContext templateInstantiationContext =
-      buildTemplateInstantiationAnalysisContext(functionDeclaration);
-  if (!templateInstantiationContext.empty() &&
-      (defDecl == NULL || defDecl->get_definition() == NULL)) {
-    SgFunctionDeclaration *templateDecl =
-        templateInstantiationContext.templateFunction;
-    if (templateDecl->get_definition() != NULL) {
-      defDecl = templateDecl;
-    } else {
-      defDecl =
-          isSgFunctionDeclaration(templateDecl->get_definingDeclaration());
-    }
-  }
-
-  if (SgTemplateInstantiationMemberFunctionDecl *instMember =
-          isSgTemplateInstantiationMemberFunctionDecl(functionDeclaration)) {
-    templateInstantiationReceiverClass =
-        resolveClassTypeFromMemberDecl(instMember);
-
-    if (defDecl == NULL || defDecl->get_definition() == NULL) {
-      SgTemplateMemberFunctionDeclaration *templateDecl =
-          instMember->get_templateDeclaration();
-      if (templateDecl == NULL) {
-        templateDecl = isSgTemplateMemberFunctionDeclaration(
-            instMember->get_specializedTemplateDeclaration());
-      }
-
-      if (templateDecl != NULL) {
-        if (templateDecl->get_definition() != NULL) {
-          defDecl = templateDecl;
-        } else {
-          defDecl =
-              isSgFunctionDeclaration(templateDecl->get_definingDeclaration());
-        }
-      }
-    }
-  }
-
-  if (defDecl != NULL && defDecl->get_definition() == NULL) {
-    defDecl = NULL;
-    std::cerr << " **** If you see this error message. Report to the ROSE team "
-                 "that a function declaration ****\n"
-              << " **** has a defining declaration but no definition           "
-                 "                            ****\n";
-  }
-
-  // cout << "!!!" << inputFunctionDeclaration->get_name().str() << " has
-  // definition " << defDecl << "\n";
-  //      cout << "Input declaration: " << inputFunctionDeclaration << " as
-  //      opposed to " << functionDeclaration << "\n";
-
-  // Test for a forward declaration (declaration without a definition)
   if (defDecl != NULL) {
+    ASSERT_not_null(defDecl->get_definition());
     hasDefinition = true;
 
-    Rose_STL_Container<SgNode *> functionCallExpList =
-        NodeQuery::querySubTree(defDecl, V_SgFunctionCallExp);
-    for (SgNode *functionCallExp : functionCallExpList) {
-      getPropertiesForExpressionWithTemplateContext(
-          isSgExpression(functionCallExp), classHierarchy, functionList, false,
-          templateInstantiationContext.empty() ? NULL
-                                               : &templateInstantiationContext);
-    }
-
-    Rose_STL_Container<SgNode *> ctorInitList =
-        NodeQuery::querySubTree(defDecl, V_SgConstructorInitializer);
-    for (SgNode *ctorInit : ctorInitList) {
-      getPropertiesForExpressionWithTemplateContext(
-          isSgExpression(ctorInit), classHierarchy, functionList, false,
-          templateInstantiationContext.empty() ? NULL
-                                               : &templateInstantiationContext);
-    }
-
-    LoweredOperatorSyntaxCollector loweredOperatorCalls;
-    loweredOperatorCalls.traverse(defDecl, preorder);
-    for (SgExpression *callSiteExpr : loweredOperatorCalls.expressions) {
-      getPropertiesForExpressionWithTemplateContext(
-          callSiteExpr, classHierarchy, functionList, false,
-          templateInstantiationContext.empty() ? NULL
-                                               : &templateInstantiationContext);
-    }
-
-    if (templateInstantiationReceiverClass != NULL) {
-      for (SgFunctionDeclaration *&callee : functionList) {
-        SgMemberFunctionDeclaration *memberCallee =
-            isSgMemberFunctionDeclaration(callee);
-        if (memberCallee == NULL) {
+    for (VariantT kind : {V_SgFunctionCallExp, V_SgConstructorInitializer,
+                          V_SgCxxSubobjectDestruction}) {
+      for (SgNode *node : NodeQuery::querySubTree(defDecl, kind)) {
+        SgExpression *expression = isSgExpression(node);
+        ASSERT_not_null(expression);
+        if (SageInterface::getEnclosingFunctionDeclaration(expression) !=
+                defDecl ||
+            CallTargetSet::isNonExecutableCallExpression(expression))
           continue;
-        }
-
-        if (SgMemberFunctionDeclaration *instantiatedCallee =
-                findMemberDeclarationInReceiverClass(
-                    templateInstantiationReceiverClass, memberCallee)) {
-          callee = instantiatedCallee;
-        }
+        CallTargetSet::getPropertiesForExpression(expression, classHierarchy,
+                                                  functionList);
       }
     }
   }
@@ -4712,8 +1916,6 @@ CallTargetSet::getFirstVirtualFunctionDefinitionFromAncestors(
 
   SgFunctionDeclaration *resultDecl = NULL;
 
-  //  memberFunctionDeclaration->get_file_info()->display( "Member function we
-  //  are considering" );
   SgDeclarationStatement *nonDefDeclInClass = NULL;
 
   nonDefDeclInClass =
@@ -4728,8 +1930,6 @@ CallTargetSet::getFirstVirtualFunctionDefinitionFromAncestors(
   // in class declaration, since there is no non-defining declaration
   else {
     functionDeclarationInClass = memberFunctionDeclaration;
-    //      functionDeclarationInClass->get_file_info()->display("declaration in
-    //      class already");
   }
 
   ASSERT_not_null(functionDeclarationInClass);
@@ -4801,61 +2001,11 @@ CallGraphBuilder::hasGraphNodeFor(SgFunctionDeclaration *fdecl) const {
   return NULL;
 }
 
-static bool
-callGraphFileInfoCanDistinguishDeclarations(const Sg_File_Info *fi) {
-  return fi != NULL && fi->get_line() > 0 && fi->get_col() > 0 &&
-         !fi->isCompilerGenerated() && !fi->isFrontendSpecific() &&
-         !fi->isTransformation();
-}
-
-static const Sg_File_Info *
-callGraphBestSourceIdentityFileInfo(SgFunctionDeclaration *fdecl) {
-  if (fdecl == NULL) {
-    return NULL;
-  }
-
-  SgFunctionDeclaration *decls[] = {
-      fdecl, isSgFunctionDeclaration(fdecl->get_firstNondefiningDeclaration()),
-      isSgFunctionDeclaration(fdecl->get_definingDeclaration())};
-
-  for (SgFunctionDeclaration *decl : decls) {
-    if (decl == NULL) {
-      continue;
-    }
-
-    const Sg_File_Info *fileInfo = decl->get_file_info();
-    if (callGraphFileInfoCanDistinguishDeclarations(fileInfo)) {
-      return fileInfo;
-    }
-  }
-
-  return NULL;
-}
-
-static bool
-callGraphDeclarationsShareSourceIdentity(SgFunctionDeclaration *lhs,
-                                         SgFunctionDeclaration *rhs) {
-  if (lhs == rhs) {
-    return true;
-  }
-
-  const Sg_File_Info *lhsFileInfo = callGraphBestSourceIdentityFileInfo(lhs);
-  const Sg_File_Info *rhsFileInfo = callGraphBestSourceIdentityFileInfo(rhs);
-
-  if (lhsFileInfo == NULL || rhsFileInfo == NULL) {
-    return true;
-  }
-
-  return lhsFileInfo->get_file_id() == rhsFileInfo->get_file_id() &&
-         lhsFileInfo->get_line() == rhsFileInfo->get_line() &&
-         lhsFileInfo->get_col() == rhsFileInfo->get_col() &&
-         lhsFileInfo->get_filenameString() == rhsFileInfo->get_filenameString();
-}
-
 void CallGraphBuilder::registerGraphNode(SgFunctionDeclaration *fdecl,
                                          SgGraphNode *graphNode) {
   ASSERT_not_null(fdecl);
   ASSERT_not_null(graphNode);
+  ASSERT_require(callGraphNodeBelongsToProject(fdecl, project));
   if (isSgTemplateFunctionDeclaration(fdecl) != nullptr ||
       isSgTemplateMemberFunctionDeclaration(fdecl) != nullptr) {
     fprintf(stderr,
@@ -4877,9 +2027,8 @@ void CallGraphBuilder::addGraphNodeMapping(SgFunctionDeclaration *fdecl,
   registerGraphNode(fdecl, graphNode);
 }
 
-SgGraphNode *
-CallGraphBuilder::getGraphNodeForMangledName(SgFunctionDeclaration *fdecl,
-                                             bool requireSourceIdentity) const {
+SgGraphNode *CallGraphBuilder::getGraphNodeForMangledName(
+    SgFunctionDeclaration *fdecl) const {
   if (fdecl == NULL) {
     return NULL;
   }
@@ -4890,27 +2039,8 @@ CallGraphBuilder::getGraphNodeForMangledName(SgFunctionDeclaration *fdecl,
     return NULL;
   }
 
-  const GraphNodesByMangledNameList &candidates = lookedup->second;
-  for (GraphNodesByMangledNameList::const_iterator it = candidates.begin();
-       it != candidates.end(); ++it) {
-    if (!requireSourceIdentity ||
-        callGraphDeclarationsShareSourceIdentity(it->first, fdecl)) {
-      return it->second;
-    }
-  }
-
-  return NULL;
-}
-
-SgGraphNode *CallGraphBuilder::getGraphNodeForConstruction(
-    SgFunctionDeclaration *fdecl) const {
-  SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
-  GraphNodes::const_iterator lookedup = graphNodes.find(unique);
-  if (lookedup != graphNodes.end()) {
-    return lookedup->second;
-  }
-
-  return getGraphNodeForMangledName(unique, true);
+  ASSERT_require(!lookedup->second.empty());
+  return lookedup->second.front().second;
 }
 
 /**
@@ -4929,12 +2059,14 @@ SgGraphNode *CallGraphBuilder::getGraphNodeForConstruction(
 SgGraphNode *
 CallGraphBuilder::getGraphNodeFor(SgFunctionDeclaration *fdecl) const {
   SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
+  if (!callGraphNodeBelongsToProject(unique, project))
+    return NULL;
   GraphNodes::const_iterator lookedup = graphNodes.find(unique);
   if (lookedup != graphNodes.end()) {
     return lookedup->second;
   }
 
-  return getGraphNodeForMangledName(fdecl, false);
+  return getGraphNodeForMangledName(unique);
 }
 
 GetOneFuncDeclarationPerFunction::result_type

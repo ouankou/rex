@@ -5,11 +5,8 @@
 #include <cstdio>
 #include <memory>
 #include <vector>
-// Fix suggested by Brian White (to allow "sleep()" to be defined)
-// #include <unistd.h>
-
-TimingPerformance timer("ROSE Performance Tests: total execution time (sec) = ",
-                        true);
+TimingPerformance
+    timer("ROSE Performance Tests: total execution time (sec) = ");
 
 void foo() {
   TimingPerformance timer("foo() execution time (sec) = ");

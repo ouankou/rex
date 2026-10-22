@@ -1,13 +1,13 @@
 #ifndef __ROSEAttributesList_H__
 #define __ROSEAttributesList_H__
 
-// #include "setup.h"
-
 #include "rosedefs.h"
 
 #include "rosedll.h"
 
 #include <map>
+
+#include <memory>
 
 #include <set>
 
@@ -15,46 +15,14 @@
 
 #include <vector>
 
-// #include <list>
 // Include the ROSE lex specific definitions of tokens
 #include "general_token_defs.h"
 
-// #ifdef CAN_NOT_COMPILE_WITH_ROSE
-//    #warning "CAN_NOT_COMPILE_WITH_ROSE IS defined"
-// #else
-//   #warning "CAN_NOT_COMPILE_WITH_ROSE is NOT defined"
-// #endif
-
-// DQ (2/28/2010): Skip this if we are compiling ROSE using ROSE.
-// This is being used in place of the CAN_NOT_COMPILE_WITH_ROSE macro.
-// Note that CAN_NOT_COMPILE_WITH_ROSE is set by the following projects:
-//     1) projects/DocumentationGenerator
-//     2) projects/haskellport
-// in their build configuration.  I think that using CXX_IS_ROSE_ANALYSIS
-// will be equivalent (used to indicate the a ROSE translator is being
-// used to compile the ROSE source code).
-// However, it might be that this is equivalent to the USE_ROSE macro,
-// which is set for all ROSE translators when they compile any code.
-// DQ (12/22/2008): I would appreciate it if this were a better name...
-// #if !CAN_NOT_COMPILE_WITH_ROSE
-// #ifndef USE_ROSE
-
 class ROSE_DLL_API PreprocessingInfo;
 class ROSEAttributesList;
-// AS(01/04/07) Global map of filenames to PreprocessingInfo*'s as it is
-// inefficient to get this by a traversal of the AST
-extern std::map<std::string, ROSEAttributesList *> mapFilenameToAttributes;
-
-// DQ (4/19/2006): Forward declaration so that PreprocessingInfo can
-// contain a pointer to a Sg_File_Info object.
 class Sg_File_Info;
 class SgLocatedNode;
-
-// DQ (1/21/2008): Need forward declaration
 class SgFile;
-
-// #if !CAN_NOT_COMPILE_WITH_ROSE
-// #ifndef USE_ROSE
 
 //! For preprocessing information including source comments, include , if,
 //! define, etc
@@ -112,8 +80,6 @@ public:
     // independent form of comment).
     CpreprocessorBlankLine,
 
-    // These used to be translated into IR nodes (and will be in the
-    // future).
     CpreprocessorIncludeDeclaration,
     CpreprocessorIncludeNextDeclaration,
     CpreprocessorDefineDeclaration,
@@ -225,36 +191,15 @@ public:
   ~PreprocessingInfo();
   PreprocessingInfo();
 
-  // This constructor is called from the C++ code generated from the lex file
-  // (preproc.lex) PreprocessingInfo(DirectiveType, const char
-  // *inputStringPointer, int line_no , int col_no,
-  //                   int nol, RelativePositionType relPos, bool copiedFlag,
-  //                   bool unparsedFlag) ROSE_DEPRECATED_FUNCTION;
-
-  // DQ (7/19/2008): I have removed the bool copiedFlag and bool unparsedFlag
-  // parameters because they are not used and are present only because in an
-  // older implementation of the unparser it would make the PreprocessingInfo as
-  // unparsed (and maybe copied) but this sort of side-effect of the unparser
-  // was later removed to make the unparsing side-effect free. DQ (4/19/2006):
-  // Use the SgFileInfo object to hold the more complete information about the
-  // filename, line number, and column number. DQ (3/15/2006): Build constructor
-  // that uses C++ string as input (to replace the char* based constructor)
-  // PreprocessingInfo(DirectiveType, const std::string inputString, int line_no
-  // , int col_no,
-  //                   int nol, RelativePositionType relPos, bool copiedFlag,
-  //                   bool unparsedFlag);
-  // PreprocessingInfo(DirectiveType, const std::string & inputString,
-  //      const std::string & filenameString, int line_no , int col_no,
-  //      int nol, RelativePositionType relPos, bool copiedFlag, bool
-  //      unparsedFlag );
   PreprocessingInfo(DirectiveType, const std::string &inputString,
                     const std::string &filenameString, int line_no, int col_no,
                     int nol, RelativePositionType relPos);
+  PreprocessingInfo(DirectiveType, const std::string &inputString,
+                    std::unique_ptr<Sg_File_Info> position, int nol,
+                    RelativePositionType relPos);
 
   // Copy constructor
   PreprocessingInfo(const PreprocessingInfo &prepInfo);
-
-  void display(const std::string &label) const;
 
   // Access functions
   int getLineNumber() const;
@@ -270,10 +215,7 @@ public:
   void setOutputPlacement(OutputPlacementType placement);
   SgLocatedNode *getAttachedOwner() const;
 
-  // DQ (2/27/2019): Adding support for CPP directives and comments to have
-  // filename information (already present, but we need to access it).
   std::string getFilename() const;
-  int getFileId() const;
 
   // Number of lines occupied by this comment (count the number of line feeds)
   int getNumberOfLines() const;
@@ -287,25 +229,12 @@ public:
   // useful for debugging
   static std::string directiveTypeName(const DirectiveType &directive);
   static std::string relativePositionName(const RelativePositionType &position);
-
-  // JH (01/03/2006) methods for packing the PreprocessingInfo data, in order to
-  // store it into a file and rebuild it!
-  unsigned int packed_size() const;
-
-  // JH (01/032006) This pack methods might cause memory leaks. Think of
-  // deleting them after stored to file ...
-  char *packed() const;
-  void unpacked(char *storePointer);
+  void display(const std::string &label) const;
 
   // DQ (4/19/2006): Added Sg_File_Info objects to each PreprocessingInfo object
   bool has_file_info() const;
   Sg_File_Info *get_file_info() const;
   void set_file_info(Sg_File_Info *info);
-
-  // DQ (8/26/2020): include directive have a filename imbedded inside, and we
-  // need to extract that for from tools (e.g. the fixup for initializers from
-  // include files).
-  std::string get_filename_from_include_directive();
 
   // DQ (11/28/2008): Support for CPP generated linemarkers
   int get_lineNumberForCompilerGeneratedLinemarker();
@@ -347,28 +276,10 @@ private:
   // char fileName[256];
   std::string fileName;
 
-  //      3/16/2000 -- Index into the list.  Not sure if this is really
-  //      necessary.  See implementation in unparser.C.
-  //
-  // This is where the current line number is stored while we
-  // go off and unparse a different include file.  This really should have
-  // been stored in a static structure (I think) rather than in this list.
-  int index;
-
   // DQ (12/15/2012): Save file ids that are from filenames referenced in #line
   // directives, these will be considered equivalent to the input source
   // filename.
   std::set<int> filenameIdSet;
-
-  // DQ (1/15/2015): Adding support for token-based unparsing. When new comments
-  // and CPP directives are added we need to record these as a kind of
-  // transformatiPreprocessingInfoon that will trigger the token stream
-  // representation to NOT be used and the comments and CPP directives unparsed
-  // from the AST separately from the associated IR node being unparsed from the
-  // AST.  The problem is that we want to record where there might be comments
-  // or CPP directives removed and having a flag here is not going to work for
-  // that, so we have to also record that the ROSEAttributesList has changed.
-  // bool p_isTransformation;
 
 public:
   // DQ (11/19/2008): Added language selection support for handling comments
@@ -382,6 +293,8 @@ public:
   };
 
   ROSEAttributesList();
+  ROSEAttributesList(const ROSEAttributesList &source);
+  ROSEAttributesList &operator=(const ROSEAttributesList &) = delete;
   ~ROSEAttributesList();
   // DQ (4/19/2006): Adding SgFileInfo objects so we need to pass in a filename
   // string void addElement(PreprocessingInfo::DirectiveType, const char *pLine,
@@ -389,16 +302,11 @@ public:
   void addElement(PreprocessingInfo::DirectiveType, const std::string &pLine,
                   const std::string &filename, int lineNumber, int columnNumber,
                   int numberOfLines);
-  // void addElements( ROSEAttributesList &);
   void moveElements(ROSEAttributesList &);
 
   // [DT] 3/15/2000 -- Interface to fileName member.
   void setFileName(const std::string &fName);
   std::string getFileName();
-
-  // 3/16/2000 -- Interface to index member.
-  void setIndex(int i);
-  int getIndex();
 
   PreprocessingInfo *operator[](int i);
   int size(void);
@@ -406,32 +314,13 @@ public:
   void deepClean(void);
   void clean(void);
 
-  // DQ (9/19/2013): generate the number associated with each position
-  // relative to the attached IR node. size_t
-  // numberByRelativePosition(PreprocessingInfo::RelativePositionType
-  // pos);
-
   // Access function for list
   std::vector<PreprocessingInfo *> &getList() { return attributeList; };
-
-  void display(const std::string &label); // DQ 02/18/2001 -- For debugging.
 
   // DQ (1/21/2008): Added access function to save the raw token stream
   // from the lex pass.
   void set_rawTokenStream(LexTokenStreamTypePointer s);
   LexTokenStreamTypePointer get_rawTokenStream();
-
-  // This function processes the token stream to generate the input for
-  // what weaves the CPP directives and comments into the AST.  All other
-  // tokens are ignore in this pass.
-  void
-  generatePreprocessorDirectivesAndCommentsForAST(const std::string &filename);
-
-  // DQ (11/26/2008): This is old code!
-  // Collection comments and CPP directives for fixed format (easier
-  // case) void
-  // collectFixedFormatPreprocessorDirectivesAndCommentsForAST( const
-  // std::string & filename );
 
   // DQ (11/16/2008): Adding support for recognition of CPP directives
   // outside of the lex tokenization.
@@ -449,7 +338,6 @@ public:
   // DQ (12/15/2012): traverse the attributeList and process all of the
   // #line directives to generate a list of file ids that should be
   // considered equivalent to that of the input source file's filename.
-  // std::set<int> generateFileIdListFromLineDirectives();
   void generateFileIdListFromLineDirectives();
 
   // DQ (12/15/2012): Added access function.
@@ -458,10 +346,6 @@ public:
   // DQ (9/29/2013): Added to support adding processed CPP directives and
   // comments as tokens to token list.
   PreprocessingInfo *lastElement();
-
-  // DQ (1/15/2015): Adding support for token-based unparsing. Access
-  // function for new data member. bool isTransformation() const; void
-  // setAsTransformation(); void unsetAsTransformation();
 };
 
 //
@@ -470,38 +354,22 @@ public:
 //
 class ROSEAttributesListContainer {
 private:
-  // DQ replaced use of old list class with STL
-  // std::vector<ROSEAttributesList*> attributeListList;
-  // std::map<std::string,ROSEAttributesList*>* attrMap;
   std::map<std::string, ROSEAttributesList *> attributeListMap;
 
 public:
   ROSEAttributesListContainer();
+  ROSEAttributesListContainer(const ROSEAttributesListContainer &source);
+  ROSEAttributesListContainer &
+  operator=(const ROSEAttributesListContainer &) = delete;
   ~ROSEAttributesListContainer();
-  // void addList ( ROSEAttributesList* listPointer );
   void addList(std::string fileName, ROSEAttributesList *listPointer);
-  // void addList(ROSEAttributesList &aRef);
-  // void insertList(ROSEAttributesList &aRef);
-  // ROSEAttributesList* operator[](int i);
-  // ROSEAttributesList* findList ( const std::string & fName );
-
-  // Check to see if the ROSEAttributesList for the fName (filename) is in the
-  // container
-  bool isInList(const std::string &fName);
-
-  // int size(void);
-  // int getLength(void);
-  void dumpContents(void); // [DT] 3/16/2000 -- For debugging.
   void deepClean(void);
   void clean(void);
   ROSEAttributesList &operator[](const std::string &fName);
 
-  // Access function for list
-  // std::vector<ROSEAttributesList*> & getList() { return attributeListList; };
   std::map<std::string, ROSEAttributesList *> &getList() {
     return attributeListMap;
   };
-  void display(const std::string &label); // DQ 02/18/2001 -- For debugging.
 };
 
 #endif

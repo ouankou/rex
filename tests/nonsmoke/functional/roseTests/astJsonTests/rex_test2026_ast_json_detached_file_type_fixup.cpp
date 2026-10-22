@@ -1,5 +1,5 @@
 #include "astJson/sageAstJson.h"
-#include "fixupTypes.h"
+#include "astPostProcessing.h"
 #include "rose.h"
 
 #include <cstring>
@@ -55,6 +55,19 @@ SgClassDeclaration *findDetachedForwardDeclaration(SgNode *root) {
   return nullptr;
 }
 
+void requireSharedClassType(SgClassDeclaration *declaration) {
+  ROSE_ASSERT(declaration != nullptr);
+  auto *definition =
+      isSgClassDeclaration(declaration->get_definingDeclaration());
+  auto *first =
+      isSgClassDeclaration(declaration->get_firstNondefiningDeclaration());
+  ROSE_ASSERT(definition != nullptr && first != nullptr);
+  ROSE_ASSERT(declaration->get_type() != nullptr);
+  ROSE_ASSERT(declaration->get_type() == definition->get_type());
+  ROSE_ASSERT(declaration->get_type() == first->get_type());
+  ROSE_ASSERT(declaration->get_type()->get_declaration() == first);
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
@@ -70,20 +83,23 @@ int main(int argc, char **argv) {
   SgSourceFile *old_file = firstSourceFile(project);
   SgClassDeclaration *old_forward = findDetachedForwardDeclaration(old_file);
   ROSE_ASSERT(old_forward != nullptr);
+  requireSharedClassType(old_forward);
 
   SgSourceFile *new_file = Rose::AstJson::roundTripSourceFile(
       old_file, Rose::AstJson::Checkpoint::PreOmpConstruction);
   ROSE_ASSERT(new_file != nullptr);
   ROSE_ASSERT(new_file != old_file);
-  ROSE_ASSERT(old_file->get_parent() == nullptr);
+  ROSE_ASSERT(!SgNode::isLiveNode(old_file));
+  ROSE_ASSERT(!SgNode::isLiveNode(old_forward));
   ROSE_ASSERT(new_file->get_parent() != nullptr);
+  SgClassDeclaration *new_forward = findDetachedForwardDeclaration(new_file);
+  requireSharedClassType(new_forward);
+  SgClassType *published_type = new_forward->get_type();
 
-  SgClassType *sentinel_type = new SgClassType(old_forward);
-  old_forward->set_type(sentinel_type);
+  AstPostProcessing(project);
 
-  resetTypesInAST();
-
-  ROSE_ASSERT(old_forward->get_type() == sentinel_type);
+  ROSE_ASSERT(new_forward->get_type() == published_type);
+  requireSharedClassType(new_forward);
   ROSE_ASSERT(firstSourceFile(project) == new_file);
   return 0;
 }

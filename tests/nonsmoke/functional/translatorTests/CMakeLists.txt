@@ -1,4 +1,3 @@
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES})
 
 if(ENABLE-C)
   add_executable(bug125 bug125.C)
@@ -71,8 +70,6 @@ if(ENABLE-C)
   add_test(
     NAME testqualifiedName
     COMMAND qualifiedName -c ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/OpenMP_tests/jacobi.c)
-  if(NOT HAVE_SYSTEM_TIME_H)
-  endif()
 
   add_test(
     NAME Translator_testConstDeclarations

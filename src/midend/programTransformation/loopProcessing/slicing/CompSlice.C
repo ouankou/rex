@@ -1,5 +1,6 @@
 
 #include <set>
+#include <vector>
 
 #include "ObserveObject.h"
 
@@ -297,30 +298,34 @@ LoopStepInfo SliceLoopStep(const CompSlice *slice) {
 }
 
 SymbolicVar SliceLoopIvar(AstInterface &fa, const CompSlice *slice) {
-  typedef std::set<std::string, std::less<std::string>> nameset;
-  nameset sliceVars, usedVars;
+  std::vector<SymbolicVar> sliceVars;
+  std::set<AstNodePtr> usedVars;
   CompSlice::ConstLoopIterator loopIter = slice->GetConstLoopIterator();
   LoopTreeInterface looptreeInterface;
   for (LoopTreeNode *loop; (loop = loopIter.Current()); loopIter.Advance()) {
-    std::string name = loop->GetLoopInfo()->GetVar().GetVarName();
-    sliceVars.insert(name);
+    SymbolicVar variable = loop->GetLoopInfo()->GetVar();
+    ROSE_ASSERT(variable.GetVarDeclaration() != AST_NULL);
+    sliceVars.push_back(variable);
     CompSlice::ConstStmtIterator stmtIter = loopIter.GetConstStmtIterator();
     for (LoopTreeNode *stmt; (stmt = stmtIter.Current()); stmtIter.Advance()) {
       for (LoopTreeNode *l = GetEnclosingLoop(stmt, looptreeInterface); l != 0;
            l = GetEnclosingLoop(l, looptreeInterface)) {
         if (l == loop)
           continue;
-        name = l->GetLoopInfo()->GetVar().GetVarName();
-        usedVars.insert((name));
+        AstNodePtr declaration = l->GetLoopInfo()->GetVar().GetVarDeclaration();
+        ROSE_ASSERT(declaration != AST_NULL);
+        usedVars.insert(declaration);
       }
     }
   }
-  for (nameset::iterator p = sliceVars.begin(); p != sliceVars.end(); ++p) {
-    if (usedVars.find(*p) == usedVars.end())
-      return SymbolicVar(*p, AST_NULL);
-    ;
+  for (const SymbolicVar &variable : sliceVars) {
+    if (usedVars.find(variable.GetVarDeclaration()) == usedVars.end())
+      return variable;
   }
-  return SymbolicVar(fa.NewVar(fa.GetType("int")), AST_NULL);
+  AstNodePtr symbol;
+  std::string name = fa.NewVar(fa.GetType("int"), "", false, true, AST_NULL,
+                               AST_NULL, &symbol);
+  return SymbolicVar(name, AST_NULL, symbol);
 }
 
 CompSlice::ConstLoopIterator::ConstLoopIterator(LoopTreeNode *root)

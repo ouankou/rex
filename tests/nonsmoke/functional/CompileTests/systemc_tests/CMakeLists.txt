@@ -9,14 +9,3 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/input_member_function.cpp
 )
-
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input_hello_world.C" AND
-   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include")
-  add_test(
-    NAME systemc_input_hello_world
-    COMMAND testTranslator -w
-      -I${CMAKE_BINARY_DIR}
-      -I${CMAKE_CURRENT_SOURCE_DIR}/include
-      -c ${CMAKE_CURRENT_SOURCE_DIR}/input_hello_world.C
-  )
-endif()

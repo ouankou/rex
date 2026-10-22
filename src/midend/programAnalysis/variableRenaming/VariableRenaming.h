@@ -80,15 +80,9 @@ public:
    *
    * @param other The attribute to copy from.
    */
-  VarUniqueName(const VarUniqueName &other)
-      : AstAttribute(other), usesThis(false) {
-    key.assign(other.key.begin(), other.key.end());
-  }
+  VarUniqueName(const VarUniqueName &other) = default;
 
-  VarUniqueName *copy() const override {
-    VarUniqueName *newName = new VarUniqueName(*this);
-    return newName;
-  }
+  VarUniqueName *copy() const override { return new VarUniqueName(*this); }
 
   AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
     return CONTAINER_OWNERSHIP;
@@ -862,17 +856,15 @@ public:
    *   Static Utility Functions
    */
 
-  /** Find if the given prefix is a prefix of the given name.
-   *
-   * This will return whether the given name has the given prefix inside it.
+  /** Check whether the given name begins with the given prefix.
    *
    * ex. a.b.c has prefix a.b, but not a.c
    *
-   * @param name The name to search.
-   * @param prefix The prefix to search for.
-   * @return Whether or not the prefix is in this name.
+   * @param name The name to check.
+   * @param prefix The required prefix.
+   * @return Whether the name begins with the prefix.
    */
-  static bool isPrefixOfName(VarName name, VarName prefix);
+  static bool isPrefixOfName(const VarName &name, const VarName &prefix);
 
   /** Get the uniqueName attribute for the given node.
    *
@@ -888,17 +880,10 @@ public:
    */
   static VarName getVarName(SgNode *node);
 
-  /** Gets whether or not the function is from a library.
-   *
-   * This method checks if the variable is compiler generated, and if its
-   * filename has "/include/" in it. If so, it will return true. Otherwise, it
-   * returns false.
-   *
-   * @param node The function to check.
-   * @return true if initName is from a library, false if otherwise.
+  /** Exclude generated declarations and declarations owned by system headers.
    */
   static bool isFromLibrary(SgFunctionDeclaration *node);
-  static bool isFromLibraryFile(const Sg_File_Info *info);
+  static bool isFromLibrary(SgInitializedName *name);
 
   /** Get an AST fragment containing the appropriate varRefs and Dot/Arrow ops
    * to access the given variable.

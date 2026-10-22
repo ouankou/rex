@@ -18,7 +18,6 @@
 #include "Outliner.hh"
 
 #include "Preprocess.hh"
-// #include "Transform.hh"
 
 #include "commandline_processing.h"
 
@@ -68,8 +67,6 @@ bool suppress_autotuning_header =
            // output of #include "autotuning_lib.h".
 
 std::string MASTER_SHARED_LIB_NAME;
-// DQ (7/13/2021): Save the SgSourceFile used when handling dynamic libraries.
-SgSourceFile *saved_source_file_for_dynamic_library = NULL;
 }; // namespace Outliner
 
 // =====================================================================
@@ -184,14 +181,11 @@ Outliner::Result Outliner::outline(SgStatement *s,
   }
 
   SgBasicBlock *s_post = preprocess(s);
-  // cout<<"Debug Outliner::outline() preprocessed statement is:"<<s_post<<endl;
   ROSE_ASSERT(s_post);
   if (preproc_only_) {
     Outliner::Result fake;
     return fake;
   } else {
-    // return Transform::outlineBlock (s_post, func_name);
-
     Outliner::Result returnResult =
         outlineBlock(s_post, func_name, original_directives);
 
@@ -499,35 +493,13 @@ SgBasicBlock *Outliner::preprocess(SgStatement *s) {
  *  Container to store the results of one outlining transformation.
  */
 
-// DQ (8/7/2019): Store data required to support defering the transformation to
-// insert the outlined function prototypes.
-Outliner::Result::Result(void)
-    : decl_(0), call_(0), target_class_member(NULL),
-      new_function_prototype(NULL) {}
-
-// DQ (11/19/2020): New code after moving the DeferredTransformation support to
-// SageInterface.
+Outliner::Result::Result(void) = default;
 Outliner::Result::Result(
     SgFunctionDeclaration *decl, SgStatement *call, SgFile *file /*=NULL*/,
     SageInterface::DeferredTransformation input_deferredTransformation)
-    : decl_(decl), call_(call), file_(file), target_class_member(NULL),
-      new_function_prototype(NULL),
+    : decl_(decl), call_(call), file_(file),
       deferredTransformation(input_deferredTransformation) {}
 
-// DQ (8/15/2019): Adding support to defere the transformations in header files
-// (a performance improvement). DQ (8/7/2019): Store data required to support
-// defering the transformation to insert the outlined function prototypes.
-Outliner::Result::Result(const Result &b)
-    : decl_(b.decl_), call_(b.call_),
-      target_class_member(b.target_class_member),
-      new_function_prototype(b.target_class_member),
-      deferredTransformation(b.deferredTransformation) {}
+Outliner::Result::Result(const Result &b) = default;
 
 bool Outliner::Result::isValid(void) const { return decl_ && call_; }
-
-/* =====================================================================
- *  Container to store the support for defering the transformations to later (on
- * header files that we will want to unparse).
- */
-
-// eof

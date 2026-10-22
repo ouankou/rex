@@ -1,12 +1,6 @@
-/* unparser.C
- * Contains the implementation of the constructors, destructor, formatting
- * functions, and fucntions that unparse directives.
- */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include "unparser.h"
-// #include "unparse_format.h"
 
 #include "unparseFormatHelp.h"
 
@@ -15,7 +9,6 @@
 #include <iomanip>
 #include <utility>
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 using namespace Rose;
 
@@ -735,52 +728,6 @@ void UnparseFormat::disable_linewrap() { set_linewrap(std::nullopt); }
 
 std::optional<int> UnparseFormat::get_linewrap() const { return linewrap; }
 
-void UnparseFormat::outputHiddenListData(Unparser *unp,
-                                         SgScopeStatement *inputScope) {
-  // debugging support
-  unp->cur << "\n /* Hidden declaration list in " << inputScope->class_name()
-           << ": size      = "
-           << inputScope->get_hidden_declaration_list().size() << " */ ";
-  unp->cur << "\n /* Hidden type list in " << inputScope->class_name()
-           << ": size             = "
-           << inputScope->get_hidden_type_list().size() << " */ ";
-  unp->cur << "\n /* Hidden type elaboration list in "
-           << inputScope->class_name()
-           << ": size = " << inputScope->get_type_elaboration_list().size()
-           << " */ ";
-
-  for (set<SgSymbol *>::iterator i =
-           inputScope->get_hidden_declaration_list().begin();
-       i != inputScope->get_hidden_declaration_list().end(); i++) {
-    printf("In hidden_declaration_list: i = %p = %s = %s \n", *i,
-           (*i)->class_name().c_str(), SageInterface::get_name(*i).c_str());
-    unp->cur << "\n /* Hidden declaration list: i = "
-             << StringUtility::numberToString(*i) << " = "
-             << (*i)->class_name().c_str() << " = "
-             << SageInterface::get_name(*i).c_str() << " */ ";
-  }
-  for (set<SgSymbol *>::iterator i = inputScope->get_hidden_type_list().begin();
-       i != inputScope->get_hidden_type_list().end(); i++) {
-    printf("In hidden_type_list:        i = %p = %s = %s \n", *i,
-           (*i)->class_name().c_str(), SageInterface::get_name(*i).c_str());
-    unp->cur << "\n /* Hidden declaration list: i = "
-             << StringUtility::numberToString(*i) << " = "
-             << (*i)->class_name().c_str() << " = "
-             << SageInterface::get_name(*i).c_str() << " */ ";
-  }
-  for (set<SgSymbol *>::iterator i =
-           inputScope->get_type_elaboration_list().begin();
-       i != inputScope->get_type_elaboration_list().end(); i++) {
-    printf("In hidden_elaboration_list: i = %p = %s = %s \n", *i,
-           (*i)->class_name().c_str(), SageInterface::get_name(*i).c_str());
-    unp->cur << "\n /* Hidden declaration list: i = "
-             << StringUtility::numberToString(*i) << " = "
-             << (*i)->class_name().c_str() << " = "
-             << SageInterface::get_name(*i).c_str() << " */ ";
-  }
-  unp->cur << "\n ";
-}
-
 bool UnparseFormat::formatHelp(SgLocatedNode *node, SgUnparse_Info &info,
                                FormatOpt opt) {
   ASSERT_not_null(node);
@@ -831,62 +778,11 @@ bool UnparseFormat::formatHelp(SgLocatedNode *node, SgUnparse_Info &info,
   return false;
 }
 
-string UnparseFormat::formatOptionToString(FormatOpt opt) {
-  string s;
-  switch (opt) {
-  case FORMAT_AFTER_STMT:
-    s = "FORMAT_AFTER_STMT";
-    break;
-  case FORMAT_BEFORE_STMT:
-    s = "FORMAT_BEFORE_STMT";
-    break;
-  case FORMAT_BEFORE_DIRECTIVE:
-    s = "FORMAT_BEFORE_DIRECTIVE";
-    break;
-  case FORMAT_AFTER_DIRECTIVE:
-    s = "FORMAT_AFTER_DIRECTIVE";
-    break;
-  case FORMAT_BEFORE_BASIC_BLOCK1:
-    s = "FORMAT_BEFORE_BASIC_BLOCK1";
-    break;
-  case FORMAT_AFTER_BASIC_BLOCK1:
-    s = "FORMAT_AFTER_BASIC_BLOCK1";
-    break;
-  case FORMAT_BEFORE_BASIC_BLOCK2:
-    s = "FORMAT_BEFORE_BASIC_BLOCK2";
-    break;
-  case FORMAT_AFTER_BASIC_BLOCK2:
-    s = "FORMAT_AFTER_BASIC_BLOCK2";
-    break;
-  case FORMAT_BEFORE_NESTED_STATEMENT:
-    s = "FORMAT_BEFORE_NESTED_STATEMENT";
-    break;
-  case FORMAT_AFTER_NESTED_STATEMENT:
-    s = "FORMAT_AFTER_NESTED_STATEMENT";
-    break;
-
-  default: {
-    printf("Error: default reached in switch for "
-           "UnparseFormat::formatOptionToString ... \n");
-    ROSE_ABORT();
-  }
-  }
-
-  return s;
-}
-
 void UnparseFormat::format(SgLocatedNode *node, SgUnparse_Info &info,
                            FormatOpt opt) {
   // DQ (added comments): this function addes new line formatting to the unparse
   // statements depending on the type of statement and the options with which it
   // is called.
-
-  if (info.get_outputCodeGenerationFormatDelimiters() == true) {
-    // printf ("In UnparseFormat::format(%s,opt=%d)
-    // \n",node->class_name().c_str(),opt);
-    // (*this) << formatOptionToString(opt) << ":" << node->class_name() << "[";
-    (*this) << formatOptionToString(opt) << ":" << node->class_name() << "[";
-  }
 
   // DQ (3/18/2006): The default is TABINDENT but we get a value from formatHelp
   // if available
@@ -974,11 +870,5 @@ void UnparseFormat::format(SgLocatedNode *node, SgUnparse_Info &info,
       ROSE_ABORT();
     }
     }
-  }
-
-  if (info.get_outputCodeGenerationFormatDelimiters() == true) {
-    // printf ("Leaving UnparseFormat::format(%s,opt=%d)
-    // \n",node->class_name().c_str(),opt);
-    (*this) << "]" << node->class_name();
   }
 }

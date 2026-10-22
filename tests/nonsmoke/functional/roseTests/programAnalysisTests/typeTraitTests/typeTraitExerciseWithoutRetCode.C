@@ -102,7 +102,6 @@ public:
         nameToFpMap["__is_trivial"]              = SageInterface::IsTrivial;
         nameToFpMap["__is_union"]                = SageInterface::IsUnion;
         //        nameToFpMap["__is_base_of"] = IsBaseOf;
-        //      SgType *  UnderlyingType(SgType *type);
     }
     
     void visit(SgNode * node) {

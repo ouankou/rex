@@ -1,6 +1,5 @@
 #include "sage3basic.h"
 
-#include "astPostProcessing.h"
 #include "sageBuilder.h"
 
 #undef SgNULL_FILE
@@ -10,56 +9,49 @@
 
 using namespace std;
 
-typedef std::set<SgLabelStatement *> SgLabelStatementPtrSet;
-
 class FlattenBlocksVisitor : public AstSimpleProcessing {
 public:
-  virtual void visit(SgNode *node) {
-    if (isSgBasicBlock(node)) {
-      SgBasicBlock *c = isSgBasicBlock(node);
-      SgStatementPtrList newStatements;
-      for (SgStatementPtrList::const_iterator i = c->get_statements().begin();
-           i != c->get_statements().end(); ++i) {
-        if (isSgBasicBlock(*i)) {
-          SgBasicBlock *c2 = isSgBasicBlock(*i);
-          const SgStatementPtrList &c2Stmts = c2->get_statements();
-          // We need to prevent a declaration from immediately following a
-          // label, as that is illegal
-          if (!newStatements.empty() &&
-              isSgLabelStatement(newStatements.back()) && !c2Stmts.empty() &&
-              isSgVariableDeclaration(c2Stmts.front())) {
-            newStatements.push_back(SageBuilder::buildNullStatement());
-          }
-          newStatements.insert(newStatements.end(),
-                               isSgBasicBlock(*i)->get_statements().begin(),
-                               isSgBasicBlock(*i)->get_statements().end());
-        } else {
-          if (!newStatements.empty() &&
-              isSgLabelStatement(newStatements.back()) &&
-              isSgVariableDeclaration(*i)) {
-            newStatements.push_back(SageBuilder::buildNullStatement());
-          }
-          newStatements.push_back(*i);
-        }
+  void visit(SgNode *node) override {
+    auto *target = isSgBasicBlock(node);
+    if (target == nullptr)
+      return;
+    const SgStatementPtrList original = target->get_statements();
+    for (SgStatement *statement : original) {
+      auto *nested = isSgBasicBlock(statement);
+      if (nested == nullptr)
+        continue;
+      ROSE_ASSERT(nested->get_parent() == target);
+      // Semantic auxiliary declarations retain this lexical scope's identity.
+      // Such a scope cannot be removed by a lexical-only flattening operation.
+      if (auto *auxiliary = nested->get_auxiliary_declarations()) {
+        auxiliary->validate_semantic_non_output_role();
+        continue;
       }
-      if (!newStatements.empty() && isSgLabelStatement(newStatements.back())) {
-        // Prevent block from ending with a label
-        newStatements.push_back(SageBuilder::buildNullStatement());
-      }
-      for (SgStatementPtrList::const_iterator i = newStatements.begin();
-           i != newStatements.end(); ++i) {
-        (*i)->set_parent(c);
-      }
-      c->get_statements() = newStatements;
-      SageInterface::detachAllSymbolsFromScope(c);
-      SageInterface::rebuildSymbolTable(c);
+      const auto &children = nested->get_statements();
+      if (std::any_of(children.begin(), children.end(), [](SgStatement *child) {
+            return isSgDeclarationStatement(child) != nullptr;
+          }))
+        continue;
+      auto &statements = target->get_statements();
+      auto position = std::find(statements.begin(), statements.end(), nested);
+      ROSE_ASSERT(position != statements.end());
+      const size_t index = position - statements.begin();
+      const size_t oldSize = statements.size();
+      const size_t movedSize = nested->get_statements().size();
+      SageInterface::moveStatementsBetweenBlocks(nested, target);
+      ROSE_ASSERT(nested->get_statements().empty());
+      ROSE_ASSERT(statements.size() == oldSize + movedSize);
+      // The transfer appends in source order. Put those already-owned children
+      // at the removed block's position without changing their ownership again.
+      std::rotate(statements.begin() + index + 1, statements.begin() + oldSize,
+                  statements.end());
+      SageInterface::removeStatement(nested);
+      SageInterface::deleteAST(nested,
+                               SageInterface::DeleteAstMode::kRequireIsolated);
     }
   }
 };
 
-// Flatten nested blocks of code in a program.  This code requires that
-// variable names in the region being processed are already distinct, and
-// it may extend variable lifetimes to the end of the outer block of code.
 void flattenBlocks(SgNode *n) { FlattenBlocksVisitor().traverse(n, postorder); }
 
 // Internal routine to check whether a given variable declaration is a
@@ -105,19 +97,16 @@ public:
         return;
       SgName name(n2->get_name());
       SgSymbolTable *symtab = n2->get_scope()->get_symbol_table();
-      SgSymbol *sym = symtab->find(n2);
-      if (sym) {
-        symtab->remove(sym);
-      }
+      auto *symbol = isSgVariableSymbol(symtab->find(n2));
+      ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == n2);
+      ROSE_ASSERT(symbol->get_parent() == symtab);
       name << "__" << counter++;
-
+      // Reindex the same symbol so every existing reference keeps its exact
+      // identity through the rename.
+      symtab->remove(symbol);
       n2->set_name(name);
-      SgVariableSymbol *n2symbol = new SgVariableSymbol(n2);
-      n2symbol->set_parent(symtab);
-      symtab->insert(name, n2symbol);
-
-      // printf ("RenameVariablesVisitor(): name = %s scope = %p = %s
-      // \n",name.str(),savedScope,savedScope->class_name().c_str());
+      symtab->insert(name, symbol);
+      ROSE_ASSERT(symtab->find(n2) == symbol);
       ASSERT_not_null(n2->get_parent());
       ASSERT_not_null(n2->get_file_info());
     }
@@ -179,7 +168,6 @@ public:
                 static_cast<void *>(symtab));
         ROSE_ABORT();
       }
-      old_symbol->set_parent(symtab);
       symtab->insert(name, old_symbol);
       if (old_symbol->get_parent() != symtab || !symtab->exists(old_symbol)) {
         fprintf(stderr,
@@ -220,12 +208,7 @@ public:
              ++i) {
           if (isSgExprStatement(*i)) {
             SgExpression *expr = isSgExprStatement(*i)->get_expression();
-            if (isSgIntVal(expr) || isSgNullExpression(expr) ||
-                isSgVarRefExp(expr) ||
-                (isSgNotOp(expr) &&
-                 isSgVarRefExp(
-                     isSgNotOp(expr)->get_operand()))) { // This is what null
-                                                         // statements are
+            if (isSgIntVal(expr) || isSgNullExpression(expr)) {
               SgStatementPtrList::iterator inext = i, iprev = i;
               ++inext;
               if (iprev != stmts.begin())
@@ -298,25 +281,15 @@ bool isDeclarationOf(SgVariableDeclaration *decl, SgInitializedName *var) {
 bool isPotentiallyModifiedDuringLifeOf(SgBasicBlock *sc,
                                        SgInitializedName *toCheck,
                                        SgInitializedName *lifetime) {
+  auto *symbol = isSgVariableSymbol(toCheck->get_symbol_from_symbol_table());
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == toCheck);
   SgStatementPtrList &stmts = sc->get_statements();
   bool inLiveRange = false;
   for (SgStatementPtrList::reverse_iterator i = stmts.rbegin();
        i != stmts.rend(); ++i) {
     if (containsVariableReference(*i, lifetime))
       inLiveRange = true;
-    SgVariableSymbol *toCheckSym = new SgVariableSymbol(toCheck);
-    SgVarRefExp *toCheckVr = new SgVarRefExp(SgNULL_FILE, toCheckSym);
-
-    bool result = false;
-    if (inLiveRange && isPotentiallyModified(toCheckVr, *i)) {
-      result = true;
-    }
-    delete toCheckSym;
-    toCheckSym = nullptr;
-    toCheckVr->set_symbol(nullptr);
-    delete toCheckVr;
-    toCheckVr = nullptr;
-    if (result)
+    if (inLiveRange && isPotentiallyModified(symbol, *i))
       return true;
 
     if (isSgVariableDeclaration(*i) &&
@@ -326,6 +299,67 @@ bool isPotentiallyModifiedDuringLifeOf(SgBasicBlock *sc,
   return false;
 }
 
+static bool canPropagateLambdaCaptureValue(const SgExpression *expression) {
+  ROSE_ASSERT(expression != nullptr);
+  for (const SgNode *child = expression; child->get_parent() != nullptr;
+       child = child->get_parent()) {
+    const auto *capture = isSgLambdaCapture(child->get_parent());
+    if (capture == nullptr)
+      continue;
+    ROSE_ASSERT(capture->get_capture_variable() != nullptr &&
+                capture->get_capture_variable()->get_parent() == capture);
+    ROSE_ASSERT(capture->get_capture_initializer() != nullptr &&
+                capture->get_capture_initializer()->get_parent() == capture);
+    ROSE_ASSERT(capture->get_closure_variable() == nullptr ||
+                capture->get_closure_variable()->get_parent() == capture);
+    const unsigned matchingEdges =
+        static_cast<unsigned>(capture->get_capture_variable() == child) +
+        static_cast<unsigned>(capture->get_capture_initializer() == child) +
+        static_cast<unsigned>(capture->get_closure_variable() == child);
+    if (matchingEdges != 1) {
+      fprintf(stderr,
+              "REX_INLINE_INVARIANT[lambda-capture-expression-owner]: "
+              "capture=%p variable=%p matches %u owned expression edges\n",
+              static_cast<const void *>(capture),
+              static_cast<const void *>(expression), matchingEdges);
+      ROSE_ABORT();
+    }
+    return capture->get_is_init_capture() &&
+           capture->get_capture_initializer() == child;
+  }
+  return true;
+}
+
+static void replaceLambdaCaptureInitializer(SgLambdaCapture *capture,
+                                            SgVarRefExp *variable,
+                                            SgExpression *replacement) {
+  ROSE_ASSERT(capture != nullptr && variable != nullptr &&
+              variable->get_parent() == capture);
+  ROSE_ASSERT(replacement != nullptr && replacement->get_parent() == nullptr);
+  if (capture->get_capture_initializer() != variable ||
+      !capture->get_is_init_capture()) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[lambda-capture-expression-role]: "
+            "capture=%p variable=%p attempted value replacement through a "
+            "capture identity edge\n",
+            static_cast<void *>(capture), static_cast<void *>(variable));
+    ROSE_ABORT();
+  }
+  replacement->set_parent(capture);
+  capture->set_capture_initializer(replacement);
+  variable->set_parent(nullptr);
+  if (replacement->get_parent() != capture ||
+      capture->get_capture_initializer() != replacement) {
+    fprintf(stderr,
+            "REX_INLINE_INVARIANT[lambda-capture-expression-owner]: "
+            "capture=%p did not adopt replacement=%p\n",
+            static_cast<void *>(capture), static_cast<void *>(replacement));
+    ROSE_ABORT();
+  }
+  SageInterface::deleteAST(variable,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+}
+
 // Find all variables which are set as references to other variables and
 // replace uses of the reference variable with what it is a reference to.
 class FindReferenceVariablesVisitor : public AstSimpleProcessing {
@@ -333,6 +367,8 @@ public:
   virtual void visit(SgNode *n) {
     if (isSgVarRefExp(n)) {
       SgVarRefExp *copy_vr = isSgVarRefExp(n);
+      if (!canPropagateLambdaCaptureValue(copy_vr))
+        return;
       assert(copy_vr->get_symbol());
       SgInitializedName *copy = copy_vr->get_symbol()->get_declaration();
       assert(copy);
@@ -340,10 +376,6 @@ public:
         return; // Fail if non-reference
 
       SgInitializer *copyinit = copy->get_initializer();
-      SgNode *copyscope_ = copy->get_parent()->get_parent();
-      while (!isSgScopeStatement(copyscope_))
-        copyscope_ = copyscope_->get_parent();
-      // SgScopeStatement* copyscope = isSgScopeStatement(copyscope_);
       if (isSgAssignInitializer(copyinit)) {
         SgAssignInitializer *init = isSgAssignInitializer(copyinit);
         SgExpression *orig_expr = init->get_operand();
@@ -363,10 +395,13 @@ public:
           SgExpression *orig_copy =
               isSgExpression(SageInterface::deepCopy(orig_expr));
           ASSERT_not_null(orig_copy);
-          orig_copy->set_parent(copy_vr->get_parent());
           orig_copy->set_lvalue(copy_vr->get_lvalue());
-          isSgExpression(copy_vr->get_parent())
-              ->replace_expression(copy_vr, orig_copy);
+          if (auto *capture = isSgLambdaCapture(copy_vr->get_parent())) {
+            replaceLambdaCaptureInitializer(capture, copy_vr, orig_copy);
+          } else {
+            ROSE_ASSERT(isSgExpression(copy_vr->get_parent()) != nullptr);
+            SageInterface::replaceExpression(copy_vr, orig_copy);
+          }
         }
       }
     }
@@ -380,9 +415,13 @@ public:
   virtual void visit(SgNode *n) {
     if (isSgVarRefExp(n)) {
       SgVarRefExp *copy_vr = isSgVarRefExp(n);
+      if (!canPropagateLambdaCaptureValue(copy_vr))
+        return;
       assert(copy_vr->get_symbol());
       SgInitializedName *copy = copy_vr->get_symbol()->get_declaration();
       assert(copy);
+      if (SageInterface::isVolatileType(copy->get_type()))
+        return;
       SgInitializer *copyinit = copy->get_initializer();
       SgScopeStatement *copyscope =
           SageInterface::getScope(copy->get_parent()->get_parent());
@@ -397,6 +436,8 @@ public:
             SgVarRefExp *orig_vr = isSgVarRefExp(orig_expr);
             SgInitializedName *orig = orig_vr->get_symbol()->get_declaration();
             assert(orig);
+            if (SageInterface::isVolatileType(orig->get_type()))
+              return;
             SgNode *origscope = orig->get_parent()->get_parent();
             assert(origscope);
             if (!hasAddressTaken(orig_vr, origscope) &&
@@ -413,91 +454,31 @@ public:
 
           SgLambdaCapture *lambdaCapture =
               isSgLambdaCapture(copy_vr->get_parent());
-          bool isSourceClosureVariable = false;
-          if (lambdaCapture != nullptr) {
-            const bool isCaptureVariable =
-                lambdaCapture->get_capture_variable() == copy_vr;
-            isSourceClosureVariable =
-                lambdaCapture->get_source_closure_variable() == copy_vr;
-            const bool isClosureVariable =
-                lambdaCapture->get_closure_variable() == copy_vr;
-            const unsigned matchingEdges =
-                static_cast<unsigned>(isCaptureVariable) +
-                static_cast<unsigned>(isSourceClosureVariable) +
-                static_cast<unsigned>(isClosureVariable);
-            if (matchingEdges != 1) {
-              fprintf(stderr,
-                      "REX_INLINE_INVARIANT[lambda-capture-expression-owner]: "
-                      "capture=%p variable=%p matches %u owned expression "
-                      "edges\n",
-                      static_cast<void *>(lambdaCapture),
-                      static_cast<void *>(copy_vr), matchingEdges);
-              ROSE_ABORT();
-            }
-
-            // The capture and closure expressions name the captured entity;
-            // replacing either with its value would produce malformed capture
-            // syntax and erase the identity needed to bind the lambda body.
-            // Only an init-capture's source initializer is a value expression
-            // eligible for copy propagation.
-            if (!isSourceClosureVariable) {
-              shouldReplace = false;
-            }
-          }
 
           if (shouldReplace) {
             assert(orig_expr);
             SgExpression *orig_copy =
                 isSgExpression(SageInterface::deepCopy(orig_expr));
             ASSERT_not_null(orig_copy);
-            orig_copy->set_parent(copy_vr->get_parent());
             orig_copy->set_lvalue(copy_vr->get_lvalue());
 
             ASSERT_not_null(copy_vr);
             ASSERT_not_null(copy_vr->get_parent());
-            // ROSE_ASSERT(isSgExpression(copy_vr->get_parent()) != NULL);
-
-            // DQ (12/15/2006): Need to handle cases where the parent is a
-            // SgStatement or a SgExpression (or make it an error).
-            // isSgExpression(copy_vr->get_parent())->replace_expression(copy_vr,
-            // orig_copy);
-            SgStatement *statement = isSgStatement(copy_vr->get_parent());
-            if (statement != nullptr) {
-              statement->replace_expression(copy_vr, orig_copy);
+            SgNode *owner = copy_vr->get_parent();
+            if (isSgStatement(owner) != nullptr ||
+                isSgExpression(owner) != nullptr) {
+              SageInterface::replaceExpression(copy_vr, orig_copy);
+            } else if (lambdaCapture != nullptr) {
+              replaceLambdaCaptureInitializer(lambdaCapture, copy_vr,
+                                              orig_copy);
             } else {
-              SgExpression *expression = isSgExpression(copy_vr->get_parent());
-              if (expression != nullptr) {
-                expression->replace_expression(copy_vr, orig_copy);
-              } else if (lambdaCapture != nullptr) {
-                if (!isSourceClosureVariable) {
-                  fprintf(stderr,
-                          "REX_INLINE_INVARIANT[lambda-capture-expression-"
-                          "role]: capture=%p variable=%p attempted value "
-                          "replacement through a capture identity edge\n",
-                          static_cast<void *>(lambdaCapture),
-                          static_cast<void *>(copy_vr));
-                  ROSE_ABORT();
-                }
-                lambdaCapture->set_source_closure_variable(orig_copy);
-                copy_vr->set_parent(NULL);
-                if (orig_copy->get_parent() != lambdaCapture ||
-                    lambdaCapture->get_source_closure_variable() != orig_copy) {
-                  fprintf(stderr,
-                          "REX_INLINE_INVARIANT[lambda-capture-expression-"
-                          "owner]: capture=%p did not adopt replacement=%p\n",
-                          static_cast<void *>(lambdaCapture),
-                          static_cast<void *>(orig_copy));
-                  ROSE_ABORT();
-                }
-              } else {
-                fprintf(stderr,
-                        "REX_INLINE_INVARIANT[copy-propagation-expression-"
-                        "owner]: variable=%p has unsupported owner=%p/%s\n",
-                        static_cast<void *>(copy_vr),
-                        static_cast<void *>(copy_vr->get_parent()),
-                        copy_vr->get_parent()->class_name().c_str());
-                ROSE_ABORT();
-              }
+              fprintf(stderr,
+                      "REX_INLINE_INVARIANT[copy-propagation-expression-"
+                      "owner]: variable=%p has unsupported owner=%p/%s\n",
+                      static_cast<void *>(copy_vr),
+                      static_cast<void *>(copy_vr->get_parent()),
+                      copy_vr->get_parent()->class_name().c_str());
+              ROSE_ABORT();
             }
           }
         }
@@ -536,9 +517,9 @@ public:
                                   const set<SgFunctionDeclaration *> &s)
       : used_decls(u), safe_functions(s) {}
 
-  // Note: this now (11/7/2008) considers pointer derefs and array derefs safe,
-  // which doesn't preserve invalid memory access behavior
   bool isSimpleInitializer(SgExpression *e) {
+    if (SageInterface::isVolatileType(e->get_type()))
+      return false;
     if (isSgVarRefExp(e))
       return true;
     if (isSgValueExp(e))
@@ -590,41 +571,38 @@ public:
   virtual void visit(SgNode *n) {
     if (isSgBasicBlock(n)) {
       SgBasicBlock *bb = isSgBasicBlock(n);
-      bool changes1 = true;
-      while (changes1) {
-        changes1 = false;
-        for (size_t i = 0; i < bb->get_statements().size(); ++i) {
-          SgStatement *stmt = bb->get_statements()[i];
-          if (isSgVariableDeclaration(stmt)) {
-            SgInitializedNamePtrList &vars =
-                isSgVariableDeclaration(stmt)->get_variables();
-            bool changes = true;
-            while (changes) {
-              changes = false;
-              SgInitializedNamePtrList::iterator j;
-              for (j = vars.begin(); j != vars.end(); ++j)
-                if (used_decls.find(*j) == used_decls.end()) {
-                  SgInitializer *init = (*j)->get_initializer();
-                  bool shouldErase = false;
-                  if (!init)
-                    shouldErase = true;
-                  else if (isSgAssignInitializer(init)) {
-                    SgAssignInitializer *init2 = isSgAssignInitializer(init);
-                    // Ensure that init does not have side effects
-                    shouldErase = isSimpleInitializer(init2->get_operand());
-                  }
-                  if (shouldErase) {
-                    removeVariableDeclaration(*j);
-                    --i; // Counteract increment
-                    goto iLoopBottom;
-                    // changes = true;
-                    // break;
-                  }
-                }
+      for (size_t i = 0; i < bb->get_statements().size();) {
+        auto *declaration = isSgVariableDeclaration(bb->get_statements()[i]);
+        bool removed = false;
+        if (declaration != nullptr) {
+          for (SgInitializedName *variable : declaration->get_variables()) {
+            if (used_decls.count(variable) != 0 ||
+                SageInterface::isVolatileType(variable->get_type()))
+              continue;
+            SgInitializer *initializer = variable->get_initializer();
+            bool shouldErase = initializer == nullptr;
+            if (auto *assignment = isSgAssignInitializer(initializer))
+              shouldErase = isSimpleInitializer(assignment->get_operand());
+            if (shouldErase) {
+              auto *symbol = isSgVariableSymbol(
+                  variable->search_for_symbol_from_symbol_table());
+              ROSE_ASSERT(symbol != nullptr);
+              auto *table = isSgSymbolTable(symbol->get_parent());
+              ROSE_ASSERT(table != nullptr && table->exists(symbol));
+              const bool owns_symbol = symbol->get_declaration() == variable;
+              removeVariableDeclaration(variable);
+              if (owns_symbol)
+                table->remove(symbol);
+              SageInterface::deleteAST(
+                  {declaration, owns_symbol ? symbol : nullptr},
+                  SageInterface::DeleteAstMode::kRequireIsolated);
+              removed = true;
+              break;
             }
           }
-        iLoopBottom:;
         }
+        if (!removed)
+          ++i;
       }
     }
   }
@@ -633,8 +611,8 @@ public:
 // In code with declarations such as "int foo = bar", where foo and bar are
 // not modified, replace "foo" with "bar" and remove the declaration
 void simpleCopyAndConstantPropagation(SgNode *top) {
-  FindReferenceVariablesVisitor().traverse(top, preorder);
-  FindCopiesVisitor().traverse(top, preorder);
+  FindReferenceVariablesVisitor().traverse(top, postorder);
+  FindCopiesVisitor().traverse(top, postorder);
   FindUsedDeclarationsVisitor vis;
   vis.traverse(top, preorder);
   RemoveUnusedDeclarationsVisitor(vis.used_decls,
@@ -659,15 +637,11 @@ void removeUnusedVariables(SgNode *top,
 void removeVariableDeclaration(SgInitializedName *initname) {
   SgVariableDeclaration *parent =
       isSgVariableDeclaration(initname->get_parent());
-  assert(parent);
-  SgInitializedNamePtrList &vars = parent->get_variables();
-  SgInitializedNamePtrList::iterator i = vars.begin();
-  for (; i != vars.end(); ++i)
-    if (*i == initname)
-      break;
-  assert(i != vars.end());
+  ROSE_ASSERT(parent != nullptr);
+  const SgInitializedNamePtrList &vars = parent->get_variables();
   ASSERT_require(vars.size() == 1);
-  SageInterface::myRemoveStatement(parent);
+  ROSE_ASSERT(vars.front() == initname);
+  SageInterface::removeStatement(parent);
 }
 
 // Move variable declarations down until just before they are used, and
@@ -705,15 +679,21 @@ public:
                       ASSERT_not_null(newinit);
                       ASSERT_not_null(newinit->get_type());
 
+                      SgExpression *initializer_operand =
+                          isSgExpression(SageInterface::deepCopy(newinit));
+                      if (initializer_operand == nullptr ||
+                          initializer_operand->get_parent() != nullptr) {
+                        fprintf(stderr,
+                                "REX_AST_INVARIANT[inliner-initializer-move]: "
+                                "copied operand is missing or already owned\n");
+                        ROSE_ABORT();
+                      }
                       SgAssignInitializer *i = new SgAssignInitializer(
-                          SgNULL_FILE, newinit, in->get_type());
+                          SgNULL_FILE, initializer_operand, in->get_type());
                       i->set_endOfConstruct(SgNULL_FILE);
 
                       vars[vari]->set_initializer(i);
                       stmts[initi] = decl;
-                      newinit->set_parent(i);
-
-                      i->set_parent(in);
                       ASSERT_not_null(i->get_parent());
 
                       ASSERT_not_null(i->get_file_info());
@@ -721,6 +701,10 @@ public:
                       // Assumes only one var per declaration FIXME
                       ASSERT_require(vars.size() == 1);
                       stmts.erase(stmts.begin() + decli);
+                      initExprStmt->set_parent(nullptr);
+                      SageInterface::deleteAST(
+                          initExprStmt,
+                          SageInterface::DeleteAstMode::kRequireIsolated);
                       --decli; // To counteract ++decli in loop header
                       break;   // To get out of initi loop
                     }
@@ -734,94 +718,6 @@ public:
     }
   }
 };
-
-bool inSimpleContext(SgExpression *expr) {
-  if (!expr->get_parent())
-    return false;
-  if (!isSgExpression(expr->get_parent()))
-    return true;
-  if (!expr->get_parent()->get_parent())
-    return false;
-  if (isSgAssignOp(expr->get_parent()) &&
-      !isSgExpression(expr->get_parent()->get_parent()) &&
-      isSgVarRefExp(isSgAssignOp(expr->get_parent())->get_lhs_operand()))
-    return true;
-  if (isSgNotOp(expr->get_parent()) &&
-      !isSgExpression(expr->get_parent()->get_parent()))
-    return true;
-  return false;
-}
-
-class SubexpressionExpansionVisitor : public AstSimpleProcessing {
-  SgInitializedName *initname;
-  SgExpression *initexpr;
-  bool needSimpleContext;
-
-public:
-  SubexpressionExpansionVisitor(SgInitializedName *initname,
-                                SgExpression *initexpr, bool needSimpleContext,
-                                bool & /*changes*/)
-      : initname(initname), initexpr(initexpr),
-        needSimpleContext(needSimpleContext) {}
-
-  virtual void visit(SgNode *n) {
-    if (isSgVarRefExp(n)) {
-      SgVarRefExp *vr = isSgVarRefExp(n);
-      assert(vr->get_symbol());
-      if (vr->get_symbol()->get_declaration() == initname) {
-        if (inSimpleContext(vr) || !needSimpleContext) {
-          SgTreeCopy tc;
-          isSgExpression(n->get_parent())
-              ->replace_expression(vr, isSgExpression(initexpr->copy(tc)));
-        }
-      }
-    }
-  }
-};
-
-// Replaces all uses of a variable by its initialing expression.
-// Requires that initname has an assign initializer
-// Replaces all uses of initname in initname's scope by copy of its
-//   initializer expression
-// Then removes initname
-void doSubexpressionExpansion(SgInitializedName *initname,
-                              bool needSimpleContext = false) {
-  SgNode *root = initname->get_parent()->get_parent();
-  assert(root);
-  SgAssignInitializer *init;
-  init = isSgAssignInitializer(initname->get_initializer());
-  if (!init)
-    return;
-  bool changes = false;
-  SubexpressionExpansionVisitor(initname, init, needSimpleContext, changes)
-      .traverse(root, postorder);
-  if (changes)
-    removeVariableDeclaration(initname);
-}
-
-// Same as doSubexpressionExpansion, but requires exactly one use of
-// initname, and this use must be in a simple context
-void doSubexpressionExpansionSmart(SgInitializedName *initname) {
-  SgNode *root = initname->get_parent()->get_parent();
-  assert(root);
-  int count = countVariableReferences(root, initname);
-  if (count != 1)
-    return;
-  bool doExpansion = true;
-  SgVariableSymbol *initnameSym = new SgVariableSymbol(initname);
-  SgVarRefExp *initnameVr = new SgVarRefExp(SgNULL_FILE, initnameSym);
-  if (isPotentiallyModified(initnameVr, root)) {
-    doExpansion = false;
-  }
-  delete initnameSym;
-  initnameSym = nullptr;
-  initnameVr->set_symbol(nullptr);
-  delete initnameVr;
-  initnameVr = nullptr;
-  if (doExpansion) {
-    doSubexpressionExpansion(initname, true);
-  }
-}
 
 // Find all initialized names in some code.
 class FindInitializedNames : public AstSimpleProcessing {
@@ -844,57 +740,20 @@ SgInitializedNamePtrList findInitializedNamesInScope(SgScopeStatement *scope) {
 // Combined procedure for cleaning up code after inlining.  Does not do
 // variable renaming or block flattening, however.
 void cleanupInlinedCode(SgNode *top) {
-  // DQ (4/6/2015): Adding check for isTransformed flag consistancy.
-  // SgGlobal* globalScope = TransformationSupport::getGlobalScope(top);
-  // ROSE_ASSERT(globalScope != NULL);
   ASSERT_not_null(isSgProject(top));
-  checkTransformedFlagsVisitor(top);
 
   simpleCopyAndConstantPropagation(top);
   SageInterface::removeJumpsToNextStatement(top);
   SageInterface::removeUnusedLabels(top);
-  checkTransformedFlagsVisitor(top);
 
   RemoveNullStatementsVisitor().traverse(top, postorder);
-  checkTransformedFlagsVisitor(top);
 
   MoveDeclarationsToFirstUseVisitor().traverse(top, postorder);
-  checkTransformedFlagsVisitor(top);
-
-  FindInitializedNames fin;
-  fin.traverse(top, preorder);
-  for (SgInitializedNamePtrList::iterator i = fin.ls.begin(); i != fin.ls.end();
-       ++i) {
-    doSubexpressionExpansionSmart(*i);
-  }
-
-  checkTransformedFlagsVisitor(top);
 
   simpleCopyAndConstantPropagation(top);
   RemoveNullStatementsVisitor().traverse(top, postorder);
-
-  // Make sure the AST is consistent. To save time, we'll just fix things that
-  // we know can go wrong. For instance, the SgAsmExpression.p_lvalue data
-  // member is required to be true for certain operators and is set to false in
-  // other situations. Since we've introduced new expressions into the AST we
-  // need to adjust their p_lvalue according to the operators where they were
-  // inserted.
-  markLhsValues(top);
-
-  checkTransformedFlagsVisitor(top);
 }
 
 void removeNullStatements(SgNode *top) {
   RemoveNullStatementsVisitor().traverse(top, postorder);
-}
-
-// Find all used variable declarations.
-class CheckTransformedFlagsVisitor : public AstSimpleProcessing {
-public:
-  virtual void visit(SgNode * /*n*/) {}
-};
-
-void checkTransformedFlagsVisitor(SgNode *e) {
-  CheckTransformedFlagsVisitor traversal;
-  traversal.traverse(e, preorder);
 }

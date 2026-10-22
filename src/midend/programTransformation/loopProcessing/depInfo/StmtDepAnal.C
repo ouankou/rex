@@ -198,8 +198,6 @@ int SetDepDirection(DepInfo &edd, int commLevel, Collect &result) {
   return i + 1;
 }
 
-// extern DepTestStatistics DepStats;
-
 template <class CoeffVec, class BoundVec, class BoundOp, class Dep>
 bool AnalyzeEquation(const CoeffVec &vec, const BoundVec &bounds,
                      BoundOp &boundop, Dep &result, const DepRel &rel) {
@@ -295,7 +293,6 @@ bool AnalyzeEquation(const CoeffVec &vec, const BoundVec &bounds,
           int odiff = diff;
           diff = diff / c;
           if (odiff != diff * c) {
-            // DepStats.AddAdhocDV(DepStats.RoseToPlatoDV(DepRel(DEPDIR_NONE)));
             result[i][j] = DepRel(DEPDIR_NONE);
             return true;
           }
@@ -303,17 +300,12 @@ bool AnalyzeEquation(const CoeffVec &vec, const BoundVec &bounds,
         hasdiff = true;
       }
       if (hasdiff) {
-        // DepStats.AddAdhocDV(DepStats.RoseToPlatoDV(DepRel(DEPDIR_EQ, diff)));
         result[i][j] = rel * DepRel(DEPDIR_EQ, diff);
         return true; // precise dependence
       } else if (signs[i] != 2) {
         if (signs[dim] * signs[i] > 0) {
-          // DepStats.AddAdhocDV(DepStats.RoseToPlatoDV(DepRel(DEPDIR_GE,
-          // diff)));
           result[i][j] = rel * DepRel(DEPDIR_GE, diff);
         } else {
-          // DepStats.AddAdhocDV(DepStats.RoseToPlatoDV(DepRel(DEPDIR_LE,
-          // diff)));
           result[i][j] = rel * DepRel(DEPDIR_LE, diff);
         }
       }

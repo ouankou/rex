@@ -1,5 +1,7 @@
 template <class Element, class Allocator> struct RexPartial;
 
+template <class Allocator> struct RexPartial<decltype(false), Allocator>;
+
 template <class Allocator> struct RexPartial<bool, Allocator> {
   Allocator value;
 };

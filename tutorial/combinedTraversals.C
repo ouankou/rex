@@ -1,5 +1,7 @@
 #include "rose.h"
 
+#include "AstCombinedSimpleProcessing.h"
+
 class NodeTypeCounter : public AstSimpleProcessing {
 public:
   NodeTypeCounter(enum VariantT variant, std::string typeName)
@@ -38,13 +40,14 @@ int main(int argc, char **argv) {
   std::cout << std::endl;
 
   std::cout << "combined execution of traversals" << std::endl;
+  NodeTypeCounter combinedForCounter(V_SgForStatement, "for loop");
+  NodeTypeCounter combinedIntCounter(V_SgIntVal, "int constant");
+  NodeTypeCounter combinedVariableCounter(V_SgVariableDeclaration,
+                                          "variable declaration");
   AstCombinedSimpleProcessing combinedTraversal;
-  combinedTraversal.addTraversal(
-      new NodeTypeCounter(V_SgForStatement, "for loop"));
-  combinedTraversal.addTraversal(
-      new NodeTypeCounter(V_SgIntVal, "int constant"));
-  combinedTraversal.addTraversal(
-      new NodeTypeCounter(V_SgVariableDeclaration, "variable declaration"));
+  combinedTraversal.addTraversal(&combinedForCounter);
+  combinedTraversal.addTraversal(&combinedIntCounter);
+  combinedTraversal.addTraversal(&combinedVariableCounter);
   // one call to traverse, execution is interleaved
   combinedTraversal.traverseInputFiles(project, preorder);
 }

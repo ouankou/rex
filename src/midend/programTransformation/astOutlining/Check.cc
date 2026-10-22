@@ -3,12 +3,9 @@
  *  \brief Verifies that a given outline target meets certain
  *  preconditions.
  */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
 #include <iostream>
-
-#include <list>
 
 #include <set>
 
@@ -18,11 +15,8 @@
 
 #include "Outliner.hh"
 
-// =====================================================================
-
 using namespace std;
 
-// =====================================================================
 static bool checkType(const SgStatement *s) {
   if (s)
     switch (s->variantT()) {
@@ -30,7 +24,6 @@ static bool checkType(const SgStatement *s) {
     case V_SgAssociateStatement:
     case V_SgBasicBlock:
     case V_SgBreakStmt:
-    case V_SgClassDeclaration:
     case V_SgCloseStatement:
     case V_SgContinueStmt:
     case V_SgDoWhileStmt:
@@ -38,7 +31,6 @@ static bool checkType(const SgStatement *s) {
     case V_SgFlushStatement:
     case V_SgForStatement:
     case V_SgFortranDo:
-    case V_SgFortranNonblockedDo:
     case V_SgGotoStatement:
     case V_SgIfStmt:
     case V_SgOpenStatement:
@@ -48,9 +40,7 @@ static bool checkType(const SgStatement *s) {
     case V_SgRewindStatement:
     case V_SgProcessControlStatement:
     case V_SgSwitchStatement:
-    case V_SgTemplateInstantiationDecl:
     case V_SgTryStmt:
-    case V_SgVariableDeclaration:
     case V_SgWaitStatement:
     case V_SgWhereStatement:
     case V_SgWhileStmt:
@@ -143,7 +133,7 @@ doesRefUnsupportedHiddenTypes(const SgStatement *s,
         return true;
   }
 
-  return false; // No hidden references found
+  return false;
 }
 
 /*!
@@ -168,11 +158,6 @@ static bool doesCall__builtin_va_start(const SgStatement *s) {
 /*!
  *  \brief Returns 'true' if the statement contains a va_start()
  *  expression.
- *
- *  \note Created this function after 0.8.10a, which introduced new IR
- *  nodes for variable argument objects. This function should make the
- *  function, doesCall__builtin_va_start() (defined in this module),
- *  obsolete.
  */
 static bool hasVAStart(const SgStatement *s) {
   typedef Rose_STL_Container<SgNode *> NodeList_t;
@@ -186,16 +171,7 @@ static bool hasVAStart(const SgStatement *s) {
  *  statement's initializer or test statement.
  */
 static bool isForInitOrTest(const SgStatement *s) {
-  if (!s)
-    return false;
-
-  if (isSgForInitStatement(s))
-    return true;
-
   const SgNode *s_par = s->get_parent();
-  // Why is this?, Liao, 4/8/2009
-  // I commented it out since we want to outline inner loop sometimes
-  // if (isSgForInitStatement (s_par) || isSgForStatement (s_par))
   if (isSgForInitStatement(s_par))
     return true;
 
@@ -205,7 +181,6 @@ static bool isForInitOrTest(const SgStatement *s) {
     const SgStatementPtrList &stmts = loop->get_init_stmt();
     if (find(stmts.begin(), stmts.end(), s) != stmts.end())
       return true;
-    // Liao, 4/8/2009
     // Check if the statement is a test statement for a for loop
     if (s == loop->get_test())
       return true;
@@ -333,8 +308,6 @@ static bool fortranLabelReferencesStayWithinCandidate(const SgStatement *s,
   return true;
 }
 
-// =====================================================================
-
 /*!
  *  \brief Check whether the candidate statement satisfies the
  *  conditions of an outlineable statement.
@@ -391,11 +364,9 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
     return false;
   }
 
-  if (isSgDeclarationStatement(s) && !isSgVariableDeclaration(s)) {
+  if (isSgDeclarationStatement(s)) {
     if (verbose) {
-      cerr << "*** Statement must not be a declaration statement, unless it is "
-              "a variable declaration. ***"
-           << endl
+      cerr << "*** Statement must not be a declaration statement. ***" << endl
            << "    (Statement: " << (const void *)s << ":<" << s->class_name()
            << ">)" << " " << ASTtools::toStringFileLoc(s) << endl;
     }
@@ -423,10 +394,6 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
     return false;
   }
 
-  // Liao, 8/20/2009 TODO why do we need this at all?
-  // A minor excuse is that if the BB is the body of a function definition,
-  // replacing it with a call statement will cause some problem.
-  // But we can easily extend SageInterface::replaceStatement() to handle it
   if (isSgBasicBlock(s) && (!isSgBasicBlock(s->get_parent()) &&
                             !isSgOmpBodyStatement(s->get_parent()))) {
     if (verbose)
@@ -496,5 +463,3 @@ bool Outliner::isOutlineable(const SgStatement *s, bool verbose) {
   // Passes all checks
   return true;
 }
-
-// eof

@@ -3,26 +3,127 @@
 namespace Rose {
 namespace AstJson {
 
-void restoreLabelSymbolFields(SgLabelSymbol *symbol, const JsonValue &json) {
-  if (symbol == nullptr) {
-    return;
+void validateNamespaceSymbolKey(const SgName &entry_name, SgNode *basis) {
+  auto *declaration = isSgNamespaceDeclarationStatement(basis);
+  auto *alias = isSgNamespaceAliasDeclarationStatement(basis);
+  if (declaration == nullptr && alias == nullptr) {
+    throw std::runtime_error("AST JSON namespace symbol has invalid basis");
   }
-  symbol->set_numeric_label_value(
-      json.requiredInt("label_numeric_label_value"));
-  symbol->set_label_type(static_cast<SgLabelSymbol::label_type_enum>(
-      json.requiredInt("label_type")));
-  if (symbol->get_declaration() == nullptr &&
-      symbol->get_numeric_label_value() <= 0 &&
-      json.requiredString("symbol_name").empty()) {
-    if (SgLabelStatement *label =
-            isSgLabelStatement(symbol->get_fortran_statement())) {
-      symbol->set_declaration(label);
-      symbol->set_fortran_statement(nullptr);
-    }
+  const SgName name =
+      alias != nullptr ? alias->get_name() : declaration->get_name();
+  if (entry_name != name) {
+    throw std::runtime_error("AST JSON namespace symbol key contradicts its "
+                             "typed declaration basis");
   }
 }
 
+LabelSymbolBasisKind labelSymbolBasisKind(const SgLabelSymbol *symbol) {
+  ASSERT_not_null(symbol);
+  const bool declaration = symbol->get_declaration() != nullptr;
+  const bool statement = symbol->get_fortran_statement() != nullptr;
+  const bool parameter =
+      symbol->get_fortran_alternate_return_parameter() != nullptr;
+  if (static_cast<int>(declaration) + statement + parameter != 1)
+    throw std::runtime_error(
+        "AST JSON label symbol must have exactly one typed basis");
+  if (declaration)
+    return LabelSymbolBasisKind::Declaration;
+  if (statement)
+    return LabelSymbolBasisKind::FortranStatement;
+  return LabelSymbolBasisKind::AlternateReturn;
+}
+
+VariantT symbolVariantFromJsonKind(const std::string &kind) {
+  static const std::pair<const char *, VariantT> variants[] = {
+      {"SgAliasSymbol", V_SgAliasSymbol},
+      {"SgClassSymbol", V_SgClassSymbol},
+      {"SgCommonSymbol", V_SgCommonSymbol},
+      {"SgNamelistSymbol", V_SgNamelistSymbol},
+      {"SgEnumFieldSymbol", V_SgEnumFieldSymbol},
+      {"SgEnumSymbol", V_SgEnumSymbol},
+      {"SgFunctionSymbol", V_SgFunctionSymbol},
+      {"SgInterfaceSymbol", V_SgInterfaceSymbol},
+      {"SgIntrinsicSymbol", V_SgIntrinsicSymbol},
+      {"SgLabelSymbol", V_SgLabelSymbol},
+      {"SgMemberFunctionSymbol", V_SgMemberFunctionSymbol},
+      {"SgModuleSymbol", V_SgModuleSymbol},
+      {"SgNamespaceSymbol", V_SgNamespaceSymbol},
+      {"SgNonrealSymbol", V_SgNonrealSymbol},
+      {"SgRenameSymbol", V_SgRenameSymbol},
+      {"SgTemplateClassSymbol", V_SgTemplateClassSymbol},
+      {"SgTemplateFunctionSymbol", V_SgTemplateFunctionSymbol},
+      {"SgTemplateMemberFunctionSymbol", V_SgTemplateMemberFunctionSymbol},
+      {"SgTemplateSymbol", V_SgTemplateSymbol},
+      {"SgTemplateTypedefSymbol", V_SgTemplateTypedefSymbol},
+      {"SgTemplateVariableSymbol", V_SgTemplateVariableSymbol},
+      {"SgTypedefSymbol", V_SgTypedefSymbol},
+      {"SgVariableSymbol", V_SgVariableSymbol},
+  };
+  for (const auto &[name, variant] : variants) {
+    if (kind == name)
+      return variant;
+  }
+  throw std::runtime_error("AST JSON symbol kind is unsupported: " + kind);
+}
+
+namespace {
+template <class Symbol, class Basis>
+std::function<SgSymbol *()> symbolWithBasis(Basis *basis) {
+  if (basis == nullptr)
+    throw std::runtime_error("AST JSON symbol has an incompatible basis node");
+  return [basis] { return new Symbol(basis); };
+}
+
+} // namespace
+
+LabelSymbolFields labelSymbolFieldsFromJson(const JsonValue &json) {
+  const auto basis = requiredEnum<LabelSymbolBasisKind>(
+      json, "label_basis_kind", "label symbol",
+      {LabelSymbolBasisKind::Declaration,
+       LabelSymbolBasisKind::FortranStatement,
+       LabelSymbolBasisKind::AlternateReturn});
+  const int64_t value = json.requiredInt("label_numeric_label_value");
+  if (value < std::numeric_limits<int>::min() ||
+      value > std::numeric_limits<int>::max())
+    throw std::runtime_error("AST JSON label numeric value is out of range");
+  const auto type = requiredEnum<SgLabelSymbol::label_type_enum>(
+      json, "label_type", "label symbol",
+      {SgLabelSymbol::e_unknown_label_type,
+       SgLabelSymbol::e_non_numeric_label_type,
+       SgLabelSymbol::e_start_label_type, SgLabelSymbol::e_else_label_type,
+       SgLabelSymbol::e_end_label_type,
+       SgLabelSymbol::e_alternative_return_type});
+  if ((basis == LabelSymbolBasisKind::Declaration &&
+       (value != -1 || type != SgLabelSymbol::e_unknown_label_type)) ||
+      (basis == LabelSymbolBasisKind::FortranStatement &&
+       (value < 1 || value > 99999 ||
+        (type != SgLabelSymbol::e_start_label_type &&
+         type != SgLabelSymbol::e_end_label_type &&
+         type != SgLabelSymbol::e_else_label_type))) ||
+      (basis == LabelSymbolBasisKind::AlternateReturn &&
+       (value != -1 || type != SgLabelSymbol::e_alternative_return_type)))
+    throw std::runtime_error(
+        "AST JSON label symbol has invalid typed identity");
+  return {basis, static_cast<int>(value), type};
+}
+void validateLabelSymbolFields(const SgLabelSymbol *symbol,
+                               const LabelSymbolFields &fields) {
+  if (labelSymbolBasisKind(symbol) != fields.basis ||
+      symbol->get_numeric_label_value() != fields.value ||
+      symbol->get_label_type() != fields.type ||
+      (fields.type == SgLabelSymbol::e_else_label_type &&
+       isSgIfStmt(symbol->get_fortran_statement()) == nullptr))
+    throw std::runtime_error(
+        "AST JSON label symbol differs from its constructed identity");
+}
+
+void validateLabelSymbolFields(const SgLabelSymbol *symbol,
+                               const JsonValue &json) {
+  validateLabelSymbolFields(symbol, labelSymbolFieldsFromJson(json));
+}
+
 SgScopeStatement *labelSymbolScopeForBasis(SgNode *basis) {
+  auto *parameter = isSgInitializedName(basis);
   if (SgLabelStatement *label = isSgLabelStatement(basis)) {
     if (label->get_scope() != nullptr) {
       return label->get_scope();
@@ -33,116 +134,87 @@ SgScopeStatement *labelSymbolScopeForBasis(SgNode *basis) {
     if (SgFunctionDefinition *function = isSgFunctionDefinition(current)) {
       return function;
     }
+    if (auto *module = isSgModuleStatement(current);
+        module != nullptr && parameter == nullptr)
+      return module->get_definition();
   }
-  return nearestScope(basis);
+  return parameter != nullptr ? parameter->get_scope() : nullptr;
 }
 
-SgLabelSymbol *existingLabelSymbolFromJson(const JsonValue &json,
-                                           SgNode *basis) {
+static SgLabelSymbol *
+labelSymbolForExactBasis(SgNode *basis, const LabelSymbolFields &fields) {
   SgScopeStatement *scope = labelSymbolScopeForBasis(basis);
-  if (scope == nullptr) {
-    return nullptr;
+  if (scope == nullptr)
+    throw std::runtime_error("AST JSON label reference has no exact scope");
+  SgSymbolTable *table = scope->get_symbol_table();
+  ASSERT_not_null(table);
+  SgLabelSymbol *symbol = nullptr;
+  for (SgSymbol *entry : table->find_symbols_with_exact_basis(basis)) {
+    ROSE_ASSERT(entry != nullptr && entry->get_symbol_basis() == basis &&
+                entry->get_parent() == table && table->exists(entry));
+    auto *candidate = isSgLabelSymbol(entry);
+    if (candidate == nullptr ||
+        labelSymbolBasisKind(candidate) != fields.basis ||
+        candidate->get_numeric_label_value() != fields.value ||
+        candidate->get_label_type() != fields.type)
+      continue;
+    if (symbol != nullptr)
+      throw std::runtime_error(
+          "AST JSON label reference has duplicate typed bindings");
+    symbol = candidate;
   }
-  const std::string name = json.requiredString("symbol_name");
-  if (name.empty()) {
-    return nullptr;
+  if (symbol == nullptr) {
+    throw std::runtime_error(
+        "AST JSON label reference basis differs from its symbol binding");
   }
-  return scope->lookup_label_symbol(SgName(name));
-}
-
-std::string inferredSymbolKindForBasis(SgNode *basis) {
-  if (isSgInitializedName(basis) != nullptr) {
-    return "SgVariableSymbol";
-  }
-  if (isSgMemberFunctionDeclaration(basis) != nullptr) {
-    return "SgMemberFunctionSymbol";
-  }
-  if (isSgFunctionDeclaration(basis) != nullptr) {
-    return "SgFunctionSymbol";
-  }
-  if (isSgClassDeclaration(basis) != nullptr) {
-    return "SgClassSymbol";
-  }
-  if (isSgEnumDeclaration(basis) != nullptr) {
-    return "SgEnumSymbol";
-  }
-  if (isSgTypedefDeclaration(basis) != nullptr) {
-    return "SgTypedefSymbol";
-  }
-  if (isSgLabelStatement(basis) != nullptr) {
-    return "SgLabelSymbol";
-  }
-  if (isSgNonrealDecl(basis) != nullptr) {
-    return "SgNonrealSymbol";
-  }
-  if (isSgTemplateDeclaration(basis) != nullptr) {
-    return "SgTemplateSymbol";
-  }
-  return "";
+  validateLabelSymbolFields(symbol, fields);
+  return symbol;
 }
 
 SgSymbol *symbolFromJson(const JsonValue &json, const NodeMap &nodes) {
   const uint64_t declaration_id =
-      static_cast<uint64_t>(json.requiredInt("symbol_declaration"));
+      json.requiredNonnegativeNodeId("symbol_declaration");
   if (declaration_id == 0) {
-    SgSymbol *external_symbol = createExternalSymbolFromJson(json, nodes);
-    if (external_symbol != nullptr) {
-      return external_symbol;
-    }
-    return nullptr;
+    return createExternalSymbolFromJson(json, nodes, nullptr);
   }
+  const VariantT expected_kind =
+      symbolVariantFromJsonKind(json.requiredString("symbol_kind"));
 
   SgNode *basis = nodeById(nodes, declaration_id);
   SgSymbol *symbol = nullptr;
-  if (SgInitializedName *name = isSgInitializedName(basis)) {
+  if (expected_kind == V_SgLabelSymbol) {
+    symbol = labelSymbolForExactBasis(basis, labelSymbolFieldsFromJson(json));
+  } else if (auto *group = isSgNameGroup(basis)) {
+    auto *owner = isSgNamelistStatement(group->get_parent());
+    if (owner != nullptr && owner->get_parent() != nullptr) {
+      auto *scope = owner->get_scope();
+      for (auto *candidate :
+           scope->get_symbol_table()->find_symbols_with_exact_basis(group)) {
+        if (candidate->variantT() == expected_kind) {
+          if (symbol != nullptr)
+            throw std::runtime_error(
+                "AST JSON duplicate NAMELIST symbol basis");
+          symbol = candidate;
+        }
+      }
+    }
+  } else if (SgInitializedName *name = isSgInitializedName(basis)) {
     SgScopeStatement *scope = name->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(name)) != nullptr) {
-      return symbol;
-    }
-  } else if (SgMemberFunctionDeclaration *decl =
-                 isSgMemberFunctionDeclaration(basis)) {
-    SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
-    }
-  } else if (SgFunctionDeclaration *decl = isSgFunctionDeclaration(basis)) {
-    SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
-    }
-  } else if (SgClassDeclaration *decl = isSgClassDeclaration(basis)) {
-    SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
-    }
-  } else if (SgEnumDeclaration *decl = isSgEnumDeclaration(basis)) {
-    SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
-    }
-  } else if (SgTypedefDeclaration *decl = isSgTypedefDeclaration(basis)) {
-    SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
-    }
+    if (scope != nullptr)
+      symbol = scope->find_symbol_from_declaration(name);
   } else if (SgDeclarationStatement *decl = isSgDeclarationStatement(basis)) {
     SgScopeStatement *scope = decl->get_scope();
-    if (scope != nullptr &&
-        (symbol = scope->find_symbol_from_declaration(decl)) != nullptr) {
-      return symbol;
+    if (scope != nullptr)
+      symbol = scope->find_symbol_from_declaration(decl);
+  }
+  if (symbol != nullptr) {
+    if (symbolBasis(symbol) != basis || symbol->variantT() != expected_kind ||
+        symbolName(symbol) != json.requiredString("symbol_name")) {
+      throw std::runtime_error(
+          "AST JSON internal symbol record disagrees with its exact typed "
+          "binding");
     }
-  } else if (isSgLabelStatement(basis) != nullptr ||
-             isSgStatement(basis) != nullptr) {
-    if (SgLabelSymbol *label = existingLabelSymbolFromJson(json, basis)) {
-      restoreLabelSymbolFields(label, json);
-      return label;
-    }
+    return symbol;
   }
 
   std::ostringstream message;
@@ -155,8 +227,9 @@ SgSymbol *symbolFromJson(const JsonValue &json, const NodeMap &nodes) {
   throw std::runtime_error(message.str());
 }
 
-SgSymbol *exactBoundSymbolFromJson(const JsonValue &json,
-                                   const NodeMap &nodes) {
+static SgSymbol *
+findConstructedExactSymbolBinding(const JsonValue &json, const NodeMap &nodes,
+                                  SgSymbolTable *local_table = nullptr) {
   if (json.kind == JsonValue::Kind::Null) {
     return nullptr;
   }
@@ -167,46 +240,110 @@ SgSymbol *exactBoundSymbolFromJson(const JsonValue &json,
 
   const JsonValue &symbol_json = json.at("symbol");
   const std::string expected_kind = symbol_json.requiredString("symbol_kind");
+  const VariantT expected_variant = symbolVariantFromJsonKind(expected_kind);
   const std::string expected_basis_name =
       symbol_json.requiredString("symbol_name");
   const uint64_t basis_id =
-      static_cast<uint64_t>(symbol_json.requiredInt("symbol_declaration"));
-  SgNode *expected_basis = basis_id != 0 ? nodeById(nodes, basis_id) : nullptr;
-
+      symbol_json.requiredNonnegativeNodeId("symbol_declaration");
+  const auto *local = json.find("binding_local");
   const uint64_t scope_id =
-      static_cast<uint64_t>(json.requiredInt("binding_scope"));
-  if (scope_id == 0) {
+      local != nullptr ? 0 : json.requiredNonnegativeNodeId("binding_scope");
+  if (local != nullptr && (!local->asBool() || local_table == nullptr ||
+                           json.find("binding_scope") != nullptr))
+    throw std::runtime_error(
+        "AST JSON alias/rename local binding has no exact receiver");
+  if (local == nullptr && scope_id == 0) {
     throw std::runtime_error(
         "AST JSON exact symbol reference has a null binding scope");
   }
-  SgScopeStatement *scope = nodeByIdAs<SgScopeStatement>(nodes, scope_id);
-  SgSymbolTable *table = scope->get_symbol_table();
+  auto basis = nodes.find(basis_id);
+  SgNode *expected_basis = basis != nodes.end() ? basis->second : nullptr;
+  const JsonValue *external_module = nullptr;
+  std::optional<SgClassDeclaration::class_types> external_module_type;
+  std::string external_module_source;
+  if (basis_id == 0) {
+    const JsonValue *external_function = symbol_json.find("external_function");
+    external_module = symbol_json.find("external_module");
+    const JsonValue *external_class = symbol_json.find("external_class");
+    if ((external_function != nullptr) + (external_module != nullptr) +
+            (external_class != nullptr) !=
+        1) {
+      throw std::runtime_error(
+          "AST JSON exact external symbol requires one declaration basis");
+    }
+    if (external_function != nullptr) {
+      SgFunctionDeclaration *function =
+          restoredExternalFunctionFromJson(*external_function);
+      expected_basis = function != nullptr
+                           ? function->get_firstNondefiningDeclaration()
+                           : nullptr;
+    } else if (external_class != nullptr) {
+      expected_basis = restoredExternalClassFromJson(*external_class);
+    } else {
+      external_module_type = requiredEnum<SgClassDeclaration::class_types>(
+          *external_module, "class_type", "external_module",
+          {SgClassDeclaration::e_fortran_module});
+      external_module_source = external_module->requiredString("source_file");
+      const std::string external_module_name =
+          external_module->requiredString("name");
+      if (!external_module->requiredBool("present") ||
+          requiredTranslationUnitSourceOrder(*external_module,
+                                             "external_module")
+              .has_value() ||
+          external_module_name.empty() ||
+          external_module_name.find('\0') != std::string::npos ||
+          external_module_name != expected_basis_name ||
+          external_module_source.empty() ||
+          external_module_source.find('\0') != std::string::npos) {
+        throw std::runtime_error(
+            "AST JSON exact external module has an invalid typed identity");
+      }
+    }
+  }
+  const SgName binding_name = json.requiredName("binding_name");
+  if ((external_module == nullptr && expected_basis == nullptr) ||
+      (local == nullptr && nodes.count(scope_id) == 0))
+    return nullptr;
+  SgScopeStatement *scope = local != nullptr
+                                ? isSgScopeStatement(local_table->get_parent())
+                                : nodeByIdAs<SgScopeStatement>(nodes, scope_id);
+  if (scope == nullptr)
+    throw std::runtime_error(
+        "AST JSON exact symbol has no typed binding scope");
+  SgSymbolTable *table =
+      local != nullptr ? local_table : scope->get_symbol_table();
   if (table == nullptr || table->get_table() == nullptr) {
     throw std::runtime_error(
         "AST JSON exact symbol binding scope has no restored symbol table");
   }
 
-  const SgName binding_name(json.requiredString("binding_name"));
   SgSymbol *result = nullptr;
   size_t matches = 0;
   for (const auto &entry : *table->get_table()) {
     SgSymbol *candidate = entry.second;
     if (entry.first != binding_name || candidate == nullptr ||
-        candidate->class_name() != expected_kind) {
+        candidate->variantT() != expected_variant) {
       continue;
     }
     const SgNode *candidate_basis = symbolBasis(candidate);
-    const bool basis_matches =
-        expected_basis != nullptr
-            ? candidate_basis == expected_basis
-            : candidate_basis != nullptr &&
-                  symbolName(candidate) == expected_basis_name;
-    if (basis_matches) {
+    bool basis_matches = candidate_basis == expected_basis;
+    if (external_module != nullptr) {
+      const SgModuleStatement *module = isSgModuleStatement(candidate_basis);
+      basis_matches =
+          module != nullptr &&
+          module->get_ast_json_external_role() ==
+              SgDeclarationStatement::e_ast_json_external_module &&
+          module->get_name().getString() ==
+              external_module->requiredString("name") &&
+          module->get_class_type() == *external_module_type &&
+          module->get_ast_json_external_source_file() == external_module_source;
+    }
+    if (basis_matches && symbolName(candidate) == expected_basis_name) {
       result = candidate;
       ++matches;
     }
   }
-  if (result == nullptr || matches != 1) {
+  if (matches > 1) {
     std::ostringstream message;
     message << "AST JSON failed to restore one exact symbol binding";
     message << " scope=" << scope->sage_class_name();
@@ -219,133 +356,289 @@ SgSymbol *exactBoundSymbolFromJson(const JsonValue &json,
   return result;
 }
 
-SgSymbol *createSymbolForKindAndBasis(const std::string &kind, SgNode *basis) {
-  if (kind == "SgVariableSymbol") {
-    return new SgVariableSymbol(isSgInitializedName(basis));
+bool exactSymbolBindingDependenciesReady(const JsonValue &json,
+                                         const NodeMap &nodes) {
+  return json.kind == JsonValue::Kind::Null ||
+         findConstructedExactSymbolBinding(json, nodes) != nullptr;
+}
+
+SgSymbol *exactBoundSymbolFromJson(const JsonValue &json, const NodeMap &nodes,
+                                   SgSymbolTable *local_table) {
+  SgSymbol *symbol =
+      findConstructedExactSymbolBinding(json, nodes, local_table);
+  if (symbol == nullptr && json.kind != JsonValue::Kind::Null)
+    throw std::runtime_error(
+        "AST JSON failed to restore one exact symbol binding");
+  return symbol;
+}
+
+size_t exactSymbolBindingEntryIndex(const JsonValue &binding,
+                                    const JsonValue &entries) {
+  if (entries.kind != JsonValue::Kind::Array)
+    throw std::runtime_error(
+        "AST JSON alias/rename binding table is not an array");
+  const auto name = binding.requiredName("binding_name");
+  const auto &symbol = binding.at("symbol");
+  const auto kind = symbol.requiredString("symbol_kind");
+  std::optional<size_t> result;
+  for (size_t index = 0; index < entries.array.size(); ++index) {
+    const auto &candidate = entries.array[index];
+    if (candidate.requiredName("entry_name") != name ||
+        candidate.requiredString("symbol_kind") != kind ||
+        !candidate.at("symbol").exactlyEquals(symbol))
+      continue;
+    if (result)
+      throw std::runtime_error(
+          "AST JSON alias/rename target binding is ambiguous");
+    result = index;
   }
-  if (kind == "SgTemplateVariableSymbol") {
-    return new SgTemplateVariableSymbol(isSgInitializedName(basis));
+  if (!result)
+    throw std::runtime_error(
+        "AST JSON alias/rename target has no exact recorded binding");
+  return *result;
+}
+
+std::vector<size_t>
+symbolDependencyOrder(const std::vector<std::optional<size_t>> &dependencies) {
+  enum State { Unseen, Visiting, Complete };
+  std::vector<State> states(dependencies.size(), Unseen);
+  std::vector<size_t> order;
+  order.reserve(dependencies.size());
+  for (size_t index = 0; index < dependencies.size(); ++index) {
+    std::vector<size_t> path;
+    for (auto current = index;; current = *dependencies[current]) {
+      if (states.at(current) == Complete)
+        break;
+      if (states[current] == Visiting)
+        throw std::runtime_error(
+            "AST JSON alias/rename targets contain a cycle");
+      states[current] = Visiting;
+      path.push_back(current);
+      if (!dependencies[current])
+        break;
+    }
+    for (auto position = path.rbegin(); position != path.rend(); ++position) {
+      states[*position] = Complete;
+      order.push_back(*position);
+    }
   }
-  if (kind == "SgEnumFieldSymbol") {
-    return new SgEnumFieldSymbol(isSgInitializedName(basis));
+  return order;
+}
+
+std::function<SgSymbol *()> prepareSymbolForKindAndBasis(
+    VariantT kind, SgNode *basis,
+    const std::optional<LabelSymbolFields> &label_fields) {
+  ROSE_ASSERT((kind == V_SgLabelSymbol) == label_fields.has_value());
+  switch (kind) {
+  case V_SgVariableSymbol:
+    return symbolWithBasis<SgVariableSymbol>(isSgInitializedName(basis));
+  case V_SgTemplateVariableSymbol:
+    return symbolWithBasis<SgTemplateVariableSymbol>(
+        isSgInitializedName(basis));
+  case V_SgEnumFieldSymbol:
+    return symbolWithBasis<SgEnumFieldSymbol>(isSgInitializedName(basis));
+  case V_SgIntrinsicSymbol:
+    return symbolWithBasis<SgIntrinsicSymbol>(isSgInitializedName(basis));
+  case V_SgCommonSymbol:
+    return symbolWithBasis<SgCommonSymbol>(isSgInitializedName(basis));
+  case V_SgFunctionSymbol:
+    return symbolWithBasis<SgFunctionSymbol>(isSgFunctionDeclaration(basis));
+  case V_SgMemberFunctionSymbol:
+    return symbolWithBasis<SgMemberFunctionSymbol>(
+        isSgFunctionDeclaration(basis));
+  case V_SgTemplateFunctionSymbol:
+    return symbolWithBasis<SgTemplateFunctionSymbol>(
+        isSgFunctionDeclaration(basis));
+  case V_SgTemplateMemberFunctionSymbol:
+    return symbolWithBasis<SgTemplateMemberFunctionSymbol>(
+        isSgFunctionDeclaration(basis));
+  case V_SgClassSymbol:
+    return symbolWithBasis<SgClassSymbol>(isSgClassDeclaration(basis));
+  case V_SgTemplateClassSymbol:
+    return symbolWithBasis<SgTemplateClassSymbol>(
+        isSgTemplateClassDeclaration(basis));
+  case V_SgEnumSymbol:
+    return symbolWithBasis<SgEnumSymbol>(isSgEnumDeclaration(basis));
+  case V_SgTypedefSymbol:
+    return symbolWithBasis<SgTypedefSymbol>(isSgTypedefDeclaration(basis));
+  case V_SgTemplateTypedefSymbol:
+    if (auto *instantiation =
+            isSgTemplateInstantiationTypedefDeclaration(basis))
+      return symbolWithBasis<SgTemplateTypedefSymbol>(instantiation);
+    return symbolWithBasis<SgTemplateTypedefSymbol>(
+        isSgTemplateTypedefDeclaration(basis));
+  case V_SgLabelSymbol: {
+    const auto fields = label_fields.value();
+    auto *declaration = isSgLabelStatement(basis);
+    auto *statement = isSgStatement(basis);
+    auto *parameter = isSgInitializedName(basis);
+    if ((fields.basis == LabelSymbolBasisKind::Declaration &&
+         declaration == nullptr) ||
+        (fields.basis == LabelSymbolBasisKind::FortranStatement &&
+         (statement == nullptr ||
+          (fields.type == SgLabelSymbol::e_else_label_type &&
+           isSgIfStmt(statement) == nullptr))) ||
+        (fields.basis == LabelSymbolBasisKind::AlternateReturn &&
+         (parameter == nullptr || parameter->get_name() != "*")))
+      throw std::runtime_error(
+          "AST JSON label basis kind disagrees with its node");
+    return [fields, declaration, statement, parameter]() -> SgSymbol * {
+      if (fields.basis == LabelSymbolBasisKind::AlternateReturn)
+        return new SgLabelSymbol(parameter);
+      if (fields.basis == LabelSymbolBasisKind::Declaration)
+        return new SgLabelSymbol(declaration);
+      return new SgLabelSymbol(statement, fields.value, fields.type);
+    };
   }
-  if (kind == "SgIntrinsicSymbol") {
-    return new SgIntrinsicSymbol(isSgInitializedName(basis));
+  case V_SgNamespaceSymbol:
+    if (auto *declaration = isSgNamespaceDeclarationStatement(basis)) {
+      return [declaration]() -> SgSymbol * {
+        return new SgNamespaceSymbol(declaration, nullptr);
+      };
+    }
+    if (auto *alias = isSgNamespaceAliasDeclarationStatement(basis)) {
+      return [alias] { return new SgNamespaceSymbol(nullptr, alias); };
+    }
+    throw std::runtime_error("AST JSON namespace symbol has invalid basis");
+  case V_SgModuleSymbol:
+    return symbolWithBasis<SgModuleSymbol>(isSgModuleStatement(basis));
+  case V_SgInterfaceSymbol:
+    return symbolWithBasis<SgInterfaceSymbol>(isSgInterfaceStatement(basis));
+  case V_SgNonrealSymbol:
+    return symbolWithBasis<SgNonrealSymbol>(isSgNonrealDecl(basis));
+  case V_SgTemplateSymbol:
+    return symbolWithBasis<SgTemplateSymbol>(isSgTemplateDeclaration(basis));
+  default:
+    throw std::runtime_error("AST JSON symbol kind cannot be constructed from "
+                             "a declaration basis");
   }
-  if (kind == "SgCommonSymbol") {
-    return new SgCommonSymbol(isSgInitializedName(basis));
+}
+
+std::function<SgSymbol *()>
+prepareSymbolForKindAndBasis(VariantT kind, SgNode *basis,
+                             const JsonValue &properties) {
+  std::optional<LabelSymbolFields> fields;
+  if (kind == V_SgLabelSymbol)
+    fields = labelSymbolFieldsFromJson(properties);
+  return prepareSymbolForKindAndBasis(kind, basis, fields);
+}
+
+SgSymbol *createSymbolForKindAndBasis(VariantT kind, SgNode *basis,
+                                      const JsonValue &properties) {
+  auto construct = prepareSymbolForKindAndBasis(kind, basis, properties);
+  return construct();
+}
+
+std::function<SgSymbol *()>
+prepareExternalSymbolFromJson(const JsonValue &json, const NodeMap &nodes,
+                              SgSymbolTable *owner_table) {
+  const std::string kind = json.requiredString("symbol_kind");
+  const VariantT symbol_variant = symbolVariantFromJsonKind(kind);
+  const std::string name = json.requiredString("symbol_name");
+  const JsonValue *external_function = json.find("external_function");
+  const JsonValue *external_module = json.find("external_module");
+  const JsonValue *external_class = json.find("external_class");
+  const int identity_count = (external_function != nullptr) +
+                             (external_module != nullptr) +
+                             (external_class != nullptr);
+  if (identity_count != 1) {
+    throw std::runtime_error(
+        "AST JSON external symbol requires exactly one declaration basis");
   }
-  if (kind == "SgFunctionSymbol") {
-    return new SgFunctionSymbol(isSgFunctionDeclaration(basis));
+  if (external_function != nullptr &&
+      (!external_function->requiredBool("present") ||
+       symbol_variant != V_SgFunctionSymbol)) {
+    throw std::runtime_error(
+        "AST JSON external function symbol has an incompatible basis");
   }
-  if (kind == "SgMemberFunctionSymbol") {
-    return new SgMemberFunctionSymbol(isSgFunctionDeclaration(basis));
+  if (external_module != nullptr &&
+      (!external_module->requiredBool("present") ||
+       (symbol_variant != V_SgModuleSymbol &&
+        symbol_variant != V_SgClassSymbol))) {
+    throw std::runtime_error(
+        "AST JSON external module symbol has an incompatible basis");
   }
-  if (kind == "SgTemplateFunctionSymbol") {
-    return new SgTemplateFunctionSymbol(isSgFunctionDeclaration(basis));
+  if (external_class != nullptr) {
+    const std::string class_kind = external_class->requiredString("kind");
+    const bool compatible_kind = symbol_variant == V_SgClassSymbol ||
+                                 (class_kind == "SgModuleStatement" &&
+                                  symbol_variant == V_SgModuleSymbol);
+    if (!external_class->requiredBool("present") || !compatible_kind) {
+      throw std::runtime_error(
+          "AST JSON external class symbol has an incompatible basis");
+    }
   }
-  if (kind == "SgTemplateMemberFunctionSymbol") {
-    return new SgTemplateMemberFunctionSymbol(isSgFunctionDeclaration(basis));
+  const JsonValue *identity;
+  if (external_function != nullptr)
+    identity = external_function;
+  else if (external_module != nullptr)
+    identity = external_module;
+  else
+    identity = external_class;
+  if (identity->requiredString("name") != name)
+    throw std::runtime_error(
+        "AST JSON external symbol has a conflicting basis name");
+  std::function<SgNode *()> construct_basis;
+  if (external_function != nullptr) {
+    construct_basis = decodeExternalFunction(*external_function, nodes);
+  } else if (external_module != nullptr) {
+    construct_basis = decodeExternalModule(*external_module);
+  } else {
+    construct_basis = decodeExternalClassDeclaration(*external_class);
   }
-  if (kind == "SgClassSymbol") {
-    return new SgClassSymbol(isSgClassDeclaration(basis));
-  }
-  if (kind == "SgTemplateClassSymbol") {
-    return new SgTemplateClassSymbol(isSgClassDeclaration(basis));
-  }
-  if (kind == "SgEnumSymbol") {
-    return new SgEnumSymbol(isSgEnumDeclaration(basis));
-  }
-  if (kind == "SgTypedefSymbol") {
-    return new SgTypedefSymbol(isSgTypedefDeclaration(basis));
-  }
-  if (kind == "SgTemplateTypedefSymbol") {
-    return new SgTemplateTypedefSymbol(isSgTypedefDeclaration(basis));
-  }
-  if (kind == "SgLabelSymbol") {
-    if (SgLabelStatement *label = isSgLabelStatement(basis)) {
-      if (label->get_label().getString().empty()) {
-        SgLabelSymbol *symbol =
-            new SgLabelSymbol(static_cast<SgLabelStatement *>(nullptr));
-        symbol->set_fortran_statement(label);
-        return symbol;
+  return [construct_basis = std::move(construct_basis), symbol_variant, name,
+          kind, owner_table]() -> SgSymbol * {
+    SgNode *basis = construct_basis();
+    if (SgFunctionDeclaration *function = isSgFunctionDeclaration(basis)) {
+      SgFunctionDeclaration *canonical_declaration =
+          isSgFunctionDeclaration(function->get_firstNondefiningDeclaration());
+      SgScopeStatement *scope = canonical_declaration != nullptr
+                                    ? canonical_declaration->get_scope()
+                                    : nullptr;
+      if (owner_table != nullptr) {
+        if (scope == nullptr || scope->get_symbol_table() != owner_table ||
+            canonical_declaration->get_firstNondefiningDeclaration() !=
+                canonical_declaration)
+          throw std::runtime_error("AST JSON external function symbol has a "
+                                   "conflicting table owner");
+        auto symbol = std::make_unique<SgFunctionSymbol>(canonical_declaration);
+        if (symbolName(symbol.get()) != name)
+          throw std::runtime_error(
+              "AST JSON external function symbol has a conflicting name");
+        return symbol.release();
       }
-      return new SgLabelSymbol(label);
+      SgSymbol *canonical_symbol =
+          scope != nullptr
+              ? scope->find_symbol_from_declaration(canonical_declaration)
+              : nullptr;
+      if (canonical_symbol == nullptr ||
+          canonical_symbol->variantT() != V_SgFunctionSymbol ||
+          symbolName(canonical_symbol) != name ||
+          canonical_symbol->get_symbol_basis() != canonical_declaration ||
+          canonical_symbol->get_parent() != scope->get_symbol_table() ||
+          !scope->get_symbol_table()->exists(canonical_symbol)) {
+        throw std::runtime_error(
+            "AST JSON external function symbol has no exact canonical "
+            "declaration-owned binding: " +
+            kind);
+      }
+      return canonical_symbol;
     }
-    if (SgInitializedName *name = isSgInitializedName(basis)) {
-      return new SgLabelSymbol(name);
+    std::unique_ptr<SgSymbol> symbol(
+        prepareSymbolForKindAndBasis(symbol_variant, basis, std::nullopt)());
+    if (symbol == nullptr || symbol->get_symbol_basis() == nullptr ||
+        symbolName(symbol.get()) != name) {
+      throw std::runtime_error(
+          "AST JSON cannot reconstruct external symbol reference: " + kind);
     }
-    if (SgStatement *stmt = isSgStatement(basis)) {
-      SgLabelSymbol *symbol =
-          new SgLabelSymbol(static_cast<SgLabelStatement *>(nullptr));
-      symbol->set_fortran_statement(stmt);
-      return symbol;
-    }
-    return nullptr;
-  }
-  if (kind == "SgNamespaceSymbol") {
-    return new SgNamespaceSymbol(
-        isSgNamespaceDeclarationStatement(basis) != nullptr
-            ? isSgNamespaceDeclarationStatement(basis)->get_name()
-            : SgName(""),
-        isSgNamespaceDeclarationStatement(basis), nullptr, false);
-  }
-  if (kind == "SgModuleSymbol") {
-    return new SgModuleSymbol(isSgModuleStatement(basis));
-  }
-  if (kind == "SgInterfaceSymbol") {
-    return new SgInterfaceSymbol(isSgInterfaceStatement(basis));
-  }
-  if (kind == "SgNonrealSymbol") {
-    return new SgNonrealSymbol(isSgNonrealDecl(basis));
-  }
-  if (kind == "SgTemplateSymbol") {
-    return new SgTemplateSymbol(isSgTemplateDeclaration(basis));
-  }
-  return nullptr;
+    return symbol.release();
+  };
 }
 
 SgSymbol *createExternalSymbolFromJson(const JsonValue &json,
-                                       const NodeMap &nodes) {
-  const std::string kind = json.at("symbol_kind").asString();
-  SgNode *basis = nullptr;
-  if (const JsonValue *external = json.find("external_function")) {
-    basis = externalFunctionFromJson(*external, nodes);
-  } else if (const JsonValue *external = json.find("external_module")) {
-    basis = externalModuleFromJson(*external);
-  } else if (const JsonValue *external = json.find("external_class")) {
-    basis = externalClassDeclarationFromJson(*external);
-  }
-  if (basis == nullptr) {
-    return nullptr;
-  }
-  if (SgFunctionDeclaration *function = isSgFunctionDeclaration(basis)) {
-    SgFunctionDeclaration *canonical_declaration =
-        isSgFunctionDeclaration(function->get_firstNondefiningDeclaration());
-    SgScopeStatement *scope = canonical_declaration != nullptr
-                                  ? canonical_declaration->get_scope()
-                                  : nullptr;
-    SgSymbol *canonical_symbol =
-        scope != nullptr
-            ? scope->find_symbol_from_declaration(canonical_declaration)
-            : nullptr;
-    if (canonical_symbol == nullptr || canonical_symbol->class_name() != kind ||
-        canonical_symbol->get_symbol_basis() != canonical_declaration ||
-        canonical_symbol->get_parent() != scope->get_symbol_table() ||
-        !scope->get_symbol_table()->exists(canonical_symbol)) {
-      throw std::runtime_error(
-          "AST JSON external function symbol has no exact canonical "
-          "declaration-owned binding: " +
-          kind);
-    }
-    return canonical_symbol;
-  }
-  SgSymbol *symbol = createSymbolForKindAndBasis(kind, basis);
-  if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
-    throw std::runtime_error(
-        "AST JSON cannot reconstruct external symbol reference: " + kind);
-  }
-  return symbol;
+                                       const NodeMap &nodes,
+                                       SgSymbolTable *owner_table) {
+  return prepareExternalSymbolFromJson(json, nodes, owner_table)();
 }
 
 void validateExternalSymbolBasisOwnership(SgSymbol *symbol) {
@@ -357,15 +650,25 @@ void validateExternalSymbolBasisOwnership(SgSymbol *symbol) {
     SgAuxiliaryDeclarationList *auxiliary =
         isSgAuxiliaryDeclarationList(decl->get_parent());
     SgScopeStatement *scope = decl->get_scope();
-    if (isAstJsonExternalFunction(decl) &&
-        (auxiliary == nullptr || scope == nullptr ||
-         auxiliary->get_parent() != scope ||
-         scope->get_auxiliary_declarations() != auxiliary ||
-         isSgGlobal(scope) == nullptr || scope->get_parent() != nullptr ||
-         std::count(auxiliary->get_declarations().begin(),
-                    auxiliary->get_declarations().end(), decl) != 1)) {
-      throw std::runtime_error(
-          "AST JSON external function shell has no isolated semantic root");
+    if (isAstJsonExternalFunction(decl)) {
+      auto *canonical = scope != nullptr
+                            ? scope->find_symbol_from_declaration(decl)
+                            : nullptr;
+      if (decl->get_parent() == nullptr ||
+          decl->get_firstNondefiningDeclaration() != decl ||
+          canonical == nullptr || canonical->get_symbol_basis() != decl ||
+          canonical->variantT() != V_SgFunctionSymbol ||
+          canonical->get_parent() != scope->get_symbol_table() ||
+          !scope->get_symbol_table()->exists(canonical))
+        throw std::runtime_error(
+            "AST JSON external function has no exact canonical symbol owner");
+      if (auxiliary != nullptr &&
+          (auxiliary->get_parent() != scope ||
+           scope->get_auxiliary_declarations() != auxiliary ||
+           std::count(auxiliary->get_declarations().begin(),
+                      auxiliary->get_declarations().end(), decl) != 1))
+        throw std::runtime_error(
+            "AST JSON external function has conflicting auxiliary ownership");
     }
   }
   if (SgModuleStatement *module = isSgModuleStatement(basis)) {
@@ -406,125 +709,6 @@ void validateExternalSymbolBasisOwnership(SgSymbol *symbol) {
   }
 }
 
-SgSymbol *resolveExistingSymbolFromJson(const JsonValue &json,
-                                        const NodeMap &nodes) {
-  const uint64_t declaration_id =
-      static_cast<uint64_t>(json.at("symbol_declaration").asInt());
-  if (declaration_id == 0) {
-    SgSymbol *external_symbol = createExternalSymbolFromJson(json, nodes);
-    if (external_symbol != nullptr) {
-      return external_symbol;
-    }
-    throw std::runtime_error(
-        "AST JSON symbol reference has no symbol_declaration");
-  }
-
-  SgNode *basis = nodeById(nodes, declaration_id);
-  SgScopeStatement *scope = nullptr;
-  if (SgInitializedName *name = isSgInitializedName(basis)) {
-    scope = name->get_scope();
-  } else if (SgDeclarationStatement *decl = isSgDeclarationStatement(basis)) {
-    scope = decl->get_scope();
-  } else if (SgLabelStatement *label = isSgLabelStatement(basis)) {
-    scope = label->get_scope();
-  }
-  if (scope == nullptr) {
-    throw std::runtime_error(
-        "AST JSON symbol reference basis has no owning scope: " +
-        std::string(basis->sage_class_name()));
-  }
-
-  SgSymbol *symbol = nullptr;
-  if (SgInitializedName *name = isSgInitializedName(basis)) {
-    symbol = scope->find_symbol_from_declaration(name);
-  } else if (SgDeclarationStatement *decl = isSgDeclarationStatement(basis)) {
-    symbol = scope->find_symbol_from_declaration(decl);
-  } else if (SgLabelStatement *label = isSgLabelStatement(basis)) {
-    symbol = scope->find_symbol_from_declaration(label);
-  }
-  if (symbol == nullptr) {
-    throw std::runtime_error(
-        "AST JSON failed to resolve serialized symbol reference: " +
-        json.requiredString("symbol_name"));
-  }
-  return symbol;
-}
-
-SgFunctionSymbol *functionReferenceSemanticSymbolFromJson(
-    const JsonValue &semantic_symbol,
-    const JsonValue &source_visible_symbol_record,
-    SgFunctionSymbol *source_visible_symbol, const NodeMap &nodes) {
-  if (source_visible_symbol != nullptr) {
-    const JsonValue *source_visible_symbol_json =
-        source_visible_symbol_record.find("symbol");
-    if (source_visible_symbol_json == nullptr) {
-      throw std::runtime_error(
-          "AST JSON Fortran source-visible function symbol has no symbol "
-          "record");
-    }
-    if (source_visible_symbol_json->exactlyEquals(semantic_symbol)) {
-      return source_visible_symbol;
-    }
-  }
-
-  SgSymbol *resolved = resolveExistingSymbolFromJson(semantic_symbol, nodes);
-  SgFunctionSymbol *function_symbol = isSgFunctionSymbol(resolved);
-  if (function_symbol == nullptr ||
-      function_symbol->class_name() !=
-          semantic_symbol.requiredString("symbol_kind") ||
-      function_symbol->get_name().getString() !=
-          semantic_symbol.requiredString("symbol_name")) {
-    throw std::runtime_error(
-        "AST JSON SgFunctionRefExp semantic symbol did not resolve to its "
-        "exact serialized kind and name");
-  }
-  return function_symbol;
-}
-
-struct DeferredSymbolTableEntry {
-  SgSymbolTable *table = nullptr;
-  SgName entry_name;
-  const JsonValue *entry_json = nullptr;
-};
-
-struct ExpectedSymbolTablePreference {
-  SgSymbolTable *table = nullptr;
-  SgName entry_name;
-  SgSymbol *symbol = nullptr;
-  bool lookup_preferred = false;
-};
-
-std::string symbolLookupPreferenceCategory(SgSymbol *symbol) {
-  if (symbol == nullptr) {
-    return "";
-  }
-  if (isSgVariableSymbol(symbol) != nullptr) {
-    return "variable";
-  }
-  if (isSgClassSymbol(symbol) != nullptr) {
-    return "class";
-  }
-  if (isSgEnumSymbol(symbol) != nullptr) {
-    return "enum";
-  }
-  if (isSgEnumFieldSymbol(symbol) != nullptr) {
-    return "enum_field";
-  }
-  if (isSgTypedefSymbol(symbol) != nullptr) {
-    return "typedef";
-  }
-  if (isSgLabelSymbol(symbol) != nullptr) {
-    return "label";
-  }
-  if (isSgNamespaceSymbol(symbol) != nullptr) {
-    return "namespace";
-  }
-  if (isSgFunctionSymbol(symbol) != nullptr) {
-    return "function";
-  }
-  return "";
-}
-
 bool symbolTablePreferencesMatch(
     const std::vector<const ExpectedSymbolTablePreference *> &entries) {
   for (const ExpectedSymbolTablePreference *entry : entries) {
@@ -545,7 +729,7 @@ void removeSymbolTablePreferenceGroup(
     ROSE_ASSERT(entry != nullptr);
     ROSE_ASSERT(entry->table != nullptr);
     ROSE_ASSERT(entry->symbol != nullptr);
-    if (!entry->table->find(entry->entry_name, entry->symbol)) {
+    if (!entry->table->exists(entry->entry_name, entry->symbol)) {
       std::ostringstream message;
       message << "AST JSON cannot reorder missing symbol-table entry";
       message << " entry=" << entry->entry_name.getString();
@@ -567,77 +751,82 @@ void insertSymbolTablePreferenceGroup(
   }
 }
 
-void enforceSymbolTablePreferences(
-    const std::vector<ExpectedSymbolTablePreference> &entries) {
-  struct PreferenceGroupKey {
-    SgSymbolTable *table = nullptr;
-    std::string entry_name;
-    std::string category;
-
-    bool operator<(const PreferenceGroupKey &rhs) const {
-      if (table != rhs.table) {
-        return std::less<SgSymbolTable *>()(table, rhs.table);
-      }
-      if (entry_name != rhs.entry_name) {
-        return entry_name < rhs.entry_name;
-      }
-      return category < rhs.category;
-    }
-  };
-
-  std::map<PreferenceGroupKey,
-           std::vector<const ExpectedSymbolTablePreference *>>
-      groups;
+SymbolTablePreferenceGroups groupSymbolTablePreferences(
+    const std::vector<ExpectedSymbolTablePreference> &entries,
+    std::optional<bool> case_insensitive) {
+  SymbolTablePreferenceGroups groups;
+  rose_hash_multimap name_semantics;
+  if (case_insensitive)
+    name_semantics.set_case_insensitive_semantics(*case_insensitive);
+  using NameGroups = std::unordered_map<SgName, size_t, hash_Name, eqstr>;
+  std::map<std::pair<SgSymbolTable *, VariantT>, NameGroups> indexes;
   for (const ExpectedSymbolTablePreference &entry : entries) {
-    const std::string category = symbolLookupPreferenceCategory(entry.symbol);
-    if (category.empty()) {
+    const VariantT category = entry.category;
+    if (category == V_SgSymbol) {
+      if (entry.lookup_preferred)
+        throw std::runtime_error(
+            "AST JSON unsupported symbol lookup preference for " +
+            entry.entry_name.getString());
       continue;
     }
-    PreferenceGroupKey key;
-    key.table = entry.table;
-    key.entry_name = entry.entry_name.getString();
-    key.category = category;
-    groups[key].push_back(&entry);
+    ROSE_ASSERT(entry.table != nullptr || case_insensitive.has_value());
+    if (entry.table != nullptr)
+      ROSE_ASSERT(entry.table->get_table() != nullptr);
+    const auto *semantics =
+        case_insensitive ? &name_semantics : entry.table->get_table();
+    auto names = indexes.try_emplace(std::make_pair(entry.table, category), 0,
+                                     hash_Name(semantics), eqstr(semantics));
+    auto group =
+        names.first->second.try_emplace(entry.entry_name, groups.size());
+    if (group.second)
+      groups.emplace_back();
+    groups[group.first->second].push_back(&entry);
   }
+  return groups;
+}
 
-  for (const auto &group_entry : groups) {
-    const std::vector<const ExpectedSymbolTablePreference *> &group =
-        group_entry.second;
+void validateSymbolTablePreferenceGroups(
+    const std::vector<ExpectedSymbolTablePreference> &entries,
+    std::optional<bool> case_insensitive) {
+  for (const auto &group :
+       groupSymbolTablePreferences(entries, case_insensitive)) {
+    const auto preferred_count =
+        std::count_if(group.begin(), group.end(),
+                      [](const ExpectedSymbolTablePreference *entry) {
+                        return entry->lookup_preferred;
+                      });
+    if (preferred_count != 1)
+      throw std::runtime_error("AST JSON symbol preference group " +
+                               group.front()->entry_name.getString() + "/" +
+                               std::to_string(group.front()->category) +
+                               " does not identify one exact preferred entry");
+  }
+}
+
+void enforceSymbolTablePreferences(
+    const std::vector<ExpectedSymbolTablePreference> &entries) {
+  for (const auto &group : groupSymbolTablePreferences(entries)) {
     if (group.size() < 2 || symbolTablePreferencesMatch(group)) {
       continue;
     }
 
-    std::vector<const ExpectedSymbolTablePreference *> preferred;
-    std::vector<const ExpectedSymbolTablePreference *> nonpreferred;
-    for (const ExpectedSymbolTablePreference *entry : group) {
-      if (entry->lookup_preferred) {
-        preferred.push_back(entry);
-      } else {
-        nonpreferred.push_back(entry);
-      }
-    }
-    if (preferred.size() != 1) {
+    auto ordered = group;
+    const auto preferred =
+        std::stable_partition(ordered.begin(), ordered.end(),
+                              [](const ExpectedSymbolTablePreference *entry) {
+                                return !entry->lookup_preferred;
+                              });
+    const auto preferred_count = std::distance(preferred, ordered.end());
+    if (preferred_count != 1) {
       std::ostringstream message;
       message << "AST JSON cannot enforce symbol lookup preference";
-      message << " entry=" << group_entry.first.entry_name;
-      message << " category=" << group_entry.first.category;
-      message << " preferred_count=" << preferred.size();
+      message << " entry=" << group.front()->entry_name;
+      message << " category="
+              << symbolLookupPreferenceCategory(group.front()->symbol);
+      message << " preferred_count=" << preferred_count;
       throw std::runtime_error(message.str());
     }
 
-    std::vector<const ExpectedSymbolTablePreference *> ordered;
-    ordered.reserve(group.size());
-    ordered.insert(ordered.end(), nonpreferred.begin(), nonpreferred.end());
-    ordered.insert(ordered.end(), preferred.begin(), preferred.end());
-    removeSymbolTablePreferenceGroup(group);
-    insertSymbolTablePreferenceGroup(ordered);
-    if (symbolTablePreferencesMatch(group)) {
-      continue;
-    }
-
-    ordered.clear();
-    ordered.insert(ordered.end(), preferred.begin(), preferred.end());
-    ordered.insert(ordered.end(), nonpreferred.begin(), nonpreferred.end());
     removeSymbolTablePreferenceGroup(group);
     insertSymbolTablePreferenceGroup(ordered);
     if (symbolTablePreferencesMatch(group)) {
@@ -646,8 +835,9 @@ void enforceSymbolTablePreferences(
 
     std::ostringstream message;
     message << "AST JSON failed to enforce symbol lookup preference";
-    message << " entry=" << group_entry.first.entry_name;
-    message << " category=" << group_entry.first.category;
+    message << " entry=" << group.front()->entry_name;
+    message << " category="
+            << symbolLookupPreferenceCategory(group.front()->symbol);
     throw std::runtime_error(message.str());
   }
 }
@@ -673,229 +863,590 @@ void validateSymbolTablePreferences(
   }
 }
 
-SgSymbol *createDeferredSymbolTableSymbol(const JsonValue &entry,
-                                          const NodeMap &nodes) {
-  const std::string kind = entry.at("symbol_kind").asString();
-  if (kind == "SgAliasSymbol") {
-    const JsonValue *target = entry.find("alias_target");
-    if (target == nullptr) {
-      throw std::runtime_error(
-          "AST JSON SgAliasSymbol table entry has no alias_target");
-    }
-    SgAliasSymbol *symbol =
-        new SgAliasSymbol(resolveExistingSymbolFromJson(*target, nodes),
-                          entry.requiredBool("alias_is_renamed"),
-                          SgName(entry.requiredString("alias_new_name")));
-    const JsonValue &causal_nodes = entry.at("alias_causal_nodes");
-    if (causal_nodes.kind != JsonValue::Kind::Array ||
-        causal_nodes.array.empty()) {
-      throw std::runtime_error(
-          "AST JSON alias_causal_nodes field is not a non-empty array");
-    }
-    for (const JsonValue &node_id : causal_nodes.array) {
-      const uint64_t id = static_cast<uint64_t>(node_id.asInt());
-      if (id == 0) {
-        throw std::runtime_error(
-            "AST JSON SgAliasSymbol has a null causal node");
-      }
-      symbol->get_causal_nodes().push_back(nodeById(nodes, id));
-    }
-    return symbol;
-  }
-  if (kind == "SgRenameSymbol") {
-    const JsonValue *original = entry.find("original_symbol");
-    if (original == nullptr) {
-      throw std::runtime_error(
-          "AST JSON SgRenameSymbol table entry has no original_symbol");
-    }
-    SgSymbol *originalSymbol = resolveExistingSymbolFromJson(*original, nodes);
-    SgFunctionDeclaration *originalBasis = isSgFunctionDeclaration(
-        originalSymbol != nullptr ? originalSymbol->get_symbol_basis()
-                                  : nullptr);
-    const JsonValue &serializedSymbol = entry.at("symbol");
-    const int64_t rawBasisId =
-        serializedSymbol.at("symbol_declaration").asInt();
-    if (rawBasisId < 0 || originalBasis == nullptr) {
-      throw std::runtime_error(
-          "AST JSON SgRenameSymbol has no exact function basis");
-    }
-
-    SgFunctionDeclaration *basis = originalBasis;
-    if (rawBasisId != 0) {
-      basis = nodeByIdAs<SgFunctionDeclaration>(
-          nodes, static_cast<uint64_t>(rawBasisId));
-      if (basis != originalBasis) {
-        throw std::runtime_error(
-            "AST JSON SgRenameSymbol basis diverges from its original "
-            "symbol");
-      }
-    } else {
-      const JsonValue *external = serializedSymbol.find("external_function");
-      if (external == nullptr ||
-          external->requiredString("name") !=
-              originalBasis->get_name().getString() ||
-          external->requiredString("kind") != originalBasis->class_name()) {
-        throw std::runtime_error(
-            "AST JSON external SgRenameSymbol payload diverges from its "
-            "original function");
-      }
-    }
-    return new SgRenameSymbol(basis, originalSymbol,
-                              SgName(entry.requiredString("rename_new_name")));
-  }
-  throw std::runtime_error("AST JSON deferred symbol kind is unsupported: " +
-                           kind);
+SerializedSymbolTableEntry::SerializedSymbolTableEntry(SgSymbolTable *owner,
+                                                       const JsonValue &entry)
+    : SerializedSymbolTableEntry(entry) {
+  ASSERT_not_null(owner);
+  table = owner;
 }
 
-void restoreSerializedSymbolTables(const AstFileRecord &ast,
-                                   const NodeMap &nodes) {
-  std::vector<DeferredSymbolTableEntry> deferred_entries;
-  std::vector<ExpectedSymbolTablePreference> expected_preferences;
+SerializedSymbolTableEntry::SerializedSymbolTableEntry(const JsonValue &entry)
+    : symbol_kind(
+          symbolVariantFromJsonKind(entry.requiredString("symbol_kind"))),
+      lookup_preferred(entry.requiredBool("lookup_preferred")),
+      basis_id(symbol_kind == V_SgAliasSymbol || symbol_kind == V_SgRenameSymbol
+                   ? std::nullopt
+                   : std::optional<uint64_t>(
+                         entry.at("symbol").requiredNonnegativeNodeId(
+                             "symbol_declaration"))),
+      entry_name(entry.requiredName("entry_name")) {
+  if (const JsonValue *symbol = entry.find("symbol")) {
+    if (symbolVariantFromJsonKind(symbol->requiredString("symbol_kind")) !=
+        symbol_kind)
+      throw std::runtime_error(
+          "AST JSON symbol table entry kind disagrees with its symbol");
+  }
+  if (symbol_kind == V_SgLabelSymbol)
+    label_fields = labelSymbolFieldsFromJson(entry.at("symbol"));
+  if (symbol_kind == V_SgNamelistSymbol) {
+    const auto &groups = entry.at("namelist_declarations");
+    if (groups.kind != JsonValue::Kind::Array || groups.array.empty())
+      throw std::runtime_error("AST JSON NAMELIST symbol has no declarations");
+    std::set<uint64_t> seen;
+    for (const auto &group : groups.array) {
+      const auto id = requiredPositiveId(group, "NAMELIST declaration");
+      if (!seen.insert(id).second)
+        throw std::runtime_error(
+            "AST JSON NAMELIST has duplicate declarations");
+      namelist_declarations.push_back(id);
+    }
+    if (namelist_declarations.front() != basis_id.value())
+      throw std::runtime_error(
+          "AST JSON NAMELIST symbol has a different first declaration");
+  }
+  if (symbol_kind == V_SgAliasSymbol || symbol_kind == V_SgRenameSymbol) {
+    const JsonValue &causes = entry.at("alias_causal_nodes");
+    if (causes.kind != JsonValue::Kind::Array ||
+        (symbol_kind == V_SgAliasSymbol && causes.array.empty()))
+      throw std::runtime_error(
+          "AST JSON alias_causal_nodes field is not a non-empty array");
+    for (const JsonValue &cause : causes.array) {
+      const int64_t id = cause.asInt();
+      if (id <= 0)
+        throw std::runtime_error("AST JSON " +
+                                 entry.requiredString("symbol_kind") +
+                                 " has an invalid causal node ID");
+      causal_ids.push_back(static_cast<uint64_t>(id));
+    }
+    visibility.emplace(entry);
+  }
+}
+
+VisibilitySymbolFields::VisibilitySymbolFields(const JsonValue &entry,
+                                               SgSymbolTable *receiver_table)
+    : kind(symbolVariantFromJsonKind(entry.requiredString("symbol_kind"))),
+      target_binding(kind == V_SgAliasSymbol
+                         ? entry.find("alias_target_binding")
+                         : entry.find("original_symbol_binding")),
+      target(target_binding != nullptr
+                 ? &target_binding->at("symbol")
+                 : &entry.at(kind == V_SgAliasSymbol ? "alias_target"
+                                                     : "original_symbol")),
+      target_kind(
+          symbolVariantFromJsonKind(target->requiredString("symbol_kind"))),
+      basis_id(target->requiredNonnegativeNodeId("symbol_declaration")),
+      new_name(entry.requiredName(kind == V_SgAliasSymbol ? "alias_new_name"
+                                                          : "rename_new_name")),
+      is_renamed(kind == V_SgAliasSymbol
+                     ? entry.requiredBool("alias_is_renamed")
+                     : false),
+      local_table(receiver_table) {
+  ROSE_ASSERT(kind == V_SgAliasSymbol || kind == V_SgRenameSymbol);
+  const bool visibility_target =
+      target_kind == V_SgAliasSymbol || target_kind == V_SgRenameSymbol;
+  if (visibility_target != (target_binding != nullptr) ||
+      (target_binding != nullptr &&
+       entry.find(kind == V_SgAliasSymbol ? "alias_target"
+                                          : "original_symbol") != nullptr))
+    throw std::runtime_error(
+        "AST JSON alias target requires one exact binding representation");
+  if (target_binding != nullptr) {
+    if (const auto *local = target_binding->find("binding_local")) {
+      if (!local->asBool() || local_table == nullptr ||
+          target_binding->find("binding_scope") != nullptr)
+        throw std::runtime_error(
+            "AST JSON alias/rename local binding has no exact receiver");
+    } else
+      requiredPositiveId(target_binding->at("binding_scope"),
+                         "alias target scope");
+    if (target_binding->requiredName("binding_name").is_null())
+      throw std::runtime_error(
+          "AST JSON alias target has an empty binding name");
+  }
+  const std::string name = target->requiredString("symbol_name");
+  const JsonValue &serializedSymbol = entry.at("symbol");
+  if (basis_id !=
+          serializedSymbol.requiredNonnegativeNodeId("symbol_declaration") ||
+      (kind == V_SgRenameSymbol &&
+       (serializedSymbol.requiredString("symbol_kind") != "SgRenameSymbol" ||
+        serializedSymbol.requiredString("symbol_name") != name))) {
+    throw std::runtime_error("AST JSON " + std::string(getVariantName(kind)) +
+                             " basis diverges from its original symbol");
+  }
+  if (kind == V_SgRenameSymbol && basis_id == 0) {
+    const JsonValue *external = serializedSymbol.find("external_function");
+    const JsonValue *originalExternal = target->find("external_function");
+    if (external == nullptr || originalExternal == nullptr ||
+        !external->requiredBool("present") ||
+        !external->exactlyEquals(*originalExternal)) {
+      throw std::runtime_error(
+          "AST JSON external SgRenameSymbol payload diverges from its "
+          "original function");
+    }
+  }
+}
+
+static SgSymbol *visibilitySymbolTarget(const VisibilitySymbolFields &fields,
+                                        const NodeMap &nodes) {
+  SgSymbol *target;
+  if (fields.target_binding != nullptr) {
+    target = exactBoundSymbolFromJson(*fields.target_binding, nodes,
+                                      fields.local_table);
+  } else if (fields.basis_id == 0) {
+    ROSE_ASSERT(fields.construct_external_target);
+    target = fields.construct_external_target();
+  } else {
+    target = symbolFromJson(*fields.target, nodes);
+  }
+  if (target == nullptr || target->get_symbol_basis() == nullptr)
+    throw std::runtime_error("AST JSON visibility symbol has no exact target");
+  validateExternalSymbolBasisOwnership(target);
+  return target;
+}
+
+static std::unique_ptr<SgSymbol>
+constructVisibilitySymbol(const VisibilitySymbolFields &fields,
+                          SgSymbol *target, SgNodePtrList causes) {
+  if (fields.kind == V_SgAliasSymbol) {
+    auto alias = std::make_unique<SgAliasSymbol>(target, fields.is_renamed,
+                                                 fields.new_name);
+    alias->get_causal_nodes().swap(causes);
+    return alias;
+  }
+  ROSE_ASSERT(fields.kind == V_SgRenameSymbol);
+  auto *basis = isSgFunctionDeclaration(target->get_symbol_basis());
+  if (basis == nullptr)
+    throw std::runtime_error(
+        "AST JSON SgRenameSymbol has no exact function basis");
+  auto rename =
+      std::make_unique<SgRenameSymbol>(basis, target, fields.new_name);
+  rename->get_causal_nodes().swap(causes);
+  return rename;
+}
+
+std::unique_ptr<SgSymbol>
+constructVisibilitySymbol(const VisibilitySymbolFields &fields,
+                          const NodeMap &nodes, SgNodePtrList causes) {
+  return constructVisibilitySymbol(
+      fields, visibilitySymbolTarget(fields, nodes), std::move(causes));
+}
+
+static SgSymbol *
+existingOrdinarySymbolTableEntry(const SerializedSymbolTableEntry &record,
+                                 SgNode *basis) {
+  SgSymbolTable *table = record.table;
+  const SgName &entry_name = record.entry_name;
+  const VariantT expected_variant = record.symbol_kind;
+  SgSymbol *symbol = nullptr;
+  for (SgSymbol *candidate : table->find_symbols_with_exact_basis(basis)) {
+    if (candidate->variantT() == expected_variant &&
+        table->stored_name_of(candidate) == entry_name) {
+      if (symbol != nullptr) {
+        throw std::runtime_error(
+            "AST JSON scope symbol table holds duplicate entries for " +
+            entry_name.getString());
+      }
+      symbol = candidate;
+    }
+  }
+  if (expected_variant == V_SgNamespaceSymbol)
+    validateNamespaceSymbolKey(entry_name, basis);
+  if (auto *label = isSgLabelSymbol(symbol))
+    validateLabelSymbolFields(label, record.label_fields.value());
+  if (symbol != nullptr)
+    validateExternalSymbolBasisOwnership(symbol);
+  return symbol;
+}
+
+std::function<SgSymbol *()>
+SerializedSymbolTableEntry::prepare(const NodeMap &nodes) const {
+  if (symbol_kind != V_SgNamelistSymbol)
+    return prepareSymbolForKindAndBasis(
+        symbol_kind, nodeById(nodes, basis_id.value()), label_fields);
+  SgNameGroupPtrList groups;
+  for (auto id : namelist_declarations) {
+    auto *group = nodeByIdAs<SgNameGroup>(nodes, id);
+    auto *owner = isSgNamelistStatement(group->get_parent());
+    if (owner == nullptr || owner->get_parent() != table->get_parent() ||
+        !table->get_table()->key_eq()(entry_name,
+                                      SgName(group->get_group_name())) ||
+        !SgNameGroup::is_valid_group(group->get_group_name(),
+                                     group->get_objects()))
+      throw std::runtime_error(
+          "AST JSON NAMELIST symbol has inconsistent declarations");
+    for (auto *object : group->get_objects())
+      if (object->get_parent() != group)
+        throw std::runtime_error(
+            "AST JSON NAMELIST symbol has unowned objects");
+    groups.push_back(group);
+  }
+  return [groups] { return new SgNamelistSymbol(groups); };
+}
+
+static SgSymbol *
+constructOrdinarySymbolTableEntry(const SerializedSymbolTableEntry &record,
+                                  const NodeMap &nodes) {
+  SgSymbolTable *table = record.table;
+  const SgName &entry_name = record.entry_name;
+  const VariantT expected_variant = record.symbol_kind;
+  SgNode *basis = nodeById(nodes, record.basis_id.value());
+  SgSymbol *symbol = existingOrdinarySymbolTableEntry(record, basis);
+  if (auto *namelist = isSgNamelistSymbol(symbol)) {
+    SgNameGroupPtrList groups;
+    for (auto id : record.namelist_declarations)
+      groups.push_back(nodeByIdAs<SgNameGroup>(nodes, id));
+    if (namelist->get_declarations() != groups)
+      throw std::runtime_error("AST JSON NAMELIST declaration family changed");
+  }
+  std::unique_ptr<SgSymbol> owned_symbol;
+  if (symbol == nullptr) {
+    auto construct = record.construct;
+    if (!construct)
+      construct = record.prepare(nodes);
+    owned_symbol.reset(construct());
+    symbol = owned_symbol.get();
+  }
+  if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
+    std::ostringstream message;
+    message << "AST JSON cannot reconstruct symbol table entry"
+            << " kind=" << getVariantName(expected_variant)
+            << " basis=" << basis->sage_class_name();
+    throw std::runtime_error(message.str());
+  }
+  if (owned_symbol != nullptr) {
+    validateExternalSymbolBasisOwnership(symbol);
+    table->insert(entry_name, symbol);
+    owned_symbol.release();
+  }
+  return symbol;
+}
+
+static bool
+deferredSymbolDependenciesReady(const SerializedSymbolTableEntry &record,
+                                const NodeMap &nodes) {
+  if (!record.visibility) {
+    const uint64_t basis_id = record.basis_id.value();
+    if (basis_id == 0)
+      throw std::runtime_error(
+          "AST JSON pending ordinary symbol has no declaration basis");
+    if (record.symbol_kind == V_SgNamelistSymbol) {
+      for (auto id : record.namelist_declarations) {
+        const auto found = nodes.find(id);
+        if (found == nodes.end())
+          return false;
+        auto *group = isSgNameGroup(found->second);
+        if (group == nullptr)
+          throw std::runtime_error(
+              "AST JSON NAMELIST symbol has a non-group declaration");
+        auto *owner = isSgNamelistStatement(group->get_parent());
+        if (owner == nullptr || owner->get_parent() == nullptr)
+          return false;
+      }
+    }
+    return nodes.count(basis_id) != 0;
+  }
+  bool ready = true;
+  for (uint64_t id : record.causal_ids) {
+    if (nodes.count(id) == 0)
+      ready = false;
+  }
+  if (record.visibility->target_binding != nullptr)
+    return ready && exactSymbolBindingDependenciesReady(
+                        *record.visibility->target_binding, nodes);
+  const uint64_t basis_id = record.visibility->basis_id;
+  if (basis_id == 0)
+    return ready;
+  const auto basis = nodes.find(basis_id);
+  if (basis == nodes.end())
+    return false;
+  SgScopeStatement *scope = nullptr;
+  if (auto *name = isSgInitializedName(basis->second))
+    scope = name->get_scope();
+  else if (auto *declaration = isSgDeclarationStatement(basis->second))
+    scope = declaration->get_scope();
+  else if (record.visibility->target_kind == V_SgLabelSymbol)
+    scope = labelSymbolScopeForBasis(basis->second);
+  else if (auto *group = isSgNameGroup(basis->second)) {
+    auto *owner = isSgNamelistStatement(group->get_parent());
+    if (owner != nullptr && owner->get_parent() != nullptr)
+      scope = owner->get_scope();
+  }
+  if (!ready || scope == nullptr)
+    return false;
+  ROSE_ASSERT(scope->get_symbol_table() != nullptr);
+  return !scope->get_symbol_table()
+              ->find_symbols_with_exact_basis(basis->second)
+              .empty();
+}
+
+bool constructPendingSerializedSymbols(
+    SerializedSymbolTableConstruction &construction, const NodeMap &nodes,
+    bool require_complete) {
+  bool constructed = false;
+  bool progress;
+  do {
+    progress = false;
+    for (size_t index = 0; index < construction.pending.size();) {
+      const auto &entry = construction.pending[index];
+      ROSE_ASSERT(entry.table != nullptr);
+      if (!deferredSymbolDependenciesReady(entry, nodes)) {
+        ++index;
+        continue;
+      }
+      SgSymbol *symbol = nullptr;
+      if (entry.visibility) {
+        SgNodePtrList causes;
+        for (uint64_t id : entry.causal_ids)
+          causes.push_back(nodeById(nodes, id));
+        const auto &fields = *entry.visibility;
+        auto *target = visibilitySymbolTarget(fields, nodes);
+        symbol =
+            existingOrdinarySymbolTableEntry(entry, target->get_symbol_basis());
+        if (symbol != nullptr) {
+          auto *alias = isSgAliasSymbol(symbol);
+          auto *rename = isSgRenameSymbol(symbol);
+          const bool matches =
+              alias != nullptr
+                  ? alias->get_alias() == target &&
+                        alias->get_isRenamed() == fields.is_renamed &&
+                        alias->get_new_name() == fields.new_name &&
+                        alias->get_causal_nodes() == causes
+                  : rename != nullptr &&
+                        rename->get_original_symbol() == target &&
+                        rename->get_new_name() == fields.new_name &&
+                        rename->get_causal_nodes() == causes;
+          if (!matches)
+            throw std::runtime_error("AST JSON visibility symbol differs from "
+                                     "its existing exact binding");
+        } else {
+          auto owned_symbol =
+              constructVisibilitySymbol(fields, target, std::move(causes));
+          entry.table->insert(entry.entry_name, owned_symbol.get());
+          symbol = owned_symbol.release();
+        }
+      } else {
+        symbol = constructOrdinarySymbolTableEntry(entry, nodes);
+      }
+      construction.preferences.push_back(
+          {entry.table, entry.entry_name, symbol, entry.lookup_preferred});
+      construction.preferences_finalized = false;
+      construction.pending.erase(construction.pending.begin() + index);
+      progress = constructed = true;
+    }
+  } while (progress);
+  if (require_complete && !construction.pending.empty())
+    throw std::runtime_error("AST JSON symbol entries have missing or cyclic "
+                             "construction dependencies");
+  if (construction.pending.empty() && !construction.preferences_finalized) {
+    enforceSymbolTablePreferences(construction.preferences);
+    validateSymbolTablePreferences(construction.preferences);
+    construction.preferences_finalized = true;
+  }
+  return constructed;
+}
+
+std::vector<SerializedSymbolTableEntry>
+symbolTableEntriesFromRecord(const NodeRecord &record) {
+  static const VariantVector scopes(V_SgScopeStatement);
+  if (!kindInVariants(record.kind, scopes))
+    throw std::runtime_error("AST JSON symbol table owner is not a scope: " +
+                             record.kind);
+  const JsonValue &entries = record.properties.at("symbol_table");
+  if (entries.kind != JsonValue::Kind::Array)
+    throw std::runtime_error(
+        "AST JSON symbol_table field is not an array for " + record.kind);
+  std::vector<SerializedSymbolTableEntry> decoded;
+  decoded.reserve(entries.array.size());
+  for (const JsonValue &entry : entries.array)
+    decoded.emplace_back(entry);
+  std::vector<ExpectedSymbolTablePreference> preferences;
+  preferences.reserve(decoded.size());
+  for (const auto &entry : decoded)
+    preferences.emplace_back(nullptr, entry.entry_name, entry.symbol_kind,
+                             entry.lookup_preferred);
+  validateSymbolTablePreferenceGroups(
+      preferences, record.properties.requiredBool("case_insensitive"));
+  return decoded;
+}
+
+void restoreSerializedSymbolTables(
+    const AstFileRecord &ast, const NodeMap &nodes,
+    const std::unordered_set<uint64_t> &scope_ids,
+    SerializedSymbolTableConstruction *construction) {
+  SerializedSymbolTableRecords records;
+  for (const NodeRecord &record : ast.nodes)
+    if (scope_ids.count(record.id) != 0)
+      records.emplace(record.id, symbolTableEntriesFromRecord(record));
+  restoreSerializedSymbolTables(ast, nodes, scope_ids, records, construction);
+}
+
+void restoreSerializedSymbolTables(
+    const AstFileRecord &ast, const NodeMap &nodes,
+    const std::unordered_set<uint64_t> &scope_ids,
+    const SerializedSymbolTableRecords &records,
+    SerializedSymbolTableConstruction *construction) {
+  SerializedSymbolTableConstruction local_construction;
+  auto &state = construction != nullptr ? *construction : local_construction;
+  auto &deferred_entries = state.pending;
+  auto &expected_preferences = state.preferences;
+  state.preferences_finalized = false;
+  std::unordered_set<SgScopeStatement *> restored_scopes;
+  struct ScopeSymbols {
+    SgSymbolTable *table;
+    std::vector<SerializedSymbolTableEntry> entries;
+  };
+  std::vector<ScopeSymbols> prepared_scopes;
 
   for (const NodeRecord &record : ast.nodes) {
+    if (scope_ids.count(record.id) == 0)
+      continue;
     auto restored_node = nodes.find(record.id);
     if (restored_node == nodes.end()) {
-      if (record.properties.find("symbol_table") != nullptr) {
-        throw std::runtime_error("AST JSON scope was not built before its "
-                                 "symbol-table reconstruction: " +
-                                 record.kind);
-      }
-      continue;
+      throw std::runtime_error("AST JSON scope was not built before its "
+                               "symbol-table reconstruction: " +
+                               record.kind);
     }
     SgScopeStatement *scope = isSgScopeStatement(restored_node->second);
     if (scope == nullptr) {
-      continue;
+      throw std::runtime_error("AST JSON symbol table owner is not a scope: " +
+                               record.kind);
     }
+    restored_scopes.insert(scope);
 
-    const JsonValue &entries = record.properties.at("symbol_table");
-    if (entries.kind != JsonValue::Kind::Array) {
+    SgSymbolTable *table = scope->get_symbol_table();
+    ROSE_ASSERT(table != nullptr && table->get_parent() == scope);
+    if (scope->isCaseInsensitive() !=
+        record.properties.requiredBool("case_insensitive")) {
       throw std::runtime_error(
-          "AST JSON symbol_table field is not an array for " + record.kind);
+          "AST JSON scope case sensitivity differs from construction");
     }
-
-    const int table_size =
-        std::max<int>(17, static_cast<int>(entries.array.size() * 2 + 1));
-    SgSymbolTable *table = new SgSymbolTable(table_size);
-    table->set_parent(scope);
-    table->setCaseInsensitive(
-        record.properties.requiredBool("case_insensitive"));
-    scope->set_symbol_table(table);
-
-    std::vector<const JsonValue *> insertion_entries;
-    insertion_entries.reserve(entries.array.size());
-    for (const JsonValue &entry : entries.array) {
-      insertion_entries.push_back(&entry);
+    auto decoded_entries = records.at(record.id);
+    for (std::size_t index = 0; index < decoded_entries.size(); ++index) {
+      auto &decoded = decoded_entries[index];
+      ROSE_ASSERT(decoded.table == nullptr);
+      decoded.table = table;
+      if (decoded.visibility) {
+        for (uint64_t id : decoded.causal_ids)
+          if (nodes.count(id) == 0)
+            ast.node(id);
+        const uint64_t target_id = decoded.visibility->basis_id;
+        if (decoded.visibility->target_binding != nullptr) {
+          ast.node(
+              decoded.visibility->target_binding->requiredNonnegativeNodeId(
+                  "binding_scope"));
+        } else if (target_id == 0)
+          decoded.visibility->construct_external_target =
+              prepareExternalSymbolFromJson(*decoded.visibility->target, nodes,
+                                            nullptr);
+        else if (nodes.count(target_id) == 0)
+          ast.node(target_id);
+        continue;
+      }
+      if (*decoded.basis_id == 0) {
+        decoded.construct = prepareExternalSymbolFromJson(
+            record.properties.at("symbol_table").array.at(index).at("symbol"),
+            nodes, table);
+        continue;
+      }
+      auto basis = nodes.find(*decoded.basis_id);
+      if (basis == nodes.end()) {
+        const NodeRecord &basis_record = ast.node(*decoded.basis_id);
+        if (basis_record.kind != "SgInitializedName" &&
+            basis_record.kind != "SgNameGroup" &&
+            basis_record.kind != "SgEnumDeclaration" &&
+            basis_record.kind != "SgNamespaceAliasDeclarationStatement" &&
+            basis_record.kind != "SgTypedefDeclaration" &&
+            basis_record.kind != "SgTemplateTypedefDeclaration" &&
+            basis_record.kind != "SgNonrealDecl" &&
+            basis_record.kind != "SgTemplateInstantiationTypedefDeclaration" &&
+            !(decoded.symbol_kind == V_SgLabelSymbol &&
+              requiresDelayedRebuild(basis_record))) {
+          throw std::runtime_error(
+              "AST JSON symbol table entry references unbuilt node " +
+              std::to_string(*decoded.basis_id));
+        }
+        continue;
+      }
+      if (decoded.symbol_kind == V_SgNamelistSymbol)
+        continue;
+      decoded.construct = decoded.prepare(nodes);
+      existingOrdinarySymbolTableEntry(decoded, basis->second);
     }
-    std::stable_sort(
-        insertion_entries.begin(), insertion_entries.end(),
-        [](const JsonValue *lhs, const JsonValue *rhs) {
-          const std::string lhs_name = lhs->at("entry_name").asString();
-          const std::string rhs_name = rhs->at("entry_name").asString();
-          const std::string lhs_kind = lhs->at("symbol_kind").asString();
-          const std::string rhs_kind = rhs->at("symbol_kind").asString();
-          const bool lhs_preferred = lhs->requiredBool("lookup_preferred");
-          const bool rhs_preferred = rhs->requiredBool("lookup_preferred");
-          if (lhs_name != rhs_name) {
-            return lhs_name < rhs_name;
-          }
-          if (lhs_kind != rhs_kind) {
-            return lhs_kind < rhs_kind;
-          }
-          if (lhs_preferred != rhs_preferred) {
-            return !lhs_preferred && rhs_preferred;
-          }
-          const uint64_t lhs_basis = static_cast<uint64_t>(
-              lhs->at("symbol").at("symbol_declaration").asInt());
-          const uint64_t rhs_basis = static_cast<uint64_t>(
-              rhs->at("symbol").at("symbol_declaration").asInt());
-          if (lhs_basis != rhs_basis) {
-            if (lhs_basis == 0) {
-              return false;
-            }
-            if (rhs_basis == 0) {
-              return true;
-            }
-            return lhs_basis < rhs_basis;
-          }
-          return false;
-        });
-    for (const JsonValue *entry_ptr : insertion_entries) {
-      const JsonValue &entry = *entry_ptr;
-      const std::string kind = entry.at("symbol_kind").asString();
-      const SgName entry_name(entry.at("entry_name").asString());
-      if (kind == "SgAliasSymbol" || kind == "SgRenameSymbol") {
-        DeferredSymbolTableEntry deferred;
-        deferred.table = table;
-        deferred.entry_name = entry_name;
-        deferred.entry_json = &entry;
-        deferred_entries.push_back(deferred);
+    prepared_scopes.push_back({table, std::move(decoded_entries)});
+  }
+  for (const ScopeSymbols &prepared : prepared_scopes) {
+    SgSymbolTable *table = prepared.table;
+    const auto &decoded_entries = prepared.entries;
+    for (SgNode *existing_node : table->get_symbols()) {
+      SgSymbol *existing = isSgSymbol(existing_node);
+      if (existing == nullptr) {
+        throw std::runtime_error(
+            "AST JSON scope symbol table holds a non-symbol entry for " +
+            table->get_parent()->class_name());
+      }
+      bool described = false;
+      for (const auto &candidate : decoded_entries) {
+        if (candidate.entry_name != table->stored_name_of(existing) ||
+            candidate.symbol_kind != existing->variantT()) {
+          continue;
+        }
+        const uint64_t basis_id = candidate.basis_id
+                                      ? *candidate.basis_id
+                                      : candidate.visibility->basis_id;
+        const auto basis = nodes.find(basis_id);
+        const bool basis_matches =
+            basis_id > 0 && basis != nodes.end() &&
+            basis->second == existing->get_symbol_basis();
+        if (basis_matches) {
+          described = true;
+          break;
+        }
+      }
+      if (!described) {
+        throw std::runtime_error(
+            "AST JSON scope symbol table holds an entry not described by "
+            "its serialized entries for " +
+            table->get_parent()->class_name());
+      }
+    }
+  }
+  for (const ScopeSymbols &prepared : prepared_scopes) {
+    SgSymbolTable *table = prepared.table;
+    for (const auto &decoded : prepared.entries) {
+      const SgName &entry_name = decoded.entry_name;
+      const bool lookup_preferred = decoded.lookup_preferred;
+      if (decoded.visibility) {
+        deferred_entries.push_back(decoded);
         continue;
       }
 
-      const JsonValue &symbol_json = entry.at("symbol");
-      const uint64_t basis_id =
-          static_cast<uint64_t>(symbol_json.at("symbol_declaration").asInt());
+      const uint64_t basis_id = decoded.basis_id.value();
       if (basis_id == 0) {
-        SgSymbol *symbol = createExternalSymbolFromJson(symbol_json, nodes);
+        SgSymbol *raw_symbol = decoded.construct();
+        if (raw_symbol != nullptr && raw_symbol->get_parent() != nullptr) {
+          throw std::runtime_error(
+              "AST JSON external symbol table entry is already owned");
+        }
+        std::unique_ptr<SgSymbol> symbol(raw_symbol);
         if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
           throw std::runtime_error(
               "AST JSON failed to reconstruct external symbol table entry");
         }
-        validateExternalSymbolBasisOwnership(symbol);
-        table->insert(entry_name, symbol);
+        table->insert(entry_name, symbol.get());
+        SgSymbol *published = symbol.release();
+        validateExternalSymbolBasisOwnership(published);
         expected_preferences.push_back(
-            {table, entry_name, symbol,
-             entry.requiredBool("lookup_preferred")});
+            {table, entry_name, published, lookup_preferred});
         continue;
       }
-      if (basis_id == 0) {
-        throw std::runtime_error(
-            "AST JSON symbol table entry has no symbol_declaration");
+      if (nodes.count(basis_id) == 0) {
+        deferred_entries.push_back(decoded);
+        continue;
       }
-      SgNode *basis = nodeById(nodes, basis_id);
-      SgSymbol *symbol = createSymbolForKindAndBasis(kind, basis);
-      if (SgLabelSymbol *label_symbol = isSgLabelSymbol(symbol)) {
-        restoreLabelSymbolFields(label_symbol, symbol_json);
-      }
-      if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
-        std::ostringstream message;
-        message << "AST JSON cannot reconstruct symbol table entry"
-                << " kind=" << kind << " basis=" << basis->sage_class_name();
-        throw std::runtime_error(message.str());
-      }
-      if (SgNamespaceSymbol *namespace_symbol = isSgNamespaceSymbol(symbol)) {
-        namespace_symbol->set_isAlias(entry.requiredBool("namespace_is_alias"));
-        namespace_symbol->set_declaration(
-            isSgNamespaceDeclarationStatement(basis));
-        const uint64_t alias_id = static_cast<uint64_t>(
-            entry.requiredInt("namespace_alias_declaration"));
-        if (alias_id != 0) {
-          namespace_symbol->set_aliasDeclaration(
-              nodeByIdAs<SgNamespaceAliasDeclarationStatement>(nodes,
-                                                               alias_id));
-        }
-      }
-      validateExternalSymbolBasisOwnership(symbol);
-      table->insert(entry_name, symbol);
+      SgSymbol *symbol = constructOrdinarySymbolTableEntry(decoded, nodes);
       expected_preferences.push_back(
-          {table, entry_name, symbol, entry.requiredBool("lookup_preferred")});
+          {table, entry_name, symbol, lookup_preferred});
     }
-  }
-
-  for (const DeferredSymbolTableEntry &deferred : deferred_entries) {
-    ROSE_ASSERT(deferred.table != nullptr);
-    ROSE_ASSERT(deferred.entry_json != nullptr);
-    SgSymbol *symbol =
-        createDeferredSymbolTableSymbol(*deferred.entry_json, nodes);
-    if (symbol == nullptr || symbol->get_symbol_basis() == nullptr) {
-      throw std::runtime_error(
-          "AST JSON failed to reconstruct deferred symbol table entry");
-    }
-    validateExternalSymbolBasisOwnership(symbol);
-    deferred.table->insert(deferred.entry_name, symbol);
-    expected_preferences.push_back(
-        {deferred.table, deferred.entry_name, symbol,
-         deferred.entry_json->requiredBool("lookup_preferred")});
   }
 
   struct AnonymousFortranProgramUnitSymbol {
@@ -916,6 +1467,8 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
       throw std::runtime_error(
           "AST JSON anonymous Fortran program unit has no symbol scope");
     }
+    if (restored_scopes.count(scope) == 0)
+      continue;
     SgFunctionDeclaration *basis =
         isSgFunctionDeclaration(declaration->get_firstNondefiningDeclaration());
     if (basis == nullptr) {
@@ -944,8 +1497,10 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
           "AST JSON anonymous Fortran program-unit internal symbol already "
           "exists before reconstruction");
     }
-    SgFunctionSymbol *symbol = new SgFunctionSymbol(basis);
-    scope->insert_symbol(internalKey, symbol);
+    auto owned_symbol = std::make_unique<SgFunctionSymbol>(basis);
+    SgFunctionSymbol *symbol = owned_symbol.get();
+    scope->get_symbol_table()->insert(internalKey, symbol);
+    owned_symbol.release();
     if (scope->get_symbol_table()->find_function(internalKey) != symbol ||
         scope->find_symbol_from_declaration(basis) != symbol ||
         symbol->get_declaration() != basis) {
@@ -957,57 +1512,35 @@ void restoreSerializedSymbolTables(const AstFileRecord &ast,
         basis, AnonymousFortranProgramUnitSymbol{scope, internalKey, symbol});
   }
 
-  enforceSymbolTablePreferences(expected_preferences);
-  validateSymbolTablePreferences(expected_preferences);
+  constructPendingSerializedSymbols(state, nodes, construction == nullptr);
 }
 
 SgClassSymbol *classSymbolForDeclaration(SgClassDeclaration *decl) {
-  if (decl == nullptr) {
-    return nullptr;
-  }
-  SgScopeStatement *scope = decl->get_scope();
-  if (scope != nullptr) {
-    if (SgClassSymbol *symbol =
-            isSgClassSymbol(scope->find_symbol_from_declaration(decl))) {
-      return symbol;
-    }
-  }
-  ensureClassTypeForDeclaration(decl);
-  SgClassSymbol *symbol = nullptr;
-  if (isSgTemplateClassDeclaration(decl) != nullptr ||
-      isSgTemplateInstantiationDecl(decl) != nullptr) {
-    symbol = new SgTemplateClassSymbol(decl);
-  } else {
-    symbol = new SgClassSymbol(decl);
+  SgScopeStatement *scope = decl != nullptr ? decl->get_scope() : nullptr;
+  SgClassSymbol *symbol =
+      scope != nullptr
+          ? isSgClassSymbol(scope->find_symbol_from_declaration(decl))
+          : nullptr;
+  if (symbol == nullptr || symbol->get_declaration() != decl) {
+    throw std::runtime_error(
+        "AST JSON class symbol reference has no exact restored "
+        "symbol-table binding");
   }
   return symbol;
 }
 
-bool declarationHasDefinition(SgDeclarationStatement *decl) {
-  if (SgFunctionDeclaration *function = isSgFunctionDeclaration(decl)) {
-    return function->get_definition() != nullptr;
-  }
-  if (SgClassDeclaration *class_decl = isSgClassDeclaration(decl)) {
-    return class_decl->get_definition() != nullptr;
-  }
-  return false;
-}
-
 SgNonrealSymbol *nonrealSymbolForDeclaration(SgNonrealDecl *decl) {
-  if (decl == nullptr) {
-    return nullptr;
+  SgScopeStatement *scope = decl != nullptr ? decl->get_scope() : nullptr;
+  SgNonrealSymbol *symbol =
+      scope != nullptr
+          ? isSgNonrealSymbol(scope->find_symbol_from_declaration(decl))
+          : nullptr;
+  if (symbol == nullptr || symbol->get_declaration() != decl) {
+    throw std::runtime_error(
+        "AST JSON nonreal symbol reference has no exact restored "
+        "symbol-table binding");
   }
-  SgScopeStatement *scope = decl->get_scope();
-  if (scope != nullptr) {
-    if (SgNonrealSymbol *symbol =
-            isSgNonrealSymbol(scope->find_symbol_from_declaration(decl))) {
-      return symbol;
-    }
-  }
-  if (decl->get_type() == nullptr) {
-    decl->set_type(new SgNonrealType(decl));
-  }
-  return new SgNonrealSymbol(decl);
+  return symbol;
 }
 
 SgTemplateArgumentPtrList templateArgumentListFromJson(const JsonValue &json,
@@ -1017,6 +1550,10 @@ SgTemplateArgumentPtrList templateArgumentListFromJson(const JsonValue &json,
   if (json.kind != JsonValue::Kind::Array) {
     throw std::runtime_error("AST JSON template argument list is not an array");
   }
+  if (parent == nullptr) {
+    throw std::runtime_error("AST JSON template argument list has no owner");
+  }
+  std::unordered_set<SgTemplateArgument *> seen;
   for (const JsonValue &arg_json : json.array) {
     const int64_t raw_id = arg_json.asInt();
     if (raw_id <= 0) {
@@ -1025,136 +1562,19 @@ SgTemplateArgumentPtrList templateArgumentListFromJson(const JsonValue &json,
     }
     const uint64_t id = static_cast<uint64_t>(raw_id);
     SgTemplateArgument *argument = nodeByIdAs<SgTemplateArgument>(nodes, id);
-    argument->set_parent(parent);
+    if (!seen.insert(argument).second) {
+      throw std::runtime_error(
+          "AST JSON template argument list repeats a node");
+    }
+    if (argument->get_parent() != nullptr && argument->get_parent() != parent) {
+      throw std::runtime_error(
+          "AST JSON template argument has a different owner");
+    }
     result.push_back(argument);
   }
+  for (SgTemplateArgument *argument : result)
+    argument->set_parent(parent);
   return result;
-}
-
-SgOmpUsesAllocatorsDefinationPtrList
-usesAllocatorsDefinitionsFromJson(const JsonValue &json, const NodeMap &nodes,
-                                  SgOmpUsesAllocatorsClause *parent) {
-  SgOmpUsesAllocatorsDefinationPtrList result;
-  if (json.kind != JsonValue::Kind::Array) {
-    return result;
-  }
-  for (const JsonValue &entry : json.array) {
-    const uint64_t id = static_cast<uint64_t>(entry.asInt());
-    if (id == 0) {
-      continue;
-    }
-    SgOmpUsesAllocatorsDefination *definition =
-        nodeByIdAs<SgOmpUsesAllocatorsDefination>(nodes, id);
-    definition->set_parent(parent);
-    result.push_back(definition);
-  }
-  return result;
-}
-
-void applyOmpAuxiliaryState(const AstFileRecord &ast, const NodeMap &nodes) {
-  for (const NodeRecord &record : ast.nodes) {
-    SgNode *node = nodeById(nodes, record.id);
-    const JsonValue &p = record.properties;
-
-    if (SgOmpClause *clause = isSgOmpClause(node)) {
-      clause->set_directive_name_modifier(
-          static_cast<SgOmpClause::omp_directive_name_modifier_enum>(
-              p.requiredInt("directive_name_modifier")));
-    }
-    if (SgOmpDirectiveKindClause *clause = isSgOmpDirectiveKindClause(node)) {
-      clause->validate_directive_kinds();
-    }
-
-    if (SgOmpOrderClause *clause = isSgOmpOrderClause(node)) {
-      clause->set_kind(
-          static_cast<SgOmpClause::omp_order_kind_enum>(p.requiredInt("kind")));
-      clause->set_modifier(static_cast<SgOmpClause::omp_order_modifier_enum>(
-          p.requiredInt("modifier")));
-    } else if (SgOmpAtomicDefaultMemOrderClause *clause =
-                   isSgOmpAtomicDefaultMemOrderClause(node)) {
-      clause->set_kind(
-          static_cast<SgOmpClause::omp_atomic_default_mem_order_kind_enum>(
-              p.requiredInt("kind")));
-    } else if (SgOmpDefaultmapClause *clause = isSgOmpDefaultmapClause(node)) {
-      clause->set_behavior(
-          static_cast<SgOmpClause::omp_defaultmap_behavior_enum>(
-              p.requiredInt("behavior")));
-      clause->set_category(
-          static_cast<SgOmpClause::omp_defaultmap_category_enum>(
-              p.requiredInt("category")));
-    } else if (SgOmpBindClause *clause = isSgOmpBindClause(node)) {
-      clause->set_binding(static_cast<SgOmpClause::omp_bind_binding_enum>(
-          p.requiredInt("binding")));
-    } else if (SgOmpFailClause *clause = isSgOmpFailClause(node)) {
-      clause->set_memory_order(
-          static_cast<SgOmpClause::omp_fail_memory_order_kind_enum>(
-              p.requiredInt("memory_order")));
-    } else if (SgOmpLinearClause *clause = isSgOmpLinearClause(node)) {
-      clause->set_modifier(static_cast<SgOmpClause::omp_linear_modifier_enum>(
-          p.requiredInt("modifier")));
-    } else if (SgOmpReductionClause *clause = isSgOmpReductionClause(node)) {
-      clause->set_modifier(
-          static_cast<SgOmpClause::omp_reduction_modifier_enum>(
-              p.requiredInt("modifier")));
-      clause->set_identifier(
-          static_cast<SgOmpClause::omp_reduction_identifier_enum>(
-              p.requiredInt("identifier")));
-    } else if (SgOmpAllocateClause *clause = isSgOmpAllocateClause(node)) {
-      clause->set_modifier(static_cast<SgOmpClause::omp_allocate_modifier_enum>(
-          p.requiredInt("modifier")));
-    } else if (SgOmpAllocatorClause *clause = isSgOmpAllocatorClause(node)) {
-      clause->set_modifier(
-          static_cast<SgOmpClause::omp_allocator_modifier_enum>(
-              p.requiredInt("modifier")));
-    } else if (SgOmpAdjustArgsClause *clause = isSgOmpAdjustArgsClause(node)) {
-      clause->set_modifier(
-          static_cast<SgOmpClause::omp_adjust_args_modifier_enum>(
-              p.requiredInt("modifier")));
-    } else if (SgOmpInReductionClause *clause =
-                   isSgOmpInReductionClause(node)) {
-      clause->set_identifier(
-          static_cast<SgOmpClause::omp_in_reduction_identifier_enum>(
-              p.requiredInt("identifier")));
-    } else if (SgOmpTaskReductionClause *clause =
-                   isSgOmpTaskReductionClause(node)) {
-      clause->set_identifier(
-          static_cast<SgOmpClause::omp_task_reduction_identifier_enum>(
-              p.requiredInt("identifier")));
-    } else if (SgOmpDepobjUpdateClause *clause =
-                   isSgOmpDepobjUpdateClause(node)) {
-      clause->set_modifier(static_cast<SgOmpClause::omp_depobj_modifier_enum>(
-          p.requiredInt("modifier")));
-    } else if (SgOmpDistScheduleClause *clause =
-                   isSgOmpDistScheduleClause(node)) {
-      clause->set_kind(static_cast<SgOmpClause::omp_dist_schedule_kind_enum>(
-          p.requiredInt("kind")));
-    } else if (SgOmpNumTasksClause *clause = isSgOmpNumTasksClause(node)) {
-      clause->set_modifier(
-          static_cast<SgOmpClause::omp_num_tasks_modifier_enum>(
-              p.requiredInt("modifier")));
-    } else if (SgOmpGrainsizeClause *clause = isSgOmpGrainsizeClause(node)) {
-      clause->set_modifier(
-          static_cast<SgOmpClause::omp_grainsize_modifier_enum>(
-              p.requiredInt("modifier")));
-    } else if (SgOmpUsesAllocatorsDefination *definition =
-                   isSgOmpUsesAllocatorsDefination(node)) {
-      definition->set_allocator(
-          static_cast<SgOmpClause::omp_uses_allocators_allocator_enum>(
-              p.requiredInt("allocator")));
-    } else if (SgOmpUsesAllocatorsClause *clause =
-                   isSgOmpUsesAllocatorsClause(node)) {
-      if (const JsonValue *definitions =
-              p.find("uses_allocators_definitions")) {
-        clause->get_uses_allocators_defination() =
-            usesAllocatorsDefinitionsFromJson(*definitions, nodes, clause);
-      }
-    } else if (SgOmpDeclareMapperStatement *stmt =
-                   isSgOmpDeclareMapperStatement(node)) {
-      stmt->set_identifier(
-          static_cast<SgOmpClause::omp_declare_mapper_identifier_enum>(
-              p.requiredInt("identifier")));
-    }
-  }
 }
 
 } // namespace AstJson

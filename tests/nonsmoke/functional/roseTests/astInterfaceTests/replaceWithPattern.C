@@ -1,21 +1,5 @@
-/*
-test code:
-
-//input
-a = b+c;
-
-// Call
-replaceWithPattern (b, func(SqVariantExpression));
-
-// output
-a =func(b) +c
-
-by Liao, 2/16/2011
-*/
 #include "rose.h"
 
-#include <iostream>
-using namespace std;
 using namespace SageBuilder;
 using namespace SageInterface;
 
@@ -34,11 +18,19 @@ int main(int argc, char *argv[])
   SgAddOp *add_op = isSgAddOp(addOps[0]);
   ROSE_ASSERT(add_op != NULL);
   SgName s_name("foo");
-  SgVariantExpression *variant_exp = buildVariantExpression();
+  SgVariantExpression *variant_exp = buildVariantExpression(add_op->get_type());
   SgExprListExp *parameter_list = buildExprListExp(variant_exp);
   ROSE_ASSERT(variant_exp->get_parent() != NULL);
-  SgExpression *pattern_exp =
+  SgFunctionCallExp *pattern_exp =
       buildFunctionCallExp(s_name, buildVoidType(), parameter_list, body);
+  auto *reference = isSgFunctionRefExp(pattern_exp->get_function());
+  ROSE_ASSERT(reference != NULL);
+  ROSE_ASSERT(reference->get_symbol() != NULL);
+  SgFunctionType *signature =
+      reference->get_symbol()->get_declaration()->get_type();
+  ROSE_ASSERT(signature->get_argument_list()->get_arguments().size() == 1);
+  ROSE_ASSERT(signature->get_argument_list()->get_arguments().front() ==
+              add_op->get_type());
 
   SgNode *result = SageInterface::replaceWithPattern(add_op, pattern_exp);
   ROSE_ASSERT(result == pattern_exp);

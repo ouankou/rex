@@ -1,13 +1,8 @@
-#include "general.h"
-
 #include "rose.h"
 
 #include "finiteDifferencing.h"
 
 #include "pre.h"
-
-// DQ (1/2/2008): I think this is no longer used!
-// #include "copy_unparser.h"
 
 #include "AnnotCollect.h"
 
@@ -21,14 +16,7 @@
 
 using namespace std;
 
-#ifdef USE_OMEGA
-#include "DepTestStatistics.h"
-
-extern DepTestStatistics DepStats;
-#endif
-
 extern bool DebugAnnot();
-extern void FixFileInfo(SgNode *n);
 class UnparseFormatHelp;
 class UnparseDelegate;
 void unparseProject(SgProject *project,
@@ -60,10 +48,6 @@ int main(int argc, char *argv[]) {
   LoopTransformInterface::cmdline_configure(argvList);
   LoopTransformInterface::set_aliasInfo(&aliasInfo);
 
-#ifdef USE_OMEGA
-  DepStats.SetFileName(buffer.str());
-#endif
-
   OperatorSideEffectAnnotation *funcInfo =
       OperatorSideEffectAnnotation::get_inst();
   funcInfo->register_annot();
@@ -75,8 +59,6 @@ int main(int argc, char *argv[]) {
 
   int filenum = project->numberOfFiles();
   for (int i = 0; i < filenum; ++i) {
-    // SgFile &sageFile = sageProject->get_file(i);
-    // SgGlobal *root = sageFile.get_root();
     SgSourceFile *file = isSgSourceFile(project->get_fileList()[i]);
     SgGlobal *root = file->get_globalScope();
     SgDeclarationStatementPtrList &declList = root->get_declarations();
@@ -106,10 +88,6 @@ int main(int argc, char *argv[]) {
   if (CmdOptions::GetInstance()->HasOption("-pre")) {
     legacy::PRE::partialRedundancyElimination(project); // PP (10/16/20)
   }
-#ifdef USE_OMEGA
-  DepStats.SetDepChoice(0x1 | 0x2 | 0x4);
-  DepStats.PrintResults();
-#endif
   // Qing's loop transformations are not robust enough to pass all tests.
   // AstTests::runAllTests(sageProject);
   unparseProject(project);

@@ -8,39 +8,8 @@
 
 #include <string>
 
-/**
- * Mandatory logging are those critial msgs of the runtime including
- * three levels of severity:
- * MLOG_LEVEL_WARN: warning of likely problem, but the results might be ok
- * MLOG_LEVEL_ERROR: error of runtime execution, program can continue,
- *                  results will be wrong, but still useful
- * MLOG_LEVEL_FATAL: fatal errors of runtime, program cannot continue.
- *
- * Optional logging are those msgs that provide information of program
- * execution. It is controlled by the mlogLevel varible that control which level
- * of information will be spit out. The levels of details incrementally include:
- * MLOG_LEVEL_KEY
- * MLOG_LEVEL_INFO
- * MLOG_LEVEL_MARCH
- * MLOG_LEVEL_TRACE
- * The default mlogLevel is MLOG_LEVEL_NONE, i.e. no information of these four
- * levels will spit out.
- *
- * MLOG_LEVEL_DEBUG is a mlogging level that can be controlled by users, it
- * should be used for debugging purpose only.
- *
- * There are two sets of APIs to use, C-style (printf) and C++-style (<<), and
- * these APIs are are simply macros that are used as functions. API names carry
- * the level information, and each mlogging API call should also be proivde a
- * subject to indicate the compoenents or module of this mlogging. MLogging msgs
- * include logging level, subject, file:line, function name, and user-specified
- * msgs. User msgs are either C-style printf format or C++-style << format
- * depending on which style to use. C-style APIs and C++-style APIs have _C and
- * _CXX suffix respectively.
- *
- * The mlog.h/C also include the implementation for ASSERT_*, ROSE_ASSERT,
- * ROSE_ABORT that are used througout the source tree.
- */
+// Runtime logging and unconditional assertion APIs. Optional log levels use
+// mlogLevel; the _C and _CXX macros provide printf and stream interfaces.
 
 // logging levels
 typedef enum MLOG_LEVEL {
@@ -61,8 +30,6 @@ typedef enum MLOG_LEVEL {
 #define MLOG_INIT "INIT"
 #define MLOG_MISC "MISC"
 #define MLOG_DRIVER "DRIVER"
-#define MLOG_OFP "OFP"
-#define MLOG_OFP2SAGE "OFP2SAGE"
 #define MLOG_OMPPARSER "OMPPARSER"
 #define MLOG_OMP2SAGE "OMP2SAGE"
 #define MLOG_ROSETTA "ROSETTA"
@@ -224,9 +191,6 @@ extern std::ostream &mlogNullStream_CXX();
   ((expr) != NULL) ? static_cast<void>(0)                                      \
                    : mlogAssertFail_C("ASSERTION:NULL pointer:", #expr,        \
                                       WHEREARG, __VA_ARGS__)
-
-// Convenience for member functions that want to assert on "this".
-#define ASSERT_this() ASSERT_not_null(this)
 
 // A more informative approach for assert and abort than the standard
 // assert/abort

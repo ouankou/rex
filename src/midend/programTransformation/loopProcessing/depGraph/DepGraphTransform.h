@@ -10,6 +10,7 @@
 #include "GraphUpdate.h"
 
 #include <assert.h>
+#include <vector>
 
 inline DepDirection EdgeDir2DepDir(GraphAccess::EdgeDirection dir) {
   switch (dir) {
@@ -39,15 +40,21 @@ public:
 template <class Graph, class Node>
 void CopySplitNodeEdge(Graph *graph, Node *orig, Node *split,
                        const DomainCond &splitCond) {
+  ROSE_ASSERT(orig != nullptr && split != nullptr && orig != split);
+  std::vector<DepInfo> selfDependencies;
+  for (auto edges = graph->GetNodeEdgeIterator(orig, GraphAccess::EdgeOut);
+       !edges.ReachEnd(); ++edges) {
+    auto *edge = edges.Current();
+    if (graph->GetEdgeEndPoint(edge, GraphAccess::EdgeIn) == orig)
+      selfDependencies.push_back(edge->GetInfo());
+  }
   CopyNodeEdge(graph, orig, split);
+  for (const auto &dependency : selfDependencies) {
+    graph->CreateEdge(orig, split, dependency);
+    graph->CreateEdge(split, orig, dependency);
+  }
   typedef UpdateDepEdgeInfo<Graph, DepInfoRestrictDomain> InfoOp;
   UpdateNodeEdge(graph, split, InfoOp(graph, DepInfoRestrictDomain(splitCond)));
-}
-
-template <class Graph, class Node>
-void UpdateSplitNodeEdge(Graph *c, Node *split, const DomainCond &splitCond) {
-  typedef UpdateDepEdgeInfo<Graph, DepInfoRestrictDomain> InfoOp;
-  UpdateNodeEdge(c, split, InfoOp(c, DepInfoRestrictDomain(splitCond)));
 }
 
 template <class Graph, class Node>

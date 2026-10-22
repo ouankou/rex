@@ -103,11 +103,6 @@ TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeUnsignedChar16) {
   ASSERT_EQ(isNull(p), false);
   EXPECT_EQ(is<SgTypeUnsignedChar>(p), true);
 }
-/*
-TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeString17){  SgTypeString
-*p = SageBuilder::buildStringType();  ASSERT_EQ(isNull(p), false);
-EXPECT_EQ(is<SgTypeString>(p), true);}
-*/
 TEST(GeneratedSageBuilderBuildTypeTestSuite, buildSgTypeFloat18) {
   SgTypeFloat *p = SageBuilder::buildFloatType();
   ASSERT_EQ(isNull(p), false);

@@ -458,9 +458,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
   ASSERT_not_null(stmt);
 
   switch (stmt->variantT()) {
-    // program units
-    // case V_SgModuleStatement:            unparseModuleStmt(stmt, info);
-    // break;
   case V_SgProgramHeaderStatement:
     unparseProgHdrStmt(stmt, info);
     break;
@@ -483,9 +480,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
     break;
   case V_SgEnumDeclaration:
     unparseEnumDeclStmt(stmt, info);
-    break;
-  case V_SgParameterStatement:
-    unparseParamDeclStmt(stmt, info);
     break;
   case V_SgUseStatement:
     unparseUseStmt(stmt, info);
@@ -573,6 +567,9 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
   case V_SgSyncTeamStatement:
     unparseSyncTeamStatement(stmt, info);
     break;
+  case V_SgFormTeamStatement:
+    unparseFormTeamStatement(stmt, info);
+    break;
   case V_SgLockStatement:
     unparseLockStatement(stmt, info);
     break;
@@ -593,9 +590,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
 
   case V_SgImplicitStatement:
     unparseImplicitStmt(stmt, info);
-    break;
-  case V_SgBlockDataStatement:
-    unparseBlockDataStmt(stmt, info);
     break;
   case V_SgStatementFunctionStatement:
     unparseStatementFunctionStmt(stmt, info);
@@ -685,10 +679,6 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
     break;
   case V_SgDeallocateStatement:
     unparseDeallocateStatement(stmt, info);
-    break;
-
-  case V_SgCAFWithTeamStatement:
-    unparseWithTeamStatement(stmt, info);
     break;
 
     // Language independent code generation (placed in base class)
@@ -783,7 +773,7 @@ void FortranCodeGeneration_locatedNode::unparseContainsStatement(
 }
 
 void FortranCodeGeneration_locatedNode::unparseNamelistStatement(
-    SgStatement *stmt, SgUnparse_Info &) {
+    SgStatement *stmt, SgUnparse_Info &info) {
   SgNamelistStatement *namelistStatement = isSgNamelistStatement(stmt);
   ASSERT_not_null(namelistStatement);
 
@@ -793,12 +783,12 @@ void FortranCodeGeneration_locatedNode::unparseNamelistStatement(
     ROSE_ABORT();
   }
   for (SgNameGroup *nameGroup : groupList) {
-    if (nameGroup == nullptr || nameGroup->get_group_name().empty() ||
-        nameGroup->get_name_list().empty()) {
+    if (nameGroup == nullptr) {
       std::cerr << "Error: malformed group in Fortran NAMELIST statement"
                 << std::endl;
       ROSE_ABORT();
     }
+    nameGroup->validate_group();
   }
 
   curprint("namelist ");
@@ -807,14 +797,12 @@ void FortranCodeGeneration_locatedNode::unparseNamelistStatement(
   while (i != groupList.end()) {
     SgNameGroup *nameGroup = *i;
     curprint("/" + nameGroup->get_group_name() + "/ ");
-    SgStringList &nameList = nameGroup->get_name_list();
-    SgStringList::iterator j = nameList.begin();
-    while (j != nameList.end()) {
-      curprint(*j);
-      j++;
-      if (j != nameList.end()) {
+    bool first = true;
+    for (auto *reference : nameGroup->get_objects()) {
+      if (!first)
         curprint(",");
-      }
+      unparseExpression(reference, info);
+      first = false;
     }
 
     i++;
@@ -831,84 +819,184 @@ void FortranCodeGeneration_locatedNode::unparseNamelistStatement(
 
 void FortranCodeGeneration_locatedNode::unparseFormatItemList(
     SgFormatItemList *formatItemList, SgUnparse_Info &info) {
-  SgFormatItemPtrList &formatList = formatItemList->get_format_item_list();
-  SgFormatItemPtrList::iterator i = formatList.begin();
-  while (i != formatList.end()) {
-    SgFormatItem *formatItem = *i;
-    ASSERT_not_null(formatItem);
-
-    // The default value is "-1" so zero should be an invalid value
-    int repeat_specification = formatItem->get_repeat_specification();
-    ROSE_ASSERT(repeat_specification != 0);
-
-    // Valid values are > 0
-    if (repeat_specification > 0) {
-      string stringValue = StringUtility::numberToString(repeat_specification);
-      curprint(stringValue);
-      curprint(" ");
+  ASSERT_not_null(formatItemList);
+  formatItemList->validate();
+  auto emitCharacter = [&](const SgFormatItem::Character &character) {
+    using Delimiter = SgFormatItem::Character::Delimiter;
+    switch (character.delimiter) {
+    case Delimiter::single_quote:
+      unp->emitFortranCharacterLiteral(character.value, '\'');
+      break;
+    case Delimiter::double_quote:
+      unp->emitFortranCharacterLiteral(character.value, '"');
+      break;
+    case Delimiter::hollerith_upper:
+    case Delimiter::hollerith_lower:
+      curprintLiteral(
+          std::to_string(character.value.size()) +
+          (character.delimiter == Delimiter::hollerith_upper ? "H" : "h") +
+          character.value);
+      break;
     }
-
-    if (formatItem->get_data() != nullptr) {
-      SgStringVal *stringValue = isSgStringVal(formatItem->get_data());
-      ASSERT_not_null(stringValue);
-
-      string str;
-      const bool usesSingleQuotes = stringValue->get_usesSingleQuotes();
-      const bool usesDoubleQuotes = stringValue->get_usesDoubleQuotes();
-      const char delimiter = stringValue->get_stringDelimiter();
-      const bool isHollerith = !usesSingleQuotes && !usesDoubleQuotes &&
-                               (delimiter == 'H' || delimiter == 'h');
-      const bool isUnquoted =
-          !usesSingleQuotes && !usesDoubleQuotes && delimiter == 0;
-      if ((!isUnquoted && !isHollerith && !usesSingleQuotes &&
-           !usesDoubleQuotes) ||
-          (usesSingleQuotes && delimiter != '\'') ||
-          (usesDoubleQuotes && delimiter != '"') ||
-          (usesSingleQuotes && usesDoubleQuotes)) {
-        std::cerr << "REX_UNPARSE_INVARIANT[fortran-format-string]: format "
-                     "descriptor has contradictory typed delimiter ownership"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-      if (usesSingleQuotes) {
-        unp->emitFortranCharacterLiteral(stringValue->get_value(), '\'');
-      } else if (usesDoubleQuotes) {
-        unp->emitFortranCharacterLiteral(stringValue->get_value(), '"');
-      } else if (isHollerith) {
-        str = StringUtility::numberToString(stringValue->get_value().size()) +
-              delimiter + stringValue->get_value();
-        curprintLiteral(str);
-      } else {
-        str = stringValue->get_value();
-        curprintLiteral(str);
-      }
-
-    } else {
-      if (formatItem->get_format_item_list() != nullptr) {
-        curprint("(");
-        unparseFormatItemList(formatItem->get_format_item_list(), info);
-        curprint(")");
-      } else {
-        std::cerr << "Error: malformed SgFormatItem has neither data nor a "
-                     "nested item list"
-                  << std::endl;
-        ROSE_ABORT();
-      }
-    }
-
-    i++;
-
-    if (i != formatList.end()) {
+  };
+  bool first = true;
+  for (auto *item : formatItemList->get_format_item_list()) {
+    if (!first)
       curprint(",");
+    first = false;
+    if (item->get_repeat_count())
+      curprint(std::to_string(*item->get_repeat_count()));
+    const auto &descriptor = item->get_descriptor().value;
+    if (const auto *intrinsic =
+            std::get_if<SgFormatItem::Intrinsic>(&descriptor)) {
+      using Kind = SgFormatItem::Intrinsic::Kind;
+      switch (intrinsic->kind) {
+      case Kind::I:
+        curprint("I");
+        break;
+      case Kind::B:
+        curprint("B");
+        break;
+      case Kind::O:
+        curprint("O");
+        break;
+      case Kind::Z:
+        curprint("Z");
+        break;
+      case Kind::F:
+        curprint("F");
+        break;
+      case Kind::E:
+        curprint("E");
+        break;
+      case Kind::EN:
+        curprint("EN");
+        break;
+      case Kind::ES:
+        curprint("ES");
+        break;
+      case Kind::EX:
+        curprint("EX");
+        break;
+      case Kind::G:
+        curprint("G");
+        break;
+      case Kind::L:
+        curprint("L");
+        break;
+      case Kind::A:
+        curprint("A");
+        break;
+      case Kind::D:
+        curprint("D");
+        break;
+      }
+      if (intrinsic->width)
+        curprint(std::to_string(*intrinsic->width));
+      if (intrinsic->digits)
+        curprint("." + std::to_string(*intrinsic->digits));
+      if (intrinsic->exponent_width)
+        curprint("E" + std::to_string(*intrinsic->exponent_width));
+    } else if (const auto *derived =
+                   std::get_if<SgFormatItem::Derived>(&descriptor)) {
+      curprint("DT");
+      if (derived->tag)
+        emitCharacter(*derived->tag);
+      if (!derived->parameters.empty()) {
+        curprint("(");
+        for (std::size_t index = 0; index < derived->parameters.size();
+             ++index) {
+          if (index != 0)
+            curprint(",");
+          curprint(std::to_string(derived->parameters[index]));
+        }
+        curprint(")");
+      }
+    } else if (const auto *control =
+                   std::get_if<SgFormatItem::Control>(&descriptor)) {
+      using Kind = SgFormatItem::Control::Kind;
+      switch (control->kind) {
+      case Kind::T:
+        curprint("T" + std::to_string(control->count));
+        break;
+      case Kind::TL:
+        curprint("TL" + std::to_string(control->count));
+        break;
+      case Kind::TR:
+        curprint("TR" + std::to_string(control->count));
+        break;
+      case Kind::X:
+        curprint(std::to_string(control->count) + "X");
+        break;
+      case Kind::Slash:
+        curprint(std::to_string(control->count) + "/");
+        break;
+      case Kind::P:
+        curprint(std::to_string(control->count) + "P");
+        break;
+      case Kind::Colon:
+        curprint(":");
+        break;
+      case Kind::SS:
+        curprint("SS");
+        break;
+      case Kind::SP:
+        curprint("SP");
+        break;
+      case Kind::S:
+        curprint("S");
+        break;
+      case Kind::BN:
+        curprint("BN");
+        break;
+      case Kind::BZ:
+        curprint("BZ");
+        break;
+      case Kind::RU:
+        curprint("RU");
+        break;
+      case Kind::RD:
+        curprint("RD");
+        break;
+      case Kind::RZ:
+        curprint("RZ");
+        break;
+      case Kind::RN:
+        curprint("RN");
+        break;
+      case Kind::RC:
+        curprint("RC");
+        break;
+      case Kind::RP:
+        curprint("RP");
+        break;
+      case Kind::DC:
+        curprint("DC");
+        break;
+      case Kind::DP:
+        curprint("DP");
+        break;
+      case Kind::Dollar:
+        curprint("$");
+        break;
+      case Kind::Backslash:
+        curprint("\\");
+        break;
+      }
+    } else if (const auto *character =
+                   std::get_if<SgFormatItem::Character>(&descriptor)) {
+      emitCharacter(*character);
+    } else {
+      const auto group = std::get<SgFormatItem::Group>(descriptor);
+      curprint(group == SgFormatItem::Group::unlimited ? "*(" : "(");
+      unparseFormatItemList(item->get_format_item_list(), info);
+      curprint(")");
     }
   }
 }
 
 void FortranCodeGeneration_locatedNode::unparseFormatStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
-  // Note that we use a SgStringVal in the SgFormatItem to hold a string which
-  // is not really interpreted as a literal in the Fortram grammar (I think).
-
   SgFormatStatement *formatStatement = isSgFormatStatement(stmt);
   ASSERT_not_null(formatStatement);
   ASSERT_not_null(formatStatement->get_format_item_list());
@@ -925,18 +1013,27 @@ void FortranCodeGeneration_locatedNode::unparseImportStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgImportStatement *importStatement = isSgImportStatement(stmt);
   ASSERT_not_null(importStatement);
+  importStatement->validate_import_state();
+  ROSE_ASSERT(!importStatement->get_is_cxx_module_import());
   const SgStringList &importList = importStatement->get_import_list();
-  for (const std::string &name : importList) {
-    if (name.empty()) {
-      std::cerr
-          << "[REX-UNPARSER-MALFORMED-IMPORT-NAME] IMPORT name is empty\n";
-      ROSE_ABORT();
-    }
-  }
 
   curprint("import ");
-  if (!importList.empty()) {
-    curprint(":: ");
+  switch (importStatement->get_fortran_import_kind()) {
+  case SgImportStatement::e_fortran_import_default:
+    if (!importList.empty())
+      curprint(":: ");
+    break;
+  case SgImportStatement::e_fortran_import_only:
+    curprint(", only: ");
+    break;
+  case SgImportStatement::e_fortran_import_none:
+    curprint(", none");
+    break;
+  case SgImportStatement::e_fortran_import_all:
+    curprint(", all");
+    break;
+  default:
+    ROSE_ABORT();
   }
 
   bool needComma = false;
@@ -1333,9 +1430,6 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
   case SgAttributeSpecificationStatement::e_externalStatement:
     name = "external";
     break;
-  case SgAttributeSpecificationStatement::e_intentStatement:
-    name = "intent";
-    break;
   case SgAttributeSpecificationStatement::e_intrinsicStatement:
     name = "intrinsic";
     break;
@@ -1377,38 +1471,6 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
 
   curprint(name);
 
-  if (attributeSpecificationStatement->get_attribute_kind() ==
-      SgAttributeSpecificationStatement::e_intentStatement) {
-    // This define is copied from OFP actionEnum.h This needs to be better
-    // handled later (using a proper enum type).
-#define IntentSpecBase 600
-    const int IN = IntentSpecBase + 0;
-    const int OUT = IntentSpecBase + 1;
-    const int INOUT = IntentSpecBase + 2;
-
-    string intentString;
-    switch (attributeSpecificationStatement->get_intent()) {
-    case IN:
-      intentString = "in";
-      break;
-    case OUT:
-      intentString = "out";
-      break;
-    case INOUT:
-      intentString = "inout";
-      break;
-
-    default: {
-      printf("Error: default reached "
-             "attributeSpecificationStatement->get_intent() = %d \n",
-             attributeSpecificationStatement->get_intent());
-      ROSE_ABORT();
-    }
-    }
-
-    curprint("(" + intentString + ")");
-  }
-
   // The parameter statement is a bit different from the other attribute
   // statements (perhaps enough for it to be it's own IR node.
   if (attributeSpecificationStatement->get_attribute_kind() ==
@@ -1434,7 +1496,7 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
 
     curprint("(");
     curprint(attributeSpecificationStatement->get_linkage());
-    if (attributeSpecificationStatement->get_binding_label().empty() == false) {
+    if (attributeSpecificationStatement->get_binding_label_present()) {
       curprint(",NAME=\"");
       curprint(attributeSpecificationStatement->get_binding_label());
       curprint("\"");
@@ -1550,14 +1612,15 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
       SgAttributeSpecificationStatement::e_dataStatement) {
     curprint(" ");
 
-    SgDataStatementGroupPtrList &dataStatementGroupList =
+    attributeSpecificationStatement->validate_data_groups();
+    const SgDataStatementGroupPtrList &dataStatementGroupList =
         attributeSpecificationStatement->get_data_statement_group_list();
-    SgDataStatementGroupPtrList::iterator i_group =
+    SgDataStatementGroupPtrList::const_iterator i_group =
         dataStatementGroupList.begin();
     while (i_group != dataStatementGroupList.end()) {
-      SgDataStatementObjectPtrList &dataStatementObjectList =
+      const SgDataStatementObjectPtrList &dataStatementObjectList =
           (*i_group)->get_object_list();
-      SgDataStatementObjectPtrList::iterator i_object =
+      SgDataStatementObjectPtrList::const_iterator i_object =
           dataStatementObjectList.begin();
 
       while (i_object != dataStatementObjectList.end()) {
@@ -1568,64 +1631,7 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
         }
       }
 
-      // Now output the data values
-      curprint("/");
-      SgDataStatementValuePtrList &dataStatementValueList =
-          (*i_group)->get_value_list();
-      SgDataStatementValuePtrList::iterator i_value =
-          dataStatementValueList.begin();
-      while (i_value != dataStatementValueList.end()) {
-        SgDataStatementValue::data_statement_value_enum value_kind =
-            (*i_value)->get_data_initialization_format();
-        switch (value_kind) {
-        case SgDataStatementValue::e_unknown:
-        case SgDataStatementValue::e_default: {
-          printf(
-              "Error: value_kind == e_unknown or e_default value_kind = %d \n",
-              value_kind);
-          ROSE_ABORT();
-        }
-
-        case SgDataStatementValue::e_explict_list: {
-          unparseExpression((*i_value)->get_initializer_list(), info);
-          break;
-        }
-
-        case SgDataStatementValue::e_implicit_list: {
-          ASSERT_require(
-              (*i_value)->get_initializer_list()->get_expressions().empty());
-
-          SgExpression *repeatExpression = (*i_value)->get_repeat_expression();
-          ASSERT_not_null(repeatExpression);
-          SgExpression *constantExpression =
-              (*i_value)->get_constant_expression();
-          ASSERT_not_null(constantExpression);
-
-          unparseExpression(repeatExpression, info);
-          curprint(" * ");
-          unparseExpression(constantExpression, info);
-          break;
-        }
-
-        case SgDataStatementValue::e_implied_do: {
-          std::cerr << "Error: SgDataStatementValue implied-do has no "
-                       "structured unparser representation"
-                    << std::endl;
-          ROSE_ABORT();
-        }
-
-        default: {
-          printf("Error: default reached value_kind = %d \n", value_kind);
-          ROSE_ABORT();
-        }
-        }
-
-        i_value++;
-        if (i_value != dataStatementValueList.end()) {
-          curprint(", ");
-        }
-      }
-      curprint("/");
+      unparseDataValues((*i_group)->get_value_list(), info);
 
       i_group++;
       if (i_group != dataStatementGroupList.end()) {
@@ -1752,8 +1758,10 @@ void FortranCodeGeneration_locatedNode::unparseAttributeSpecificationStatement(
 void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgImplicitStatement *implicitStatement = isSgImplicitStatement(stmt);
-
-  if (implicitStatement->get_implicit_none()) {
+  ASSERT_not_null(implicitStatement);
+  implicitStatement->validate_implicit_statement();
+  if (implicitStatement->get_implicit_spec() !=
+      SgImplicitStatement::e_has_implicit_spec_list) {
     curprint_keyword("IMPLICIT", info);
     curprint(" ");
     curprint_keyword("NONE", info);
@@ -1777,50 +1785,27 @@ void FortranCodeGeneration_locatedNode::unparseImplicitStmt(
       ROSE_ABORT();
     }
   } else {
-    // This is a range such as "DOUBLE PRECISION (D-E)" or a singleton such as
-    // "COMPLEX (C)"
-
-    SgInitializedNamePtrList &nameList = implicitStatement->get_variables();
-    if (nameList.empty()) {
-      std::cerr << "Error: non-NONE SgImplicitStatement has no type ranges"
-                << std::endl;
-      ROSE_ABORT();
-    } else {
-      ROSE_ASSERT(nameList.empty() == false);
-
-      curprint_keyword("IMPLICIT", info);
-      curprint(" ");
-
-      SgInitializedNamePtrList::iterator i = nameList.begin();
-      // DQ (12/2/2010): New code to handle implicit statements.
-      while (i != nameList.end()) {
-        SgInitializedName *implicitTypeName = *i;
-        ASSERT_not_null(implicitTypeName);
-
-        SgUnparse_Info typeInfo(info);
-        typeInfo.set_reference_node_for_qualification(implicitTypeName);
-        unp->u_fortran_type->unparseType(implicitTypeName->get_type(),
-                                         typeInfo);
-        curprint("(");
-        curprint(implicitTypeName->get_name().str());
-        curprint(")");
-
-        i++;
-        if (i != nameList.end())
-          curprint(",");
+    curprint_keyword("IMPLICIT", info);
+    curprint(" ");
+    bool firstRange = true;
+    for (SgFortranImplicitRange *range : implicitStatement->get_ranges()) {
+      if (!firstRange)
+        curprint(",");
+      firstRange = false;
+      SgUnparse_Info typeInfo(info);
+      typeInfo.set_reference_node_for_qualification(range);
+      unp->u_fortran_type->unparseType(range->get_type(), typeInfo);
+      curprint("(");
+      curprint(std::string(1, range->get_first_letter()));
+      if (range->get_last_letter()) {
+        curprint("-");
+        curprint(std::string(1, *range->get_last_letter()));
       }
+      curprint(")");
     }
   }
 
   unp->cur.insert_newline(1);
-}
-
-void FortranCodeGeneration_locatedNode::unparseBlockDataStmt(SgStatement *,
-                                                             SgUnparse_Info &) {
-  std::cerr << "Error: legacy SgBlockDataStatement cannot represent a complete "
-               "BLOCK DATA program unit; use SgProcedureHeaderStatement"
-            << std::endl;
-  ROSE_ABORT();
 }
 
 void FortranCodeGeneration_locatedNode::unparseStatementFunctionStmt(
@@ -2121,68 +2106,6 @@ void FortranCodeGeneration_locatedNode::unparseAssignedGotoStmt(
 //  FortranCodeGeneration_locatedNode::<program units>
 //----------------------------------------------------------------------------
 
-void FortranCodeGeneration_locatedNode::unparseModuleStmt(
-    SgStatement *stmt, SgUnparse_Info &info) {
-  // Sage node corresponds to Fortran module
-
-  SgModuleStatement *mod = isSgModuleStatement(stmt);
-  ROSE_ASSERT(mod);
-  if (mod->get_name().is_null()) {
-    std::cerr << "Error: Fortran MODULE or SUBMODULE has no name" << std::endl;
-    ROSE_ABORT();
-  }
-
-  const SgName &parentName = mod->get_fortran_submodule_parent();
-  bool isSubmodule = false;
-  switch (mod->get_fortran_module_kind()) {
-  case SgModuleStatement::e_fortran_submodule:
-    isSubmodule = true;
-    if (!isValidFortranSubmoduleParent(parentName)) {
-      std::cerr << "REX_UNPARSE_INVARIANT[fortran-submodule-parent]: invalid "
-                   "parent='"
-                << parentName.getString() << "'" << std::endl;
-      ROSE_ABORT();
-    }
-    curprint("SUBMODULE (");
-    curprint(parentName.getString());
-    curprint(") ");
-    break;
-  case SgModuleStatement::e_fortran_module:
-    if (!parentName.is_null()) {
-      std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: MODULE has "
-                   "unexpected submodule parent='"
-                << parentName.getString() << "'" << std::endl;
-      ROSE_ABORT();
-    }
-    curprint("MODULE ");
-    break;
-  default:
-    std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: invalid value="
-              << static_cast<int>(mod->get_fortran_module_kind()) << std::endl;
-    ROSE_ABORT();
-  }
-  curprint(mod->get_name().str());
-
-  // body
-  ASSERT_not_null(mod->get_definition());
-  SgUnparse_Info ninfo(info);
-  unparseStatement(mod->get_definition(), ninfo);
-
-  unparseStatementNumbersSupport(mod->get_end_numeric_label(), info);
-
-  if (isSubmodule) {
-    curprint("END SUBMODULE");
-    if (!mod->get_name().getString().empty()) {
-      curprint(" ");
-      curprint(mod->get_name().str());
-    }
-  } else {
-    curprint("END MODULE");
-  }
-  ASSERT_not_null(unp);
-  unp->cur.insert_newline(1);
-}
-
 void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   // Sage node corresponds to Fortran program
@@ -2272,8 +2195,10 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
       curprint(proghdr->get_name().str());
     }
 
-    // Output 1 new line so that new statements will appear on their own line
-    // after the SgProgramHeaderStatement declaration.
+    SgUnparse_Info headerInfo(info);
+    headerInfo.unset_SkipFunctionDefinition();
+    unparseAttachedPreprocessingInfo(proghdr, headerInfo,
+                                     PreprocessingInfo::after_syntax);
     unp->cur.insert_newline(1);
   }
 }
@@ -2287,6 +2212,13 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
   // Sage node corresponds to Fortran interface statement
   SgInterfaceStatement *interfaceStatement = isSgInterfaceStatement(stmt);
   ASSERT_not_null(interfaceStatement);
+  const bool isAbstract = interfaceStatement->get_declarationModifier()
+                              .get_typeModifier()
+                              .isAbstract();
+  ASSERT_require(!isAbstract ||
+                 (interfaceStatement->get_generic_spec() ==
+                      SgInterfaceStatement::e_unnamed_interface_type &&
+                  interfaceStatement->get_name().is_null()));
 
   for (SgInterfaceBody *body : interfaceStatement->get_interface_body_list()) {
     if (body == nullptr ||
@@ -2301,6 +2233,9 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
   }
 
   string nm = interfaceStatement->get_name().str();
+  if (isAbstract) {
+    curprint("ABSTRACT ");
+  }
   curprint("INTERFACE ");
 
   switch (interfaceStatement->get_generic_spec()) {
@@ -2335,7 +2270,6 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
     break;
   }
   case SgInterfaceStatement::e_unnamed_interface_type: {
-    // Nothing to do for this case!
     break;
   }
   default: {
@@ -2345,6 +2279,8 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
   }
   }
 
+  unparseAttachedPreprocessingInfo(interfaceStatement, info,
+                                   PreprocessingInfo::after_syntax);
   unp->cur.insert_newline(1);
 
   for (size_t i = 0; i < interfaceStatement->get_interface_body_list().size();
@@ -2366,12 +2302,7 @@ void FortranCodeGeneration_locatedNode::unparseInterfaceStmt(
           isSgProcedureHeaderStatement(functionDeclaration);
       if (procHeader != nullptr && procHeader->get_definition() == nullptr) {
         SgUnparse_Info ninfo(info);
-        // INTERFACE bodies use a direct procedure-header dispatch so their
-        // specification declarations can be emitted explicitly below.  That
-        // bypasses the common statement dispatcher; preserve its fixed-form
-        // label-field contract here before writing the header.
-        unparseStatementNumbers(procHeader, ninfo);
-        unparseProcHdrStmt(procHeader, ninfo);
+        unparseStatement(procHeader, ninfo);
 
         if (SgFunctionParameterScope *paramScope =
                 procHeader->get_functionParameterScope()) {
@@ -2549,17 +2480,14 @@ void FortranCodeGeneration_locatedNode::unparseEnumDeclStmt(
     }
     SgAssignInitializer *initializer =
         isSgAssignInitializer(enumerator->get_initializer());
-    SgEnumVal *value = initializer != nullptr
-                           ? isSgEnumVal(initializer->get_operand_i())
-                           : nullptr;
-    SgEnumDeclaration *valueDecl =
-        value != nullptr ? value->get_declaration() : nullptr;
-    if (initializer == nullptr || value == nullptr || valueDecl == nullptr ||
-        valueDecl->get_definingDeclaration() != enumDecl ||
-        value->get_name() != enumerator->get_name()) {
+    if (!enumerator->get_enum_constant_value().has_value() ||
+        (enumerator->get_initializer() != nullptr &&
+         (initializer == nullptr || initializer->get_operand_i() == nullptr ||
+          initializer->get_parent() != enumerator ||
+          initializer->get_operand_i()->get_parent() != initializer))) {
       std::cerr << "REX_UNPARSER_INVARIANT[fortran-enum]: enumerator '"
                 << enumerator->get_name()
-                << "' has no exact semantic integer initializer\n";
+                << "' has no exact value or source initializer\n";
       ROSE_ABORT();
     }
 
@@ -2568,12 +2496,13 @@ void FortranCodeGeneration_locatedNode::unparseEnumDeclStmt(
     curprint("ENUMERATOR :: ");
     curprint(enumerator->get_name().str());
     curprint(" = ");
-    curprint(std::to_string(value->get_value()));
+    curprint(std::to_string(*enumerator->get_enum_constant_value()));
     unparseAttachedPreprocessingInfo(enumerator, info,
                                      PreprocessingInfo::after);
     unp->cur.insert_newline(1);
   }
   unparseAttachedPreprocessingInfo(enumDecl, info, PreprocessingInfo::inside);
+  unparseStatementNumbersSupport(enumDecl->get_end_numeric_label(), info);
   curprint("END ENUM");
   unp->cur.insert_newline(1);
 }
@@ -2607,24 +2536,9 @@ void FortranCodeGeneration_locatedNode::unparseVarDeclStmt(
   // for this statement
   SgUnparse_Info ninfo(info);
 
-  // FIXME: we may need to do something analagous for modules?
-  // Check to see if this is an object defined within a class
-
-  SgName inCname;
   ROSE_ASSERT(vardecl->get_parent());
-  SgClassDefinition *cdefn = isSgClassDefinition(vardecl->get_parent());
-  if (cdefn) {
-    inCname = cdefn->get_declaration()->get_name();
-    if (cdefn->get_declaration()->get_class_type() ==
-        SgClassDeclaration::e_class)
-      ninfo.set_CheckAccess();
-  }
-
-  // Save the input information
-  SgUnparse_Info saved_ninfo(ninfo);
 
   // Setup the SgUnparse_Info object for this statement
-  ninfo.unset_CheckAccess();
   info.set_access_attribute(ninfo.get_access_attribute());
   SgInitializedNamePtrList::iterator p = vardecl->get_variables().begin();
   unparseVarDecl(vardecl, *p, ninfo);
@@ -2643,14 +2557,6 @@ void FortranCodeGeneration_locatedNode::unparseVarDefnStmt(SgStatement *stmt,
                                                            SgUnparse_Info &) {
   ASSERT_not_null(isSgVariableDefinition(stmt));
   std::cerr << "Error: SgVariableDefinition has no Fortran source spelling"
-            << std::endl;
-  ROSE_ABORT();
-}
-
-void FortranCodeGeneration_locatedNode::unparseParamDeclStmt(SgStatement *,
-                                                             SgUnparse_Info &) {
-  std::cerr << "Error: SgParameterStatement must not reach the Fortran "
-               "unparser"
             << std::endl;
   ROSE_ABORT();
 }
@@ -2797,89 +2703,37 @@ void FortranCodeGeneration_locatedNode::unparseBasicBlockStmt(
   }
 }
 
-bool hasCStyleElseIfConstruction(SgIfStmt *parentIfStatement) {
-  // Rasmussen(7/17/2018): Check for C style AST else-if construction.
-  // The C style else-if AST doesn't have an SgBasicBlock immediately
-  // preceding the SgIfStmt representing the else-if clause; the SgIfStmt
-  // itself is the false branch.
-  //
-  SgIfStmt *else_if_stmt = isSgIfStmt(parentIfStatement->get_false_body());
-
-  return (else_if_stmt != nullptr);
-}
-
-SgIfStmt *getElseIfStatement(SgIfStmt *parentIfStatement) {
-  // This returns the elseif statement in a SgIfStmt object, else returns NULL.
-
-  SgIfStmt *childIfStatement{nullptr};
-
-  SgBasicBlock *falseBlock =
-      isSgBasicBlock(parentIfStatement->get_false_body());
-
-  // Rasmussen (7/23/2018): Simplification of logic allowed because usage of
-  // is_else_if_statement was fixed in frontend.  Previously
-  // is_else_if_statement was not used in the unparser and this confused users
-  // at NCAR when attempting transformations.
-  //
-  if (falseBlock != nullptr) {
-    if (falseBlock->get_statements().empty() == false) {
-      childIfStatement = isSgIfStmt(*(falseBlock->get_statements().begin()));
-      if (childIfStatement != nullptr) {
-        if (childIfStatement->get_is_else_if_statement() == false) {
-          childIfStatement = nullptr;
-        }
-      }
-    }
-  }
-
-  // Rasmussen (7/23/2018): This branch added for the experimental Fortran
-  // parser where the AST was designed to follow the C if statement.  For the
-  // new design there is no SgBasicBlock immediately preceding the SgIfStmt (the
-  // SgIfStmt is the false branch).
-  //
-  SgIfStmt *else_if_stmt = isSgIfStmt(parentIfStatement->get_false_body());
-  if (else_if_stmt != nullptr) {
-    childIfStatement = else_if_stmt;
-  }
-
-  return childIfStatement;
-}
-
 void FortranCodeGeneration_locatedNode::unparseIfStmt(SgStatement *stmt,
                                                       SgUnparse_Info &info) {
-  // Sage node corresponding to Fortran 'if'
-  //
-
-  // Rasmussen(7/23/2018): Modified much of the unparsing of if statements and
-  // if constructs because:
-  //   1. The AST was modified to follow the C-style AST for the experimental
-  //   branch.
-  //   2. Original Fortran frontend AST construction also moved towards C by
-  //   using NULL for false body.
-  //   3. ELSE was not unparsed if the else-block was empty (no reason not to
-  //   unparse it).
-  //   4. A bug was fixed in unparsing the if-construct label name
-  //   (label_string).
-  //
   SgIfStmt *if_stmt = isSgIfStmt(stmt);
   ASSERT_not_null(if_stmt);
+  ROSE_ASSERT(if_stmt->get_if_statement_kind() == SgIfStmt::e_if_ordinary);
   ROSE_ASSERT(if_stmt->get_conditional());
   ROSE_ASSERT(if_stmt->get_true_body());
+  SgIfStmt *elseIfStatement = isSgIfStmt(if_stmt->get_false_body());
+  SgBasicBlock *fbb = isSgBasicBlock(if_stmt->get_false_body());
+  ROSE_ASSERT(if_stmt->get_false_body() == nullptr || fbb != nullptr ||
+              elseIfStatement != nullptr);
+  if (if_stmt->get_is_else_if_statement()) {
+    ROSE_ASSERT(if_stmt->get_use_then_keyword());
+    ROSE_ASSERT(!if_stmt->get_has_end_statement());
+    SgIfStmt *owner = isSgIfStmt(if_stmt->get_parent());
+    ROSE_ASSERT(owner != nullptr && owner->get_false_body() == if_stmt);
+  }
+  if (!if_stmt->get_else_construct_name().empty()) {
+    ROSE_ASSERT(if_stmt->get_use_then_keyword());
+    ROSE_ASSERT(isSgBasicBlock(if_stmt->get_false_body()) != nullptr);
+  }
 
-  // Output the if-construct-name string (if present) if this is an else-if
-  // branch
+  // Construct names precede IF; ELSE IF names follow THEN.
   if (if_stmt->get_string_label().empty() == false &&
       if_stmt->get_is_else_if_statement() == false) {
     curprint(if_stmt->get_string_label() + ": ");
   }
 
-  // IF keyword and conditional
   curprint("IF (");
   info.set_inConditional();
 
-  // DQ (8/15/2007): In C the condition is a statement, and in Fortran the
-  // condition is an expression! We might want to fix this by having an IR node
-  // to represent the Fortran "if" statement.
   SgExprStatement *expressionStatement =
       isSgExprStatement(if_stmt->get_conditional());
   unparseExpression(expressionStatement->get_expression(), info);
@@ -2887,41 +2741,21 @@ void FortranCodeGeneration_locatedNode::unparseIfStmt(SgStatement *stmt,
   info.unset_inConditional();
   curprint(") ");
 
-  // DQ (12/26/2007): handling cases where endif is not in the source code and
-  // not required (stmt vs. construct) This is also (primarily) used to keep
-  // else-if-stmt from printing extra END IF.
   bool output_endif = if_stmt->get_has_end_statement();
 
-  SgIfStmt *elseIfStatement = getElseIfStatement(if_stmt);
-
-  // THEN keyword
-  // DQ (12/26/2007): If this is an elseif statement then output the "THEN" even
-  // though we will not output an "ENDIF"
   if (output_endif) {
-    // IF THEN statement branch
-    //
     ROSE_ASSERT(if_stmt->get_use_then_keyword());
-    // This branch taken for an if-then-stmt.
-    // Note that the string label if output before "IF", not after "THEN"
     curprint("THEN");
     unp->cur.insert_newline(1);
     unparseStatement(if_stmt->get_true_body(), info);
   } else {
     if (if_stmt->get_use_then_keyword()) {
-      // ELSE IF statement branch (uses if_stmt to unparse the "IF")
-      //
-      // This branch taken for an else-if-stmt.
-      // Note that the string label if output after "THEN"
       curprint("THEN");
-      // Output the if-construct-name string after THEN if needed
       if (if_stmt->get_string_label().empty() == false)
         curprint(" " + if_stmt->get_string_label());
       unp->cur.insert_newline(1);
       unparseStatement(if_stmt->get_true_body(), info);
     } else {
-      // IF statement branch (not if-construct)
-      //
-      // "THEN" is not output for the case of "IF (C) B = 0"
       ROSE_ASSERT(isSgBasicBlock(if_stmt->get_true_body()));
       SgStatementPtrList &statementList =
           isSgBasicBlock(if_stmt->get_true_body())->get_statements();
@@ -2937,44 +2771,28 @@ void FortranCodeGeneration_locatedNode::unparseIfStmt(SgStatement *stmt,
     }
   }
 
-  // ELSE and ELSE IF statements
-  //
-  // Rasmussen(7/23/2018): Added unparsing of C style else-if AST construction.
-  // The C AST does not use an SgBasicBlock to precede an SgIfStmt representing
-  // the else-if-stmt. Also simplified the logic somewhat, now allowed because
-  // the false_body is NULL if no else-stmt (changed in the frontend to follow C
-  // AST).
-  //
-  SgBasicBlock *fbb = isSgBasicBlock(if_stmt->get_false_body());
-
-  if (fbb || hasCStyleElseIfConstruction(if_stmt)) {
+  if (fbb || elseIfStatement) {
     // The else statement might have its own numeric label
     unparseStatementNumbersSupport(if_stmt->get_else_numeric_label(), info);
     curprint("ELSE");
 
-    // However, currently there is no information on else if-construct name in
-    // SgIfStmt so we won't try to unparse it.  NOTE, output could be different
-    // from input.
-
     if (elseIfStatement != nullptr) {
-      // ELSE IF statement branch
       ROSE_ASSERT(elseIfStatement->get_is_else_if_statement());
 
       // Call the associated unparse function directly to avoid formatting
       curprint(" ");
       unparseIfStmt(elseIfStatement, info);
     } else {
-      // ELSE statement branch
+      if (!if_stmt->get_else_construct_name().empty()) {
+        curprint(" " + if_stmt->get_else_construct_name());
+      }
       unparseStatement(if_stmt->get_false_body(), info);
     }
   }
 
-  // END IF statement
-  //
   if (output_endif) {
     unparseStatementNumbersSupport(if_stmt->get_end_numeric_label(), info);
     curprint("END IF");
-    // Output the if-construct-name string if present
     if (if_stmt->get_string_label().empty() == false)
       curprint(" " + if_stmt->get_string_label());
   }
@@ -3060,7 +2878,8 @@ void FortranCodeGeneration_locatedNode::unparseDoConcurrentStatement(
   }
 
   curprint("DO ");
-  if (forAllStatement->get_end_numeric_label() != nullptr) {
+  if (!forAllStatement->get_has_end_statement() &&
+      forAllStatement->get_end_numeric_label() != nullptr) {
     SgLabelSymbol *endLabelSymbol =
         forAllStatement->get_end_numeric_label()->get_symbol();
     ASSERT_not_null(endLabelSymbol->get_fortran_statement());
@@ -3176,7 +2995,8 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
 
   curprint("DO ");
 
-  if (doloop->get_end_numeric_label() != nullptr) {
+  if (!doloop->get_has_end_statement() &&
+      doloop->get_end_numeric_label() != nullptr) {
     SgLabelSymbol *endLabelSymbol =
         doloop->get_end_numeric_label()->get_symbol();
     ASSERT_not_null(endLabelSymbol);
@@ -3206,13 +3026,6 @@ void FortranCodeGeneration_locatedNode::unparseDoStmt(SgStatement *stmt,
   ASSERT_not_null(unp);
   unp->cur.insert_newline(1);
 
-  // This setting converts all non-block where statements into blocked where
-  // statements. So "DO I=1,2 B = 0" becomes: "DO I=1,2
-  //     B = 0
-  //  END DO"
-
-  // DQ (12/26/2007): handling cases where enddo is not in the source code and
-  // not required (stmt vs. construct)
   if (doloop->get_has_end_statement()) {
     unparseStatementNumbersSupport(doloop->get_end_numeric_label(), info);
 
@@ -3242,7 +3055,8 @@ void FortranCodeGeneration_locatedNode::unparseWhileStmt(SgStatement *stmt,
   curprint_keyword("DO", info);
   curprint(" ");
 
-  if (while_stmt->get_end_numeric_label() != nullptr) {
+  if (!while_stmt->get_has_end_statement() &&
+      while_stmt->get_end_numeric_label() != nullptr) {
     SgLabelSymbol *endLabelSymbol =
         while_stmt->get_end_numeric_label()->get_symbol();
 
@@ -3266,24 +3080,18 @@ void FortranCodeGeneration_locatedNode::unparseWhileStmt(SgStatement *stmt,
   // loop body (must always exist)
   unparseStatement(while_stmt->get_body(), info);
 
-  // This setting converts all non-block where statements into blocked where
-  // statements. So "DO WHILE (A) B = 0" becomes: "DO WHILE (A)
-  //     B = 0
-  //  END DO"
-  bool output_enddo = while_stmt->get_has_end_statement();
-  if (output_enddo == false && while_stmt->get_end_numeric_label() != nullptr) {
+  if (!while_stmt->get_has_end_statement()) {
+    ASSERT_not_null(while_stmt->get_end_numeric_label());
     SgLabelSymbol *endLabelSymbol =
         while_stmt->get_end_numeric_label()->get_symbol();
     SgStatement *endLabelStmt = endLabelSymbol != nullptr
                                     ? endLabelSymbol->get_fortran_statement()
                                     : nullptr;
-    if (endLabelStmt == nullptr || endLabelStmt == while_stmt ||
-        isSgNullStatement(endLabelStmt) != nullptr) {
-      output_enddo = true;
-    }
+    ROSE_ASSERT(endLabelStmt != nullptr && endLabelStmt != while_stmt &&
+                isSgNullStatement(endLabelStmt) == nullptr);
   }
 
-  if (output_enddo) {
+  if (while_stmt->get_has_end_statement()) {
     unparseStatementNumbersSupport(while_stmt->get_end_numeric_label(), info);
     curprint_keyword("END", info);
     curprint(" ");
@@ -3451,17 +3259,12 @@ void FortranCodeGeneration_locatedNode::unparseGotoStmt(
   curprint_keyword("GOTO", info);
   curprint(" ");
 
-  // The Flang parser uses an SgLabelStatement for a statement label, at this
-  // point it has already been printed.  Printing the goto label is simple, just
-  // print it and return.
   if (gotoStmt->get_label()) {
-    // Flang unparser
     curprint(gotoStmt->get_label()->get_label());
     unp->cur.insert_newline(1);
     return;
   }
 
-  // Old OFP parser uses numeric label handling which is different than C/C++.
   ASSERT_not_null(gotoStmt->get_label_expression());
   SgLabelSymbol *labelSymbol = gotoStmt->get_label_expression()->get_symbol();
 
@@ -3551,7 +3354,6 @@ void FortranCodeGeneration_locatedNode::unparseReturnStmt(
   ASSERT_not_null(altret);
 
   if (isSgNullExpression(altret) == nullptr) {
-    // ROSE_ASSERT(isSgValueExp(altret));
     curprint(" ");
     unparseExpression(altret, info);
   }
@@ -3671,9 +3473,9 @@ void FortranCodeGeneration_locatedNode::unparseReadStatement(
     // Added missing items to the io-control-spec-list [Rasmussen, 2019.05.31]
 
     unparse_IO_Control_Support("FMT", readStatement->get_format(), false, info);
-    if (!readStatement->get_namelist().empty()) {
+    if (readStatement->get_namelist() != nullptr) {
       curprint(", NML=");
-      curprint(readStatement->get_namelist());
+      curprint(readStatement->get_namelist()->get_name().getString());
     }
     unparse_IO_Control_Support("ADVANCE", readStatement->get_advance(), false,
                                info);
@@ -3715,9 +3517,9 @@ void FortranCodeGeneration_locatedNode::unparseWriteStatement(
   unparse_IO_Support(stmt, false, info);
 
   unparse_IO_Control_Support("FMT", writeStatement->get_format(), false, info);
-  if (!writeStatement->get_namelist().empty()) {
+  if (writeStatement->get_namelist() != nullptr) {
     curprint(", NML=");
-    curprint(writeStatement->get_namelist());
+    curprint(writeStatement->get_namelist()->get_name().getString());
   }
   unparse_IO_Control_Support("ADVANCE", writeStatement->get_advance(), false,
                              info);
@@ -4055,11 +3857,8 @@ void FortranCodeGeneration_locatedNode::unparseSyncAllStatement(
   SgSyncAllStatement *sync_stmt = isSgSyncAllStatement(stmt);
   ROSE_ASSERT(sync_stmt);
 
-  bool print_initial_comma = false;
-
   curprint("SYNC ALL (");
-
-  unparse_Image_Ctrl_Stmt_Support(sync_stmt, print_initial_comma, info);
+  unparse_Image_Ctrl_Stmt_Support(sync_stmt, false, info);
 
   curprint(")");
   unp->cur.insert_newline(1);
@@ -4071,36 +3870,18 @@ void FortranCodeGeneration_locatedNode::unparseSyncImagesStatement(
   ROSE_ASSERT(sync_stmt);
 
   SgExpression *image_set = sync_stmt->get_image_set();
-  ROSE_ASSERT(image_set);
-
-  bool print_comma = true;
+  ROSE_ASSERT(sync_stmt->get_all_images() == (image_set == nullptr));
+  ROSE_ASSERT(image_set == nullptr || isSgNullExpression(image_set) == nullptr);
 
   curprint("SYNC IMAGES (");
 
-  // unparse the image set
-  if (isSgNullExpression(image_set)) {
-    // A null expression is used to indicate lack of an actual/"real" expression
+  if (sync_stmt->get_all_images()) {
     curprint("*");
   } else {
-    unparseExpression(sync_stmt->get_image_set(), info);
+    unparseExpression(image_set, info);
   }
 
-  if (sync_stmt->get_stat()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("STAT=");
-    unparseExpression(sync_stmt->get_stat(), info);
-  }
-  if (sync_stmt->get_err_msg()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("ERRMSG=");
-    unparseExpression(sync_stmt->get_err_msg(), info);
-  }
+  unparse_Image_Ctrl_Stmt_Support(sync_stmt, true, info);
 
   curprint(")");
 
@@ -4112,26 +3893,8 @@ void FortranCodeGeneration_locatedNode::unparseSyncMemoryStatement(
   SgSyncMemoryStatement *sync_stmt = isSgSyncMemoryStatement(stmt);
   ROSE_ASSERT(sync_stmt);
 
-  bool print_comma = false;
-
   curprint("SYNC MEMORY (");
-
-  if (sync_stmt->get_stat()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("STAT=");
-    unparseExpression(sync_stmt->get_stat(), info);
-  }
-  if (sync_stmt->get_err_msg()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("ERRMSG=");
-    unparseExpression(sync_stmt->get_err_msg(), info);
-  }
+  unparse_Image_Ctrl_Stmt_Support(sync_stmt, false, info);
 
   curprint(")");
 
@@ -4143,30 +3906,28 @@ void FortranCodeGeneration_locatedNode::unparseSyncTeamStatement(
   SgSyncTeamStatement *sync_stmt = isSgSyncTeamStatement(stmt);
   ROSE_ASSERT(sync_stmt);
 
-  bool print_comma = true;
-
   curprint("SYNC TEAM (");
-
-  // unparse the team value
   unparseExpression(sync_stmt->get_team_value(), info);
+  unparse_Image_Ctrl_Stmt_Support(sync_stmt, true, info);
 
-  if (sync_stmt->get_stat()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("STAT=");
-    unparseExpression(sync_stmt->get_stat(), info);
-  }
-  if (sync_stmt->get_err_msg()) {
-    if (print_comma)
-      curprint(", ");
-    else
-      print_comma = true;
-    curprint("ERRMSG=");
-    unparseExpression(sync_stmt->get_err_msg(), info);
-  }
+  curprint(")");
+  unp->cur.insert_newline(1);
+}
 
+void FortranCodeGeneration_locatedNode::unparseFormTeamStatement(
+    SgStatement *stmt, SgUnparse_Info &info) {
+  auto *form = isSgFormTeamStatement(stmt);
+  ROSE_ASSERT(form != nullptr);
+  form->validate_operands();
+  curprint("FORM TEAM (");
+  unparseExpression(form->get_team_number(), info);
+  curprint(", ");
+  unparseExpression(form->get_team_variable(), info);
+  if (form->get_new_index() != nullptr) {
+    curprint(", NEW_INDEX=");
+    unparseExpression(form->get_new_index(), info);
+  }
+  unparse_Image_Ctrl_Stmt_Support(form, true, info);
   curprint(")");
   unp->cur.insert_newline(1);
 }
@@ -4175,8 +3936,6 @@ void FortranCodeGeneration_locatedNode::unparseLockStatement(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgLockStatement *lock_stmt = isSgLockStatement(stmt);
   ROSE_ASSERT(lock_stmt);
-
-  bool print_initial_comma = true;
 
   curprint("LOCK (");
 
@@ -4188,7 +3947,7 @@ void FortranCodeGeneration_locatedNode::unparseLockStatement(
     curprint("ACQUIRED_LOCK=");
     unparseExpression(lock_stmt->get_acquired_lock(), info);
   }
-  unparse_Image_Ctrl_Stmt_Support(lock_stmt, print_initial_comma, info);
+  unparse_Image_Ctrl_Stmt_Support(lock_stmt, true, info);
 
   curprint(")");
   unp->cur.insert_newline(1);
@@ -4199,14 +3958,12 @@ void FortranCodeGeneration_locatedNode::unparseUnlockStatement(
   SgUnlockStatement *unlock_stmt = isSgUnlockStatement(stmt);
   ROSE_ASSERT(unlock_stmt);
 
-  bool print_initial_comma = true;
-
   curprint("UNLOCK (");
 
   // unparse the lock variable
   unparseExpression(unlock_stmt->get_lock_variable(), info);
 
-  unparse_Image_Ctrl_Stmt_Support(unlock_stmt, print_initial_comma, info);
+  unparse_Image_Ctrl_Stmt_Support(unlock_stmt, true, info);
 
   curprint(")");
   unp->cur.insert_newline(1);
@@ -4244,7 +4001,8 @@ void FortranCodeGeneration_locatedNode::unparseAssociateStatement(
   ASSERT_not_null(associateStatement->get_body());
   unparseStatement(associateStatement->get_body(), info);
 
-  unparseStatementNumbersSupport(nullptr, info);
+  unparseStatementNumbersSupport(associateStatement->get_end_numeric_label(),
+                                 info);
 
   curprint("END ASSOCIATE");
 
@@ -4293,6 +4051,8 @@ void FortranCodeGeneration_locatedNode::unparsePragmaDeclStmt(
   switch (pragmaDeclaration->get_fortran_directive_family()) {
   case SgPragmaDeclaration::e_fortran_directive_none:
     curprint("!pragma ");
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_compiler:
     break;
   case SgPragmaDeclaration::e_fortran_directive_openmp:
   case SgPragmaDeclaration::e_fortran_directive_ompx:
@@ -4687,7 +4447,10 @@ void FortranCodeGeneration_locatedNode::unparseVarDecl(
   if (init != nullptr) {
     SgInitializer *initializer = isSgInitializer(init);
     ASSERT_not_null(initializer);
-    if (isSgPointerType(semanticType)) {
+    if (isSgFortranDataInitializer(initializer) != nullptr) {
+      ROSE_ASSERT(initializer->get_type() == semanticType);
+      unparseExpression(initializer, info);
+    } else if (isSgPointerType(semanticType)) {
       curprint(" => ");
       auto *assignInitializer = isSgAssignInitializer(initializer);
       if (assignInitializer == nullptr ||
@@ -4755,7 +4518,7 @@ void FortranCodeGeneration_locatedNode::unparseBindAttribute(
 
     curprint(declaration->get_linkage());
 
-    if (declaration->get_binding_label().empty() == false) {
+    if (declaration->get_binding_label_present()) {
       curprint(",NAME=\"");
       curprint(declaration->get_binding_label());
       curprint("\"");
@@ -5152,8 +4915,10 @@ void FortranCodeGeneration_locatedNode::unparseProcHdrStmt(
       curprint(")");
     }
 
-    // Output 1 new line so that new statements will appear on their own line
-    // after the SgProgramHeaderStatement declaration.
+    SgUnparse_Info headerInfo(info);
+    headerInfo.unset_SkipFunctionDefinition();
+    unparseAttachedPreprocessingInfo(procedureHeader, headerInfo,
+                                     PreprocessingInfo::after_syntax);
     unp->cur.insert_newline(1);
   }
 }
@@ -5181,7 +4946,6 @@ void FortranCodeGeneration_locatedNode::unparseFuncDefnStmt(
   // member function declaration) this will help us know when to trim the "::"
   // prefix from the name qualiciation.  The "::" global scope qualifier is not
   // used in function declarations, but is used for function calls.
-  info.set_declstatement_ptr(nullptr);
   info.set_declstatement_ptr(funcdefn_stmt->get_declaration());
 
   // Emit numeric labels after leading comments for Fortran defining
@@ -5296,8 +5060,6 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
 
     ninfox.unset_SkipSemiColon();
 
-    // DQ (6/13/2007): Set to null before resetting to non-null value
-    ninfox.set_declstatement_ptr(nullptr);
     ninfox.set_declstatement_ptr(classdecl_stmt);
 
     unparseStatement(classdecl_stmt->get_definition(), ninfox);
@@ -5313,13 +5075,6 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
     if (!info.inEmbeddedDecl()) {
       SgUnparse_Info ninfo(info);
       ASSERT_not_null(classdecl_stmt->get_parent());
-      SgClassDefinition *cdefn =
-          isSgClassDefinition(classdecl_stmt->get_parent());
-
-      if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                       SgClassDeclaration::e_class)
-        ninfo.set_CheckAccess();
-
       unp->u_sage->printSpecifier(classdecl_stmt, ninfo);
       info.set_access_attribute(ninfo.get_access_attribute());
     }
@@ -5359,49 +5114,32 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
     }
 
     if (classdecl_stmt->get_declarationModifier().get_typeModifier().isBind()) {
-      // The BIND keyword is only permitted within Modules
-      if (SageInterface::getEnclosingModuleStatement(classdecl_stmt) !=
-          nullptr) {
-        // I think that bind implies "BIND(C)"
-        curprint(", BIND(C)");
-      } else {
-        fprintf(stderr,
-                "REX_UNPARSE_INVARIANT[fortran-bind]: BIND derived type "
-                "occurs outside a module\n");
-        ROSE_ABORT();
-      }
+      curprint(", BIND(C)");
     }
 
-    std::string extendsName;
-    if (SgClassDefinition *def = classdecl_stmt->get_definition()) {
-      if (!def->get_inheritances().empty()) {
-        if (SgBaseClass *base = def->get_inheritances().front()) {
-          if (SgClassDeclaration *baseDecl = base->get_base_class()) {
-            extendsName = baseDecl->get_name().str();
-          }
-        }
-      }
-    }
-
-    if (!extendsName.empty() || classdecl_stmt->get_declarationModifier()
-                                    .get_typeModifier()
-                                    .isExtends()) {
-      // The EXTENDS keyword is only permitted within Modules
-      if (SageInterface::getEnclosingModuleStatement(classdecl_stmt) !=
-          nullptr) {
-        if (extendsName.empty()) {
-          std::cerr << "Error: EXTENDS modifier has no base-class edge"
-                    << std::endl;
-          ROSE_ABORT();
-        }
-        curprint(", EXTENDS(");
-        curprint(extendsName);
-        curprint(")");
-      } else {
-        std::cerr << "Error: EXTENDS modifier occurs outside a module"
-                  << std::endl;
-        ROSE_ABORT();
-      }
+    SgClassDefinition *definition = classdecl_stmt->get_definition();
+    ASSERT_not_null(definition);
+    const auto &bases = definition->get_inheritances();
+    ASSERT_require(bases.size() <= 1);
+    ASSERT_require(!classdecl_stmt->get_declarationModifier()
+                        .get_typeModifier()
+                        .isExtends() ||
+                   !bases.empty());
+    if (!bases.empty()) {
+      SgBaseClass *base = bases.front();
+      ASSERT_not_null(base);
+      ASSERT_require(base->get_parent() == definition);
+      ASSERT_not_null(base->get_base_class());
+      ASSERT_not_null(base->get_fortran_source_derived_type_symbol());
+      ASSERT_require(base->get_source_type() ==
+                     base->get_base_class()->get_type());
+      SgUnparse_Info baseInfo(info);
+      baseInfo.set_reference_node_for_qualification(base);
+      curprint(", EXTENDS(");
+      curprint(requireFortranSourceDerivedTypeName(
+                   base->get_base_class()->get_type(), baseInfo)
+                   .getString());
+      curprint(")");
     }
 
     if (classdecl_stmt->get_declarationModifier()
@@ -5410,11 +5148,14 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_derivedType(
       curprint(", ABSTRACT");
     }
 
-    // DQ (8/28/2010): I think this is require to separate type attribute
-    // specifiers from the name of the type.
     curprint(" :: ");
 
     curprint(classdecl_stmt->get_name().str());
+    SgUnparse_Info headerInfo(info);
+    headerInfo.unset_SkipClassDefinition();
+    headerInfo.unset_SkipEnumDefinition();
+    unparseAttachedPreprocessingInfo(classdecl_stmt, headerInfo,
+                                     PreprocessingInfo::after_syntax);
   }
 }
 
@@ -5424,6 +5165,32 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_module(
   ASSERT_not_null(classdecl_stmt);
   if (classdecl_stmt->get_name().is_null()) {
     std::cerr << "Error: Fortran MODULE declaration has no name" << std::endl;
+    ROSE_ABORT();
+  }
+  const SgName &parentName = classdecl_stmt->get_fortran_submodule_parent();
+  bool isSubmodule = false;
+  switch (classdecl_stmt->get_fortran_module_kind()) {
+  case SgModuleStatement::e_fortran_submodule:
+    isSubmodule = true;
+    if (!isValidFortranSubmoduleParent(parentName)) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-submodule-parent]: invalid "
+                   "parent='"
+                << parentName.getString() << "'" << std::endl;
+      ROSE_ABORT();
+    }
+    break;
+  case SgModuleStatement::e_fortran_module:
+    if (!parentName.is_null()) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: MODULE has "
+                   "unexpected submodule parent='"
+                << parentName.getString() << "'" << std::endl;
+      ROSE_ABORT();
+    }
+    break;
+  default:
+    std::cerr << "REX_UNPARSE_INVARIANT[fortran-module-kind]: invalid value="
+              << static_cast<int>(classdecl_stmt->get_fortran_module_kind())
+              << std::endl;
     ROSE_ABORT();
   }
   if (!classdecl_stmt->isForward() &&
@@ -5439,15 +5206,13 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_module(
 
     ninfox.unset_SkipSemiColon();
 
-    // DQ (6/13/2007): Set to null before resetting to non-null value
-    ninfox.set_declstatement_ptr(nullptr);
     ninfox.set_declstatement_ptr(classdecl_stmt);
 
     unparseStatement(classdecl_stmt->get_definition(), ninfox);
 
     unparseStatementNumbersSupport(classdecl_stmt->get_end_numeric_label(),
                                    info);
-    curprint("END MODULE ");
+    curprint(isSubmodule ? "END SUBMODULE " : "END MODULE ");
     curprint(classdecl_stmt->get_name().str());
 
     ASSERT_not_null(unp);
@@ -5457,23 +5222,26 @@ void FortranCodeGeneration_locatedNode::unparseClassDeclStmt_module(
     if (!info.inEmbeddedDecl()) {
       SgUnparse_Info ninfo(info);
       ASSERT_not_null(classdecl_stmt->get_parent());
-      SgClassDefinition *cdefn =
-          isSgClassDefinition(classdecl_stmt->get_parent());
-
-      if (cdefn && cdefn->get_declaration()->get_class_type() ==
-                       SgClassDeclaration::e_class)
-        ninfo.set_CheckAccess();
-
       unp->u_sage->printSpecifier(classdecl_stmt, ninfo);
       info.set_access_attribute(ninfo.get_access_attribute());
     }
 
     info.unset_inEmbeddedDecl();
 
-    curprint("MODULE ");
+    if (isSubmodule) {
+      curprint("SUBMODULE (");
+      curprint(parentName.getString());
+      curprint(") ");
+    } else {
+      curprint("MODULE ");
+    }
     curprint(classdecl_stmt->get_name().str());
 
-    SgName nm = classdecl_stmt->get_name();
+    SgUnparse_Info headerInfo(info);
+    headerInfo.unset_SkipClassDefinition();
+    headerInfo.unset_SkipEnumDefinition();
+    unparseAttachedPreprocessingInfo(classdecl_stmt, headerInfo,
+                                     PreprocessingInfo::after_syntax);
   }
 }
 
@@ -5481,13 +5249,6 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
     SgStatement *stmt, SgUnparse_Info &info) {
   SgClassDefinition *classdefn_stmt = isSgClassDefinition(stmt);
   ASSERT_not_null(classdefn_stmt);
-  if (classdefn_stmt->get_packingAlignment() != 0) {
-    std::cerr << "Error: C/C++ packing alignment reached a Fortran type "
-                 "definition"
-              << std::endl;
-    ROSE_ABORT();
-  }
-
   SgUnparse_Info ninfo(info);
 
   ninfo.set_SkipClassDefinition();
@@ -5506,17 +5267,11 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
   ninfo.unset_SkipClassDefinition();
   ninfo.unset_SkipEnumDefinition();
 
-  SgNamedType *saved_context = ninfo.get_current_context();
-
   ASSERT_not_null(
       classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
   SgClassDeclaration *classDeclaration = isSgClassDeclaration(
       classdefn_stmt->get_declaration()->get_firstNondefiningDeclaration());
   ASSERT_not_null(classDeclaration->get_type());
-
-  // DQ (6/13/2007): Set to null before resetting to non-null value
-  ninfo.set_current_context(nullptr);
-  ninfo.set_current_context(classDeclaration->get_type());
 
   // Fortran derived types may use EXTENDS to model single inheritance.
 
@@ -5558,10 +5313,6 @@ void FortranCodeGeneration_locatedNode::unparseClassDefnStmt(
     unparseAttachedPreprocessingInfo(classdefn_stmt, info,
                                      PreprocessingInfo::inside);
   }
-
-  // DQ (6/13/2007): Set to null before resetting to non-null value
-  ninfo.set_current_context(nullptr);
-  ninfo.set_current_context(saved_context);
 }
 
 void FortranCodeGeneration_locatedNode::unparseAllocateStatement(
@@ -5672,33 +5423,6 @@ void FortranCodeGeneration_locatedNode::unparseDeallocateStatement(
   }
 
   curprint(" )");
-  unp->cur.insert_newline(1);
-}
-
-void FortranCodeGeneration_locatedNode::unparseWithTeamStatement(
-    SgStatement *stmt, SgUnparse_Info &info) {
-  SgCAFWithTeamStatement *withTeamStmt = isSgCAFWithTeamStatement(stmt);
-  ASSERT_not_null(withTeamStmt);
-
-  curprint("WITHTEAM ");
-
-  SgVarRefExp *teamIdRef = withTeamStmt->get_teamId();
-
-  SgInitializedName *teamDecl = teamIdRef->get_symbol()->get_declaration();
-
-  curprint(teamDecl->get_name().str());
-
-  unp->cur.insert_newline(1);
-
-  // unparse the body
-  SgBasicBlock *body = isSgBasicBlock(withTeamStmt->get_body());
-  ASSERT_not_null(body);
-
-  unparseBasicBlockStmt(body, info);
-
-  curprint("END WITHTEAM ");
-
-  curprint(teamDecl->get_name().str());
   unp->cur.insert_newline(1);
 }
 

@@ -295,65 +295,15 @@ add_test(
      test \"$(grep -F 'Compile Line:' compiler_options_mixed_suffix_module_backend.log | grep -Fo -- '-x none' | wc -l)\" -eq 2"
 )
 
-if(NOT LLVM_TOOLS_BINARY_DIR OR NOT IS_ABSOLUTE "${LLVM_TOOLS_BINARY_DIR}")
-  message(FATAL_ERROR
-    "The GNU option tests require the absolute LLVM 22 tool directory from LLVMConfig.cmake")
-endif()
-set(_compiler_options_clang_driver "")
-foreach(_compiler_options_clang_driver_name
-    clang-${LLVM_REQUIRED_MAJOR} clang)
-  if(EXISTS
-      "${LLVM_TOOLS_BINARY_DIR}/${_compiler_options_clang_driver_name}" AND
-     NOT IS_DIRECTORY
-      "${LLVM_TOOLS_BINARY_DIR}/${_compiler_options_clang_driver_name}")
-    set(_compiler_options_clang_driver
-      "${LLVM_TOOLS_BINARY_DIR}/${_compiler_options_clang_driver_name}")
-    break()
-  endif()
-endforeach()
-if(NOT _compiler_options_clang_driver)
-  message(FATAL_ERROR
-    "The loaded LLVM ${LLVM_REQUIRED_MAJOR} installation has no Clang driver in ${LLVM_TOOLS_BINARY_DIR}")
-endif()
-get_filename_component(_compiler_options_clang_driver
-  "${_compiler_options_clang_driver}" REALPATH)
-
-execute_process(
-  COMMAND "${_compiler_options_clang_driver}" -dumpversion
-  OUTPUT_VARIABLE _compiler_options_clang_driver_version
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_VARIABLE _compiler_options_clang_driver_version_error
-  RESULT_VARIABLE _compiler_options_clang_driver_version_result
-)
-string(REGEX MATCH "^[0-9]+" _compiler_options_clang_driver_major
-  "${_compiler_options_clang_driver_version}")
-if(NOT _compiler_options_clang_driver_version_result EQUAL 0 OR
-   NOT "${_compiler_options_clang_driver_major}" STREQUAL
-       "${LLVM_REQUIRED_MAJOR}")
-  message(FATAL_ERROR
-    "The selected Clang driver is not exact LLVM ${LLVM_REQUIRED_MAJOR}: "
-    "${_compiler_options_clang_driver}; version='${_compiler_options_clang_driver_version}'; "
-    "error='${_compiler_options_clang_driver_version_error}'")
-endif()
-
-execute_process(
-  COMMAND "${_compiler_options_clang_driver}" --print-resource-dir
-  OUTPUT_VARIABLE _compiler_options_clang_resource_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_VARIABLE _compiler_options_clang_resource_dir_error
-  RESULT_VARIABLE _compiler_options_clang_resource_dir_result
-)
-if(NOT _compiler_options_clang_resource_dir_result EQUAL 0 OR
-   NOT IS_ABSOLUTE "${_compiler_options_clang_resource_dir}" OR
-   NOT IS_DIRECTORY "${_compiler_options_clang_resource_dir}" OR
-   NOT EXISTS "${_compiler_options_clang_resource_dir}/include/stddef.h")
+include("${ROSE_TOP_SRC_DIR}/cmake/rex_llvm_driver.cmake")
+rex_require_llvm_driver(clang _compiler_options_clang_driver)
+rex_require_clang_resource_directory("${_compiler_options_clang_driver}"
+  _compiler_options_clang_resource_dir)
+if(NOT EXISTS "${_compiler_options_clang_resource_dir}/include/stddef.h")
   message(FATAL_ERROR
     "The exact LLVM ${LLVM_REQUIRED_MAJOR} Clang driver has no complete resource directory: "
-    "driver='${_compiler_options_clang_driver}'; resource='${_compiler_options_clang_resource_dir}'; "
-    "error='${_compiler_options_clang_resource_dir_error}'")
+    "driver='${_compiler_options_clang_driver}'; resource='${_compiler_options_clang_resource_dir}'")
 endif()
-get_filename_component(_compiler_options_clang_resource_dir
-  "${_compiler_options_clang_resource_dir}" REALPATH)
 
 add_test(
   NAME compiler_options_gnu_split_resource_dir
@@ -387,14 +337,7 @@ add_rex_cmdline_death_test(
 set_tests_properties(compiler_options_gnu_duplicate_resource_dir
   PROPERTIES ENVIRONMENT "LLVM_DIR=${LLVM_DIR}")
 unset(_compiler_options_clang_driver)
-unset(_compiler_options_clang_driver_major)
-unset(_compiler_options_clang_driver_name)
-unset(_compiler_options_clang_driver_version)
-unset(_compiler_options_clang_driver_version_error)
-unset(_compiler_options_clang_driver_version_result)
 unset(_compiler_options_clang_resource_dir)
-unset(_compiler_options_clang_resource_dir_error)
-unset(_compiler_options_clang_resource_dir_result)
 
 add_test(
   NAME compiler_options_gnu_skip_rose

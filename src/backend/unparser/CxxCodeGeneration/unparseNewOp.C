@@ -4,12 +4,9 @@
 
 #include "rose_config.h"
 
-#define DEBUG_unparseNewOp 0
+#include <algorithm>
 
 void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
-#if DEBUG_unparseNewOp
-  printf("Enter Unparse_ExprStmt::unparseNewOp()\n");
-#endif
 
   SgNewExp *new_op = isSgNewExp(expr);
   ASSERT_not_null(new_op);
@@ -21,7 +18,13 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
 
   SgUnparse_Info newinfo(info);
   newinfo.unset_inVarDecl();
-  if (new_op->get_placement_args() != NULL) {
+  SgExprListExp *placement = new_op->get_placement_args();
+  if (placement != nullptr &&
+      std::any_of(placement->get_expressions().begin(),
+                  placement->get_expressions().end(),
+                  [](SgExpression *argument) {
+                    return isSgCxxDefaultInitExp(argument) == nullptr;
+                  })) {
     curprint("(");
     unparseExpression(new_op->get_placement_args(), newinfo);
     curprint(") ");
@@ -40,35 +43,28 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
   ASSERT_not_null(new_operator_specified_type);
   add_parenthesis_around_type = new_op->get_type_id_is_parenthesized();
 
-#if DEBUG_unparseNewOp
-  printf("  add_parenthesis_around_type = %s\n",
-         add_parenthesis_around_type ? "true" : "false");
-#endif
-
   if (add_parenthesis_around_type)
     curprint("( ");
 
   newinfo.set_reference_node_for_qualification(new_op);
   ASSERT_not_null(newinfo.get_reference_node_for_qualification());
-  if (new_op->get_array_bound_is_implicit()) {
-    SgArrayType *array_type = isSgArrayType(new_op->get_specified_type());
-    SgValueExp *inferred_bound =
-        array_type != nullptr ? isSgValueExp(array_type->get_index()) : nullptr;
-    if (inferred_bound == nullptr ||
-        inferred_bound->get_literal_spelling_form() !=
-            SgValueExp::e_literal_canonical_generated ||
-        inferred_bound->get_file_info() == nullptr ||
-        !inferred_bound->get_file_info()->isCompilerGenerated()) {
-      fprintf(stderr,
-              "REX_UNPARSE_INVARIANT[new-inferred-array-bound]: "
-              "new-expression=%p marks an implicit array bound without one "
-              "typed canonical generated size\n",
-              static_cast<void *>(new_op));
-      ROSE_ABORT();
-    }
-    newinfo.set_supressArrayBound();
+  if (new_op->get_array_bound() != nullptr &&
+      new_op->get_array_bound_source_form() != SgNewExp::e_type_array_bound) {
+    ROSE_ASSERT(new_op->get_array_bound()->get_parent() == new_op);
+    newinfo.set_isTypeFirstPart();
+    unp->u_type->unparseType(new_operator_specified_type, newinfo);
+    newinfo.unset_isTypeFirstPart();
+    curprint("[");
+    if (new_op->get_array_bound_source_form() ==
+        SgNewExp::e_written_array_bound)
+      unparseExpression(new_op->get_array_bound(), newinfo);
+    curprint("]");
+    newinfo.set_isTypeSecondPart();
+    unp->u_type->unparseType(new_operator_specified_type, newinfo);
+    newinfo.unset_isTypeSecondPart();
+  } else {
+    unp->u_type->unparseType(new_operator_specified_type, newinfo);
   }
-  unp->u_type->unparseType(new_operator_specified_type, newinfo);
 
   if (add_parenthesis_around_type)
     curprint(") ");
@@ -94,8 +90,4 @@ void Unparse_ExprStmt::unparseNewOp(SgExpression *expr, SgUnparse_Info &info) {
   if (new_op->get_builtin_args() != NULL) {
     unparseExpression(new_op->get_builtin_args(), newinfo);
   }
-
-#if DEBUG_unparseNewOp
-  printf("Leaving Unparse_ExprStmt::unparseNewOp()\n");
-#endif
 }

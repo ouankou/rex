@@ -73,6 +73,25 @@ SgGlobal *attachExactGlobalScope(SgSourceFile &file,
   return global;
 }
 
+SgNonrealRefExp *buildAutoConstraint(SgGlobal *scope) {
+  auto *declaration = new SgNonrealDecl("rex_concept", nullptr);
+  declaration->set_is_concept(true);
+  declaration->set_parent(scope);
+  declaration->set_scope(scope);
+  declaration->set_firstNondefiningDeclaration(declaration);
+  declaration->set_type(new SgNonrealType(declaration));
+  auto *symbol = new SgNonrealSymbol(declaration);
+  scope->insert_symbol(declaration->get_name(), symbol);
+  auto *reference = SageBuilder::buildNonrealRefExp_nfi(symbol);
+  auto *argument =
+      SageBuilder::buildTemplateArgument(SageBuilder::buildIntType());
+  argument->set_explicitlySpecified(true);
+  argument->set_parent(reference);
+  reference->get_templateArguments().push_back(argument);
+  reference->set_explicit_template_argument_list(true);
+  return reference;
+}
+
 SgBasicBlock *buildExactFunctionBody(SgGlobal *global, const SgName &name) {
   ROSE_ASSERT(global != nullptr);
   SgFunctionDeclaration *function =
@@ -209,15 +228,33 @@ SgTemplateInstantiationDecl *buildTemplateInstantiationTypeDeclaration(
     const SgName &template_name, const SgName &template_id,
     const SgTemplateArgumentPtrList &arguments, SgScopeStatement *scope) {
   ROSE_ASSERT(scope != nullptr);
+  SgTemplateParameterPtrList parameters = buildTemplateParameters();
+  SgTemplateArgumentPtrList specialization_arguments;
+  SgTemplateClassDeclaration *primary =
+      SageBuilder::buildNondefiningTemplateClassDeclaration_nfi(
+          SageBuilder::declaration_ownership::semanticAuxiliary(),
+          template_name, SgClassDeclaration::e_class,
+          SageBuilder::template_class_declaration_scopes::
+              fromExactSemanticScope(scope),
+          &parameters, &specialization_arguments, &template_name);
+  SgTemplateArgumentPtrList semantic_arguments;
+  for (SgTemplateArgument *argument : arguments) {
+    ROSE_ASSERT(argument != nullptr);
+    semantic_arguments.push_back(SageInterface::deepCopy(argument));
+  }
   SgTemplateInstantiationDecl *declaration = new SgTemplateInstantiationDecl(
-      template_id, SgClassDeclaration::e_class, nullptr, nullptr, nullptr,
-      arguments, SgTemplateArgumentPtrList());
+      template_id, SgClassDeclaration::e_class, nullptr, nullptr, primary,
+      arguments, semantic_arguments, false, SgTemplateArgumentPtrList());
   declaration->set_templateName(template_name);
   declaration->set_scope(scope);
   declaration->set_firstNondefiningDeclaration(declaration);
   declaration->set_definingDeclaration(nullptr);
   for (SgTemplateArgument *argument : declaration->get_templateArguments()) {
     ROSE_ASSERT(argument != nullptr);
+    argument->set_parent(declaration);
+  }
+  for (SgTemplateArgument *argument :
+       declaration->get_semanticTemplateArguments()) {
     argument->set_parent(declaration);
   }
   SageBuilder::attachAuxiliaryDeclaration(scope, declaration);
@@ -276,7 +313,7 @@ struct CxxFunctionCallFixture {
   SgFunctionDeclaration *declaration = nullptr;
   SgExpression *callee = nullptr;
   SgExprListExp *arguments = nullptr;
-  SgExprListExp *literal_lexical_operands = nullptr;
+  SgCxxLiteralTokenList *literal_lexical_operands = nullptr;
   SgFunctionCallExp *call = nullptr;
   SgVariableDeclaration *use_site = nullptr;
 
@@ -300,7 +337,10 @@ struct CxxFunctionCallFixture {
       }
       callee = SageBuilder::buildFunctionRefExp(declaration);
     } else {
-      callee = new SgFunctionRefExp(new SgFunctionSymbol(nullptr), nullptr);
+      callee = new SgFunctionRefExp(
+          new SgFunctionSymbol(nullptr),
+          SageBuilder::buildFunctionType(SageBuilder::buildIntType(),
+                                         new SgFunctionParameterTypeList()));
     }
 
     arguments = SageBuilder::buildExprListExp_nfi();
@@ -310,14 +350,39 @@ struct CxxFunctionCallFixture {
         arguments->append_expression(semantic_operand);
         semantic_operand->set_parent(arguments);
 
-        literal_lexical_operands = SageBuilder::buildExprListExp_nfi();
-        SgIntVal *lexical_operand = markSourceLiteral(
-            SageBuilder::buildIntVal_nfi(42, "0x2a"), filename);
-        literal_lexical_operands->append_expression(lexical_operand);
+        literal_lexical_operands = new SgCxxLiteralTokenList();
+        SgCxxLiteralToken *lexical_operand = new SgCxxLiteralToken(
+            SgCxxLiteralToken::e_numeric_token, "0x2a_typed_suffix");
+        lexical_operand->set_startOfConstruct(new Sg_File_Info(filename, 1, 1));
+        lexical_operand->set_endOfConstruct(new Sg_File_Info(
+            filename, 1,
+            static_cast<int>(lexical_operand->get_spelling().size())));
+        lexical_operand->get_startOfConstruct()->set_parent(lexical_operand);
+        lexical_operand->get_endOfConstruct()->set_parent(lexical_operand);
+        literal_lexical_operands->get_tokens().push_back(lexical_operand);
         lexical_operand->set_parent(literal_lexical_operands);
       } else {
-        SgIntVal *operand = markSourceLiteral(
+        SgExpression *operand = markSourceLiteral(
             SageBuilder::buildIntVal_nfi(42, "0x2a"), filename);
+        if (operand_is_default_argument) {
+          auto *type = SageBuilder::buildIntType();
+          auto *parameter = SageBuilder::buildInitializedName_nfi(
+              "value", type,
+              SageBuilder::buildAssignInitializer_nfi(
+                  SageBuilder::buildIntVal_nfi(42, "42"), type));
+          auto *parameters = SageBuilder::buildFunctionParameterList_nfi();
+          parameters->append_arg(parameter);
+          auto *default_source =
+              SageBuilder::buildNondefiningFunctionDeclaration(
+                  SageBuilder::function_declaration_ownership::sourceLexical(),
+                  "rex_foreign_default_argument_source", type, parameters,
+                  global_scope);
+          ROSE_ASSERT(default_source != declaration);
+          operand = new SgCxxDefaultInitExp(parameter, operand,
+                                            SgCxxDefaultInitExp::e_parameter);
+          ROSE_ASSERT(
+              SgCxxDefaultInitExp::is_valid_binding(default_source, {operand}));
+        }
         arguments->append_expression(operand);
         operand->set_parent(arguments);
       }
@@ -339,17 +404,6 @@ struct CxxFunctionCallFixture {
         "rex_function_call_use_site", call->get_type(), initializer,
         global_scope);
     SageInterface::appendStatement(use_site, global_scope);
-    if (operand_is_default_argument) {
-      for (SgExpression *argument : arguments->get_expressions()) {
-        for (Sg_File_Info *position :
-             {argument->get_file_info(), argument->get_startOfConstruct(),
-              argument->get_endOfConstruct(),
-              argument->get_operatorPosition()}) {
-          ROSE_ASSERT(position != nullptr);
-          position->setDefaultArgument();
-        }
-      }
-    }
     if (is_literal_operator) {
       for (SgExpression *semantic_operand : arguments->get_expressions()) {
         markCanonicalGeneratedLiteral(semantic_operand);
@@ -445,6 +499,11 @@ buildFortranDimensionFixture(SgScopeStatement *exact_scope,
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 4 && std::string(argv[1]) == "backend-compile-command") {
+    CommandlineProcessing::validateBackendCompileOnlyCommandLine(
+        {"c++", "-c", argv[2], "-o", argv[3]}, argv[2]);
+    return 0;
+  }
   const std::string mode = argc == 2 ? argv[1] : std::string();
   if (argc > 2) {
     return 2;
@@ -511,7 +570,6 @@ int main(int argc, char **argv) {
             SageBuilder::buildIntVal_nfi(1, "1"), SageBuilder::buildIntType()));
     ROSE_ASSERT(initializer != nullptr);
     definition->append_ctor_initializer(initializer);
-    initializer->set_parent(definition->get_CtorInitializerList());
     fixture.declaration->set_definingDeclaration(definition);
     fixture.declaration->unsetForward();
 
@@ -563,15 +621,26 @@ int main(int argc, char **argv) {
     return 0;
   }
 
-  if (mode == "lambda-missing-closure-type") {
-    SgLambdaExp *lambda = new SgLambdaExp(
-        static_cast<SgLambdaCaptureList *>(nullptr), nullptr, nullptr);
-    (void)lambda->get_type();
+  if (mode == "lambda-missing-construction-children") {
+    (void)new SgLambdaExp(nullptr, nullptr, nullptr, nullptr, nullptr);
     return 0;
   }
 
+  if (mode == "parameter-value-unknown-type" ||
+      mode == "parameter-value-default-type") {
+    SgType *type = mode == "parameter-value-unknown-type"
+                       ? static_cast<SgType *>(SageBuilder::buildUnknownType())
+                       : static_cast<SgType *>(SgTypeDefault::createType());
+    auto *parameter =
+        new SgTemplateParameter(SgTemplateParameter::nontype_parameter, type);
+    auto *name = SageBuilder::buildInitializedName("rex_parameter", type);
+    parameter->set_initializedName(name);
+    name->set_parent(parameter);
+    (void)new SgTemplateParameterVal(0, parameter);
+    return 0;
+  }
   if (mode == "this-missing-result-type") {
-    (void)(new SgThisExp(nullptr, nullptr, 0, nullptr))->get_type();
+    (void)(new SgThisExp(nullptr, nullptr, nullptr))->get_type();
     return 0;
   }
   if (mode == "this-builder-missing-result-type") {
@@ -592,7 +661,7 @@ int main(int argc, char **argv) {
         first != nullptr ? first->get_symbol_from_symbol_table() : nullptr);
     ROSE_ASSERT(symbol != nullptr);
     (void)(new SgThisExp(
-               symbol, nullptr, 0,
+               symbol, nullptr,
                SageBuilder::buildPointerType(SageBuilder::buildIntType())))
         ->get_type();
     return 0;
@@ -603,9 +672,11 @@ int main(int argc, char **argv) {
     SgExpression *operation =
         mode == "sizeof-missing-result-type"
             ? static_cast<SgExpression *>(
-                  new SgSizeOfOp(operand, nullptr, nullptr))
-            : static_cast<SgExpression *>(
-                  new SgAlignOfOp(operand, nullptr, nullptr));
+                  new SgSizeOfOp(operand, nullptr, nullptr,
+                                 SgExpression::e_sizeof, std::nullopt))
+            : static_cast<SgExpression *>(new SgAlignOfOp(
+                  operand, nullptr, nullptr, SgExpression::e_preferred_alignof,
+                  std::nullopt));
     operand->set_parent(operation);
     (void)operation->get_type();
     return 0;
@@ -626,9 +697,11 @@ int main(int argc, char **argv) {
     SgExpression *operation =
         mode == "sizeof-explicit-invalid-result-type"
             ? static_cast<SgExpression *>(new SgSizeOfOp(
-                  operand, nullptr, SageBuilder::buildUnsignedLongType()))
+                  operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_sizeof, std::nullopt))
             : static_cast<SgExpression *>(new SgAlignOfOp(
-                  operand, nullptr, SageBuilder::buildUnsignedLongType()));
+                  operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_preferred_alignof, std::nullopt));
     operand->set_parent(operation);
     operation->set_explicitly_stored_type(SageBuilder::buildIntType());
     return 0;
@@ -644,9 +717,11 @@ int main(int argc, char **argv) {
     SgExpression *operation =
         mode == "sizeof-foreign-target-result-type"
             ? static_cast<SgExpression *>(new SgSizeOfOp(
-                  operand, nullptr, SageBuilder::buildUnsignedIntType()))
+                  operand, nullptr, SageBuilder::buildUnsignedIntType(),
+                  SgExpression::e_sizeof, std::nullopt))
             : static_cast<SgExpression *>(new SgAlignOfOp(
-                  operand, nullptr, SageBuilder::buildUnsignedIntType()));
+                  operand, nullptr, SageBuilder::buildUnsignedIntType(),
+                  SgExpression::e_preferred_alignof, std::nullopt));
     operand->set_parent(operation);
     operation->set_parent(global);
     (void)operation->get_type();
@@ -658,10 +733,11 @@ int main(int argc, char **argv) {
     SgExpression *operation =
         mode == "sizeof-replace-foreign-old"
             ? static_cast<SgExpression *>(new SgSizeOfOp(
-                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType()))
-            : static_cast<SgExpression *>(
-                  new SgAlignOfOp(owned_operand, nullptr,
-                                  SageBuilder::buildUnsignedLongType()));
+                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_sizeof, std::nullopt))
+            : static_cast<SgExpression *>(new SgAlignOfOp(
+                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_preferred_alignof, std::nullopt));
     owned_operand->set_parent(operation);
     SgIntVal *foreign_old = SageBuilder::buildIntVal_nfi(2, "2");
     SgIntVal *replacement = SageBuilder::buildIntVal_nfi(3, "3");
@@ -679,10 +755,11 @@ int main(int argc, char **argv) {
     SgExpression *operation =
         mode == "sizeof-replace-owned-new"
             ? static_cast<SgExpression *>(new SgSizeOfOp(
-                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType()))
-            : static_cast<SgExpression *>(
-                  new SgAlignOfOp(owned_operand, nullptr,
-                                  SageBuilder::buildUnsignedLongType()));
+                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_sizeof, std::nullopt))
+            : static_cast<SgExpression *>(new SgAlignOfOp(
+                  owned_operand, nullptr, SageBuilder::buildUnsignedLongType(),
+                  SgExpression::e_preferred_alignof, std::nullopt));
     owned_operand->set_parent(operation);
     SgIntVal *already_owned_replacement = SageBuilder::buildIntVal_nfi(2, "2");
     already_owned_replacement->set_parent(operation);
@@ -716,11 +793,7 @@ int main(int argc, char **argv) {
     }
     SgType *stored_type =
         mode == "function-call-missing-result-type" ? nullptr : function_type;
-    SgFunctionCallExp *call =
-        new SgFunctionCallExp(callee, arguments, stored_type);
-    callee->set_parent(call);
-    arguments->set_parent(call);
-    (void)call->get_type();
+    (void)new SgFunctionCallExp(callee, arguments, stored_type);
     return 0;
   }
 
@@ -736,10 +809,138 @@ int main(int argc, char **argv) {
     SgConditionalExp *conditional =
         new SgConditionalExp(SageBuilder::buildBoolValExp_nfi(true),
                              SageBuilder::buildIntVal_nfi(1, "1"),
-                             SageBuilder::buildIntVal_nfi(0, "0"), nullptr);
-    conditional->set_operator_kind(
-        SgConditionalExp::e_conditional_operator_standard);
+                             SageBuilder::buildIntVal_nfi(0, "0"), nullptr,
+                             SgConditionalExp::e_conditional_operator_standard);
     (void)conditional->get_type();
+    return 0;
+  }
+
+  const bool aggregateConstructor =
+      mode.compare(0, 22, "aggregate-constructor-") == 0;
+  if (aggregateConstructor || mode.compare(0, 18, "aggregate-builder-") == 0) {
+    std::string fault = mode.substr(aggregateConstructor ? 22 : 18);
+    const bool nfi = fault.compare(0, 4, "nfi-") == 0;
+    if (nfi)
+      fault.erase(0, 4);
+    auto *list = SageBuilder::buildExprListExp_nfi();
+    auto *element = SageBuilder::buildIntVal_nfi(1, "1");
+    list->append_expression(element);
+    auto source_form =
+        SgAggregateInitializer::e_aggregate_initializer_source_braced;
+    SgType *type = SageBuilder::buildIntType();
+    if (fault == "invalid-source")
+      source_form = static_cast<
+          SgAggregateInitializer::aggregate_initializer_source_form_enum>(999);
+    else if (fault == "owned-list") {
+      auto *owner = new SgExprListExp();
+      owner->append_expression(list);
+    } else if (fault == "duplicate-element")
+      list->get_expressions().push_back(element);
+    else if (fault == "foreign-element")
+      element->set_parent(new SgExprListExp());
+    else if (fault == "null-element")
+      list->get_expressions().push_back(nullptr);
+    else if (fault == "missing-type")
+      type = nullptr;
+    else
+      return 2;
+    if (aggregateConstructor)
+      (void)new SgAggregateInitializer(
+          Sg_File_Info::generateDefaultFileInfoForTransformationNode(), list,
+          type, source_form);
+    else if (nfi)
+      (void)SageBuilder::buildAggregateInitializer_nfi(list, type, source_form);
+    else
+      (void)SageBuilder::buildAggregateInitializer(list, type, source_form);
+    return 0;
+  }
+
+  if (mode == "aggregate-valid-construction") {
+    for (auto source_form :
+         {SgAggregateInitializer::e_aggregate_initializer_source_braced,
+          SgAggregateInitializer::e_aggregate_initializer_source_unbraced,
+          SgAggregateInitializer::e_aggregate_initializer_source_typed_braced,
+          SgAggregateInitializer::
+              e_aggregate_initializer_source_compound_literal,
+          SgAggregateInitializer::e_aggregate_initializer_source_fortran,
+          SgAggregateInitializer::
+              e_aggregate_initializer_source_fortran_structure}) {
+      for (bool direct : {false, true}) {
+        for (bool nfi : {false, true}) {
+          for (bool empty : {false, true}) {
+            auto *list = SageBuilder::buildExprListExp();
+            if (!empty)
+              list->append_expression(SageBuilder::buildIntVal(1));
+            SgType *type = SageBuilder::buildIntType();
+            SgAggregateInitializer *aggregate;
+            if (direct)
+              aggregate =
+                  nfi ? new SgAggregateInitializer(list, type, source_form)
+                      : new SgAggregateInitializer(
+                            Sg_File_Info::
+                                generateDefaultFileInfoForTransformationNode(),
+                            list, type, source_form);
+            else
+              aggregate = nfi ? SageBuilder::buildAggregateInitializer_nfi(
+                                    list, type, source_form)
+                              : SageBuilder::buildAggregateInitializer(
+                                    list, type, source_form);
+            ROSE_ASSERT(aggregate->get_initializers() == list);
+            ROSE_ASSERT(list->get_parent() == aggregate);
+            ROSE_ASSERT(aggregate->get_type() == type);
+            ROSE_ASSERT(aggregate->get_source_form() == source_form);
+            ROSE_ASSERT(list->get_expressions().size() == (empty ? 0 : 1));
+            if (!empty)
+              ROSE_ASSERT(list->get_expressions().front()->get_parent() ==
+                          list);
+            // Only the transformation builder supplies a complete source range.
+            if (!direct && !nfi) {
+              auto *copy =
+                  isSgAggregateInitializer(SageInterface::deepCopy(aggregate));
+              ROSE_ASSERT(copy != nullptr && copy != aggregate);
+              ROSE_ASSERT(copy->get_initializers() != list);
+              ROSE_ASSERT(copy->get_initializers()->get_parent() == copy);
+              ROSE_ASSERT(copy->get_type() == type &&
+                          copy->get_source_form() == source_form);
+              SageInterface::deleteAST(copy);
+            }
+            SageInterface::deleteAST(aggregate);
+          }
+        }
+      }
+    }
+    return 0;
+  }
+
+  if (mode == "typed-builtin-unparser-duplicate-operand") {
+    auto *builtin = new SgTypeTraitBuiltinOperator(
+        SgName("__is_integral"),
+        SgTypeTraitBuiltinOperator::e_type_trait_builtin,
+        SageBuilder::buildBoolType());
+    auto *operand = new SgTypeExpression(SageBuilder::buildIntType());
+    operand->set_parent(builtin);
+    builtin->get_args() = {operand, operand};
+    SgUnparse_Info info;
+    unparser.u_exprStmt->unparseLanguageSpecificExpression(builtin, info);
+    return 0;
+  }
+
+  if (mode == "typed-builtin-builder-invalid-type-operand" ||
+      mode == "typed-builtin-builder-duplicate-operand" ||
+      mode == "typed-builtin-builder-owned-operand") {
+    auto *operand = new SgTypeExpression(
+        mode == "typed-builtin-builder-invalid-type-operand"
+            ? nullptr
+            : SageBuilder::buildIntType());
+    SgExpressionPtrList arguments{operand};
+    if (mode == "typed-builtin-builder-duplicate-operand")
+      arguments.push_back(operand);
+    if (mode == "typed-builtin-builder-owned-operand")
+      operand->set_parent(new SgExprListExp());
+    (void)SageBuilder::buildTypeTraitBuiltinOperator_nfi(
+        SgName("__is_integral"),
+        SgTypeTraitBuiltinOperator::e_type_trait_builtin,
+        SageBuilder::buildBoolType(), arguments);
     return 0;
   }
 
@@ -758,7 +959,8 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (mode == "unary-missing-result-type") {
-    (void)(new SgMinusOp(SageBuilder::buildIntVal_nfi(1, "1"), nullptr))
+    (void)(new SgMinusOp(SageBuilder::buildIntVal_nfi(1, "1"), nullptr,
+                         SgUnaryOp::prefix))
         ->get_type();
     return 0;
   }
@@ -775,20 +977,37 @@ int main(int argc, char **argv) {
   }
   if (mode == "throw-nonvoid-result-type") {
     (void)(new SgThrowOp(SageBuilder::buildIntVal_nfi(1, "1"),
-                         SageBuilder::buildIntType(),
+                         SageBuilder::buildIntType(), SgUnaryOp::prefix,
                          SgThrowOp::throw_expression))
         ->get_type();
     return 0;
   }
   if (mode == "await-missing-result-type") {
-    (void)(new SgAwaitExpression(SageBuilder::buildIntVal_nfi(1, "1"), nullptr))
+    (void)(new SgAwaitExpression(
+               SageBuilder::buildIntVal_nfi(1, "1"), nullptr,
+               SgAwaitExpression::e_coroutine_keyword_co_await))
         ->get_type();
     return 0;
   }
   if (mode == "fold-default-result-type") {
-    (void)(new SgFoldExpression(SageBuilder::buildIntVal_nfi(1, "1"), "+", true,
+    (void)(new SgFoldExpression(SageBuilder::buildIntVal_nfi(1, "1"),
+                                SgFoldExpression::e_fold_add, true,
                                 SgTypeDefault::createType()))
         ->get_type();
+    return 0;
+  }
+  if (mode == "fold-invalid-operator-type-query") {
+    (void)(new SgFoldExpression(SageBuilder::buildIntVal_nfi(1, "1"),
+                                SgFoldExpression::e_fold_operator_unspecified,
+                                true, SageBuilder::buildIntType()))
+        ->get_type();
+    return 0;
+  }
+  if (mode == "fold-invalid-operator-builder") {
+    (void)SageBuilder::buildFoldExpression_nfi(
+        SageBuilder::buildIntVal_nfi(1, "1"),
+        SgFoldExpression::e_fold_operator_unspecified, true,
+        SageBuilder::buildIntType());
     return 0;
   }
   if (mode == "pack-pattern-foreign-owner") {
@@ -812,7 +1031,7 @@ int main(int argc, char **argv) {
   }
   if (mode == "typeid-missing-result-type") {
     (void)(new SgTypeIdOp(SageBuilder::buildIntVal_nfi(1, "1"), nullptr,
-                          nullptr))
+                          nullptr, false))
         ->get_type();
     return 0;
   }
@@ -837,6 +1056,22 @@ int main(int argc, char **argv) {
         SageBuilder::buildIntVal_nfi(1, "1"),
         SageBuilder::buildIntVal_nfi(1, "1"), nullptr, nullptr)
         ->get_type();
+    return 0;
+  }
+  if (mode.compare(0, 29, "cuda-exec-config-constructor-") == 0) {
+    SgExpression *grid = SageBuilder::buildIntVal_nfi(1, "1");
+    SgExpression *blocks = SageBuilder::buildIntVal_nfi(2, "2");
+    if (mode == "cuda-exec-config-constructor-grid")
+      grid = nullptr;
+    else if (mode == "cuda-exec-config-constructor-blocks")
+      blocks = nullptr;
+    else if (mode == "cuda-exec-config-constructor-owned")
+      (void)SageBuilder::buildExprStatement_nfi(grid);
+    else if (mode == "cuda-exec-config-constructor-duplicate")
+      blocks = grid;
+    else
+      ROSE_ABORT();
+    (void)new SgCudaKernelExecConfig(grid, blocks, nullptr, nullptr);
     return 0;
   }
   if (mode == "range-type-query" || mode == "range-fourth-element") {
@@ -867,8 +1102,9 @@ int main(int argc, char **argv) {
   }
   if (mode == "asm-operand-type-query") {
     SgIntVal *operand = SageBuilder::buildIntVal_nfi(0, "0");
-    SgAsmOp *asm_operand =
-        new SgAsmOp(SgAsmOp::e_any, SgAsmOp::e_input, operand);
+    SgAsmOp::constraint_info constraint;
+    constraint.spelling = "X";
+    SgAsmOp *asm_operand = new SgAsmOp(constraint, SgAsmOp::e_input, operand);
     operand->set_parent(asm_operand);
     (void)asm_operand->get_type();
     return 0;
@@ -923,13 +1159,43 @@ int main(int argc, char **argv) {
     return 0;
   }
   if (mode == "function-parameter-reference-missing-type") {
-    (void)(new SgFunctionParameterRefExp(nullptr, 0, 0, nullptr))->get_type();
+    (void)new SgFunctionParameterRefExp(nullptr, 0, 0, nullptr);
     return 0;
   }
   if (mode == "function-parameter-reference-placeholder-type") {
-    (void)(new SgFunctionParameterRefExp(nullptr, 0, 0,
-                                         SgTypeDefault::createType()))
-        ->get_type();
+    (void)new SgFunctionParameterRefExp(nullptr, 0, 0,
+                                        SgTypeDefault::createType());
+    return 0;
+  }
+  if (mode == "function-parameter-reference-source-binding" ||
+      mode == "decltype-parameter-reference-source-binding") {
+    auto *reference = SageBuilder::buildFunctionParameterRefExp(
+        0, 0, SageBuilder::buildIntType());
+    SgUnparse_Info info;
+    if (mode == "decltype-parameter-reference-source-binding") {
+      auto *type =
+          SageBuilder::buildDeclType(reference, SageBuilder::buildIntType());
+      unparser.u_type->unparseDeclType(type, info);
+    } else {
+      unparser.u_exprStmt->unparseFunctionParameterRefExpression(reference,
+                                                                 info);
+    }
+    return 0;
+  }
+  if (mode == "unnamed-variable-reference-source" ||
+      mode == "decltype-unnamed-variable-reference-source") {
+    auto *parameter = SageBuilder::buildInitializedName_nfi(
+        SgName(), SageBuilder::buildIntType(), nullptr);
+    auto *reference =
+        SageBuilder::buildVarRefExp(new SgVariableSymbol(parameter));
+    SgUnparse_Info info;
+    if (mode == "decltype-unnamed-variable-reference-source") {
+      auto *type =
+          SageBuilder::buildDeclType(reference, SageBuilder::buildIntType());
+      unparser.u_type->unparseDeclType(type, info);
+    } else {
+      unparser.u_exprStmt->unparseVarRef(reference, info);
+    }
     return 0;
   }
 
@@ -947,7 +1213,7 @@ int main(int argc, char **argv) {
   }
   if (mode == "coarray-image-selector-type-query") {
     SgCAFImageSelectorExp *selector = new SgCAFImageSelectorExp(
-        static_cast<SgExprListExp *>(nullptr), nullptr, nullptr, nullptr);
+        SageBuilder::buildExprListExp_nfi(), nullptr, nullptr, nullptr);
     (void)selector->get_type();
     return 0;
   }
@@ -980,18 +1246,32 @@ int main(int argc, char **argv) {
       mode == "line-directive-filename-backslash" ||
       mode == "line-directive-filename-line-feed" ||
       mode == "line-directive-filename-carriage-return" ||
-      mode == "line-directive-filename-control-byte") {
+      mode == "line-directive-filename-control-byte" ||
+      mode == "line-directive-filename-trigraph" ||
+      mode == "line-directive-filename-nul") {
     std::string filename;
+    std::string escaped;
     if (mode == "line-directive-filename-quote") {
       filename = "line-\"bad.cpp";
+      escaped = "line-\\\"bad.cpp";
     } else if (mode == "line-directive-filename-backslash") {
       filename = "line-\\bad.cpp";
+      escaped = "line-\\\\bad.cpp";
     } else if (mode == "line-directive-filename-line-feed") {
       filename = "line-\nbad.cpp";
+      escaped = "line-\\nbad.cpp";
     } else if (mode == "line-directive-filename-carriage-return") {
       filename = "line-\rbad.cpp";
-    } else {
+      escaped = "line-\\rbad.cpp";
+    } else if (mode == "line-directive-filename-control-byte") {
       filename = "line-" + std::string(1, '\x01') + "bad.cpp";
+      escaped = "line-\\001bad.cpp";
+    } else if (mode == "line-directive-filename-trigraph") {
+      filename = "?"
+                 "?/name.cpp";
+      escaped = "\\?\\?/name.cpp";
+    } else {
+      filename = "line-" + std::string(1, '\0') + "bad.cpp";
     }
     Unparser_Opt lineOptions;
     lineOptions.set_linefile_opt(true);
@@ -1000,6 +1280,9 @@ int main(int argc, char **argv) {
     SgNullStatement *statement = new SgNullStatement();
     setExactSourceRange(statement, filename, 1, 1);
     lineUnparser.u_exprStmt->unparseLineDirectives(statement);
+    ROSE_ASSERT(mode != "line-directive-filename-nul");
+    ROSE_ASSERT(
+        countOccurrences(lineOutput.str(), "#line 1 \"" + escaped + "\"") == 1);
     return 0;
   }
   if (mode == "token-sequence-position-invalid") {
@@ -1029,7 +1312,7 @@ int main(int argc, char **argv) {
       traversal.setNameQualificationOnName(nullptr, nullptr, 0, false);
     } else if (mode == "name-qualification-unpublished-declaration") {
       SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
-          SgName("rex_unpublished"), nullptr, nullptr);
+          SgName("rex_unpublished"), nullptr, nullptr, nullptr);
       traversal.validateDeclarationPublishedBeforeQualification(declaration);
     } else {
       const SgName name("rex_missing_canonical_function");
@@ -1118,6 +1401,11 @@ int main(int argc, char **argv) {
       SageInterface::appendStatement(positionDirective, global);
       position = positionDirective;
     } else if (mode == "name-qualification-using-missing-comparison-order") {
+      SgClassDeclaration *imported = SageBuilder::buildClassDeclaration(
+          SageBuilder::declaration_ownership::sourceLexical(),
+          SgName("RexUsingOrderTarget"),
+          namespaceDeclaration->get_definition());
+      ROSE_ASSERT(imported != nullptr && imported != target);
       position = SageBuilder::buildClassDeclaration(
           SageBuilder::declaration_ownership::semanticAuxiliary(),
           SgName("RexUsingOrderSemanticPosition"), global);
@@ -1377,7 +1665,7 @@ int main(int argc, char **argv) {
 
   if (mode == "declaration-missing-semantic-scope") {
     SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
-        SgName("rex_missing_scope"), nullptr, nullptr);
+        SgName("rex_missing_scope"), nullptr, nullptr, nullptr);
     SgUnparse_Info info;
     unparser.u_exprStmt->unparseFuncDeclStmt(declaration, info);
     return 0;
@@ -1406,7 +1694,7 @@ int main(int argc, char **argv) {
   }
 
   if (mode == "concept-missing-constraint") {
-    SgNonrealDecl *concept = new SgNonrealDecl(SgName("rex_concept"));
+    SgNonrealDecl *concept = new SgNonrealDecl(SgName("rex_concept"), nullptr);
     concept->set_is_concept(true);
     SgUnparse_Info info;
     unparser.u_exprStmt->unparseNonrealDecl(concept, info);
@@ -1448,7 +1736,8 @@ int main(int argc, char **argv) {
 
   if (mode == "requires-missing-requirements") {
     SgRequiresExpr *requires_expr =
-        SageBuilder::buildRequiresExpr_nfi(nullptr, nullptr);
+        new SgRequiresExpr(static_cast<SgFunctionParameterList *>(nullptr),
+                           nullptr, nullptr, nullptr);
     SgUnparse_Info info;
     unparser.u_exprStmt->unparseLanguageSpecificExpression(requires_expr, info);
     return 0;
@@ -1466,7 +1755,7 @@ int main(int argc, char **argv) {
 
   if (mode == "required-name-qualification-missing-record") {
     SgNonrealDecl *reference =
-        new SgNonrealDecl(SgName("rex_missing_qualification"));
+        new SgNonrealDecl(SgName("rex_missing_qualification"), nullptr);
     SgNullStatement *use_site = new SgNullStatement();
     (void)unparser.u_name->lookup_type_qualification(reference, use_site);
     return 0;
@@ -1561,8 +1850,6 @@ int main(int argc, char **argv) {
         SageBuilder::buildNamespaceDefinition();
     SgNamespaceDeclarationStatement *declaration =
         new SgNamespaceDeclarationStatement("missing", definition, false);
-    definition->set_parent(declaration);
-    definition->set_namespaceDeclaration(declaration);
     SageInterface::setOneSourcePositionForTransformation(declaration);
     SgUnparse_Info info;
     info.set_current_source_file(&source_file);
@@ -1580,8 +1867,6 @@ int main(int argc, char **argv) {
         SageBuilder::buildNamespaceDefinition();
     SgNamespaceDeclarationStatement *declaration =
         new SgNamespaceDeclarationStatement("source", definition, false);
-    definition->set_parent(declaration);
-    definition->set_namespaceDeclaration(declaration);
 
     const auto set_exact_range = [&](SgLocatedNode *node, int start_line,
                                      int start_column, int end_line,
@@ -1709,12 +1994,12 @@ int main(int argc, char **argv) {
   }
   if (mode == "context-free-named-type") {
     SgBasicBlock *scope = SageBuilder::buildBasicBlock();
-    SgTypedefDeclaration *declaration = new SgTypedefDeclaration(
-        SgName("rex_contextual_type"), SageBuilder::buildIntType(), nullptr,
-        nullptr, nullptr);
+    SgTypedefDeclaration *declaration =
+        new SgTypedefDeclaration(SgName("rex_contextual_type"),
+                                 SageBuilder::buildIntType(), nullptr, nullptr);
     declaration->set_scope(scope);
     declaration->set_parent(scope);
-    SgTypedefType *type = new SgTypedefType(declaration, nullptr);
+    SgTypedefType *type = new SgTypedefType(declaration);
     declaration->set_type(type);
     type->unparseToString();
     return 0;
@@ -1728,16 +2013,18 @@ int main(int argc, char **argv) {
     SageBuilder::buildBoolType()->unparseToString();
     return 0;
   }
-  if (mode == "constrained-auto-missing-source-spelling" ||
-      mode == "unconstrained-auto-with-source-spelling") {
+  if (mode == "constrained-auto-missing-reference" ||
+      mode == "unconstrained-auto-with-reference") {
     SgSourceFile &source_file = *new SgSourceFile();
     initializeSourceFile(source_file, "constrained-auto.cpp", false);
     unparser.currentFile = &source_file;
     SgAutoType *auto_type = SageBuilder::buildAutoType();
-    auto_type->set_is_constrained(mode ==
-                                  "constrained-auto-missing-source-spelling");
-    if (mode == "unconstrained-auto-with-source-spelling") {
-      auto_type->set_source_constraint_spelling("rex_concept");
+    auto_type->set_is_constrained(mode == "constrained-auto-missing-reference");
+    if (mode == "unconstrained-auto-with-reference") {
+      auto *constraint = buildAutoConstraint(
+          attachExactGlobalScope(source_file, "constrained-auto.cpp"));
+      auto_type->set_type_constraint(constraint);
+      constraint->set_parent(auto_type);
     }
     SgUnparse_Info info;
     info.set_current_source_file(&source_file);
@@ -1771,8 +2058,7 @@ int main(int argc, char **argv) {
 
   if (mode == "typedef-unknown-source-form") {
     SgTypedefDeclaration *declaration = new SgTypedefDeclaration(
-        SgName("rex_bad_alias"), SageBuilder::buildIntType(), nullptr, nullptr,
-        nullptr);
+        SgName("rex_bad_alias"), SageBuilder::buildIntType(), nullptr, nullptr);
     SgUnparse_Info info;
     unparser.u_exprStmt->unparseTypeDefStmt(declaration, info);
     return 0;
@@ -1787,7 +2073,7 @@ int main(int argc, char **argv) {
       modifier->set_base_type(nullptr);
     }
     SgTypedefDeclaration *declaration = new SgTypedefDeclaration(
-        SgName("rex_bad_alias"), modifier, nullptr, nullptr, nullptr);
+        SgName("rex_bad_alias"), modifier, nullptr, nullptr);
     declaration->set_typedef_type(SgTypedefDeclaration::e_typedef);
     SgUnparse_Info info;
     info.set_SkipBaseType();
@@ -1808,7 +2094,8 @@ int main(int argc, char **argv) {
                        ? nullptr
                        : SageBuilder::buildIntType();
     SgConstructorInitializer *initializer = new SgConstructorInitializer(
-        nullptr, arguments, type, true, false, false, true);
+        nullptr, arguments, type, true, false, false, true,
+        SgConstructorInitializer::e_constructor_argument_expressions);
     if (mode == "constructor-missing-arguments") {
       initializer->set_args(nullptr);
     }
@@ -1942,7 +2229,7 @@ int main(int argc, char **argv) {
     SgStringVal *message = SageBuilder::buildStringVal("message");
     SgStaticAssertionDeclaration *declaration =
         new SgStaticAssertionDeclaration(condition, message);
-    condition->set_parent(declaration);
+    message->set_parent(nullptr);
     SgUnparse_Info info;
     info.set_current_source_file(&cxx_file);
     unparser.u_exprStmt->unparseStaticAssertionDeclaration(declaration, info);
@@ -1951,7 +2238,8 @@ int main(int argc, char **argv) {
 
   if (mode == "cuda-launch-bounds-owner") {
     SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
-        SgName("rex_kernel"), static_cast<SgFunctionType *>(nullptr), nullptr);
+        SgName("rex_kernel"), static_cast<SgFunctionType *>(nullptr), nullptr,
+        nullptr);
     declaration->set_cuda_launch_bounds_expression(
         SageBuilder::buildIntVal_nfi(128, "128"));
     SgUnparse_Info info;
@@ -2142,7 +2430,8 @@ int main(int argc, char **argv) {
     if (mode == "openmp-init-missing-interop-type" ||
         mode == "openmp-init-invalid-depinfo" ||
         mode == "openmp-init-syntax-operand") {
-      SgOmpInteropStatement *statement = new SgOmpInteropStatement();
+      SgOmpInteropStatement *statement =
+          new SgOmpInteropStatement(new SgOmpClauseList());
       SgOmpInitModifierList *init_list = new SgOmpInitModifierList();
       if (mode == "openmp-init-invalid-depinfo" ||
           mode == "openmp-init-syntax-operand") {
@@ -2326,24 +2615,16 @@ int main(int argc, char **argv) {
   if (mode == "coroutine-missing-keyword" ||
       mode == "coroutine-invalid-keyword" ||
       mode == "coroutine-missing-operand") {
-    SgAwaitExpression *await_expression = nullptr;
-    if (mode == "coroutine-missing-operand") {
-      await_expression =
-          new SgAwaitExpression(nullptr, SageBuilder::buildIntType());
-    } else {
-      SgIntVal *operand = SageBuilder::buildIntVal_nfi(7, "7");
-      await_expression = SageBuilder::buildAwaitExpression_nfi(
-          operand, SageBuilder::buildIntType());
-    }
-    await_expression->set_coroutine_keyword_kind(
-        mode == "coroutine-missing-keyword"
-            ? SgAwaitExpression::e_coroutine_keyword_unspecified
-        : mode == "coroutine-invalid-keyword"
-            ? static_cast<SgAwaitExpression::coroutine_keyword_kind_enum>(999)
-            : SgAwaitExpression::e_coroutine_keyword_co_await);
-    SgUnparse_Info info;
-    unparser.u_exprStmt->unparseLanguageSpecificExpression(await_expression,
-                                                           info);
+    auto keyword = SgAwaitExpression::e_coroutine_keyword_co_await;
+    if (mode == "coroutine-missing-keyword")
+      keyword = SgAwaitExpression::e_coroutine_keyword_unspecified;
+    if (mode == "coroutine-invalid-keyword")
+      keyword =
+          static_cast<SgAwaitExpression::coroutine_keyword_kind_enum>(999);
+    SgExpression *operand = nullptr;
+    if (mode != "coroutine-missing-operand")
+      operand = SageBuilder::buildIntVal_nfi(7, "7");
+    (void)new SgAwaitExpression(operand, SageBuilder::buildIntType(), keyword);
     return 0;
   }
 
@@ -2362,7 +2643,7 @@ int main(int argc, char **argv) {
       mode == "gnu-type-visibility-error") {
     SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
         SgName("rex_visibility"), static_cast<SgFunctionType *>(nullptr),
-        nullptr);
+        nullptr, nullptr);
     const bool type_visibility = mode == "gnu-type-visibility-unknown" ||
                                  mode == "gnu-type-visibility-error";
     const auto invalid_visibility =
@@ -2788,7 +3069,7 @@ int main(int argc, char **argv) {
   {
     SgFunctionDeclaration &declaration = *new SgFunctionDeclaration(
         SgName("rex_default_visibility"),
-        static_cast<SgFunctionType *>(nullptr), nullptr);
+        static_cast<SgFunctionType *>(nullptr), nullptr, nullptr);
     if (declaration.get_declarationModifier().get_gnu_attribute_visibility() !=
         SgDeclarationModifier::e_unspecified_visibility) {
       return 4;
@@ -2823,6 +3104,29 @@ int main(int argc, char **argv) {
       return 4;
     }
   }
+
+  auto *multicharacter = SageBuilder::buildCharVal(16706);
+  multicharacter->set_literal_type(SageBuilder::buildIntType());
+  auto *utf8_character = SageBuilder::buildCharVal(195);
+  utf8_character->set_literal_type(SageBuilder::buildChar8Type());
+  if (multicharacter->get_value() != 16706 ||
+      multicharacter->unparseToString() != "((int)16706)" ||
+      utf8_character->get_value() != 195 ||
+      utf8_character->unparseToString() != "((char8_t)195)")
+    return 4;
+  SageInterface::deleteAST(multicharacter);
+  SageInterface::deleteAST(utf8_character);
+
+  auto *wide = SageBuilder::buildWcharVal(937);
+  auto *utf16 = SageBuilder::buildChar16Val(937);
+  auto *utf32 = SageBuilder::buildChar32Val(128578);
+  if (wide->unparseToString() != "((wchar_t)937)" ||
+      utf16->unparseToString() != "((char16_t)937)" ||
+      utf32->unparseToString() != "((char32_t)128578)")
+    return 4;
+  SageInterface::deleteAST(wide);
+  SageInterface::deleteAST(utf16);
+  SageInterface::deleteAST(utf32);
 
   if (SageBuilder::buildIntVal(42)->unparseToString() != "42" ||
       SageBuilder::buildCharVal('A')->unparseToString() != "'A'" ||
@@ -2968,12 +3272,22 @@ int main(int argc, char **argv) {
     SgSourceFile &cxx_file = *new SgSourceFile();
     initializeSourceFile(cxx_file, "constrained-auto.cpp", false);
     auto_unparser.currentFile = &cxx_file;
-    SgAutoType *auto_type = SageBuilder::buildAutoType();
-    auto_type->set_is_constrained(true);
-    auto_type->set_source_constraint_spelling("rex_concept<int>");
+    SgGlobal *scope = attachExactGlobalScope(cxx_file, "constrained-auto.cpp");
+    SgNonrealRefExp *constraint = buildAutoConstraint(scope);
+    setExactSourceRange(constraint, "constrained-auto.cpp", 1, 1);
+    SgAutoType *auto_type = new SgAutoType(true, constraint);
+    SgNullStatement *use = SageBuilder::buildNullStatement();
+    SageInterface::appendStatement(use,
+                                   buildExactFunctionBody(scope, "rex_use"));
+    auto_unparser.get_name_qualification_context().recordName(
+        constraint, use, {"", 0, false, false});
+    auto_unparser.get_name_qualification_context().recordType(
+        constraint->get_templateArguments().front(), use,
+        {"", 0, false, false});
     SgUnparse_Info info;
     info.set_current_source_file(&cxx_file);
     info.set_language(SgFile::e_Cxx_language);
+    info.set_template_argument_qualification_context(use);
     auto_unparser.u_type->unparseType(auto_type, info);
     auto_unparser.cur << std::string("rex_value");
     if (auto_output.str() != "rex_concept<int> auto rex_value") {
@@ -3095,6 +3409,7 @@ int main(int argc, char **argv) {
         SgName("_typed_suffix"));
     fixture.unparse(literal_unparser);
     if (literal_output.str() != "0x2a_typed_suffix") {
+      std::cerr << "unexpected UDL output: " << literal_output.str() << '\n';
       return 23;
     }
   }
@@ -3129,7 +3444,8 @@ int main(int argc, char **argv) {
     Unparser launch_bounds_unparser(&launch_bounds_output,
                                     "typed-launch-bounds.cpp", options);
     SgFunctionDeclaration *declaration = new SgFunctionDeclaration(
-        SgName("rex_kernel"), static_cast<SgFunctionType *>(nullptr), nullptr);
+        SgName("rex_kernel"), static_cast<SgFunctionType *>(nullptr), nullptr,
+        nullptr);
     SgIntVal *expression = markSourceLiteral(
         SageBuilder::buildIntVal_nfi(128, "128"), "typed-launch-bounds.cpp");
     declaration->set_cuda_launch_bounds_expression(expression);
@@ -3201,7 +3517,8 @@ int main(int argc, char **argv) {
     variables->set_parent(map_clause);
 
     SgNullStatement *target_body = SageBuilder::buildNullStatement();
-    SgOmpTargetStatement *target = new SgOmpTargetStatement(target_body);
+    SgOmpTargetStatement *target =
+        new SgOmpTargetStatement(target_body, new SgOmpClauseList());
     ROSE_ASSERT(target->get_body() == target_body);
     target_body->set_parent(target);
     ROSE_ASSERT(target_body->get_parent() == target);
@@ -3306,7 +3623,7 @@ int main(int argc, char **argv) {
   }
   {
     SgNonrealDecl *shared_reference =
-        new SgNonrealDecl(SgName("rex_shared_qualification"));
+        new SgNonrealDecl(SgName("rex_shared_qualification"), nullptr);
     SgNullStatement *first_use = new SgNullStatement();
     SgNullStatement *second_use = new SgNullStatement();
     NameQualificationContext &context =
@@ -3475,10 +3792,9 @@ int main(int argc, char **argv) {
     SgIntVal *operand = SageBuilder::buildIntVal_nfi(7, "7");
     markSourceLiteral(operand, "coroutine.cpp");
     SgAwaitExpression *await_expression = SageBuilder::buildAwaitExpression_nfi(
-        operand, SageBuilder::buildIntType());
-    markSourceLiteral(await_expression, "coroutine.cpp");
-    await_expression->set_coroutine_keyword_kind(
+        operand, SageBuilder::buildIntType(),
         SgAwaitExpression::e_coroutine_keyword_co_yield);
+    markSourceLiteral(await_expression, "coroutine.cpp");
     SgUnparse_Info info;
     info.set_current_source_file(&source_file);
     info.set_language(SgFile::e_Cxx_language);
@@ -3553,7 +3869,7 @@ int main(int argc, char **argv) {
       return 27;
     }
     SgNonrealType *argument_type = SageBuilder::buildSemanticNonrealType(
-        SgName("rex_value"), global, nullptr, nullptr);
+        SgName("rex_value"), global, nullptr);
     SgNonrealDecl *argument_declaration =
         isSgNonrealDecl(argument_type->get_declaration());
     ROSE_ASSERT(argument_declaration != nullptr);

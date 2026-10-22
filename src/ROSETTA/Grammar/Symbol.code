@@ -1,9 +1,3 @@
-// #########################################################
-// #########################################################
-//                      HEADER CODE
-// #########################################################
-// #########################################################
-
 HEADER_START
           virtual SgName  get_name() const = 0;
           virtual SgType* get_type() const = 0;
@@ -18,20 +12,9 @@ HEADER_START
 
 HEADER_END
 
-HEADER_X_SYMBOL_START
-          virtual SgName  get_name() const = 0;
-          virtual SgType* get_type() const = 0;
-          virtual SgNode* get_symbol_basis() const; // from X_SYMBOL
-HEADER_X_SYMBOL_END
-
-HEADER_NON_X_SYMBOL_START
-HEADER_NON_X_SYMBOL_END
-
 
 HEADER_GET_TYPE_START
-       // DQ (3/23/2017): ROSETTA macro expansion
           SgType* get_type() const override;
-       // SgNode* get_symbol_basis() const; // from GET_TYPE
 HEADER_GET_TYPE_END
 
 HEADER_GET_NAME_START
@@ -46,13 +29,7 @@ HEADER_DECLARATION_START
        // DQ (6/10/2007): This is now deprecated in favor of a more uniform implementation for all symbols.
           SgClassDefinition *get_scope() const override ROSE_DEPRECATED_FUNCTION;
 
-       // SgNode* get_symbol_basis() const; // from DECLARATION
 HEADER_DECLARATION_END
-
-HEADER_TEMPLATE_INSTANTIATION_DECLARATION_START
-          ** This code is not used by ROSETTA! **
-          SgTemplateInstantiationDecl *get_declaration() const;
-HEADER_TEMPLATE_INSTANTIATION_DECLARATION_END
 
 
 HEADER_LABEL_SYMBOL_START
@@ -70,9 +47,9 @@ HEADER_LABEL_SYMBOL_START
                e_last_label_type         = 6
              };
 
-       // DQ (2/1/2011): Added support for named lable to handle arternative return parameters in Fortran.
-       // SgLabelSymbol ( const SgName & name );
           SgLabelSymbol ( SgInitializedName* initializedName );
+          SgLabelSymbol ( SgStatement* statement, int numericValue,
+                          label_type_enum labelType );
 
       //! Labels are scoped by their exact label-namespace symbol table, not
       //! by the labeled statement's lexical scope.
@@ -82,15 +59,12 @@ HEADER_LABEL_SYMBOL_END
 
 
 HEADER_ALIAS_SYMBOL_START
-       // SgName  get_name() const;
-       // SgType* get_type() const;
-       // SgNode* get_symbol_basis() const;
-
-       // DQ (2/28/2015): Added copy constructor to make sure that the causal_nodes is preserved across copies.
           SgAliasSymbol( const SgAliasSymbol & X );
 
-       // DQ (2/28/2015): Add this function so that we can check and for alias of SgAliasSymbol.
           void post_construction_initialization() override;
+
+          SgSymbol* get_alias() const;
+          void set_alias(SgSymbol* alias);
 
       //! For a chain of aliased symbols, this function returns the last (non-aliased) symbol.
           SgSymbol* get_base() const;
@@ -104,10 +78,9 @@ HEADER_ALIAS_SYMBOL_START
 HEADER_ALIAS_SYMBOL_END
 
 HEADER_RENAME_SYMBOL_START
-
-      //! For a chain of aliased symbols the last link may be a SgRenameSymbol, this
-      //! function returns the declaration in the last (non-aliased and not renamed) symbol.
-      //  SgSymbol* get_base() const;
+          void post_construction_initialization() override;
+          SgSymbol* get_original_symbol() const;
+          void set_original_symbol(SgSymbol* original_symbol);
 
       //! A renamed symbol is semantically visible in the exact symbol table
       //! that owns the rename, not in the original declaration's scope.
@@ -119,39 +92,113 @@ HEADER_NAMESPACE_SYMBOL_START
           void post_construction_initialization() override;
 HEADER_NAMESPACE_SYMBOL_END
 
+HEADER_NAMELIST_SYMBOL_START
+SgName get_name() const override;
+SgType *get_type() const override;
+SgNode *get_symbol_basis() const override;
+SgScopeStatement *get_scope() const override;
+const SgNameGroupPtrList &get_declarations() const { return p_declarations; }
+void append_declaration(SgNameGroup *group);
+void post_construction_initialization() override;
+static SgNamelistSymbol *resolve(SgSymbol *symbol);
+HEADER_NAMELIST_SYMBOL_END
 
-// #########################################################
-// #########################################################
-//                      SOURCE CODE
-// #########################################################
-// #########################################################
+SOURCE_NAMELIST_SYMBOL_START
+void SgNamelistSymbol::post_construction_initialization() {
+  ROSE_ASSERT(!p_declarations.empty());
+  std::set<SgNameGroup *> seen;
+  for (auto *group : p_declarations) {
+    ROSE_ASSERT(group != nullptr && seen.insert(group).second);
+  }
+  get_scope();
+}
+
+SgScopeStatement *SgNamelistSymbol::get_scope() const {
+  ROSE_ASSERT(!p_declarations.empty());
+  auto *owner = isSgNamelistStatement(p_declarations.front()->get_parent());
+  ROSE_ASSERT(owner != nullptr && owner->get_scope() != nullptr);
+  auto *scope = owner->get_scope();
+  ROSE_ASSERT(scope->get_symbol_table() != nullptr);
+  auto *entries = scope->get_symbol_table()->get_table();
+  ROSE_ASSERT(entries != nullptr);
+  const SgName name(p_declarations.front()->get_group_name());
+  for (auto *group : p_declarations) {
+    group->validate_group();
+    auto *declaration = isSgNamelistStatement(group->get_parent());
+    ROSE_ASSERT(declaration != nullptr && declaration->get_scope() == scope);
+    ROSE_ASSERT(entries->key_eq()(name, SgName(group->get_group_name())));
+  }
+  return scope;
+}
+
+SgName SgNamelistSymbol::get_name() const {
+  ROSE_ASSERT(!p_declarations.empty());
+  return SgName(p_declarations.front()->get_group_name());
+}
+
+SgNode *SgNamelistSymbol::get_symbol_basis() const {
+  ROSE_ASSERT(!p_declarations.empty());
+  return p_declarations.front();
+}
+
+void SgNamelistSymbol::append_declaration(SgNameGroup *group) {
+  ROSE_ASSERT(group != nullptr);
+  group->validate_group();
+  auto *owner = isSgNamelistStatement(group->get_parent());
+  auto *scope = get_scope();
+  ROSE_ASSERT(owner != nullptr && owner->get_scope() == scope);
+  ROSE_ASSERT(scope->get_symbol_table()->get_table()->key_eq()(
+      get_name(), SgName(group->get_group_name())));
+  ROSE_ASSERT(std::find(p_declarations.begin(), p_declarations.end(), group) ==
+              p_declarations.end());
+  p_declarations.push_back(group);
+  markAsModified();
+}
+
+SgNamelistSymbol *SgNamelistSymbol::resolve(SgSymbol *symbol) {
+  ROSE_ASSERT(symbol != nullptr);
+  if (auto *alias = isSgAliasSymbol(symbol)) {
+    symbol = alias->get_base();
+  }
+  auto *namelist = isSgNamelistSymbol(symbol);
+  ROSE_ASSERT(namelist != nullptr);
+  namelist->get_scope();
+  return namelist;
+}
+SOURCE_NAMELIST_SYMBOL_END
+
 
 SOURCE_START
-// DQ (2/6/2007): This returns the basis for SgSymbol
+static SgSymbol *validatedVisibilityBase(const SgSymbol *owner,
+                                         SgSymbol *symbol) {
+  std::set<const SgSymbol *> seen{owner};
+  while (true) {
+    if (auto *alias = isSgAliasSymbol(symbol)) {
+      ROSE_ASSERT(seen.insert(alias).second);
+      symbol = alias->get_alias();
+    } else if (auto *rename = isSgRenameSymbol(symbol)) {
+      ROSE_ASSERT(seen.insert(rename).second);
+      symbol = rename->get_original_symbol();
+    } else {
+      break;
+    }
+  }
+  ROSE_ASSERT(symbol != nullptr);
+  auto *base = symbol;
+  for (const auto *visited : seen)
+    if (const auto *rename = isSgRenameSymbol(visited)) {
+      ROSE_ASSERT(isSgFunctionDeclaration(base->get_symbol_basis()) != nullptr);
+      ROSE_ASSERT(base->get_symbol_basis() == rename->get_declaration());
+    }
+  return base;
+}
+
 SgNode*
 SgSymbol::get_symbol_basis() const
    {
      return NULL;
    }
 
-#if PHASED_OUT
-
-SgDeclarationStatement*
-SgSymbol::get_declaration() const
-   {
-  // DQ (8/21/2013): Added function so that templated lower-level symbol table support will compile.
-  // Note that this function can not be called and returns an appropriate error message.
-
-     printf ("ERROR: SgSymbol::get_declaration(): this function exists so that templated lower-level symbol table support will compile (please call this on an appropriate derived class of SgSymbol) \n");
-     ROSE_ASSERT(false);
-
-     return NULL;
-   }
-#endif /* PHASED_OUT */
-
-// This function has been implement to support testing of the scope of
-// the declartion with the scope of where the symbols are placed
-// (within the inserion and checking og symbol tables).
 SgScopeStatement*
 SgSymbol::get_scope() const
    {
@@ -159,7 +206,6 @@ SgSymbol::get_scope() const
      const SgNode* basis = get_symbol_basis();
 
      ROSE_ASSERT(basis != NULL);
-  // printf ("In SgSymbol::get_scope(): basis = %p = %s \n",basis,basis->class_name().c_str());
 
      const SgInitializedName* initializedName = isSgInitializedName(basis);
      if (initializedName != NULL)
@@ -181,8 +227,6 @@ SgSymbol::get_scope() const
 SgName
 SgSymbol::get_mangled_name() const
    {
-  // DQ (12/3/2011): refactoring of support for symbol tables and symbols.
-
      SgName mangledName;
      const SgSymbol* symbolFromTable = this;
      ROSE_ASSERT(symbolFromTable != NULL);
@@ -195,7 +239,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgFunctionDeclaration* functionDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(functionDeclaration != NULL);
 
                mangledName = functionDeclaration->get_mangled_name();
@@ -209,7 +252,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgFunctionDeclaration* functionDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(functionDeclaration != NULL);
 
                mangledName = functionDeclaration->get_mangled_name();
@@ -222,7 +264,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgClassDeclaration* classDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(classDeclaration != NULL);
 
                mangledName = classDeclaration->get_mangled_name();
@@ -235,7 +276,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgInitializedName* enumFieldName = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(enumFieldName != NULL);
 
                mangledName = enumFieldName->get_mangled_name();
@@ -248,7 +288,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgEnumDeclaration* enumDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(enumDeclaration != NULL);
 
                mangledName = enumDeclaration->get_mangled_name();
@@ -261,9 +300,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                mangledName = symbol->get_name();
 
-            // DQ (4/12/2019): I think this should be commented out since it generates output spew.
-            // printf ("A SgFunctionTypeSymbol also has a pointer to a SgType = %p \n",symbol->get_type());
-
                break;
              }
 
@@ -273,8 +309,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgLabelStatement* labelStatement = symbol->get_declaration();
 
-            // DQ (12/24/2007): Modified to reflect new implementation for Fortran numeric labels.
-            // mangledName = labelStatement->get_label();
                if (labelStatement == NULL)
                   {
                     assert(symbol->get_numeric_label_value() >= 0);
@@ -291,26 +325,22 @@ SgSymbol::get_mangled_name() const
              {
                const SgNamespaceSymbol* symbol = isSgNamespaceSymbol(symbolFromTable);
                assert(symbol != NULL);
-               if (symbol->get_isAlias() == true)
+               symbol->get_symbol_basis();
+               if (symbol->get_aliasDeclaration() != NULL)
                   {
                     SgNamespaceAliasDeclarationStatement* namespaceAliasDeclarationStatement = symbol->get_aliasDeclaration();
 
-                 // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                     ROSE_ASSERT(namespaceAliasDeclarationStatement != NULL);
 
                     mangledName = namespaceAliasDeclarationStatement->get_mangled_name();
-
-                    printf ("A SgNamespaceSymbol has an ALIAS with name = %s \n",symbol->get_name().str());
                   }
                  else
                   {
                     SgNamespaceDeclarationStatement* namespaceDeclaration = symbol->get_declaration();
 
-                 // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                     ROSE_ASSERT(namespaceDeclaration != NULL);
 
                     mangledName = namespaceDeclaration->get_mangled_name();
-                    printf ("A SgNamespaceSymbol also has a name = %s \n",symbol->get_name().str());
                   }
                break;
              }
@@ -321,7 +351,6 @@ SgSymbol::get_mangled_name() const
                assert(symbol != NULL);
                SgTemplateDeclaration* templateDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(templateDeclaration != NULL);
 
                mangledName = templateDeclaration->get_mangled_name();
@@ -334,7 +363,6 @@ SgSymbol::get_mangled_name() const
                ROSE_ASSERT(symbol != NULL);
                SgTypedefDeclaration* typedefDeclaration = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(typedefDeclaration != NULL);
 
                mangledName = typedefDeclaration->get_mangled_name();
@@ -347,7 +375,6 @@ SgSymbol::get_mangled_name() const
                ROSE_ASSERT(symbol != NULL);
                SgInitializedName* initializedName = symbol->get_declaration();
 
-            // DQ (3/19/2016): Klocworks reports this as an issue (fix by adding assertion).
                ROSE_ASSERT(initializedName != NULL);
 
                mangledName = initializedName->get_mangled_name();
@@ -362,9 +389,15 @@ SgSymbol::get_mangled_name() const
                break;
              }
 
-       // DQ (3/7/2012): Added support for new kind of symbol (required for test2004_77.C).
-          case V_SgTemplateFunctionSymbol:
-             {
+             case V_SgNamelistSymbol: {
+               const auto *symbol = isSgNamelistSymbol(symbolFromTable);
+               ROSE_ASSERT(symbol != nullptr);
+               mangledName = symbol->get_scope()->get_mangled_name() +
+                             "_namelist_" + symbol->get_name();
+               break;
+             }
+
+             case V_SgTemplateFunctionSymbol: {
                const SgTemplateFunctionSymbol* symbol = isSgTemplateFunctionSymbol(symbolFromTable);
                ROSE_ASSERT(symbol != NULL);
                mangledName = symbol->get_name();
@@ -379,7 +412,6 @@ SgSymbol::get_mangled_name() const
                break;
              }
 
-       // DQ (3/8/2012): Added support for new kind of symbol (required for test2004_77.C).
           case V_SgTemplateMemberFunctionSymbol:
              {
                const SgTemplateMemberFunctionSymbol* symbol = isSgTemplateMemberFunctionSymbol(symbolFromTable);
@@ -396,94 +428,52 @@ SgSymbol::get_mangled_name() const
                break;
              }
 
-       // DQ (2/28/2018): Added support for C++11 specific symbol.
           case V_SgTemplateTypedefSymbol:
              {
                const SgTemplateTypedefSymbol* symbol = isSgTemplateTypedefSymbol(symbolFromTable);
                ROSE_ASSERT(symbol != NULL);
                ROSE_ASSERT(symbol->get_declaration() != NULL);
 
-            // DQ (2/28/2018): We need to handle the association of the symbol with either a
-            // SgTemplateTypedefDeclaration or a SgTemplateInstantiationTypedefDeclaration IR node.
-
                SgTemplateTypedefDeclaration* typedefDeclaration = isSgTemplateTypedefDeclaration(symbol->get_declaration());
                if (typedefDeclaration != NULL)
                   {
                     mangledName = typedefDeclaration->get_mangled_name();
-                  }
+                 }
                  else
                   {
-                    printf ("In SgSymbol::get_mangled_name(): symbol->get_declaration() = %p = %s \n",symbol->get_declaration(),symbol->get_declaration()->class_name().c_str());
-
                     SgTemplateInstantiationTypedefDeclaration* typedefInstantiationDeclaration = isSgTemplateInstantiationTypedefDeclaration(symbol->get_declaration());
                     if (typedefInstantiationDeclaration != NULL)
                        {
                          mangledName = typedefInstantiationDeclaration->get_mangled_name();
-                       }
+                      }
                       else
                        {
-                         printf ("ERROR: In SgSymbol::get_mangled_name(): symbol->get_declaration() = %p = %s \n",symbol->get_declaration(),symbol->get_declaration()->class_name().c_str());
-                       }
-                  }
-               break;
-             }
-          default:
-             {
-               mangledName = "unknown mangled name";
-               printf ("Error: SgSymbol not handled (%s) \n",symbolFromTable->class_name().c_str());
-
-            // DQ (6/8/2007): Make this case fail so we can detect this error.
-               assert(false);
-             }
+                        fprintf(
+                            stderr,
+                            "REX_AST_INVARIANT[template-typedef-symbol]: "
+                            "declaration=%p/%s is neither a template typedef "
+                            "nor an instantiation\n",
+                            static_cast<void *>(symbol->get_declaration()),
+                            symbol->get_declaration()->class_name().c_str());
+                        ROSE_ABORT();
+                      }
+                 }
+                 break;
+          }
+          default: {
+            fprintf(stderr,
+                    "REX_AST_INVARIANT[symbol-mangled-name]: symbol=%p/%s "
+                    "has no mangling case\n",
+                    static_cast<const void *>(symbolFromTable),
+                    symbolFromTable->class_name().c_str());
+            ROSE_ABORT();
+          }
         }
 
      return mangledName;
    }
 
 SOURCE_END
-
-SOURCE_X_SYMBOL_START
-SOURCE_X_SYMBOL_END
-
-
-SOURCE_NON_X_SYMBOL_START
-
-SgType*
-$CLASSNAME::get_type() const
-   {
-     return NULL;
-   }
-
-SgName
-$CLASSNAME::get_name() const
-   {
-     return SgName("undefined_non_X_symbol");
-   }
-
-SgNode*
-$CLASSNAME::get_symbol_basis() const
-   {
-     return NULL;
-   }
-SOURCE_NON_X_SYMBOL_END
-
-
-SOURCE_LONG_GET_NAME_START
-SgName
-$CLASSNAME::get_name() const
-   {
-      return (get_declaration() != NULL) ? get_declaration()->get_name() : SgName("undefined");
-   }
-
-// DQ (2/6/2007): This returns the basis for the SgVariableSymbol (an SgInitializedName object)
-SgNode*
-$CLASSNAME::get_symbol_basis() const
-   {
-     return get_declaration();
-   }
-
-SOURCE_LONG_GET_NAME_END
-
 
 SOURCE_GET_TYPE_START
 SgType*
@@ -509,32 +499,18 @@ SOURCE_SHORT_GET_NAME_START
 SgName
 $CLASSNAME::get_name() const
    {
-     return (get_declaration() != NULL) ? get_declaration()->get_name() : SgName("undefined");
+     ROSE_ASSERT(get_declaration() != nullptr);
+     return get_declaration()->get_name();
    }
 
-// DQ (2/6/2007): This returns the basis for the SHORT_GET_NAME
 SgNode*
 $CLASSNAME::get_symbol_basis() const
    {
+     ROSE_ASSERT(get_declaration() != nullptr);
      return get_declaration();
    }
 SOURCE_SHORT_GET_NAME_END
 
-
-SOURCE_SHORT_EMPTY_GET_NAME_START
-SgName
-$CLASSNAME::get_name() const
-   {
-     return NULL;
-   }
-
-// DQ (2/6/2007): This returns the basis for the SHORT_EMPTY_GET_NAME
-SgNode*
-$CLASSNAME::get_symbol_basis() const
-   {
-     return NULL;
-   }
-SOURCE_SHORT_EMPTY_GET_NAME_END
 
 SOURCE_SHORT_DEFAULT_GET_NAME_START
 SgName
@@ -543,7 +519,6 @@ $CLASSNAME::get_name() const
      return "Default_Symbol_Name";
    }
 
-// DQ (2/6/2007): This returns the basis for the SHORT_DEFAULT_GET_NAME
 SgNode*
 $CLASSNAME::get_symbol_basis() const
    {
@@ -553,80 +528,33 @@ SOURCE_SHORT_DEFAULT_GET_NAME_END
 
 
 SOURCE_LABEL_SYMBOL_START
-SgName
-SgLabelSymbol::get_name() const
-   {
-  // DQ (12/9/2007): This IR node has been modified to hold a SgStatement in addition
-  // to a SgLabelStatement. by leaving the pointer to a SgLabelStatement I don't change
-  // anything about how the C/C++ case works, but I have added a pointer to a SgStatement
-  // so that the Fortran support can reference any statement (to support numeric labels
-  // and non-numeric labels as well, though this is not yet implemented).  I plan to
-  // merge the support for C/C++ and fortran a bit later after I am sure that this
-  // approach will work.
+SgName SgLabelSymbol::get_name() const {
+  get_symbol_basis();
+  if (get_declaration() != nullptr)
+    return get_declaration()->get_label();
+  if (get_fortran_statement() != nullptr)
+    return Rose::StringUtility::numberToString(get_numeric_label_value());
+  return get_fortran_alternate_return_parameter()->get_name();
+}
 
-  // This handles the general case where for C/C++ the declaration statement is not set,
-  // but I think this should be an error.  Except that we have to handle the case of a
-  // label with unassociated statement in C.  So maybe we need to handle this case!
-
-  // Previous implementation.
-  // return (get_declaration() != NULL) ? get_declaration()->get_name() : SgName("undefined");
-
-     SgName name;
-     if (get_declaration() != NULL)
-        {
-          name = get_declaration()->get_name();
-        }
-       else
-        {
-          SgStatement* fortranStatement = get_fortran_statement();
-          if (fortranStatement != NULL)
-             {
-               int numericLabel = get_numeric_label_value();
-               name = Rose::StringUtility::numberToString(numericLabel);
-             }
-            else
-             {
-            // DQ (2/2/2011): Fortran specific code.
-               SgInitializedName* alternativeReturnDeclaration = get_fortran_alternate_return_parameter();
-               if (alternativeReturnDeclaration != NULL)
-                  {
-                    name = alternativeReturnDeclaration->get_name();
-                  }
-             }
-        }
-
-     return name;
-   }
-
-// DQ (2/1/2011): This function has the wrong semantics for the case of labels.
-// DQ (2/6/2007): This returns the basis for the SHORT_GET_NAME
 SgNode*
 SgLabelSymbol::get_symbol_basis() const
    {
-  // DQ (12/9/2007): Modified (see comment above).
-  // return get_declaration();
-
-
-  // SgStatement* returnStatement = get_declaration();
-     SgLocatedNode* returnStatement = get_declaration();
-     if (returnStatement == NULL)
+     const int basis_count = (get_declaration() != nullptr) +
+                             (get_fortran_statement() != nullptr) +
+                             (get_fortran_alternate_return_parameter() != nullptr);
+     if (basis_count != 1)
         {
-          SgStatement* fortranStatement = get_fortran_statement();
-          if (fortranStatement != NULL)
-             {
-               returnStatement = fortranStatement;
-             }
-            else
-             {
-               SgInitializedName* alternativeReturnDeclaration = get_fortran_alternate_return_parameter();
-               if (alternativeReturnDeclaration != NULL)
-                  {
-                    returnStatement = alternativeReturnDeclaration;
-                  }
-             }
+          fprintf(stderr,
+                  "REX_SYMBOL_INVARIANT[label-basis]: label=%p has %d bases\n",
+                  static_cast<const void*>(this), basis_count);
+          ROSE_ABORT();
         }
-
-     return returnStatement;
+     if (get_declaration() != nullptr)
+       return get_declaration();
+     if (get_fortran_statement() != nullptr)
+       return get_fortran_statement();
+     return get_fortran_alternate_return_parameter();
    }
 
 SgScopeStatement*
@@ -653,21 +581,14 @@ SgLabelSymbol::get_scope() const
 SgType*
 SgLabelSymbol::get_type() const
    {
-  // DQ (2/1/2011): Label symbols can only have a label type.
      return SgTypeLabel::createType();
    }
 
-// DQ (2/1/2011): Added support for named lable to handle arternative return parameters in Fortran.
 SgLabelSymbol::SgLabelSymbol ( SgInitializedName* initializedName )
    : SgSymbol()
    {
-  // This constructor is used to support Fortran alternative return parameters in the function declaration.
-  // Note that we don't really use the name but I didn't want to make this a default constructor.
-
-  // We could support a pointer to the SgInitializedName object used in the function declaration's parameter list.
      ROSE_ASSERT(initializedName != NULL);
 
-  // Verify that this is used correctly.
      ROSE_ASSERT(initializedName->get_name() == "*");
 
      p_declaration = NULL;
@@ -675,10 +596,32 @@ SgLabelSymbol::SgLabelSymbol ( SgInitializedName* initializedName )
      p_fortran_alternate_return_parameter = NULL;
      p_numeric_label_value = -1;
 
-  // Set the internal mode to support analysis...
      p_label_type = e_alternative_return_type;
 
      set_fortran_alternate_return_parameter(initializedName);
+     post_construction_initialization();
+   }
+
+   SgLabelSymbol::SgLabelSymbol(SgStatement *statement, int numericValue,
+                                label_type_enum labelType)
+       : SgSymbol() {
+     if (statement == NULL || numericValue < 1 || numericValue > 99999 ||
+         (labelType != e_start_label_type && labelType != e_end_label_type &&
+          labelType != e_else_label_type) ||
+         (labelType == e_else_label_type && isSgIfStmt(statement) == NULL)) {
+       fprintf(stderr,
+               "REX_SYMBOL_INVARIANT[fortran-label-construction]: "
+               "statement=%p value=%d role=%d is not one exact numeric "
+               "label\n",
+               static_cast<void *>(statement), numericValue,
+               static_cast<int>(labelType));
+       ROSE_ABORT();
+     }
+     p_declaration = NULL;
+     p_fortran_statement = statement;
+     p_fortran_alternate_return_parameter = NULL;
+     p_numeric_label_value = numericValue;
+     p_label_type = labelType;
      post_construction_initialization();
    }
 
@@ -698,148 +641,16 @@ SgMemberFunctionSymbol::get_declaration() const
      return memberFuncionDeclaration;
    }
 
-// DQ (6/10/2007): This is now deprecated in favor of a more uniform implementation for all symbols.
-// This is used in the hidden list intersection code:
-//      astHiddenTypeAndDeclarationLists/HiddenList_Intersection.C
-// and maybe else where as well.
 SgClassDefinition*
 SgMemberFunctionSymbol::get_scope() const
    {
-  // DQ (7/28/2007): Call the base class instead
-  // ROSE_ASSERT(get_declaration() != NULL);
-  // return get_declaration()->get_class_scope();
      SgScopeStatement* scope = SgSymbol::get_scope();
      ROSE_ASSERT(scope != NULL);
      SgClassDefinition* classDefinition = isSgClassDefinition(scope);
-
-     if (classDefinition == NULL)
-        {
-#if PRINT_DEVELOPER_WARNINGS
-          printf ("In SgMemberFunctionSymbol::get_scope() (scope is not a SgClassDefinition, likely a pointer to member function): scope = %p = %s \n",scope,scope->class_name().c_str());
-#endif
-        }
-  // ROSE_ASSERT(classDefinition != NULL);
-
      return classDefinition;
    }
 SOURCE_DECLARATION_END
 
-SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_START
-
- *** This case of ROSETTA test is not used! ***
-
-SgTemplateInstantiationDecl*
-
-SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_END
-
-SOURCE_MODULE_GET_NAME_START
-SgName
-SgModuleSymbol::get_name() const
-   {
-   // (original note from Sage II) this is less efficient but it does avoid a bug in Sun C++
-      $GRAMMAR_PREFIX_Name theName;
-
-      if (get_declaration())
-         {
-           theName = get_declaration()->get_name();
-         }
-        else
-         {
-           theName = $GRAMMAR_PREFIX_Name("undefined");
-         }
-
-      return theName;
-   }
-
-// DQ (2/6/2007): This returns the basis for the SgModuleSymbol
-SgNode*
-SgModuleSymbol::get_symbol_basis() const
-   {
-     return get_declaration();
-   }
-
-SOURCE_MODULE_GET_NAME_END
-
-SOURCE_COMMON_GET_NAME_START
-SgName
-SgCommonSymbol::get_name() const
-   {
-   // (original note from Sage II) this is less efficient but it does avoid a bug in Sun C++
-      $GRAMMAR_PREFIX_Name theName;
-
-      if (get_declaration())
-         {
-           theName = get_declaration()->get_name();
-         }
-        else
-         {
-           theName = $GRAMMAR_PREFIX_Name("undefined");
-         }
-
-      return theName;
-   }
-
-SgNode*
-SgCommonSymbol::get_symbol_basis() const
-   {
-     return get_declaration();
-   }
-
-SOURCE_COMMON_GET_NAME_END
-
-SOURCE_INTRIN_GET_NAME_START
-SgName
-SgIntrinsicSymbol::get_name() const
-   {
-   // (original note from Sage II) this is less efficient but it does avoid a bug in Sun C++
-      $GRAMMAR_PREFIX_Name theName;
-
-      if (get_declaration())
-         {
-           theName = get_declaration()->get_name();
-         }
-        else
-         {
-           theName = $GRAMMAR_PREFIX_Name("undefined");
-         }
-
-      return theName;
-   }
-
-SgNode*
-SgIntrinsicSymbol::get_symbol_basis() const
-   {
-     return get_declaration();
-   }
-
-SOURCE_INTRIN_GET_NAME_END
-
-SOURCE_INTERFACE_GET_NAME_START
-SgName
-SgInterfaceSymbol::get_name() const
-   {
-   // (original note from Sage II) this is less efficient but it does avoid a bug in Sun C++
-      $GRAMMAR_PREFIX_Name theName;
-
-      if (get_declaration())
-         {
-           theName = get_declaration()->get_name();
-         }
-        else
-         {
-           theName = $GRAMMAR_PREFIX_Name("undefined");
-         }
-
-      return theName;
-   }
-
-SgNode*
-SgInterfaceSymbol::get_symbol_basis() const
-   {
-     return get_declaration();
-   }
-
-SOURCE_INTERFACE_GET_NAME_END
 
 
 
@@ -847,34 +658,26 @@ SOURCE_ALIAS_SYMBOL_START
 SgName
 SgAliasSymbol::get_name() const
    {
-     ROSE_ASSERT(p_alias != NULL);
-
-     SgName name;
-     if (get_isRenamed() == true)
+     SgSymbol* base = get_base();
+     for (const SgAliasSymbol* alias = this; alias != nullptr;
+          alias = isSgAliasSymbol(alias->get_alias()))
         {
-          name = get_new_name();
+          if (alias->get_isRenamed())
+             return alias->get_new_name();
         }
-       else
-        {
-          name = get_alias()->get_name();
-        }
-
-
-     return name;
+     return base->get_name();
    }
 
 SgNode*
 SgAliasSymbol::get_symbol_basis() const
    {
-     ROSE_ASSERT(p_alias != NULL);
-     return get_alias()->get_symbol_basis();
+     return get_base()->get_symbol_basis();
    }
 
 SgType*
 SgAliasSymbol::get_type() const
    {
-     ROSE_ASSERT(p_alias != NULL);
-     return get_alias()->get_type();
+     return get_base()->get_type();
    }
 
 SgScopeStatement*
@@ -906,151 +709,43 @@ SgAliasSymbol::get_scope() const
      return scope;
    }
 
-SgSymbol*
-SgAliasSymbol::get_base() const
-   {
-  // DQ (10/9/2008): For a chain of aliased symbols, this function returns the last (non-aliased) symbol.
-     SgSymbol* nonAliasedSymbol = get_alias();
-     ROSE_ASSERT(nonAliasedSymbol != NULL);
+SgSymbol *SgAliasSymbol::get_base() const {
+  validatedVisibilityBase(this, p_alias);
+  auto *base = p_alias;
+  while (auto *alias = isSgAliasSymbol(base))
+    base = alias->get_alias();
+  return base;
+}
 
-     SgAliasSymbol* aliasSymbol = isSgAliasSymbol(get_alias());
-     while (aliasSymbol != NULL)
-        {
-       // This may be any symbol (even a SgAliasSymbol)
-          nonAliasedSymbol = aliasSymbol->get_alias();
+SgSymbol *SgAliasSymbol::get_alias() const { return p_alias; }
 
-       // Advance in the chain to the next SgAliasSymbol symbol
-          aliasSymbol = isSgAliasSymbol(aliasSymbol->get_alias());
-        }
-
-  // Every chain of aliased symbols should have a non-aliased symbol at the end!
-     ROSE_ASSERT(nonAliasedSymbol != NULL);
-     return nonAliasedSymbol;
-   }
-
+void SgAliasSymbol::set_alias(SgSymbol *alias) {
+  validatedVisibilityBase(this, alias);
+  p_alias = alias;
+  markAsModified();
+}
 
 SgDeclarationStatement*
 SgAliasSymbol::get_declaration() const
    {
-  // DQ (4/14/2010): Added support for getting declarations from the alias symbols.
-
-     ROSE_ASSERT(get_alias() != NULL);
-
-     SgDeclarationStatement* returnValue = NULL;
-     switch (get_alias()->variantT())
+     SgSymbol* base = get_base();
+     SgNode* basis = base->get_symbol_basis();
+     SgDeclarationStatement* declaration = isSgDeclarationStatement(basis);
+     if (auto* name = isSgInitializedName(basis))
         {
-          case V_SgNamespaceSymbol:
-             {
-               SgNamespaceSymbol* symbol = isSgNamespaceSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-          case V_SgVariableSymbol:
-             {
-            // This case is a bit special since the SgInitializedName is not a declaration
-            // and thus the get_declaration() function does not return a SgDeclarationStatement.
-               SgVariableSymbol* symbol = isSgVariableSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               SgInitializedName* initializedName = isSgInitializedName(symbol->get_declaration());
-               ROSE_ASSERT(initializedName != NULL);
-               SgVariableDeclaration* variableDeclaration = isSgVariableDeclaration(initializedName->get_parent());
-               ROSE_ASSERT(variableDeclaration != NULL);
-               returnValue = variableDeclaration;
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-          case V_SgFunctionSymbol:
-          case V_SgMemberFunctionSymbol:
-             {
-               SgFunctionSymbol* symbol = isSgFunctionSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-           case V_SgTemplateClassSymbol:
-           case V_SgClassSymbol:
-             {
-               SgClassSymbol* symbol = isSgClassSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-           case V_SgEnumSymbol:
-             {
-               SgEnumSymbol* symbol = isSgEnumSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-           case V_SgEnumFieldSymbol:
-             {
-               SgEnumFieldSymbol* symbol = isSgEnumFieldSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               SgInitializedName* initializedName = isSgInitializedName(symbol->get_declaration());
-               ROSE_ASSERT(initializedName != NULL);
-
-            // DQ (5/20/2010): Call the SgInitializedName::get_declaration() function directly instead.
-            // SgVariableDeclaration* variableDeclaration = isSgVariableDeclaration(initializedName->get_parent());
-            // ROSE_ASSERT(variableDeclaration != NULL);
-            // returnValue = variableDeclaration;
-               returnValue = initializedName->get_declaration();
-
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-           case V_SgTemplateSymbol:
-             {
-               SgTemplateSymbol* symbol = isSgTemplateSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-           case V_SgTypedefSymbol:
-             {
-               SgTypedefSymbol* symbol = isSgTypedefSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-           case V_SgAliasSymbol:
-             {
-               SgAliasSymbol* symbol = isSgAliasSymbol(get_alias());
-               ROSE_ASSERT(symbol != NULL);
-               returnValue = symbol->get_declaration();
-               ROSE_ASSERT(returnValue != NULL);
-               break;
-             }
-
-          default:
-             {
-               printf ("Error: default reached in switch inside of SgAliasSymbol::get_declaration() get_alias() = %p = %s \n",get_alias(),get_alias()->class_name().c_str());
-               ROSE_ASSERT(false);
-             }
+          if (isSgVariableSymbol(base))
+             declaration = isSgVariableDeclaration(name->get_parent());
+          else if (isSgEnumFieldSymbol(base))
+             declaration = name->get_declaration();
         }
-
-
-     return returnValue;
+     else if (auto* group = isSgNameGroup(basis))
+        declaration = isSgNamelistStatement(group->get_parent());
+     ROSE_ASSERT(declaration != nullptr);
+     return declaration;
    }
 
 SgAliasSymbol::SgAliasSymbol( const SgAliasSymbol & X ) : SgSymbol()
    {
-  // DQ (2/28/2015): Added copy constructor to make sure that the causal_nodes is preserved across copies (used in SgScopeStatement::insert_symbol() function).
-  // This is a fix for Tristan's use of the copy constructor in the SgScopeStatement::insert_symbol() function).
-
      p_alias        = X.p_alias;
      p_isRenamed    = X.p_isRenamed;
      p_new_name     = X.p_new_name;
@@ -1058,52 +753,47 @@ SgAliasSymbol::SgAliasSymbol( const SgAliasSymbol & X ) : SgSymbol()
 
    }
 
-       // DQ (2/28/2015): Add this function so that we can check and for alias of SgAliasSymbol.
 void
 SgAliasSymbol::post_construction_initialization()
    {
      ROSE_ASSERT(p_alias != NULL);
-     SgAliasSymbol* aliasSymbol = isSgAliasSymbol(p_alias);
-     if (aliasSymbol != NULL)
-        {
-          p_alias = aliasSymbol->get_alias();
-
-          SgAliasSymbol* aliasSymbol_nextLevel = isSgAliasSymbol(p_alias);
-          if (aliasSymbol_nextLevel != NULL)
-             {
-               printf ("ERROR: SgAliasSymbol build from another SgAliasSymbol is not allowed! \n");
-               ROSE_ASSERT(false);
-             }
-        }
+     get_base();
    }
 
 SOURCE_ALIAS_SYMBOL_END
 
 
 SOURCE_RENAME_SYMBOL_START
+void SgRenameSymbol::post_construction_initialization() {
+  validatedVisibilityBase(this, p_original_symbol);
+}
+
+SgSymbol *SgRenameSymbol::get_original_symbol() const { return p_original_symbol; }
+
+void SgRenameSymbol::set_original_symbol(SgSymbol *original_symbol) {
+  validatedVisibilityBase(this, original_symbol);
+  p_original_symbol = original_symbol;
+  markAsModified();
+}
+
 SgName
 SgRenameSymbol::get_name() const
    {
      ROSE_ASSERT(p_original_symbol != NULL);
 
-  // This is a difference between SgAliasSymbol and SgRenameSymbol
-     SgName name = get_new_name();
-
-     return name;
+     return get_new_name();
    }
 
 SgNode*
 SgRenameSymbol::get_symbol_basis() const
    {
-     ROSE_ASSERT(p_original_symbol != NULL);
-     return get_original_symbol()->get_symbol_basis();
+     return validatedVisibilityBase(this, p_original_symbol)->get_symbol_basis();
    }
 
 SgType*
 SgRenameSymbol::get_type() const
    {
-     ROSE_ASSERT(p_original_symbol != NULL);
-     return get_original_symbol()->get_type();
+     return validatedVisibilityBase(this, p_original_symbol)->get_type();
    }
 
    SgScopeStatement *SgRenameSymbol::get_scope() const {
@@ -1138,51 +828,30 @@ SOURCE_NAMESPACE_SYMBOL_START
 SgName
 SgNamespaceSymbol::get_name() const
    {
-  // DQ (8/30/2009): Added support for SgNamespaceAliasDeclarationStatement
-     SgName n;
-     if (p_isAlias == true)
-        {
-          n = (get_aliasDeclaration() != NULL) ? get_aliasDeclaration()->get_name() : SgName("undefined");
-        }
-       else
-        {
-          n = (get_declaration() != NULL) ? get_declaration()->get_name() : SgName("undefined");
-        }
-
-  // return (get_declaration() != NULL) ? get_declaration()->get_name() : SgName("undefined");
-     return n;
+     get_symbol_basis();
+     return p_aliasDeclaration != NULL ? p_aliasDeclaration->get_name()
+                                       : p_declaration->get_name();
    }
 
-// DQ (2/6/2007): This returns the basis for the SHORT_GET_NAME
 SgNode*
 SgNamespaceSymbol::get_symbol_basis() const
    {
-  // DQ (8/30/2009): Added support for SgNamespaceAliasDeclarationStatement
-     SgNode* declaration = NULL;
-     if (p_isAlias == true)
+     if ((p_declaration == NULL) == (p_aliasDeclaration == NULL))
         {
-          declaration = get_aliasDeclaration();
+          fprintf(stderr,
+                  "REX_SYMBOL_INVARIANT[namespace-basis]: symbol=%p must "
+                  "have exactly one typed namespace declaration basis\n",
+                  static_cast<const void*>(this));
+          ROSE_ABORT();
         }
-       else
-        {
-          declaration = get_declaration();
-        }
-
-  // return get_declaration();
-     return declaration;
+     return p_aliasDeclaration != NULL ? static_cast<SgNode*>(p_aliasDeclaration)
+                                       : p_declaration;
    }
 
 void
 SgNamespaceSymbol::post_construction_initialization()
    {
-  // DQ (8/30/2009): Added support for namespace alias in the SgNamespaceSymbol
-
-     ROSE_ASSERT(p_declaration != NULL || p_aliasDeclaration != NULL);
-     ROSE_ASSERT(p_declaration == NULL || p_aliasDeclaration == NULL);
-
-  // Mark this symbol as representing a namespace alias
-     if (p_aliasDeclaration != NULL)
-          set_isAlias(true);
+     get_symbol_basis();
    }
 
 SOURCE_NAMESPACE_SYMBOL_END

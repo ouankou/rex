@@ -1,8 +1,10 @@
-#include "astJson/sageAstJson.h"
+#include "astJson/sageAstJsonPrivate.h"
 #include "rose.h"
 
+#include <algorithm>
 #include <cstring>
 #include <filesystem>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -109,6 +111,98 @@ int main(int argc, char **argv) {
   project->skipfinalCompileStep(true);
   SgSourceFile *original = firstSourceFile(project);
   verifyContract(original);
+
+  const auto ast = Rose::AstJson::parseAstFileJson(
+      Rose::AstJson::buildJson(
+          original, Rose::AstJson::Checkpoint::PreOmpConstruction, original),
+      Rose::AstJson::checkpointName(
+          Rose::AstJson::Checkpoint::PreOmpConstruction));
+  for (int malformed = 0; malformed < 7; ++malformed) {
+    auto invalid = ast;
+    bool changed = false;
+    for (auto &record : invalid.nodes) {
+      if (record.kind != "SgInitializedName")
+        continue;
+      const uint64_t shape = record.properties.requiredNonnegativeNodeId(
+          "fortran_cray_pointer_pointee_shape");
+      if (shape == 0)
+        continue;
+      ROSE_ASSERT(!changed);
+      changed = true;
+      if (malformed == 0) {
+        record.properties.object["fortran_cray_pointer_pointee_shape"] =
+            Rose::AstJson::JsonValue::number("0");
+      } else {
+        auto &shape_record = invalid.nodes.at(invalid.index_by_id.at(shape));
+        if (malformed == 1) {
+          for (auto &edge : shape_record.edges)
+            if (edge.field == "parent")
+              edge.target = 0;
+        } else if (malformed == 2) {
+          shape_record.kind = "SgIntVal";
+        } else if (malformed == 3) {
+          shape_record.edges.erase(
+              std::remove_if(
+                  shape_record.edges.begin(), shape_record.edges.end(),
+                  [](const auto &edge) { return edge.field == "expressions"; }),
+              shape_record.edges.end());
+        } else {
+          auto operand = std::find_if(
+              shape_record.edges.begin(), shape_record.edges.end(),
+              [](const auto &edge) { return edge.field == "expressions"; });
+          ROSE_ASSERT(operand != shape_record.edges.end());
+          if (malformed == 4) {
+            auto duplicate = *operand;
+            ++duplicate.index;
+            shape_record.edges.push_back(duplicate);
+          } else if (malformed == 5) {
+            operand->target = record.id;
+          } else {
+            auto &child =
+                invalid.nodes.at(invalid.index_by_id.at(operand->target));
+            for (auto &edge : child.edges)
+              if (edge.field == "parent")
+                edge.target = 0;
+          }
+        }
+      }
+    }
+    ROSE_ASSERT(changed);
+    const auto nodes_before = numberOfNodes();
+    const auto type_entries_before =
+        *SgNode::get_globalTypeTable()->get_type_table()->get_table();
+    const auto function_types_before =
+        SgNode::get_globalFunctionTypeTable()->get_types();
+    bool rejected = false;
+    std::string diagnostic;
+    try {
+      (void)Rose::AstJson::reconstructSourceFile(invalid, original);
+    } catch (const std::runtime_error &error) {
+      diagnostic = error.what();
+      rejected = true;
+    }
+    ROSE_ASSERT(rejected && numberOfNodes() == nodes_before);
+    const char *expected =
+        malformed == 0
+            ? "AST JSON initialized-name Cray pointee shape property does not "
+              "match its exact owned edge"
+        : malformed < 3
+            ? "AST JSON initialized-name Cray pointee shape has invalid "
+              "serialized ownership"
+        : malformed == 3 ? "AST JSON Cray pointee shape has no dimensions"
+        : malformed == 5 ? "AST JSON expression list has a non-expression child"
+                         : "AST JSON expression list has conflicting ownership";
+    ROSE_ASSERT(diagnostic == expected);
+    ROSE_ASSERT(*SgNode::get_globalTypeTable()->get_type_table()->get_table() ==
+                type_entries_before);
+    const auto &functions = SgNode::get_globalFunctionTypeTable()->get_types();
+    ROSE_ASSERT(functions.size() == function_types_before.size());
+    for (const auto &entry : function_types_before) {
+      const auto found = functions.find(entry.first);
+      ROSE_ASSERT(found != functions.end() && found->second == entry.second);
+    }
+    verifyContract(original);
+  }
 
   const Rose_STL_Container<SgNode *> bodies =
       NodeQuery::querySubTree(original, V_SgBasicBlock);

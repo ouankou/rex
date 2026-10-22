@@ -17,10 +17,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
-  // accept -rose:convertFullAST
-  if (CommandlineProcessing::isOption(argvList, "-rose:", "convertFullAST",
-                                      true))
-    bool dumpFullAST = true;
+  const bool dumpFullAST = CommandlineProcessing::isOption(
+      argvList, "-rose:", "convertFullAST", true);
 
   SgProject *project = frontend(argvList);
   ROSE_ASSERT(project != NULL);
@@ -65,6 +63,10 @@ int main(int argc, char **argv) {
   }
 
   AstPDFGeneration astpdfgen;
-  astpdfgen.generateInputFiles(project);
+  if (dumpFullAST) {
+    astpdfgen.generate(project);
+  } else {
+    astpdfgen.generateInputFiles(project);
+  }
   return 0;
 }

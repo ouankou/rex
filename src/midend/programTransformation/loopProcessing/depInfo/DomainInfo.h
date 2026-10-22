@@ -54,11 +54,8 @@ public:
   void AlignLoop(int index1, int align);
 };
 typedef IteratorImpl<DomainCond> DomainCondConstIteratorImpl;
-typedef IteratorImpl<DomainCond &> DomainCondUpdateIteratorImpl;
 typedef IteratorWrap<DomainCond, DomainCondConstIteratorImpl>
     DomainCondConstIterator;
-typedef IteratorWrap<DomainCond &, DomainCondUpdateIteratorImpl>
-    DomainCondUpdateIterator;
 
 DomainCond operator|(const DomainCond &d1, const DomainCond &d2);
 DomainCond operator&(const DomainCond &d1, const DomainCond &d2);
@@ -86,14 +83,11 @@ public:
 
   bool AddCond(const DomainCond &c);
   bool operator|=(const DomainInfo &that);
-  void UpdateDomainCond(bool (*Update)(DomainCond &info));
-
   bool IsTop() const;
   bool IsBottom() const;
   std::string toString() const;
 
   DomainCondConstIterator GetConstIterator() const;
-  DomainCondUpdateIterator GetUpdateIterator();
 };
 
 DomainInfo operator&(const DomainInfo &d1, const DomainInfo &d2);

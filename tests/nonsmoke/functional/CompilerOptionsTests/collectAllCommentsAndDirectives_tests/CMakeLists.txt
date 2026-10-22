@@ -1,5 +1,4 @@
 
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES} )
 
 set(_collect_comments_perf_file
   ${CMAKE_BINARY_DIR}/COMMENT_TESTS_ROSE_PERFORMANCE_DATA.csv)

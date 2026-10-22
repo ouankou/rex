@@ -21,20 +21,6 @@ using namespace std;
 
 // =====================================================================
 
-//! Trims leading and trailing whitespace.
-static void trim(string &str) {
-  string::size_type pos = str.find_last_not_of(" \t\n\r");
-  if (pos != string::npos) {
-    str.erase(pos + 1);
-    pos = str.find_first_not_of(" \t\n\r");
-    if (pos != string::npos)
-      str.erase(0, pos);
-  } else
-    str.erase(str.begin(), str.end());
-}
-
-// =====================================================================
-
 bool ASTtools::isPositionBefore(const PreprocessingInfo *info) {
   return info && info->getRelativePosition() == PreprocessingInfo::before;
 }
@@ -174,35 +160,6 @@ void ASTtools::insertHeader(const string &filename, SgProject *project) {
 }
 
 // =====================================================================
-
-void ASTtools::dumpPreprocInfo(const SgStatement *s, ostream &o) {
-  if (!s)
-    return;
-
-  o << "=== PreprocessingInfo (" << toStringFileLoc(s) << ") ===" << endl;
-
-  const AttachedPreprocessingInfoType *pp =
-      const_cast<SgStatement *>(s)->getAttachedPreprocessingInfo();
-  if (!pp)
-    o << "   (none)" << endl;
-  else // pp
-  {
-    size_t count = 0;
-    AttachedPreprocessingInfoType::const_iterator i;
-    for (i = pp->begin(); i != pp->end(); ++i) {
-      const PreprocessingInfo *info = *i;
-      string text = info->getString();
-      trim(text);
-      o << "  (" << ++count << ") '" << text << "'"
-        << ":<"
-        << PreprocessingInfo::directiveTypeName(info->getTypeOfDirective())
-        << '>' << "; "
-        << PreprocessingInfo::relativePositionName(info->getRelativePosition())
-        << endl;
-    }
-    o << endl;
-  }
-}
 
 void ASTtools::cutPreprocInfo(SgBasicBlock *b,
                               PreprocessingInfo::RelativePositionType pos,

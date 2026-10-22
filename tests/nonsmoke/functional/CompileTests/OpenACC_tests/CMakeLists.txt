@@ -25,6 +25,19 @@ add_test(
 set_tests_properties(OpenACC_rex_typed_supported_conversion_session_isolation
   PROPERTIES LABELS "OpenACC;rex;typed")
 
+add_test(
+  NAME OpenACC_rex_ast_json_roundtrip
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:rex_openacc_typed_integration>
+    --roundtrip
+    ${_rex_openacc_flags}
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_openacc_session_first.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_openacc_session_second.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_openacc_wait_forms.c)
+set_tests_properties(OpenACC_rex_ast_json_roundtrip
+  PROPERTIES LABELS "OpenACC;ASTJSON;rex;typed")
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; OpenACC hard-error tests require bash")

@@ -375,7 +375,8 @@ int main(int argc, char **argv) {
   SgTemplateInstantiationDecl *detachedDeclaration =
       new SgTemplateInstantiationDecl(
           SgName("rex_detached<int>"), SgClassDeclaration::e_class, nullptr,
-          nullptr, nullptr, detachedArguments, SgTemplateArgumentPtrList());
+          nullptr, nullptr, detachedArguments, SgTemplateArgumentPtrList(),
+          false, SgTemplateArgumentPtrList());
   SageInterface::setSourcePosition(detachedDeclaration);
   detachedDeclaration->set_templateName(SgName("rex_detached"));
   detachedDeclaration->set_firstNondefiningDeclaration(detachedDeclaration);

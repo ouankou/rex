@@ -63,8 +63,8 @@ ComputeForce(float4 bi, float4 bj, float softeningSquared)
     float distSqr = r.x * r.x + r.y * r.y + r.z * r.z;
     distSqr += softeningSquared;
 
-    float invDist = 1.0f / sqrtf(distSqr);
-    float invDistCube =  invDist * invDist * invDist;
+    float invDist = 1.0f / sqrt(distSqr);
+    float invDistCube = invDist * invDist * invDist;
 
     float s = bj.w * invDistCube;
 
@@ -77,28 +77,26 @@ IntegrateSystem(__global float4 *newPos, __global float4 *newVel,
                      __local float4 *sharedPos, const float deltaTime,
                      const float damping, const float softening, const int body_count)
 {
-    int index 		= get_global_thread_id(0);
-    int tidx 		= get_local_thread_id(0);
-    int blockDimX 	= get_local_thread_size(0);
+  int index = get_global_id(0);
+  int tidx = get_local_id(0);
+  int blockDimX = get_local_size(0);
 
-    int tile = 0;
+  int tile = 0;
 
-    float4 pos = oldPos[index];
-    float mass = pos.w;
-    float softeningSq = softening * softening;
+  float4 pos = oldPos[index];
+  float mass = pos.w;
+  float softeningSq = softening * softening;
 
-    float4 acc = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
-    int i, j;
+  float4 acc = (float4)(0.0f, 0.0f, 0.0f, 0.0f);
+  int i, j;
 
-    for (i = 0; i < body_count; i += blockDimX, tile++)
-    {
-        sharedPos[tidx] = oldPos[tile * blockDimX + tidx];
+  for (i = 0; i < body_count; i += blockDimX, tile++) {
+    sharedPos[tidx] = oldPos[tile * blockDimX + tidx];
 
-        barrier(CL_LOCAL_MEM_FENCE);
+    barrier(CLK_LOCAL_MEM_FENCE);
 
-        for (j = 0; j < blockDimX; )
-        {
-            acc += ComputeForce(sharedPos[j++], pos, softeningSq);
+    for (j = 0; j < blockDimX;) {
+      acc += ComputeForce(sharedPos[j++], pos, softeningSq);
 #if LOOP_UNROLL >= 1
             acc += ComputeForce(sharedPos[j++], pos, softeningSq);
 #endif
@@ -114,8 +112,7 @@ IntegrateSystem(__global float4 *newPos, __global float4 *newVel,
 #endif
         }
 
-        barrier(CL_LOCAL_MEM_FENCE);
-
+        barrier(CLK_LOCAL_MEM_FENCE);
     }
 
     float4 vel = oldVel[index];

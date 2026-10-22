@@ -1,5 +1,4 @@
-set(_rose_flags -rose:verbose 0 -rose:experimental_fortran_frontend
-  -I${CMAKE_CURRENT_SOURCE_DIR})
+set(_rose_flags -rose:verbose 0 -I${CMAKE_CURRENT_SOURCE_DIR})
 string(JOIN " " _rose_flags_str ${_rose_flags})
 set(_experimental_output_dir ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_experimental_output_dir})
@@ -28,9 +27,13 @@ set(_f90_tests
 )
 
 set(_f2018_tests
-  R507-F2015-N2007.f90
-  R511-F2015-N2007.f90
   R1123-F2018.f90
+)
+
+# Preserve these imported specimens as exact rejection tests: stock LLVM 22
+# rejects their syntax/types. See docs/codebase-audit/legacy-test-contracts.md.
+set(_f2018_rejection_tests
+  R511-F2015-N2007.f90
   R1164-F2018.f90
   R1166-F2018.f90
   R1168-F2018.f90
@@ -162,7 +165,7 @@ function(_experimental_add_frontend_test test_prefix specimen)
     NAME ${test_prefix}_${_name}
     WORKING_DIRECTORY ${_experimental_output_dir}
     COMMAND $<TARGET_FILE:testFrontEnd>
-      ${_rose_flags}
+      ${_rose_flags} ${ARGN}
       ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
   )
   set_tests_properties(${test_prefix}_${_name} PROPERTIES RESOURCE_LOCK experimental_frontend_test_output)
@@ -224,12 +227,41 @@ foreach(specimen IN LISTS _translator_tests)
   _experimental_add_translator_test(experimental_frontend ${specimen})
 endforeach()
 
+add_test(
+  NAME rex_flang_if_construct_names
+  WORKING_DIRECTORY ${_experimental_output_dir}
+  COMMAND $<TARGET_FILE:rex_flang_semantic_regression_contract>
+    ${_rose_flags} -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/R832.f90)
+set_tests_properties(rex_flang_if_construct_names PROPERTIES
+  LABELS "FORTRANTEST;rex"
+  RESOURCE_LOCK experimental_frontend_test_output)
+
 foreach(specimen IN LISTS _semantic_negative_tests)
   _experimental_add_semantic_negative_test(experimental_frontend ${specimen})
 endforeach()
 
 foreach(specimen IN LISTS _frontend_tests)
   _experimental_add_frontend_test(experimental_frontend ${specimen})
+endforeach()
+
+# LLVM 22's multi-image code generation requires -fcoarray. This grammar
+# specimen has external procedures and no PRIF runtime; verify object emission.
+# ASTJSON_rex_fortran_form_team_codegen separately verifies that FORM TEAM is
+# preserved through frontend construction, copying, JSON, and generated code.
+_experimental_add_frontend_test(experimental_frontend
+  R507-F2015-N2007.f90 -c -fcoarray)
+
+find_program(_experimental_python NAMES python3 REQUIRED)
+foreach(specimen IN LISTS _f2018_rejection_tests)
+  _experimental_sanitize_name(${specimen} _name)
+  add_test(NAME experimental_frontend_${_name}
+    COMMAND ${_experimental_python}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_rejection_contract.py
+      $<TARGET_FILE:testFrontEnd> ${CMAKE_CURRENT_SOURCE_DIR}/${specimen}
+      ${_rose_flags})
+  set_tests_properties(experimental_frontend_${_name} PROPERTIES
+    RESOURCE_LOCK experimental_frontend_test_output)
 endforeach()
 
 set_tests_properties(

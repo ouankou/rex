@@ -1,12 +1,8 @@
-#include "AutoTuningInterface.h"
-
 #include "CommandOptions.h"
 
 #include "CopyArrayAnal.h"
 
 #include "LoopInfoInterface.h"
-
-#include "ReuseAnalysis.h"
 
 #include "GraphIO.h"
 
@@ -40,7 +36,7 @@ void CopyArrayOperator::operator()(LoopTreeLocalityAnal &tc,
 
   if (DebugCrossGraph())
     write_graph(refDep, std::cerr, "reuse");
-  DepCompCopyArrayCollect collect(root);
+  DepCompCopyArrayCollect collect(tc.GetDepComp(), root);
   DepCompCopyArrayToBuffer::CollectCopyArray(collect, refDep);
   ModifyCopyArrayCollect(collect, refDep);
   DepCompCopyArrayToBuffer::ApplyCopyArray(collect, refDep);
@@ -122,16 +118,6 @@ bool CopyArrayOperator::IsRedundantCopy(
   if (unit.refs.size() <= 3)
     return true;
 
-  /*
-     for (p.Reset(); !p.ReachEnd(); ++p) {
-        AstNodePtr ref = (*p)->GetInfo().orig;
-        LoopTreeNode* loop = (*p)->GetInfo().stmt->EnclosingLoop();
-        for (int i = 0; i < copydim && loop != unit.root; loop =
-     loop->EnclosingLoop(), ++i) if (!ReferenceDimension(ref,
-     loop->GetLoopInfo()->GetLoopIndexVar().GetVarName(),i)) return false;
-     }
-     return true;
-  */
   return false;
 }
 
@@ -250,73 +236,5 @@ void CopyArrayUnderSizeLimit::ModifyCopyArrayCollect(
       }
       collect.RemoveCopyArray(tmp);
     }
-  }
-}
-
-void ParameterizeCopyArray::ApplyXform(
-    DepCompCopyArrayCollect::CopyArrayUnit &curarray, CopyArrayConfig &config,
-    LoopTreeNode *repl, LoopTreeNode *init, LoopTreeNode *save) {
-  AutoTuningInterface *tuning =
-      LoopTransformInterface::getAutoTuningInterface();
-  assert(tuning != 0);
-
-  tuning->CopyArray(config, repl);
-}
-
-bool ParameterizeCopyArray::CanBeBlocked(
-    DepCompCopyArrayCollect::CopyArrayUnit &unit, int copydim) {
-  if (copydim == 0)
-    return false;
-
-  int k = 0; /* number of sweeping loop dimensions */
-  for (int i = 0; i < copydim; ++i) {
-    bool sweeping = false; /*QY: any sweeping loops*/
-    for (DepCompCopyArrayCollect::CopyArrayUnit::NodeSet::const_iterator p =
-             unit.refs.begin();
-         !p.ReachEnd(); ++p) {
-      int j = 0; /*number of sweeping loop dimensions per array dimension*/
-      for (LoopTreeNode *loop = (*p)->GetInfo().stmt->EnclosingLoop();
-           loop != 0 && loop != unit.root; loop = loop->EnclosingLoop()) {
-        AstNodePtr ref = (*p)->GetInfo().orig;
-        if (!ReferenceDimension(ref, loop->GetLoopInfo()->GetVar().GetVarName(),
-                                i)) {
-          ++j;
-          sweeping = true;
-          break;
-        }
-      }
-      if (j > 1)
-        return false; /*QY: multiple loops sweeping a dimension*/
-    }
-    if (sweeping)
-      ++k;
-  }
-  if (k == 0)
-    return false; /* QY: no sweeping dimensions*/
-  return true;
-}
-
-void ParameterizeCopyArray::ModifyCopyArrayCollect(
-    DepCompCopyArrayCollect &collect, DepCompAstRefGraphCreate &refDep) {
-  CopyArrayUnderSizeLimit::ModifyCopyArrayCollect(collect, refDep);
-#ifndef NDEBUG
-  AutoTuningInterface *tuning =
-      LoopTransformInterface::getAutoTuningInterface();
-  assert(tuning != 0);
-#else
-  LoopTransformInterface::getAutoTuningInterface(); // side effects?
-#endif
-
-  for (DepCompCopyArrayCollect::iterator arrays = collect.begin();
-       arrays != collect.end(); ++arrays) {
-    DepCompCopyArrayCollect::CopyArrayUnit &unit = *arrays;
-    if (!CanBeBlocked(unit, copydim))
-      continue;
-    if (DebugCopyRoot())
-      std::cerr << " modifying copy unit: "
-                << IteratorToString2(unit.refs.begin()) << " with root = "
-                << ((unit.root == 0) ? "null" : unit.root->toString())
-                << std::endl;
-    unit.root = collect.get_tree_root();
   }
 }

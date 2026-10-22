@@ -6,46 +6,11 @@
 
 #include "grammar.h"
 
-// DQ (3/22/2018): Revert back to the previous implementation and pursue
-// changing the name qualification support code. The new version below with the
-// names NOT using the "_for_type" version was a problem for the unparser
-// support (which reuses the same code for SgInitializedName,
-// SgTemplateArgument, and SgAggregateInitializer).  So it might be better to
-// just fixup the name qualification support and reuse the unparsing support
-// then to reuse the name qualification support and implement new unparsing
-// support.  It appears that we can not quite do both, unless I figure that out
-// next.
-
-// DQ (3/22/2018): The names of the data members have been renamed to support
-// the name qualification support using the same support as for the
-// SgConstructor initializer.  The name qualification that is supported for an
-// aggregate initializer is just that for the C++11 specific type specifier that
-// is sometime required (for an example of this see Cxx11_tests/test2018_47.C).
-// Since it is the type name that is qualified it does make sens to use the
-// original names (e.g. name_qualification_length_for_type), but it would be
-// inconsistant with the constructor initializer support, and eliminate the
-// opportunity to reuse that supporting name qualification code.
-#define USE_NAME_QUALIFICATION_THROUGH_TYPE 1
-
-// What should be the behavior of the default constructor for Grammar
-
 void Grammar::setUpExpressions() {
-  // In preparation for moving to Rosebud where each node type is defined in a
-  // C++-like DSL that looks like a class definition, we are reorganizing this
-  // `setUpExpressions` function so that all parts of each particular class are
-  // together instead of scattered throughout the thousands of lines in this
-  // function. For ease of finding them, they are also alphabetical to the
-  // extent possible (ROSETTA requires derived classes to be declared before
-  // their base class, opposite the C++ and Rosebud ordering).
+  // ROSETTA requires derived classes to be declared before their base class.
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                  Terminal classes in alphabetical order
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#ifdef USE_FORTRAN_IR_NODES
   // DQ (12/31/2007): This expression represents constructions such as "DIM=N"
   // which binds a function parameter name with a function argument as in:
   // "sum(array,DIM=1)". DQ (12/31/2007): Support for named actual arguments to
@@ -62,31 +27,25 @@ void Grammar::setUpExpressions() {
       "SgExpression*", "expression", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AddOp, "AddOp", "ADD_OP");
   AddOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
   AddOp.editSubstitute("PRECEDENCE_VALUE", "12");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AddressOfOp, "AddressOfOp", "ADDRESS_OP");
-  AddressOfOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                "../Grammar/Expression.code");
+  AddressOfOp.setDataPrototype(
+      "SgAddressOfOp::address_operand_form_enum", "address_operand_form", "",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   AddressOfOp.editSubstitute("PRECEDENCE_VALUE", "15");
   AddressOfOp.setFunctionPrototype("HEADER_ADDRESS_OF_OPERATOR",
                                    "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AggregateInitializer, "AggregateInitializer",
                      "AGGREGATE_INIT");
-  // SgAggregateInitializer.setFunctionPrototype ( "HEADER_REPLACE_EXPRESSION",
-  // "../Grammar/Expression.code" );
   AggregateInitializer.setFunctionPrototype(
       "HEADER_AGGREGATE_INITIALIZER_EXPRESSION", "../Grammar/Expression.code");
 
-  // The the list declaration from the SgStatement.code file
   AggregateInitializer.editSubstitute("HEADER_LIST_DECLARATIONS",
                                       "HEADER_LIST_FUNCTIONS",
                                       "../Grammar/Expression.code");
@@ -133,109 +92,40 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_DATA);
 
-  // DQ (3/22/2018): This should be the type_elaboration_required data member
-  // (and to be consistant with the ConstructorInitializer. In general, the use
-  // of this name qualification is only for type names that are sometime
-  // required for C++11 support (see Cxx11_tests/test2018_47.C). DQ (6/11/2015):
-  // Skip building of access functions (because it sets the isModified flag, not
-  // wanted for the name qualification step). DQ (9/4/2013): Added support for
-  // name qualification on the type referenced by the AggregateInitializer (part
-  // of support for compound literals).
-  // AggregateInitializer.setDataPrototype("bool",
-  // "requiresGlobalNameQualificationOnType", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
-#if USE_NAME_QUALIFICATION_THROUGH_TYPE
+  // Qualification accessors must not mark the AST as modified.
   AggregateInitializer.setDataPrototype(
       "bool", "requiresGlobalNameQualificationOnType", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
-  // DQ (3/22/2018): This should be the type_elaboration_required data member
-  // (and to be consistant with the ConstructorInitializer. In general, the use
-  // of this name qualification is only for type names that are sometime
-  // required for C++11 support (see Cxx11_tests/test2018_47.C). DQ (6/11/2015):
-  // Skip building of access functions (because it sets the isModified flag, not
-  // wanted for the name qualification step). DQ (9/4/2013): Added support for
-  // name qualification on the type referenced by the AggregateInitializer (part
-  // of support for compound literals). AggregateInitializer.setDataPrototype (
-  // "int", "name_qualification_length_for_type", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-#if USE_NAME_QUALIFICATION_THROUGH_TYPE
   AggregateInitializer.setDataPrototype(
       "int", "name_qualification_length_for_type", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#else
-  AggregateInitializer.setDataPrototype(
-      "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-  // DQ (3/22/2018): This should be the type_elaboration_required data member
-  // (and to be consistant with the ConstructorInitializer. In general, the use
-  // of this name qualification is only for type names that are sometime
-  // required for C++11 support (see Cxx11_tests/test2018_47.C). DQ (6/11/2015):
-  // Skip building of access functions (because it sets the isModified flag, not
-  // wanted for the name qualification step). DQ (9/4/2013): Added support for
-  // name qualification on the type referenced by the AggregateInitializer (part
-  // of support for compound literals).
-  // AggregateInitializer.setDataPrototype("bool","type_elaboration_required_for_type","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
-#if USE_NAME_QUALIFICATION_THROUGH_TYPE
   AggregateInitializer.setDataPrototype(
       "bool", "type_elaboration_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#else
-  AggregateInitializer.setDataPrototype(
-      "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
-  // DQ (3/22/2018): This should be the type_elaboration_required data member
-  // (and to be consistant with the ConstructorInitializer. In general, the use
-  // of this name qualification is only for type names that are sometime
-  // required for C++11 support (see Cxx11_tests/test2018_47.C). DQ (6/11/2015):
-  // Skip building of access functions (because it sets the isModified flag, not
-  // wanted for the name qualification step). DQ (9/4/2013): Added support for
-  // name qualification on the type referenced by the AggregateInitializer (part
-  // of support for compound literals).
-  // AggregateInitializer.setDataPrototype("bool","global_qualification_required_for_type","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
-#if USE_NAME_QUALIFICATION_THROUGH_TYPE
   AggregateInitializer.setDataPrototype(
       "bool", "global_qualification_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#else
-  AggregateInitializer.setDataPrototype(
-      "bool", "global_qualification_required", "= false",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (6/20/2013): Added alignOf operator.
   NEW_TERMINAL_MACRO(AlignOfOp, "AlignOfOp", "ALIGNOF_OP");
-  AlignOfOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+  AlignOfOp.setFunctionSource("SOURCE_UNARY_TYPE_TRAIT_POST_CONSTRUCTION",
                               "../Grammar/Expression.code");
+  AlignOfOp.setFunctionPrototype("HEADER_UNARY_TYPE_TRAIT_SEMANTICS",
+                                 "../Grammar/Expression.code");
   AlignOfOp.editSubstitute("PRECEDENCE_VALUE", "16");
-  // DQ (6/20/2013): Added alignOf operator.
   AlignOfOp.setFunctionPrototype("HEADER_ALIGNOF_OPERATOR",
                                  "../Grammar/Expression.code");
   // alignof has exactly one of an expression operand or a type operand.  The
   // expression edge is therefore conditional for traversal;
   // SgAlignOfOp::get_type enforces the cross-field XOR contract directly.
   AlignOfOp.setDataPrototype("SgExpression*", "operand_expr", "",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                              OPTIONAL_TRAVERSAL_MEMBER);
   AlignOfOp.setDataPrototype("SgType*", "operand_type", "",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE);
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   AlignOfOp.setDataPrototype(
       "SgDeclarationStatement*", "type_defining_declaration", "= NULL",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
@@ -243,25 +133,20 @@ void Grammar::setUpExpressions() {
   // alignof has the target's size_t type.  The operand does not carry that ABI
   // fact, so the frontend or transformation producer must supply it exactly.
   AlignOfOp.setDataPrototype("SgType*", "expression_type", "",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added support for name qualification.
-  // AlignOfOp.setDataPrototype ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  AlignOfOp.setDataPrototype(
+      "SgExpression::unary_type_trait_kind_enum", "operator_kind",
+      "= SgExpression::e_preferred_alignof", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  AlignOfOp.setDataPrototype("std::optional<Rose::Integer128Value>",
+                             "evaluated_value", "= std::nullopt",
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   AlignOfOp.setDataPrototype("int", "name_qualification_length", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // AlignOfOp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   AlignOfOp.setDataPrototype("bool", "type_elaboration_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -272,25 +157,15 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // AlignOfOp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   AlignOfOp.setDataPrototype("bool", "global_qualification_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AndAssignOp, "AndAssignOp", "AND_ASSIGN_OP");
   AndAssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   AndAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AndOp, "AndOp", "AND_OP");
   AndOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
@@ -298,7 +173,6 @@ void Grammar::setUpExpressions() {
   AndOp.setFunctionPrototype("HEADER_AND_OPERATOR",
                              "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ArrowExp, "ArrowExp", "POINTST_OP");
   ArrowExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
@@ -310,7 +184,6 @@ void Grammar::setUpExpressions() {
                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ArrowStarOp, "ArrowStarOp", "ARROWSTAR_OP");
   ArrowStarOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
@@ -318,43 +191,27 @@ void Grammar::setUpExpressions() {
   ArrowStarOp.setFunctionPrototype("HEADER_ARROW_STAR_OPERATOR",
                                    "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // DQ (7/22/2006): Support for ASM operands that are contained in an SgAsmStmt
   NEW_TERMINAL_MACRO(AsmOp, "AsmOp", "ASM_OP");
   AsmOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
   AsmOp.editSubstitute("PRECEDENCE_VALUE", "16");
   AsmOp.setFunctionPrototype("HEADER_ASM_OP", "../Grammar/Expression.code");
-  // DQ (7/22/2006): This maybe should be a list of constraints (but the only
-  // examples I have have a single constraint)
-  AsmOp.setDataPrototype("SgAsmOp::asm_operand_constraint_enum", "constraint",
-                         "= SgAsmOp::e_invalid", CONSTRUCTOR_PARAMETER,
+  AsmOp.setDataPrototype("SgAsmOp::constraint_info", "constraint",
+                         "= SgAsmOp::constraint_info()", CONSTRUCTOR_PARAMETER,
                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   AsmOp.setDataPrototype("SgAsmOp::asm_operand_modifier_enum", "modifiers",
                          "= SgAsmOp::e_unknown", CONSTRUCTOR_PARAMETER,
                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   AsmOp.setDataPrototype("SgExpression*", "expression", "= NULL",
                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         DEF_TRAVERSAL, DEF_DELETE, COPY_DATA,
+                         DEF_TRAVERSAL, DEF_DELETE, CLONE_TREE,
                          OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (1/8/2009): Added support for recording raw asm operand descriptions.
-  // This allows us to handle "asm" statements that reference non-x86 specific
-  // details (registers and instructions).
-  AsmOp.setDataPrototype("bool", "recordRawAsmOperandDescriptions", "= false",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
-  AsmOp.setDataPrototype("bool", "isOutputOperand", "= false",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
-  AsmOp.setDataPrototype("std::string", "constraintString", "= \"\"",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
   AsmOp.setDataPrototype("std::string", "name", "= \"\"",
                          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                          NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AssignInitializer, "AssignInitializer", "ASSIGN_INIT");
   AssignInitializer.setFunctionPrototype(
       "HEADER_ASSIGNMENT_INITIALIZER_EXPRESSION", "../Grammar/Expression.code");
@@ -378,7 +235,6 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AssignOp, "AssignOp", "ASSIGN_OP");
   AssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
@@ -386,12 +242,8 @@ void Grammar::setUpExpressions() {
   AssignOp.setFunctionPrototype("HEADER_ASSIGNMENT_OPERATOR",
                                 "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   NEW_TERMINAL_MACRO(AsteriskShapeExp, "AsteriskShapeExp",
                      "TEMP_AsteriskShapeExp");
-  // DQ (11/24/2007): renamed
-  // SubscriptAsterisk.editSubstitute   ( "PRECEDENCE_VALUE", " 2" );
   AsteriskShapeExp.editSubstitute("PRECEDENCE_VALUE", " 2");
   AsteriskShapeExp.setFunctionPrototype("HEADER_ASTERISK_SHAPE_EXPRESSION",
                                         "../Grammar/Expression.code");
@@ -400,68 +252,53 @@ void Grammar::setUpExpressions() {
   AssumedRankExp.editSubstitute("PRECEDENCE_VALUE", " 2");
   AssumedRankExp.setFunctionPrototype("HEADER_ASSUMED_RANK_EXPRESSION",
                                       "../Grammar/Expression.code");
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(AwaitExpression, "AwaitExpression", "AWAIT_EXPR");
   AwaitExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_AWAIT_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   AwaitExpression.setFunctionPrototype("HEADER_AWAIT_EXPRESSION",
                                        "../Grammar/Expression.code");
-  // DQ (7/25/2020): Adding C++17 language features (required for C++20
-  // support).
   AwaitExpression.setDataPrototype(
-      "SgExpression*", "value", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgExpression*", "value", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
   // Coroutine lowering computes the value category and semantic result type.
   // The awaiter operand alone cannot recover await_resume conversions.
   AwaitExpression.setDataPrototype(
-      "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgType*", "expression_type", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   AwaitExpression.setDataPrototype(
       "SgAwaitExpression::coroutine_keyword_kind_enum",
-      "coroutine_keyword_kind",
-      "= SgAwaitExpression::e_coroutine_keyword_unspecified",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      "coroutine_keyword_kind", "", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitAndOp, "BitAndOp", "BITAND_OP");
   BitAndOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   BitAndOp.editSubstitute("PRECEDENCE_VALUE", " 8");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitComplementOp, "BitComplementOp", "BIT_COMPLEMENT_OP");
-  // DQ (1/20/2019): This should be a prefix operator and so it can't use the
-  // default automatically generated version of the
-  // post_construction_initialization function.
-  // BitComplementOp.setFunctionSource (
-  // "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-  // "../Grammar/Expression.code" );
+  BitComplementOp.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   BitComplementOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitEqvOp, "BitEqvOp", "BITEQV_OP");
   BitEqvOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   BitEqvOp.editSubstitute("PRECEDENCE_VALUE", " 6");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitOrOp, "BitOrOp", "BITOR_OP");
   BitOrOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
   BitOrOp.editSubstitute("PRECEDENCE_VALUE", " 6");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BitXorOp, "BitXorOp", "BITXOR_OP");
   BitXorOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   BitXorOp.editSubstitute("PRECEDENCE_VALUE", " 7");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(BoolValExp, "BoolValExp", "BOOL_VAL");
   BoolValExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
@@ -471,19 +308,9 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   BoolValExp.editSubstitute("GENERIC_TYPE", "SgTypeBool");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (11/15/2016): Adding support for new SgBracedInitializer, required to
-  // template support (see Cxx11_tests/test2016_82.C).
   NEW_TERMINAL_MACRO(BracedInitializer, "BracedInitializer", "BRACED_INIT");
-  // DQ (11/15/2016): Adding support for new SgBracedInitializer, required to
-  // template support (see Cxx11_tests/test2016_82.C).
   BracedInitializer.setFunctionPrototype("HEADER_BRACED_INITIALIZER_EXPRESSION",
                                          "../Grammar/Expression.code");
-  // BracedInitializer.setDataPrototype     ( "SgExpression*", "operand_i" , "=
-  // NULL",
-  //                                          CONSTRUCTOR_PARAMETER,
-  //                                          BUILD_ACCESS_FUNCTIONS,
-  //                                          DEF_TRAVERSAL, NO_DELETE);
   BracedInitializer.editSubstitute("HEADER_LIST_DECLARATIONS",
                                    "HEADER_LIST_FUNCTIONS",
                                    "../Grammar/Expression.code");
@@ -495,17 +322,7 @@ void Grammar::setUpExpressions() {
   BracedInitializer.setDataPrototype("SgType*", "expression_type", "",
                                      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                      NO_TRAVERSAL, NO_DELETE);
-  // Not certain that I want this data member since it is redundant with the
-  // list of initializers being lenght zero. This would make a better member
-  // function that tested the list size than a new data member.
-  // BracedInitializer.setDataPrototype     ( "bool",
-  // "is_empty_braced_initializer", "= false",
-  //                                               CONSTRUCTOR_PARAMETER,
-  //                                               BUILD_ACCESS_FUNCTIONS,
-  //                                               NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   // FMZ (2/6/2009): Added CoArray Reference Expression
   NEW_TERMINAL_MACRO(CAFCoExpression, "CAFCoExpression", "COARRAY_REF_EXPR");
   // FMZ (2/6/2009): Added for SgCAFCoExpression--following SgPntrArrRefExp
@@ -513,15 +330,14 @@ void Grammar::setUpExpressions() {
   // FMZ (2/5/2009): Added for CAFCoExpression => change teamId from "SgName" to
   // "SgVarRefExp*"
 
-  // CAFCoExpression.setDataPrototype ( "SgName", "teamId",  "= \"\"",
-  //                                    CONSTRUCTOR_PARAMETER,
-  //                                    BUILD_ACCESS_FUNCTIONS,NO_TRAVERSAL,NO_DELETE);
   CAFCoExpression.setDataPrototype(
       "SgVarRefExp*", "teamId", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
   CAFCoExpression.setDataPrototype(
       "SgExpression*", "teamRank", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      OPTIONAL_TRAVERSAL_MEMBER);
   CAFCoExpression.setDataPrototype(
       "SgExpression*", "referData", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
@@ -530,7 +346,7 @@ void Grammar::setUpExpressions() {
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   CAFCoExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_CAF_CO_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
 
   // OpenACC/CAF image selector expression for coarray references
@@ -554,93 +370,51 @@ void Grammar::setUpExpressions() {
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
       COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   CAFImageSelectorExp.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_CAF_IMAGE_SELECTOR_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(CastExp, "CastExp", "CAST_OP");
   CastExp.editSubstitute("PRECEDENCE_VALUE", "15");
   CastExp.setFunctionPrototype("HEADER_CAST_EXPRESSION",
                                "../Grammar/Expression.code");
 
-  CastExp.setDataPrototype("SgCastExp::cast_type_enum", "cast_type",
-                           "= SgCastExp::e_unknown", CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CastExp.setDataPrototype("SgCastExp::cast_type_enum", "cast_type", "",
+                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE);
 
-  CastExp.setDataPrototype(
-      "SgCastExp::semantic_conversion_kind_enum", "semantic_conversion_kind",
-      "= SgCastExp::e_semantic_conversion_unclassified", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  CastExp.setDataPrototype("SgCastExp::semantic_conversion_kind_enum",
+                           "semantic_conversion_kind", "",
+                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   CastExp.setDataPrototype("SgCastExp::value_category_enum", "value_category",
-                           "= SgCastExp::e_value_category_unclassified",
-                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                           "", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   // The exact sequence of semantic base types traversed by Clang for
   // base/derived and member-pointer conversions.  The cast owns the vector;
   // the canonical types themselves are shared, as all SgType objects are.
   CastExp.setDataPrototype("SgTypePtrList", "conversion_base_path", "",
-                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                           CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   // The expression type is the exact semantic result published by Clang.
   // Explicit cast syntax can name a source-distinct typedef, alias template,
   // elaborated type, or dependent type surface, so preserve that written type
   // on the use site instead of replacing the semantic expression type.
-  CastExp.setDataPrototype("SgType*", "source_type", "= nullptr",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  CastExp.setDataPrototype("SgType*", "source_type", "", CONSTRUCTOR_PARAMETER,
+                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                           CLONE_TREE);
 
-  // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads
-  // to an inconsistant AST (incrementally applying fixes). DQ (9/22/2011):
-  // Double checked and this was marked as DEF_TRAVERSAL in master (so we
-  // don't have to change this case). DQ (9/17/2011): Put back the traversal
-  // over the originalExpressionTree (because it will be set to NULL in post
-  // processing). DQ (9/16/2011): Modified this to not be traversed.  The
-  // traversal leads to an inconsistant AST We now want to select two modes of
-  // consistant AST (using or not use the originalExpressionTree). DQ
-  // (6/19/2006): Added reference to expression tree for unfolded constant
-  // expressions, where this happens in a cast it is because the frontend
-  // generated an alternative expression tree and yet holds the original one
-  // (similar to the unfolded constant expression) as an alternative.  We
-  // actually want the original tree in most cases and it has a SgCastExp as a
-  // root of the subexpression instead of a simple value. The unfoled constant
-  // expression is also availabel from the SgValue IR node. It does not appear
-  // to be required that we handle the more gneral case of adding this sort of
-  // support in the SgExpression and I would like to avoid the extra memory
-  // requirement of this design, since expressions are numerous within the AST
-  // and so they need to be kept as small as possible.  So we handle it in
-  // SgValue and SgCastExp explicitly instead of at the SgExpression level.
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added support for name qualification. CastExp.setDataPrototype
-  // ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Qualification accessors do not mark the node modified.
   CastExp.setDataPrototype("int", "name_qualification_length", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // CastExp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   CastExp.setDataPrototype("bool", "type_elaboration_required", "= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // CastExp.setDataPrototype("bool","global_qualification_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   CastExp.setDataPrototype("bool", "global_qualification_required", "= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -668,59 +442,39 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (4/15/2019): Let's demonstrate this is possible in the language before
-  // we add support for it (see Cxx11_test/test2019_381.C). DQ (4/15/2019): This
-  // is needed to support pointers to member type specified to the cast
-  // operator.
   CastExp.setDataPrototype(
       "int", "name_qualification_for_pointer_to_member_class_length", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the cast operator.
   CastExp.setDataPrototype(
       "bool", "type_elaboration_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the cast operator.
   CastExp.setDataPrototype(
       "bool", "global_qualification_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
   NEW_TERMINAL_MACRO(Char16Val, "Char16Val", "CHAR16_VAL");
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
-  Char16Val.setFunctionPrototype("HEADER_CHAR16_VALUE_EXPRESSION",
-                                 "../Grammar/Expression.code");
-  Char16Val.setDataPrototype("unsigned short", "valueUL", "= 0",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE);
+  Char16Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+                              "../Grammar/Expression.code");
+  Char16Val.setDataPrototype(
+      "unsigned short", "value", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   Char16Val.setDataPrototype("std::string", "valueString", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
   Char16Val.setFunctionSource("SOURCE_GET_TYPE_VALUE",
                               "../Grammar/Expression.code");
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
   Char16Val.editSubstitute("GENERIC_TYPE", "SgTypeChar16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(Char32Val, "Char32Val", "CHAR32_VAL");
-  // DQ (2/16/2018): Adding support for char16_t and char32_t (C99 and C++11
-  // specific types).
-  Char32Val.setFunctionPrototype("HEADER_CHAR32_VALUE_EXPRESSION",
-                                 "../Grammar/Expression.code");
-  Char32Val.setDataPrototype("unsigned int", "valueUL", "= 0",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE);
+  Char32Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+                              "../Grammar/Expression.code");
+  Char32Val.setDataPrototype(
+      "unsigned int", "value", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   Char32Val.setDataPrototype("std::string", "valueString", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -728,12 +482,12 @@ void Grammar::setUpExpressions() {
                               "../Grammar/Expression.code");
   Char32Val.editSubstitute("GENERIC_TYPE", "SgTypeChar32");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(CharVal, "CharVal", "CHAR_VAL");
   CharVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
-  CharVal.setDataPrototype("char", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CharVal.setDataPrototype("int64_t", "value", "= 0", CONSTRUCTOR_PARAMETER,
+                           BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                           NO_DELETE);
   CharVal.setDataPrototype("std::string", "valueString", "= \"\"",
                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -741,10 +495,11 @@ void Grammar::setUpExpressions() {
                             "../Grammar/Expression.code");
   CharVal.editSubstitute("GENERIC_TYPE", "SgTypeChar");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ChooseExpression, "ChooseExpression", "CHOOSE_EXPR");
+  ChooseExpression.setFunctionPrototype("HEADER_CHOOSE_EXPRESSION",
+                                        "../Grammar/Expression.code");
   ChooseExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_CHOOSE_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   ChooseExpression.setDataPrototype(
       "SgExpression*", "condition", "= NULL", CONSTRUCTOR_PARAMETER,
@@ -763,20 +518,11 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   ChooseExpression.setFunctionSource("SOURCE_CHOOSE_EXPRESSION_GET_TYPE",
                                      "../Grammar/Expression.code");
+  ChooseExpression.setDataPrototype(
+      "SgChooseExpression::selection_kind_enum", "selection_kind",
+      "= SgChooseExpression::e_choose_selection_unclassified",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  NEW_TERMINAL_MACRO(ClassExp, "ClassExp", "CLASS_NODE");
-  ClassExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                             "../Grammar/Expression.code");
-  ClassExp.setFunctionPrototype("HEADER_CLASS_EXPRESSION",
-                                "../Grammar/Expression.code");
-  ClassExp.setDataPrototype("SgClassSymbol*", "class_symbol", "= NULL",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
-  ClassExp.setDataPrototype("int", "pobj_class", "= 0", CONSTRUCTOR_PARAMETER,
-                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ClassNameRefExp, "ClassNameRefExp", "CLASSNAME_REF");
   ClassNameRefExp.excludeFunctionPrototype("HEADER_GET_TYPE",
                                            "../Grammar/Expression.code");
@@ -787,28 +533,12 @@ void Grammar::setUpExpressions() {
       "SgClassSymbol*", "symbol", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   NEW_TERMINAL_MACRO(ColonShapeExp, "ColonShapeExp", "TEMP_ColonShapeExp");
   // Note that SgColonExp and SgAsteriskExp are used in array shape
   // specification, but not indexing, so they are not part of subscript
-  // expressions. DQ (11/18/2007): I think this should have lowest precedence
-  // (unclear if this really made any difference, in the end I need to handle
-  // this as a special case to about over use of "()" Colon.editSubstitute (
-  // "PRECEDENCE_VALUE", " 2" );
+  // expressions.
   ColonShapeExp.editSubstitute("PRECEDENCE_VALUE", " 17");
-  // DQ (11/18/2007): This IR node is used in declarations!
-  // Colon.setFunctionPrototype ( "HEADER_COLON_EXPRESSION",
-  // "../Grammar/Expression.code" ); Colon.setDataPrototype ( "SgExpression*",
-  // "lowerBound", "= NULL",
-  //                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                  DEF_TRAVERSAL, NO_DELETE);
-  // Colon.setDataPrototype ( "SgExpression*", "stride", "= NULL",
-  //                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                  DEF_TRAVERSAL, NO_DELETE);
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(CommaOpExp, "CommaOpExp", "COMMA_OP");
   CommaOpExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
@@ -818,14 +548,13 @@ void Grammar::setUpExpressions() {
   CommaOpExp.setFunctionPrototype("HEADER_COMMA_OPERATOR_EXPRESSION",
                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (8/27/2006): Added support for complex values (We will use a ComplexVal
-  // to stand for a imaginary number as well).
+  // Complex values own their components; a null real component denotes a
+  // pure imaginary value. Source spelling belongs to the scalar components.
   NEW_TERMINAL_MACRO(ComplexVal, "ComplexVal", "COMPLEX_VAL");
-  ComplexVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                               "../Grammar/Expression.code");
-  // DQ (8/27/2006): Added support for Complex values (save the values as long
-  // doubles internally within the AST). A Fortran complex literal can use a
+  ComplexVal.setFunctionSource(
+      "SOURCE_COMPLEX_VALUE_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  // A Fortran complex literal can use a
   // named constant for either component, so the typed operands are arbitrary
   // expressions rather than only immediate value nodes. real_value can be
   // NULL for a pure imaginary value.
@@ -840,31 +569,13 @@ void Grammar::setUpExpressions() {
   ComplexVal.setDataPrototype("SgType*", "precisionType", "= NULL",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
-  ComplexVal.setDataPrototype("std::string", "valueString", "= \"\"",
-                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
   ComplexVal.editSubstitute("GENERIC_TYPE", "SgTypeComplex");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (9/4/2013): Adding support for compound literals.  These are not the
-  // same as initializers and define a memory location that is un-named (much
-  // like an un-named variable).  When they are const they cannot be written to
-  // and can be unified where they are the same value.  Any expression can be
-  // placed into the list. C90 and C99 define writting to the compound literal
-  // as undefined behavior.
   NEW_TERMINAL_MACRO(CompoundLiteralExp, "CompoundLiteralExp",
                      "COMPOUND_LITERAL");
   CompoundLiteralExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  // DQ (9/4/2013): Adding support for compound literals.  These are not the
-  // same as initializers and define a memory location that is un-named (much
-  // like an un-named variable).  When they are const they cannot be written to
-  // and can be unified where they are the same value.  Any expression can be
-  // placed into the list. C90 and C99 define writting to the compound literal
-  // as undefined behavior.
   CompoundLiteralExp.setFunctionPrototype("HEADER_COMPOUND_LITERAL_EXPRESSION",
                                           "../Grammar/Expression.code");
 
@@ -873,62 +584,52 @@ void Grammar::setUpExpressions() {
   // used which means that the declaration will be a SgInitializedName which
   // will contain a internally generated name used as a key to add the
   // SgVariableSymbol to the symbol table.
-  CompoundLiteralExp.setDataPrototype(
-      "SgVariableSymbol*", "symbol", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CompoundLiteralExp.setDataPrototype("SgVariableSymbol*", "symbol", "= NULL",
+                                      CONSTRUCTOR_PARAMETER,
+                                      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                      NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
 
   // DQ (9/4/2013): This follows the design of CompoundLiteralExp to be similar
   // to a variable reference.
   CompoundLiteralExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                        "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (12/13/2007): Added support for Fortran string concatenation operator
   NEW_TERMINAL_MACRO(ConcatenationOp, "ConcatenationOp", "CONCATENATION_OP");
   ConcatenationOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   ConcatenationOp.editSubstitute("PRECEDENCE_VALUE", " 3");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ConjugateOp, "ConjugateOp", "CONJUGATE_OP");
   ConjugateOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   ConjugateOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ConditionalExp, "ConditionalExp", "EXPR_CONDITIONAL");
   ConditionalExp.setFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
                                       "../Grammar/Expression.code");
   ConditionalExp.setFunctionPrototype("HEADER_CONDITIONAL_EXPRESSION",
                                       "../Grammar/Expression.code");
-  ConditionalExp.setDataPrototype("SgExpression*", "conditional_exp", "= NULL",
+  ConditionalExp.setDataPrototype("SgExpression*", "conditional_exp", "",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                   REQUIRED_TRAVERSAL_MEMBER);
-  ConditionalExp.setDataPrototype("SgExpression*", "true_exp", "= NULL",
+  ConditionalExp.setDataPrototype("SgExpression*", "true_exp", "",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                   OPTIONAL_TRAVERSAL_MEMBER);
-  ConditionalExp.setDataPrototype("SgExpression*", "false_exp", "= NULL",
+  ConditionalExp.setDataPrototype("SgExpression*", "false_exp", "",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                   REQUIRED_TRAVERSAL_MEMBER);
-  // DQ (1/14/2006): We should not store the type of unary operators but instead
-  // obtain it from the operand directly. ConditionalExp.setDataPrototype (
-  // "SgType*"      , "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  ConditionalExp.setDataPrototype("SgType*", "expression_type", "= NULL",
+  ConditionalExp.setDataPrototype("SgType*", "expression_type", "",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
   ConditionalExp.setDataPrototype(
-      "SgConditionalExp::conditional_operator_kind_enum", "operator_kind",
-      "= SgConditionalExp::e_conditional_operator_unclassified",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      "SgConditionalExp::conditional_operator_kind_enum", "operator_kind", "",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_DATA);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ConstructorInitializer, "ConstructorInitializer",
                      "CONSTRUCTOR_INIT");
   ConstructorInitializer.setFunctionPrototype(
@@ -936,82 +637,50 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   ConstructorInitializer.setDataPrototype(
       "SgMemberFunctionDeclaration*", "declaration", "= NULL",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_CONSTRUCTOR_REFERENCE);
   ConstructorInitializer.setDataPrototype(
       "SgExprListExp*", "args", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
-  // DQ (8/1/2006): Store the type explicitly (from it we can still get the
-  // SgClassDeclaration, but this permits more general use of
-  // ConstructorInitializer). ConstructorInitializer.setDataPrototype     (
-  // "SgClassDeclaration*", "class_decl"    , "= NULL",
-  //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                 NO_TRAVERSAL, NO_DELETE);
+      OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES);
   ConstructorInitializer.setDataPrototype(
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (5/20/2004): removed need_paren from this class and added it to the
-  // base class so that all expression could allow it to be set.
-  // ConstructorInitializer.setDataPrototype     ( "int", "need_paren"    , "=
-  // false",
-  //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                 NO_TRAVERSAL, NO_DELETE);
   ConstructorInitializer.setDataPrototype(
       "bool", "need_name", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   ConstructorInitializer.setDataPrototype(
       "bool", "need_qualifier", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/5/2005): Added this flag so it could be used for a different purpose
-  // (or perhaps the orginal purpose as "need_paren" if I didn't understand it
-  // intitially).  This flag controls the use of "()" after a class name in a
-  // variable declaration (i.e. "class X x();" vs. "class X x;" if the default
-  // constructor is explicit in the class "X" then eitheer will work, but if not
-  // the only "class X x;" will work).  This was previously controled by the
-  // get_args() function returning a NULL pointer (poorly done, since we want to
-  // avoid NULL pointers in general). Also changed types to :"bool" from "int".
   ConstructorInitializer.setDataPrototype(
       "bool", "need_parenthesis_after_name", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/5/2005): Mark explicitly the cases where the associated class is
-  // unknown (happens in case dik_call_returning_class_via_cctor).  When
-  // associated_class_unknown == true class_decl is NULL, else class_decl should
-  // be a valid pointer!
   ConstructorInitializer.setDataPrototype(
       "bool", "associated_class_unknown", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Inherited calls forward the enclosing constructor's incoming arguments,
+  // including unnamed variadic arguments, without reevaluating expressions.
+  ConstructorInitializer.setDataPrototype(
+      "SgConstructorInitializer::argument_source_enum", "argument_source",
+      "= SgConstructorInitializer::e_constructor_argument_expressions",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  ConstructorInitializer.setDataPrototype(
+      "bool", "is_elidable", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  ConstructorInitializer.setDataPrototype(
+      "bool", "elision_permitted", "= false", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/1/2011): Added support for name qualification.
-  // ConstructorInitializer.setDataPrototype ( "int",
-  // "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Qualification accessors do not mark the node modified.
   ConstructorInitializer.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // ConstructorInitializer.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   ConstructorInitializer.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // ConstructorInitializer.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   ConstructorInitializer.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1038,20 +707,12 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (1/15/2019): Adding support for initializers in for loop tests
-  // (conditionals), see Cxx_tests/test2019_02.C).
   ConstructorInitializer.setDataPrototype(
       "bool", "is_used_in_conditional", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (7/19/2006): Suggested change by Jeremiah Willcock
-  // ConstructorInitializer.setFunctionSource ( "SOURCE_GET_TYPE_GENERIC",
-  // "../Grammar/Expression.code" ); ConstructorInitializer.editSubstitute    (
-  // "GENERIC_TYPE", "SgTypeDefault" );
-  ConstructorInitializer.setFunctionSource("SOURCE_GET_TYPE_CLASS_DECL",
+  ConstructorInitializer.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                            "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // sgCudaKernelCallExp is a node for CUDA support, it catch kernel's call.
   NEW_TERMINAL_MACRO(CudaKernelCallExp, "CudaKernelCallExp", "KERN_CALL");
   CudaKernelCallExp.editSubstitute("PRECEDENCE_VALUE", " 0");
   CudaKernelCallExp.editSubstitute("HEADER_LIST_DECLARATIONS",
@@ -1062,13 +723,8 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // TV (04/22/2010): CUDA support
-  // sgCudaKernelExecConfig is the '<<< grid, block, shared_size, stream >>>'
-  // part of a kernel call
   NEW_TERMINAL_MACRO(CudaKernelExecConfig, "CudaKernelExecConfig", "EXEC_CONF");
   CudaKernelExecConfig.editSubstitute("PRECEDENCE_VALUE", " 0");
-  // TV (04/22/2010): CUDA support
   CudaKernelExecConfig.setDataPrototype(
       "SgExpression*", "grid", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
@@ -1085,14 +741,9 @@ void Grammar::setUpExpressions() {
       "SgExpression*", "stream", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
-  // TV (04/22/2010): CUDA support
-  CudaKernelExecConfig.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-      "../Grammar/Expression.code");
   CudaKernelExecConfig.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                          "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DeleteExp, "DeleteExp", "DELETE_OP");
   DeleteExp.setFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
                                  "../Grammar/Expression.code");
@@ -1107,20 +758,11 @@ void Grammar::setUpExpressions() {
   DeleteExp.setDataPrototype("short", "need_global_specifier", "= 0",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/21/2006): Added pointer to delete operator being used (there could
-  // be many implemented) At the moment this is always NULL; the frontend does
-  // not provide this information.
   DeleteExp.setDataPrototype(
       "SgFunctionDeclaration*", "deleteOperatorDeclaration", "= NULL",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_CONSTRUCTOR_REFERENCE);
 
-  // DQ (1/16/2006): I think this should be void instead of generic
-  // DeleteExp.setFunctionSource           ( "SOURCE_GET_TYPE_GENERIC",
-  //                                              "../Grammar/Expression.code"
-  //                                              );
-  // DeleteExp.editSubstitute              ( "GENERIC_TYPE", "SgTypeVoid" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // An expression with a designator, used for designated initialization in
   // SgAggregateInitializer
   NEW_TERMINAL_MACRO(DesignatedInitializer, "DesignatedInitializer",
@@ -1128,31 +770,15 @@ void Grammar::setUpExpressions() {
   DesignatedInitializer.setFunctionPrototype("HEADER_DESIGNATED_INITIALIZER",
                                              "../Grammar/Expression.code");
 
-  // DQ (7/21/2013): I may have been too quick to not consider multi-deminsional
-  // array references (so move back to support SgExprListExp*). DQ (7/21/2013):
-  // I think that the use of a SgExprListExp* for the data member of this
-  // SgDesignatedInitializer is incorrect, unless we wanted it to be a
-  // DesignatedInitializerList in which case we would at least need a list of
-  // SgInitializer pointers.  So we should have the first data member be a
-  // SgVarRefExp or SgValueExp (so make it a SgExpression) and the second data
-  // member can be the SgInitializer* (as it is). Note that the
-  // SgAggregateInitializer holds the list and should reference the associated
-  // type. Each of these fields is either a SgValueExp for an array index or an
-  // SgVarRefExp for a struct field name -- they are chained to form the actual
-  // designator
   DesignatedInitializer.setDataPrototype(
       "SgExprListExp*", "designatorList", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
-  // DesignatedInitializer.setDataPrototype("SgExpression*" , "designator", "=
-  // NULL", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  // NO_DELETE);
   DesignatedInitializer.setDataPrototype(
       "SgInitializer*", "memberInit", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One source designator in a designated initializer.  Its explicit kind
   // distinguishes `.field`, `[index]`, and `[lower ... upper]` without asking
   // the backend to infer syntax from the payload expression's dynamic type.
@@ -1174,19 +800,16 @@ void Grammar::setUpExpressions() {
                               DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                               OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DivAssignOp, "DivAssignOp", "DIV_ASSIGN_OP");
   DivAssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   DivAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DivideOp, "DivideOp", "DIV_OP");
   DivideOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   DivideOp.editSubstitute("PRECEDENCE_VALUE", "13");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DotExp, "DotExp", "RECORD_REF");
   DotExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                            "../Grammar/Expression.code");
@@ -1194,33 +817,19 @@ void Grammar::setUpExpressions() {
   DotExp.setFunctionPrototype("HEADER_DOT_EXPRESSION",
                               "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DotStarOp, "DotStarOp", "DOTSTAR_OP");
-  // DQ (2/27/2005): We need to have the type of the DotStarOp set (so uncomment
-  // this) Bugfix (2/27/2001) we want to use the empty version of this function
-  // since then we don't have to build an empty version of the set_type member
-  // function (this just makes more sense).
   DotStarOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  // DQ (2/27/2005): We want to post_construction_initialization to call
-  // set_type so we don't want and empty function here plus I have added a
-  // set_type function for DotStarOp. Bugfix (2/27/2001) Generate this empty
-  // function instead of one with a call to an empty setType() function
-  // DotStarOp.setFunctionSource (
-  // "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-  // "../Grammar/Expression.code" );
   DotStarOp.editSubstitute("PRECEDENCE_VALUE", "14");
   DotStarOp.setFunctionPrototype("HEADER_DOT_STAR_OPERATOR",
                                  "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(DoubleVal, "DoubleVal", "DOUBLE_VAL");
   DoubleVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
   DoubleVal.setDataPrototype("double", "value", "= 0.0", CONSTRUCTOR_PARAMETER,
-                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
+                             BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                             NO_DELETE);
   DoubleVal.setDataPrototype("std::string", "valueString", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -1228,7 +837,6 @@ void Grammar::setUpExpressions() {
                               "../Grammar/Expression.code");
   DoubleVal.editSubstitute("GENERIC_TYPE", "SgTypeDouble");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(EnumVal, "EnumVal", "ENUM_VAL");
   EnumVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
@@ -1251,34 +859,14 @@ void Grammar::setUpExpressions() {
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added support for name qualification. EnumVal.setDataPrototype
-  // ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   EnumVal.setDataPrototype("int", "name_qualification_length", "= 0",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // EnumVal.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   EnumVal.setDataPrototype("bool", "type_elaboration_required", "= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // EnumVal.setDataPrototype("bool","global_qualification_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   EnumVal.setDataPrototype("bool", "global_qualification_required", "= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -1291,23 +879,9 @@ void Grammar::setUpExpressions() {
   EnumVal.setDataPrototype("SgStringList", "explicit_name_qualification_tokens",
                            "", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  // DQ (2/5/2020): I think this should be a TypeEnum, so fixing this now.
-  // I think we require a separate get_type() function so that we can pass in
-  // the required SgEnumDeclaration. EnumVal.setFunctionSource                (
-  // "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" ); DQ (2/5/2020): I
-  // think this should be a TypeEnum, so fixing this now. I think we require a
-  // separate get_type() function so that we can pass in the required
-  // SgEnumDeclaration. Shouldn't this be using the TypeEnum?
-  // EnumVal.editSubstitute                ( "GENERIC_TYPE", "SgTypeInt" );
-  // EnumVal.editSubstitute                ( "GENERIC_TYPE", "SgEnumType" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(EqualityOp, "EqualityOp", "EQ_OP");
   EqualityOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
-  // DQ (8/8/2006): A review of operator precedence with Jeremiah pointed out a
-  // number of errors! EqualityOp.editSubstitute      ( "PRECEDENCE_VALUE", " 2"
-  // );
   EqualityOp.editSubstitute("PRECEDENCE_VALUE", " 9");
   EqualityOp.setFunctionPrototype("HEADER_EQUALITY_OPERATOR",
                                   "../Grammar/Expression.code");
@@ -1322,7 +896,6 @@ void Grammar::setUpExpressions() {
                             "SOURCE_BOOLEAN_GET_TYPE",
                             "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ExponentiationAssignOp, "ExponentiationAssignOp",
                      "EXP_ASSIGN_OP");
   ExponentiationAssignOp.setFunctionSource(
@@ -1330,42 +903,24 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   ExponentiationAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   // Binary operator
   NEW_TERMINAL_MACRO(ExponentiationOp, "ExponentiationOp", "EXPONENTIATION_OP");
   ExponentiationOp.editSubstitute("PRECEDENCE_VALUE", " 2");
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ExpressionRoot, "ExpressionRoot", "EXPRESSION_ROOT");
-  // *** Expression objects using empty (non-existant)
-  // post_construction_initialization() member functions
   ExpressionRoot.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   ExpressionRoot.excludeFunctionPrototype("HEADER_PRECEDENCE",
                                           "../Grammar/Expression.code");
-  // QY:9/30/04: remove statement pointer. use parent pointer instead
-  // ExpressionRoot.setDataPrototype ( "SgStatement*", "statement", "= NULL",
-  //      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // ExpressionRoot.setAutomaticGenerationOfDataAccessFunctions(false);
-  // QY: 9/30/2004: removed stmt pointer inside exprRoot. Use parent pointer
-  // instead. void initialize_root (SgExpression* exp, SgStatement* stmt);
 
-  // DQ (12/17/2006): Removed to clean up code (not used, I think).
-  // void set_statement( SgStatement* stmt );
-  // SgStatement* get_statement() const;
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(Float128Val, "Float128Val", "FLOAT_128_VAL");
-  Float128Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                                "../Grammar/Expression.code");
-  Float128Val.setDataPrototype("long double", "value", "= 0.0",
-                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
+  Float128Val.setFunctionSource(
+      "SOURCE_EXTENDED_FLOAT_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  Float128Val.setDataPrototype("Rose::FloatingValue", "value",
+                               "= Rose::FloatingValue()", CONSTRUCTOR_PARAMETER,
+                               NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   Float128Val.setDataPrototype("std::string", "valueString", "= \"\"",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
@@ -1373,15 +928,21 @@ void Grammar::setUpExpressions() {
                                 "../Grammar/Expression.code");
   Float128Val.editSubstitute("GENERIC_TYPE", "SgTypeFloat128");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  Float128Val.setFunctionPrototype("HEADER_EXTENDED_FLOAT_LITERAL",
+                                   "../Grammar/Expression.code");
+  Float128Val.setFunctionSource("SOURCE_EXTENDED_FLOAT_LITERAL",
+                                "../Grammar/Expression.code");
+  Float128Val.editSubstitute(
+      "NORMALIZE_FLOATING_FORMAT",
+      "p_value = p_value.converted(Rose::FloatingValue::Format::binary128);");
+
   NEW_TERMINAL_MACRO(Float80Val, "Float80Val", "FLOAT_80_VAL");
-  Float80Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                               "../Grammar/Expression.code");
-  Float80Val.setDataPrototype("long double", "value", "= 0.0",
-                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
+  Float80Val.setFunctionSource(
+      "SOURCE_EXTENDED_FLOAT_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  Float80Val.setDataPrototype("Rose::FloatingValue", "value",
+                              "= Rose::FloatingValue()", CONSTRUCTOR_PARAMETER,
+                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   Float80Val.setDataPrototype("std::string", "valueString", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -1389,12 +950,21 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   Float80Val.editSubstitute("GENERIC_TYPE", "SgTypeFloat80");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  Float80Val.setFunctionPrototype("HEADER_EXTENDED_FLOAT_LITERAL",
+                                  "../Grammar/Expression.code");
+  Float80Val.setFunctionSource("SOURCE_EXTENDED_FLOAT_LITERAL",
+                               "../Grammar/Expression.code");
+  Float80Val.editSubstitute(
+      "NORMALIZE_FLOATING_FORMAT",
+      "p_value = "
+      "p_value.converted(Rose::FloatingValue::Format::x87_binary80);");
+
   NEW_TERMINAL_MACRO(BFloat16Val, "BFloat16Val", "BFLOAT_16_VAL");
   BFloat16Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   BFloat16Val.setDataPrototype("float", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                               BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS,
+                               NO_TRAVERSAL, NO_DELETE);
   BFloat16Val.setDataPrototype("std::string", "valueString", "= \"\"",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
@@ -1402,12 +972,12 @@ void Grammar::setUpExpressions() {
                                 "../Grammar/Expression.code");
   BFloat16Val.editSubstitute("GENERIC_TYPE", "SgTypeBFloat16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(Float16Val, "Float16Val", "FLOAT_16_VAL");
   Float16Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   Float16Val.setDataPrototype("float", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                              BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
   Float16Val.setDataPrototype("std::string", "valueString", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -1415,12 +985,12 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   Float16Val.editSubstitute("GENERIC_TYPE", "SgTypeFloat16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(Float32Val, "Float32Val", "FLOAT_32_VAL");
   Float32Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   Float32Val.setDataPrototype("float", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                              BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
   Float32Val.setDataPrototype("std::string", "valueString", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -1428,12 +998,12 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   Float32Val.editSubstitute("GENERIC_TYPE", "SgTypeFloat32");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(Float64Val, "Float64Val", "FLOAT_64_VAL");
   Float64Val.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   Float64Val.setDataPrototype("double", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                              BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
   Float64Val.setDataPrototype("std::string", "valueString", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -1441,14 +1011,12 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   Float64Val.editSubstitute("GENERIC_TYPE", "SgTypeFloat64");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(FloatVal, "FloatVal", "FLOAT_VAL");
   FloatVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   FloatVal.setDataPrototype("float", "value", "= 0.0", CONSTRUCTOR_PARAMETER,
-                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
+                            BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                            NO_DELETE);
   FloatVal.setDataPrototype("std::string", "valueString", "= \"\"",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
@@ -1456,22 +1024,20 @@ void Grammar::setUpExpressions() {
                              "../Grammar/Expression.code");
   FloatVal.editSubstitute("GENERIC_TYPE", "SgTypeFloat");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (7/25/2020): Adding C++17 fold operator support.
   NEW_TERMINAL_MACRO(FoldExpression, "FoldExpression", "FOLD_EXPR");
-  // DQ (7/25/2020): Adding support for C++17 and C++20.
+  FoldExpression.setFunctionPrototype("HEADER_FOLD_EXPRESSION",
+                                      "../Grammar/Expression.code");
   FoldExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_FOLD_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  // DQ (7/25/2020): Adding C++17 language features (required for C++20
-  // support).
   FoldExpression.setDataPrototype("SgExpression*", "operands", "= NULL",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                   OPTIONAL_TRAVERSAL_MEMBER);
-  FoldExpression.setDataPrototype("std::string", "operator_token", "= \"\"",
-                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
+  FoldExpression.setDataPrototype(
+      "SgFoldExpression::operator_kind_enum", "operator_kind",
+      "= SgFoldExpression::e_fold_operator_unspecified", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   FoldExpression.setDataPrototype("bool", "is_left_associative", "= false",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
@@ -1481,11 +1047,10 @@ void Grammar::setUpExpressions() {
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PackExpansionExpr, "PackExpansionExpr",
                      "PACK_EXPANSION_EXPR");
   PackExpansionExpr.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_PACK_EXPANSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   PackExpansionExpr.setDataPrototype(
       "SgExpression*", "pattern_expression", "= NULL", CONSTRUCTOR_PARAMETER,
@@ -1497,42 +1062,30 @@ void Grammar::setUpExpressions() {
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (8/8/2014): Added support for C++11 decltype which references a function
-  // parameter.
   NEW_TERMINAL_MACRO(FunctionParameterRefExp, "FunctionParameterRefExp",
                      "FUNCTION_PARAMETER_REF_EXP");
-  // DQ (8/8/2014): Added support for function parameter reference used in C++11
-  // decltype type declarations.
   FunctionParameterRefExp.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_FUNCTION_PARAMETER_REF_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  // DQ (8/11/2014): Added support for C++11 decltype used in new function
-  // return syntax.
   FunctionParameterRefExp.editSubstitute("PRECEDENCE_VALUE", "16");
-  // DQ (8/8/2014): Added support for function parameter reference used in C++11
-  // decltype type declarations.
   FunctionParameterRefExp.setDataPrototype(
-      "int", "parameter_number", "= -1", CONSTRUCTOR_PARAMETER,
+      "int", "parameter_number", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   FunctionParameterRefExp.setDataPrototype(
-      "int", "parameter_levels_up", "= -1", CONSTRUCTOR_PARAMETER,
+      "int", "parameter_levels_up", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   FunctionParameterRefExp.setDataPrototype(
-      "SgType*", "parameter_type", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgType*", "parameter_type", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/8/2014): Added support for function parameter reference used in C++11
-  // decltype type declarations. I think we need a custom get_type() function.
-  // FunctionParameterRefExp.setFunctionSource (
-  // "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(FunctionRefExp, "FunctionRefExp", "FUNCTION_REF");
   FunctionRefExp.setFunctionPrototype("HEADER_FUNCTION_REF_EXPRESSION",
                                       "../Grammar/Expression.code");
-  FunctionRefExp.setDataPrototype("SgFunctionSymbol*", "symbol_i", "= NULL",
+  FunctionRefExp.setDataPrototype("SgFunctionSymbol*", "symbol_i", "",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
+  FunctionRefExp.setDataPrototype("SgType*", "function_type", "",
+                                  CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                  NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   // In pre-C23 C, a call can introduce an implicit function declaration
   // before the entity acquires a later lexical declaration.  The shared
   // function symbol is deliberately re-rooted when that source declaration is
@@ -1540,10 +1093,10 @@ void Grammar::setUpExpressions() {
   // site as a separate temporal binding edge.
   FunctionRefExp.setDataPrototype(
       "SgFunctionDeclaration*", "c_implicit_declaration", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
   // Fortran semantic resolution and source visibility are distinct.  The
-  // semantic symbol above determines the exact procedure identity and type;
+  // semantic symbol above determines the exact procedure identity;
   // this optional edge records the exact symbol whose lexical binding supplies
   // the source-spelled unqualified name at the use site.
   FunctionRefExp.setDataPrototype(
@@ -1557,56 +1110,14 @@ void Grammar::setUpExpressions() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (1/14/2006): The function type should be computed from the function
-  // declaration (instead of being stored) Leave the type in the constructor for
-  // storage internally and build a special version of get_type() to access this
-  // value or later compute it directly. FunctionRefExp.setDataPrototype (
-  // "SgFunctionType*"  , "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  FunctionRefExp.setDataPrototype("SgFunctionType*", "function_type", "= NULL",
-                                  CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
-  // DQ (9/22/2011): Double checked and this was marked as NO_TRAVERSAL in
-  // master (so mark it as such so that I can pass the existing tests).  I am
-  // trying to pass the existing tests and implement the new changes to support
-  // originalExpressionTree handling gradually so that I can identify what
-  // changes are breaking a few of the existing tests.
-  // DQ (9/17/2011): Put back the traversal over the originalExpressionTree
-  // (because it will be set to NULL in post processing). DQ (9/16/2011):
-  // Modified this to specify NO_TRAVERSAL. DQ (2/6/2011): Added reference to
-  // expression tree for unfolded constant expressions (see comment above).
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification.
-  // FunctionRefExp.setDataPrototype ( "int", "name_qualification_length", "=
-  // 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   FunctionRefExp.setDataPrototype("int", "name_qualification_length", "= 0",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // FunctionRefExp.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   FunctionRefExp.setDataPrototype("bool", "type_elaboration_required",
                                   "= false", NO_CONSTRUCTOR_PARAMETER,
                                   NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // FunctionRefExp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   FunctionRefExp.setDataPrototype("bool", "global_qualification_required",
                                   "= false", NO_CONSTRUCTOR_PARAMETER,
                                   NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1619,10 +1130,7 @@ void Grammar::setUpExpressions() {
   FunctionRefExp.setDataPrototype(
       "SgStringList", "explicit_name_qualification_tokens", "",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  FunctionRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
-                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(GreaterOrEqualOp, "GreaterOrEqualOp", "GE_OP");
   GreaterOrEqualOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -1640,7 +1148,6 @@ void Grammar::setUpExpressions() {
                                   "SOURCE_BOOLEAN_GET_TYPE",
                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(GreaterThanOp, "GreaterThanOp", "GT_OP");
   GreaterThanOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -1657,44 +1164,21 @@ void Grammar::setUpExpressions() {
                                "SOURCE_BOOLEAN_GET_TYPE",
                                "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ImagPartOp, "ImagPartOp", "IMAG_PART_OP");
   ImagPartOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   ImagPartOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   NEW_TERMINAL_MACRO(ImpliedDo, "ImpliedDo", "IMPLIED_DO");
   ImpliedDo.editSubstitute("PRECEDENCE_VALUE", " 2");
   ImpliedDo.setFunctionPrototype("HEADER_IMPLIED_DO",
                                  "../Grammar/Expression.code");
-  // DQ (9/22/2010): This is only an simple varRef in trivial cases, this is
-  // more generally where an expression in terms of an index is put (e.g. a
-  // function of an index as in
-  // "(product(localCount(:j)), j = 1, numDims - 1)" in test2010_49.f90).
-  // ImpliedDo.setDataPrototype     ( "SgVarRefExp*", "do_var", "= NULL",
-  //                                     CONSTRUCTOR_PARAMETER,
-  //                                     BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  //                                     NO_DELETE);
-  // ImpliedDo.setDataPrototype     ( "SgExpression*", "do_var_exp", "= NULL",
-  //                                     CONSTRUCTOR_PARAMETER,
-  //                                     BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  //                                     NO_DELETE);
+  // The loop initialization can contain an expression in the index, as in
+  // "(product(localCount(:j)), j = 1, numDims - 1)" in test2010_49.f90.
   ImpliedDo.setDataPrototype("SgExpression*", "do_var_initialization", "= NULL",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                              OPTIONAL_TRAVERSAL_MEMBER);
-  // DQ (10/9/2010): This data member is now replaced by the
-  // do_var_exp_initialization. DQ (10/2/2010): This should be a
-  // SgVariableDeclaration instead of an expression. This was suggested at the
-  // Sept Portlan Fortran Adventure meeting. ImpliedDo.setDataPrototype     (
-  // "SgExpression*", "first_val", "= NULL",
-  //              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  //              NO_DELETE);
-  // ImpliedDo.setDataPrototype     ( "SgExpression*", "first_val", "= NULL",
-  //              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  //              NO_DELETE);
   ImpliedDo.setDataPrototype("SgExpression*", "last_val", "= NULL",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
@@ -1717,9 +1201,7 @@ void Grammar::setUpExpressions() {
   ImpliedDo.setDataPrototype("SgScopeStatement*", "implied_do_scope", "= NULL",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-#endif
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(IntegerDivideAssignOp, "IntegerDivideAssignOp",
                      "IDIV_ASSIGN_OP");
   IntegerDivideAssignOp.setFunctionSource(
@@ -1727,19 +1209,18 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   IntegerDivideAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(IntegerDivideOp, "IntegerDivideOp", "INTEGER_DIV_OP");
   IntegerDivideOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   IntegerDivideOp.editSubstitute("PRECEDENCE_VALUE", "13");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(IntVal, "IntVal", "INT_VAL");
   IntVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                            "../Grammar/Expression.code");
   IntVal.setDataPrototype("int", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                          BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                          NO_DELETE);
   IntVal.setDataPrototype("std::string", "valueString", "= \"\"",
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
@@ -1747,19 +1228,11 @@ void Grammar::setUpExpressions() {
                            "../Grammar/Expression.code");
   IntVal.editSubstitute("GENERIC_TYPE", "SgTypeInt");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(IorAssignOp, "IorAssignOp", "IOR_ASSIGN_OP");
   IorAssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   IorAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (12/30/2007): New IR node to support references to labels (much like
-  // references to variables for the VarRefExp, but with a internal pointer ot a
-  // SgLabelSymbol) This IR nodes will eventually be used in the C/C++ goto, but
-  // is introduced to hnadle references to labels in Fortran (e.g. format
-  // expression in "read" and "write" statements, and a cleanr implementation of
-  // references to labels in Fortran loop constructs etc.).
   NEW_TERMINAL_MACRO(LabelRefExp, "LabelRefExp", "LABEL_REF");
   LabelRefExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
@@ -1771,38 +1244,29 @@ void Grammar::setUpExpressions() {
   LabelRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                 "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (9/2/2014): Adding support for C++11 Lambda expressions.
   NEW_TERMINAL_MACRO(LambdaExp, "LambdaExp", "LAMBDA_EXP");
-  // DQ (9/2/2014): Adding support for C++11 lambda functions.
-  LambdaExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                              "../Grammar/Expression.code");
-  // DQ (9/2/2014): Adding support for C++11 lambda expresions.
+  LambdaExp.setFunctionSource(
+      "SOURCE_LAMBDA_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   LambdaExp.editSubstitute("PRECEDENCE_VALUE", "16");
-  // DQ (9/2/2014): Adding support for C++11 lambda expresions.
-  LambdaExp.setDataPrototype("SgLambdaCaptureList*", "lambda_capture_list",
-                             "= NULL", CONSTRUCTOR_PARAMETER,
-                             BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-                             COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+  LambdaExp.setDataPrototype("SgLambdaCaptureList*", "lambda_capture_list", "",
+                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                             OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (2/15/2015): This will call cycles in the AST if it is allowed to be
-  // defined in the AST traversal. LambdaExp.setDataPrototype
-  // ("SgClassDeclaration*", "lambda_closure_class", "= NULL",
-  //             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-  //             NO_DELETE);
-  // DQ (4/27/2017): I think it might be better to traverse the class directly
-  // and mark the operator() member function to not be traversed via the lambda
-  // function (becasue it is in the lambda closure class).
-  LambdaExp.setDataPrototype("SgClassDeclaration*", "lambda_closure_class",
-                             "= NULL", CONSTRUCTOR_PARAMETER,
-                             BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-                             COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
-  // DQ (4/27/2017): This points to the non defining declaration, so it is OK to
-  // traverse it.
-  LambdaExp.setDataPrototype("SgFunctionDeclaration*", "lambda_function",
-                             "= NULL", CONSTRUCTOR_PARAMETER,
-                             BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-                             COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+  LambdaExp.setDataPrototype("SgClassDeclaration*", "lambda_closure_class", "",
+                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
+  LambdaExp.setDataPrototype("SgFunctionDeclaration*", "lambda_function", "",
+                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
+  LambdaExp.setDataPrototype(
+      "SgDeclarationScope*", "closure_scope", "= nullptr",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES);
+  LambdaExp.setFunctionPrototype("HEADER_LAMBDA_EXPRESSION",
+                                 "../Grammar/Expression.code");
   LambdaExp.setDataPrototype("bool", "is_mutable", "= false",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -1819,15 +1283,10 @@ void Grammar::setUpExpressions() {
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/23/2016): Modified to support specification of __device__ or
-  // __atttribute((device)) This is included to support a concept that Jeff
-  // Keasler would like to have (experimental). This implementation still needs
-  // to be reviewed.
   LambdaExp.setDataPrototype("bool", "is_device", "= false",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(LessOrEqualOp, "LessOrEqualOp", "LE_OP");
   LessOrEqualOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -1844,7 +1303,6 @@ void Grammar::setUpExpressions() {
                                "SOURCE_BOOLEAN_GET_TYPE",
                                "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(LessThanOp, "LessThanOp", "LT_OP");
   LessThanOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
@@ -1860,17 +1318,13 @@ void Grammar::setUpExpressions() {
                             "SOURCE_BOOLEAN_GET_TYPE",
                             "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(LongDoubleVal, "LongDoubleVal", "LONG_DOUBLE_VAL");
   LongDoubleVal.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  LongDoubleVal.setDataPrototype("long double", "value", "= 0.0",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                 NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/9/2005): Added string to hold source code constant precisely (part
-  // of work with Andreas)
+  LongDoubleVal.setDataPrototype(
+      "Rose::FloatingValue", "value", "= Rose::FloatingValue()",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   LongDoubleVal.setDataPrototype("std::string", "valueString", "= \"\"",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
@@ -1878,12 +1332,17 @@ void Grammar::setUpExpressions() {
                                   "../Grammar/Expression.code");
   LongDoubleVal.editSubstitute("GENERIC_TYPE", "SgTypeLongDouble");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  LongDoubleVal.setFunctionPrototype("HEADER_EXTENDED_FLOAT_LITERAL",
+                                     "../Grammar/Expression.code");
+  LongDoubleVal.setFunctionSource("SOURCE_EXTENDED_FLOAT_LITERAL",
+                                  "../Grammar/Expression.code");
+
   NEW_TERMINAL_MACRO(LongIntVal, "LongIntVal", "LONG_INT_VAL");
   LongIntVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   LongIntVal.setDataPrototype("long int", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                              BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
   LongIntVal.setDataPrototype("std::string", "valueString", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -1891,14 +1350,13 @@ void Grammar::setUpExpressions() {
                                "../Grammar/Expression.code");
   LongIntVal.editSubstitute("GENERIC_TYPE", "SgTypeLong");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(LongLongIntVal, "LongLongIntVal", "LONG_LONG_INT_VAL");
   LongLongIntVal.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  LongLongIntVal.setDataPrototype("long long int", "value", "= 0",
-                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
+  LongLongIntVal.setDataPrototype(
+      "long long int", "value", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   LongLongIntVal.setDataPrototype("std::string", "valueString", "= \"\"",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
@@ -1906,26 +1364,39 @@ void Grammar::setUpExpressions() {
                                    "../Grammar/Expression.code");
   LongLongIntVal.editSubstitute("GENERIC_TYPE", "SgTypeLongLong");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(Integer128Val, "Integer128Val", "INTEGER_128_VAL");
+  Integer128Val.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  Integer128Val.setDataPrototype(
+      "Rose::Integer128Value", "value", "= Rose::Integer128Value()",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  Integer128Val.setFunctionPrototype("HEADER_INTEGER128_LITERAL",
+                                     "../Grammar/Expression.code");
+  Integer128Val.setFunctionSource("SOURCE_INTEGER128_LITERAL",
+                                  "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(FortranBOZVal, "FortranBOZVal", "FORTRAN_BOZ_VAL");
+  FortranBOZVal.setDataPrototype("Rose::Integer128Value", "bits",
+                                 "= Rose::Integer128Value::fromBits({}, true)",
+                                 CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                 NO_TRAVERSAL, NO_DELETE);
+  FortranBOZVal.setFunctionPrototype("HEADER_FORTRAN_BOZ_LITERAL",
+                                     "../Grammar/Expression.code");
+  FortranBOZVal.setFunctionSource("SOURCE_FORTRAN_BOZ_LITERAL",
+                                  "../Grammar/Expression.code");
+
   NEW_TERMINAL_MACRO(LshiftAssignOp, "LshiftAssignOp", "LSHIFT_ASSIGN_OP");
   LshiftAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   LshiftAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(LshiftOp, "LshiftOp", "LSHIFT_OP");
   LshiftOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
-  // DQ (1/26/2013): I think this is wrong, "<<" and ">>" have value 7 (lower
-  // than "==") (see test2013_42.C). I think this value of 7 is incorrect since
-  // it is from a table that lists values in reverse order from how we list then
-  // here.  Here we are following the apendix of the C++ language book.
-  // LshiftOp.editSubstitute        ( "PRECEDENCE_VALUE", "11" );
-  // RshiftOp.editSubstitute        ( "PRECEDENCE_VALUE", "11" );
   LshiftOp.editSubstitute("PRECEDENCE_VALUE", "11");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MemberFunctionRefExp, "MemberFunctionRefExp",
                      "MEMBER_FUNCTION_REF");
   MemberFunctionRefExp.setFunctionPrototype(
@@ -1934,57 +1405,26 @@ void Grammar::setUpExpressions() {
       "SgMemberFunctionSymbol*", "symbol_i", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   MemberFunctionRefExp.setDataPrototype(
-      "int", "virtual_call", "= 0", CONSTRUCTOR_PARAMETER,
+      "SgTypeExpression*", "conversion_type_id", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+  MemberFunctionRefExp.setDataPrototype(
+      "bool", "virtual_call", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/14/2006): The function type should be computed from the function
-  // declaration (instead of being stored) Leave the type in the constructor for
-  // storage internally and build a special version of get_type() to access this
-  // value or later compute it directly. MemberFunctionRefExp.setDataPrototype (
-  // "SgFunctionType*", "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  MemberFunctionRefExp.setDataPrototype(
-      "SgFunctionType*", "function_type", "= NULL", CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // The exact member symbol supplies the semantic function type.
 
-  // DQ (4/13/2004): Changed false to true in default setting (and removed
-  // resetting of value in
-  //                 post_constructor_initialization(), as suggested by Qing).
   MemberFunctionRefExp.setDataPrototype(
-      "int", "need_qualifier", "= true", CONSTRUCTOR_PARAMETER,
+      "bool", "need_qualifier", "= true", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification.
-  // MemberFunctionRefExp.setDataPrototype ( "int", "name_qualification_length",
-  // "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   MemberFunctionRefExp.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // MemberFunctionRefExp.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   MemberFunctionRefExp.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // MemberFunctionRefExp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   MemberFunctionRefExp.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1997,75 +1437,66 @@ void Grammar::setUpExpressions() {
   MemberFunctionRefExp.setDataPrototype(
       "SgStringList", "explicit_name_qualification_tokens", "",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/14/2006): The function type should be computed from the function
-  // declaration (instead of being stored) Leave the type in the constructor for
-  // storage internally and build a special version of get_type() to access this
-  // value or later compute it directly. MemberFunctionRefExp.setDataPrototype (
-  // "SgFunctionType*", "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   MemberFunctionRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                                          "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MinusAssignOp, "MinusAssignOp", "MINUS_ASSIGN_OP");
   MinusAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   MinusAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MinusMinusOp, "MinusMinusOp", "MINUSMINUS_OP");
+  MinusMinusOp.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   MinusMinusOp.editSubstitute("PRECEDENCE_VALUE", "15");
   MinusMinusOp.setFunctionPrototype("HEADER_MINUS_MINUS_OPERATOR",
                                     "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MinusOp, "MinusOp", "UNARY_MINUS_OP");
   MinusOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
   MinusOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ModAssignOp, "ModAssignOp", "MOD_ASSIGN_OP");
   ModAssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   ModAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ModOp, "ModOp", "MOD_OP");
   ModOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
   ModOp.editSubstitute("PRECEDENCE_VALUE", "13");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MultAssignOp, "MultAssignOp", "MULT_ASSIGN_OP");
   MultAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   MultAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(MultiplyOp, "MultiplyOp", "MULT_OP");
   MultiplyOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   MultiplyOp.editSubstitute("PRECEDENCE_VALUE", "13");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(NewExp, "NewExp", "NEW_OP");
   NewExp.setFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
                               "../Grammar/Expression.code");
   NewExp.setFunctionPrototype("HEADER_NEW_OPERATOR_EXPRESSION",
                               "../Grammar/Expression.code");
-  // DQ (1/14/2006): We should not store the type of unary operators but instead
-  // obtain it from the operand directly. NewExp.setDataPrototype     (
-  // "SgType*", "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // NewExp.setDataPrototype     ( "SgType*", "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   NewExp.setDataPrototype("SgType*", "specified_type", "= NULL",
+                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                          NO_TRAVERSAL, NO_DELETE);
+  NewExp.setDataPrototype("SgPointerType*", "expression_type", "= NULL",
+                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                          NO_TRAVERSAL, NO_DELETE);
+  NewExp.setDataPrototype("SgExpression*", "array_bound", "= NULL",
+                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                          DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                          OPTIONAL_TRAVERSAL_MEMBER);
+  NewExp.setDataPrototype("SgNewExp::array_bound_source_form_enum",
+                          "array_bound_source_form", "= e_no_array_bound",
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
   NewExp.setDataPrototype("SgExprListExp*", "placement_args", "= NULL",
@@ -2086,44 +1517,22 @@ void Grammar::setUpExpressions() {
   NewExp.setDataPrototype("bool", "type_id_is_parenthesized", "= false",
                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
-  NewExp.setDataPrototype("bool", "array_bound_is_implicit", "= false",
-                          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                          NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/21/2006): Added pointer to new operator being used (there could be
-  // many implemented) This is NULL if the new operator is compiler generated
-  // (not explicitly declared).
   NewExp.setDataPrototype("SgFunctionDeclaration*", "newOperatorDeclaration",
                           "= NULL", CONSTRUCTOR_PARAMETER,
-                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                          COPY_CONSTRUCTOR_REFERENCE);
+  NewExp.setDataPrototype("unsigned int", "allocation_implicit_argument_count",
+                          "= 1", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                          NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added support for name qualification. NewExp.setDataPrototype (
-  // "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   NewExp.setDataPrototype("int", "name_qualification_length", "= 0",
                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // NewExp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   NewExp.setDataPrototype("bool", "type_elaboration_required", "= false",
                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // NewExp.setDataPrototype("bool","global_qualification_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   NewExp.setDataPrototype("bool", "global_qualification_required", "= false",
                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
@@ -2140,48 +1549,39 @@ void Grammar::setUpExpressions() {
                           "", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the new operator.
   NewExp.setDataPrototype(
       "int", "name_qualification_for_pointer_to_member_class_length", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the new operator.
   NewExp.setDataPrototype(
       "bool", "type_elaboration_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the new operator.
   NewExp.setDataPrototype(
       "bool", "global_qualification_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (2/4/2015): Added C++11 noexcept operator.
   NEW_TERMINAL_MACRO(NoexceptOp, "NoexceptOp", "NOEXCEPT_OP");
-  NoexceptOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                               "../Grammar/Expression.code");
+  NoexceptOp.setFunctionSource(
+      "SOURCE_NOEXCEPT_OPERATOR_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   NoexceptOp.editSubstitute("PRECEDENCE_VALUE", "16");
-  // DQ (2/4/2015): Added noexecpt operator.
   NoexceptOp.setFunctionPrototype("HEADER_NOEXCEPT_OPERATOR",
                                   "../Grammar/Expression.code");
-  NoexceptOp.setDataPrototype("SgExpression*", "operand_expr", "= NULL",
+  NoexceptOp.setDataPrototype("SgExpression*", "operand_expr", "",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-                              OPTIONAL_TRAVERSAL_MEMBER);
+                              REQUIRED_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // C++20 requires-expressions are structural AST.  A raw source string here
   // used to hide failed frontend translation and made every downstream pass
   // blind to local parameters, requirements, and referenced declarations.
   NEW_TERMINAL_MACRO(SimpleRequirement, "SimpleRequirement",
                      "SIMPLE_REQUIREMENT");
   SimpleRequirement.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_SIMPLE_REQUIREMENT_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   SimpleRequirement.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                       "../Grammar/Expression.code");
@@ -2226,7 +1626,7 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(CompoundRequirement, "CompoundRequirement",
                      "COMPOUND_REQUIREMENT");
   CompoundRequirement.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_COMPOUND_REQUIREMENT_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   CompoundRequirement.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                         "../Grammar/Expression.code");
@@ -2269,7 +1669,7 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(NestedRequirement, "NestedRequirement",
                      "NESTED_REQUIREMENT");
   NestedRequirement.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_NESTED_REQUIREMENT_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   NestedRequirement.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                       "../Grammar/Expression.code");
@@ -2280,10 +1680,8 @@ void Grammar::setUpExpressions() {
 
   NEW_TERMINAL_MACRO(RequiresExpr, "RequiresExpr", "REQUIRES_EXPR");
   RequiresExpr.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_REQUIRES_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  RequiresExpr.setFunctionPrototype("HEADER_REQUIRES_EXPRESSION",
-                                    "../Grammar/Expression.code");
   RequiresExpr.setFunctionSource("SOURCE_GET_TYPE_GENERIC",
                                  "../Grammar/Expression.code");
   RequiresExpr.editSubstitute("GENERIC_TYPE", "SgTypeBool");
@@ -2293,20 +1691,33 @@ void Grammar::setUpExpressions() {
       COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   RequiresExpr.setDataPrototype(
       "SgFunctionParameterScope*", "local_parameter_scope", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   RequiresExpr.setDataPrototype("SgExprListExp*", "requirements", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                 OPTIONAL_TRAVERSAL_MEMBER);
+  RequiresExpr.setDataPrototype("SgFunctionParameterList*",
+                                "local_parameter_list_syntax", "= NULL",
+                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(NonrealRefExp, "NonrealRefExp", "NONREAL_REF");
   NonrealRefExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   NonrealRefExp.setFunctionPrototype("HEADER_NONREAL_REF_EXPRESSION",
                                      "../Grammar/Expression.code");
+  // A dependent conversion-function-id owns its written type syntax. It is
+  // not an identifier containing a printable approximation of a Clang type.
+  NonrealRefExp.setDataPrototype(
+      "SgNonrealRefExp::name_kind_enum", "name_kind",
+      "= SgNonrealRefExp::e_ordinary_name", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  NonrealRefExp.setDataPrototype(
+      "SgTypeExpression*", "conversion_type_id", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   NonrealRefExp.setDataPrototype(
       "SgNonrealSymbol*", "symbol", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2328,6 +1739,11 @@ void Grammar::setUpExpressions() {
       "SgTemplateVariableDeclaration*", "resolved_variable_declaration",
       "= NULL", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
+  // Storage-use classification belongs to each reference, not its shared
+  // variable-template specialization.
+  NonrealRefExp.setDataPrototype("bool", "is_non_odr_use", "= false",
+                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                 NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   // Distinguish an ordinary source-only name from a callable whose target is
   // intentionally dependent on template instantiation and ADL. Consumers
   // must not infer this semantic fact merely from a missing resolved edge.
@@ -2367,7 +1783,6 @@ void Grammar::setUpExpressions() {
   NonrealRefExp.setFunctionSource("SOURCE_NONREAL_REFERENCE_GET_TYPE",
                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(NotOp, "NotOp", "NOT_OP");
   NotOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                           "../Grammar/Expression.code");
@@ -2379,7 +1794,6 @@ void Grammar::setUpExpressions() {
   NotOp.editSubstitute("SOURCE_BOOLEAN_GET_TYPE_MEMBER_FUNCTION",
                        "SOURCE_BOOLEAN_GET_TYPE", "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(NotEqualOp, "NotEqualOp", "NE_OP");
   NotEqualOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
@@ -2395,7 +1809,6 @@ void Grammar::setUpExpressions() {
                             "SOURCE_BOOLEAN_GET_TYPE",
                             "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // DQ (12/13/2005): Added support for empty expression (and empty statement).
   NEW_TERMINAL_MACRO(NullExpression, "NullExpression", "NULL_EXPR");
   NullExpression.setFunctionSource(
@@ -2409,17 +1822,9 @@ void Grammar::setUpExpressions() {
       "= SgNullExpression::e_null_expression_unclassified",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // NullExpression.setDataPrototype        ( "SgType*", "expression_type", "=
-  // NULL",
-  //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                 NO_TRAVERSAL, NO_DELETE);
-  // NullExpression.setFunctionSource    ( "SOURCE_DEFAULT_GET_TYPE",
-  // "../Grammar/Expression.code" ); NullExpression.setFunctionSource    (
-  // "SOURCE_EMPTY_SET_TYPE_FUNCTION", "../Grammar/Expression.code" );
   NullExpression.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                    "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // An OpenMP grammar identifier is syntax carried by a directive rather than
   // a C, C++, or Fortran variable reference.  Keep it explicit so parser
   // clients never fabricate unresolved symbols merely to preserve spelling.
@@ -2433,7 +1838,6 @@ void Grammar::setUpExpressions() {
       "std::string", "spelling", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // A frontend-owned semantic reference to a variable declared by OpenMP
   // directive syntax (for example a mapper variable or iterator).  Such a
   // variable has an exact semantic type before the directive parser creates
@@ -2453,7 +1857,6 @@ void Grammar::setUpExpressions() {
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Exact source spelling for an OpenMP clause expression whose semantic AST
   // was built from macro-expanded tokens.  This is deliberately distinct from
   // SgOmpNameExpression: the spelling can be a complete expression or locator
@@ -2468,7 +1871,6 @@ void Grammar::setUpExpressions() {
       "std::string", "spelling", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One semantic induction-clause item.  The enum distinguishes the closed
   // grammar alternatives; labels and expressions are data, never magic tag
   // expressions interpreted by the unparser.
@@ -2492,7 +1894,6 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One apply-clause transformation.  Standard transformations use the kind
   // enum. Extension transformations use the dedicated transformation-name
   // field. A nested apply is represented by its clause subtree rather than
@@ -2525,7 +1926,6 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One init/append_args modifier. Closed alternatives use the enum and only
   // modifiers defined by the OpenMP grammar may own an expression.
   NEW_TERMINAL_MACRO(OmpInitModifier, "OmpInitModifier", "OMP_INIT_MODIFIER");
@@ -2544,7 +1944,6 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Typed ownership boundary for an init clause's ordered modifier sequence.
   // Keeping the container in a dedicated node lets SgOmpInitClause own only
   // singleton traversal successors, as required by ROSETTA's clean model.
@@ -2560,7 +1959,6 @@ void Grammar::setUpExpressions() {
       "SgOmpInitModifierPtrList", "modifiers", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One typed append_args interop operation. The operation node owns the
   // modifier-list wrapper so operation and modifier boundaries cannot be
   // flattened or inferred during unparsing.
@@ -2577,7 +1975,6 @@ void Grammar::setUpExpressions() {
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
       CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // One typed experimental dist-data policy attached to exactly one map
   // item. The optional expression is the block/cyclic argument.
   NEW_TERMINAL_MACRO(OmpMapDistDataPolicy, "OmpMapDistDataPolicy",
@@ -2597,7 +1994,6 @@ void Grammar::setUpExpressions() {
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Canonical ordered map-clause item. It owns the exact locator expression
   // and the policies that follow that item in source; no symbol-keyed side
   // channel is permitted.
@@ -2615,28 +2011,192 @@ void Grammar::setUpExpressions() {
       "SgOmpMapDistDataPolicyPtrList", "policies", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // Exact source syntax for a C/C++ macro invocation together with the
   // expanded semantic expression produced by Clang. The spelling is the
-  // authoritative unparse surface; the traversed child preserves semantic
-  // identity for analyses and transformations.
+  // original unparse surface; the traversed child preserves semantic identity
+  // and records any later changes that require emission of the expansion.
   NEW_TERMINAL_MACRO(MacroExpansionExp, "MacroExpansionExp",
                      "MACRO_EXPANSION_EXPR");
   MacroExpansionExp.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_MACRO_EXPANSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   MacroExpansionExp.editSubstitute("PRECEDENCE_VALUE", "16");
   MacroExpansionExp.setFunctionPrototype("HEADER_MACRO_EXPANSION_EXPRESSION",
                                          "../Grammar/Expression.code");
   MacroExpansionExp.setDataPrototype(
-      "std::string", "spelling", "= \"\"", CONSTRUCTOR_PARAMETER,
+      "std::string", "spelling", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  MacroExpansionExp.setDataPrototype("SgExpression*", "expanded_expression", "",
+                                     CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                     DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+                                     OPTIONAL_TRAVERSAL_MEMBER);
   MacroExpansionExp.setDataPrototype(
-      "SgExpression*", "expanded_expression", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
-      OPTIONAL_TRAVERSAL_MEMBER);
+      "bool", "expansion_was_modified", "= false", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  MacroExpansionExp.setDataPrototype(
+      "uint64_t", "expansion_source_sequence", "= 0", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(OpaqueValueBinding, "OpaqueValueBinding",
+                     "OPAQUE_VALUE_BINDING");
+  OpaqueValueBinding.setFunctionPrototype("HEADER_OPAQUE_VALUE_BINDING",
+                                          "../Grammar/Expression.code");
+  OpaqueValueBinding.setDataPrototype(
+      "SgExpression*", "source_expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE, CLONE_TREE,
+      REQUIRED_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES);
+  OpaqueValueBinding.setDataPrototype(
+      "SgType*", "expression_type", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OpaqueValueBinding.setDataPrototype(
+      "SgCastExp::value_category_enum", "value_category",
+      "= SgCastExp::e_value_category_unclassified", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  OpaqueValueBinding.setDataPrototype(
+      "SgOpaqueValueBinding::object_kind_enum", "object_kind",
+      "= SgOpaqueValueBinding::e_ordinary_object", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  NEW_TERMINAL_MACRO(OpaqueValueReference, "OpaqueValueReference",
+                     "OPAQUE_VALUE_REFERENCE");
+  OpaqueValueReference.setFunctionPrototype("HEADER_OPAQUE_VALUE_REFERENCE",
+                                            "../Grammar/Expression.code");
+  OpaqueValueReference.setDataPrototype(
+      "SgOpaqueValueBinding*", "binding", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+
+  NEW_TERMINAL_MACRO(PseudoObjectExp, "PseudoObjectExp", "PSEUDO_OBJECT_EXPR");
+  PseudoObjectExp.setFunctionPrototype("HEADER_PSEUDO_OBJECT_EXPRESSION",
+                                       "../Grammar/Expression.code");
+  PseudoObjectExp.setDataPrototype(
+      "SgExpression*", "written_expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
+  PseudoObjectExp.setDataPrototype(
+      "SgExprListExp*", "semantic_evaluations", "= nullptr",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE,
+      CLONE_TREE, REQUIRED_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES);
+  PseudoObjectExp.setDataPrototype(
+      "SgExpression*", "result_expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+  PseudoObjectExp.setDataPrototype(
+      "SgOpaqueValueBindingPtrList", "captured_bindings",
+      "= SgOpaqueValueBindingPtrList()", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+  PseudoObjectExp.setDataPrototype("SgType*", "expression_type", "= nullptr",
+                                   CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                   NO_TRAVERSAL, NO_DELETE);
+  PseudoObjectExp.setDataPrototype(
+      "SgCastExp::value_category_enum", "value_category",
+      "= SgCastExp::e_value_category_unclassified", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  PseudoObjectExp.setDataPrototype(
+      "SgOpaqueValueBinding::object_kind_enum", "object_kind",
+      "= SgOpaqueValueBinding::e_ordinary_object", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  PseudoObjectExp.setDataPrototype(
+      "uint64_t", "source_sequence", "= 0", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  NEW_TERMINAL_MACRO(CxxDecompositionRefExp, "CxxDecompositionRefExp",
+                     "CXX_DECOMPOSITION_REF");
+  CxxDecompositionRefExp.setFunctionPrototype(
+      "HEADER_CXX_DECOMPOSITION_REFERENCE", "../Grammar/Expression.code");
+  CxxDecompositionRefExp.setFunctionSource("SOURCE_CXX_DECOMPOSITION_REFERENCE",
+                                           "../Grammar/Expression.code");
+  CxxDecompositionRefExp.setDataPrototype(
+      "SgInitializedName*", "decomposition", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+  CxxDecompositionRefExp.setDataPrototype(
+      "SgType*", "expression_type", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxDecompositionRefExp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
+                                           "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(CxxSubobjectDestruction, "CxxSubobjectDestruction",
+                     "CXX_SUBOBJECT_DESTRUCTION");
+  CxxSubobjectDestruction.setFunctionPrototype(
+      "HEADER_CXX_SUBOBJECT_DESTRUCTION", "../Grammar/Expression.code");
+  CxxSubobjectDestruction.setDataPrototype(
+      "SgMemberFunctionDeclaration*", "destructor_declaration", "= nullptr",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_CONSTRUCTOR_REFERENCE);
+  CxxSubobjectDestruction.setDataPrototype(
+      "SgInitializedName*", "member_target", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+  CxxSubobjectDestruction.setDataPrototype(
+      "SgClassDeclaration*", "base_target", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_CONSTRUCTOR_REFERENCE);
+  CxxSubobjectDestruction.setDataPrototype(
+      "SgCxxSubobjectDestruction::target_kind_enum", "target_kind",
+      "= SgCxxSubobjectDestruction::e_unclassified", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxSubobjectDestruction.setDataPrototype(
+      "SgType*", "expression_type", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxSubobjectDestruction.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
+                                            "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(CxxArrayInitLoop, "CxxArrayInitLoop",
+                     "CXX_ARRAY_INIT_LOOP");
+  CxxArrayInitLoop.setFunctionPrototype("HEADER_CXX_ARRAY_INIT_LOOP",
+                                        "../Grammar/Expression.code");
+  CxxArrayInitLoop.setDataPrototype(
+      "SgCxxArrayInitBinding*", "binding", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      REQUIRED_TRAVERSAL_MEMBER);
+  CxxArrayInitLoop.setDataPrototype(
+      "SgExpression*", "element_initializer", "= nullptr",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      CLONE_PTR, REQUIRED_TRAVERSAL_MEMBER);
+  CxxArrayInitLoop.setDataPrototype(
+      "SgType*", "expression_type", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxArrayInitLoop.setDataPrototype(
+      "uint64_t", "element_count", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxArrayInitLoop.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
+                                     "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(CxxArrayInitReference, "CxxArrayInitReference",
+                     "CXX_ARRAY_INIT_REFERENCE");
+  CxxArrayInitReference.setFunctionPrototype("HEADER_CXX_ARRAY_INIT_REFERENCE",
+                                             "../Grammar/Expression.code");
+  CxxArrayInitReference.setDataPrototype(
+      "SgCxxArrayInitBinding*", "binding", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  CxxArrayInitReference.setDataPrototype(
+      "SgCxxArrayInitReference::reference_kind_enum", "reference_kind",
+      "= SgCxxArrayInitReference::e_common_value", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxArrayInitReference.setDataPrototype(
+      "SgType*", "expression_type", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxArrayInitReference.setDataPrototype(
+      "SgCastExp::value_category_enum", "value_category",
+      "= SgCastExp::e_value_category_unclassified", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxArrayInitReference.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
+                                          "../Grammar/Expression.code");
+
+  NEW_TERMINAL_MACRO(CxxDefaultInitExp, "CxxDefaultInitExp",
+                     "CXX_DEFAULT_INIT_EXP");
+  CxxDefaultInitExp.setFunctionPrototype("HEADER_CXX_DEFAULT_INIT_EXP",
+                                         "../Grammar/Expression.code");
+  CxxDefaultInitExp.setDataPrototype("SgInitializedName*", "source_declaration",
+                                     "= nullptr", CONSTRUCTOR_PARAMETER,
+                                     BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                     NO_DELETE, COPY_DATA);
+  CxxDefaultInitExp.setDataPrototype(
+      "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      REQUIRED_TRAVERSAL_MEMBER);
+  CxxDefaultInitExp.setDataPrototype(
+      "SgCxxDefaultInitExp::source_kind_enum", "source_kind",
+      "= SgCxxDefaultInitExp::e_parameter", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   // A Clang source-location builtin invocation. Preserve the builtin as a
   // typed semantic expression rather than replacing it with a guessed value.
   NEW_TERMINAL_MACRO(SourceLocationBuiltinExp, "SourceLocationBuiltinExp",
@@ -2655,10 +2215,9 @@ void Grammar::setUpExpressions() {
   SourceLocationBuiltinExp.setDataPrototype(
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  SourceLocationBuiltinExp.setFunctionSource("SOURCE_GET_TYPE_CLASS_DECL",
+  SourceLocationBuiltinExp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                              "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // A Fortran common-block designator in an OpenMP or OpenACC variable list.
   // Keep the exact use-site spelling separate from the semantic common-block
   // object. Expanding the designator into member variables loses source syntax
@@ -2676,59 +2235,55 @@ void Grammar::setUpExpressions() {
       "SgCommonBlockObject*", "common_block", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // DQ (7/31/2014): Added support for C++11 nullptr constant value expression
   // (using type nullptr_t).
   NEW_TERMINAL_MACRO(NullptrValExp, "NullptrValExp", "NULLPTR_VAL");
   NullptrValExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  // DQ (7/31/2014): Adding support for nullptr constant value expression.
-  // DQ (7/31/2014): I don't think this need a value.
-  // NullptrValExp.setDataPrototype ( "SgNullptrType*", "value", "= 0",
-  //                               CONSTRUCTOR_PARAMETER,
-  //                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                               NO_DELETE);
   NullptrValExp.setFunctionSource("SOURCE_GET_TYPE_VALUE",
                                   "../Grammar/Expression.code");
   NullptrValExp.editSubstitute("GENERIC_TYPE", "SgTypeNullptr");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(OrOp, "OrOp", "OR_OP");
   OrOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                          "../Grammar/Expression.code");
   OrOp.editSubstitute("PRECEDENCE_VALUE", " 4");
   OrOp.setFunctionPrototype("HEADER_OR_OPERATOR", "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PlusAssignOp, "PlusAssignOp", "PLUS_ASSIGN_OP");
   PlusAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   PlusAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PlusPlusOp, "PlusPlusOp", "PLUSPLUS_OP");
+  PlusPlusOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+                               "../Grammar/Expression.code");
   PlusPlusOp.editSubstitute("PRECEDENCE_VALUE", "15");
   PlusPlusOp.setFunctionPrototype("HEADER_PLUS_PLUS_OPERATOR",
                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PntrArrRefExp, "PntrArrRefExp", "ARRAY_OP");
   PntrArrRefExp.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_POINTER_ARRAY_REFERENCE_POST_CONSTRUCTION",
       "../Grammar/Expression.code");
+  PntrArrRefExp.setDataPrototype("std::optional<long long>",
+                                 "result_storage_size_bytes", "= std::nullopt",
+                                 CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                 NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  PntrArrRefExp.setDataPrototype("std::vector<std::optional<long long>>",
+                                 "subscript_stride_bits", "= {}",
+                                 CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                 NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   PntrArrRefExp.editSubstitute("PRECEDENCE_VALUE", "16");
   PntrArrRefExp.setFunctionPrototype(
       "HEADER_POINTER_ARRAY_REFERENCE_EXPRESSION",
       "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   // DQ (1/31/2009): Added Fortran pointer assignment operator (to support
   // pointer assignment statement).
   NEW_TERMINAL_MACRO(PointerAssignOp, "PointerAssignOp", "POINTER_ASSIGN_OP");
-#endif
   PointerAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
@@ -2736,7 +2291,6 @@ void Grammar::setUpExpressions() {
   PointerAssignOp.setFunctionPrototype("HEADER_POINTER_ASSIGNMENT_OPERATOR",
                                        "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PointerDerefExp, "PointerDerefExp", "DEREF_OP");
   PointerDerefExp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -2745,10 +2299,8 @@ void Grammar::setUpExpressions() {
   PointerDerefExp.setFunctionPrototype("HEADER_POINTER_DEREF_EXPRESSION",
                                        "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(PseudoDestructorRefExp, "PseudoDestructorRefExp",
                      "PSEUDO_DESTRUCTOR_REF");
-#if USE_FORTRAN_IR_NODES
   PseudoDestructorRefExp.editSubstitute("PRECEDENCE_VALUE", " 2");
   PseudoDestructorRefExp.setFunctionPrototype("HEADER_PSEUDO_DESTRUCTOR_REF",
                                               "../Grammar/Expression.code");
@@ -2759,56 +2311,66 @@ void Grammar::setUpExpressions() {
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/18/2020): Adding support for name qualification (see
-  // Cxx11_tests/test2020_56.C).
   PseudoDestructorRefExp.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/18/2020): Adding support for name qualification (see
-  // Cxx11_tests/test2020_56.C).
   PseudoDestructorRefExp.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/18/2020): Adding support for name qualification (see
-  // Cxx11_tests/test2020_56.C).
   PseudoDestructorRefExp.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-  PseudoDestructorRefExp.setFunctionSource("SOURCE_GET_TYPE_CLASS_DECL",
+  PseudoDestructorRefExp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                            "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // SgRangeExp for representing a range like 1:5 or 1:2:5.
   NEW_TERMINAL_MACRO(RangeExp, "RangeExp", "RANGE_EXP");
-  RangeExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                             "../Grammar/Expression.code");
+  RangeExp.setFunctionSource(
+      "SOURCE_RANGE_EXP_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   RangeExp.setFunctionPrototype("HEADER_RANGE_EXP",
                                 "../Grammar/Expression.code");
   RangeExp.setDataPrototype("SgExpression*", "start", "= NULL",
-                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             REQUIRED_TRAVERSAL_MEMBER);
   RangeExp.setDataPrototype("SgExpression*", "end", "= NULL",
-                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             REQUIRED_TRAVERSAL_MEMBER);
   RangeExp.setDataPrototype("SgExpression*", "stride", "= NULL",
-                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             REQUIRED_TRAVERSAL_MEMBER);
   RangeExp.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                              "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(RealPartOp, "RealPartOp", "REAL_PART_OP");
   RealPartOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   RealPartOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(VectorElementExp, "VectorElementExp",
+                     "VECTOR_ELEMENT_EXPR");
+  VectorElementExp.setFunctionPrototype("HEADER_VECTOR_ELEMENT_EXPRESSION",
+                                        "../Grammar/Expression.code");
+  VectorElementExp.setFunctionSource(
+      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
+  VectorElementExp.editSubstitute("PRECEDENCE_VALUE", "16");
+  VectorElementExp.setDataPrototype(
+      "std::vector<unsigned int>", "components", "", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  VectorElementExp.setDataPrototype(
+      "SgVectorElementExp::selector_kind_enum", "selector_kind",
+      "= SgVectorElementExp::e_components", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  VectorElementExp.setDataPrototype(
+      "bool", "is_arrow", "= false", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
   NEW_TERMINAL_MACRO(RefExp, "RefExp", "TYPE_REF");
   RefExp.excludeFunctionPrototype("HEADER_GET_TYPE",
                                   "../Grammar/Expression.code");
@@ -2818,20 +2380,17 @@ void Grammar::setUpExpressions() {
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(RshiftAssignOp, "RshiftAssignOp", "RSHIFT_ASSIGN_OP");
   RshiftAssignOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   RshiftAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(RshiftOp, "RshiftOp", "RSHIFT_OP");
   RshiftOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   RshiftOp.editSubstitute("PRECEDENCE_VALUE", "11");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ScopeOp, "ScopeOp", "SCOPE_OP");
   ScopeOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
@@ -2839,14 +2398,14 @@ void Grammar::setUpExpressions() {
   ScopeOp.setFunctionPrototype("HEADER_SCOPE_OPERATOR",
                                "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ShortVal, "ShortVal", "SHORT_VAL");
   ShortVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
   // URK (08/22/2006): Added string to hold source code constants of integer and
   // character types precisely.
   ShortVal.setDataPrototype("short", "value", "= 0", CONSTRUCTOR_PARAMETER,
-                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                            BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                            NO_DELETE);
   ShortVal.setDataPrototype("std::string", "valueString", "= \"\"",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
@@ -2854,10 +2413,11 @@ void Grammar::setUpExpressions() {
                              "../Grammar/Expression.code");
   ShortVal.editSubstitute("GENERIC_TYPE", "SgTypeShort");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(SizeOfOp, "SizeOfOp", "SIZEOF_OP");
-  SizeOfOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+  SizeOfOp.setFunctionSource("SOURCE_UNARY_TYPE_TRAIT_POST_CONSTRUCTION",
                              "../Grammar/Expression.code");
+  SizeOfOp.setFunctionPrototype("HEADER_UNARY_TYPE_TRAIT_SEMANTICS",
+                                "../Grammar/Expression.code");
   // Now set the precedence values for each leaf of the grammar
   // (where the precedence member function is defined)
   SizeOfOp.editSubstitute("PRECEDENCE_VALUE", "16");
@@ -2867,12 +2427,12 @@ void Grammar::setUpExpressions() {
   // expression edge is therefore optional for traversal; SgSizeOfOp::get_type
   // enforces the cross-field XOR contract directly.
   SizeOfOp.setDataPrototype("SgExpression*", "operand_expr", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             OPTIONAL_TRAVERSAL_MEMBER);
   SizeOfOp.setDataPrototype("SgType*", "operand_type", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   SizeOfOp.setDataPrototype(
       "SgDeclarationStatement*", "type_defining_declaration", "= NULL",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
@@ -2881,26 +2441,21 @@ void Grammar::setUpExpressions() {
   // carry that ABI fact, so the frontend or transformation producer must
   // supply it exactly.
   SizeOfOp.setDataPrototype("SgType*", "expression_type", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
+  SizeOfOp.setDataPrototype("SgExpression::unary_type_trait_kind_enum",
+                            "operator_kind", "= SgExpression::e_sizeof",
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE);
+  SizeOfOp.setDataPrototype("std::optional<Rose::Integer128Value>",
+                            "evaluated_value", "= std::nullopt",
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added support for name qualification. SizeOfOp.setDataPrototype
-  // ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   SizeOfOp.setDataPrototype("int", "name_qualification_length", "= 0",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // SizeOfOp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   SizeOfOp.setDataPrototype("bool", "type_elaboration_required", "= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
@@ -2910,102 +2465,59 @@ void Grammar::setUpExpressions() {
                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // SizeOfOp.setDataPrototype("bool","global_qualification_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   SizeOfOp.setDataPrototype("bool", "global_qualification_required", "= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/12/2019): Adding support for objectless nonstatic data member
-  // references (C++11 feature).
   SizeOfOp.setDataPrototype("bool",
                             "is_objectless_nonstatic_data_member_reference",
                             "= false", NO_CONSTRUCTOR_PARAMETER,
                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // REX: Support sizeof...(pack) via an explicit flag on SizeOfOp.
-  SizeOfOp.setDataPrototype("bool", "is_sizeof_pack", "= false",
-                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (4/15/2019): Let's demonstrate this is possible in the language before
-  // we add support for it (see Cxx11_test/test2019_379.C). DQ (4/15/2019): This
-  // is needed to support pointers to member type specified to the sizeof
-  // operator.
   SizeOfOp.setDataPrototype(
       "int", "name_qualification_for_pointer_to_member_class_length", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the sizeof operator.
   SizeOfOp.setDataPrototype(
       "bool", "type_elaboration_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the sizeof operator.
   SizeOfOp.setDataPrototype(
       "bool", "global_qualification_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (7/25/2020): Adding C++20 spaceship operator support.
   NEW_TERMINAL_MACRO(SpaceshipOp, "SpaceshipOp", "SPACESHIP_OP");
-  // DQ (7/25/2020): Adding C++20 support.
   SpaceshipOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   // DQ (7/25/2020): Adding C++20 support (need to lookup the correct operator
   // precedence, made it the same as AddOp for now).
   SpaceshipOp.editSubstitute("PRECEDENCE_VALUE", "12");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (7/21/2006): Added support for GNU Statement Expression extension.
   NEW_TERMINAL_MACRO(StatementExpression, "StatementExpression", "STMT_EXPR");
-  StatementExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-      "../Grammar/Expression.code");
-  // DQ (7/21/2006): Added support for GNU statement expression extension.
   StatementExpression.editSubstitute("PRECEDENCE_VALUE", "16");
   StatementExpression.setFunctionPrototype("HEADER_STATEMENT_EXPRESSION",
                                            "../Grammar/Expression.code");
   StatementExpression.setDataPrototype(
       "SgStatement*", "statement", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
+      OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_BEFORE_CONSTRUCTOR_DEPENDENCIES);
   // GNU statement-expression typing includes Clang's void and value-category
   // conversions.  Walking the final Sage statement loses those semantics.
   StatementExpression.setDataPrototype(
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(StringVal, "StringVal", "STRING_VAL");
   StringVal.setFunctionPrototype("HEADER_STRING_VALUE_EXPRESSION",
                                  "../Grammar/Expression.code");
-  // DQ (3/25/2006): We can have ROSETTA generate the constructor now that we
-  // use a C++ style std::string
-  // StringVal.setAutomaticGenerationOfConstructor(false);
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // StringVal.setAutomaticGenerationOfDestructor (false);
-
-  // DQ (3/25/2006): This should take a const char (since we don't modified it
-  // and it make for a simpler interface) StringVal.setDataPrototype ( "char*",
-  // "value", "= NULL",
-  //          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //          NO_DELETE);
-  // StringVal.setDataPrototype ( "const char*", "value", "= NULL",
-  //          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //          NO_DELETE);
-  StringVal.setDataPrototype("std::string", "value", "= \"\"",
-                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE);
+  // Store decoded target code units. Source escaping belongs to emission.
+  StringVal.setDataPrototype("SgStringCodeUnitList", "value",
+                             "= SgStringCodeUnitList{}", CONSTRUCTOR_PARAMETER,
+                             NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                             COPY_DATA);
   StringVal.setDataPrototype(
       "SgStringVal::string_literal_encoding_enum", "literal_encoding",
       "= SgStringVal::e_string_encoding_ordinary", NO_CONSTRUCTOR_PARAMETER,
@@ -3019,15 +2531,7 @@ void Grammar::setUpExpressions() {
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // PP (4/25/21) replace usesSingleQuotes and usesDoubleQuotes with
-  //   stringDelimiter (char)
-  //~   StringVal.setDataPrototype ( "bool", "usesSingleQuotes", "= false",
-  //~            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  // NO_DELETE); ~ // DQ (12/23/2007): Added support for distinguishing double
-  // quotes (permits use of sing, double, or un-quoted strings in the
-  // SgFormatItem object). ~   StringVal.setDataPrototype ( "bool",
-  //"usesDoubleQuotes", "= false", ~            NO_CONSTRUCTOR_PARAMETER,
-  // BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Fortran FORMAT items retain a quote, Hollerith, or unquoted delimiter.
   StringVal.setDataPrototype("char", "stringDelimiter", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -3041,15 +2545,8 @@ void Grammar::setUpExpressions() {
   StringVal.setDataPrototype("std::string", "raw_string_payload", "= \"\"",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/17/2010): types for strings need to be handled using a lenght
-  // parameter to the SgTypeString::createType function. For fortran the lenght
-  // can be specified as an expression, but for a literal it has to be a known
-  // value of an integer. StringVal.setFunctionSource              (
-  // "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" );
   StringVal.editSubstitute("GENERIC_TYPE", "SgTypeString");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   NEW_TERMINAL_MACRO(SubscriptExpression, "SubscriptExpression",
                      "SUBSCRIPT_EXPR");
   SubscriptExpression.editSubstitute("PRECEDENCE_VALUE", " 2");
@@ -3067,42 +2564,15 @@ void Grammar::setUpExpressions() {
       "SgExpression*", "stride", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
-  // SubscriptExpression.setFunctionSource ( "SOURCE_EMPTY_SET_TYPE_FUNCTION",
-  // "../Grammar/Expression.code" );
-#endif
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(SubtractOp, "SubtractOp", "SUBT_OP");
   SubtractOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   SubtractOp.editSubstitute("PRECEDENCE_VALUE", "12");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  NEW_TERMINAL_MACRO(SuperExp, "SuperExp", "SUPER_NODE");
-  SuperExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                             "../Grammar/Expression.code");
-  SuperExp.setFunctionPrototype("HEADER_SUPER_EXPRESSION",
-                                "../Grammar/Expression.code");
-  SuperExp.setDataPrototype("SgClassSymbol*", "class_symbol", "= NULL",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
-  SuperExp.setDataPrototype("int", "pobj_super", "= 0", CONSTRUCTOR_PARAMETER,
-                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (12/15/2011): Added support for templates into AST.  It might make sense
-  // at some point to have function ref expressions have a hierarchy rather than
-  // a flat representation as it is now (similar to SgFunctionDeclaration's
-  // hierarchy).
   NEW_TERMINAL_MACRO(TemplateFunctionRefExp, "TemplateFunctionRefExp",
                      "TEMPLATE_FUNCTION_REF");
   TemplateFunctionRefExp.setFunctionPrototype(
       "HEADER_TEMPLATE_FUNCTION_REF_EXPRESSION", "../Grammar/Expression.code");
-  // TemplateFunctionRefExp.setDataPrototype ( "SgTemplateSymbol*", "symbol_i",
-  // "= NULL",
-  //                                   CONSTRUCTOR_PARAMETER,
-  //                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                                   NO_DELETE);
   TemplateFunctionRefExp.setDataPrototype(
       "SgTemplateFunctionSymbol*", "symbol_i", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3114,49 +2584,16 @@ void Grammar::setUpExpressions() {
       "SgFunctionDeclaration*", "semantic_function_declaration", "= NULL",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // DQ (1/14/2006): The function type should be computed from the function
-  // declaration (instead of being stored) Leave the type in the constructor for
-  // storage internally and build a special version of get_type() to access this
-  // value or later compute it directly. FunctionRefExp.setDataPrototype (
-  // "SgFunctionType*"  , "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // TemplateFunctionRefExp.setDataPrototype ( "SgFunctionType*"  ,
-  // "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // The function declaration supplies the function type.
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification.
-  // TemplateFunctionRefExp.setDataPrototype ( "int",
-  // "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   TemplateFunctionRefExp.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateFunctionRefExp.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateFunctionRefExp.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateFunctionRefExp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateFunctionRefExp.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3174,7 +2611,6 @@ void Grammar::setUpExpressions() {
       "SOURCE_TEMPLATE_FUNCTION_REFERENCE_GET_TYPE",
       "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(TemplateMemberFunctionRefExp,
                      "TemplateMemberFunctionRefExp",
                      "TEMPLATE_MEMBER_FUNCTION_REF");
@@ -3185,10 +2621,10 @@ void Grammar::setUpExpressions() {
   TemplateMemberFunctionRefExp.setFunctionPrototype(
       "HEADER_TEMPLATE_MEMBER_FUNCTION_REF_EXPRESSION",
       "../Grammar/Expression.code");
-  // TemplateMemberFunctionRefExp.setDataPrototype ( "SgTemplateSymbol*",
-  // "symbol_i", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  TemplateMemberFunctionRefExp.setDataPrototype(
+      "SgTypeExpression*", "conversion_type_id", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateMemberFunctionRefExp.setDataPrototype(
       "SgTemplateMemberFunctionSymbol*", "symbol_i", "= NULL",
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3201,50 +2637,20 @@ void Grammar::setUpExpressions() {
       "= NULL", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
   TemplateMemberFunctionRefExp.setDataPrototype(
-      "int", "virtual_call", "= 0", CONSTRUCTOR_PARAMETER,
+      "bool", "virtual_call", "= false", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // TemplateMemberFunctionRefExp.setDataPrototype ( "SgFunctionType*",
-  // "function_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // DQ (4/13/2004): Changed false to true in default setting (and removed
-  // resetting of value in
-  //                 post_constructor_initialization(), as suggested by Qing).
   TemplateMemberFunctionRefExp.setDataPrototype(
-      "int", "need_qualifier", "= true", CONSTRUCTOR_PARAMETER,
+      "bool", "need_qualifier", "= true", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification.
-  // TemplateMemberFunctionRefExp.setDataPrototype ( "int",
-  // "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   TemplateMemberFunctionRefExp.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateMemberFunctionRefExp.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateMemberFunctionRefExp.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateMemberFunctionRefExp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateMemberFunctionRefExp.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3262,20 +2668,10 @@ void Grammar::setUpExpressions() {
       "SOURCE_TEMPLATE_MEMBER_FUNCTION_REFERENCE_GET_TYPE",
       "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (11/28/2011): Adding support for template declarations in the AST.
   NEW_TERMINAL_MACRO(TemplateParameterVal, "TemplateParameterVal",
                      "TEMPLATE_PARAMETER_VAL");
-  // DQ (8/6/2013): We need to implement this member function explicitly and
-  // cannot use the default implementation.
   TemplateParameterVal.excludeFunctionPrototype("HEADER_GET_TYPE",
                                                 "../Grammar/Expression.code");
-  // DQ (11/28/2011): Adding template declaration support to the AST.
-  TemplateParameterVal.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-      "../Grammar/Expression.code");
-  // DQ (11/28/2011): Adding template declaration support in the AST (see
-  // test2011_164.C).
   TemplateParameterVal.setFunctionPrototype(
       "HEADER_TEMPLATE_PARAMETER_VALUE_EXPRESSION",
       "../Grammar/Expression.code");
@@ -3283,28 +2679,10 @@ void Grammar::setUpExpressions() {
       "int", "template_parameter_position", "= -1", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateParameterVal.setDataPrototype(
-      "std::string", "valueString", "= \"\"", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgTemplateParameter*", "template_parameter", "= NULL",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
 
-  // DQ (8/6/2013): Added explicit representation for type (required to
-  // disambiguate overloaded template functions.
-  TemplateParameterVal.setDataPrototype(
-      "SgType*", "valueType", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/6/2013): We need to store the type explicitly and implement this
-  // function explicitly to return the explicitly stored type.  This is
-  // important to resolving functions overloaded on template parameters, see
-  // test2013_303.C for an example. DQ (11/28/2011): Adding template declaration
-  // support to the AST. TemplateParameterVal.setFunctionSource   (
-  // "SOURCE_GET_TYPE_GENERIC","../Grammar/Expression.code" ); DQ (8/6/2013): We
-  // need to store the type explicitly and implement this function explicitly to
-  // return the explicitly stored type.  This is important to resolving
-  // functions overloaded on template parameters, see test2013_303.C for an
-  // example. DQ (11/28/2011): Adding template declaration support to the AST.
-  // TemplateParameterVal.editSubstitute   ( "GENERIC_TYPE", "SgTemplateType" );
-  // TemplateParameterVal.editSubstitute   ( "GENERIC_TYPE", "SgTypeInt" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ThisExp, "ThisExp", "THIS_NODE");
   ThisExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
@@ -3316,10 +2694,6 @@ void Grammar::setUpExpressions() {
   ThisExp.setDataPrototype("SgNonrealSymbol*", "nonreal_symbol", "",
                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/14/2006): This is a CC++ specific data member, but it is part of the
-  // constructor argument list so we will remove it later.
-  ThisExp.setDataPrototype("int", "pobj_this", "", CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // The pointee cv-qualifiers come from the enclosing member function and are
   // not recoverable from the class symbol.  Store the exact Clang/producer
   // result type instead of synthesizing a fresh unqualified pointer in
@@ -3328,37 +2702,25 @@ void Grammar::setUpExpressions() {
                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ThrowOp, "ThrowOp", "THROW_OP");
   ThrowOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
   ThrowOp.editSubstitute("PRECEDENCE_VALUE", "15");
   ThrowOp.setFunctionPrototype("HEADER_THROW_OPERATOR",
                                "../Grammar/Expression.code");
-  // DQ (9/19/2004): Added support for rethrow (allows unary operator operand to
-  // be NULL without being interpreted as an error)
+  // A rethrow has no operand.
   ThrowOp.setTraversalCardinalityOverride("operand_i",
                                           OPTIONAL_TRAVERSAL_MEMBER);
   ThrowOp.setDataPrototype("SgThrowOp::e_throw_kind", "throwKind",
                            "= SgThrowOp::unknown_throw", CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (7/24/2014): C11 Generic macros requires additional IR support.  This IR
-  // node is likely to be favor of this newer (more language independent) IR
-  // node.
   NEW_TERMINAL_MACRO(TypeExpression, "TypeExpression", "TYPE_EXPRESSION");
-  // DQ (7/24/2014): Added more general support for type expressions (required
-  // for C11 generic macro support. DQ (7/24/2014): Added more general support
-  // for type expressions (required for C11 generic macro support.
   TypeExpression.setFunctionPrototype("HEADER_TYPE_EXPRESSION",
                                       "../Grammar/Expression.code");
-  // DQ (3/23/2017): We need to change the name to simplify the support for the
-  // virtual get_type() function elsewhere in ROSE (and to support the
-  // "override" keyword).
   TypeExpression.setDataPrototype("SgType*", "represented_type", "= NULL",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
+                                  NO_TRAVERSAL, DELETE_IF_OWNED, CLONE_TREE);
   TypeExpression.setDataPrototype("int", "name_qualification_length", "= 0",
                                   NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
@@ -3368,100 +2730,64 @@ void Grammar::setUpExpressions() {
   TypeExpression.setDataPrototype("bool", "global_qualification_required",
                                   "= false", NO_CONSTRUCTOR_PARAMETER,
                                   NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // TypeExpression.setDataPrototype ( "SgType*", "internal_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // DQ (7/24/2014): Added more general support for type expressions (required
-  // for C11 generic macro support.
   TypeExpression.setFunctionSource(
-      "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+      "SOURCE_TYPE_EXPRESSION_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   TypeExpression.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                    "../Grammar/Expression.code");
-  // DQ (7/24/2014): Added more general support for type expressions (required
-  // for C11 generic macro support.
   TypeExpression.editSubstitute("PRECEDENCE_VALUE", "16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(TypeIdOp, "TypeIdOp", "TYPEID_OP");
-  TypeIdOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
-                             "../Grammar/Expression.code");
-  // DQ (1/26/2013): I think that this is an error (see test2013_42.C).
-  // TypeIdOp.editSubstitute        ( "PRECEDENCE_VALUE", "16" );
+  TypeIdOp.setFunctionSource(
+      "SOURCE_TYPE_ID_OPERATOR_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Expression.code");
   TypeIdOp.editSubstitute("PRECEDENCE_VALUE", "16");
   TypeIdOp.setFunctionPrototype("HEADER_TYPE_ID_OPERATOR",
                                 "../Grammar/Expression.code");
-  TypeIdOp.setDataPrototype("SgExpression*", "operand_expr", "= NULL",
+  TypeIdOp.setDataPrototype("SgExpression*", "operand_expr", "",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             OPTIONAL_TRAVERSAL_MEMBER);
-  TypeIdOp.setDataPrototype("SgType*", "operand_type", "= NULL",
+  TypeIdOp.setDataPrototype("SgType*", "operand_type", "",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
   // Store the typeid expression result type explicitly (const std::type_info&).
   // This avoids name-based lookups and does not depend on operand typing.
-  TypeIdOp.setDataPrototype("SgType*", "expression_type", "= NULL",
+  TypeIdOp.setDataPrototype("SgType*", "expression_type", "",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
+  TypeIdOp.setDataPrototype("bool", "operand_is_evaluated", "",
+                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added support for name qualification. TypeIdOp.setDataPrototype
-  // ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   TypeIdOp.setDataPrototype("int", "name_qualification_length", "= 0",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // TypeIdOp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TypeIdOp.setDataPrototype("bool", "type_elaboration_required", "= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (6/2/2011): Added information required for new name qualification support.
-  // TypeIdOp.setDataPrototype("bool","global_qualification_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TypeIdOp.setDataPrototype("bool", "global_qualification_required", "= false",
                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): Let's demonstrate this is possible in the language before
-  // we add support for it (see Cxx11_test/test2019_380.C). DQ (4/15/2019): This
-  // is needed to support pointers to member type specified to the typeid
-  // operator.
   TypeIdOp.setDataPrototype(
       "int", "name_qualification_for_pointer_to_member_class_length", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the typeid operator.
   TypeIdOp.setDataPrototype(
       "bool", "type_elaboration_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (4/15/2019): This is needed to support pointers to member type specified
-  // to the typeid operator.
   TypeIdOp.setDataPrototype(
       "bool", "global_qualification_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(TypeTraitBuiltinOperator, "TypeTraitBuiltinOperator",
                      "TYPE_TRAIT_BUILTIN_OPERATOR");
-  // DQ (7/12/2013): Added type-trait builtin function support.
   TypeTraitBuiltinOperator.setFunctionPrototype(
       "HEADER_TYPE_TRAIT_BUILTIN_OPERATOR", "../Grammar/Expression.code");
   TypeTraitBuiltinOperator.setDataPrototype(
@@ -3479,48 +2805,11 @@ void Grammar::setUpExpressions() {
       "SgExpressionPtrList", "args", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnaryAddOp, "UnaryAddOp", "UNARY_ADD_OP");
   UnaryAddOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                "../Grammar/Expression.code");
   UnaryAddOp.editSubstitute("PRECEDENCE_VALUE", "15");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
-  // DQ (11/24/2007): Added new IR node for locations in the AST where
-  // post-processing is required.
-  NEW_TERMINAL_MACRO(UnknownArrayOrFunctionReference,
-                     "UnknownArrayOrFunctionReference",
-                     "TEMP_UnknownArrayOrFunctionReference");
-  // DQ (11/24/2007): Added new IR node for locations in the AST where
-  // post-processing is required.
-  UnknownArrayOrFunctionReference.editSubstitute("PRECEDENCE_VALUE", " 2");
-  // DQ (11/24/2007): Added new IR node to handle unknown array reference vs.
-  // function call problem in Fortran. These are translated to either array
-  // references or function calls within post-processing steps.
-
-  // This is the name of the array variable being referenced or the name of the
-  // function (to be decided in post-processing).
-  UnknownArrayOrFunctionReference.setDataPrototype(
-      "std::string", "name", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // This is the variable reference that was constucted already (will be ignored
-  // if we convert this to a function call in post-processing).
-  UnknownArrayOrFunctionReference.setDataPrototype(
-      "SgExpression*", "named_reference", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
-
-  // This is either a subscript list or a function argument list (to be decided
-  // in post-processing).
-  UnknownArrayOrFunctionReference.setDataPrototype(
-      "SgExprListExp*", "expression_list", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
-#endif
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // PL (1/21/2025): Despite C++ not having a signed char literal (only char and
   // unsigned char literals), signed chars can come out of the frontend constant
   // folding. For example, an expression like `(signed char)0` can get constant
@@ -3535,9 +2824,9 @@ void Grammar::setUpExpressions() {
   SignedCharVal.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  SignedCharVal.setDataPrototype("signed char", "value", "= 0",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                 NO_TRAVERSAL, NO_DELETE);
+  SignedCharVal.setDataPrototype(
+      "signed char", "value", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   SignedCharVal.setDataPrototype("std::string", "valueString", "= \"\"",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
@@ -3545,14 +2834,13 @@ void Grammar::setUpExpressions() {
                                   "../Grammar/Expression.code");
   SignedCharVal.editSubstitute("GENERIC_TYPE", "SgTypeSignedChar");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnsignedCharVal, "UnsignedCharVal", "UNSIGNED_CHAR_VAL");
   UnsignedCharVal.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   UnsignedCharVal.setDataPrototype(
       "unsigned char", "value", "= 0", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnsignedCharVal.setDataPrototype(
       "std::string", "valueString", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3560,14 +2848,13 @@ void Grammar::setUpExpressions() {
                                     "../Grammar/Expression.code");
   UnsignedCharVal.editSubstitute("GENERIC_TYPE", "SgTypeUnsignedChar");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnsignedIntVal, "UnsignedIntVal", "UNSIGNED_INT_VAL");
   UnsignedIntVal.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  UnsignedIntVal.setDataPrototype("unsigned int", "value", "= 0",
-                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
+  UnsignedIntVal.setDataPrototype(
+      "unsigned int", "value", "= 0", CONSTRUCTOR_PARAMETER,
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnsignedIntVal.setDataPrototype("std::string", "valueString", "= \"\"",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
@@ -3575,7 +2862,6 @@ void Grammar::setUpExpressions() {
                                    "../Grammar/Expression.code");
   UnsignedIntVal.editSubstitute("GENERIC_TYPE", "SgTypeUnsignedInt");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnsignedLongLongIntVal, "UnsignedLongLongIntVal",
                      "UNSIGNED_LONG_LONG_INT_VAL");
   UnsignedLongLongIntVal.setFunctionSource(
@@ -3583,7 +2869,7 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   UnsignedLongLongIntVal.setDataPrototype(
       "unsigned long long int", "value", "= 0", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnsignedLongLongIntVal.setDataPrototype(
       "std::string", "valueString", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3592,7 +2878,6 @@ void Grammar::setUpExpressions() {
   UnsignedLongLongIntVal.editSubstitute("GENERIC_TYPE",
                                         "SgTypeUnsignedLongLong");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnsignedLongVal, "UnsignedLongVal",
                      "UNSIGNED_LONG_INT_VAL");
   UnsignedLongVal.setFunctionSource(
@@ -3600,7 +2885,7 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   UnsignedLongVal.setDataPrototype(
       "unsigned long", "value", "= 0", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnsignedLongVal.setDataPrototype(
       "std::string", "valueString", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3608,7 +2893,6 @@ void Grammar::setUpExpressions() {
                                     "../Grammar/Expression.code");
   UnsignedLongVal.editSubstitute("GENERIC_TYPE", "SgTypeUnsignedLong");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(UnsignedShortVal, "UnsignedShortVal",
                      "UNSIGNED_SHORT_VAL");
   UnsignedShortVal.setFunctionSource(
@@ -3616,7 +2900,7 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   UnsignedShortVal.setDataPrototype(
       "unsigned short", "value", "= 0", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   UnsignedShortVal.setDataPrototype(
       "std::string", "valueString", "= \"\"", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3624,16 +2908,12 @@ void Grammar::setUpExpressions() {
                                      "../Grammar/Expression.code");
   UnsignedShortVal.editSubstitute("GENERIC_TYPE", "SgTypeUnsignedShort");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if USE_FORTRAN_IR_NODES
   // User defined operator for Fortran named operators.
   NEW_TERMINAL_MACRO(UserDefinedBinaryOp, "UserDefinedBinaryOp",
                      "USER_DEFINED_BINARY_OP");
-#endif
   UserDefinedBinaryOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-#if USE_FORTRAN_IR_NODES
   UserDefinedBinaryOp.editSubstitute("PRECEDENCE_VALUE", " 2");
   UserDefinedBinaryOp.setFunctionPrototype(
       "HEADER_USER_DEFINED_BINARY_EXPRESSION", "../Grammar/Expression.code");
@@ -3643,18 +2923,12 @@ void Grammar::setUpExpressions() {
   UserDefinedBinaryOp.setDataPrototype(
       "SgFunctionSymbol*", "symbol", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-  // UserDefinedBinaryOp.setFunctionSource (
-  // "SOURCE_GET_TYPE_FROM_SYMBOL","../Grammar/Expression.code" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // User defined operator for Fortran named operators.
   NEW_TERMINAL_MACRO(UserDefinedUnaryOp, "UserDefinedUnaryOp",
                      "USER_DEFINED_UNARY_OP");
   UserDefinedUnaryOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-#if USE_FORTRAN_IR_NODES
   UserDefinedUnaryOp.editSubstitute("PRECEDENCE_VALUE", " 2");
   UserDefinedUnaryOp.setFunctionPrototype(
       "HEADER_USER_DEFINED_UNARY_EXPRESSION", "../Grammar/Expression.code");
@@ -3664,12 +2938,6 @@ void Grammar::setUpExpressions() {
   UserDefinedUnaryOp.setDataPrototype(
       "SgFunctionSymbol*", "symbol", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
-  // DQ (10/8/2008): Unclear if this is how we should hancle this!
-  // UserDefinedUnaryOp.setFunctionSource  (
-  // "SOURCE_GET_TYPE_FROM_SYMBOL","../Grammar/Expression.code" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(VarArgCopyOp, "VarArgCopyOp", "VA_COPY_OP");
   VarArgCopyOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
@@ -3686,10 +2954,9 @@ void Grammar::setUpExpressions() {
   VarArgCopyOp.setDataPrototype("SgType*", "expression_type", "= NULL",
                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
-  VarArgCopyOp.setFunctionSource("SOURCE_DEFAULT_GET_TYPE",
+  VarArgCopyOp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                  "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(VarArgEndOp, "VarArgEndOp", "VA_END_OP");
   VarArgEndOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
@@ -3703,12 +2970,9 @@ void Grammar::setUpExpressions() {
   VarArgEndOp.setDataPrototype("SgType*", "expression_type", "= NULL",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
-  VarArgEndOp.setFunctionPrototype("HEADER_VARARG_END_OPERATOR",
-                                   "../Grammar/Expression.code");
-  VarArgEndOp.setFunctionSource("SOURCE_DEFAULT_GET_TYPE",
+  VarArgEndOp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                 "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(VarArgOp, "VarArgOp", "VA_OP");
   VarArgOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                              "../Grammar/Expression.code");
@@ -3742,14 +3006,6 @@ void Grammar::setUpExpressions() {
       "bool", "global_qualification_for_pointer_to_member_class_required",
       "= false", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // DQ (1/17/2008): this was implemented twice (see few lines above)!
-  // DQ (1/16/2006): Added support for custom get_type() member function
-  // (returns explicitly stored type) VarArgOp.setFunctionPrototype (
-  // "HEADER_VARARG_OPERATOR", "../Grammar/Expression.code" );
-  // VarArgOp.setFunctionPrototype ( "HEADER_VARARG_OPERATOR",
-  // "../Grammar/Expression.code" );
-
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(VarArgStartOneOperandOp, "VarArgStartOneOperandOp",
                      "VA_START_ONE_OPERAND_OP");
   VarArgStartOneOperandOp.setFunctionSource(
@@ -3763,21 +3019,14 @@ void Grammar::setUpExpressions() {
   VarArgStartOneOperandOp.setDataPrototype(
       "SgType*", "expression_type", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  VarArgStartOneOperandOp.setFunctionSource("SOURCE_DEFAULT_GET_TYPE",
+  VarArgStartOneOperandOp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                             "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (2/5/2004): The frontend now separates out vararg functions explicitly
-  // in the AST (something I always wanted to see done), so we will do the
-  // same in SAGE. This provides for the best possible vararg handling!
   NEW_TERMINAL_MACRO(VarArgStartOp, "VarArgStartOp", "VA_START_OP");
-  // DQ (2/5/2004): Adding support for varargs in AST
   VarArgStartOp.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
-  // DQ (2/5/2004): Adding support for varargs in AST
   VarArgStartOp.editSubstitute("PRECEDENCE_VALUE", "16");
-  // DQ (2/5/2004): Adding vararg support for SAGE AST
   VarArgStartOp.setFunctionPrototype("HEADER_VARARG_START_OPERATOR",
                                      "../Grammar/Expression.code");
   VarArgStartOp.setDataPrototype("SgExpression*", "lhs_operand", "= NULL",
@@ -3791,31 +3040,20 @@ void Grammar::setUpExpressions() {
   VarArgStartOp.setDataPrototype("SgType*", "expression_type", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
-  // DQ (2/5/2004): Adding vararg support to SAGE
-  VarArgStartOp.setFunctionSource("SOURCE_DEFAULT_GET_TYPE",
+  VarArgStartOp.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                   "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (12/13/2005): Added variant expression to support future patterns
-  // specifications (contains RegEx string specifier for SgStatement IR node).
   NEW_TERMINAL_MACRO(VariantExpression, "VariantExpression", "VARIANT_EXPR");
   VariantExpression.setFunctionSource(
       "SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
       "../Grammar/Expression.code");
   VariantExpression.editSubstitute("PRECEDENCE_VALUE", "16");
-  // VariantExpression.setDataPrototype        ( "SgType*", "expression_type",
-  // "= NULL",
-  //                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                 NO_TRAVERSAL, NO_DELETE);
-  // VariantExpression.setFunctionSource ( "SOURCE_DEFAULT_GET_TYPE",
-  // "../Grammar/Expression.code" ); VariantExpression.setFunctionSource (
-  // "SOURCE_EMPTY_SET_TYPE_FUNCTION", "../Grammar/Expression.code" );
-  // VariantExpression.editSubstitute    ( "GENERIC_TYPE", "SgTypeDefault" );
-  VariantExpression.setFunctionSource("SOURCE_GET_TYPE_GENERIC",
+  VariantExpression.setDataPrototype(
+      "SgType*", "expression_type", "", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  VariantExpression.setFunctionSource("SOURCE_EXACT_EXPRESSION_GET_TYPE",
                                       "../Grammar/Expression.code");
-  VariantExpression.editSubstitute("GENERIC_TYPE", "SgTypeDefault");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // This function sets up the type system for the grammar.  In this case it
   // implements the C++ grammar, but this will be modified to permit all
   // grammars to contain elements of the C++ grammar.  Modified grammars will
@@ -3831,53 +3069,23 @@ void Grammar::setUpExpressions() {
   VarRefExp.setFunctionPrototype("HEADER_VAR_REF_EXPRESSION",
                                  "../Grammar/Expression.code");
 
-  // DQ (11/4/2015): The set_* access function should not mark set the
-  // isModified flag. VarRefExp.setDataPrototype ( "SgVariableSymbol*",
-  // "symbol", "= NULL",
-  //                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                              NO_TRAVERSAL, NO_DELETE);
+  // Changing the symbol must not mark the AST as modified.
   VarRefExp.setDataPrototype("SgVariableSymbol*", "symbol", "= NULL",
+                             CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE,
+                             COPY_CONSTRUCTOR_REFERENCE);
+  VarRefExp.setDataPrototype("bool", "is_non_odr_use", "= false",
                              CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/22/2011): Double checked and this was marked as NO_TRAVERSAL in
-  // master (so mark it as such so that I can pass the existing tests).  I am
-  // trying to pass the existing tests and implement the new changes to support
-  // originalExpressionTree handling gradually so that I can identify what
-  // changes are breaking a few of the existing tests.
-  // DQ (9/17/2011): Put back the traversal over the originalExpressionTree
-  // (because it will be set to NULL in post processing). DQ (9/16/2011):
-  // Modified this to specify NO_TRAVERSAL. DQ (2/6/2011): Added reference to
-  // expression tree for unfolded constant expressions (see comment above).
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added support for name qualification.
-  // VarRefExp.setDataPrototype ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   VarRefExp.setDataPrototype("int", "name_qualification_length", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // VarRefExp.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   VarRefExp.setDataPrototype("bool", "type_elaboration_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // VarRefExp.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   VarRefExp.setDataPrototype("bool", "global_qualification_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -3893,8 +3101,6 @@ void Grammar::setUpExpressions() {
   VarRefExp.setFunctionSource("SOURCE_GET_TYPE_FROM_SYMBOL",
                               "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (2/14/2019): Added support for C++14 void values.
   NEW_TERMINAL_MACRO(VoidVal, "VoidVal", "VOID_VAL");
   VoidVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                             "../Grammar/Expression.code");
@@ -3902,14 +3108,12 @@ void Grammar::setUpExpressions() {
                             "../Grammar/Expression.code");
   VoidVal.editSubstitute("GENERIC_TYPE", "SgTypeVoid");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(WcharVal, "WcharVal", "WCHAR_VAL");
-  // This stores values such as L'ab' where as a SgCharVal would store 'x'.
-  WcharVal.setFunctionPrototype("HEADER_WCHAR_VALUE_EXPRESSION",
-                                "../Grammar/Expression.code");
-  WcharVal.setDataPrototype("unsigned long", "valueUL", "= 0",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE);
+  WcharVal.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
+                             "../Grammar/Expression.code");
+  WcharVal.setDataPrototype("int64_t", "value", "= 0", CONSTRUCTOR_PARAMETER,
+                            BUILD_LITERAL_VALUE_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                            NO_DELETE);
   WcharVal.setDataPrototype("std::string", "valueString", "= \"\"",
                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
@@ -3917,13 +3121,11 @@ void Grammar::setUpExpressions() {
                              "../Grammar/Expression.code");
   WcharVal.editSubstitute("GENERIC_TYPE", "SgTypeWchar");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(XorAssignOp, "XorAssignOp", "XOR_ASSIGN_OP");
   XorAssignOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
   XorAssignOp.editSubstitute("PRECEDENCE_VALUE", " 2");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // SIMD operators
   NEW_TERMINAL_MACRO(SIMDLoad, "SIMDLoad", "SIMD_LOAD");
   NEW_TERMINAL_MACRO(SIMDBroadcast, "SIMDBroadcast", "SIMD_BROADCAST");
@@ -3931,7 +3133,6 @@ void Grammar::setUpExpressions() {
   NEW_TERMINAL_MACRO(SIMDPartialStore, "SIMDPartialStore",
                      "SIMD_PARTIAL_STORE");
   NEW_TERMINAL_MACRO(SIMDScalarStore, "SIMDScalarStore", "SIMD_SCALAR_STORE");
-  // NEW_TERMINAL_MACRO (SIMDSVAddV, "SIMDSVAddV", "SIMD_SVADDV");
 
   NEW_TERMINAL_MACRO(SIMDGather, "SIMDGather", "SIMD_GATHER");
   NEW_TERMINAL_MACRO(SIMDExplicitGather, "SIMDExplicitGather",
@@ -3963,14 +3164,9 @@ void Grammar::setUpExpressions() {
   SIMDExplicitGather.editSubstitute("PRECEDENCE_VALUE", "16");
   SIMDScatter.editSubstitute("PRECEDENCE_VALUE", "16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   //                                  Nonterminal classes in reverse
   //                                  hierarchical order
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_NONTERMINAL_MACRO(
       CompoundAssignOp,
       PlusAssignOp | MinusAssignOp | AndAssignOp | IorAssignOp | MultAssignOp |
@@ -3985,7 +3181,6 @@ void Grammar::setUpExpressions() {
   CompoundAssignOp.setFunctionPrototype("HEADER_COMPOUND_ASSIGNMENT_OPERATOR",
                                         "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_NONTERMINAL_MACRO(MemberAccessExp,
                         ArrowExp | DotExp | DotStarOp | ArrowStarOp,
                         "MemberAccessExp", "MEMBER_ACCESS_EXP", false);
@@ -3994,7 +3189,6 @@ void Grammar::setUpExpressions() {
       "../Grammar/Expression.code");
   MemberAccessExp.editSubstitute("PRECEDENCE_VALUE", "16");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_NONTERMINAL_MACRO(
       BinaryOp,
       MemberAccessExp | EqualityOp | LessThanOp | GreaterThanOp | NotEqualOp |
@@ -4022,11 +3216,11 @@ void Grammar::setUpExpressions() {
   BinaryOp.setFunctionPrototype("HEADER_BINARY_EXPRESSION",
                                 "../Grammar/Expression.code");
   BinaryOp.setDataPrototype("SgExpression*", "lhs_operand_i", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             REQUIRED_TRAVERSAL_MEMBER);
   BinaryOp.setDataPrototype("SgExpression*", "rhs_operand_i", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                             REQUIRED_TRAVERSAL_MEMBER);
   // Every semantic binary expression owns its exact frontend-computed result
@@ -4034,26 +3228,15 @@ void Grammar::setUpExpressions() {
   // subtraction, member-pointer application, and language rules can all change
   // the result independently of either operand.
   BinaryOp.setDataPrototype("SgType*", "expression_type", "",
-                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                            CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                             NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/22/2011): Double checked and this was marked as NO_TRAVERSAL in
-  // master (so mark it as such so that I can pass the existing tests).  I am
-  // trying to pass the existing tests and implement the new changes to support
-  // originalExpressionTree handling gradually so that I can identify what
-  // changes are breaking a few of the existing tests.
-  // DQ (9/17/2011): Put back the traversal over the originalExpressionTree
-  // (because it will be set to NULL in post processing). DQ (9/16/2011):
-  // Modified this to specify NO_TRAVERSAL. DQ (2/6/2011): Added reference to
-  // expression tree for unfolded constant expressions (see comment above).
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // TV (06/06/13) : CudaKernelCall are now considered to be a FunctionCall
   NEW_NONTERMINAL_MACRO(FunctionCallExp, CudaKernelCallExp, "FunctionCallExp",
                         "FUNC_CALL", true);
   FunctionCallExp.setFunctionPrototype("HEADER_FUNCTION_CALL_EXPRESSION",
                                        "../Grammar/Expression.code");
-  // FunctionCallExp.editSubstitute       ( "LIST_FUNCTION_RETURN_TYPE", "void"
-  // ); DQ (4/8/2013): Added support for specification of operator vs.
+  // Support specification of operator vs.
   // non-operator syntax ("x+y" instead of "operator+(x,y)"). This is relevant
   // for generated code in some cases (has different function evaluation rules).
   // See test2013_100.C. ROSE has historically defaulted to using the operator
@@ -4061,25 +3244,23 @@ void Grammar::setUpExpressions() {
   // test2013_100.C demonstrates.
   FunctionCallExp.setDataPrototype(
       "bool", "uses_operator_syntax", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   FunctionCallExp.setDataPrototype(
       "SgFunctionCallExp::source_syntax_enum", "source_syntax",
       "= SgFunctionCallExp::e_source_function_call", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   FunctionCallExp.setDataPrototype(
       "SgFunctionCallExp::source_operator_surface_enum",
       "source_operator_surface", "= SgFunctionCallExp::e_no_operator_surface",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   FunctionCallExp.setDataPrototype(
       "SgFunctionCallExp::source_operator_callee_form_enum",
       "source_operator_callee_form",
       "= SgFunctionCallExp::e_no_operator_callee_form",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   FunctionCallExp.setDataPrototype(
       "SgUnsignedCharList", "source_operator_operand_roles", "",
@@ -4091,19 +3272,26 @@ void Grammar::setUpExpressions() {
   // means that this call was not written with literal syntax.
   FunctionCallExp.setDataPrototype(
       "SgName", "source_user_defined_literal_suffix", "= \"\"",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // Source operands of a UDL are lexical syntax, not the semantic parameters
   // passed to its literal-operator function.  Keep them under a separate edge
   // so raw and template UDLs do not corrupt the semantic call arity.
   FunctionCallExp.setDataPrototype(
-      "SgExprListExp*", "source_user_defined_literal_operands", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      "SgCxxLiteralTokenList*", "source_user_defined_literal_operands",
+      "= NULL", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   FunctionCallExp.setDataPrototype(
       "SgUnsignedCharList", "source_user_defined_literal_suffix_roles", "",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+
+  FunctionCallExp.setDataPrototype(
+      "uint64_t", "source_user_defined_literal_sequence", "= 0",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FunctionCallExp.setDataPrototype(
+      "bool", "source_user_defined_literal_was_modified", "= false",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE);
 
   //               x.init(1,2,3) and init(x, 1, 2, 4)
   //               the flag indicates if the call was parsed/ should be unparsed
@@ -4112,18 +3300,8 @@ void Grammar::setUpExpressions() {
       "bool", "usesObjectCallSyntax", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (7/12/2013): Added new IR nodes to support new type of function call
-  // (builtin functions used for type trait support in later versions of GNU and
-  // other compilers).  For more details see:
-  // http://gcc.gnu.org/onlinedocs/gcc/Type-Traits.html These are required to
-  // support builtin type-trait functions used by newer compilers and some STL
-  // code. These builtin functions take types as parameters and sometimes return
-  // types as well. They require an implementation in ROSE to support analysis.
   NEW_NONTERMINAL_MACRO(CallExpression, FunctionCallExp, "CallExpression",
                         "CALL_EXPRESSION", true);
-  // NEW_NONTERMINAL_MACRO (CallExpression,FunctionCallExp |
-  // TypeTraitBuiltinOperator,"CallExpression","CALL_EXPRESSION", true);
   CallExpression.setFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
                                       "../Grammar/Expression.code");
   CallExpression.setFunctionPrototype("HEADER_CALL_EXPRESSION",
@@ -4141,16 +3319,10 @@ void Grammar::setUpExpressions() {
                                   DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                                   OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (1/14/2006): We should not store the type of unary operators but instead
-  // obtain it from the operand directly. CallExpression.setDataPrototype (
-  // "SgType*", "expression_type", "= NULL",
-  //        CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   CallExpression.setDataPrototype("SgType*", "expression_type", "= NULL",
                                   CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                   NO_TRAVERSAL, NO_DELETE);
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   NEW_TERMINAL_MACRO(ExprListExp, "ExprListExp", "EXPR_LIST");
   ExprListExp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                                 "../Grammar/Expression.code");
@@ -4162,19 +3334,32 @@ void Grammar::setUpExpressions() {
   ExprListExp.setDataPrototype("SgExpressionPtrList", "expressions", "",
                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                DEF_TRAVERSAL, NO_DELETE);
+  ExprListExp.setDataPrototype(
+      "source_form_enum", "source_form", "= e_expression_list_plain",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   ExprListExp.editSubstitute("HEADER_LIST_DECLARATIONS",
                              "HEADER_LIST_FUNCTIONS",
                              "../Grammar/Expression.code");
-  // ExprListExp.editSubstitute       ( "LIST_DATA_TYPE", "Expression" );
   ExprListExp.editSubstitute("LIST_NAME", "expression");
   ExprListExp.setFunctionSource("SOURCE_SYNTAX_ONLY_GET_TYPE",
                                 "../Grammar/Expression.code");
 
-  ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+  NEW_TERMINAL_MACRO(FortranDataInitializer, "FortranDataInitializer",
+                     "FORTRAN_DATA_INIT");
+  FortranDataInitializer.setFunctionPrototype("HEADER_FORTRAN_DATA_INITIALIZER",
+                                              "../Grammar/Expression.code");
+  FortranDataInitializer.setFunctionSource("SOURCE_FORTRAN_DATA_INITIALIZER",
+                                           "../Grammar/Expression.code");
+  FortranDataInitializer.setDataPrototype(
+      "SgDataStatementValuePtrList", "values", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
+  FortranDataInitializer.setDataPrototype(
+      "SgType*", "expression_type", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   NEW_NONTERMINAL_MACRO(Initializer,
                         AggregateInitializer | ConstructorInitializer |
                             AssignInitializer | DesignatedInitializer |
-                            BracedInitializer,
+                            BracedInitializer | FortranDataInitializer,
                         "Initializer", "EXPR_INIT", false);
   Initializer.excludeFunctionPrototype("HEADER_GET_TYPE",
                                        "../Grammar/Expression.code");
@@ -4184,6 +3369,8 @@ void Grammar::setUpExpressions() {
                                           "../Grammar/Expression.code");
   Initializer.excludeFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
                                        "../Grammar/Expression.code");
+  FortranDataInitializer.excludeFunctionPrototype("HEADER_GET_NEXT_EXPRESSION",
+                                                  "../Grammar/Expression.code");
   Initializer.setFunctionPrototype("HEADER_INITIALIZER_EXPRESSION",
                                    "../Grammar/Expression.code");
   // DQ (11/6/2014): This is C++11 syntax for direct brace initalization (e.g.
@@ -4192,14 +3379,13 @@ void Grammar::setUpExpressions() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  NEW_NONTERMINAL_MACRO(
-      UnaryOp,
-      ExpressionRoot | MinusOp | UnaryAddOp | NotOp | PointerDerefExp |
-          AddressOfOp | MinusMinusOp | PlusPlusOp | BitComplementOp | CastExp |
-          ThrowOp | RealPartOp | ImagPartOp | ConjugateOp | UserDefinedUnaryOp,
-      "UnaryOp", "UNARY_EXPRESSION", false);
+  NEW_NONTERMINAL_MACRO(UnaryOp,
+                        ExpressionRoot | MinusOp | UnaryAddOp | NotOp |
+                            PointerDerefExp | AddressOfOp | MinusMinusOp |
+                            PlusPlusOp | BitComplementOp | CastExp | ThrowOp |
+                            RealPartOp | ImagPartOp | ConjugateOp |
+                            UserDefinedUnaryOp | VectorElementExp,
+                        "UnaryOp", "UNARY_EXPRESSION", false);
   UnaryOp.setFunctionPrototype("HEADER_EXTRA_FUNCTIONS",
                                "../Grammar/Expression.code");
   // get_type is included directly within UnaryOp and BinaryOp
@@ -4230,24 +3416,19 @@ void Grammar::setUpExpressions() {
   UnaryOp.setDataPrototype("SgType*", "expression_type", "",
                            CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  UnaryOp.setDataPrototype("SgUnaryOp::Sgop_mode", "mode", "= prefix",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+  UnaryOp.setDataPrototype("SgUnaryOp::Sgop_mode", "mode", "",
+                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  // MK: UnaryOp.excludeDataPrototype ( "SgUnaryOp::Sgop_mode", "mode", "=
-  // prefix");
 
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (11/21/2017): This was removed in favor of using the SgLabelRefExp.
-  // DQ (11/21/2017): Added support for label address value (see test2017_73.C).
   NEW_NONTERMINAL_MACRO(
       ValueExp,
       BoolValExp | StringVal | ShortVal | CharVal | SignedCharVal |
           UnsignedCharVal | WcharVal | UnsignedShortVal | IntVal | EnumVal |
-          UnsignedIntVal | LongIntVal | LongLongIntVal |
-          UnsignedLongLongIntVal | UnsignedLongVal | FloatVal | DoubleVal |
-          LongDoubleVal | ComplexVal | TemplateParameterVal | NullptrValExp |
-          Char16Val | Char32Val | Float80Val | Float128Val | BFloat16Val |
-          Float16Val | Float32Val | Float64Val | VoidVal,
+          UnsignedIntVal | LongIntVal | LongLongIntVal | Integer128Val |
+          FortranBOZVal | UnsignedLongLongIntVal | UnsignedLongVal | FloatVal |
+          DoubleVal | LongDoubleVal | ComplexVal | TemplateParameterVal |
+          NullptrValExp | Char16Val | Char32Val | Float80Val | Float128Val |
+          BFloat16Val | Float16Val | Float32Val | Float64Val | VoidVal,
       "ValueExp", "ValueExpTag", false);
 
   ValueExp.excludeFunctionPrototype("HEADER_GET_TYPE",
@@ -4259,60 +3440,40 @@ void Grammar::setUpExpressions() {
   ValueExp.setDataPrototype(
       "SgValueExp::literal_spelling_form_enum", "literal_spelling_form",
       "= SgValueExp::e_literal_spelling_unclassified", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // Most C and C++ literal node classes encode their type directly.  Other
   // source languages, notably Fortran, attach semantic selectors such as KIND
   // that cannot be reconstructed from the payload carrier class.  Preserve
   // that exact frontend type independently from the carrier and its spelling.
   ValueExp.setDataPrototype("SgType*", "literal_type", "= NULL",
                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                            NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-  // DQ (9/23/2011): Modified this to not be traversed.  The traversal leads
-  // to an inconsistant AST (incrementally applying fixes). DQ (9/22/2011):
-  // Double checked and this was marked as DEF_TRAVERSAL in master (so we
-  // don't have to change this case). DQ (9/17/2011): Put back the traversal
-  // over the originalExpressionTree (because it will be set to NULL in post
-  // processing). DQ (9/16/2011): Modified this to not be traversed.  The
-  // traversal leads to an inconsistant AST We now want to select two modes
-  // of consistant AST (using or not use the originalExpressionTree). DQ
-  // (2/7/2011): Moved this to the SgExpression level in the IR node
-  // hierarchy because it requires more general support. DQ (6/19/2006):
-  // Changed name of data member to be consitant with more general use in
-  // SgCastExp DQ (11/9/2005): Added reference to expression tree for
-  // original unfolded constant expressions. Constant folding allows us to
-  // ignore this subtree, but it is here to to permit the original source
-  // code to be faithfully represented.
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // DQ (9/4/2013): Added compound literal support.
-  // DQ (7/12/2013): Moved the TypeTraitBuiltinOperator to be derived from
-  // Expression.
+                            NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   NEW_NONTERMINAL_MACRO(
       Expression,
       UnaryOp | BinaryOp | ExprListExp | VarRefExp | ClassNameRefExp |
           FunctionRefExp | MemberFunctionRefExp | ValueExp | CallExpression |
-          SizeOfOp | SuperExp | TypeIdOp | ConditionalExp | NewExp | DeleteExp |
-          ThisExp | RefExp | Initializer | VarArgStartOp | VarArgOp |
-          VarArgEndOp | VarArgCopyOp | VarArgStartOneOperandOp |
-          NullExpression | OmpNameExpression | OmpDirectiveLocalRefExp |
-          OmpSourceExpression | OmpInductionItem | OmpApplyTransformation |
-          OmpInitModifier | OmpInitModifierList | OmpAppendArgsOperation |
-          OmpMapDistDataPolicy | OmpMapItem | MacroExpansionExp |
-          SourceLocationBuiltinExp | FortranCommonBlockRefExp |
-          VariantExpression | SubscriptExpression | ColonShapeExp |
-          AsteriskShapeExp | AssumedRankExp |
-          /*UseOnlyExpression |*/ ImpliedDo |
-          /* UseRenameExpression   | */ StatementExpression | AsmOp |
-          LabelRefExp | ActualArgumentExpression |
-          UnknownArrayOrFunctionReference | PseudoDestructorRefExp |
-          CAFCoExpression | CAFImageSelectorExp |
-          CudaKernelExecConfig | /* TV (04/22/2010): CUDA support */
-          TemplateFunctionRefExp | TemplateMemberFunctionRefExp | AlignOfOp |
-          RangeExp | TypeTraitBuiltinOperator | CompoundLiteralExp |
-          TypeExpression | ClassExp | FunctionParameterRefExp | LambdaExp |
-          NoexceptOp | RequiresExpr | SimpleRequirement | TypeRequirement |
-          CompoundRequirement | RequirementSubstitutionFailure |
-          NestedRequirement | NonrealRefExp | FoldExpression | Designator |
-          PackExpansionExpr | AwaitExpression | ChooseExpression,
+          SizeOfOp | TypeIdOp | ConditionalExp | NewExp | DeleteExp | ThisExp |
+          RefExp | Initializer | VarArgStartOp | VarArgOp | VarArgEndOp |
+          VarArgCopyOp | VarArgStartOneOperandOp | NullExpression |
+          OmpNameExpression | OmpDirectiveLocalRefExp | OmpSourceExpression |
+          OmpInductionItem | OmpApplyTransformation | OmpInitModifier |
+          OmpInitModifierList | OmpAppendArgsOperation | OmpMapDistDataPolicy |
+          OmpMapItem | MacroExpansionExp | OpaqueValueBinding |
+          OpaqueValueReference | PseudoObjectExp | CxxSubobjectDestruction |
+          CxxDecompositionRefExp | CxxArrayInitLoop | CxxArrayInitReference |
+          CxxDefaultInitExp | SourceLocationBuiltinExp |
+          FortranCommonBlockRefExp | VariantExpression | SubscriptExpression |
+          ColonShapeExp | AsteriskShapeExp | AssumedRankExp | ImpliedDo |
+          StatementExpression | AsmOp | LabelRefExp | ActualArgumentExpression |
+          PseudoDestructorRefExp | CAFCoExpression | CAFImageSelectorExp |
+          CudaKernelExecConfig | TemplateFunctionRefExp |
+          TemplateMemberFunctionRefExp | AlignOfOp | RangeExp |
+          TypeTraitBuiltinOperator | CompoundLiteralExp | TypeExpression |
+          FunctionParameterRefExp | LambdaExp | NoexceptOp | RequiresExpr |
+          SimpleRequirement | TypeRequirement | CompoundRequirement |
+          RequirementSubstitutionFailure | NestedRequirement | NonrealRefExp |
+          FoldExpression | Designator | PackExpansionExpr | AwaitExpression |
+          ChooseExpression,
       "Expression", "ExpressionTag", false);
 
   // DQ (5/20/2004): Add need_paren to all expression objects so that we can
@@ -4344,6 +3505,19 @@ void Grammar::setUpExpressions() {
       "SgExpression::semantic_wrapper_mask_enum", "semantic_wrapper_mask",
       "= SgExpression::e_no_semantic_wrapper", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  Expression.setDataPrototype("SgMemberFunctionDeclaration*",
+                              "bound_temporary_destructor", "= nullptr",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
+  Expression.setDataPrototype("SgExpression::temporary_storage_duration_enum",
+                              "materialized_storage_duration",
+                              "= SgExpression::e_temporary_storage_none",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE);
+  Expression.setDataPrototype("SgInitializedName*",
+                              "materialized_lifetime_owner", "= nullptr",
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
   // Every expression kind can be the canonical semantic owner of a distinct
   // source-spelled expression tree.  Keeping this edge only on a historical
@@ -4356,8 +3530,8 @@ void Grammar::setUpExpressions() {
                               NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
                               CLONE_TREE);
 
-  // Flang folds Fortran KIND/LEN selector expressions during semantic
-  // analysis. Preserve that exact integer meaning on the source selector root
+  // Flang folds Fortran KIND/LEN selectors and DATA repeat expressions during
+  // semantic analysis. Preserve that exact integer meaning on the source root
   // while retaining the original typed expression tree for direct emission.
   Expression.setDataPrototype("bool",
                               "fortran_integer_constant_value_is_available",
@@ -4367,14 +3541,10 @@ void Grammar::setUpExpressions() {
                               "= 0", NO_CONSTRUCTOR_PARAMETER,
                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // Expression.setSubTreeFunctionPrototype ( "HEADER", "../Grammar/Common.code"
-  // ); Expression.excludeFunctionPrototype    ( "HEADER",
-  // "../Grammar/Common.code" );
-
   Expression.setFunctionPrototype("HEADER", "../Grammar/Expression.code");
 
   Expression.setDataPrototype("Sg_File_Info*", "operatorPosition", "= NULL",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
 
   Expression.setDataPrototype("SgExpression*", "alternativeExpr", "= nullptr",
@@ -4388,17 +3558,10 @@ void Grammar::setUpExpressions() {
   Expression.excludeFunctionPrototype("HEADER_GET_TYPE",
                                       "../Grammar/Expression.code");
 
-  // This is the easiest solution, then where any
-  // post_construction_initialization() function was ment to call the base class
-  // post_construction_initialization() function, we just do so directly in
-  // thederived class post_construction_initialization() function. MK: the
-  // following two function calls could be wrapped into a single one:
   Expression.setFunctionPrototype("HEADER_POST_CONSTRUCTION_INITIALIZATION",
                                   "../Grammar/Expression.code");
   Expression.setSubTreeFunctionPrototype(
       "HEADER_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code");
-  // Expression.excludeFunctionPrototype (
-  // "HEADER_POST_CONSTRUCTION_INITIALIZATION", "../Grammar/Expression.code" );
 
   // SIMD operators
   SIMDBinaryOp.setFunctionPrototype("HEADER_EXTRA_FUNCTIONS",
@@ -4413,75 +3576,39 @@ void Grammar::setUpExpressions() {
 
   SIMDAddOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  SIMDAddOp.setFunctionPrototype("HEADER_SIMD_ADD_OP",
-                                 "../Grammar/Expression.code");
 
   SIMDSubOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  SIMDSubOp.setFunctionPrototype("HEADER_SIMD_SUB_OP",
-                                 "../Grammar/Expression.code");
 
   SIMDMulOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  SIMDMulOp.setFunctionPrototype("HEADER_SIMD_MUL_OP",
-                                 "../Grammar/Expression.code");
 
   SIMDDivOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  SIMDDivOp.setFunctionPrototype("HEADER_SIMD_DIV_OP",
-                                 "../Grammar/Expression.code");
 
   SIMDFmaOp.setFunctionSource("SOURCE_EMPTY_POST_CONSTRUCTION_INITIALIZATION",
                               "../Grammar/Expression.code");
-  SIMDFmaOp.setFunctionPrototype("HEADER_SIMD_FMA_OP",
-                                 "../Grammar/Expression.code");
 
-  SIMDLoad.setFunctionPrototype("HEADER_SIMD_LOAD",
-                                "../Grammar/Expression.code");
   SIMDLoad.setFunctionSource("SOURCE_SIMD_LOAD", "../Grammar/Expression.code");
 
-  SIMDBroadcast.setFunctionPrototype("HEADER_SIMD_BROADCAST",
-                                     "../Grammar/Expression.code");
   SIMDBroadcast.setFunctionSource("SOURCE_SIMD_BROADCAST",
                                   "../Grammar/Expression.code");
 
-  SIMDStore.setFunctionPrototype("HEADER_SIMD_STORE",
-                                 "../Grammar/Expression.code");
   SIMDStore.setFunctionSource("SOURCE_SIMD_STORE",
                               "../Grammar/Expression.code");
 
-  SIMDPartialStore.setFunctionPrototype("HEADER_SIMD_PARTIAL_STORE",
-                                        "../Grammar/Expression.code");
   SIMDPartialStore.setFunctionSource("SOURCE_SIMD_PARTIAL_STORE",
                                      "../Grammar/Expression.code");
 
-  SIMDScalarStore.setFunctionPrototype("HEADER_SIMD_SCALAR_STORE",
-                                       "../Grammar/Expression.code");
   SIMDScalarStore.setFunctionSource("SOURCE_SIMD_SCALAR_STORE",
                                     "../Grammar/Expression.code");
 
-  // SIMDSVAddV.setFunctionPrototype ( "HEADER_SIMD_SVADDV",
-  // "../Grammar/Expression.code" ); SIMDSVAddV.setFunctionSource (
-  // "SOURCE_SIMD_SVADDV", "../Grammar/Expression.code" );
-
-  SIMDGather.setFunctionPrototype("HEADER_SIMD_GATHER",
-                                  "../Grammar/Expression.code");
   SIMDGather.setFunctionSource("SOURCE_SIMD_GATHER",
                                "../Grammar/Expression.code");
 
-  SIMDExplicitGather.setFunctionPrototype("HEADER_SIMD_EXPLICIT_GATHER",
-                                          "../Grammar/Expression.code");
   SIMDExplicitGather.setFunctionSource("SOURCE_SIMD_EXPLICIT_GATHER",
                                        "../Grammar/Expression.code");
 
-  SIMDScatter.setFunctionPrototype("HEADER_SIMD_SCATTER",
-                                   "../Grammar/Expression.code");
   SIMDScatter.setFunctionSource("SOURCE_SIMD_SCATTER",
                                 "../Grammar/Expression.code");
-
-  ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // What is this?
-#ifdef HL_GRAMMARS
-  X_Expression.setAutomaticGenerationOfCopyFunction(false);
-#endif
 }

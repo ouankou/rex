@@ -7,15 +7,6 @@
 
 #include "GraphAccess.h"
 
-/*
-struct T
-{
-   T& operator = (const T &that) { return *this; }
- private:
-   T() {}
-};
-*/
-
 /* TransInfoOP class defines the required operations that need to be
   implemented for the path representation of graphs during transitive
   path analysis.

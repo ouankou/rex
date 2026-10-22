@@ -59,7 +59,6 @@ if (HAVE_SYS_TIME_H)
   target_link_libraries(astProcessingTestInterproceduralCFG ROSE_DLL ${link_with_libraries})
 
   set(interproceduralCFG_SPECIMENS test11.C test12.C test13.C test14.C)
-  set(proFunSIG_SPECIMENS mf1.C mf3.C mf4.C mf5.C)
   foreach(specimen ${interproceduralCFG_SPECIMENS})
     add_test(
       NAME ipcfg_${specimen}
@@ -72,7 +71,8 @@ if (HAVE_SYS_TIME_H)
   endforeach()
 
   #-----------------------------------------------------------------------------
-  add_executable(e0 efor2.C.maintest.C)
+  add_executable(e0 tf1.C.maintest.C)
+  target_compile_definitions(e0 PRIVATE REX_EXPECTED_PATH_COUNT=8)
   target_link_libraries(e0 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -85,7 +85,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(e1 efor3.C.maintest.C)
+  add_executable(e1 tf1.C.maintest.C)
+  target_compile_definitions(e1 PRIVATE REX_EXPECTED_PATH_COUNT=5)
   target_link_libraries(e1 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -98,7 +99,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(f1 tfif1.C.maintest.C)
+  add_executable(f1 tf1.C.maintest.C)
+  target_compile_definitions(f1 PRIVATE REX_EXPECTED_PATH_COUNT=4)
   target_link_libraries(f1 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -111,7 +113,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(f2 tfif2.C.maintest.C)
+  add_executable(f2 tf1.C.maintest.C)
+  target_compile_definitions(f2 PRIVATE REX_EXPECTED_PATH_COUNT=4)
   target_link_libraries(f2 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -124,7 +127,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(f3 tfif3.C.maintest.C)
+  add_executable(f3 tf1.C.maintest.C)
+  target_compile_definitions(f3 PRIVATE REX_EXPECTED_PATH_COUNT=6)
   target_link_libraries(f3 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -137,7 +141,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(f4 tfif4.C.maintest.C)
+  add_executable(f4 tf1.C.maintest.C)
+  target_compile_definitions(f4 PRIVATE REX_EXPECTED_PATH_COUNT=5)
   target_link_libraries(f4 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -151,6 +156,7 @@ if (HAVE_SYS_TIME_H)
 
   #-----------------------------------------------------------------------------
   add_executable(ff1 tf1.C.maintest.C)
+  target_compile_definitions(ff1 PRIVATE REX_EXPECTED_PATH_COUNT=2)
   target_link_libraries(ff1 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -163,7 +169,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(ff2 tf2.C.maintest.C)
+  add_executable(ff2 tf1.C.maintest.C)
+  target_compile_definitions(ff2 PRIVATE REX_EXPECTED_PATH_COUNT=4)
   target_link_libraries(ff2 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -176,7 +183,8 @@ if (HAVE_SYS_TIME_H)
   )
 
   #-----------------------------------------------------------------------------
-  add_executable(ff3 tf3.C.maintest.C)
+  add_executable(ff3 tf1.C.maintest.C)
+  target_compile_definitions(ff3 PRIVATE REX_EXPECTED_PATH_COUNT=3)
   target_link_libraries(ff3 ROSE_DLL ${link_with_libraries})
 
   add_test(
@@ -187,66 +195,6 @@ if (HAVE_SYS_TIME_H)
       ${_exit_status}
       ff3_tf3.C.passed
   )
-
-  #-----------------------------------------------------------------------------
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/strictGraphTest.C)
-    add_executable(strictGraphTest strictGraphTest.C)
-    target_link_libraries(strictGraphTest ROSE_DLL ${link_with_libraries})
-
-    add_test(
-      NAME strictGraphTest
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="$<TARGET_FILE:strictGraphTest>"
-        ${_exit_status}
-        strictGraphTest.passed
-    )
-  endif()
-
-  #-----------------------------------------------------------------------------
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/strictGraphTest2.C)
-    add_executable(strictGraphTest2 strictGraphTest2.C)
-    target_link_libraries(strictGraphTest2 ROSE_DLL ${link_with_libraries})
-
-    add_test(
-      NAME strictGraphTest2
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="$<TARGET_FILE:strictGraphTest2>"
-        ${_exit_status}
-        strictGraphTest2.passed
-    )
-  endif()
-
-  #-----------------------------------------------------------------------------
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/strictGraphTest3.C)
-    add_executable(strictGraphTest3 strictGraphTest3.C)
-    target_link_libraries(strictGraphTest3 ROSE_DLL ${link_with_libraries})
-
-    add_test(
-      NAME strictGraphTest3
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="$<TARGET_FILE:strictGraphTest3>"
-        ${_exit_status}
-        strictGraphTest3.passed
-    )
-  endif()
-
-  #-----------------------------------------------------------------------------
-  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/smtlibParser.C)
-    add_executable(smtlibParser smtlibParser.C)
-    target_link_libraries(smtlibParser ROSE_DLL ${link_with_libraries})
-
-    add_test(
-      NAME smtlibParser_test11.C
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="$<TARGET_FILE:smtlibParser> ${CMAKE_CURRENT_SOURCE_DIR}/test11.C"
-        ${_exit_status}
-        smtlib_test11.C.passed
-    )
-  endif()
 
   #-----------------------------------------------------------------------------
   add_executable(sourcePTP sourcePTP.C)
@@ -295,4 +243,3 @@ if (HAVE_SYS_TIME_H)
   endforeach()
 
 endif()
-

@@ -115,7 +115,6 @@ public:
 
   // Support function
   MacroExpansion *isPartOfMacroExpansion(SgStatement *statement);
-  MacroExpansion *isPartOfMacroExpansion(SgLocatedNode *locatedNode);
 };
 
 // Main API function to call the AST traversals

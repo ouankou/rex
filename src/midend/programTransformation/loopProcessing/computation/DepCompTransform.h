@@ -12,18 +12,7 @@
 
 class DepCompDistributeLoop {
 public:
-  // selective distribution
-  struct Result {
-    LoopTreeNode *node;
-    SelectPtrSet<LoopTreeNode> sel;
-    Result() : node(0) {}
-    Result(LoopTreeNode *n, const PtrSetWrap<LoopTreeNode> &_sel)
-        : node(n), sel(_sel) {}
-  };
-  Result operator()(LoopTreeDepComp &tc, LoopTreeNode *l,
-                    LoopTreeNodeIterator iter);
-  // max distribution
-  Result operator()(LoopTreeDepComp &tc, LoopTreeNode *l);
+  void operator()(LoopTreeDepComp &tc, LoopTreeNode *l);
 };
 
 class DepCompCopyArrayCollect {
@@ -143,7 +132,8 @@ public:
                                 DepCompAstRefGraphCreate &refDep,
                                 LoopTreeNode *treeroot);
 
-  DepCompCopyArrayCollect(LoopTreeNode *root) : stmtrefInfo(root) {}
+  DepCompCopyArrayCollect(const LoopTreeDepComp &comp, LoopTreeNode *root)
+      : stmtrefInfo(comp, root) {}
 
 private:
   DoublyLinkedListWrap<CopyArrayUnit> arraycopy;

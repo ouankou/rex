@@ -1,16 +1,10 @@
-// Tests the TaintAnalysis genericDataflow features. See
-// src/midend/programAnalysis/genericDataflow/simpleAnalysis/taintAnalysis.h for
-// details.
-//
-// This test is newer than taintedFlowAnalysisTest.C in this same directory.
-// Also, it uses the taint analysis built into the ROSE library rather than the
-// taintedFlowAnalysis.[Ch] features defined in this test directory.
-
 #include "sage3basic.h"
 
 #include <cstdlib>
 
 #include "taintAnalysis.h"
+
+using VirtualCFG::DataflowNode;
 
 static std::string get_debug_output_dir() {
   const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
@@ -77,13 +71,13 @@ public:
     SgReturnStmt *xop = isSgReturnStmt(node.getNode());
     if (xop) {
       varID id = SgExpr2Var(xop->get_expression());
-      assert(!dfInfo.empty());
+      ROSE_ASSERT(!dfInfo.empty());
       FiniteVarsExprsProductLattice *prodLat =
           dynamic_cast<FiniteVarsExprsProductLattice *>(dfInfo.front());
-      assert(prodLat != NULL);
+      ROSE_ASSERT(prodLat != NULL);
       TaintLattice *lattice =
           dynamic_cast<TaintLattice *>(prodLat->getVarLattice(id));
-      assert(lattice != NULL);
+      ROSE_ASSERT(lattice != NULL);
       std::cout << "Function " << func.get_name() << " returns "
                 << lattice->to_string() << " value\n";
     }
@@ -113,26 +107,32 @@ int main(int argc, char *argv[]) {
     usage(argv[0], 1);
 
   SgProject *project = frontend(argc, argv);
-  initAnalysis(project);
-  Dbg::init("Taint analysis", get_debug_output_dir(), "index.html");
+  ASSERT_not_null(project);
+  if (project->get_frontendErrorCode() != 0) {
+    const int status = frontendExitStatus(project);
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    return status;
+  }
+  {
+    initAnalysis(project);
+    Dbg::init("Taint analysis", get_debug_output_dir(), "index.html");
 
-  // Generate the call graph
-  CallGraphBuilder cg_analyzer(project);
-  cg_analyzer.buildCallGraph();
-  SgIncidenceDirectedGraph *cg = cg_analyzer.getGraph();
+    // Live/Dead variables analysis
+    LiveDeadVarsAnalysis ldv_analysis(project);
+    UnstructuredPassInterDataflow ldv_dataflow(&ldv_analysis);
+    ldv_dataflow.runAnalysis();
 
-  // Live/Dead variables analysis
-  LiveDeadVarsAnalysis ldv_analysis(project);
-  UnstructuredPassInterDataflow ldv_dataflow(&ldv_analysis);
-  ldv_dataflow.runAnalysis();
-
-  // Taint analysis
-  TaintAnalysisTest taint_analysis(&ldv_analysis);
-  if (do_debug)
-    taint_analysis.set_debug(&std::cerr);
-  ContextInsensitiveInterProceduralDataflow taint_interproc(&taint_analysis,
-                                                            cg);
-  taint_interproc.runAnalysis();
+    // Taint analysis
+    TaintAnalysisTest taint_analysis(&ldv_analysis);
+    if (do_debug)
+      taint_analysis.set_debug(&std::cerr);
+    ContextInsensitiveInterProceduralDataflow taint_interproc(&taint_analysis);
+    taint_interproc.runAnalysis();
+  }
+  clearAnalysis();
+  SageInterface::deleteAST(project,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
 
   return 0;
 }

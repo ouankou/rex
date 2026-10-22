@@ -1,33 +1,27 @@
 #ifndef CLASS_HIERARCHY_GRAPH_H
 #define CLASS_HIERARCHY_GRAPH_H
 
-#include <map>
-
 #include <unordered_map>
-
 #include <unordered_set>
-
-#include <vector>
 
 class ROSE_DLL_API ClassHierarchyWrapper {
 public:
   typedef std::unordered_set<SgClassDefinition *> ClassDefSet;
 
-  typedef std::unordered_map<std::string, ClassDefSet>
-      MangledNameToClassDefsMap;
+  typedef std::unordered_map<SgClassDefinition *, ClassDefSet> ClassDefMap;
 
 private:
   /** Map from each class to all its immediate superclasses. */
-  MangledNameToClassDefsMap directParents;
+  ClassDefMap directParents;
 
   /** Map from each class to all its immediate subclasses. */
-  MangledNameToClassDefsMap directChildren;
+  ClassDefMap directChildren;
 
   /** Map from class to all (strict) ancestors. */
-  MangledNameToClassDefsMap ancestorClasses;
+  ClassDefMap ancestorClasses;
 
   /** Map from class to all (strict) subclasses. */
-  MangledNameToClassDefsMap subclasses;
+  ClassDefMap subclasses;
 
 public:
   explicit ClassHierarchyWrapper(SgNode *node);
@@ -40,8 +34,8 @@ private:
   /** Computes the transitive closure of the child-parent class relationship.
    * @param parents map from each class to its parents.
    * @param transitiveParents map from each class to all its ancestors */
-  static void buildAncestorsMap(const MangledNameToClassDefsMap &parents,
-                                MangledNameToClassDefsMap &transitiveParents);
+  static void buildAncestorsMap(const ClassDefMap &parents,
+                                ClassDefMap &transitiveParents);
 };
 
 #endif

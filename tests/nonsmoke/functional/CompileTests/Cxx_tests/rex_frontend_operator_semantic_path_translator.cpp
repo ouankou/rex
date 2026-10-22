@@ -99,16 +99,14 @@ int main(int argc, char **argv) {
         // every call.  Explicitness and written type spelling belong to this
         // call's exact reference, not to that declaration.
         ROSE_ASSERT(!instantiation->get_template_argument_list_is_explicit());
-        ROSE_ASSERT(!instantiation->get_templateArguments().empty());
+        ROSE_ASSERT(instantiation->get_templateArguments().empty());
+        ROSE_ASSERT(instantiation->get_deducedTemplateArguments().size() == 1);
         for (SgTemplateArgument *argument :
-             instantiation->get_templateArguments()) {
+             instantiation->get_deducedTemplateArguments()) {
           ROSE_ASSERT(argument != nullptr);
-          if (argument->get_argumentType() ==
-              SgTemplateArgument::start_of_pack_expansion_argument) {
-            ROSE_ASSERT(!argument->get_explicitlySpecified());
-            ROSE_ASSERT(argument->get_sourceSpelledType() == nullptr);
-            continue;
-          }
+          ROSE_ASSERT(argument->get_argumentType() ==
+                      SgTemplateArgument::type_argument);
+          ROSE_ASSERT(isSgTypeInt(argument->get_type()) != nullptr);
           ROSE_ASSERT(!argument->get_explicitlySpecified());
           ROSE_ASSERT(argument->get_sourceSpelledType() == nullptr);
         }

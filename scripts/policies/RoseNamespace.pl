@@ -2,6 +2,7 @@
 # DO NOT DISABLE without first checking with a ROSE core developer
 BEGIN {push @INC, $1 if $0 =~ /(.*)\//}
 use strict;
+use Errno qw(ENOENT);
 use FileLister;
 use Policies;
 
@@ -281,34 +282,12 @@ my %bad_words = (
 
 
 ###############################################################################################################################
-# Returns a severity prefix string appropriate for whether the specified policy is enabled or disabled for the file.
-# See also, the regular expression in `countViolations` below.
-sub severity {
-    my($file_name, $policy_name) = @_;
-    my($disabled,$info) = is_disabled_in_dir($file_name, $policy_name);
-    my($w) = $disabled ? "warning: " : "error: ";
-
-    my($extra) = "";
-    for my $key (keys %$info) {
-	$extra .= "\n" . $key . ": " . $info->{$key} unless $key eq 'disabled';
-    }
-    return ($w, $extra);
-}
-
-###############################################################################################################################
-# True if the specified header is deprecated using the approved deprecation mechanism.
-sub headerIsDeprecated {
-    my($filename) = @_;
-    my($isDeprecated);
-    open HEADER, "<$filename" or return;
-    while (<HEADER>) {
-        if (/ROSE_PRAGMA_MESSAGE\("This header is deprecated/) {
-            $isDeprecated = 1;
-            last;
-        }
-    }
-    close HEADER;
-    return $isDeprecated;
+sub recordViolation {
+    my ($violations, $filename, $policy, @messages) = @_;
+    my $warning = is_disabled_in_dir($filename, $policy);
+    push @{$violations->{$policy}}, map {
+        {warning => $warning, message => $_}
+    } @messages;
 }
 
 ###############################################################################################################################
@@ -316,31 +295,33 @@ sub headerIsDeprecated {
 # and the following #define symbol.
 sub multiInclusionProtectionSymbols {
     my($filename) = @_;
-    open HEADER, "<$filename" or return;
-    while (<HEADER>) {
-        if (/^\s*#\s*ifndef\s+(\w+)/) {
-            my $ifndef = $1;
-            while (<HEADER>) {
-                if (/^\s*#\s*define\s+(\w+)/) {
-                    my $def = $1;
-                    close HEADER;
-                    return ($ifndef, $def);
-                }
-            }
-            close HEADER;
-            return ($ifndef, undef);
+    open my $header, "<", $filename or die "$filename: cannot open: $!\n";
+    my ($ifndef, $define);
+    local $! = 0;
+    while (<$header>) {
+        if (!defined $ifndef) {
+            $ifndef = $1 if /^\s*#\s*ifndef\s+(\w+)/;
+        } elsif (/^\s*#\s*define\s+(\w+)/) {
+            $define = $1;
+            last;
         }
     }
-    close HEADER;
-    return ();
+    die "$filename: cannot read: $!\n" if $!;
+    close $header or die "$filename: cannot close: $!\n";
+    return defined $ifndef ? ($ifndef, $define) : ();
 }
 
 ###############################################################################################################################
 # Load English words
 sub loadWords {
     my %words;
-    open WORDS, '</usr/share/dict/words' or return;
-    while (<WORDS>) {
+    my $dictionary;
+    unless (open $dictionary, '<', '/usr/share/dict/words') {
+        return if $! == ENOENT;
+        die "cannot open dictionary: $!\n";
+    }
+    local $! = 0;
+    while (<$dictionary>) {
 	chomp $_;
 	$_ = lc $_;
 	if (/^[a-z]+$/) {
@@ -356,7 +337,8 @@ sub loadWords {
 	    }
 	}
     }
-    close WORDS;
+    die "cannot read dictionary: $!\n" if $!;
+    close $dictionary or die "cannot close dictionary: $!\n";
 
     # Add special words, but only if we found any words.
     if (keys %words) {
@@ -367,23 +349,6 @@ sub loadWords {
     }
 
     return %words;
-}
-
-###############################################################################################################################
-# Given a word that looks plural, return a singular spelling
-sub depluralize {
-    my($word, $word_list) = @_;
-
-    my @possibilities;
-    push @possibilities, $1."y" if $word =~ /^(.+)ies$/;
-    push @possibilities, $1 if $word =~ /^(.+)s$/;
-    push @possibilities, $1."ex" if $word =~ /^(.*)ices$/;
-
-    foreach (@possibilities) {
-	return $_ if exists $word_list->{$_};
-    }
-
-    return;
 }
 
 ###############################################################################################################################
@@ -415,11 +380,6 @@ sub checkWords {
 	}
     }
 
-    #my $last_word = $words[-1];
-    #if (my($singular) = depluralize($last_word, $word_list)) {
-    #	push @errors, "\"$last_word\" should probably not be plural";
-    #}
-
     return @errors;
 }
 
@@ -448,17 +408,17 @@ sub countViolations {
 	foreach (keys %{$violations}) {
 	die "invalid key $_" unless exists $policies{$_};
 	$n += @{$violations->{$_}};
-	$errors += scalar(grep {/^error: /} @{$violations->{$_}});
+	$errors += scalar(grep {!$_->{warning}} @{$violations->{$_}});
     }
     return ($n, $errors);
 }
 
 ###############################################################################################################################
-# Print violations and return number of errors.
+# Print violations and return their total and error counts.
 sub printViolations {
     my($violations) = @_;
     my($total,$nerrors) = countViolations($violations);
-    return 0 if $total == 0;
+    return (0, 0) if $total == 0;
 
     if (1 == $total) {
 	print $desc, "\nThe following violation was found:\n";
@@ -475,7 +435,9 @@ sub printViolations {
 	print "    Policy #", ++$policy_number, " \"", $policy->{name}, "\"\n\n";
 	print indent("    ", "Requirement: " . $policy->{policy}), "\n";
 	print indent("    ", "Reason: " . $policy->{reason}), "\n";
-	for my $text (@{$violations->{$policy->{name}}}) {
+	for my $violation (@{$violations->{$policy->{name}}}) {
+	    my $text = ($violation->{warning} ? "warning: " : "error: ") .
+	        $violation->{message};
 	    ++$i;
 	    my($highlight) = $text =~ /\Q<$me@\E/ && -t STDOUT;
 	    my($hl_begin) = $highlight ? "\033[30;43m" : "";
@@ -488,7 +450,7 @@ sub printViolations {
 	}
 	print  "        No violations found for this policy\n" if 0 == @{$violations->{$policy->{name}}};
     }
-    return $nerrors;
+    return ($total, $nerrors);
 }
 
 ###############################################################################################################################
@@ -502,27 +464,22 @@ $violations{$_} = [] for keys %policies;
 my $files = FileLister->new(@ARGV);
 my %words = loadWords;
 while (my $filename = $files->next_file) {
-    if ($filename =~ /^(.*\/src)\/(Rose\/.*)\.(h|hpp|h\+\+|H)/) {
+    if ($filename =~ /^(.*\/src)\/(Rose\/.*)\.(h|hpp|h\+\+|H)$/) {
         my ($root, $nsFile, $extension) = ($1, $2, $3);
         my @nsParts = split("/", $nsFile);
         my $ns = join("::", @nsParts);
 	my $dir = join("/", @nsParts[0 .. $#nsParts-1]);
-	my $note;
-
-        # If this header is deprecated, then none of these rules apply
-        next if headerIsDeprecated($filename);
-
         # All header files should use ".h" for their file extension
         if ($extension ne "h") {
-	    my($w,$u) = severity($filename, 'h_extension');
-	    push @{$violations{h_extension}}, "${w}file \"$filename\" must use \".h\" as its extension${u}";
+	    recordViolation(\%violations, $filename, 'h_extension',
+	        "file \"$filename\" must use \".h\" as its extension");
         }
 
 	# Namespace symbol must be composed of valid words.
 	if (keys %words) {
 	    if (my @badWords = checkWords($nsParts[-1], \%words)) {
-		my($w,$u) = severity($filename, 'english_words');
-		push @{$violations{english_words}}, map("${w}in \"$ns\", $_${u}", @badWords);
+		recordViolation(\%violations, $filename, 'english_words',
+		    map("in \"$ns\", $_", @badWords));
 	    }
 	}
 	    
@@ -530,79 +487,79 @@ while (my $filename = $files->next_file) {
 	my $nsLastCase = $nsParts[-1];
 	$nsLastCase =~ s/[A-Z]/X/g;
 	if (($nsLastCase =~ /XXX|_|-/ || $nsLastCase eq "XX" || $nsLastCase =~ /^[^X]/) && $nsLastCase =~ /[^X]/) {
-	    my($w,$u) = severity($filename, 'namespace_capitalization');
-	    push @{$violations{namespace_capitalization}}, "${w}in \"$ns\", \"$nsParts[-1]\" must be PascalCase${u}";
+	    recordViolation(\%violations, $filename, 'namespace_capitalization',
+	        "in \"$ns\", \"$nsParts[-1]\" must be PascalCase");
 	} else {
 	    # Check the the multi-inclusion-protection symbol is correct
 	    my($expectedMipSymbol) = join("_", "ROSE", @nsParts[1 .. $#nsParts], "H");
 	    my($ifndef,$def) = multiInclusionProtectionSymbols($filename);
 	    if ($ifndef eq "") {
-		my($w,$u) = severity($filename, 'include_once');
-		push @{$violations{include_once}},
-		    "${w}file \"$filename\" must have multi-inclusion protection using #ifndef/#define${u}";
+		recordViolation(\%violations, $filename, 'include_once',
+		    "file \"$filename\" must have multi-inclusion protection using #ifndef/#define");
 	    } elsif ($ifndef ne $expectedMipSymbol) {
-		my($w,$u) = severity($filename, 'once_symbol');
-		push @{$violations{once_symbol}},
-		    "${w}file \"$filename\" multi-inclusion symbol must be \"$expectedMipSymbol\" (not \"$ifndef\")${u}";
+		recordViolation(\%violations, $filename, 'once_symbol',
+		    "file \"$filename\" multi-inclusion symbol must be \"$expectedMipSymbol\" (not \"$ifndef\")");
 	    } elsif ($def eq "") {
-		my($w,$u) = severity($filename, 'once_symbol');
-		push @{$violations{once_symbol}}, "${note}file \"$filename\" multi-inclusion lacks #define${u}";
+		recordViolation(\%violations, $filename, 'once_symbol',
+		    "file \"$filename\" multi-inclusion lacks #define");
 	    }
 	}
 	
         # The parent header must exist.
 	my $parentHeaderExists;
         my $parentHeader = join("/", $root, @nsParts[0 .. $#nsParts-1]) . ".h";
-	if (! -r $parentHeader) {
+	my @parent_stat = stat $parentHeader;
+	if (!@parent_stat) {
+	    die "$parentHeader: cannot inspect: $!\n" unless $! == ENOENT;
 	    if ($#nsParts == 1 && $nsParts[0] eq "Rose") {
 		# For the time being, there is no src/Rose.h file because it would be confusing
 		# to have both <rose.h> and <Rose.h> on case-insensitive file systems.
 	    } else {
-		my($w,$u) = severity($filename, 'namespace_header_exists');
-		push @{$violations{namespace_header_exists}}, "${w}file \"$parentHeader\" must exist for ${ns}${u}";
+		recordViolation(\%violations, $filename, 'namespace_header_exists',
+		    "file \"$parentHeader\" must exist for ${ns}");
 	    }
 	} else {
 	    $parentHeaderExists = 1;
 	}
 
-        # There must be a "
-
-#include <" . $nsFile . ".h>" in the parent
+        # The parent header must include this namespace header.
 	if ($parentHeaderExists) {
 	    my $foundInclude = 0;
-	    open PARENT, "<$parentHeader";
-	    while (<PARENT>) {
-		if (my($sep, $name) = /^\s*#\s*include\s*([<"])(.*)[">]/) {
+	    open my $parent, "<", $parentHeader or die "$parentHeader: cannot open: $!\n";
+	    local $!;
+	    while (1) {
+		$! = 0;
+		my $line = <$parent>;
+		die "$parentHeader: cannot read: $!\n" if $!;
+		last unless defined $line;
+		if (my($sep, $name) = $line =~ /^\s*#\s*include\s*([<"])(.*)[">]/) {
 		    if ($name eq "$nsFile.h") {
 			if ($sep ne "<") {
-			    my($w,$u) = severity($filename, 'include_by_angle_brackets');
-			    push @{$violations{include_by_angle_brackets}},
-				"${w}in \"$parentHeader\", \"$nsFile\" must be included with <> not \"\"${u}";
+			    recordViolation(\%violations, $filename, 'include_by_angle_brackets',
+				"in \"$parentHeader\", \"$nsFile\" must be included with <> not \"\"");
 			}
 			$foundInclude++;
 		    }
 		}
 	    }
-	    close PARENT;
+	    close $parent or die "$parentHeader: cannot close: $!\n";
 	    if ($foundInclude == 0) {
-		my($w,$u) = severity($filename, 'namespace_header_includes_all');
-		push @{$violations{namespace_header_includes_all}},
-		    "${w}file \"$parentHeader\" does not include <$nsFile.h>${u}";
+		recordViolation(\%violations, $filename, 'namespace_header_includes_all',
+		    "file \"$parentHeader\" does not include <$nsFile.h>");
 	    } elsif ($foundInclude > 1) {
-		my($w,$u) = severity($filename, 'namespace_header_includes_all');
-		push @{$violations{namespace_header_includes_all}},
-		    "${w}file \"$parentHeader\" includes <$nsFile> more than once${u}";
+		recordViolation(\%violations, $filename, 'namespace_header_includes_all',
+		    "file \"$parentHeader\" includes <$nsFile> more than once");
 	    }
 	}
     }
 }
 
-my $nerrors = printViolations(\%violations);
+my ($total, $nerrors) = printViolations(\%violations);
 if ($nerrors > 0) {
     print STDERR "\n*** error: policy checks failed for the ::Rose namespace (src/Rose directory)",
 	": $nerrors ", (1==$nerrors?"error":"errors"), "\n";
     exit(1);
 } else {
     print "\nNo policy checks failed for the ::Rose namespace (src/Rose directory)\n";
-    exit(0);
+    exit($total ? 128 : 0);
 }

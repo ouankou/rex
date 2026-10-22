@@ -18,8 +18,6 @@ class Analysis;
 
 #include "nodeState.h"
 
-#include "varSets.h"
-
 #include "variables.h"
 
 #include <map>
@@ -37,8 +35,9 @@ public:
   // Custom filter is set inside the intra-procedural analysis.
   // Inter-procedural analysis will copy the filter from its intra-procedural
   // analysis during the call to its constructor.
-  bool (*filter)(CFGNode cfgn);
-  Analysis(bool (*f)(CFGNode) = defaultFilter) : filter(f) {}
+  bool (*filter)(VirtualCFG::CFGNode cfgn);
+  Analysis(bool (*f)(VirtualCFG::CFGNode) = VirtualCFG::defaultFilter)
+      : filter(f) {}
 };
 
 class InterProceduralAnalysis;
@@ -89,7 +88,7 @@ public:
   // state - the function's NodeState
   bool runAnalysis(const Function &func, NodeState *state);
 
-  virtual void visit(const Function &func, const DataflowNode &n,
+  virtual void visit(const Function &func, const VirtualCFG::DataflowNode &n,
                      NodeState &state) = 0;
 };
 // A driver class which simply iterates all function definitions one by one and

@@ -28,6 +28,9 @@ class SgNode;
 class SgOmpClause;
 class SgOmpClauseList;
 class SgStatement;
+class SgInitializedName;
+class SgOmpTaskStatement;
+class SgOmpClauseBodyStatement;
 /** Types and functions to support OpenMP
  *
  *  OpenMP specific data types and functions are put into this namespace */
@@ -328,6 +331,10 @@ void addOmpClause(SgStatement *node, SgOmpClause *clause);
 //! source-order provenance when the directive came from combined syntax.
 void addGeneratedOmpClause(SgStatement *node, SgOmpClause *clause);
 SgOmpClauseList *getOmpClauseList(SgStatement *node);
+void initializeTaskDataEnvironment(
+    SgOmpTaskStatement *task, SgOmpClauseBodyStatement *source_context,
+    const std::vector<SgInitializedName *> &generated_firstprivate,
+    const std::vector<SgInitializedName *> &generated_private);
 
 // We use objects of this class to store parameters of those clauses that take
 // one or two additional parameters other than variable or expression list. E.g.

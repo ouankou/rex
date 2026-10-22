@@ -293,8 +293,6 @@ bool RewriteFromArrayAst::operator()(AstInterface &_fa, const AstNodePtr &orig,
   AstNodePtr array;
   AstNodePtr decl, body;
   int dim;
-  // std::cerr << "rewrite from array ast: " << AstInterface::AstToString(orig)
-  // << "\n";
   CPPAstInterface &fa = static_cast<CPPAstInterface &>(_fa);
   AstInterface::AstNodeList args, vars;
   if (fa.IsVariableDecl(orig, &vars) ||

@@ -38,6 +38,18 @@ void requireExactAssignDestination(SgProject *project,
 }
 
 void validateInitializerContracts(SgProject *project) {
+  size_t braced_lists = 0;
+  for (SgNode *node : RoseAst(project)) {
+    auto *list = isSgExprListExp(node);
+    if (list != nullptr &&
+        list->get_source_form() == SgExprListExp::e_expression_list_braced) {
+      ROSE_ASSERT(isSgExprListExp(list->get_parent()) != nullptr);
+      if (isSgTemplateFunctionDeclaration(
+              SageInterface::getEnclosingFunctionDeclaration(list)) != nullptr)
+        ++braced_lists;
+    }
+  }
+  ROSE_ASSERT(braced_lists == 4);
   requireExactAssignDestination(project, "rex_initializer_text");
   requireExactAssignDestination(project, "rex_initializer_array_reference");
   requireExactAssignDestination(project, "rex_initializer_qualified");

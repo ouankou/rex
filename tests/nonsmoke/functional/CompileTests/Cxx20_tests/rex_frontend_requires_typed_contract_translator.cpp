@@ -20,7 +20,18 @@ int main(int argc, char **argv) {
     SgAutoType *auto_type = isSgAutoType(type);
     ROSE_ASSERT(auto_type != nullptr);
     ROSE_ASSERT(auto_type->get_is_constrained());
-    ROSE_ASSERT(auto_type->get_source_constraint_spelling() == "SameType<int>");
+    SgNonrealRefExp *constraint = auto_type->get_type_constraint();
+    ROSE_ASSERT(constraint != nullptr);
+    ROSE_ASSERT(constraint->get_parent() == auto_type);
+    ROSE_ASSERT(constraint->get_symbol() != nullptr);
+    ROSE_ASSERT(constraint->get_symbol()->get_name() == "SameType");
+    ROSE_ASSERT(constraint->get_symbol()->get_declaration()->get_is_concept());
+    ROSE_ASSERT(constraint->get_templateArguments().size() == 1);
+    SgTemplateArgument *argument = constraint->get_templateArguments().front();
+    ROSE_ASSERT(argument->get_parent() == constraint);
+    ROSE_ASSERT(argument->get_argumentType() ==
+                SgTemplateArgument::type_argument);
+    ROSE_ASSERT(isSgTypeInt(argument->get_type()) != nullptr);
   };
 
   RoseAst ast(project);
@@ -36,12 +47,19 @@ int main(int argc, char **argv) {
               requires_expr->get_local_parameter_list()) {
         ++parameterized_requires_count;
         ROSE_ASSERT(parameters->get_parent() == requires_expr);
+        SgFunctionParameterScope *scope =
+            requires_expr->get_local_parameter_scope();
+        ROSE_ASSERT(scope != nullptr);
+        ROSE_ASSERT(scope->get_parent() == requires_expr);
         for (SgInitializedName *parameter : parameters->get_args()) {
           ROSE_ASSERT(parameter != nullptr);
           ROSE_ASSERT(parameter->get_parent() == parameters);
+          ROSE_ASSERT(parameter->get_scope() == scope);
           ROSE_ASSERT(parameter->get_type() != nullptr);
           ROSE_ASSERT(parameter->get_initializer() == nullptr);
         }
+      } else {
+        ROSE_ASSERT(requires_expr->get_local_parameter_scope() == nullptr);
       }
     } else if (SgSimpleRequirement *requirement = isSgSimpleRequirement(node)) {
       ++simple_count;
@@ -52,6 +70,10 @@ int main(int argc, char **argv) {
       ++type_count;
       ROSE_ASSERT(requirement->get_required_type() != nullptr);
       ROSE_ASSERT(isSgExprListExp(requirement->get_parent()) != nullptr);
+      ROSE_ASSERT(requirement->get_explicit_name_qualification_present());
+      ROSE_ASSERT(!requirement->get_explicit_global_qualification());
+      ROSE_ASSERT(requirement->get_explicit_name_qualification_tokens() ==
+                  SgStringList{"T::"});
     } else if (SgCompoundRequirement *requirement =
                    isSgCompoundRequirement(node)) {
       ++compound_count;
@@ -79,13 +101,23 @@ int main(int argc, char **argv) {
       }
     } else if (SgInitializedName *name = isSgInitializedName(node)) {
       if (name->get_name() == "constrained_auto_value") {
-        require_exact_constrained_auto(name->get_type());
+        ROSE_ASSERT(isSgTypeInt(name->get_type()) != nullptr);
+        require_exact_constrained_auto(name->get_auto_decltype());
         saw_constrained_auto_value = true;
       }
     } else if (SgFunctionDeclaration *function =
                    isSgFunctionDeclaration(node)) {
       if (function->get_name() == "constrained_auto_result") {
-        require_exact_constrained_auto(function->get_orig_return_type());
+        ROSE_ASSERT(isSgTypeInt(function->get_type()->get_return_type()) !=
+                    nullptr);
+        SgFunctionDeclaration *written =
+            isSgFunctionDeclaration(function->get_definingDeclaration());
+        ROSE_ASSERT(written != nullptr && written->get_definition() != nullptr);
+        ROSE_ASSERT(written->get_definition()->get_declaration() == written);
+        ROSE_ASSERT(written->get_type_syntax_is_available());
+        ROSE_ASSERT(written->get_type_syntax() != nullptr);
+        require_exact_constrained_auto(
+            written->get_type_syntax()->get_return_type());
         saw_constrained_auto_result = true;
       }
     }

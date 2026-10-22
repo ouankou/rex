@@ -11,7 +11,7 @@
 size_t BreakupStatement::breaksize = 0;
 
 std::string BreakupStatement::cmdline_help() {
-  return "-bs <stmtsize> : break up statements in loops at <stmtsize>";
+  return "-bs [size] : break up statements in loops at size (default 12)";
 }
 
 void BreakupStatement::cmdline_configure(
@@ -21,15 +21,9 @@ void BreakupStatement::cmdline_configure(
   if (!cmdline_find(argv, index, "-bs", unknown_args))
     return;
   ++index;
-  if (index < argv.size())
-    breaksize = atoi(argv[index].c_str());
-  if (breaksize <= 0) {
-    std::cerr << "invalid breaking size. Use default (12)\n";
-    breaksize = 12;
-  } else {
-    ++index;
-    std::cerr << "breaking size = " << breaksize << "\n";
-  }
+  unsigned size = 12;
+  readOptionalPositiveSize(argv, index, "-bs", size);
+  breaksize = size;
   if (unknown_args != 0)
     append_args(argv, index, *unknown_args);
 }

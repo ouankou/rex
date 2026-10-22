@@ -68,3 +68,29 @@ struct RexFrontendPreprocessorConditionalCtorGap {
   {
   }
 };
+
+/*
+#if REX_COMMENT_IS_NOT_A_DIRECTIVE
+*/
+template <class T> struct RexFrontendTemplateAfterDirectiveComment {
+  /*
+#if REX_MEMBER_COMMENT_IS_NOT_A_DIRECTIVE
+  */
+  T value;
+};
+
+template <class T> T rex_frontend_template_after_directive_comment(T value) {
+  return value;
+}
+
+#if 1
+template <class T> struct RexFrontendTemplateInsideConditional {
+  T value;
+};
+#endif
+
+template <class T> struct RexFrontendTemplateContainingConditional {
+#if 1
+  T value;
+#endif
+};

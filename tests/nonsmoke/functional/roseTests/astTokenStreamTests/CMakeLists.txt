@@ -1353,16 +1353,6 @@ add_test(
     -c ${CMAKE_CURRENT_SOURCE_DIR}/input_test_file_with_text.c
 )
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/input_testUnparsingUsingTokenStream_test2021_02.C")
-  add_test(
-    NAME test_unparsingUsingTokens_test2021_02
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-    COMMAND testUnparsingUsingTokenStream -rose:unparse_tokens
-      -rose:verbose 0
-      -c ${CMAKE_CURRENT_SOURCE_DIR}/input_testUnparsingUsingTokenStream_test2021_02.C
-  )
-endif()
-
 add_test(
   NAME test_typeTransformation_UsingTokens
   WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}

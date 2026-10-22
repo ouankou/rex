@@ -5,7 +5,7 @@
 
 /** @brief Library developers and collaborators
  *
- * Documentation oriented toward those working on ROSE.
+ * Documentation oriented toward those working on REX.
  *
  * This module serves as the top level for developer-specific documentation that
  * should not appear in the main end-user table of contents.

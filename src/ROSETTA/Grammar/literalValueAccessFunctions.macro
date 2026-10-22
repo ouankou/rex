@@ -1,0 +1,18 @@
+DATA_ACCESS_FUNCTION_START
+$DATA_TYPE
+$CLASSNAME::get_$DATA() const
+   {
+     return p_$DATA;
+   }
+
+void
+$CLASSNAME::set_$DATA($DATA_TYPE $DATA)
+   {
+     p_$DATA = $DATA;
+     // The spelling belongs to the previous value. Constructors establish
+     // value and spelling together; a later typed edit must discard it.
+     p_valueString.clear();
+     p_literal_spelling_form = SgValueExp::e_literal_canonical_generated;
+     markAsModified();
+   }
+DATA_ACCESS_FUNCTION_END

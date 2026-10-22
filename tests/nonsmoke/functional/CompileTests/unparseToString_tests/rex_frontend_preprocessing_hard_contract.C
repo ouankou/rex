@@ -108,6 +108,11 @@ int main(int argc, char **argv) {
         attributes.isCppDirective("  #pragma rex collector", kind, rest));
     ROSE_ASSERT(kind == PreprocessingInfo::CpreprocessorPragmaDeclaration);
     ROSE_ASSERT(rest == " rex collector");
+    for (const std::string &emptyDirective : {"#", " # \t"}) {
+      ROSE_ASSERT(attributes.isCppDirective(emptyDirective, kind, rest));
+      ROSE_ASSERT(kind == PreprocessingInfo::CpreprocessorEmptyDeclaration);
+      ROSE_ASSERT(rest.empty());
+    }
     ROSE_ASSERT(!attributes.isFortran90Comment(""));
     ROSE_ASSERT(attributes.isFortran77Comment(""));
     return 0;
@@ -140,11 +145,6 @@ int main(int argc, char **argv) {
     PreprocessingInfo::DirectiveType kind;
     std::string rest;
     (void)attributes.isCppDirective("#rex_unknown payload", kind, rest);
-  } else if (mode == "empty-hash-directive") {
-    ROSEAttributesList attributes;
-    PreprocessingInfo::DirectiveType kind;
-    std::string rest;
-    (void)attributes.isCppDirective(" # \t", kind, rest);
   } else if (mode == "invalid-hash-identifier") {
     ROSEAttributesList attributes;
     PreprocessingInfo::DirectiveType kind;
@@ -153,7 +153,7 @@ int main(int argc, char **argv) {
   } else if (mode == "null-list-entry") {
     ROSEAttributesList attributes;
     attributes.getList().push_back(NULL);
-    attributes.display("hard-contract");
+    (void)attributes.lastElement();
   } else if (mode == "invalid-fortran-fixed-byte") {
     ROSEAttributesList attributes;
     const std::string sourceLine(1, static_cast<char>(0xff));

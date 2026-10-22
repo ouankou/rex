@@ -9,7 +9,6 @@
 
 #include <sstream>
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
 extern bool DebugAnnot();
@@ -62,7 +61,12 @@ void ReadAnnotCollection<TargetInfo, sep1, sep2, e>::read(istream &in) {
       read_ch(in, sep1);
 
     ReadAnnotCollectionWrap<TargetInfo, sep1, sep2, e> op(target, *this);
-    read_list(in, op, sep2);
+    while (peek_ch(in) != e) {
+      if (!op.read(in))
+        throw ReadError("annotation collection has no item");
+      if (peek_ch(in) != e)
+        read_ch(in, sep2);
+    }
     // Read in the end character.
     if (e != 0)
       read_ch(in, e);

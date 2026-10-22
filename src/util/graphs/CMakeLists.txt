@@ -1,11 +1,9 @@
 add_library(util_graphs OBJECT
   DGBaseGraphImpl.C
   SCCAnalysis.C
-  TransAnalysis.C
   TypedFusion.C
 )
 
-########### install files ###############
 install(FILES
   BaseGraphCreate.h DGBaseGraphImpl.h GraphAccess.h GraphDotOutput.h
   GraphGroup.h GraphIO.h GraphScope.h GraphUpdate.h GraphUtils.h

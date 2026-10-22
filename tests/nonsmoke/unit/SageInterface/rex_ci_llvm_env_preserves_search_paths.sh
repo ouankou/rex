@@ -29,6 +29,8 @@ printf '/* exact LLVM 22 stddef fixture */\n' \
   >"$llvm_root/lib/clang/22/include/stddef.h"
 printf '/* exact LLVM 22 OpenMP fixture */\n' \
   >"$llvm_root/lib/clang/22/include/omp.h"
+printf '#!/bin/sh\nprintf "22.1.8\\n"\n' >"$llvm_root/bin/llvm-config"
+chmod +x "$llvm_root/bin/llvm-config"
 
 PATH="/caller/bin:/usr/bin"
 LD_LIBRARY_PATH="/caller/lib:/caller/lib64"
@@ -53,3 +55,15 @@ test "$LLVM_DIR" = "$llvm_root/lib/cmake/llvm"
 test "$Clang_DIR" = "$llvm_root/lib/cmake/clang"
 test "$LLVM_NATIVE_TOOL_DIR" = "$llvm_root/bin"
 test "$REX_WASM_OMP_INCLUDE_DIR" = "$llvm_root/lib/clang/22/include"
+
+printf '#!/bin/sh\nprintf "22garbage\\n"\n' >"$llvm_root/bin/llvm-config"
+if (source "$environment_script" 22) >/dev/null 2>&1; then
+  echo "ci-llvm-env accepted a malformed LLVM version" >&2
+  exit 1
+fi
+
+rm "$llvm_root/bin/llvm-config"
+if (source "$environment_script" 22) >/dev/null 2>&1; then
+  echo "ci-llvm-env accepted an LLVM root without llvm-config" >&2
+  exit 1
+fi

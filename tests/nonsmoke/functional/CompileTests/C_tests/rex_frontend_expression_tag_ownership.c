@@ -2,11 +2,17 @@ struct RexExistingTag {
   int value;
 };
 
+#define REX_TAG_POINTER(TYPE) TYPE *
+#define REX_SIZE_TAG                                                           \
+  struct RexSizeTag {                                                          \
+    int value;                                                                 \
+  }
+
 int rex_expression_tag_ownership(void *raw) {
   enum {
     rex_standalone_anonymous = 7,
   };
-  unsigned long size = sizeof(struct RexSizeTag { int value; });
+  unsigned long size = sizeof(REX_TAG_POINTER(REX_SIZE_TAG));
   unsigned long alignment = _Alignof(enum RexAlignTag{
       rex_align_zero,
       rex_align_one,
@@ -20,9 +26,10 @@ int rex_expression_tag_ownership(void *raw) {
 
   unsigned long existing_size = sizeof(struct RexExistingTag);
   unsigned long existing_alignment = _Alignof(struct RexExistingTag);
+  unsigned long preferred_alignment = __alignof__(struct RexExistingTag);
   void *existing_cast = (struct RexExistingTag *)raw;
   return rex_standalone_anonymous == 0 || size == 0 || alignment == 0 ||
          inline_cast == existing_cast || anonymous_cast == existing_cast ||
          compound_literal == raw || existing_size == 0 ||
-         existing_alignment == 0;
+         existing_alignment == 0 || preferred_alignment == 0;
 }

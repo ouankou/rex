@@ -1,19 +1,121 @@
-// tps (01/14/2010) : Switching from rose.h to sage3
 #include "abiStuff.h"
 
 #include "sage3basic.h"
 
-#include "sageBuilder.h"
-
-#include <vector>
-
-#include <climits>
-
-#include <cstdint>
+#include "FortranIntegerSelector.h"
+#include <limits>
 
 using namespace std;
-using namespace SageBuilder;
 using namespace SageInterface;
+
+namespace {
+SgSourceFile::scalar_abi_layout
+requireTargetScalarLayout(SgType *&type, const SgNode *context) {
+  ASSERT_not_null(type);
+  ASSERT_not_null(context);
+  type = type->stripTypedefsAndModifiers();
+  if (auto *enum_type = isSgEnumType(type)) {
+    auto *declaration = isSgEnumDeclaration(enum_type->get_declaration());
+    ASSERT_not_null(declaration);
+    if (declaration->get_definingDeclaration() != nullptr)
+      declaration = isSgEnumDeclaration(declaration->get_definingDeclaration());
+    ASSERT_not_null(declaration);
+    type = declaration->get_field_type();
+    ASSERT_not_null(type);
+    type = type->stripTypedefsAndModifiers();
+  }
+  ROSE_ASSERT(isSgIntegralType(type) || isSgFloatingPointType(type));
+  auto *source = getEnclosingSourceFile(context, true);
+  ASSERT_not_null(source);
+  const auto &abi = source->get_target_abi();
+  ROSE_ASSERT(abi.available);
+
+  VariantT variant = type->variantT();
+  switch (variant) {
+  case V_SgTypeSignedShort:
+    variant = V_SgTypeShort;
+    break;
+  case V_SgTypeSignedInt:
+    variant = V_SgTypeInt;
+    break;
+  case V_SgTypeSignedLong:
+    variant = V_SgTypeLong;
+    break;
+  case V_SgTypeSignedLongLong:
+    variant = V_SgTypeLongLong;
+    break;
+  default:
+    break;
+  }
+  int kind = 0;
+  if (auto *selector = type->get_type_kind()) {
+    const auto value = Detail::fortranIntegerSelectorValue(selector);
+    ROSE_ASSERT(value && !value->isNegative() && value->words()[1] == 0 &&
+                value->words()[0] > 0 &&
+                value->words()[0] <= std::numeric_limits<int>::max());
+    kind = static_cast<int>(value->words()[0]);
+  }
+  const auto found = abi.scalars.find({variant, kind});
+  ROSE_ASSERT(found != abi.scalars.end());
+  ROSE_ASSERT(found->second.size_bits > 0);
+  return found->second;
+}
+} // namespace
+
+unsigned SageInterface::requireTargetScalarSizeBits(SgType *type,
+                                                    const SgNode *context) {
+  ASSERT_not_null(type);
+  type = type->stripTypedefsAndModifiers();
+  if (auto *complex = isSgTypeComplex(type)) {
+    SgType *component = complex->get_base_type();
+    ASSERT_not_null(component);
+    component = component->stripTypedefsAndModifiers();
+    ROSE_ASSERT(isSgIntegralType(component) ||
+                isSgFloatingPointType(component));
+    const unsigned component_bits =
+        requireTargetScalarSizeBits(component, context);
+    ROSE_ASSERT(component_bits <= std::numeric_limits<unsigned>::max() / 2);
+    return component_bits * 2;
+  }
+  if (auto *imaginary = isSgTypeImaginary(type)) {
+    SgType *component = imaginary->get_base_type();
+    ASSERT_not_null(component);
+    ROSE_ASSERT(isSgFloatingPointType(component->stripTypedefsAndModifiers()));
+    return requireTargetScalarSizeBits(component, context);
+  }
+  return requireTargetScalarLayout(type, context).size_bits;
+}
+
+unsigned
+SageInterface::requireTargetDefaultPointerSizeBits(const SgNode *context) {
+  auto *source = getEnclosingSourceFile(context, true);
+  ASSERT_not_null(source);
+  const auto &abi = source->get_target_abi();
+  ROSE_ASSERT(abi.available && abi.pointer_size_bits > 0);
+  return abi.pointer_size_bits;
+}
+
+void SageInterface::requireTargetIntegerDomain(SgType *type,
+                                               const SgNode *context,
+                                               bool &is_unsigned,
+                                               unsigned &width) {
+  const auto layout = requireTargetScalarLayout(type, context);
+  ROSE_ASSERT(isSgIntegralType(type));
+  // Boolean values have a two-value domain independent of storage size.
+  is_unsigned = isSgTypeBool(type) || layout.is_unsigned;
+  width = isSgTypeBool(type) ? 1 : layout.size_bits;
+}
+
+void SageInterface::requireTargetFloatingDomain(SgType *type,
+                                                const SgNode *context,
+                                                unsigned &precision,
+                                                int &max_exponent) {
+  const auto layout = requireTargetScalarLayout(type, context);
+  ROSE_ASSERT(isSgFloatingPointType(type));
+  ROSE_ASSERT(layout.precision > 0 && layout.max_exponent > 0);
+  precision = layout.precision;
+  max_exponent = layout.max_exponent;
+}
 
 StructLayoutInfo ChainableTypeLayoutGenerator::layoutType(SgType *t) const {
   // Default implementation just passes everything (except typedefs and
@@ -28,23 +130,20 @@ StructLayoutInfo ChainableTypeLayoutGenerator::layoutType(SgType *t) const {
     return this->beginning->layoutType(t2);
   }
   default: {
-    if (this->next) {
+    if (this->next)
       return this->next->layoutType(t);
-    } else {
-      std::cerr << "Reached end of chain when trying to lay out a "
-                << t->class_name() << std::endl;
-      abort();
-    }
+    std::cerr << "Reached end of chain when trying to lay out a "
+              << t->class_name() << std::endl;
+    abort();
   }
   }
-  ROSE_ABORT();
-  return StructLayoutInfo();
 }
 
 void NonpackedTypeLayoutGenerator::layoutOneField(
     SgType *fieldType, SgNode *decl, bool isUnion, size_t &currentOffset,
     StructLayoutInfo &layout) const {
   StructLayoutInfo fieldInfo = this->beginning->layoutType(fieldType);
+  ROSE_ASSERT(fieldInfo.alignment != 0);
   if (fieldInfo.alignment > layout.alignment) {
     layout.alignment = fieldInfo.alignment;
   }
@@ -162,8 +261,6 @@ StructLayoutInfo NonpackedTypeLayoutGenerator::layoutType(SgType *t) const {
   }
 }
 
-//! There is a nice summary for ABI in the AMD64 System V ABI docs.
-// Liao, 7/22/2008
 StructLayoutInfo I386PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
   StructLayoutInfo layout;
   switch (t->variantT()) {
@@ -247,9 +344,6 @@ StructLayoutInfo I386PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
     layout.alignment = 4;
     break;
   }
-  // No this node in ROSE yet
-  // case V_SgTypeSignedLongLong: {layout.size = 8; layout.alignment = 4;
-  // break;}
   case V_SgTypeUnsignedLongLong: {
     layout.size = 8;
     layout.alignment = 4;
@@ -258,7 +352,7 @@ StructLayoutInfo I386PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
 
   case V_SgTypeFloat16: {
     layout.size = 2;
-    layout.alignment = 4;
+    layout.alignment = 2;
     break;
   }
   case V_SgTypeFloat: {
@@ -287,9 +381,6 @@ StructLayoutInfo I386PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
     layout.alignment = 4;
     break;
   }
-  // TODO what is the specification for them?
-  // case V_SgTypeVoid: {layout.size = 1; layout.alignment = 1; break;}
-  // case V_SgTypeWchar: {layout.size = 4; layout.alignment = 4; break;}
   default:
     return ChainableTypeLayoutGenerator::layoutType(t);
   }
@@ -380,8 +471,6 @@ X86_64PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
     layout.alignment = 8;
     break;
   }
-  // case V_SgTypeSignedLongLong: {layout.size = 8; layout.alignment = 8;
-  // break;}
   case V_SgTypeUnsignedLongLong: {
     layout.size = 8;
     layout.alignment = 8;
@@ -390,7 +479,7 @@ X86_64PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
 
   case V_SgTypeFloat16: {
     layout.size = 2;
-    layout.alignment = 4;
+    layout.alignment = 2;
     break;
   }
   case V_SgTypeFloat: {
@@ -419,9 +508,6 @@ X86_64PrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
     layout.alignment = 8;
     break;
   }
-    // case V_SgTypeVoid: {layout.size = 1; layout.alignment = 1; break;}
-    // case V_SgTypeWchar: {layout.size = 4; layout.alignment = 4; break;}
-
   default:
     return ChainableTypeLayoutGenerator::layoutType(t);
   }
@@ -458,263 +544,4 @@ ostream &operator<<(ostream &o, const StructLayoutInfo &i) {
     o << "}";
   }
   return o;
-}
-
-//! Get size and alignment from the member: custom_sizes.
-StructLayoutInfo
-CustomizedPrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
-  StructLayoutInfo layout;
-  switch (t->variantT()) {
-  case V_SgTypeBool: {
-    layout.size = custom_sizes->sz_bool;
-    layout.alignment = custom_sizes->sz_alignof_bool;
-    break;
-  }
-
-  case V_SgTypeChar:
-  case V_SgTypeSignedChar:
-  case V_SgTypeUnsignedChar: {
-    layout.size = custom_sizes->sz_char;
-    layout.alignment = custom_sizes->sz_alignof_char;
-    break;
-  }
-
-  case V_SgTypeShort:
-  case V_SgTypeSignedShort:
-  case V_SgTypeUnsignedShort: {
-    layout.size = custom_sizes->sz_short;
-    layout.alignment = custom_sizes->sz_alignof_short;
-    break;
-  }
-  case V_SgTypeInt:
-  case V_SgEnumType:
-  case V_SgTypeSignedInt:
-  case V_SgTypeUnsignedInt: {
-    layout.size = custom_sizes->sz_int;
-    layout.alignment = custom_sizes->sz_alignof_int;
-    ROSE_ASSERT(layout.size != 0);
-    break;
-  }
-  case V_SgTypeLong:
-  case V_SgTypeSignedLong:
-  case V_SgTypeUnsignedLong: {
-    layout.size = custom_sizes->sz_long;
-    layout.alignment = custom_sizes->sz_alignof_long;
-    break;
-  }
-
-  case V_SgTypeLongLong:
-  // case V_SgTypeSignedLongLong: // No this node in ROSE yet
-  case V_SgTypeUnsignedLongLong: {
-    layout.size = custom_sizes->sz_longlong;
-    layout.alignment = custom_sizes->sz_alignof_longlong;
-    break;
-  }
-  case V_SgTypeFloat16: {
-    layout.size = custom_sizes->sz_float16;
-    layout.alignment = custom_sizes->sz_alignof_float16;
-    break;
-  }
-  case V_SgTypeFloat: {
-    layout.size = custom_sizes->sz_float;
-    layout.alignment = custom_sizes->sz_alignof_float;
-    break;
-  }
-
-  case V_SgTypeDouble: {
-    layout.size = custom_sizes->sz_double;
-    layout.alignment = custom_sizes->sz_alignof_double;
-    break;
-  }
-  case V_SgTypeLongDouble: {
-    layout.size = custom_sizes->sz_longdouble;
-    layout.alignment = custom_sizes->sz_alignof_longdouble;
-    break;
-  }
-  // extended types
-  case V_SgPointerType: {
-    layout.size = custom_sizes->sz_void_ptr;
-    layout.alignment = custom_sizes->sz_alignof_void_ptr;
-    break;
-  }
-  case V_SgReferenceType: //{layout.size = 4; layout.alignment = 4; break;}
-  {
-    layout.size = custom_sizes->sz_reference;
-    layout.alignment = custom_sizes->sz_alignof_reference;
-    break;
-  }
-
-  case V_SgTypeVoid: {
-    layout.size = custom_sizes->sz_void_ptr;
-    layout.alignment = custom_sizes->sz_alignof_void_ptr;
-    break;
-  }
-  case V_SgTypeWchar: {
-    layout.size = custom_sizes->sz_wchar;
-    layout.alignment = custom_sizes->sz_alignof_wchar;
-    break;
-  }
-
-  default:
-    return ChainableTypeLayoutGenerator::layoutType(t);
-  }
-  return layout;
-}
-template <typename T> struct rose_alignof {
-
-  struct test {
-    char c;
-    T t;
-  };
-
-#ifndef USE_ROSE
-  // DQ (1/26/2010): this fails in legacy frontend (so a problem for ROSE
-  // compiling ROSE).
-  static const size_t v = offsetof(struct test, t);
-#else
-  static const size_t v = 0;
-#endif
-};
-
-enum testenum { testenum_x = INT_MAX }; /* NO_STRINGIFY */
-
-StructLayoutInfo
-SystemPrimitiveTypeLayoutGenerator::layoutType(SgType *t) const {
-  StructLayoutInfo layout;
-  switch (t->variantT()) {
-  case V_SgTypeBool: {
-    layout.size = sizeof(bool);
-    layout.alignment = rose_alignof<bool>::v;
-    break;
-  }
-
-  case V_SgTypeChar: {
-    layout.size = sizeof(char);
-    layout.alignment = rose_alignof<char>::v;
-    break;
-  }
-  case V_SgTypeSignedChar: {
-    layout.size = sizeof(signed char);
-    layout.alignment = rose_alignof<signed char>::v;
-    break;
-  }
-  case V_SgTypeUnsignedChar: {
-    layout.size = sizeof(unsigned char);
-    layout.alignment = rose_alignof<unsigned char>::v;
-    break;
-  }
-
-  case V_SgTypeShort: {
-    layout.size = sizeof(short);
-    layout.alignment = rose_alignof<short>::v;
-    break;
-  }
-  case V_SgTypeSignedShort: {
-    layout.size = sizeof(signed short);
-    layout.alignment = rose_alignof<signed short>::v;
-    break;
-  }
-  case V_SgTypeUnsignedShort: {
-    layout.size = sizeof(unsigned short);
-    layout.alignment = rose_alignof<unsigned short>::v;
-    break;
-  }
-
-  case V_SgTypeInt: {
-    layout.size = sizeof(int);
-    layout.alignment = rose_alignof<int>::v;
-    break;
-  }
-  case V_SgEnumType: {
-    layout.size = sizeof(testenum);
-    layout.alignment = rose_alignof<testenum>::v;
-    break;
-  } // strictly, this depends on the members of the enumeration (see C99
-    // s6.7.2.2, para 4)
-  case V_SgTypeSignedInt: {
-    layout.size = sizeof(signed int);
-    layout.alignment = rose_alignof<signed int>::v;
-    break;
-  }
-  case V_SgTypeUnsignedInt: {
-    layout.size = sizeof(unsigned int);
-    layout.alignment = rose_alignof<unsigned int>::v;
-    break;
-  }
-
-  case V_SgTypeLong: {
-    layout.size = sizeof(long);
-    layout.alignment = rose_alignof<long>::v;
-    break;
-  }
-  case V_SgTypeSignedLong: {
-    layout.size = sizeof(signed long);
-    layout.alignment = rose_alignof<signed long>::v;
-    break;
-  }
-  case V_SgTypeUnsignedLong: {
-    layout.size = sizeof(unsigned long);
-    layout.alignment = rose_alignof<unsigned long>::v;
-    break;
-  }
-
-  case V_SgTypeLongLong: {
-    layout.size = sizeof(long long);
-    layout.alignment = rose_alignof<long long>::v;
-    break;
-  }
-  // case V_SgTypeSignedLongLong: {layout.size = sizeof(); layout.alignment =
-  // rose_alignof<>::v; break;}
-  case V_SgTypeUnsignedLongLong: {
-    layout.size = sizeof(unsigned long long);
-    layout.alignment = rose_alignof<unsigned long long>::v;
-    break;
-  }
-
-    // PL (9/24/2025): Cannot use _Float16 here because this type does not exist
-    // in every compiler We need to include _Float16 in here for the
-    // abiStuffTest test to pass (due to _Float16 being in the type signature
-    // for a C++23 intrinsic), but just like there must be a workaround in
-    // ROSE-required macros header to define _Float16 if the type doesn't exist,
-    // we can't rely on _Float16 existing here. I think since we know _Float16
-    // is a 16-bit fixed- width float, it's safe to replace it with std::int16_t
-    // here. Not certain if the alignof is the same, but I imagine it should be.
-  case V_SgTypeFloat16: {
-    layout.size = sizeof(std::int16_t);
-    layout.alignment = rose_alignof<std::int16_t>::v;
-    break;
-  }
-  case V_SgTypeFloat: {
-    layout.size = sizeof(float);
-    layout.alignment = rose_alignof<float>::v;
-    break;
-  }
-  case V_SgTypeDouble: {
-    layout.size = sizeof(double);
-    layout.alignment = rose_alignof<double>::v;
-    break;
-  }
-  case V_SgTypeLongDouble: {
-    layout.size = sizeof(long double);
-    layout.alignment = rose_alignof<long double>::v;
-    break;
-  }
-
-  case V_SgPointerType: {
-    layout.size = sizeof(void *);
-    layout.alignment = rose_alignof<void *>::v;
-    break;
-  }
-  case V_SgReferenceType: {
-    layout.size = sizeof(void *);
-    layout.alignment = rose_alignof<void *>::v;
-    break;
-  }
-    // case V_SgTypeVoid: {layout.size = 1; layout.alignment = 1; break;}
-    // case V_SgTypeWchar: {layout.size = 4; layout.alignment = 4; break;}
-
-  default:
-    return ChainableTypeLayoutGenerator::layoutType(t);
-  }
-  return layout;
 }

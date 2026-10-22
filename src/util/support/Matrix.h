@@ -4,96 +4,59 @@
 
 #include <assert.h>
 
-#include <unistd.h>
-
-template <class Mat, class T> class SubMatrix {
-  unsigned r, c;
-  Mat &mat;
-
-public:
-  SubMatrix(Mat &m, unsigned _r, unsigned _c) : mat(m), r(_r), c(_c) {}
-  unsigned cols() const { return mat.cols() - c; }
-  unsigned rows() const { return mat.rows() - r; }
-  T &Entry(unsigned index1, unsigned index2) const {
-    return mat.Entry(index1 + r, index2 + c);
-  }
-  T &Entry(unsigned index1, unsigned index2) {
-    return mat.Entry(index1 + r, index2 + c);
-  }
-};
-
-template <class Mat, class T> class RowVector {
-  unsigned r, c, len;
-  Mat &mat;
-
-public:
-  RowVector(Mat &m, unsigned _r, unsigned _c, unsigned _len)
-      : mat(m), r(_r), c(_c), len(_len) {
-    assert(len >= c && len < mat.cols());
-  }
-  unsigned size() const { return len - c; }
-  void push_back(const T &e) {
-    mat.Entry(r, len) = e;
-    ++len;
-  }
-  T &Entry(unsigned index) const {
-    assert(index + c < len);
-    return mat.Entry(r, index + c);
-  }
-  T &operator[](unsigned index) const { return Entry(index); }
-};
+#include <limits>
+#include <memory>
+#include <stdexcept>
 
 template <class T> class Matrix {
   unsigned nr, nc, num;
-  T *vec;
-  unsigned GetLength() const { return num; }
+  std::unique_ptr<T[]> vec;
+
+  static unsigned checkedCapacity(unsigned rows, unsigned cols,
+                                  unsigned spare) {
+    const unsigned max = std::numeric_limits<unsigned>::max();
+    if (rows > max - spare || cols > max - spare)
+      throw std::length_error("Matrix dimensions overflow capacity");
+    rows += spare;
+    cols += spare;
+    if (rows != 0 && cols > max / rows)
+      throw std::length_error("Matrix dimensions overflow capacity");
+    return rows * cols;
+  }
 
 public:
   typedef T Elem;
 
-  Matrix() {
-    nr = nc = num = 0;
-    vec = 0;
-  }
+  Matrix() : nr(0), nc(0), num(0) {}
   Matrix(unsigned _nr, unsigned _nc, unsigned spare = 1) {
     nr = _nr;
     nc = _nc;
-    num = (nr + spare) * (nc + spare);
-    if (num == 0)
-      vec = 0;
-    else
-      vec = new T[num];
+    num = checkedCapacity(nr, nc, spare);
+    if (num != 0)
+      vec = std::make_unique<T[]>(num);
   }
 
   Matrix(const Matrix &that) {
     nr = that.nr;
     nc = that.nc;
     num = that.num;
-    if (num == 0)
-      vec = 0;
-    else {
-      vec = new T[num];
+    if (num != 0) {
+      vec = std::make_unique<T[]>(num);
       for (size_t i = 0; i < num; ++i)
         vec[i] = that.vec[i];
     }
   }
   void operator=(const Matrix &that) {
+    if (num < that.num) {
+      vec = std::make_unique<T[]>(that.num);
+      num = that.num;
+    }
     nr = that.nr;
     nc = that.nc;
-    if (num < that.num) {
-      delete[] vec;
-      num = that.num;
-      vec = new T[num];
-    }
     if (that.num > 0) {
-      for (int i = 0; i < num; ++i)
+      for (unsigned i = 0; i < that.num; ++i)
         vec[i] = that.vec[i];
     }
-  }
-
-  ~Matrix() {
-    if (vec != 0)
-      delete[] vec;
   }
 
   unsigned cols() const { return nc; }
@@ -107,37 +70,20 @@ public:
     return Entry(index1, index2);
   }
 
-  RowVector<Matrix<T>, T> operator[](int index) {
-    // DQ (11/8/2011): Fixed to avoid function pointer comparision ("rows()"
-    // instead of "rows").
-    assert(index > 0 && index < rows());
-    return RowVector<Matrix<T>, T>(*this, index, 0, cols());
-  }
-
-  RowVector<const Matrix<T>, T> operator[](int index) const {
-    // DQ (11/8/2011): Fixed to avoid function pointer comparision ("rows()"
-    // instead of "rows").
-    assert(index > 0 && index < rows());
-    return RowVector<const Matrix<T>, T>(*this, index, 0, cols());
-  }
-
   void Reset(unsigned index1, unsigned index2) {
-    unsigned num1 = index1 * index2;
+    unsigned num1 = checkedCapacity(index1, index2, 0);
+    if (num < num1) {
+      vec = std::make_unique<T[]>(num1);
+      num = num1;
+    }
     nr = index1;
     nc = index2;
-    if (num < num1) {
-      delete[] vec;
-      num = num1;
-      vec = new T[num];
-    }
   }
 
   void Initialize(const T &init) {
     for (size_t i = 0; i < num; i++)
       vec[i] = init;
   }
-
-  bool IsEmpty() const { return vec == 0; }
 };
 
 template <class Mat, class ElemOp>

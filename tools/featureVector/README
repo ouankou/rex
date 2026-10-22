@@ -1,4 +1,8 @@
-featureVector :
-This tool is designed to assist checking the differences between two source code by comparing the featureVector.
-A featureVector is the list of AST nodes, in the corresponding ID, that are shown in the source code.
-The AST nodes collected are only the class of SgLocatedNode,  representing the notion of an expression or statement which has a position within the source code.
+featureVector writes a .FV.txt inventory of the input file's source-located
+AST nodes. Entries include node class names, constant values, declaration and
+argument types, template arguments, and attached preprocessing information.
+Compare inventories when checking a transformation's output. Variant IDs and
+hash values are not a substitute for semantic equivalence.
+
+Run `featureVector --help` for tool options. `--verbose` also prints the entries
+to standard output. Output-file errors fail the command.

@@ -107,7 +107,15 @@ exactQualificationUseSiteForEmission(const SgNode *node,
   ASSERT_not_null(node);
 
   auto normalizeSemanticDeclaratorState =
-      [](SgStatement *statement) -> SgStatement * {
+      [node](SgStatement *statement) -> SgStatement * {
+    SgTemplateInstantiationDirectiveStatement *directive =
+        isSgTemplateInstantiationDirectiveStatement(
+            statement != nullptr ? statement->get_parent() : nullptr);
+    if (directive != nullptr &&
+        isSgTemplateArgument(const_cast<SgNode *>(node)) != nullptr) {
+      ROSE_ASSERT(directive->get_declaration() == statement);
+      return directive;
+    }
     SgVariableDefinition *definition = isSgVariableDefinition(statement);
     if (definition == nullptr) {
       return statement;
@@ -135,7 +143,17 @@ exactQualificationUseSiteForEmission(const SgNode *node,
       return false;
     }
     if (isSgAuxiliaryDeclarationList(declaration->get_parent()) != nullptr) {
-      return true;
+      // Auxiliary ownership excludes file output; a retained source declaration
+      // still supplies its exact qualification use site for diagnostic output.
+      for (const Sg_File_Info *position : {declaration->get_startOfConstruct(),
+                                           declaration->get_endOfConstruct()}) {
+        if (position == nullptr || position->isCompilerGenerated() ||
+            !SageInterface::hasExactSemanticFrontendSourcePosition(declaration,
+                                                                   position)) {
+          return true;
+        }
+      }
+      return false;
     }
     return isSgNonrealDecl(const_cast<SgDeclarationStatement *>(declaration)) !=
                nullptr &&
@@ -149,6 +167,17 @@ exactQualificationUseSiteForEmission(const SgNode *node,
   }
   structuralStatement = normalizeSemanticDeclaratorState(structuralStatement);
   emissionStatement = normalizeSemanticDeclaratorState(emissionStatement);
+
+  if (auto *parameters = isSgFunctionParameterList(structuralStatement)) {
+    auto *function = isSgFunctionDeclaration(parameters->get_parent());
+    if (function != nullptr && SageInterface::isLambdaFunction(function)) {
+      ROSE_ASSERT(parameters == function->get_parameterList() ||
+                  parameters == function->get_parameterList_syntax());
+      ASSERT_not_null(emissionStatement);
+      ROSE_ASSERT(!isSemanticOnlyDeclaration(emissionStatement));
+      return emissionStatement;
+    }
+  }
 
   if (isSgStatement(const_cast<SgNode *>(node)) != nullptr &&
       structuralStatement != nullptr &&
@@ -562,10 +591,9 @@ NameQualificationContext::lookup(const SgNode *node,
         const auto &arguments = parent_nonreal->get_tpl_args();
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
-                "parent-nonreal-name=%s semantic-name=%s arguments=%zu "
+                "parent-nonreal-name=%s arguments=%zu "
                 "contains=%d\n",
                 parent_nonreal->get_name().getString().c_str(),
-                parent_nonreal->get_semantic_name().getString().c_str(),
                 arguments.size(),
                 std::find(arguments.begin(), arguments.end(), argument) !=
                         arguments.end()
@@ -595,27 +623,22 @@ NameQualificationContext::lookup(const SgNode *node,
       }
     }
     if (argument != nullptr) {
-      fprintf(
-          stderr,
-          "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
-          "type=%p(%s) expression=%p(%s) initialized-name=%p(%s) "
-          "template-declaration=%p(%s)\n",
-          static_cast<void *>(argument->get_type()),
-          argument->get_type() != nullptr
-              ? argument->get_type()->class_name().c_str()
-              : "<null>",
-          static_cast<void *>(argument->get_expression()),
-          argument->get_expression() != nullptr
-              ? argument->get_expression()->class_name().c_str()
-              : "<null>",
-          static_cast<void *>(argument->get_initializedName()),
-          argument->get_initializedName() != nullptr
-              ? argument->get_initializedName()->get_name().getString().c_str()
-              : "<null>",
-          static_cast<void *>(argument->get_templateDeclaration()),
-          argument->get_templateDeclaration() != nullptr
-              ? argument->get_templateDeclaration()->class_name().c_str()
-              : "<null>");
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
+              "type=%p(%s) expression=%p(%s) "
+              "template-declaration=%p(%s)\n",
+              static_cast<void *>(argument->get_type()),
+              argument->get_type() != nullptr
+                  ? argument->get_type()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(argument->get_expression()),
+              argument->get_expression() != nullptr
+                  ? argument->get_expression()->class_name().c_str()
+                  : "<null>",
+              static_cast<void *>(argument->get_templateDeclaration()),
+              argument->get_templateDeclaration() != nullptr
+                  ? argument->get_templateDeclaration()->class_name().c_str()
+                  : "<null>");
       if (SgTemplateType *argumentTemplateType =
               isSgTemplateType(argument->get_type())) {
         fprintf(stderr,
@@ -763,19 +786,4 @@ NameQualificationResult
 Unparser_Nameq::lookup_pointer_member_base_qualification(
     const SgNode *node, const SgStatement *useSiteStatement) const {
   return nameQualifications.lookupPointerMemberBase(node, useSiteStatement);
-}
-
-// DQ (3/14/2019): Adding debugging support to output the map of names.
-void Unparser_Nameq::outputNameQualificationMap(
-    const SgUnorderedMapNodeToString &qualifiedNameMap) {
-  printf("qualifiedNameMap.size() = %zu \n", qualifiedNameMap.size());
-  SgUnorderedMapNodeToString::const_iterator i = qualifiedNameMap.begin();
-  while (i != qualifiedNameMap.end()) {
-    ASSERT_not_null(i->first);
-
-    printf(" --- *i = i->first = %p = %s i->second = %s \n", i->first,
-           i->first->class_name().c_str(), i->second.c_str());
-
-    i++;
-  }
 }

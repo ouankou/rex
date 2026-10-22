@@ -58,32 +58,4 @@ public:
   }
 };
 
-class ParameterizeCopyArray : public CopyArrayUnderSizeLimit {
-  /*
-    struct LoopInfo {
-       std::vector<LoopTreeNode*> loops;
-       bool canbeBlocked;
-       LoopInfo() : canbeBlocked(false) {}
-    }
-    std::map<DepCompCopyArrayCollect::CopyArrayUnit*,LoopInfo> copyInfo;
-  */
-  /* set of copied arrays that can be blocked*/
-  /*
-    std::set<DepCompCopyArrayCollect::CopyArrayUnit*> blockInfo;
-  */
-
-  virtual void ModifyCopyArrayCollect(DepCompCopyArrayCollect &collect,
-                                      DepCompAstRefGraphCreate &g);
-  virtual void ApplyXform(DepCompCopyArrayCollect::CopyArrayUnit &curarray,
-                          CopyArrayConfig &config, LoopTreeNode *replRoot,
-                          LoopTreeNode *initStmt, LoopTreeNode *saveStmt);
-  bool CanBeBlocked(DepCompCopyArrayCollect::CopyArrayUnit &unit, int copydim);
-
-public:
-  ParameterizeCopyArray(unsigned sz) : CopyArrayUnderSizeLimit(sz) {}
-  virtual LoopTransformOptions::OptType GetOptimizationType() {
-    return LoopTransformOptions::DATA_OPT;
-  }
-};
-
 #endif

@@ -31,10 +31,17 @@ typedef VirtualGraphCreateTemplate<GraphAccessInterface::Node,
     ShadowGraphCreate;
 
 class CloneShadowGraphCreate : public ShadowGraphCreate {
-  PtrSetWrap<const GraphAccessInterface::Node> shadows;
+  PtrSetWrap<ShadowGraphNode> shadows;
 
 public:
   CloneShadowGraphCreate(BaseGraphCreate *_impl) : ShadowGraphCreate(_impl) {}
+  ~CloneShadowGraphCreate() {
+    for (auto node = shadows.begin(); !node.ReachEnd(); ++node) {
+      ShadowGraphNode *shadow = node.Current();
+      DeleteNode(shadow);
+      delete shadow;
+    }
+  }
 
   BaseGraphNode *CloneBaseNode(GraphAccessInterface::Node *orig) {
     ShadowGraphNode *n = new ShadowGraphNode(this, orig);
@@ -45,7 +52,7 @@ public:
     return GetBaseNode(orig);
   }
   bool IsShadowNode(const GraphAccessInterface::Node *node) const {
-    return shadows.IsMember(node);
+    return shadows.IsMember(static_cast<const ShadowGraphNode *>(node));
   }
   bool IsShadowBaseNode(const BaseGraphNode *base) const {
     GraphAccessInterface::Node *n = ShadowGraphCreate::GetVirtualNode(base);
@@ -127,53 +134,53 @@ public:
   T Closure(T info) { return analOp->Closure(info); }
 };
 
+template <class T> class TransInfoEdge : public MultiGraphElem {
+  T info;
+
+public:
+  TransInfoEdge(MultiGraphCreate *c, const T &t) : MultiGraphElem(c), info(t) {}
+  T &Info() { return info; }
+};
+
 template <class T>
-class TransInfoCreate : public ShadowGraphCreate, public TransInfoGraph<T> {
+class TransInfoCreate
+    : public VirtualGraphCreateTemplate<GraphAccessInterface::Node,
+                                        TransInfoEdge<T>>,
+      public TransInfoGraph<T> {
+  using Graph =
+      VirtualGraphCreateTemplate<GraphAccessInterface::Node, TransInfoEdge<T>>;
   TransInfoOP<T> *analOp;
 
 public:
-  class EdgeImpl : public MultiGraphElem {
-    T info;
-
-  public:
-    EdgeImpl(MultiGraphCreate *c, const T &t) : MultiGraphElem(c), info(t) {}
-    ~EdgeImpl() {}
-    T &Info() { return info; }
-  };
-
   TransInfoCreate(TransInfoOP<T> *op, BaseGraphCreate *_impl = 0)
-      : ShadowGraphCreate(_impl), analOp(op) {}
-  ~TransInfoCreate() {}
+      : Graph(_impl), analOp(op) {}
   bool TransInfoComputed(const GraphAccessInterface::Node *src,
                          const GraphAccessInterface::Node *snk) {
-    return ContainNode(src) && ContainNode(snk) &&
+    return this->ContainNode(src) && this->ContainNode(snk) &&
            !GraphCrossEdgeIterator<TransInfoCreate<T>>(this, src, snk)
                 .ReachEnd();
   }
   T GetTransInfo(const GraphAccessInterface::Node *n1,
                  const GraphAccessInterface::Node *n2) {
-    if (!ContainNode(n1) || !ContainNode(n2))
+    if (!this->ContainNode(n1) || !this->ContainNode(n2))
       return analOp->GetTopInfo(n1, n2);
     GraphCrossEdgeIterator<TransInfoCreate<T>> cross(this, n1, n2);
     if (cross.ReachEnd())
       return analOp->GetTopInfo(n1, n2);
-    EdgeImpl *e = static_cast<EdgeImpl *>(cross.Current());
-    return e->Info();
+    return cross.Current()->Info();
   }
   void SetTransInfo(GraphAccessInterface::Node *n1,
                     GraphAccessInterface::Node *n2, T info) {
-    if (!ContainNode(n1))
-      AddNode(n1);
-    if (!ContainNode(n2))
-      AddNode(n2);
+    if (!this->ContainNode(n1))
+      this->AddNode(n1);
+    if (!this->ContainNode(n2))
+      this->AddNode(n2);
     GraphCrossEdgeIterator<TransInfoCreate<T>> crossIter(this, n1, n2);
-    EdgeImpl *e;
     if (crossIter.ReachEnd()) {
-      e = new EdgeImpl(this, info);
-      AddEdge(n1, n2, e);
+      auto *edge = new TransInfoEdge<T>(this, info);
+      this->AddEdge(n1, n2, edge);
     } else {
-      e = static_cast<EdgeImpl *>(crossIter.Current());
-      e->Info() = info;
+      crossIter.Current()->Info() = info;
     }
   }
 };

@@ -96,28 +96,33 @@ SgInitializedName *findSemanticField(SgClassDefinition *definition,
   return nullptr;
 }
 
-void requireGeneratedDependencyProvenance(SgTypedefDeclaration *declaration) {
+void requireSourceDependencyProvenance(SgTypedefDeclaration *declaration,
+                                       int line) {
   ROSE_ASSERT(declaration != nullptr);
   for (Sg_File_Info *file_info :
        {declaration->get_file_info(), declaration->get_startOfConstruct(),
         declaration->get_endOfConstruct()}) {
     ROSE_ASSERT(file_info != nullptr);
     ROSE_ASSERT(file_info->get_parent() == declaration);
-    ROSE_ASSERT(file_info->isCompilerGenerated());
-    ROSE_ASSERT(file_info->isFrontendSpecific());
+    ROSE_ASSERT(!file_info->isCompilerGenerated());
+    ROSE_ASSERT(!file_info->isFrontendSpecific());
     ROSE_ASSERT(!file_info->isTransformation());
     ROSE_ASSERT(!file_info->isSourcePositionUnavailableInFrontend());
     ROSE_ASSERT(file_info->isOutputInCodeGeneration());
-    ROSE_ASSERT(file_info->get_file_id() ==
-                Sg_File_Info::COMPILER_GENERATED_FILE_ID);
-    ROSE_ASSERT(file_info->get_physical_file_id() ==
-                Sg_File_Info::COMPILER_GENERATED_FILE_ID);
+    ROSE_ASSERT(file_info->get_file_id() >= 0);
+    ROSE_ASSERT(file_info->get_file_id() == file_info->get_physical_file_id());
+    ROSE_ASSERT(Rose::utility_stripPathFromFileName(
+                    file_info->get_physical_filename()) ==
+                "rex_frontend_generated_typedef_dependency.h");
+    ROSE_ASSERT(file_info->get_raw_line() == line);
+    ROSE_ASSERT(SageInterface::hasExactSemanticFrontendSourcePosition(
+        declaration, file_info));
     ROSE_ASSERT(file_info->get_source_sequence_number() == 0);
   }
 }
 
 void requireSemanticDependency(SgGlobal *global,
-                               SgTypedefDeclaration *dependency) {
+                               SgTypedefDeclaration *dependency, int line) {
   ROSE_ASSERT(dependency != nullptr);
   SgAuxiliaryDeclarationList *auxiliary = global->get_auxiliary_declarations();
   ROSE_ASSERT(auxiliary != nullptr);
@@ -128,7 +133,7 @@ void requireSemanticDependency(SgGlobal *global,
                          global->get_declarations().end(), dependency) == 0);
   ROSE_ASSERT(std::count(auxiliary->get_declarations().begin(),
                          auxiliary->get_declarations().end(), dependency) == 1);
-  requireGeneratedDependencyProvenance(dependency);
+  requireSourceDependencyProvenance(dependency, line);
   ROSE_ASSERT(!dependency->get_translation_unit_source_order().has_value());
   ROSE_ASSERT(dependency->get_firstNondefiningDeclaration() == dependency);
   ROSE_ASSERT(dependency->get_definingDeclaration() == nullptr);
@@ -163,9 +168,9 @@ int main(int argc, char **argv) {
       findSemanticTypedef(global, "rex_hidden_local_word_t");
   SgClassDeclaration *record =
       findGlobalClassDefinition(global, "rex_hidden_socket_address");
-  requireSemanticDependency(global, field_dependency);
-  requireSemanticDependency(global, signature_dependency);
-  requireSemanticDependency(global, local_dependency);
+  requireSemanticDependency(global, field_dependency, 4);
+  requireSemanticDependency(global, signature_dependency, 5);
+  requireSemanticDependency(global, local_dependency, 6);
   ROSE_ASSERT(record != nullptr);
   ROSE_ASSERT(SageInterface::hasExactSemanticAuxiliaryOwnership(record));
   ROSE_ASSERT(
@@ -183,6 +188,16 @@ int main(int argc, char **argv) {
       findGlobalFunction(global, "rex_hidden_identity");
   ROSE_ASSERT(identity != nullptr);
   ROSE_ASSERT(identity->get_type()->get_return_type() ==
+              SgTypeUnsignedShort::createType());
+  SgFunctionType *identity_syntax = identity->get_type_syntax();
+  ROSE_ASSERT(identity_syntax != nullptr &&
+              identity_syntax != identity->get_type());
+  ROSE_ASSERT(identity_syntax->get_parent() == identity);
+  ROSE_ASSERT(identity_syntax->get_semantic_signature() ==
+              identity->get_type());
+  ROSE_ASSERT(identity_syntax->get_return_type() ==
+              signature_dependency->get_type());
+  ROSE_ASSERT(identity->get_orig_return_type() ==
               signature_dependency->get_type());
   SgFunctionParameterList *identity_parameters = identity->get_parameterList();
   ROSE_ASSERT(identity_parameters != nullptr);

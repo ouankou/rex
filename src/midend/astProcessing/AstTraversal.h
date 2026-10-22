@@ -1,6 +1,3 @@
-// Author: Markus Schordan
-// $Id: AstTraversal.h,v 1.3 2006/04/24 00:21:32 dquinlan Exp $
-
 #ifndef ASTTRAVERSAL_H
 #define ASTTRAVERSAL_H
 
@@ -10,12 +7,6 @@
 
 class SgNode;
 
-// #include "sage3.h"
-
-// WORK IN PROGRESS. DO NOT MODIFY OR THINK ABOUT IT.
-
-// test new traversal classes
-// example class for tree traversal
 class AstPreOrderTraversal : public PreOrderTraversal<SgNode *> {
 protected:
   virtual void preOrderVisit(SgNode *node);

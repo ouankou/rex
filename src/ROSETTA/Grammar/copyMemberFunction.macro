@@ -1,21 +1,73 @@
 
 virtual $GRAMMAR_PREFIX_Node* $CLASSNAME::copy ( $GRAMMAR_PREFIX_CopyHelp& help) const
    {
+     if (const SgIncludeFile* include = isSgIncludeFile(this))
+        include->validateIncludeOwnership();
+     requireClassDefinitionOwnerForCopy(this);
+     SgCopyHelp::ConstructionScope construction(help, this);
      $CLASSNAME* result = NULL;
-
-  // printf ("Copy $CLASSNAME = %p = %s \n",this,SageInterface::get_name(this).c_str());
-
-  // Record the depth of the copy so that we build an clear internal state (new feature)
-  // used to associated old and new symbols in the original AST and the copy of the AST.
-  // The default value of the depth is 0, so after this call the depth is 1!
      help.incrementDepth();
 
+     if (const SgFunctionDeclaration* source = isSgFunctionDeclaration(this))
+        SageInterface::materializeTypeWithCopyMap(source->get_type(), help, true);
 
-  // Copy data members from base classes
+$DEPENDENCY_COPY
+
+     if (const SgTemplateParameter* source = isSgTemplateParameter(this))
+        SageInterface::prepareTemplateParameterTypeCopy(source, help);
+
+     if (const SgTypedefDeclaration* source = isSgTypedefDeclaration(this))
+        SageInterface::materializeTypeWithCopyMap(source->get_base_type(), help, true);
+     if (const SgBaseClass* source = isSgBaseClass(this))
+        {
+        if (SgType* type = source->get_source_type())
+           SageInterface::materializeTypeWithCopyMap(type, help, true);
+        prepareConstructorReference(source->get_fortran_source_derived_type_symbol(), help);
+        }
+     if (const SgInitializedName* source = isSgInitializedName(this))
+        SageInterface::materializeTypeWithCopyMap(source->get_type(), help, true);
+     if (const SgFunctionParameterTypeList* source = isSgFunctionParameterTypeList(this))
+        if (source->get_source_parameters() == nullptr)
+           for (SgType* argument : source->get_arguments())
+              SageInterface::materializeTypeWithCopyMap(argument, help, true);
+     if (const SgExpression* source = isSgExpression(this))
+        {
+        if (source->has_semantic_value_type())
+           SageInterface::materializeTypeWithCopyMap(source->get_type(), help, true);
+        if (const SgCastExp* cast = isSgCastExp(source))
+           if (SgType* type = cast->get_source_type())
+              SageInterface::materializeTypeWithCopyMap(type, help, true);
+        }
+     if (const SgFunctionType* source = isSgFunctionType(this))
+        if (SgFunctionType* semantic = source->get_semantic_signature())
+           SageInterface::materializeTypeWithCopyMap(semantic, help, true);
+
+     if (const SgTemplateVariableDeclaration* source = isSgTemplateVariableDeclaration(this))
+        {
+          for (const SgTemplateParameter* parameter : source->get_templateParameters())
+             {
+               ROSE_ASSERT(parameter != NULL && parameter->get_parent() == source);
+               ROSE_ASSERT(help.copyOrLookupOwnedAst(parameter) != parameter);
+             }
+        }
+     if (const SgTemplateArgument* source = isSgTemplateArgument(this))
+        SageInterface::prepareTemplateArgumentCopy(source, help);
+     if (const SgNonrealDecl* source = isSgNonrealDecl(this))
+        prepareConstructorReference(source->get_templateDeclaration(), help);
+
 $CONSTRUCT_ARG_COPY
 
-  // Build an empty copy of this object (will be filled in, but
-  // the parent can't be set and must be set by the caller)
+  // A constructor dependency can complete this exact node through a
+  // semantic cycle.
+     const auto existing = help.get_copiedNodeMap().find(this);
+     if (existing != help.get_copiedNodeMap().end() && existing->second != this)
+        {
+          result = dynamic_cast<$CLASSNAME*>(existing->second);
+          ROSE_ASSERT(result != NULL && result->variantT() == variantT());
+          completeNodeCopy(this, result, help);
+          return result;
+        }
+
      result = new $CLASSNAME( $CONSTRUCT_ARG_LIST );
      ROSE_ASSERT(result != NULL);
 
@@ -25,8 +77,118 @@ $CONSTRUCT_ARG_COPY
   // detached provisional copy that would need late graph repair.
      help.insertCopiedNodePair(this,result);
 
-  // Copy data members of "this" class
+$STATE_COPY
+
+$REFERENCE_COPY
+
+  // Signature types can require the specification scope before the function
+  // declaration exists. Keep that region private until its typed owner adopts it.
+     if (const SgFunctionParameterScope* source = isSgFunctionParameterScope(this))
+        if (const SgFunctionDeclaration* owner = isSgFunctionDeclaration(source->get_parent()))
+           {
+             ROSE_ASSERT(owner->get_functionParameterScope() == source);
+             SgScopeStatement* enclosing = nullptr;
+             help.bindCopiedReference(enclosing, source->get_scope());
+             ASSERT_not_null(enclosing);
+             SageInterface::beginDetachedFunctionParameterScopeConstruction(
+                 isSgFunctionParameterScope(result), enclosing, enclosing);
+           }
+
+     if (const SgNamespaceDefinitionStatement* source = isSgNamespaceDefinitionStatement(this))
+        {
+          SgNamespaceDeclarationStatement* owner = source->get_namespaceDeclaration();
+          ROSE_ASSERT(owner != NULL && owner->get_definition() == source &&
+                      source->get_parent() == owner);
+          SgNamespaceDeclarationStatement* copiedOwner =
+              isSgNamespaceDeclarationStatement(help.copyOrLookupAst(owner));
+          SgNamespaceDefinitionStatement* copiedDefinition =
+              isSgNamespaceDefinitionStatement(result);
+          ROSE_ASSERT(copiedOwner != NULL && copiedOwner != owner &&
+                      (copiedOwner->get_definition() == NULL ||
+                       copiedOwner->get_definition() == copiedDefinition));
+          copiedOwner->set_definition(copiedDefinition);
+          copiedDefinition->set_namespaceDeclaration(copiedOwner);
+          copiedDefinition->set_parent(copiedOwner);
+          ROSE_ASSERT(copiedOwner->get_definition() == copiedDefinition &&
+                      copiedDefinition->get_namespaceDeclaration() == copiedOwner &&
+                      copiedDefinition->get_parent() == copiedOwner);
+        }
+
+     if (const SgClassDefinition* source = isSgClassDefinition(this))
+        {
+          SgClassDeclaration* owner = source->get_declaration();
+          ROSE_ASSERT(owner != NULL && owner->get_definition() == source);
+          SgClassDeclaration* copiedOwner =
+              isSgClassDeclaration(help.copyOrLookupAst(owner));
+          SgClassDefinition* copiedDefinition = isSgClassDefinition(result);
+          ROSE_ASSERT(copiedOwner != NULL && copiedOwner != owner &&
+                      (copiedOwner->get_definition() == NULL ||
+                       copiedOwner->get_definition() == copiedDefinition));
+          copiedDefinition->set_parent(copiedOwner);
+          copiedOwner->set_definition(copiedDefinition);
+          help.constructClassTypeCopy(owner);
+        }
+     if (const SgClassDeclaration* source = isSgClassDeclaration(this))
+        {
+          if (source->get_definingDeclaration() == NULL)
+             help.constructClassTypeCopy(source);
+        }
+     if (const SgEnumDeclaration* source = isSgEnumDeclaration(this))
+        {
+          if (source->get_definingDeclaration() == source)
+             help.constructEnumTypeCopy(source);
+        }
+     if (const SgTemplateParameter* source = isSgTemplateParameter(this))
+        help.constructTemplateParameterTypeCopy(source);
+
+     if (const SgFunctionDefinition* source = isSgFunctionDefinition(this))
+        {
+          SgFunctionDeclaration* owner = source->get_declaration();
+          ROSE_ASSERT(owner != NULL && owner->get_definition() == source);
+          SgFunctionDeclaration* copiedOwner =
+              isSgFunctionDeclaration(help.copyOrLookupAst(owner));
+          SgFunctionDefinition* copiedDefinition = isSgFunctionDefinition(result);
+          ROSE_ASSERT(copiedOwner != NULL && copiedOwner != owner &&
+                      (copiedOwner->get_definition() == NULL ||
+                       copiedOwner->get_definition() == copiedDefinition));
+          copiedDefinition->set_declaration(copiedOwner);
+          copiedOwner->set_definition(copiedDefinition);
+        }
+
+  // The constructor and semantic back-reference must share one mapped type.
+     if (SgTypedefDeclaration* declaration = isSgTypedefDeclaration(result))
+        {
+          const SgTypedefDeclaration* original = isSgTypedefDeclaration(this);
+          SgTypedefType* originalType = original->get_type();
+          SgTypedefType* copiedType = declaration->get_type();
+          if (originalType == NULL || copiedType == NULL ||
+              copiedType == originalType ||
+              originalType->get_declaration() != original ||
+              copiedType->get_declaration() != declaration ||
+              help.get_copiedNodeMap().at(originalType) != copiedType)
+             {
+               fprintf(stderr, "REX_COPY_INVARIANT[typedef-type-construction]: "
+                               "typedef copy has no exact private type\n");
+               ROSE_ABORT();
+             }
+        }
+
 $POST_CONSTRUCT_COPY
+
+     if (SgInitializedName* parameter = isSgInitializedName(result))
+        parameter->construct_source_prototype_copy_symbol(
+            *isSgInitializedName(this), help);
+     if (SgFunctionParameterTypeList* parameters = isSgFunctionParameterTypeList(result))
+        parameters->validate_source_prototype();
+
+  // Runtime source context is immutable provenance inherited by the exact
+  // directive copy, not a string-keyed attribute reconstructed after outlining.
+     if (SgOmpExecStatement* directive = isSgOmpExecStatement(result))
+        {
+          if (directive->get_runtime_source_origin() !=
+              SgOmpExecStatement::e_runtime_source_unavailable)
+             directive->mark_runtime_source_context_copied();
+        }
 
      if (SgSymbolTable* symbolTable = isSgSymbolTable(result))
         {
@@ -38,19 +200,12 @@ $POST_CONSTRUCT_COPY
           fresh_table->set_case_insensitive_semantics(symbolTable->isCaseInsensitive());
           symbolTable->set_table(fresh_table);
           symbolTable->set_symbolSet(SgNodeSet());
-          symbolTable->clear_functionSymbolExactIndex();
+          symbolTable->clear_symbol_indexes();
         }
 
-  // DQ (10/9/2007): comment out to test template problem ... This breaks test2004_76.C and test2004_142.C
-  // DQ (10/5/2007): Add custom function to be called to fixup IR node specific details.
-  // fixupCopy(result,help);
-
-  // DQ (10/16/2007): The semantics of copy should include setting the parents of all
-  // the Sg_File_Info objects that are built for the new IR nodes.
      SgLocatedNode* locatedNode = isSgLocatedNode(result);
      if (locatedNode != NULL)
         {
-       // If this is a SgLocatedNode then check the parents of the Sg_File_Info objects
           Sg_File_Info* start = locatedNode->get_startOfConstruct();
           ROSE_ASSERT(start != NULL);
           start->set_parent(locatedNode);
@@ -88,11 +243,34 @@ $POST_CONSTRUCT_COPY
              }
         }
 
-  // DQ (10/16/2007): Also set the Sg_File_Info parents for the SgInitializedName
+  // Files own their position independently of SgLocatedNode. Publish that
+  // ownership before any source-file token associations become observable.
+     if (SgFile* file = isSgFile(result))
+        {
+          Sg_File_Info* start = file->get_startOfConstruct();
+          ROSE_ASSERT(start != NULL);
+          start->set_parent(file);
+        }
+
+  // Frontend associations use the exact nodes, tokens and preprocessing records
+  // constructed by this transaction.
+     if (SgSourceFile* sourceFile = isSgSourceFile(result))
+        sourceFile->copy_frontendAssociations(*isSgSourceFile(this), help);
+
+  // Pragmas own positions independently of SgLocatedNode. Their copied
+  // locations must identify the copied pragma before it leaves construction.
+     if (SgPragma* pragma = isSgPragma(result))
+        {
+          Sg_File_Info* start = pragma->get_startOfConstruct();
+          Sg_File_Info* end = pragma->get_endOfConstruct();
+          ROSE_ASSERT(start != NULL && end != NULL);
+          start->set_parent(pragma);
+          end->set_parent(pragma);
+        }
+
      SgInitializedName* initializedName = isSgInitializedName(result);
      if (initializedName != NULL)
         {
-       // If this is a SgLocatedNode then check the parents of the Sg_File_Info objects
           Sg_File_Info* start = initializedName->get_startOfConstruct();
           ROSE_ASSERT(start != NULL);
           start->set_parent(initializedName);
@@ -100,88 +278,8 @@ $POST_CONSTRUCT_COPY
 
         }
 
-  // printf ("End of copy $CLASSNAME = %p = %s \n",this,SageInterface::get_name(this).c_str());
 
-  // A function definition is physically owned by its defining declaration,
-  // even though the declaration is reached through the definition's parent
-  // relation rather than a normal downward data-member edge.  When the
-  // definition itself is the copy root, include that exact owner while this
-  // copy transaction is still nested.  The already-published definition map
-  // entry closes the declaration/definition cycle without manufacturing a
-  // second definition or requiring late repair.
-     if (help.get_depth() == 1)
-        {
-          const SgFunctionDefinition* rootDefinition = isSgFunctionDefinition(this);
-          if (rootDefinition != NULL)
-             {
-               SgFunctionDeclaration* rootDeclaration = rootDefinition->get_declaration();
-               if (rootDeclaration == NULL || rootDeclaration->get_definition() != rootDefinition)
-                  {
-                    fprintf(stderr,
-                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
-                            "definition=%p declaration=%p has no exact physical owner\n",
-                            static_cast<const void*>(rootDefinition),
-                            static_cast<void*>(rootDeclaration));
-                    ROSE_ABORT();
-                  }
-               SgNode* copiedRootDeclaration = help.copyOrLookupAst(rootDeclaration);
-               SgFunctionDeclaration* copiedDeclaration =
-                   isSgFunctionDeclaration(copiedRootDeclaration);
-               if (copiedDeclaration == NULL ||
-                   copiedRootDeclaration == rootDeclaration)
-                  {
-                    fprintf(stderr,
-                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
-                            "definition=%p declaration=%p copy=%p is not one exact copied owner\n",
-                            static_cast<const void*>(rootDefinition),
-                            static_cast<void*>(rootDeclaration),
-                            static_cast<void*>(copiedRootDeclaration));
-                    ROSE_ABORT();
-                  }
-               SgFunctionDefinition* copiedDefinition =
-                   isSgFunctionDefinition(result);
-               if (copiedDefinition == NULL ||
-                   copiedDefinition->get_declaration() != copiedDeclaration ||
-                   copiedDeclaration->get_definition() != copiedDefinition)
-                  {
-                    fprintf(stderr,
-                            "REX_COPY_INVARIANT[function-definition-root-owner]: "
-                            "copied definition=%p declaration=%p does not preserve the exact ownership cycle\n",
-                            static_cast<void*>(copiedDefinition),
-                            static_cast<void*>(copiedDeclaration));
-                    ROSE_ABORT();
-                  }
-             }
-        }
-
-  // Record the depth of the copy so that we build an clear internal state (new feature)
-  // used to associated old and new symbols in the original AST and the copy of the AST.
-     help.decrementDepth();
-
-  // Test if this is the root of the copy!
-     if (help.get_depth() == 0)
-        {
-       // This is the original calling node.
-
-       // Canonicalize provisional copied-node associations that influence
-       // fixup traversal before any scope/symbol/reference repair begins.
-          help.prepareRootCopyForFixup();
-
-       // Call the fixup mechanism to correct details of the AST copy mechanism.
-       // printf ("Calling $CLASSNAME::fixupCopy() (from root of AST being copied) \n");
-#if ALT_FIXUP_COPY
-       // DQ (11/7/2007): These need to be called separately (see documentation)
-          fixupCopy_scopes (result,help);
-          fixupCopy_symbols (result,help);
-          fixupCopy_references (result,help);
-#else
-          fixupCopy(result,help);
-#endif
-          help.finalizeRootCopy();
-       // Allow this to be called recursively, so accumulate the state.
-       // Also, clear the state in the SgCopyHelp object.
-       // help.clearState();
-        }
+     completeNodeCopy(this, result, help);
 
      return result;
    }

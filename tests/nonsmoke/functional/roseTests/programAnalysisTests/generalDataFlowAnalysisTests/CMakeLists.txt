@@ -5,7 +5,6 @@ include_directories(
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${_saf_src_root}
   ${_saf_src_root}/analysis
-  ${_saf_src_root}/arrIndexLabeler
   ${_saf_src_root}/cfgUtils
   ${_saf_src_root}/lattice
   ${_saf_src_root}/rwAccessLabeler
@@ -19,9 +18,6 @@ target_link_libraries(taintAnalysisTest ROSE_DLL ${link_with_libraries})
 
 add_executable(constantPropagationTest constantPropagation.C constantPropagationTest.C)
 target_link_libraries(constantPropagationTest ROSE_DLL ${link_with_libraries})
-
-add_executable(taintedFlowAnalysisTest taintedFlowAnalysis.C taintedFlowAnalysisTest.C)
-target_link_libraries(taintedFlowAnalysisTest ROSE_DLL ${link_with_libraries})
 
 add_executable(liveDeadVarAnalysisTest liveDeadVarAnalysisTest.C)
 target_link_libraries(liveDeadVarAnalysisTest ROSE_DLL ${link_with_libraries})
@@ -1335,7 +1331,7 @@ endforeach()
 
 #-------------------------------------------------------------------------------
 # Fortran constant propagation tests
-if(enable-fortran)
+if(ENABLE-FORTRAN)
   foreach(specimen IN LISTS F77_CONSTPROP_SPECIMENS)
     string(REPLACE "." "_" _name ${specimen})
     if(NOT EXISTS "${_f77_test_dir}/${specimen}")
@@ -1368,37 +1364,45 @@ if(enable-fortran)
     )
   endforeach()
 
-  foreach(specimen IN LISTS F03_CONSTPROP_SPECIMENS)
+  rex_get_registered_compile_source_set(_f03_frontend_negative_sources
+    REX_FORTRAN_F03_NEGATIVE_SOURCES)
+  foreach(specimen IN LISTS F03_CONSTPROP_SPECIMENS
+      F03_CONSTPROP_ADDITIONAL_SPECIMENS F03_CONSTPROP_ADDITIONAL_SPECIMENS_CFG)
     string(REPLACE "." "_" _name ${specimen})
     if(NOT EXISTS "${_f03_test_dir}/${specimen}")
       message(STATUS "Skipping gdf_f03_constprop_${_name} (missing ${_f03_test_dir}/${specimen})")
       continue()
     endif()
-    add_test(
-      NAME gdf_f03_constprop_${_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
-        ${_exit_status}
-        f03cp_${specimen}.passed
-    )
-  endforeach()
-
-  foreach(specimen IN LISTS F03_CONSTPROP_ADDITIONAL_SPECIMENS F03_CONSTPROP_ADDITIONAL_SPECIMENS_CFG)
-    string(REPLACE "." "_" _name ${specimen})
-    if(NOT EXISTS "${_f03_test_dir}/${specimen}")
-      message(STATUS "Skipping gdf_f03_constprop_${_name} (missing ${_f03_test_dir}/${specimen})")
-      continue()
+    if("Fortran_tests/${specimen}" IN_LIST _f03_frontend_negative_sources)
+      fortran_frontend_negative_diagnostic(
+        ${specimen} _expected_diagnostic _expected_count)
+      get_filename_component(_source_stem ${specimen} NAME_WE)
+      rex_add_flang_frontend_negative_test(
+        gdf_f03_constprop_${_name}
+        gdf
+        ${CMAKE_CURRENT_BINARY_DIR}
+        f03cp_${specimen}.frontend-negative.log
+        ${_source_stem}
+        "${_expected_diagnostic}"
+        ${_expected_count}
+        $<TARGET_FILE:constantPropagationTest>
+        -rose:skipfinalCompileStep -rose:fortran_std=f2003
+        -c ${_f03_test_dir}/${specimen})
+    else()
+      add_test(
+        NAME gdf_f03_constprop_${_name}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+        COMMAND ${_rth}
+          CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
+          ${_exit_status}
+          f03cp_${specimen}.passed
+      )
     endif()
-    add_test(
-      NAME gdf_f03_constprop_${_name}
-      WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-      COMMAND ${_rth}
-        CMD="\"$<TARGET_FILE:constantPropagationTest>\" -rose:skipfinalCompileStep -rose:fortran_std=f2003 -c \"${_f03_test_dir}/${specimen}\""
-        ${_exit_status}
-        f03cp_${specimen}.passed
-    )
   endforeach()
+  unset(_f03_frontend_negative_sources)
+  unset(_expected_diagnostic)
+  unset(_expected_count)
+  unset(_source_stem)
 endif()
 
 #-------------------------------------------------------------------------------

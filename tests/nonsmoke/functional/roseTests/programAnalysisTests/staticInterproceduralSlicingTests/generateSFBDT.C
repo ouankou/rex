@@ -48,7 +48,7 @@ int main(int argc, char **argv) {
                (fDef->get_declaration()->get_name().getString()) + ".bDT.dot";
 
     SliceDominatorTree dt(*i, POST_DOMINATOR);
-    dt.writeDot(const_cast<char *>(filename.c_str()));
+    dt.writeDot(filename.c_str());
   }
   return 0;
 }

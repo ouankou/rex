@@ -96,21 +96,4 @@ public:
               const CompSliceDepGraphNode::FullNestInfo &nestInfo);
 };
 
-class ParameterizeBlocking : public AllLoopReuseBlocking {
-protected:
-  virtual LoopTreeNode *
-  ApplyBlocking(const CompSliceDepGraphNode::FullNestInfo &nestInfo,
-                LoopTreeDepComp &comp, DependenceHoisting &op,
-                LoopTreeNode *&top);
-
-public:
-  virtual LoopTransformOptions::OptType GetOptimizationType() {
-    return LoopTransformOptions::LOOP_NEST_OPT;
-  }
-  /* return the innermost slice after blocking */
-  virtual const CompSlice *
-  SetBlocking(CompSliceLocalityRegistry *anal,
-              const CompSliceDepGraphNode::FullNestInfo &nestInfo);
-};
-
 #endif

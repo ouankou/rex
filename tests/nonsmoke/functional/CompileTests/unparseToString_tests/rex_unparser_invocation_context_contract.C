@@ -216,5 +216,26 @@ int main(int argc, char **argv) {
   if (globalUnparseToString(&canonicalArguments, nullptr) != "<23>") {
     return 12;
   }
+
+  SgGlobal *global = sourceFile->get_globalScope();
+  ASSERT_not_null(global);
+  const std::string baseline = global->unparseToString();
+  if (global->unparseToString() != baseline) {
+    std::cerr << "Repeated emission changed the same source AST" << std::endl;
+    return 13;
+  }
+  const bool previousC = Rose::is_C_language;
+  const bool previousCpp = Rose::is_Cxx_language;
+  Rose::is_C_language = true;
+  Rose::is_Cxx_language = false;
+  const std::string afterCInput = global->unparseToString();
+  Rose::is_C_language = previousC;
+  Rose::is_Cxx_language = previousCpp;
+  if (afterCInput != baseline) {
+    std::cerr << "Ambient language flags changed C++ source emission\n"
+              << "before:\n" << baseline << "\nafter:\n" << afterCInput
+              << std::endl;
+    return 14;
+  }
   return 0;
 }

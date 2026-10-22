@@ -22,23 +22,14 @@ std::vector<std::string> split(const std::string &separator,
     retval.push_back(str.substr(retval.size()));
   } else {
     size_t at = 0;
-    while (at <= str.size() && retval.size() + 1 < maxparts) {
-      if (at == str.size()) {
-        retval.push_back(""); // string ends with separator
-        break;
-      }
+    while (retval.size() + 1 < maxparts) {
       size_t sep_at = str.find(separator, at);
-      if (sep_at == std::string::npos) {
-        retval.push_back(str.substr(at));
-        at = str.size() + 1; // "+1" means string doesn't end with separator
+      if (sep_at == std::string::npos)
         break;
-      } else {
-        retval.push_back(str.substr(at, sep_at - at));
-        at = sep_at + separator.size();
-      }
+      retval.push_back(str.substr(at, sep_at - at));
+      at = sep_at + separator.size();
     }
-    if (at < str.size() && retval.size() < maxparts)
-      retval.push_back(str.substr(at));
+    retval.push_back(str.substr(at));
   }
 
   if (trim_white_space) {
@@ -73,22 +64,6 @@ std::string join(char separator, char *strings[], size_t nstrings) {
 
 std::string join(char separator, const char *strings[], size_t nstrings) {
   return join_range(std::string(1, separator), strings, strings + nstrings);
-}
-
-std::string joinEnglish(const std::vector<std::string> &phrases,
-                        const std::string &separator,
-                        const std::string &finalIntro) {
-  if (phrases.empty())
-    return "";
-  if (phrases.size() == 1)
-    return phrases[0];
-  if (phrases.size() == 2)
-    return phrases[0] + " " + finalIntro + " " + phrases[1];
-
-  std::string s;
-  for (size_t i = 0; i < phrases.size() - 1; ++i)
-    s += phrases[i] + separator + " ";
-  return s + finalIntro + " " + phrases.back();
 }
 
 std::string listToString(const std::list<std::string> &container,

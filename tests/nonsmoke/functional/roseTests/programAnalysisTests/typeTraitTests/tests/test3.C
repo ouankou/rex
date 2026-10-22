@@ -52,10 +52,11 @@ void Foo(){
     class F: B{
         F() __attribute__((nothrow)){}
     };
-    // explicit constructor in the derived class w/ nothrow but the base type has explicit constructor w/o nothrow
-    if(!__has_nothrow_constructor(F));
+    if (__has_nothrow_constructor(F))
+      ;
+    static_assert(__has_nothrow_constructor(F),
+                  "derived constructor is nothrow");
 
     // pointers are always trivial.
     if(__has_nothrow_constructor(F*));
-    
 }

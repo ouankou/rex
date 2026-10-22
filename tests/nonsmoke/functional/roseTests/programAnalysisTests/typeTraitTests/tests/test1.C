@@ -59,12 +59,9 @@ void Foo(){
     class F: B{
         F & operator=(const F&) __attribute__((nothrow)){}
     };
-    // overloaded assign op with nothrow in derived type but not in the base type
-    if(!__has_nothrow_assign(F));
+    if (__has_nothrow_assign(F))
+      ;
+    static_assert(__has_nothrow_assign(F), "derived assignment is nothrow");
     // Pointers are always assignable
     if(__has_nothrow_assign(F*));
-
-    
-    
-    
 }

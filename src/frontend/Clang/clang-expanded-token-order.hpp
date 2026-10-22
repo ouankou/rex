@@ -18,7 +18,6 @@ public:
                    "REX_FRONTEND_INVARIANT[expanded-token-order-state]: exact "
                    "expanded-token order must be positive\n");
       std::abort();
-      __builtin_unreachable();
     }
     return ClangExpandedTokenOrder(order);
   }
@@ -29,7 +28,6 @@ public:
                    "REX_FRONTEND_INVARIANT[expanded-token-order-state]: exact "
                    "expanded-token order must be positive\n");
       std::abort();
-      __builtin_unreachable();
     }
     first_order_ = std::min(first_order_, order);
     last_order_ = std::max(last_order_, order);

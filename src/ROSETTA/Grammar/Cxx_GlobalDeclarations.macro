@@ -1,8 +1,1 @@
-// Preprocessor definitions
-
-// #include <string.h>
-
-// Global Declarations
-
-// DQ (10/19/2010): Moved the body of this function to src/frontend/SageIII/sage_support/sage_support.C.
-void preventConstructionOnStack(SgNode* n);
+void preventConstructionOnStack(SgNode *n);

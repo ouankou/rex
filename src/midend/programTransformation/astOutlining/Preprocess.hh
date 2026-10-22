@@ -11,8 +11,9 @@
 #define INC_LIAOUTLINER_PREPROCESS_HH //!< Preprocess/Preprocess.hh included.
 
 class SgBasicBlock;
-class SgVariableDeclaration;
 class SgStatement;
+class SgFunctionDeclaration;
+class SgScopeStatement;
 
 namespace Outliner {
 namespace Preprocess {
@@ -30,31 +31,6 @@ void checkAndPatchUpOptions();
  *  always providing the caller with an SgBasicBlock to outline.
  */
 SgBasicBlock *preprocessOutlineTarget(SgStatement *s);
-
-/*!
- *  \brief Normalizes outline targets that are variable declarations,
- *  returning a new SgBasicBlock to outline.
- *
- *  This routine converts a variable declaration of the form:
- *
- *    TYPE i, j = J0, k = K0, ...;
- *
- *  to:
- *
- *    TYPE i, j, k, ...;
- *    { // @RET
- *      j = J0;
- *      k = K0;
- *      ...
- *    }
- *
- *  and returns a pointer to the SgBasicBlock at "@RET".
- *
- *  In addition to creating a new SgBasicBlock, this routine modifies
- *  the original SgVariableDeclaration by removing all
- *  SgAssignInitializers.
- */
-SgBasicBlock *normalizeVarDecl(SgVariableDeclaration *s);
 
 /*!
  *  \brief Convert the "plain-old" statement into an SgBasicBlock.
@@ -239,21 +215,16 @@ SgBasicBlock *transformNonLocalControlFlow(SgBasicBlock *b_orig);
  */
 void gatherNonLocalDecls(SgBasicBlock *b);
 
-/*!
- *  \brief Constant propagation for static member variables
- *
- *  This routine analyzes the basic block to-be-outlined, and
- *  determines if any variables need to be replaced with their
- *  constant values.
- *
- *  This is needed since the outlining step will use addressOf
- *  Operator to pass variables around, which may require explicit
- *  definition of static member variables of a class.
- *
- *  Original code do not need such definitions as long as they are integer
- *  or enumerate types of static constant variables with intialized values.
- */
-void propagateStaticConstMembers(SgBasicBlock *b);
+void preparePrototypeParameterDeclarations(
+    const SgFunctionDeclaration *prototype, SgGlobal *scope,
+    SgDeclarationStatement *boundary);
+void moveLeadingPreprocessorPrefixForPrototype(SgStatement *source,
+                                               SgStatement *destination);
+
+SgFunctionDeclaration *
+copyNonLocalFunctionDeclaration(SgFunctionDeclaration *source,
+                                SgScopeStatement *scope,
+                                SgStatement *insertionAnchor);
 
 } /* namespace Preprocess */
 } /* namespace Outliner */

@@ -71,26 +71,32 @@ int main(int argc, char **argv) {
         isSgNamespaceDeclarationStatement(declaration);
     if (candidate == nullptr || candidate->get_name() != "std")
       continue;
+    ROSE_ASSERT(candidate->has_source_fragments());
+    candidate->validate_source_fragments();
+    const auto form =
+        candidate->get_opening_source_fragment()->get_source_form();
+    ROSE_ASSERT(
+        form ==
+        SgNamespaceSourceFragment::e_namespace_source_fragment_source_spelled);
     ROSE_ASSERT(source_reopening == nullptr);
     source_reopening = candidate;
+    ROSE_ASSERT(candidate->get_parent() == global);
+    ROSE_ASSERT(candidate->get_scope() == global);
+    ROSE_ASSERT(candidate->get_firstNondefiningDeclaration() == semantic_root);
+    ROSE_ASSERT(candidate->get_definition() != nullptr);
+    ROSE_ASSERT(candidate->get_definition()->get_parent() == candidate);
+    ROSE_ASSERT(candidate->get_definition()->get_global_definition() ==
+                semantic_root->get_definition());
   }
   ROSE_ASSERT(source_reopening != nullptr);
-  ROSE_ASSERT(source_reopening->has_source_fragments());
-  source_reopening->validate_source_fragments();
-  ROSE_ASSERT(source_reopening->get_parent() == global);
-  ROSE_ASSERT(source_reopening->get_scope() == global);
-  ROSE_ASSERT(source_reopening->get_firstNondefiningDeclaration() ==
-              semantic_root);
-  ROSE_ASSERT(source_reopening->get_definition() != nullptr);
-  ROSE_ASSERT(source_reopening->get_definition()->get_parent() ==
-              source_reopening);
-  ROSE_ASSERT(source_reopening->get_definition()->get_global_definition() ==
-              semantic_root->get_definition());
   ROSE_ASSERT(
       source_reopening->get_definition()->get_previousNamespaceDefinition() ==
       semantic_root->get_definition());
   ROSE_ASSERT(semantic_root->get_definition()->get_nextNamespaceDefinition() ==
               source_reopening->get_definition());
+  ROSE_ASSERT(
+      source_reopening->get_definition()->get_nextNamespaceDefinition() ==
+      nullptr);
   ROSE_ASSERT(std::count(global->get_declarations().begin(),
                          global->get_declarations().end(),
                          source_reopening) == 1);

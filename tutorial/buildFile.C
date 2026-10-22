@@ -13,24 +13,10 @@ int main(int argc, char *argv[]) {
   // Read in the input program (construct initial AST).
   SgProject *project = frontend(argc, argv);
 
-  // Build the SgFile, will be a SgSourceFile which is derived from SgFile.
-  // If the input file is not present in the current directory then the input
-  // file is ignored. It is a bit strange that a filename is required (empty
-  // string is not allowed), it also appears that the language specification for
-  // the file is taken from the suffix of the input file. This can be fixed
-  // later.
-  string source_suffix = ".C";
+  // Construct a new translation unit without parsing or creating dummy input.
   string newFilename_output = "new_source_file";
-  string newFilename_input = "temp_dummy_file_" + newFilename_output;
-
-  // This current API requires an input filename, the language selection is done
-  // based on the input filename. the input file will be constructed as an empty
-  // file in the current working directory.
-  SgFile *file = buildFile(newFilename_input + source_suffix,
-                           newFilename_output + source_suffix, project);
-  ROSE_ASSERT(file != NULL);
-
-  SgSourceFile *sourceFile = isSgSourceFile(file);
+  SgSourceFile *sourceFile =
+      buildGeneratedSourceFile(newFilename_output + ".C", project);
   ROSE_ASSERT(sourceFile != NULL);
 
   // There should now be 2 SgFile objects in the SgProject.
@@ -57,11 +43,13 @@ int main(int argc, char *argv[]) {
       return_type, parameter_list, globalScopeOfNewFile);
   ROSE_ASSERT(functionDeclaration != NULL);
 
-  // Find the associated nondefining declaration to unparse separately as a
-  // function prototype in a header file.
+  // Build an explicit source prototype for the header. The defining function's
+  // canonical nondefining declaration is semantic metadata, not source syntax.
   SgFunctionDeclaration *nondefiningFunctionDeclaration =
-      isSgFunctionDeclaration(
-          functionDeclaration->get_firstNondefiningDeclaration());
+      buildNondefiningFunctionDeclaration(
+          function_declaration_ownership::sourceLexicalRedeclarationIn(
+              globalScopeOfNewFile, functionDeclaration),
+          functionDeclaration, globalScopeOfNewFile);
   ROSE_ASSERT(nondefiningFunctionDeclaration != NULL);
 
   // Generate the string for the function prototype.

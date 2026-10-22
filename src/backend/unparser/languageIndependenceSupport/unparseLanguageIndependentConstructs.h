@@ -61,6 +61,8 @@ class Unparser;
 // This is a base class for the language dependent parts of the unparser.
 class UnparseLanguageIndependentConstructs {
 protected:
+  void unparseCharacterValue(SgValueExp *literal, const std::string &spelling,
+                             int64_t value);
   Unparser *unp;
   std::string currentOutputFileName;
   std::set<const SgStatement *> statementsWithTokenEmittedLeadingPreprocessing;
@@ -118,41 +120,12 @@ public:
     e_else_whitespace_end
   };
 
-  // DQ (6/6/2021): Adding the support to provide offsets to modify the starting
-  // and ending token sequence to unparse. Single statement specification of
-  // token subsequence. void unparseStatementFromTokenStream (SgStatement* stmt,
-  // token_sequence_position_enum_type e_leading_whitespace_start,
-  // token_sequence_position_enum_type e_token_subsequence_start); void
-  // unparseStatementFromTokenStream (SgStatement* stmt,
-  // token_sequence_position_enum_type e_leading_whitespace_start,
-  // token_sequence_position_enum_type e_token_subsequence_start,
-  // SgUnparse_Info& info);
   void unparseStatementFromTokenStream(
       SgStatement *stmt,
       token_sequence_position_enum_type e_leading_whitespace_start,
       token_sequence_position_enum_type e_token_subsequence_start,
       SgUnparse_Info &info, int start_offset = 0, int end_offset = 0);
 
-  // DQ (6/6/2021): Adding the support to provide offsets to modify the starting
-  // and ending token sequence to unparse. Two statement specification of token
-  // subsequence (required for "else" case in SgIfStmt). void
-  // unparseStatementFromTokenStream (SgStatement* stmt_1, SgStatement* stmt_2,
-  // token_sequence_position_enum_type e_leading_whitespace_start,
-  // token_sequence_position_enum_type e_token_subsequence_start); void
-  // unparseStatementFromTokenStream (SgLocatedNode* stmt_1, SgLocatedNode*
-  // stmt_2, token_sequence_position_enum_type e_leading_whitespace_start,
-  // token_sequence_position_enum_type e_token_subsequence_start); void
-  // unparseStatementFromTokenStream (SgLocatedNode* stmt_1, SgLocatedNode*
-  // stmt_2, token_sequence_position_enum_type e_leading_whitespace_start,
-  //                                       token_sequence_position_enum_type
-  //                                       e_token_subsequence_start, bool
-  //                                       unparseOnlyWhitespace = false );
-  // void unparseStatementFromTokenStream (SgLocatedNode* stmt_1, SgLocatedNode*
-  // stmt_2, token_sequence_position_enum_type e_leading_whitespace_start,
-  //                                       token_sequence_position_enum_type
-  //                                       e_token_subsequence_start,
-  //                                       SgUnparse_Info& info, bool
-  //                                       unparseOnlyWhitespace = false );
   void unparseStatementFromTokenStream(
       SgLocatedNode *stmt_1, SgLocatedNode *stmt_2,
       token_sequence_position_enum_type e_leading_whitespace_start,
@@ -243,6 +216,46 @@ public:
     }
     return spelling + suffix;
   }
+  std::string canonicalFloatingLiteral(Rose::FloatingValue value,
+                                       const std::string &suffix) const {
+    ROSE_ASSERT(!value.isInfinite() && !value.isNaN());
+    std::string spelling = value.decimal();
+    if (spelling.find_first_of(".eE") == std::string::npos)
+      spelling += ".0";
+    return spelling + suffix;
+  }
+  std::string
+  canonicalExtendedFloatingLiteral(Rose::FloatingValue value,
+                                   const std::string &suffix,
+                                   const std::string &builtinSuffix) const {
+    if (!value.isInfinite() && !value.isNaN())
+      return canonicalFloatingLiteral(value, suffix);
+    const std::string sign = value.isNegative() ? "-" : "";
+    if (value.isInfinite())
+      return sign + "__builtin_huge_val" + builtinSuffix + "()";
+    // Payload words exclude the sign, exponent and quiet/signaling tag.
+    auto words = value.words();
+    switch (value.format()) {
+    case Rose::FloatingValue::Format::binary64:
+      words[0] &= (UINT64_C(1) << 51) - 1;
+      words[1] = 0;
+      break;
+    case Rose::FloatingValue::Format::x87_binary80:
+      words[0] &= (UINT64_C(1) << 62) - 1;
+      words[1] = 0;
+      break;
+    case Rose::FloatingValue::Format::binary128:
+      words[1] &= (UINT64_C(1) << 47) - 1;
+      break;
+    }
+    std::ostringstream payload;
+    payload << "0x" << std::hex;
+    if (words[1] != 0)
+      payload << words[1] << std::setfill('0') << std::setw(16);
+    payload << words[0];
+    return sign + (value.isSignaling() ? "__builtin_nans" : "__builtin_nan") +
+           builtinSuffix + "(\"" + payload.str() + "\")";
+  }
   void requireGeneratedCanonicalLiteralSpelling(const SgValueExp *value) const;
   SgExpression *validatedOriginalExpressionSource(SgExpression *owner,
                                                   const char *consumer) const;
@@ -297,6 +310,8 @@ public:
   virtual void unparseIntVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseUIntVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseLongIntVal(SgExpression *expr, SgUnparse_Info &info);
+  void unparseInteger128Val(SgExpression *expr, SgUnparse_Info &info);
+  void unparseFortranBOZVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseLongLongIntVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseULongLongIntVal(SgExpression *expr, SgUnparse_Info &info);
   virtual void unparseULongIntVal(SgExpression *expr, SgUnparse_Info &info);
@@ -457,18 +472,9 @@ public:
   virtual PrecedenceSpecifier getPrecedence(SgExpression *exp);
   virtual AssociativitySpecifier getAssociativity(SgExpression *exp);
 
-  // DQ (4/14/2013): Added to support the mixed use of both overloaded operator
-  // names and operator syntax.
   bool isRequiredOperator(SgBinaryOp *binary_op,
-                          bool current_function_call_uses_operator_syntax,
                           bool parent_function_call_uses_operator_syntax);
 
-  // DQ (10/29/2013): Adding support to unparse statements using the token
-  // stream. int unparseStatementFromTokenStream(SgSourceFile* sourceFile,
-  // SgStatement* stmt);
-
-  // DQ (6/6/2021): I think this is not needed (was modified to be the version
-  // of the function below).
   int unparseStatementFromTokenStream(
       SgSourceFile *sourceFile, SgStatement *stmt, SgUnparse_Info &info,
       bool &lastStatementOfGlobalScopeUnparsedUsingTokenStream);
@@ -481,10 +487,6 @@ public:
   bool canBeUnparsedFromTokenStream(SgSourceFile *sourceFile,
                                     SgStatement *stmt);
 
-  // DQ (11/30/2013): Adding support to suppress redundant unparsing of CPP
-  // directives and comments. bool
-  // isTransitionFromTokenUnparsingToASTunparsing(SgStatement* statement);
-
   // DQ (9/3/2014): Adding support to supress output of SgThisExp as part of
   // support for C++11 lambda functions code generation.
   bool suppressImplicitObjectAccess(SgExpression *expr);
@@ -494,10 +496,6 @@ public:
   bool unparseAttachedPreprocessingInfoUsingTokenStream(
       SgLocatedNode *stmt, SgUnparse_Info &info,
       PreprocessingInfo::RelativePositionType whereToUnparse);
-
-  friend void unparse_alignas(SgInitializedName *decl_item,
-                              class Unparse_ExprStmt &unparser,
-                              SgUnparse_Info &info);
 };
 
 #endif

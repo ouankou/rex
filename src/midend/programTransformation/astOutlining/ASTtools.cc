@@ -9,16 +9,9 @@
  *  This implementation was extracted by Liao from his ROSE
  *  OpenMP_Translator project.
  */
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "sage3basic.h"
 
-#include <algorithm>
-
 #include <iostream>
-
-#include <list>
-
-#include "rosePublicConfig.h"
 
 #include <sstream>
 
@@ -60,6 +53,12 @@ SgFunctionDeclaration *ASTtools::functionOwningHiddenNamedType(SgType *type) {
   SgNamedType *named = isSgNamedType(base);
   SgDeclarationStatement *declaration =
       named != NULL ? named->get_declaration() : NULL;
+  if (auto *use = isSgNonrealDecl(declaration)) {
+    if (auto *target = use->get_templateDeclaration()) {
+      ROSE_ASSERT(target != use);
+      declaration = target;
+    }
+  }
   if (declaration == NULL)
     return NULL;
 
@@ -88,51 +87,32 @@ SgFunctionDeclaration *ASTtools::functionOwningHiddenNamedType(SgType *type) {
   ROSE_ABORT();
 }
 
-bool ASTtools::isConstMemFunc(const SgFunctionDeclaration *decl) {
-  const SgMemberFunctionDeclaration *mf_decl =
-      isSgMemberFunctionDeclaration(decl);
-  if (mf_decl) {
-    const SgMemberFunctionType *func_type =
-        isSgMemberFunctionType(mf_decl->get_type());
-    if (func_type)
-      return func_type->isConstFunc();
-  }
-  return false; // Default: assume it isn't a const member function.
-}
-
-bool ASTtools::isConstMemFunc(const SgFunctionDefinition *def) {
-  if (def) {
-    SgFunctionDeclaration *decl = def->get_declaration();
-    return isConstMemFunc(decl);
-  }
-  return false; // Default: assume it isn't a const member function.
-}
-
 bool ASTtools::isConstObj(const SgType *type) {
-  if (!type)
-    return false;
-  switch (type->variantT()) {
-  case V_SgModifierType: {
-    const SgModifierType *mod = isSgModifierType(type);
-    return mod->get_typeModifier().get_constVolatileModifier().isConst();
-  } break;
-  case V_SgPointerType: {
-    const SgPointerType *p = isSgPointerType(type);
-    return isConstObj(isSgModifierType(p->get_base_type()));
+  bool canFollowIndirection = true;
+  for (;;) {
+    ROSE_ASSERT(type != nullptr);
+    if (const SgTypedefType *alias = isSgTypedefType(type)) {
+      type = alias->get_base_type();
+    } else if (const SgModifierType *modifier = isSgModifierType(type)) {
+      if (modifier->get_typeModifier().get_constVolatileModifier().isConst())
+        return true;
+      type = modifier->get_base_type();
+    } else if (const SgPointerType *pointer = isSgPointerType(type)) {
+      if (!canFollowIndirection)
+        return false;
+      canFollowIndirection = false;
+      type = pointer->get_base_type();
+    } else if (const SgReferenceType *reference = isSgReferenceType(type)) {
+      if (!canFollowIndirection)
+        return false;
+      canFollowIndirection = false;
+      type = reference->get_base_type();
+    } else if (const SgArrayType *array = isSgArrayType(type)) {
+      type = array->get_base_type();
+    } else {
+      return false;
+    }
   }
-  case V_SgReferenceType: {
-    const SgReferenceType *r = isSgReferenceType(type);
-    return isConstObj(isSgModifierType(r->get_base_type()));
-  }
-  case V_SgArrayType: {
-    const SgArrayType *a = isSgArrayType(type);
-    return isConstObj(isSgModifierType(a->get_base_type()));
-  }
-  default:
-    break;
-  }
-  // Default: Assume it's not
-  return false;
 }
 
 void ASTtools::publishTemplateParameterPackExpansion(
@@ -169,6 +149,8 @@ void ASTtools::publishTemplateParameterPackExpansion(
     // ellipsis, otherwise `T...` becomes `T......` when the argument expansion
     // is emitted below.
     if (SgTemplateType *parameter_type = isSgTemplateType(semantic_type)) {
+      ROSE_ASSERT(parameter_type->get_tpl_args().empty());
+      ROSE_ASSERT(!parameter_type->get_is_pack_substitution());
       SgTemplateType *reference_type =
           new SgTemplateType(parameter_type->get_name());
       reference_type->set_template_parameter_position(
@@ -190,15 +172,8 @@ void ASTtools::publishTemplateParameterPackExpansion(
       if (source_identity.has_value()) {
         reference_type->initialize_canonical_source_identity(*source_identity);
       }
-      reference_type->set_class_type(parameter_type->get_class_type());
-      reference_type->set_parent_class_type(
-          parameter_type->get_parent_class_type());
       reference_type->set_template_parameter(
           parameter_type->get_template_parameter());
-      reference_type->get_tpl_args() = parameter_type->get_tpl_args();
-      reference_type->get_part_spec_tpl_args() =
-          parameter_type->get_part_spec_tpl_args();
-      reference_type->set_packed(false);
       argument->set_sourceSpelledType(reference_type);
     } else if (isSgNonrealType(semantic_type) == nullptr) {
       std::cerr
@@ -212,104 +187,7 @@ void ASTtools::publishTemplateParameterPackExpansion(
   argument->set_is_pack_element(true);
 }
 
-SgPointerType *ASTtools::buildAddressOfResultType(SgType *operand_type) {
-  if (operand_type == NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type is "
-            "null\n");
-    ROSE_ABORT();
-  }
-
-  // A typedef or modifier may be the written surface of a reference alias.
-  // Inspect through those transparent layers only to find a reference; when
-  // there is no reference, retain the exact written operand type as the
-  // pointer's base type.
-  SgType *probe = operand_type;
-  std::set<SgType *> visited;
-  while (probe != NULL && visited.insert(probe).second) {
-    if (SgTypedefType *typedef_type = isSgTypedefType(probe)) {
-      probe = typedef_type->get_base_type();
-    } else if (SgModifierType *modifier_type = isSgModifierType(probe)) {
-      probe = modifier_type->get_base_type();
-    } else {
-      break;
-    }
-  }
-  if (probe == NULL ||
-      visited.count(probe) != 0 &&
-          (isSgTypedefType(probe) != NULL || isSgModifierType(probe) != NULL)) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
-            "has a null or cyclic transparent type chain\n",
-            static_cast<void *>(operand_type));
-    ROSE_ABORT();
-  }
-
-  SgType *pointee_type = operand_type;
-  if (SgReferenceType *reference_type = isSgReferenceType(probe)) {
-    pointee_type = reference_type->get_base_type();
-  } else if (SgRvalueReferenceType *reference_type =
-                 isSgRvalueReferenceType(probe)) {
-    pointee_type = reference_type->get_base_type();
-  }
-  if (pointee_type == NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[address-of-result-type]: reference "
-            "operand type=%p has no exact referred-to type\n",
-            static_cast<void *>(operand_type));
-    ROSE_ABORT();
-  }
-
-  SgType *canonical_pointee = pointee_type->stripType(
-      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE);
-  if (canonical_pointee == NULL ||
-      isSgReferenceType(canonical_pointee) != NULL ||
-      isSgRvalueReferenceType(canonical_pointee) != NULL) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
-            "would produce a pointer to a reference\n",
-            static_cast<void *>(operand_type));
-    ROSE_ABORT();
-  }
-
-  SgPointerType *result = SgPointerType::createType(pointee_type);
-  if (result == NULL || result->get_base_type() != pointee_type) {
-    fprintf(stderr,
-            "REX_OUTLINER_INVARIANT[address-of-result-type]: operand type=%p "
-            "did not produce one exact pointer result type\n",
-            static_cast<void *>(operand_type));
-    ROSE_ABORT();
-  }
-  return result;
-}
-
 // ========================================================================
-// ========================================================================
-// ========================================================================
-
-/*!
- *  \brief
- *  \returns A scope statement, or NULL if not found.
- */
-const SgScopeStatement *ASTtools::findFirstFuncDefScope(const SgStatement *s) {
-  if (s) {
-    const SgScopeStatement *scope = s->get_scope();
-    if (scope) {
-      switch (scope->variantT()) {
-        // The following may contain a function definition:
-      case V_SgGlobal:
-      case V_SgClassDefinition:
-      case V_SgNamespaceDefinitionStatement:
-        return scope;
-
-        // Otherwise, keep looking.
-      default:
-        return findFirstFuncDefScope(scope);
-      }
-    }
-  }
-  return NULL; // Can't find?
-}
 
 const SgFunctionDefinition *ASTtools::findFirstFuncDef(const SgStatement *s) {
   if (s) {
@@ -357,215 +235,6 @@ bool ASTtools::isWhileCond(const SgStatement *s) {
   return false;
 }
 
-// ========================================================================
-
-bool ASTtools::isC99(const SgNode *n) {
-  if (n)
-    switch (n->variantT()) {
-    case V_SgProject: {
-      const SgProject *proj = isSgProject(n);
-      ROSE_ASSERT(proj);
-      return proj->get_C99_only();
-    } break;
-      // case V_SgFile:
-    case V_SgSourceFile: {
-      const SgFile *file = isSgFile(n);
-      ROSE_ASSERT(file);
-      return file->get_C99_only();
-    } break;
-    default:
-      return ASTtools::isC99(n->get_parent());
-    }
-  return false;
-}
-
-// ========================================================================
-
-bool ASTtools::isStdNamespace(const SgScopeStatement *scope) {
-  const SgNamespaceDefinitionStatement *ns =
-      isSgNamespaceDefinitionStatement(scope);
-  if (ns && isSgGlobal(ns->get_scope())) {
-    const SgNamespaceDeclarationStatement *decl =
-        ns->get_namespaceDeclaration();
-    ROSE_ASSERT(decl);
-    return decl->get_name().getString() == "std";
-  }
-  // Default: No.
-  return false;
-}
-
-// ========================================================================
-
-bool ASTtools::isMain(const SgFunctionDeclaration *func) {
-  return isFuncName(func, "main") && isSgGlobal(func->get_scope());
-}
-
-// ========================================================================
-
-bool ASTtools::isTemplateInst(const SgDeclarationStatement *decl) {
-  return isSgTemplateInstantiationDecl(decl) ||
-         isSgTemplateInstantiationFunctionDecl(decl) ||
-         isSgTemplateInstantiationMemberFunctionDecl(decl);
-}
-
-bool ASTtools::isTemplateInst(const SgScopeStatement *scope) {
-  if (isSgTemplateInstantiationDefn(scope))
-    return true;
-
-  const SgFunctionDefinition *func_def = isSgFunctionDefinition(scope);
-  if (func_def && isTemplateInst(func_def->get_declaration()))
-    return true;
-
-  return false;
-}
-
-// ========================================================================
-
-bool ASTtools::isExternC(const SgFunctionDeclaration *func) {
-  return func &&
-         const_cast<SgFunctionDeclaration *>(func)
-             ->get_declarationModifier()
-             .get_storageModifier()
-             .isExtern() &&
-         func->get_linkage() == string("C");
-}
-
-// ========================================================================
-
-bool ASTtools::isFuncName(const SgFunctionDeclaration *func,
-                          const string &name) {
-  return func && func->get_name().getString() == name;
-}
-
-bool ASTtools::isFuncNamePrefix(const SgFunctionDeclaration *func,
-                                const string &name) {
-  if (func)
-    return func->get_name().getString().find(name) == 0;
-  return false;
-}
-
-// ========================================================================
-
-size_t ASTtools::getNumArgs(const SgFunctionDeclaration *func) {
-  if (func) {
-    if (isSgMemberFunctionDeclaration(func) && !isStaticFunc(func))
-      return func->get_args().size() + 1;
-    else
-      return func->get_args().size();
-  }
-  // Default: Assume none.
-  return 0;
-}
-
-// ========================================================================
-
-bool ASTtools::isCtor(const SgFunctionDeclaration *func) {
-  const SgMemberFunctionDeclaration *mem_func =
-      isSgMemberFunctionDeclaration(func);
-  return mem_func && getMemFuncName(mem_func) == getClassName(mem_func);
-}
-
-bool ASTtools::isDtor(const SgFunctionDeclaration *func) {
-  const SgMemberFunctionDeclaration *mem_func =
-      isSgMemberFunctionDeclaration(func);
-  return mem_func && getMemFuncName(mem_func) == ("~" + getClassName(mem_func));
-}
-
-// ========================================================================
-
-bool ASTtools::isStaticFunc(const SgFunctionDeclaration *func) {
-  return func && const_cast<SgFunctionDeclaration *>(func)
-                     ->get_declarationModifier()
-                     .get_storageModifier()
-                     .isStatic();
-}
-
-// ========================================================================
-
-string ASTtools::getUnqualUntmplName(const SgDeclarationStatement *d) {
-  if (isTemplateInst(d)) {
-    ROSE_ASSERT(d);
-    string name;
-    switch (d->variantT()) {
-    case V_SgTemplateInstantiationDecl: {
-      const SgTemplateInstantiationDecl *t = isSgTemplateInstantiationDecl(d);
-      ROSE_ASSERT(t);
-      name = t->get_templateName();
-    } break;
-    case V_SgTemplateInstantiationFunctionDecl: {
-      const SgTemplateInstantiationFunctionDecl *t =
-          isSgTemplateInstantiationFunctionDecl(d);
-      ROSE_ASSERT(t);
-      name = t->get_templateName();
-    } break;
-    case V_SgTemplateInstantiationMemberFunctionDecl: {
-      const SgTemplateInstantiationMemberFunctionDecl *t =
-          isSgTemplateInstantiationMemberFunctionDecl(d);
-      ROSE_ASSERT(t);
-      name = t->get_templateName();
-    } break;
-    default:
-      ROSE_ASSERT(!"*** Unhandled case in getUnqualUntmplName () ***");
-      break;
-    }
-    return name;
-  } else if (isSgClassDeclaration(d))
-    return isSgClassDeclaration(d)->get_name().getString();
-  else if (isSgFunctionDeclaration(d))
-    return isSgFunctionDeclaration(d)->get_name().getString();
-  return string(""); // No name found!
-}
-
-// ========================================================================
-
-string ASTtools::getClassName(const SgMemberFunctionDeclaration *mem_func) {
-  ROSE_ASSERT(mem_func);
-  const SgScopeStatement *scope = mem_func->get_class_scope();
-  ROSE_ASSERT(scope);
-
-  const SgClassDefinition *cdefn = isSgClassDefinition(scope);
-  const SgDeclarationScope *nrscope = isSgDeclarationScope(scope);
-  if (cdefn != NULL) {
-    const SgClassDeclaration *cls_decl = cdefn->get_declaration();
-    ROSE_ASSERT(cls_decl);
-    return cls_decl->get_name();
-  } else if (nrscope != NULL) {
-    const SgNode *parent = nrscope->get_parent();
-    ROSE_ASSERT(parent != NULL);
-    const SgClassDeclaration *xdecl = isSgClassDeclaration(parent);
-    const SgNonrealDecl *nrdecl = isSgNonrealDecl(parent);
-    if (xdecl != NULL) {
-      return xdecl->get_name();
-    } else if (nrdecl != NULL) {
-      return nrdecl->get_name();
-    } else {
-      ROSE_ABORT();
-      abort();
-    }
-  } else {
-    ROSE_ABORT();
-    abort();
-  }
-}
-
-string ASTtools::getMemFuncName(const SgMemberFunctionDeclaration *mem_func) {
-  ROSE_ASSERT(mem_func);
-  return mem_func->get_name().getString();
-}
-
-/* =====================================================================
- *  Debugging aids.
- */
-
-void ASTtools::dumpSymTab(const SgScopeStatement *scope, const string &tag,
-                          ostream &o) {
-  if (scope) {
-    char *c_tag = const_cast<char *>(tag.c_str());
-    ROSE_ASSERT(c_tag);
-    const_cast<SgScopeStatement *>(scope)->print_symboltable(c_tag, o);
-  }
-}
-
 string ASTtools::toStringFileLoc(const SgLocatedNode *n) {
   stringstream s;
   if (n) {
@@ -600,72 +269,6 @@ string ASTtools::toStringFileLoc(const SgLocatedNode *n) {
     s << "]";
   }
   return s.str();
-}
-
-Sg_File_Info *ASTtools::newFileInfo(void) {
-  return Sg_File_Info::generateDefaultFileInfoForTransformationNode();
-}
-// TODO  move to SageInterface when thoroughly tested, especially how to free
-// previously allocated memory for file info nodes
-void ASTtools::setSourcePositionAsTransformation(SgNode *node) {
-  ROSE_ASSERT(node != NULL);
-
-  SgLocatedNode *locatedNode = isSgLocatedNode(node);
-  SgExpression *expression = isSgExpression(node);
-  SgInitializedName *initName = isSgInitializedName(node);
-  SgPragma *pragma = isSgPragma(node); // missed this one!! Liao, 1/30/2008
-  SgGlobal *global =
-      isSgGlobal(node); // SgGlobal should have NULL endOfConstruct()
-
-  // DQ (7/13/2021): Debugging information.  The relocated statements are
-  // assigned new SgFileInfo objects instead of changing the existing ones.
-  printf("In ASTtools::setSourcePositionAsTransformation(): node = %p = %s \n",
-         node, node->class_name().c_str());
-
-  if (locatedNode != NULL) {
-    locatedNode->set_startOfConstruct(
-        Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-    locatedNode->get_startOfConstruct()->set_parent(locatedNode);
-
-    if (global == NULL) {
-      locatedNode->set_endOfConstruct(
-          Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-      locatedNode->get_endOfConstruct()->set_parent(locatedNode);
-    }
-
-    // Only SgExpression IR nodes have a 3rd source position data structure.
-    if (expression != NULL) {
-      expression->set_operatorPosition(
-          Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-      expression->get_operatorPosition()->set_parent(expression);
-    }
-  } else {
-    if (initName != NULL) {
-      //  no endOfConstruct for SgInitializedName
-      initName->set_startOfConstruct(
-          Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-      initName->get_startOfConstruct()->set_parent(initName);
-    } else {
-      if (pragma != NULL) {
-        pragma->set_startOfConstruct(
-            Sg_File_Info::generateDefaultFileInfoForTransformationNode());
-        pragma->get_startOfConstruct()->set_parent(pragma);
-      }
-    }
-  }
-}
-
-void ASTtools::setSourcePositionAtRootAndAllChildrenAsTransformation(
-    SgNode *root) {
-  Rose_STL_Container<SgNode *> nodeList =
-      NodeQuery::querySubTree(root, V_SgNode);
-  if (std::find(nodeList.begin(), nodeList.end(), root) == nodeList.end()) {
-    nodeList.push_back(root);
-  }
-  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
-       i != nodeList.end(); i++) {
-    setSourcePositionAsTransformation(*i);
-  }
 }
 
 // eof

@@ -10,7 +10,6 @@ from pathlib import Path
 _CODE_START = re.compile(r"^\[source,cpp")
 _DELIM = "----"
 _IDENT = re.compile(r"\b[A-Za-z_]\w*\b")
-_EXTERNAL = {"FILE", "JNIEnv"}
 _FILTER = re.compile(r"^(Sg|Ast|Rose|Sage|OpenMP|OpenACC)[A-Za-z_]\w*$")
 
 
@@ -54,7 +53,7 @@ def _collect_missing_return_types(reference_dir: Path, pages: set[str]) -> set[s
                     if not m:
                         break
                     tok = m.group(0)
-                    if tok in pages or tok in _EXTERNAL:
+                    if tok in pages:
                         break
                     if len(tok) <= 2:
                         break
@@ -100,4 +99,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

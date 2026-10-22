@@ -1,10 +1,6 @@
-#include <algorithm>
-
 #include <string>
 
 #include <vector>
-
-#include "AutoTuningInterface.h"
 
 #include "CommandOptions.h"
 
@@ -14,17 +10,16 @@
 
 #include "LoopUnroll.h"
 
-#include "ProcessAstTree.h"
-
 #include "SymbolicVal.h"
 
-#include <assert.h>
+#include "sageBuilder.h"
+#include "sageInterface.h"
 
 unsigned LoopUnrolling::unrollsize = 0;
 LoopUnrolling::UnrollOpt LoopUnrolling::opt = DEFAULT;
 std::string LoopUnrolling::cmdline_help() {
-  return "-unroll [-locond] [-nvar] [poet] <-unrollsize> : unrolling innermost "
-         "loops at <unrollsize>";
+  return "-unroll [-locond] [-nvar] [factor] : unrolling innermost "
+         "loops by factor (default 4)";
 }
 
 void LoopUnrolling::cmdline_configure(const std::vector<std::string> &argv,
@@ -32,6 +27,7 @@ void LoopUnrolling::cmdline_configure(const std::vector<std::string> &argv,
   unsigned index = 0;
   if (!cmdline_find(argv, index, "-unroll", unknown_args))
     return;
+  opt = DEFAULT;
   ++index;
   if (index < argv.size() && argv[index] == "-locond") {
     opt = (LoopUnrolling::UnrollOpt)(opt | LoopUnrolling::COND_LEFTOVER);
@@ -45,15 +41,12 @@ void LoopUnrolling::cmdline_configure(const std::vector<std::string> &argv,
     ++index;
   }
   if (index < argv.size() && argv[index] == "poet") {
-    opt = (LoopUnrolling::UnrollOpt)(opt | LoopUnrolling::POET_TUNING);
-    ++index;
+    std::cerr << "REX_LOOP_OPTION[unsupported-poet]: -unroll poet requires "
+                 "the removed POET backend\n";
+    ROSE_ABORT();
   }
-  if (index < argv.size() && ((unrollsize = atoi(argv[index].c_str())) > 0))
-    ++index;
-  else {
-    std::cerr << "invalid unrolling size. Use default (4)\n";
-    unrollsize = 4;
-  }
+  unrollsize = 4;
+  readOptionalPositiveSize(argv, index, "-unroll", unrollsize);
   if (unknown_args != 0)
     append_args(argv, index, *unknown_args);
 }
@@ -78,87 +71,77 @@ bool LoopUnrolling::operator()(AstInterface &fa, const AstNodePtr &s,
                                            &stepval, &body))
     return false;
 
-  if (opt & POET_TUNING) {
-    AutoTuningInterface *tune =
-        LoopTransformInterface::getAutoTuningInterface();
-    if (tune == 0) {
-      std::cerr << "ERROR: AutoTuning Interface not defined!\n";
-      ROSE_ABORT();
-    }
-    tune->UnrollLoop(fa, s, unrollsize);
+  SymbolicVal nstepval = stepval * unrollsize;
+  SymbolicVal nubval = ubval;
+
+  bool hasleft = true, negativeStep = (stepval < 0);
+  AstNodePtr leftbody, lefthead;
+
+  int stepnum = 0, loopnum = 0;
+  SymbolicVal loopval = ubval - lbval + 1;
+  if (stepval.isConstInt(stepnum) && loopval.isConstInt(loopnum) &&
+      !(loopnum % (stepnum * unrollsize))) {
+    hasleft = false;
   } else {
-    AstNodePtr r = s;
-    SymbolicVal nstepval = stepval * unrollsize;
-    SymbolicVal nubval = ubval;
-
-    bool hasleft = true, negativeStep = (stepval < 0);
-    std::vector<AstNodePtr> bodylist;
-    AstNodePtr leftbody, lefthead;
-
-    int stepnum = 0, loopnum = 0;
-    SymbolicVal loopval = ubval - lbval + 1;
-    if (stepval.isConstInt(stepnum) && loopval.isConstInt(loopnum) &&
-        !(loopnum % (stepnum * unrollsize))) {
-      std::cerr << "loop val = " << loopnum
-                << "; step: " << stepnum * unrollsize << "\n";
-      hasleft = false;
+    nubval = ubval - SymbolicVal(unrollsize - 1);
+    if (opt & COND_LEFTOVER) {
+      leftbody = fa.CreateBlock();
+      lefthead = leftbody;
     } else {
-      nubval = ubval - SymbolicVal(unrollsize - 1);
-      if (opt & COND_LEFTOVER) {
-        leftbody = fa.CreateBlock();
-        lefthead = leftbody;
-      } else {
-        leftbody = fa.CopyAstTree(body);
-        lefthead =
-            fa.CreateLoop(ivar.CodeGen(fa), AstNodePtr(), ubval.CodeGen(fa),
-                          stepval.CodeGen(fa), leftbody, negativeStep);
-      }
+      leftbody = fa.CopyAstTree(body);
+      lefthead =
+          fa.CreateLoop(ivar.CodeGen(fa), AstNodePtr(), ubval.CodeGen(fa),
+                        stepval.CodeGen(fa), leftbody, negativeStep);
     }
-    fa.RemoveStmt(body);
-    AstNodePtr s1 =
-        fa.CreateLoop(ivar.CodeGen(fa), lbval.CodeGen(fa), nubval.CodeGen(fa),
-                      nstepval.CodeGen(fa), body, negativeStep);
-    fa.ReplaceAst(s, s1);
-    r = s1;
-
-    AstNodePtr origbody = fa.CopyAstTree(body);
-    std::string nvarname = "";
-    SymbolicVal nvar;
-    if (opt & USE_NEWVAR) {
-      nvarname =
-          fa.NewVar(fa.GetType("int"), "", true, false, body, ivar.CodeGen(fa));
-      nvar = SymbolicVar(nvarname, body);
-    }
-    bodylist.push_back(body);
-    for (unsigned i = 1; i < unrollsize; ++i) {
-      AstNodePtr bodycopy = fa.CopyAstTree(origbody);
-      if (opt & USE_NEWVAR) {
-        AstNodePtr nvarassign =
-            fa.CreateAssignment(nvar.CodeGen(fa), (nvar + 1).CodeGen(fa));
-        fa.BlockAppendStmt(body, nvarassign);
-        AstTreeReplaceVar repl(ivar, nvar);
-        repl(fa, bodycopy);
-      } else {
-        AstTreeReplaceVar repl(ivar, ivar + i);
-        repl(fa, bodycopy);
-      }
-      fa.BlockAppendStmt(body, bodycopy);
-      bodylist.push_back(bodycopy);
-      if (hasleft && (opt & COND_LEFTOVER)) {
-        AstNodePtr cond =
-            fa.CreateBinaryOP(AstInterface::BOP_LE, ivar.CodeGen(fa),
-                              (ubval - (i - 1)).CodeGen(fa));
-        AstNodePtr body1 = fa.CopyAstTree(bodylist[i]);
-        AstNodePtr ifstmt = fa.CreateIf(cond, body1);
-        fa.BlockAppendStmt(leftbody, ifstmt);
-        leftbody = body1;
-      }
-    }
-    if (hasleft) {
-      fa.InsertStmt(r, lefthead, false, true);
-    }
-    r = s;
-    return true;
   }
-  return false;
+  AstNodePtr emptyBody(SageBuilder::buildBasicBlock());
+  ROSE_ASSERT(fa.ReplaceAst(body, emptyBody));
+  AstNodePtr s1 =
+      fa.CreateLoop(ivar.CodeGen(fa), lbval.CodeGen(fa), nubval.CodeGen(fa),
+                    nstepval.CodeGen(fa), body, negativeStep);
+
+  AstNodePtr origbody = fa.CopyAstTree(body);
+  SymbolicVal nvar;
+  if (opt & USE_NEWVAR) {
+    AstNodePtr nvarSymbol;
+    std::string nvarname = fa.NewVar(fa.GetType("int"), "", true, false, body,
+                                     ivar.CodeGen(fa), &nvarSymbol);
+    nvar = SymbolicVar(nvarname, body, nvarSymbol);
+  }
+  for (unsigned i = 1; i < unrollsize; ++i) {
+    AstNodePtr bodycopy = fa.CopyAstTree(origbody);
+    if (opt & USE_NEWVAR) {
+      AstNodePtr nvarassign =
+          fa.CreateAssignment(nvar.CodeGen(fa), (nvar + 1).CodeGen(fa));
+      fa.BlockAppendStmt(body, nvarassign);
+      AstTreeReplaceVar repl(ivar, nvar);
+      repl(fa, bodycopy);
+    } else {
+      AstTreeReplaceVar repl(ivar, ivar + i);
+      repl(fa, bodycopy);
+    }
+    fa.BlockAppendStmt(body, bodycopy);
+    if (hasleft && (opt & COND_LEFTOVER)) {
+      AstNodePtr cond =
+          fa.CreateBinaryOP(AstInterface::BOP_LE, ivar.CodeGen(fa),
+                            (ubval - (i - 1)).CodeGen(fa));
+      AstNodePtr body1 = fa.CopyAstTree(bodycopy);
+      AstNodePtr ifstmt = fa.CreateIf(cond, body1);
+      fa.BlockAppendStmt(leftbody, ifstmt);
+      leftbody = body1;
+    }
+  }
+  AstNodePtr replacement = s1;
+  if (hasleft) {
+    if (fa.GetParent(s) != AST_NULL &&
+        SageInterface::isRemovableStatement(isSgStatement(s.get_ptr()))) {
+      fa.InsertStmt(s, lefthead, false, true);
+    } else {
+      replacement = AstNodePtr(SageBuilder::buildBasicBlock());
+      fa.BlockAppendStmt(replacement, s1);
+      fa.BlockAppendStmt(replacement, lefthead);
+    }
+  }
+  r = replacement;
+  return true;
 }

@@ -1,3 +1,4 @@
+#include "astJson/sageAstJson.h"
 #include "rose.h"
 
 #include <algorithm>
@@ -71,6 +72,11 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(frontendExitStatus(project) == 0);
 
   SgSourceFile *sourceFile = mainSourceFile(project);
+  ROSE_ASSERT(sourceFile != nullptr);
+  Rose::AstJson::Options options;
+  options.outputDirectory = "initializer_include_json";
+  sourceFile = Rose::AstJson::roundTripSourceFile(
+      sourceFile, Rose::AstJson::Checkpoint::PostOmpConstruction, options);
   ROSE_ASSERT(sourceFile != nullptr);
   SgGlobal *global = sourceFile->get_globalScope();
   ROSE_ASSERT(global != nullptr);

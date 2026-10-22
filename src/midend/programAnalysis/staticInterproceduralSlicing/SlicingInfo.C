@@ -1,76 +1,39 @@
-// tps (1/14/2010) : Switching from rose.h to sage3 changed size from 17,4 MB to
-// 7,0MB
+#include "SlicingInfo.h"
 #include "sage3basic.h"
 
-#include "SlicingInfo.h"
-
-#include <string>
-using namespace std;
-
-SlicingInfo::SlicingInfo()
-    : _markFunction(false), _markStatement(false),
-      sliceFunctionCalls("SliceFunction"), sliceStatement("SliceTarget") {
-  targets = std::list<SgNode *>();
-}
-
 void SlicingInfo::visit(SgNode *node) {
-
-  if (isSgPragmaDeclaration(node)) { // figure out what to do with this pragma
-    SgPragma *pragma = isSgPragmaDeclaration(node)->get_pragma();
-
-    string pragma_name(pragma->get_pragma());
-
-    if (pragma_name == sliceFunctionCalls) {
-
-      _markFunction = true;
-    } else if (pragma_name == sliceStatement) {
-      _markStatement = true;
-    }
-    // get the next line and mark the statement as` one of the slicing
-    // target
-    if (_markStatement || _markFunction) {
-      SgStatement *stmnt =
-          dynamic_cast<SgStatement *>(isSgPragmaDeclaration(node));
-
-      if (stmnt == NULL)
-        cout << "error" << endl;
-      SgStatement *next = Rose::getNextStatement(stmnt);
-
-      if (next == NULL)
-        cout << "Next is NULL" << endl;
-
-      else {
-        // if the following statement is a loop or a if markthe
-        // controlexpression instead of the controlflow-stmt
-        if (isSgForStatement(next))
-          next = isSgForStatement(next)->get_test();
-        else if (isSgDoWhileStmt(next))
-          next = isSgDoWhileStmt(next)->get_condition();
-        else if (isSgWhileStmt(next))
-          next = isSgWhileStmt(next)->get_condition();
-        else if (isSgIfStmt(next))
-          next = isSgIfStmt(next)->get_conditional();
-
-        targets.push_back(node);
-        targets.push_back(next);
-      }
-    }
+  SgPragmaDeclaration *declaration = isSgPragmaDeclaration(node);
+  if (declaration == nullptr) {
+    return;
+  }
+  SgPragma *pragma = declaration->get_pragma();
+  ROSE_ASSERT(pragma != nullptr);
+  if (pragma->get_pragma() != "SliceTarget") {
     return;
   }
 
-  if (_markFunction) {
-    if (isSgFunctionDeclaration(node)) {
-      _func = isSgFunctionDeclaration(node);
-      _markFunction = false;
-    }
+  SgStatement *target = Rose::getNextStatement(declaration);
+  if (target == nullptr) {
+    fprintf(stderr, "REX_SLICING_INVARIANT[slice-target]: target pragma has no "
+                    "following statement\n");
+    ROSE_ABORT();
   }
 
-  if (_markStatement) {
-    if (isSgStatement(node)) {
-      _target = isSgStatement(node);
-      _markStatement = false;
+  if (SgForStatement *loop = isSgForStatement(target)) {
+    SgStatement *test = loop->get_test();
+    if (test != nullptr && !isSgNullStatement(test)) {
+      target = test;
     }
+  } else if (SgDoWhileStmt *loop = isSgDoWhileStmt(target)) {
+    target = loop->get_condition();
+  } else if (SgWhileStmt *loop = isSgWhileStmt(target)) {
+    target = loop->get_condition();
+  } else if (SgIfStmt *if_statement = isSgIfStmt(target)) {
+    if (!if_statement->get_is_if_consteval_statement())
+      target = if_statement->get_conditional();
   }
+  ROSE_ASSERT(target != nullptr);
 
-  return;
+  targets.push_back(declaration);
+  targets.push_back(target);
 }

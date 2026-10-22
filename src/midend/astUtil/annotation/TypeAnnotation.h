@@ -17,14 +17,8 @@
 #include <vector>
 
 bool DebugAnnot();
-//! An interface to a single annotation item
 template <class TargetInfo> class AnnotCollectionBase {
 public:
-  //! Check if annotName matches the current annotation type name (TargetInfo)
-  // The name is one of the following:
-  //    array(is-array?), construct_array(new-array), modify_array,
-  //    array_optimize, has_value, alias/allow_alias, inline, modify, read,
-  //    restrict_value, ??(inheritable)
   virtual bool read_annot_name(const std::string &annotName) const = 0;
   virtual void read_descriptor(const TargetInfo &target,
                                const std::string &annotName,
@@ -32,15 +26,6 @@ public:
   virtual ~AnnotCollectionBase() {}
 };
 
-//! An interface to read and store a collection of annotations for a type or an
-//! operator
-// TargetInfo is result's type, targetsep is begin char, annotend is the end
-// char descriptorsep is the delimitor
-// e.g.
-//         ReadAnnotCollection<TypeDescriptor,      '{', ';','}'>
-//         ReadTypeCollection;
-// typedef ReadAnnotCollection<OperatorDeclaration, '{', ';','}'>
-// ReadOperatorCollection;
 template <class TargetInfo, char targetsep, char descriptorsep, char annotend>
 class ReadAnnotCollection {
   std::vector<AnnotCollectionBase<TargetInfo> *> col;

@@ -1,5 +1,6 @@
 template <typename T> struct rex_injected_member_pointer_owner {
   T value;
+  void (rex_injected_member_pointer_owner::*callback)();
   typedef T rex_injected_member_pointer_owner::*pointer;
 
   pointer address() const { return &rex_injected_member_pointer_owner::value; }

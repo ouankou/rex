@@ -1,3 +1,5 @@
+#include "rex_unparser_lambda_parameter_type.hpp"
+
 namespace rex_lambda_return_target {
 struct Result {};
 } // namespace rex_lambda_return_target
@@ -13,4 +15,7 @@ int exercise() {
 }
 } // namespace rex_lambda_return_use
 
-int main() { return rex_lambda_return_use::exercise(); }
+int main() {
+  return rex_lambda_return_use::exercise() +
+         !RexLambdaParameterMatcher<RexLambdaParameterTraits<char>>::match('a');
+}

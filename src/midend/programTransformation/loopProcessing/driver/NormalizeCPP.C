@@ -7,50 +7,9 @@
 
 #include "sage3.h"
 
-#include <iostream>
-
-#include <vector>
-
 extern Sg_File_Info *GetFileInfo();
 
-void FixFileInfo(SgNode *n) {
-  if (n == 0)
-    return;
-  SgFunctionDeclaration *fd = isSgFunctionDeclaration(n);
-  if (fd != 0) {
-    SgFunctionDefinition *def = fd->get_definition();
-    if (def != 0) {
-      SgBasicBlock *body = def->get_body();
-      Sg_File_Info *end = body->get_endOfConstruct();
-      fd->set_endOfConstruct(new Sg_File_Info(end->get_filename(),
-                                              end->get_line(), end->get_col()));
-    }
-  }
-  std::vector<SgNode *> children = n->get_traversalSuccessorContainer();
-  for (std::vector<SgNode *>::const_iterator cp = children.begin();
-       cp != children.end(); ++cp) {
-    FixFileInfo(*cp);
-  }
-  if (n->get_endOfConstruct() == 0) {
-    int size = children.size();
-    for (; size > 0; --size) {
-      if (children[size - 1] != 0)
-        break;
-    }
-    if (size > 0) {
-      Sg_File_Info *end = children[size - 1]->get_endOfConstruct();
-      if (end != 0) {
-        SgLocatedNode *n1 = isSgLocatedNode(n);
-        if (n1 != 0)
-          n1->set_endOfConstruct(new Sg_File_Info(
-              end->get_filename(), end->get_line(), end->get_col()));
-      }
-    }
-  }
-}
-
 class NormalizeLoopTraverse : public ProcessAstTree<AstNodePtr> {
-  bool succ;
   virtual bool ProcessLoop(AstInterface &fa, const AstNodePtr &_s,
                            const AstNodePtr &body,
                            AstInterface::TraversalVisitType t) {
@@ -73,103 +32,92 @@ class NormalizeLoopTraverse : public ProcessAstTree<AstNodePtr> {
         f->set_increment(new_incr);
         new_incr->set_parent(f);
       }
-    }
-      succ = true;
       break;
+    }
 
     case V_SgForStatement: {
       SgForStatement *fs = isSgForStatement(s);
 
       SgStatementPtrList &init = fs->get_init_stmt();
       if (init.size() != 1) {
-        succ = false;
         return true;
       }
 
       AstNodePtrImpl test = fs->get_test_expr();
       AstNodePtr testlhs, testrhs;
       if (!fa.IsBinaryOp(test, 0, &testlhs, &testrhs)) {
-        succ = false;
         return true;
       }
 
       switch (test->variantT()) {
       case V_SgLessThanOp:
-        fa.ReplaceAst(test, fa.CreateBinaryOP(
-                                AstInterface::BOP_LE, fa.CopyAstTree(testlhs),
-                                fa.CreateBinaryOP(AstInterface::BOP_MINUS,
-                                                  fa.CopyAstTree(testrhs),
-                                                  fa.CreateConstInt(1))));
+      case V_SgGreaterThanOp:
+      case V_SgLessOrEqualOp:
+      case V_SgGreaterOrEqualOp:
+      case V_SgNotEqualOp:
+        break;
+      default:
+        return true;
+      }
+
+      AstNodePtrImpl incr = fs->get_increment();
+      SgUnaryOp *increment_op = nullptr;
+      int increment_value = 0;
+      if (auto *plus = isSgPlusPlusOp(incr.get_ptr())) {
+        increment_op = plus;
+        increment_value = 1;
+      } else if (auto *minus = isSgMinusMinusOp(incr.get_ptr())) {
+        increment_op = minus;
+        increment_value = -1;
+      } else {
+        return true;
+      }
+      if (!fa.IsSameVarRef(AstNodePtrImpl(increment_op->get_operand()),
+                           testlhs)) {
+        return true;
+      }
+      ROSE_ASSERT(test.get_ptr()->get_parent() != nullptr);
+      ROSE_ASSERT(incr.get_ptr()->get_parent() != nullptr);
+
+      switch (test->variantT()) {
+      case V_SgLessThanOp:
+        ROSE_ASSERT(fa.ReplaceAst(
+            test,
+            fa.CreateBinaryOP(AstInterface::BOP_LE, fa.CopyAstTree(testlhs),
+                              fa.CreateBinaryOP(AstInterface::BOP_MINUS,
+                                                fa.CopyAstTree(testrhs),
+                                                fa.CreateConstInt(1)))));
         break;
       case V_SgGreaterThanOp:
-        fa.ReplaceAst(test, fa.CreateBinaryOP(
-                                AstInterface::BOP_GE, fa.CopyAstTree(testlhs),
-                                fa.CreateBinaryOP(AstInterface::BOP_PLUS,
-                                                  fa.CopyAstTree(testrhs),
-                                                  fa.CreateConstInt(1))));
+        ROSE_ASSERT(fa.ReplaceAst(
+            test,
+            fa.CreateBinaryOP(AstInterface::BOP_GE, fa.CopyAstTree(testlhs),
+                              fa.CreateBinaryOP(AstInterface::BOP_PLUS,
+                                                fa.CopyAstTree(testrhs),
+                                                fa.CreateConstInt(1)))));
         break;
       case V_SgLessOrEqualOp:
       case V_SgGreaterOrEqualOp:
       case V_SgNotEqualOp:
         break;
       default:
-        succ = false;
         return true;
       }
 
-      AstNodePtrImpl incr = fs->get_increment();
-      switch (incr->variantT()) {
-      case V_SgPlusPlusOp:
-        if (!fa.IsSameVarRef(
-                AstNodePtrImpl(isSgPlusPlusOp(incr.get_ptr())->get_operand()),
-                testlhs)) {
-          succ = false;
-          return true;
-        }
-        fa.ReplaceAst(
-            incr,
-            AstNodePtrImpl(new SgPlusAssignOp(
-                GetFileInfo(),
-                isSgExpression(
-                    AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
-                isSgExpression(AstNodePtrImpl(fa.CreateConstInt(1)).get_ptr()),
-                isSgExpression(incr.get_ptr())->get_type())));
-        break;
-      case V_SgMinusMinusOp:
-        if (!fa.IsSameVarRef(
-                AstNodePtrImpl(isSgMinusMinusOp(incr.get_ptr())->get_operand()),
-                testlhs)) {
-          succ = false;
-          return true;
-        }
-        fa.ReplaceAst(
-            incr,
-            AstNodePtrImpl(new SgPlusAssignOp(
-                GetFileInfo(),
-                isSgExpression(
-                    AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
-                isSgExpression(AstNodePtrImpl(fa.CreateConstInt(-1)).get_ptr()),
-                isSgExpression(incr.get_ptr())->get_type())));
-        break;
-      default:
-        succ = false;
-        return true;
-      }
-    }
-      succ = true;
+      ROSE_ASSERT(fa.ReplaceAst(
+          incr,
+          AstNodePtrImpl(new SgPlusAssignOp(
+              GetFileInfo(),
+              isSgExpression(AstNodePtrImpl(fa.CopyAstTree(testlhs)).get_ptr()),
+              isSgExpression(
+                  AstNodePtrImpl(fa.CreateConstInt(increment_value)).get_ptr()),
+              isSgExpression(incr.get_ptr())->get_type()))));
       break;
-
+    }
     default:
-      succ = false;
+      break;
     }
     return true;
-  }
-
-public:
-  bool operator()(AstInterface &li, const AstNodePtr &root) {
-    succ = true;
-    ProcessAstTree<AstNodePtr>::operator()(li, root);
-    return succ;
   }
 };
 

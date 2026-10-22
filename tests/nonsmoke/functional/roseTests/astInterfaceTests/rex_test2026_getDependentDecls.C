@@ -14,7 +14,20 @@ int main(int argc, char *argv[]) {
   ROSE_ASSERT(body != NULL);
   SgStatement *stmt = SageInterface::getFirstStatement(body);
   ROSE_ASSERT(stmt != NULL);
-  ROSE_ASSERT(isSgForStatement(stmt) != NULL);
+  SgForStatement *for_stmt = isSgForStatement(stmt);
+  ROSE_ASSERT(for_stmt != NULL);
+  ROSE_ASSERT(!for_stmt->get_for_init_stmt()->get_init_stmt().empty());
+  SgVariableDeclaration *loop_decl = isSgVariableDeclaration(
+      for_stmt->get_for_init_stmt()->get_init_stmt().front());
+  SgFunctionDeclaration *main_def =
+      isSgFunctionDeclaration(func->get_definingDeclaration());
+  ROSE_ASSERT(loop_decl != NULL && main_def != NULL);
+  ROSE_ASSERT(loop_decl->get_translation_unit_source_order().has_value());
+  ROSE_ASSERT(main_def->get_translation_unit_source_order().has_value());
+  std::vector<SgDeclarationStatement *> source_decls = {loop_decl, main_def};
+  std::vector<SgDeclarationStatement *> source_sorted =
+      SageInterface::sortSgNodeListBasedOnAppearanceOrderInSource(source_decls);
+  ROSE_ASSERT(source_sorted[0] == main_def && source_sorted[1] == loop_decl);
 
   std::vector<SgDeclarationStatement *> decls =
       SageInterface::getDependentDeclarations(stmt);

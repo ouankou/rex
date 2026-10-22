@@ -89,19 +89,10 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
     ROSE_ASSERT(scope);
     list<SgNode *> temp1, temp2;
 
-    // for-loops and Switch statements have conditions ( and increment )
-    // expressed as expressions and not as standalone statements; this will
-    // change in future Sage versions
-    // TODO: when for-loops and switch statements have conditions expressed via
-    // SgStatements these cases won't be treated separately; however, do-while
-    // will have condition expressed via expression so that will be the only
-    // exceptional case to be treated separately
     if (forStm != NULL) {
       // create a list of function calls in the condition and increment
       // expression the order is important, the condition is evaluated after the
-      // increment expression temp1 = FEOQueryForNodes(
-      // forStm->get_increment_expr_root(), V_SgFunctionCallExp ); temp2 =
-      // FEOQueryForNodes( forStm->get_test_expr_root(), V_SgFunctionCallExp );
+      // increment expression.
       temp1 = FEOQueryForNodes(forStm->get_increment(), V_SgFunctionCallExp);
       temp2 = FEOQueryForNodes(forStm->get_test(), V_SgFunctionCallExp);
       functionCallExpList = temp1;
@@ -109,9 +100,7 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
     } else {
       if (swStm != NULL) {
         // create a list of function calls in the condition in the order of
-        // function evaluation DQ (11/23/2005): Fixed SgSwitchStmt to have
-        // SgStatement for conditional. list<SgNode*> temp1 = FEOQueryForNodes(
-        // swStm->get_item_selector_root(), V_SgFunctionCallExp );
+        // function evaluation.
         list<SgNode *> temp1 =
             FEOQueryForNodes(swStm->get_item_selector(), V_SgFunctionCallExp);
         functionCallExpList = temp1;
@@ -289,8 +278,9 @@ void FunctionCallNormalization::visit(SgNode *astNode) {
           ROSE_ASSERT(newExpAssign);
           SgExpression *assignmentRhs = newExpAssign;
           if (pointerTypeNeeded) {
-            assignmentRhs =
-                SageBuilder::buildAddressOfOp(newExpAssign, pointerType);
+            assignmentRhs = SageBuilder::buildAddressOfOp(
+                newExpAssign, pointerType,
+                SgAddressOfOp::e_address_operand_object);
           }
           SgVarRefExp *assignmentLhs = SageBuilder::buildVarRefExp(varSymbol);
           SgAssignOp *assignOp = SageBuilder::buildAssignOp(

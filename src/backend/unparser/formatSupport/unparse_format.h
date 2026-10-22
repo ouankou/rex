@@ -3,7 +3,6 @@
 #ifndef UNPARSER_FORMAT_H
 #define UNPARSER_FORMAT_H
 
-#define KAI_NONSTD_IOSTREAM 1
 #include <iostream>
 #include <optional>
 #include <string>
@@ -12,9 +11,7 @@
 #include "unparseFormatTypes.h"
 
 class SgLocatedNode;
-class SgScopeStatement;
 class SgUnparse_Info;
-class Unparser;
 
 #define MAXCHARSONLINE 1000000
 
@@ -153,10 +150,6 @@ public:
 
   int get_indentstop() const { return indentstop; }
 
-  // DQ (3/18/2006): Added to support presentation and debugging of formatting
-  std::string formatOptionToString(FormatOpt opt);
-  // DQ (6/6/2007): Debugging support for hidden list data held in scopes
-  void outputHiddenListData(Unparser *unp, SgScopeStatement *inputScope);
 };
 
 #endif

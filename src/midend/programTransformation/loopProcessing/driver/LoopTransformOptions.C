@@ -1,4 +1,5 @@
 
+#include <charconv>
 #include <iostream>
 
 #include "BlockingAnal.h"
@@ -12,8 +13,6 @@
 #include "InterchangeAnal.h"
 
 #include "LoopTransformOptions.h"
-
-#include "ParallelizeLoop.h"
 
 class DynamicTuning {
   static int dt;
@@ -31,59 +30,53 @@ bool DynamicTuning::Do() {
   return dt > 0;
 }
 
-inline unsigned ReadUnsignedInt(LoopTransformOptions &opt,
-                                const std::vector<std::string> &argv,
+inline unsigned ReadUnsignedInt(const std::vector<std::string> &argv,
                                 unsigned &index, const std::string &name,
                                 unsigned def_value) {
-  int val = -1;
-  if (index + 1 < argv.size()) {
-    const std::string &content = argv[index + 1];
-    if (content[0] <= '9' && content[0] >= '0') {
-      val = atoi(content.c_str());
-      ++index;
-      std::cerr << name << " is " << val << "\n";
-      return val;
-    }
+  if (index + 1 == argv.size())
+    return def_value;
+  const std::string &content = argv[index + 1];
+  if (content.empty()) {
+    std::cerr << "REX_LOOP_OPTION[unsigned-size]: " << name
+              << " has an empty size\n";
+    ROSE_ABORT();
   }
-  std::cerr << "Invalid " << name << "; Use default (" << def_value << ")\n";
-  return def_value;
+  const char *begin = content.data();
+  const char *end = begin + content.size();
+  if (begin != end && *begin == '+')
+    ++begin;
+  const bool numeric = begin != end && ((*begin >= '0' && *begin <= '9') ||
+                                        (*begin == '-' && begin + 1 != end &&
+                                         begin[1] >= '0' && begin[1] <= '9'));
+  if (!numeric)
+    return def_value;
+  int value = 0;
+  const auto parsed = std::from_chars(begin, end, value);
+  if (parsed.ec != std::errc{} || parsed.ptr != end || value < 0) {
+    std::cerr << "REX_LOOP_OPTION[unsigned-size]: " << name
+              << " has invalid size '" << content << "'\n";
+    ROSE_ABORT();
+  }
+  ++index;
+  return static_cast<unsigned>(value);
 }
 
-class BlockParameterizeOpt : public LoopTransformOptions::OptRegistryType {
-  virtual void operator()(LoopTransformOptions &opt, unsigned &index,
-                          const std::vector<std::string> &argv) {
-    opt.SetDefaultBlockSize(
-        ReadUnsignedInt(opt, argv, index, "block size", 16));
-    opt.SetBlockSel(new ParameterizeBlocking());
+inline unsigned ReadPositiveInt(const std::vector<std::string> &argv,
+                                unsigned &index, const std::string &name,
+                                unsigned def_value) {
+  unsigned value = ReadUnsignedInt(argv, index, name, def_value);
+  if (value == 0) {
+    std::cerr << "REX_LOOP_OPTION[positive-size]: " << name
+              << " requires a positive size\n";
+    ROSE_ABORT();
   }
-
-public:
-  BlockParameterizeOpt()
-      : OptRegistryType(
-            "-bk_poet",
-            " <blocksize> : parameterize the blocking transformation") {}
-};
-
-class POETParallelizeOpt : public LoopTransformOptions::OptRegistryType {
-  virtual void operator()(LoopTransformOptions &opt, unsigned &index,
-                          const std::vector<std::string> &argv) {
-    opt.SetParBlockSize(
-        ReadUnsignedInt(opt, argv, index, "parallel block size", 256));
-    opt.SetParSel(new ParallelizeBlocking());
-  }
-
-public:
-  POETParallelizeOpt()
-      : OptRegistryType(
-            "-par_poet",
-            " <blocksize> : paralleization transformation using POET") {}
-};
+  return value;
+}
 
 class BlockOuterLoopOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    opt.SetDefaultBlockSize(
-        ReadUnsignedInt(opt, argv, index, "block size", 16));
+    opt.SetDefaultBlockSize(ReadPositiveInt(argv, index, "block size", 16));
     opt.SetBlockSel(new OuterLoopReuseBlocking(1));
   }
 
@@ -95,8 +88,7 @@ public:
 class BlockInnerLoopOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    opt.SetDefaultBlockSize(
-        ReadUnsignedInt(opt, argv, index, "block size", 16));
+    opt.SetDefaultBlockSize(ReadPositiveInt(argv, index, "block size", 16));
     opt.SetBlockSel(new InnerLoopReuseBlocking());
   }
 
@@ -108,8 +100,7 @@ public:
 class BlockAllLoopOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    opt.SetDefaultBlockSize(
-        ReadUnsignedInt(opt, argv, index, "block size", 16));
+    opt.SetDefaultBlockSize(ReadPositiveInt(argv, index, "block size", 16));
     opt.SetBlockSel(new AllLoopReuseBlocking());
   }
 
@@ -121,7 +112,7 @@ public:
 class CopyArrayDimensionOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    int dim = ReadUnsignedInt(opt, argv, index, "array-copy dimension", 0);
+    int dim = ReadUnsignedInt(argv, index, "array-copy dimension", 0);
     opt.SetCopySel(new CopyArrayUnderSizeLimit(dim));
   }
 
@@ -130,20 +121,6 @@ public:
       : OptRegistryType(
             "-cp",
             " <copydim> :copy array regions with dimensions <= <copydim>") {}
-};
-
-class ParameterizeCopyArrayOpt : public LoopTransformOptions::OptRegistryType {
-  virtual void operator()(LoopTransformOptions &opt, unsigned &index,
-                          const std::vector<std::string> &argv) {
-    int dim = ReadUnsignedInt(opt, argv, index, "array-copy dimension", 0);
-    opt.SetCopySel(new ParameterizeCopyArray(dim));
-  }
-
-public:
-  ParameterizeCopyArrayOpt()
-      : OptRegistryType("-cp_poet",
-                        "<copydim> :parameterize array copy array regions; to "
-                        "be applied together with blocking.") {}
 };
 
 class ReuseInterchangeOpt : public LoopTransformOptions::OptRegistryType {
@@ -205,7 +182,7 @@ public:
 class SplitLimitOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    int limit = ReadUnsignedInt(opt, argv, index, "split limit", 20);
+    int limit = ReadUnsignedInt(argv, index, "split limit", 20);
     opt.SetTransAnalSplitLimit(limit);
   }
 
@@ -218,7 +195,7 @@ public:
 class CacheLineSizeOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    int size = 0;
+    unsigned size = ReadPositiveInt(argv, index, "cache line size", 16);
     opt.SetCacheLineSize(size);
   }
 
@@ -230,7 +207,7 @@ public:
 class ReuseDistOpt : public LoopTransformOptions::OptRegistryType {
   virtual void operator()(LoopTransformOptions &opt, unsigned &index,
                           const std::vector<std::string> &argv) {
-    unsigned size = ReadUnsignedInt(opt, argv, index, "reuse distance", 4);
+    unsigned size = ReadUnsignedInt(argv, index, "reuse distance", 4);
     opt.SetReuseDistance(size);
   }
 
@@ -240,7 +217,8 @@ public:
 };
 
 LoopTransformOptions::LoopTransformOptions()
-    : parOp(0), cpOp(0), cacheline(16), reuseDist(8), splitlimit(20) {
+    : cpOp(0), cacheline(16), reuseDist(8), splitlimit(20),
+      defaultblocksize(16) {
   icOp = new ArrangeOrigNestingOrder();
   fsOp = new SameLevelFusion(new OrigLoopFusionAnal());
   bkOp = new LoopNoBlocking();
@@ -249,16 +227,8 @@ LoopTransformOptions::LoopTransformOptions()
 LoopTransformOptions::~LoopTransformOptions() {
   delete icOp;
   delete fsOp;
-  if (bkOp != 0)
-    delete bkOp;
-  if (cpOp != 0)
-    delete cpOp;
-}
-
-void LoopTransformOptions::SetParSel(LoopPar *sel) {
-  if (parOp != 0)
-    delete parOp;
-  parOp = sel;
+  delete bkOp;
+  delete cpOp;
 }
 
 void LoopTransformOptions::SetBlockSel(LoopBlocking *sel) {
@@ -288,19 +258,16 @@ LoopTransformOptions::OptType LoopTransformOptions::GetOptimizationType() {
            ((cpOp == 0) ? NO_OPT : cpOp->GetOptimizationType()) |
            icOp->GetOptimizationType());
   return (OptType)t;
-};
+}
 
 LoopTransformOptions *LoopTransformOptions::inst = 0;
 LoopTransformOptions *LoopTransformOptions::GetInstance() {
   if (inst == 0) {
     inst = new LoopTransformOptions();
-    inst->RegisterOption(new BlockParameterizeOpt);
-    inst->RegisterOption(new POETParallelizeOpt);
     inst->RegisterOption(new BlockOuterLoopOpt);
     inst->RegisterOption(new BlockInnerLoopOpt);
     inst->RegisterOption(new BlockAllLoopOpt);
     inst->RegisterOption(new CopyArrayDimensionOpt);
-    inst->RegisterOption(new ParameterizeCopyArrayOpt);
     inst->RegisterOption(new ReuseInterchangeOpt);
     inst->RegisterOption(new FissionOpt);
     inst->RegisterOption(new InnerFissionOpt);

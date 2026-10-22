@@ -9,7 +9,6 @@ add_library(midend_util OBJECT
   symbolicVal/SymbolicExpr.C
   annotation/OperatorAnnotation.C
   annotation/AnnotIO.C
-  annotation/AnnotGen.C
   annotation/AnnotCollect.C
   annotation/AnnotDescriptors.C
   annotation/OperatorDescriptors.C

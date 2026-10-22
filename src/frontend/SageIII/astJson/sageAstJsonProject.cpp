@@ -1,5 +1,8 @@
 #include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
+#ifdef ROSE_FLANG_FRONTEND
+#include "FlangModuleInfo.h"
+#endif
 
 namespace Rose {
 namespace AstJson {
@@ -66,7 +69,16 @@ AstFileRecord parseAstFileJson(const std::string &json,
   }
 
   AstFileRecord result;
-  result.root_id = static_cast<uint64_t>(root.at("root_id").asInt());
+  const int64_t root_id = root.requiredInt("root_id");
+  if (root_id <= 0) {
+    throw std::runtime_error("AST JSON root_id is not positive");
+  }
+  result.root_id = static_cast<uint64_t>(root_id);
+  const int64_t project_files_id = root.requiredInt("project_files_id");
+  if (project_files_id < 0) {
+    throw std::runtime_error("AST JSON project_files_id is negative");
+  }
+  result.project_files_id = static_cast<uint64_t>(project_files_id);
   result.root_kind = root.at("root_kind").asString();
   result.metadata = root.at("metadata");
   result.checkpoint = result.metadata.at("checkpoint").asString();
@@ -81,13 +93,26 @@ AstFileRecord parseAstFileJson(const std::string &json,
   result.nodes.reserve(nodes.array.size());
   for (const JsonValue &node_value : nodes.array) {
     NodeRecord record;
-    record.id = static_cast<uint64_t>(node_value.at("id").asInt());
+    const int64_t node_id = node_value.requiredInt("id");
+    if (node_id <= 0) {
+      throw std::runtime_error("AST JSON node id is not positive");
+    }
+    record.id = static_cast<uint64_t>(node_id);
     record.kind = node_value.at("kind").asString();
-    record.variant = node_value.at("variant").asInt();
+    const int64_t variant = node_value.requiredInt("variant");
+    if (variant < 0 || variant >= V_SgNumVariants)
+      throw std::runtime_error("AST JSON node variant is out of range");
+    record.variant = static_cast<VariantT>(variant);
+    if (roseGlobalVariantNameList[record.variant] != record.kind)
+      throw std::runtime_error("AST JSON node kind and variant disagree");
     record.flags = node_value.at("flags");
+    // Validate every record, including delayed nodes, before AST allocation.
+    validateConstructionFlags(record);
     record.location = node_value.at("location");
     record.properties = node_value.at("properties");
     record.preprocessing = record.properties.at("preprocessing");
+    (void)record.location.at("start").requiredBool("present");
+    (void)record.location.at("end").requiredBool("present");
 
     const JsonValue &edges = node_value.at("edges");
     if (edges.kind != JsonValue::Kind::Array) {
@@ -96,8 +121,13 @@ AstFileRecord parseAstFileJson(const std::string &json,
     for (const JsonValue &edge_value : edges.array) {
       EdgeRecord edge;
       edge.field = edge_value.at("field").asString();
-      edge.index = static_cast<uint64_t>(edge_value.requiredInt("index"));
-      edge.target = static_cast<uint64_t>(edge_value.at("target").asInt());
+      const int64_t index = edge_value.requiredInt("index");
+      const int64_t target = edge_value.requiredInt("target");
+      if (index < 0 || target <= 0) {
+        throw std::runtime_error("AST JSON edge index or target is invalid");
+      }
+      edge.index = static_cast<uint64_t>(index);
+      edge.target = static_cast<uint64_t>(target);
       record.edges.push_back(std::move(edge));
     }
 
@@ -112,76 +142,84 @@ AstFileRecord parseAstFileJson(const std::string &json,
       static_cast<int64_t>(result.nodes.size())) {
     throw std::runtime_error("AST JSON node_count does not match nodes array");
   }
-  if (result.root_kind != "SgSourceFile") {
+  // Validate the record graph before reconstruction allocates any Sage nodes.
+  // Each serialized field/index names one edge, including auxiliary records
+  // that are not reached from the checkpoint root's structural traversal.
+  for (const NodeRecord &record : result.nodes) {
+    std::unordered_map<std::string, std::unordered_set<uint64_t>> indices;
+    for (const EdgeRecord &edge : record.edges) {
+      if (edge.field.empty())
+        throw std::runtime_error("AST JSON edge field is empty");
+      if (!indices[edge.field].insert(edge.index).second)
+        throw std::runtime_error(
+            "AST JSON contains a duplicate edge field/index");
+      (void)result.node(edge.target);
+    }
+  }
+  if (result.root_kind != "SgSourceFile" ||
+      result.node(result.root_id).kind != result.root_kind) {
     throw std::runtime_error("AST JSON checkpoint root is not SgSourceFile");
   }
+  if (result.project_files_id != 0) {
+    const NodeRecord &files = result.node(result.project_files_id);
+    if (files.kind != "SgFileList") {
+      throw std::runtime_error("AST JSON project_files_id is not SgFileList");
+    }
+    std::unordered_set<uint64_t> members;
+    std::unordered_set<uint64_t> indices;
+    for (const EdgeRecord &edge : files.edges) {
+      if (edge.field != "listOfFiles" || edge.index >= files.edges.size() ||
+          !indices.insert(edge.index).second ||
+          !members.insert(edge.target).second) {
+        throw std::runtime_error("AST JSON project file list is malformed");
+      }
+      const NodeRecord &file = result.node(edge.target);
+      if (file.kind != "SgSourceFile" ||
+          singleEdgeTarget(file, "parent") != result.project_files_id) {
+        throw std::runtime_error(
+            "AST JSON project file has a conflicting owner");
+      }
+    }
+    if (members.count(result.root_id) != 1) {
+      throw std::runtime_error(
+          "AST JSON checkpoint root is not a project file");
+    }
+  }
+  validateParentChains(result);
   return result;
 }
 
-void appendComparableValue(std::ostream &out, const JsonValue &value);
-
-void appendComparableObject(std::ostream &out, const JsonValue &value) {
-  if (value.kind != JsonValue::Kind::Object) {
-    throw std::runtime_error("AST JSON comparable value is not an object");
-  }
-  out << '{';
-  bool first = true;
-  for (const auto &entry : value.object) {
-    if (!first) {
-      out << ',';
+void validateParentChains(const AstFileRecord &ast) {
+  enum class ParentState : unsigned char { Unvisited, Visiting, Complete };
+  std::vector<ParentState> parent_states(ast.nodes.size(),
+                                         ParentState::Unvisited);
+  std::vector<size_t> parent_path;
+  for (size_t start = 0; start < ast.nodes.size(); ++start) {
+    parent_path.clear();
+    size_t current = start;
+    while (parent_states[current] != ParentState::Complete) {
+      if (parent_states[current] == ParentState::Visiting)
+        throw std::runtime_error("AST JSON contains a parent cycle at node " +
+                                 std::to_string(ast.nodes[current].id));
+      parent_states[current] = ParentState::Visiting;
+      parent_path.push_back(current);
+      const uint64_t parent = singleEdgeTarget(ast.nodes[current], "parent");
+      if (parent == 0)
+        break;
+      (void)ast.node(parent);
+      current = ast.index_by_id.at(parent);
     }
-    out << jsonString(entry.first) << ':';
-    appendComparableValue(out, entry.second);
-    first = false;
-  }
-  out << '}';
-}
-
-void appendComparableValue(std::ostream &out, const JsonValue &value) {
-  switch (value.kind) {
-  case JsonValue::Kind::Null:
-    out << "null";
-    break;
-  case JsonValue::Kind::Bool:
-    out << (value.bool_value ? "true" : "false");
-    break;
-  case JsonValue::Kind::Number:
-    out << value.text;
-    break;
-  case JsonValue::Kind::String:
-    out << jsonString(value.text);
-    break;
-  case JsonValue::Kind::Array:
-    out << '[';
-    for (size_t i = 0; i < value.array.size(); ++i) {
-      if (i != 0) {
-        out << ',';
-      }
-      appendComparableValue(out, value.array[i]);
-    }
-    out << ']';
-    break;
-  case JsonValue::Kind::Object:
-    appendComparableObject(out, value);
-    break;
+    for (size_t index : parent_path)
+      parent_states[index] = ParentState::Complete;
   }
 }
 
-void appendComparableProperties(std::ostream &out, const JsonValue &value) {
-  if (value.kind != JsonValue::Kind::Object) {
-    throw std::runtime_error("AST JSON properties value is not an object");
-  }
-  out << '{';
-  bool first = true;
-  for (const auto &entry : value.object) {
-    if (!first) {
-      out << ',';
-    }
-    out << jsonString(entry.first) << ':';
-    appendComparableValue(out, entry.second);
-    first = false;
-  }
-  out << '}';
+void appendComparableObject(
+    std::ostream &out, const JsonValue &value,
+    const char *error = "AST JSON comparable value is not an object") {
+  if (value.kind != JsonValue::Kind::Object)
+    throw std::runtime_error(error);
+  appendCanonicalJson(out, value);
 }
 
 std::string semanticSignature(const AstFileRecord &ast) {
@@ -190,6 +228,7 @@ std::string semanticSignature(const AstFileRecord &ast) {
   out << "schema=" << kSchemaVersion << '\n';
   out << "checkpoint=" << ast.checkpoint << '\n';
   out << "root=" << ast.root_id << ":" << ast.root_kind << '\n';
+  out << "project_files=" << ast.project_files_id << '\n';
   out << "metadata=";
   appendComparableObject(out, ast.metadata);
   out << '\n';
@@ -204,7 +243,8 @@ std::string semanticSignature(const AstFileRecord &ast) {
     appendComparableObject(out, record.location);
     out << '\n';
     out << "properties=";
-    appendComparableProperties(out, record.properties);
+    appendComparableObject(out, record.properties,
+                           "AST JSON properties value is not an object");
     out << '\n';
 
     std::vector<EdgeRecord> edges = record.edges;
@@ -254,304 +294,142 @@ SgProject *owningProject(SgSourceFile *file) {
   return isSgProject(file_list->get_parent());
 }
 
-bool nodeParentChainReferencesSourceFile(SgNode *node, SgSourceFile *file) {
-  if (node == nullptr || file == nullptr) {
-    return false;
+void replaceProjectFiles(SgProject *project, const AstFileRecord &ast,
+                         const NodeMap &original, const NodeMap &restored) {
+  ROSE_ASSERT(project != nullptr && ast.project_files_id != 0);
+  auto *old_list = nodeByIdAs<SgFileList>(original, ast.project_files_id);
+  auto *new_list = nodeByIdAs<SgFileList>(restored, ast.project_files_id);
+  ROSE_ASSERT(old_list != new_list && old_list->get_parent() == project);
+  SgFilePtrList &files = project->get_fileList();
+  SgFilePtrList &replacements = new_list->get_listOfFiles();
+  ROSE_ASSERT(&files == &old_list->get_listOfFiles());
+  ROSE_ASSERT(files.size() == replacements.size());
+
+  std::unordered_map<SgNode *, SgNode *> identities;
+  for (const auto &entry : original) {
+    SgNode *replacement = nodeById(restored, entry.first);
+    ROSE_ASSERT(entry.second->variantT() == replacement->variantT());
+    ROSE_ASSERT(identities.emplace(entry.second, replacement).second);
   }
-  for (SgNode *current = node; current != nullptr;
-       current = current->get_parent()) {
-    if (current == file) {
-      return true;
-    }
-  }
-  return false;
-}
-
-bool declarationReferencesSourceFile(SgDeclarationStatement *declaration,
-                                     SgSourceFile *file) {
-  if (declaration == nullptr || file == nullptr) {
-    return false;
-  }
-  return nodeParentChainReferencesSourceFile(declaration, file) ||
-         nodeParentChainReferencesSourceFile(declaration->get_scope(), file);
-}
-
-bool symbolReferencesSourceFile(SgSymbol *symbol, SgSourceFile *file) {
-  if (symbol == nullptr || file == nullptr) {
-    return false;
-  }
-  if (nodeParentChainReferencesSourceFile(symbol, file)) {
-    return true;
-  }
-  SgNode *basis = const_cast<SgNode *>(symbolBasis(symbol));
-  return nodeParentChainReferencesSourceFile(basis, file) ||
-         declarationReferencesSourceFile(isSgDeclarationStatement(basis), file);
-}
-
-struct SourceFileReferenceScanner {
-  explicit SourceFileReferenceScanner(SgSourceFile *file) : file(file) {}
-
-  bool references(SgType *type) {
-    if (type == nullptr || file == nullptr) {
-      return false;
-    }
-    if (!seen_types.insert(type).second) {
-      return false;
-    }
-    if (nodeParentChainReferencesSourceFile(type, file)) {
-      return true;
-    }
-
-    if (SgPointerMemberType *member_pointer = isSgPointerMemberType(type)) {
-      return references(member_pointer->get_base_type()) ||
-             references(member_pointer->get_class_type());
-    }
-    if (SgPointerType *pointer = isSgPointerType(type)) {
-      return references(pointer->get_base_type());
-    }
-    if (SgReferenceType *reference = isSgReferenceType(type)) {
-      return references(reference->get_base_type());
-    }
-    if (SgRvalueReferenceType *reference = isSgRvalueReferenceType(type)) {
-      return references(reference->get_base_type());
-    }
-    if (SgTypeString *string_type = isSgTypeString(type)) {
-      return references(string_type->get_lengthExpression()) ||
-             references(string_type->get_type_kind());
-    }
-    if (SgTypeComplex *complex_type = isSgTypeComplex(type)) {
-      return references(complex_type->get_base_type()) ||
-             references(complex_type->get_type_kind());
-    }
-    if (SgArrayType *array = isSgArrayType(type)) {
-      return references(array->get_base_type()) ||
-             references(array->get_index()) ||
-             references(array->get_dim_info());
-    }
-    if (SgModifierType *modifier = isSgModifierType(type)) {
-      return references(modifier->get_base_type());
-    }
-    if (SgTypedefType *typedef_type = isSgTypedefType(type)) {
-      return declarationReferencesSourceFile(typedef_type->get_declaration(),
-                                             file);
-    }
-    if (SgClassType *class_type = isSgClassType(type)) {
-      return declarationReferencesSourceFile(class_type->get_declaration(),
-                                             file);
-    }
-    if (SgEnumType *enum_type = isSgEnumType(type)) {
-      return declarationReferencesSourceFile(enum_type->get_declaration(),
-                                             file);
-    }
-    if (SgNonrealType *nonreal_type = isSgNonrealType(type)) {
-      return declarationReferencesSourceFile(nonreal_type->get_declaration(),
-                                             file);
-    }
-    if (SgTemplateType *template_type = isSgTemplateType(type)) {
-      return references(template_type->get_class_type()) ||
-             references(template_type->get_parent_class_type());
-    }
-    if (SgMemberFunctionType *member_type = isSgMemberFunctionType(type)) {
-      if (references(member_type->get_return_type()) ||
-          references(member_type->get_class_type())) {
-        return true;
-      }
-      for (SgType *argument : member_type->get_arguments()) {
-        if (references(argument)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    if (SgFunctionType *function_type = isSgFunctionType(type)) {
-      if (references(function_type->get_return_type())) {
-        return true;
-      }
-      for (SgType *argument : function_type->get_arguments()) {
-        if (references(argument)) {
-          return true;
-        }
-      }
-      return false;
-    }
-    if (SgDeclType *decl_type = isSgDeclType(type)) {
-      return references(decl_type->get_base_expression()) ||
-             references(decl_type->get_base_type());
-    }
-
-    return false;
-  }
-
-  bool references(SgExpression *expr) {
-    if (expr == nullptr || file == nullptr) {
-      return false;
-    }
-    if (!seen_expressions.insert(expr).second) {
-      return false;
-    }
-    if (nodeParentChainReferencesSourceFile(expr, file)) {
-      return true;
-    }
-
-    if (referencesExpressionLocalLinks(expr)) {
-      return true;
-    }
-
-    RoseAst ast(expr);
-    for (RoseAst::iterator it = ast.begin().withoutNullValues();
-         it != ast.end(); ++it) {
-      SgExpression *child = isSgExpression(*it);
-      if (child == nullptr || child == expr) {
+  // Inline external peers are absent from the indexed graph, but peers whose
+  // semantic scope is replaced must retire in the same deletion transaction.
+  std::vector<SgNode *> retired_roots{new_list};
+  for (const auto &[id, node] : original) {
+    auto *declaration = isSgDeclarationStatement(node);
+    if (declaration == nullptr)
+      continue;
+    auto *replacement = nodeByIdAs<SgDeclarationStatement>(restored, id);
+    const std::pair<SgDeclarationStatement *, SgDeclarationStatement *>
+        peers[] = {{declaration->get_firstNondefiningDeclaration(),
+                    replacement->get_firstNondefiningDeclaration()},
+                   {declaration->get_definingDeclaration(),
+                    replacement->get_definingDeclaration()}};
+    for (const auto &[peer, restored_peer] : peers) {
+      if (peer == nullptr || peer->get_ast_json_external_role() ==
+                                 SgDeclarationStatement::e_ast_json_local)
+        continue;
+      ROSE_ASSERT(restored_peer != nullptr &&
+                  peer->variantT() == restored_peer->variantT() &&
+                  peer->get_ast_json_external_role() ==
+                      restored_peer->get_ast_json_external_role());
+      if (identities.count(peer) != 0) {
+        ROSE_ASSERT(identities.at(peer) == restored_peer);
         continue;
       }
-      if (references(child)) {
-        return true;
-      }
-      if (isSgBaseClass(*it) != nullptr) {
-        it.skipChildrenOnForward();
-      }
+      if (identities.count(peer->get_scope()) == 0)
+        continue;
+      ROSE_ASSERT(peer != restored_peer);
+      ROSE_ASSERT(peer->get_parent() == project ||
+                  identities.count(peer->get_parent()) != 0);
+      ROSE_ASSERT(restored_peer->get_scope() ==
+                  identities.at(peer->get_scope()));
+      identities.emplace(peer, restored_peer);
+      retired_roots.push_back(peer);
     }
-    return false;
   }
-
-  bool referencesExpressionLocalLinks(SgExpression *expr) {
-    if (SgVarRefExp *ref = isSgVarRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol(), file);
-    }
-    if (SgFunctionRefExp *ref = isSgFunctionRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol(), file) ||
-             symbolReferencesSourceFile(
-                 ref->get_fortran_source_visible_symbol(), file) ||
-             references(ref->get_type());
-    }
-    if (SgTemplateFunctionRefExp *ref = isSgTemplateFunctionRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol(), file) ||
-             nodeParentChainReferencesSourceFile(
-                 ref->get_semantic_function_declaration(), file) ||
-             references(ref->get_type());
-    }
-    if (SgMemberFunctionRefExp *ref = isSgMemberFunctionRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol_i(), file) ||
-             references(ref->get_type());
-    }
-    if (SgTemplateMemberFunctionRefExp *ref =
-            isSgTemplateMemberFunctionRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol_i(), file) ||
-             nodeParentChainReferencesSourceFile(
-                 ref->get_semantic_member_function_declaration(), file) ||
-             references(ref->get_type());
-    }
-    if (SgClassNameRefExp *ref = isSgClassNameRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol(), file) ||
-             references(ref->get_type());
-    }
-    if (SgNonrealRefExp *ref = isSgNonrealRefExp(expr)) {
-      return symbolReferencesSourceFile(ref->get_symbol(), file) ||
-             nodeParentChainReferencesSourceFile(
-                 ref->get_resolved_function_declaration(), file) ||
-             nodeParentChainReferencesSourceFile(
-                 ref->get_resolved_variable_declaration(), file) ||
-             references(ref->get_type());
-    }
-    if (SgThisExp *this_expr = isSgThisExp(expr)) {
-      return symbolReferencesSourceFile(this_expr->get_class_symbol(), file) ||
-             symbolReferencesSourceFile(this_expr->get_nonreal_symbol(),
-                                        file) ||
-             references(this_expr->get_type());
-    }
-    if (SgEnumVal *value = isSgEnumVal(expr)) {
-      return nodeParentChainReferencesSourceFile(value->get_declaration(),
-                                                 file) ||
-             references(value->get_type());
-    }
-    if (SgConstructorInitializer *init = isSgConstructorInitializer(expr)) {
-      return nodeParentChainReferencesSourceFile(init->get_declaration(),
-                                                 file) ||
-             references(init->get_type());
-    }
-    if (SgNewExp *new_expr = isSgNewExp(expr)) {
-      return references(new_expr->get_specified_type());
-    }
-    if (SgPseudoDestructorRefExp *pseudo = isSgPseudoDestructorRefExp(expr)) {
-      return references(pseudo->get_object_type()) ||
-             references(pseudo->get_type());
-    }
-    if (SgSizeOfOp *size_of = isSgSizeOfOp(expr)) {
-      return references(size_of->get_operand_type()) ||
-             references(size_of->get_operand_expr());
-    }
-    if (SgAlignOfOp *align_of = isSgAlignOfOp(expr)) {
-      return references(align_of->get_operand_type()) ||
-             references(align_of->get_operand_expr());
-    }
-    if (SgTypeExpression *type_expr = isSgTypeExpression(expr)) {
-      return references(type_expr->get_represented_type());
-    }
-    if (SgFortranCommonBlockRefExp *common =
-            isSgFortranCommonBlockRefExp(expr)) {
-      SageInterface::validateFortranCommonBlockRef(common);
-      return nodeParentChainReferencesSourceFile(common->get_common_block(),
-                                                 file);
-    }
-    if (!expressionCarriesSemanticType(expr)) {
-      return false;
-    }
-    return references(expr->get_type());
-  }
-
-  SgSourceFile *file = nullptr;
-  std::unordered_set<SgType *> seen_types;
-  std::unordered_set<SgExpression *> seen_expressions;
-};
-
-void purgeStaleTypeEntriesFromTable(SgSymbolTable *table,
-                                    SgSourceFile *old_file,
-                                    bool function_type_table) {
-  if (table == nullptr || table->get_table() == nullptr ||
-      old_file == nullptr) {
-    return;
-  }
-
-  std::vector<SgName> stale_names;
-  std::set<std::string> seen_names;
-  for (const auto &entry : *table->get_table()) {
-    SgFunctionTypeSymbol *symbol = isSgFunctionTypeSymbol(entry.second);
-    if (symbol == nullptr || symbol->get_type() == nullptr) {
+  for (const auto &[id, node] : original) {
+    auto *scope = isSgScopeStatement(node);
+    if (scope == nullptr)
       continue;
-    }
-    SourceFileReferenceScanner scanner(old_file);
-    if (!scanner.references(symbol->get_type())) {
-      continue;
-    }
-    const std::string name = entry.first.getString();
-    if (seen_names.insert(name).second) {
-      stale_names.push_back(entry.first);
+    auto *replacement_scope = nodeByIdAs<SgScopeStatement>(restored, id);
+    for (const auto &entry : *scope->get_symbol_table()->get_table()) {
+      SgSymbol *symbol = entry.second;
+      const auto basis = identities.find(symbol->get_symbol_basis());
+      if (basis == identities.end())
+        continue;
+      SgSymbol *replacement = nullptr;
+      const auto matches =
+          replacement_scope->get_symbol_table()->get_table()->equal_range(
+              entry.first);
+      for (auto candidate = matches.first; candidate != matches.second;
+           ++candidate) {
+        if (candidate->second->get_symbol_basis() == basis->second &&
+            candidate->second->variantT() == symbol->variantT()) {
+          ROSE_ASSERT(replacement == nullptr ||
+                      replacement == candidate->second);
+          replacement = candidate->second;
+        }
+      }
+      ROSE_ASSERT(replacement != nullptr);
+      identities.emplace(symbol, replacement);
     }
   }
+  for (size_t index = 0; index < files.size(); ++index) {
+    ROSE_ASSERT(identities.at(files[index]) == replacements[index]);
+    ROSE_ASSERT(replacements[index]->get_parent() == new_list);
+  }
+  ROSE_ASSERT(isSgSourceFile(nodeById(restored, ast.root_id)) != nullptr);
+  class ProjectReferences : public SgSimpleProcessing,
+                            public SimpleReferenceToPointerHandler {
+    const std::unordered_map<SgNode *, SgNode *> &identities_;
 
-  for (const SgName &name : stale_names) {
-    if (function_type_table) {
-      table->remove_function_type(name);
-    } else {
-      SgNode::get_globalTypeTable()->remove_type(name);
+  public:
+    explicit ProjectReferences(
+        const std::unordered_map<SgNode *, SgNode *> &identities)
+        : identities_(identities) {}
+    void operator()(SgNode *&edge, const SgName &, bool) override {
+      if (const auto replacement = identities_.find(edge);
+          replacement != identities_.end())
+        edge = replacement->second;
     }
+    void visit(SgNode *node) override {
+      node->processDataMemberReferenceToPointers(this);
+      if (auto *scope = isSgScopeStatement(node)) {
+        auto *table = scope->get_symbol_table();
+        std::vector<std::pair<SgSymbol *, const SgNode *>> symbols;
+        // An alias can acquire its new basis when another table changes its
+        // target.
+        for (const auto &[basis, entries] : table->get_symbolBasisExactIndex())
+          for (SgSymbol *symbol : entries)
+            symbols.emplace_back(symbol, basis);
+        for (const auto &entry : *table->get_table())
+          entry.second->processDataMemberReferenceToPointers(this);
+        for (const auto &[symbol, basis] : symbols)
+          if (symbol->get_symbol_basis() != basis)
+            table->reindex_symbol_basis(symbol, basis);
+      }
+    }
+  } references(identities);
+  references.traverse(project->get_globalScopeAcrossFiles(), preorder);
+#ifdef ROSE_FLANG_FRONTEND
+  FlangModuleInfo::replaceAstIdentities(project, identities);
+#endif
+  for (const auto &entry : original) {
+    if (auto *source = isSgSourceFile(entry.second))
+      OmpSupport::discardOpenMPProducerSemanticRecords(source);
   }
-}
-
-void purgeStaleCheckpointTypeCaches(SgSourceFile *old_file) {
-  if (old_file == nullptr) {
-    return;
+  // Keep the project's list and its iterators stable for the frontend's active
+  // per-file traversal. All replacement nodes are complete before publication.
+  for (size_t index = 0; index < files.size(); ++index) {
+    SgFile *original_file = files[index];
+    files[index] = replacements[index];
+    files[index]->set_parent(old_list);
+    replacements[index] = original_file;
+    original_file->set_parent(new_list);
   }
-
-  SgTypeTable *type_table = SgNode::get_globalTypeTable();
-  ROSE_ASSERT(type_table != nullptr);
-  purgeStaleTypeEntriesFromTable(type_table->get_type_table(), old_file, false);
-
-  SgFunctionTypeTable *function_type_table =
-      SgNode::get_globalFunctionTypeTable();
-  ROSE_ASSERT(function_type_table != nullptr);
-  purgeStaleTypeEntriesFromTable(function_type_table->get_function_type_table(),
-                                 old_file, true);
+  attachJsonNodeId(old_list, ast.project_files_id);
+  SageInterface::deleteAST(retired_roots,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
 }
 
 void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file) {
@@ -562,6 +440,18 @@ void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file) {
 
   SgFileList *file_list_node = isSgFileList(old_file->get_parent());
   ROSE_ASSERT(file_list_node != nullptr);
+  // The replacement owns its reconstructed module graph. Moving the old
+  // files here would disconnect its serialized component and type identities.
+  SgFileList *old_external = old_file->get_frontendExternalFileList();
+  SgFileList *new_external = new_file->get_frontendExternalFileList();
+  if ((old_external == nullptr) != (new_external == nullptr) ||
+      (old_external != nullptr &&
+       (old_external == new_external ||
+        old_external->get_listOfFiles().size() !=
+            new_external->get_listOfFiles().size()))) {
+    throw std::runtime_error(
+        "AST JSON replacement did not preserve its owned module graph");
+  }
   SgFilePtrList &files = project->get_fileList();
   bool replaced = false;
   for (SgFile *&entry : files) {
@@ -572,32 +462,6 @@ void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file) {
     }
   }
   ROSE_ASSERT(replaced);
-
-  SgFileList *external_files = old_file->get_frontendExternalFileList();
-  if (new_file->get_frontendExternalFileList() != nullptr) {
-    throw std::runtime_error(
-        "AST JSON replacement source file unexpectedly owns frontend-external "
-        "files");
-  }
-  if (external_files != nullptr) {
-    if (external_files->get_parent() != old_file ||
-        external_files->get_listOfFiles().empty()) {
-      throw std::runtime_error(
-          "AST JSON source file has malformed frontend-external ownership "
-          "during replacement");
-    }
-    for (SgFile *external_file : external_files->get_listOfFiles()) {
-      if (external_file == nullptr ||
-          external_file->get_parent() != external_files) {
-        throw std::runtime_error(
-            "AST JSON source file has a malformed frontend-external child "
-            "during replacement");
-      }
-    }
-    old_file->set_frontendExternalFileList(nullptr);
-    new_file->set_frontendExternalFileList(external_files);
-    external_files->set_parent(new_file);
-  }
   new_file->set_parent(file_list_node);
   if (new_file->get_globalScope() != nullptr) {
     new_file->get_globalScope()->set_parent(new_file);
@@ -606,17 +470,22 @@ void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file) {
   old_file->set_parent(nullptr);
 }
 
-std::vector<std::string> commandLineFromMetadata(const JsonValue &metadata) {
-  const JsonValue *array = metadata.find("command_line");
-  std::vector<std::string> result;
-  if (array != nullptr && array->kind == JsonValue::Kind::Array) {
-    for (const JsonValue &value : array->array) {
-      result.push_back(value.asString());
-    }
+std::vector<std::string> commandLineFromJson(const JsonValue &properties) {
+  const JsonValue &array = properties.at("command_line");
+  if (array.kind != JsonValue::Kind::Array || array.array.empty()) {
+    throw std::runtime_error(
+        "AST JSON source file command_line must be a nonempty array");
   }
-  if (result.empty()) {
-    result.push_back("cc");
-    result.push_back(metadata.requiredString("source_file"));
+  std::vector<std::string> result;
+  for (const JsonValue &value : array.array) {
+    result.push_back(value.asString());
+    if (result.back().find('\0') != std::string::npos)
+      throw std::runtime_error(
+          "AST JSON source file command_line contains a NUL byte");
+  }
+  if (result.front().empty()) {
+    throw std::runtime_error(
+        "AST JSON source file command_line has no driver name");
   }
   return result;
 }
@@ -660,8 +529,8 @@ void restoreFileIdMapFromMetadata(const JsonValue &metadata) {
     id_to_name[static_cast<int>(id64)] = filename;
     ++expected_id;
   }
-  Sg_File_Info::set_fileidtoname_map(id_to_name);
-  Sg_File_Info::set_nametofileid_map(name_to_id);
+  Sg_File_Info::get_fileidtoname_map().swap(id_to_name);
+  Sg_File_Info::get_nametofileid_map().swap(name_to_id);
 }
 
 } // namespace AstJson

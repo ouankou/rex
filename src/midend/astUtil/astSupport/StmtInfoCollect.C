@@ -1,5 +1,7 @@
 #include "sage3basic.h"
 
+#include <algorithm>
+
 #include <iostream>
 
 #include <sstream>
@@ -37,14 +39,97 @@ SgNode *stripAliasIdentityConversions(SgNode *expression) {
   return expression;
 }
 
+template <class Evaluate>
+void evaluateLocationOperands(SgExpression *expression, Evaluate &evaluate) {
+  ASSERT_not_null(expression);
+  if (SgCastExp *cast = isSgCastExp(expression)) {
+    cast->validate_semantic_conversion();
+    if (cast->get_semantic_conversion_kind() ==
+            SgCastExp::e_semantic_conversion_ArrayToPointerDecay ||
+        (cast->get_value_category() == SgCastExp::e_value_category_lvalue &&
+         (cast->get_semantic_conversion_kind() ==
+              SgCastExp::e_semantic_conversion_NoOp ||
+          cast->get_semantic_conversion_kind() ==
+              SgCastExp::e_semantic_conversion_LValueBitCast ||
+          cast->get_semantic_conversion_kind() ==
+              SgCastExp::e_semantic_conversion_DerivedToBase ||
+          cast->get_semantic_conversion_kind() ==
+              SgCastExp::e_semantic_conversion_UncheckedDerivedToBase))) {
+      evaluateLocationOperands(cast->get_operand(), evaluate);
+      return;
+    }
+  }
+  if (isSgVarRefExp(expression) || isSgNonrealRefExp(expression) ||
+      isSgThisExp(expression))
+    return;
+  if (auto *dereference = isSgPointerDerefExp(expression)) {
+    evaluate(dereference->get_operand());
+  } else if (isSgDotExp(expression) || isSgArrowExp(expression) ||
+             isSgDotStarOp(expression) || isSgArrowStarOp(expression) ||
+             isSgPntrArrRefExp(expression)) {
+    auto *access = isSgBinaryOp(expression);
+    SgExpression *base = access->get_lhs_operand();
+    if (isSgDotExp(access) || isSgDotStarOp(access) ||
+        (isSgPntrArrRefExp(access) &&
+         isSgArrayType(base->get_type()->stripTypedefsAndModifiers())))
+      evaluateLocationOperands(base, evaluate);
+    else
+      evaluate(base);
+    if (isSgDotStarOp(access) || isSgArrowStarOp(access) ||
+        isSgPntrArrRefExp(access))
+      evaluate(access->get_rhs_operand());
+  } else if (auto *comma = isSgCommaOpExp(expression)) {
+    evaluate(comma->get_lhs_operand());
+    evaluateLocationOperands(comma->get_rhs_operand(), evaluate);
+  } else if (auto *conditional = isSgConditionalExp(expression)) {
+    conditional->validate();
+    evaluate(conditional->get_conditional_exp());
+    if (conditional->get_operator_kind() ==
+        SgConditionalExp::e_conditional_operator_standard)
+      evaluateLocationOperands(conditional->get_true_value_exp(), evaluate);
+    evaluateLocationOperands(conditional->get_false_exp(), evaluate);
+  } else {
+    evaluate(expression);
+  }
+}
+
 void collectAssignmentTargetMemoryRefs(AstInterface &fa, const AstNodePtr &expr,
-                                       AstInterface::AstNodeList &refs) {
+                                       AstInterface::AstNodeList &refs,
+                                       bool suppress_reads = false) {
   SgNode *node = AstNodePtrImpl(expr).get_ptr();
   if (node == nullptr) {
     return;
   }
+  if (SgCastExp *cast = isSgCastExp(node)) {
+    cast->validate_semantic_conversion();
+    if (cast->get_value_category() == SgCastExp::e_value_category_lvalue &&
+        (cast->get_semantic_conversion_kind() ==
+             SgCastExp::e_semantic_conversion_NoOp ||
+         cast->get_semantic_conversion_kind() ==
+             SgCastExp::e_semantic_conversion_LValueBitCast)) {
+      collectAssignmentTargetMemoryRefs(fa, cast->get_operand(), refs,
+                                        suppress_reads);
+    } else {
+      refs.push_back(expr);
+    }
+    return;
+  }
   if (SgCommaOpExp *comma = isSgCommaOpExp(node)) {
-    collectAssignmentTargetMemoryRefs(fa, comma->get_rhs_operand(), refs);
+    collectAssignmentTargetMemoryRefs(fa, comma->get_rhs_operand(), refs,
+                                      suppress_reads);
+    return;
+  }
+  if (SgConditionalExp *conditional = isSgConditionalExp(node)) {
+    conditional->validate();
+    // The GNU common operand selects the destination as well as supplying it.
+    if (!suppress_reads ||
+        conditional->get_operator_kind() ==
+            SgConditionalExp::e_conditional_operator_standard) {
+      collectAssignmentTargetMemoryRefs(fa, conditional->get_true_value_exp(),
+                                        refs, suppress_reads);
+    }
+    collectAssignmentTargetMemoryRefs(fa, conditional->get_false_exp(), refs,
+                                      suppress_reads);
     return;
   }
   fa.IsMemoryAccess(expr, &refs);
@@ -62,23 +147,53 @@ void StmtInfoCollect::AppendFuncCallArguments(AstInterface &fa,
   if (callee != 0) {
     *callee = AstNodePtrImpl(p_callee).get_ptr();
   }
-  std::string fname;
-  if (AstInterface::IsFunctionDefinition(fa.GetFunctionDefinition(p_callee),
-                                         &fname, &params)) {
-    DebugLocalInfoCollect(
-        [&fname]() { return "static Function call to : " + fname; });
+  auto *constructor = isSgConstructorInitializer(p_callee.get_ptr());
+  const bool incoming =
+      constructor != nullptr &&
+      constructor->get_argument_source() !=
+          SgConstructorInitializer::e_constructor_argument_expressions;
+  SgFunctionDeclaration *selected =
+      constructor != nullptr
+          ? constructor->get_declaration()
+          : SgFunctionCallExp::getAssociatedFunctionDeclarationForCallee(
+                isSgExpression(p_callee.get_ptr()));
+  if (selected != nullptr) {
+    if (SgDeclarationStatement *definition =
+            selected->get_definingDeclaration()) {
+      selected = isSgFunctionDeclaration(definition);
+      ROSE_ASSERT(selected != nullptr);
+    }
+    for (SgInitializedName *parameter : selected->get_args())
+      if (!isSgTypeEllipse(parameter->get_type()))
+        params.emplace_back(parameter);
   }
 
+  auto argument = args.begin();
+  auto *expression = isSgExpression(p_callee.get_ptr());
+  ROSE_ASSERT(expression != nullptr && expression->get_type() != nullptr);
+  auto *callable = expression->get_type()->stripType(
+      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+      SgType::STRIP_POINTER_TYPE);
+  if (isSgMemberFunctionType(callable) != nullptr) {
+    ROSE_ASSERT(argument != args.end());
+    if (*argument != AST_NULL)
+      operator()(fa, *argument);
+    ++argument;
+  }
   AstInterface::AstNodeList::const_iterator p2 = params.begin();
-  for (AstInterface::AstNodeList::const_iterator p1 = args.begin();
-       p1 != args.end(); ++p1) {
-    AstNodePtr c = AstNodePtrImpl(*p1).get_ptr();
+  for (; argument != args.end(); ++argument) {
+    AstNodePtr c = *argument;
     if (c == AstNodePtr())
       continue;
     DebugLocalInfoCollect([&c]() {
       return "Function Argument: " + AstInterface::AstToString(c);
     });
-    operator()(fa, c);
+    if (incoming) {
+      ROSE_ASSERT(isSgInitializedName(c.get_ptr()) != nullptr);
+      ROSE_ASSERT(p2 != params.end());
+    } else {
+      operator()(fa, c);
+    }
     if (p2 != params.end()) {
       AppendReadLoc(fa, c, (*p2));
       p2++;
@@ -99,7 +214,10 @@ void StmtInfoCollect::AppendFuncCallWrite(AstInterface &fa,
               << std::endl;
     ROSE_ABORT();
   }
-  if (isSgNonrealRefExp(callee.get_ptr()) != nullptr) {
+  if (auto *reference = isSgNonrealRefExp(callee.get_ptr());
+      reference != nullptr &&
+      isSgNonrealType(reference->get_type()->stripTypedefsAndModifiers()) !=
+          nullptr) {
     // Overload resolution for a dependent call occurs at instantiation.  Every
     // memory-bearing operand is therefore a potential non-const reference
     // argument.  Preserve that exact language boundary conservatively instead
@@ -141,10 +259,10 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
                                    const AstInterface::AstNodePtr &s,
                                    AstInterface::TraversalVisitType t) {
   if (t == AstInterface::PreVisit) {
+    auto evaluate = [&](SgExpression *expression) { operator()(fa, expression); };
     AstInterface::AstNodePtr lhs, rhs, body;
     AstInterface::AstNodeList vars, args;
     AstInterface::OperatorEnum opr;
-    std::vector<std::string> sigs;
     bool additional = false;
     if (fa.IsFunctionDefinition(s, 0, &vars, &args, &body)) {
       curstmt = AstNodePtrImpl(s).get_ptr();
@@ -199,7 +317,20 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       }
     }
 
-    if (fa.IsAssignment(s, &lhs, &rhs, /*read_lhs=*/&additional)) {
+    AstNodePtr runtimeBody, runtimeCondition;
+    if (fa.IsIfWithKnownRuntimeBranch(s, &runtimeBody, &runtimeCondition)) {
+      if (runtimeCondition != AST_NULL)
+        operator()(fa, runtimeCondition);
+      if (runtimeBody != AST_NULL)
+        operator()(fa, runtimeBody);
+      Skip(s);
+    } else if (SgDesignatedInitializer *initializer =
+                   isSgDesignatedInitializer(s.get_ptr())) {
+      SgInitializer *value = initializer->get_memberInit();
+      ROSE_ASSERT(value != nullptr);
+      operator()(fa, value);
+      Skip(s);
+    } else if (fa.IsAssignment(s, &lhs, &rhs, /*read_lhs=*/&additional)) {
       DebugLocalInfoCollect([]() { return "Is assignment"; });
       ModMap *mp = modstack.size() ? &modstack.back().modmap : 0;
       if (mp == 0 || mp->find(AstNodePtrImpl(lhs).get_ptr()) == mp->end()) {
@@ -207,8 +338,28 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
         modstack.back().modmap[AstNodePtrImpl(lhs).get_ptr()] =
             ModRecord(AstNodePtrImpl(rhs).get_ptr(), additional);
       }
-    } else if (fa.IsUnaryOp(s, &opr, &lhs)) {
+    } else if (auto *cast = isSgCastExp(s.get_ptr());
+               cast != nullptr && cast->get_semantic_conversion_kind() ==
+                                      SgCastExp::e_semantic_conversion_ToVoid) {
+      cast->validate_semantic_conversion();
+      evaluateLocationOperands(cast->get_operand(), evaluate);
+      Skip(s);
+    } else if (fa.IsUnaryOp(s, &opr, &lhs) && opr != AstInterface::UOP_DEREF) {
       switch (opr) {
+      case AstInterface::UOP_ADDR:
+        evaluateLocationOperands(isSgExpression(lhs.get_ptr()), evaluate);
+        Skip(s);
+        break;
+      case AstInterface::UOP_SEMANTIC_CONVERSION: {
+        auto *cast = isSgCastExp(s.get_ptr());
+        ASSERT_not_null(cast);
+        if (cast->get_semantic_conversion_kind() ==
+            SgCastExp::e_semantic_conversion_ArrayToPointerDecay) {
+          evaluateLocationOperands(cast->get_operand(), evaluate);
+          Skip(s);
+        }
+        break;
+      }
       case AstInterface::UOP_INCR1:
       case AstInterface::UOP_INCR1_POST:
       case AstInterface::UOP_DECR1:
@@ -251,49 +402,41 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
     } else if (AstInterface::IsMemoryFree(s, 0, &lhs)) {
       AppendMemoryFree(fa, lhs.get_ptr());
       Skip(s);
-    } else if (fa.IsIOInputStmt(s, &args)) {
-      DebugLocalInfoCollect([]() { return "Is IOInput stmt."; });
-      modstack.push_back(s);
-      for (AstInterface::AstNodeList::reverse_iterator p = args.rbegin();
-           p != args.rend(); ++p) {
-        AstNodePtr c = *p;
-        modstack.back().modmap[c] = ModRecord(0, false);
-      }
     } else if (fa.IsFunctionCall(s)) {
       DebugLocalInfoCollect([&s]() {
         return " append function call " + AstInterface::AstToString(s);
       });
       AppendFuncCall(fa, AstNodePtrImpl(s).get_ptr());
       Skip(s);
-    } else if (fa.IsAddressOfOp(s, &lhs)) {
-      SkipOnly(lhs);
     } else if (fa.IsMemoryAccess(s, &vars)) {
       DebugLocalInfoCollect([&s]() {
         return " append read set " + AstInterface::AstToString(s);
       });
-      if (!fa.IsSameVarRef(
-              s,
-              fa.GetParent(
-                  s))) { /*QY: skip s if it refers to the same thing as parent*/
-        ModMap *mp = modstack.size() ? &modstack.back().modmap : 0;
-        if (mp == 0 || mp->find(s) == mp->end() || (*mp)[s].readlhs) {
-          if (!vars.empty()) {
-            for (const auto &v : vars) {
-              AppendReadLoc(fa, v);
+      bool reads_value = true;
+      if (!modstack.empty()) {
+        for (const auto &modified : modstack.back().modmap) {
+          if (!modified.second.readlhs) {
+            AstInterface::AstNodeList targets;
+            collectAssignmentTargetMemoryRefs(fa, modified.first, targets,
+                                              true);
+            if (std::find(targets.begin(), targets.end(), s) != targets.end()) {
+              reads_value = false;
+              break;
             }
-          } else {
-            AppendReadLoc(fa, s);
           }
         }
       }
-      AstNodeList arglist;
-      if (fa.IsArrayAccess(s, 0, &arglist)) {
-        for (AstNodeList::const_iterator p = arglist.begin();
-             p != arglist.end(); ++p) {
-          AstNodePtr c = *p;
-          operator()(fa, c);
+      if (reads_value) {
+        for (const auto &reference : vars) {
+          AppendReadLoc(fa, reference);
+        }
+        if (vars.empty()) {
+          AppendReadLoc(fa, s);
         }
       }
+      auto *expression = isSgExpression(s.get_ptr());
+      if (expression != nullptr)
+        evaluateLocationOperands(expression, evaluate);
       Skip(s);
     }
   } else {
@@ -469,6 +612,13 @@ void StmtSideEffectCollect::AppendModLoc(AstInterface &, const AstNodePtr &mod,
 void StmtSideEffectCollect::AppendReadLoc(AstInterface & /*fa*/,
                                           const AstNodePtr &read,
                                           const AstNodePtr &lhs) {
+  if (lhs != 0) {
+    ROSE_ASSERT(isSgInitializedName(lhs.get_ptr()) != nullptr);
+    // Expression arguments are traversed before their formal binding.
+    if (isSgExpression(read.get_ptr()) != nullptr)
+      return;
+    ROSE_ASSERT(isSgInitializedName(read.get_ptr()) != nullptr);
+  }
   DebugLocalInfoCollect([&read]() {
     return "appending reading " + AstInterface::AstToString(read);
   });

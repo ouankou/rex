@@ -1,22 +1,3 @@
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
-
-// DQ (8/26/2016): Added support for the call graph generation for template
-// functions in classes that are moved by legacy frontend outside of the class
-// and for which we previously only captured the function prototype and for
-// which the new fix adds the function definitions to the AST. Note that this
-// cased the results to change and for many of the save correct answer to be
-// updated to reflect the improved AST.  As a result of studing the results, the
-// current call graph computation has a number of observed limitations:
-//    1) SgConstructorInitializers are not included as function calls
-//    2) implicit base class constructor calls are not handled.
-// Note that these were acceptable limitations for the time when the original
-// call graph support was written.  However, we will be replacing this call
-// graph with a future on based on a subset of the interprocedural control flow
-// graph.
-
 #include "rose_config.h"
 #undef CONFIG_ROSE /* prevent error about including both private and public    \
                       headers; must be between rose_config.h and rose.h */
@@ -254,7 +235,7 @@ static std::string qualifiedClassNameForDump(SgClassDeclaration *classDecl) {
         inst_decl->get_scope()->get_qualified_name().getString());
     std::string class_name =
         base_name.getString() +
-        templateArgumentListForDump(inst_decl->get_templateArguments());
+        templateArgumentListForDump(inst_decl->get_semanticTemplateArguments());
     if (!scope_name.empty()) {
       return scope_name + "::" + class_name;
     }
@@ -457,85 +438,79 @@ static std::string templateArgumentNameForDump(SgTemplateArgument *arg) {
   }
 
   case SgTemplateArgument::nontype_argument: {
-    ROSE_ASSERT(arg->get_expression() != NULL ||
-                arg->get_initializedName() != NULL);
-    ROSE_ASSERT(arg->get_expression() == NULL ||
-                arg->get_initializedName() == NULL);
-    if (SgExpression *expression = arg->get_expression()) {
-      std::function<std::string(SgExpression *)> exactExpressionName =
-          [&](SgExpression *current) -> std::string {
-        ROSE_ASSERT(current != NULL);
-        if (SgCastExp *cast = isSgCastExp(current)) {
-          cast->validate_semantic_conversion();
-          if (cast->get_cast_type() != SgCastExp::e_implicit_cast ||
-              cast->get_operand() == NULL ||
-              cast->get_operand()->get_parent() != cast) {
-            fprintf(stderr,
-                    "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
-                    "non-type argument contains a non-implicit or malformed "
-                    "cast\n");
-            ROSE_ABORT();
-          }
-          return exactExpressionName(cast->get_operand());
+    SgExpression *expression = arg->get_expression();
+    ROSE_ASSERT(expression != nullptr);
+    std::function<std::string(SgExpression *)> exactExpressionName =
+        [&](SgExpression *current) -> std::string {
+      ROSE_ASSERT(current != NULL);
+      if (SgCastExp *cast = isSgCastExp(current)) {
+        cast->validate_semantic_conversion();
+        if (cast->get_cast_type() != SgCastExp::e_implicit_cast ||
+            cast->get_operand() == NULL ||
+            cast->get_operand()->get_parent() != cast) {
+          fprintf(stderr,
+                  "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                  "non-type argument contains a non-implicit or malformed "
+                  "cast\n");
+          ROSE_ABORT();
         }
-        if (SgAddressOfOp *address = isSgAddressOfOp(current)) {
-          if (address->get_operand() == NULL ||
-              address->get_operand()->get_parent() != address) {
-            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
-                            "address argument has no exact owned operand\n");
-            ROSE_ABORT();
-          }
-          return "&" + exactExpressionName(address->get_operand());
+        return exactExpressionName(cast->get_operand());
+      }
+      if (SgAddressOfOp *address = isSgAddressOfOp(current)) {
+        if (address->get_operand() == NULL ||
+            address->get_operand()->get_parent() != address) {
+          fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                          "address argument has no exact owned operand\n");
+          ROSE_ABORT();
         }
-        if (SgIntVal *value = isSgIntVal(current)) {
-          return value->get_valueString();
+        return "&" + exactExpressionName(address->get_operand());
+      }
+      if (SgIntVal *value = isSgIntVal(current)) {
+        return std::to_string(value->get_value());
+      }
+      if (SgVarRefExp *reference = isSgVarRefExp(current)) {
+        SgVariableSymbol *symbol = reference->get_symbol();
+        SgInitializedName *declaration =
+            symbol != NULL ? symbol->get_declaration() : NULL;
+        if (declaration == NULL) {
+          fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                          "variable reference has no exact declaration\n");
+          ROSE_ABORT();
         }
-        if (SgVarRefExp *reference = isSgVarRefExp(current)) {
-          SgVariableSymbol *symbol = reference->get_symbol();
-          SgInitializedName *declaration =
-              symbol != NULL ? symbol->get_declaration() : NULL;
-          if (declaration == NULL) {
-            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
-                            "variable reference has no exact declaration\n");
-            ROSE_ABORT();
-          }
-          return stripGlobalModifer(
-              declaration->get_qualified_name().getString());
+        return stripGlobalModifer(
+            declaration->get_qualified_name().getString());
+      }
+      if (SgMemberFunctionRefExp *reference =
+              isSgMemberFunctionRefExp(current)) {
+        SgMemberFunctionDeclaration *declaration =
+            reference->getAssociatedMemberFunctionDeclaration();
+        if (declaration == NULL) {
+          fprintf(stderr,
+                  "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                  "member-function reference has no exact declaration\n");
+          ROSE_ABORT();
         }
-        if (SgMemberFunctionRefExp *reference =
-                isSgMemberFunctionRefExp(current)) {
-          SgMemberFunctionDeclaration *declaration =
-              reference->getAssociatedMemberFunctionDeclaration();
-          if (declaration == NULL) {
-            fprintf(stderr,
-                    "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
-                    "member-function reference has no exact declaration\n");
-            ROSE_ABORT();
-          }
-          return stripGlobalModifer(
-              declaration->get_qualified_name().getString());
+        return stripGlobalModifer(
+            declaration->get_qualified_name().getString());
+      }
+      if (SgFunctionRefExp *reference = isSgFunctionRefExp(current)) {
+        SgFunctionDeclaration *declaration =
+            reference->getAssociatedFunctionDeclaration();
+        if (declaration == NULL) {
+          fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
+                          "function reference has no exact declaration\n");
+          ROSE_ABORT();
         }
-        if (SgFunctionRefExp *reference = isSgFunctionRefExp(current)) {
-          SgFunctionDeclaration *declaration =
-              reference->getAssociatedFunctionDeclaration();
-          if (declaration == NULL) {
-            fprintf(stderr, "REX_CALLGRAPH_INVARIANT[template-argument-dump]: "
-                            "function reference has no exact declaration\n");
-            ROSE_ABORT();
-          }
-          return stripGlobalModifer(
-              declaration->get_qualified_name().getString());
-        }
-        fprintf(stderr,
-                "REX_CALLGRAPH_INVARIANT[template-argument-dump]: non-type "
-                "argument has unsupported exact expression=%p/%s\n",
-                static_cast<void *>(current), current->class_name().c_str());
-        ROSE_ABORT();
-      };
-      return exactExpressionName(expression);
-    }
-    return stripGlobalModifer(
-        arg->get_initializedName()->get_name().getString());
+        return stripGlobalModifer(
+            declaration->get_qualified_name().getString());
+      }
+      fprintf(stderr,
+              "REX_CALLGRAPH_INVARIANT[template-argument-dump]: non-type "
+              "argument has unsupported exact expression=%p/%s\n",
+              static_cast<void *>(current), current->class_name().c_str());
+      ROSE_ABORT();
+    };
+    return exactExpressionName(expression);
   }
 
   case SgTemplateArgument::template_template_argument: {
@@ -589,12 +564,12 @@ static std::string qualifiedDumpName(SgFunctionDeclaration *funcDecl) {
   if (SgTemplateInstantiationFunctionDecl *inst_func =
           isSgTemplateInstantiationFunctionDecl(funcDecl)) {
     SgName base_name = inst_func->get_templateName();
-    if (base_name.is_null()) {
-      base_name = inst_func->get_name();
-    }
+    ROSE_ASSERT(!base_name.is_null());
+    const auto &arguments = inst_func->get_template_argument_list_is_explicit()
+                                ? inst_func->get_templateArguments()
+                                : inst_func->get_deducedTemplateArguments();
     std::string function_name =
-        base_name.getString() +
-        templateArgumentListForDump(inst_func->get_templateArguments());
+        base_name.getString() + templateArgumentListForDump(arguments);
     return stripGlobalModifer(
         SgName::assembleQualifiedName(
             inst_func->get_scope()->get_qualified_name(), function_name)
@@ -638,10 +613,6 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
 
   cgNodes.sort(nodeCompareGraphPair);
   cgNodes.unique();
-
-  auto formatDumpName = [](SgFunctionDeclaration *func_decl) -> std::string {
-    return qualifiedDumpName(func_decl);
-  };
 
   for (list<pair<SgGraphNode *, int>>::iterator it = cgNodes.begin();
        it != cgNodes.end(); it++) {
@@ -703,7 +674,7 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
                 << " calls to it." << std::endl;
 
     ROSE_ASSERT(cur_function != NULL);
-    std::string output_line = formatDumpName(cur_function) + " ->";
+    std::string output_line = qualifiedDumpName(cur_function) + " ->";
 
     if (!calledNodes.empty()) {
       for (list<SgGraphNode *>::iterator j = calledNodes.begin();
@@ -711,7 +682,7 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
         SgFunctionDeclaration *j_function =
             isSgFunctionDeclaration((*j)->get_SgNode());
 
-        output_line += " " + formatDumpName(j_function);
+        output_line += " " + qualifiedDumpName(j_function);
       }
     }
 
@@ -728,8 +699,6 @@ void sortedCallGraphDump(string fileName, SgIncidenceDirectedGraph *cg) {
 struct OnlyCurrentDirectory {
   static size_t nselected;
 
-#define DEBUG_SELECTOR 0
-
   bool operator()(SgFunctionDeclaration *node) const {
     ROSE_ASSERT(node != NULL);
 
@@ -740,14 +709,8 @@ struct OnlyCurrentDirectory {
       stringToFilter =
           (std::filesystem::path(roots.build_root) / "tests").string();
     }
-    // Liao 6/20/2011, we have to use the same source path without symbolic
-    // links to have the right match
     std::string srcDir =
         ROSE_SOURCE_TREE_PATH + std::string("/tests"); // source tree
-    // std::string srcDir = ROSE_SOURCE_TREE + std::string("/tests");
-    // //source tree
-    //
-    //  Hard code this for initial testing on target exercise.
     std::string secondaryTestSrcDir =
         ROSE_SOURCE_TREE + std::string("/developersScratchSpace");
 
@@ -768,21 +731,6 @@ struct OnlyCurrentDirectory {
       return false;
     }
 
-    string sourceFilenameSubstring = sourceFilename.substr(
-        0, stringToFilter.size()); // if the file is from the build tree?
-    string sourceFilenameSrcdirSubstring = sourceFilename.substr(
-        0, srcDir.size()); // or from the ROSE source tree?
-    // or from the developer scratch space?
-    string sourceFilenameSecondaryTestSrcdirSubstring =
-        sourceFilename.substr(0, secondaryTestSrcDir.size());
-
-#if DEBUG_SELECTOR
-    printf("test 1 \n");
-    printf("In select: sourceFilenameSubstring = %s \n",
-           sourceFilenameSubstring.c_str());
-    printf("   --- stringToFilter = %s \n", stringToFilter.c_str());
-#endif
-
     bool retval = false;
     auto root_exists = [](const std::string &root_path) {
       if (root_path.empty()) {
@@ -797,32 +745,15 @@ struct OnlyCurrentDirectory {
         rosePathIsWithinTree(stringToFilter, sourceFilename)) {
       retval = true;
     } else {
-#if DEBUG_SELECTOR
-      printf("test 2 \n");
-      printf("   --- sourceFilenameSrcdirSubstring = %s \n",
-             sourceFilenameSrcdirSubstring.c_str());
-      printf("   --- srcDir = %s \n", srcDir.c_str());
-#endif
       if (root_exists(srcDir) && rosePathIsWithinTree(srcDir, sourceFilename)) {
         retval = true;
       } else {
-#if DEBUG_SELECTOR
-        printf("test 3 \n");
-        printf("   --- sourceFilenameSecondaryTestSrcdirSubstring = %s \n",
-               sourceFilenameSecondaryTestSrcdirSubstring.c_str());
-        printf("   --- secondaryTestSrcDir = %s \n",
-               secondaryTestSrcDir.c_str());
-#endif
         retval = root_exists(secondaryTestSrcDir) &&
                  rosePathIsWithinTree(secondaryTestSrcDir, sourceFilename);
       }
     }
 
     if (retval) {
-#if DEBUG_SELECTOR
-      std::cerr << "OnlyCurrentDirectory is selecting node " << node << " \""
-                << node->get_qualified_name().getString() << "\"\n";
-#endif
       ++nselected;
     }
 
@@ -833,18 +764,6 @@ struct OnlyCurrentDirectory {
 size_t OnlyCurrentDirectory::nselected = 0;
 
 int main(int argc, char **argv) {
-  /*
-    std::cerr
-    <<"*******************************************************************************************************\n"
-              <<"*** BIG FAT WARNING:  This test, " <<argv[0] <<",\n"
-              <<"*** only works if the input files are in the right place in the
-    ROSE source tree!  If they are not\n"
-              <<"*** in the correct location the test will pass without doing
-    anything.  Look for output lines that\n"
-              <<"*** begin with \"OnlyCurrentDirectory is selecting node\"
-    (there should be at least one).\n"
-              <<"*******************************************************************************************************\n";
-  */
   std::vector<std::string> argvList(argv, argv + argc);
 
   // Read the comparison file

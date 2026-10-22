@@ -17,7 +17,11 @@
 
 #include <list>
 
+#include <memory>
+
 #include <string>
+
+#include <utility>
 
 #include "ASTtools.hh"
 
@@ -193,12 +197,12 @@ static void genCloseDirectives(const CPreproc::If::Case *c,
 
     // Build preprocessing info object for this string.
     string closer = "#endif /* " + makeCommentSafe(s_closer.str()) + " */\n";
+    auto position = std::make_unique<Sg_File_Info>(
+        Sg_File_Info::TRANSFORMATION_FILE_ID, 0, 0);
+    position->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
     PreprocessingInfo *d = new PreprocessingInfo(
         PreprocessingInfo::CpreprocessorEndifDeclaration, closer,
-        string("transformation"), 0, 0, 1 /* no. of lines */, pos);
-    ROSE_ASSERT(d);
-    ROSE_ASSERT(d->get_file_info() != NULL);
-    d->get_file_info()->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
+        std::move(position), 1 /* no. of lines */, pos);
 
     D.push_back(d);
 
@@ -227,15 +231,12 @@ static void genOpenDirectives(const CPreproc::If::Case *c,
     s_opener << c->getDirective() << ' ' << c->getCondition();
 
     string opener = "#if 1 /* " + makeCommentSafe(s_opener.str()) + "*/\n";
+    auto position = std::make_unique<Sg_File_Info>(
+        Sg_File_Info::TRANSFORMATION_FILE_ID, 0, 0);
+    position->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
     PreprocessingInfo *d = new PreprocessingInfo(
         PreprocessingInfo::CpreprocessorIfDeclaration, opener,
-        string("transformation"), 0, 0, 1 /* no. of lines */, pos);
-
-    ROSE_ASSERT(d);
-    ROSE_ASSERT(d->get_file_info() != NULL);
-    d->get_file_info()->set_physical_file_id(Sg_File_Info::NULL_FILE_ID);
-
-    d->setRelativePosition(pos);
+        std::move(position), 1 /* no. of lines */, pos);
     D.push_back(d);
   }
 }

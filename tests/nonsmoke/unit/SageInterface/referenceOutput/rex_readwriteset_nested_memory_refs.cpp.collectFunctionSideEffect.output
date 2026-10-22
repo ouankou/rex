@@ -1,6 +1,8 @@
 --------------------------------------------------
 Function name:"::test_nested_memory_refs"
 Read references:
+	SgPointerDerefExp@3:16	"p"
+	SgPointerDerefExp@4:18	"q"
 	SgVarRefExp@2:12	"p"
 	SgVarRefExp@2:17	"q"
 	SgVarRefExp@2:4	"cond"

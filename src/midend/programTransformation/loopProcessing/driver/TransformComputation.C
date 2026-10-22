@@ -1,5 +1,3 @@
-#include "AutoTuningInterface.h"
-
 #include "BlockingAnal.h"
 
 #include "CommandOptions.h"
@@ -24,13 +22,12 @@
 
 #include "LoopTreeTransform.h"
 
-#include "ParallelizeLoop.h"
-
 #include "ProcessAstTree.h"
 
 #include "ROSE_ASSERT.h"
 
-#include <stdio.h>
+#include <charconv>
+#include <sys/time.h>
 
 using namespace std;
 
@@ -46,21 +43,26 @@ bool ApplyLoopSplitting() {
 }
 
 int ApplyOptLevel() {
-  static int level = -1;
-  if (level < 0) {
-    level = 0;
-    vector<string>::const_iterator p =
-        CmdOptions::GetInstance()->GetOptionPosition("-opt");
-    if (p != CmdOptions::GetInstance()->end()) {
-      string str = p->substr(4);
-      if (str.empty()) {
-        ++p;
-        assert(p != CmdOptions::GetInstance()->end());
-        str = *p;
-      }
-      sscanf(str.c_str(), "%d", &level);
-    }
-    std::cerr << "opt level=" << level << "\n";
+  CmdOptions *options = CmdOptions::GetInstance();
+  auto position = options->GetOptionPosition("-opt");
+  if (position == options->end())
+    return 0;
+  ++position;
+  if (position == options->end() || position->empty()) {
+    std::cerr
+        << "REX_LOOP_OPTION[opt-level]: -opt requires a nonnegative integer\n";
+    ROSE_ABORT();
+  }
+  int level = 0;
+  const char *begin = position->data();
+  const char *end = begin + position->size();
+  if (*begin == '+')
+    ++begin;
+  const auto parsed = std::from_chars(begin, end, level);
+  if (parsed.ec != std::errc{} || parsed.ptr != end || level < 0) {
+    std::cerr << "REX_LOOP_OPTION[opt-level]: invalid -opt value '" << *position
+              << "'\n";
+    ROSE_ABORT();
   }
   return level;
 }
@@ -205,14 +207,26 @@ public:
   }
 };
 
-extern double GetWallTime();
+static double GetWallTime() {
+  struct timeval tp;
+  static long start = 0, startu;
+  if (!start) {
+    gettimeofday(&tp, NULL);
+    start = tp.tv_sec;
+    startu = tp.tv_usec;
+    return 0.0;
+  }
+  gettimeofday(&tp, NULL);
+  return static_cast<double>(tp.tv_sec - start) +
+         static_cast<double>(tp.tv_usec - startu) / 1000000.0;
+}
 
 bool LoopTransformation(const AstNodePtr &head, AstNodePtr &result) {
   DebugLog DebugOpt("-debugopt");
 
   DebugOpt([]() { return "LoopTransformation1"; });
 
-  /*CmdOptions *opt =*/CmdOptions::GetInstance();
+  const int optLevel = ApplyOptLevel();
   bool reportPhaseTiming = ReportTiming();
   bool outputdep = CmdOptions::GetInstance()->HasOption("-outputdep");
 
@@ -250,10 +264,10 @@ bool LoopTransformation(const AstNodePtr &head, AstNodePtr &result) {
     });
     if (lopt->DoDynamicTuning()) {
       DynamicSlicing op;
-      LoopTransformation(comp, op, loopAnal, ApplyOptLevel());
+      LoopTransformation(comp, op, loopAnal, optLevel);
     } else {
       DependenceHoisting op;
-      LoopTransformation(comp, op, loopAnal, ApplyOptLevel());
+      LoopTransformation(comp, op, loopAnal, optLevel);
     }
     DebugOpt([&comp]() { return "Final LoopTree : " + comp.TreeToString(); });
   }
@@ -330,7 +344,6 @@ void LoopTransformation(LoopTreeDepComp &comp, DependenceHoisting &op,
     return;
   }
 
-  LoopPar *par = lopt->GetParSel();
   LoopBlocking *blocking = lopt->GetBlockSel();
   assert(blocking != 0);
 
@@ -377,8 +390,6 @@ void LoopTransformation(LoopTreeDepComp &comp, DependenceHoisting &op,
     const CompSlice *slice = blocking->SetBlocking(&sliceAnal, *info);
     assert(slice != 0);
     loopTree_handle = blocking->apply(*info, comp, op, loopTree_handle);
-    if (par != 0)
-      loopTree_handle = par->apply(*info, comp, op, loopTree_handle);
     DebugOpt(
         [&comp]() { return "*******after xform*****" + comp.TreeToString(); });
     DebugOpt(

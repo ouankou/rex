@@ -43,7 +43,8 @@ public:
 
 class LoopTreeSplitStmt : public LoopTreeTransform {
   LoopTreeNode *operator()(LoopTreeNode *stmt, LoopTreeNode *restr1,
-                           LoopTreeNode *restr2);
+                           LoopTreeNode *restr2,
+                           LoopTreeNode::CloneNodes &copies);
 
 public:
   LoopTreeNode *operator()(LoopTreeNode *stmt, LoopTreeNode *loop1,

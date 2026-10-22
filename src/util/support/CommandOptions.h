@@ -2,7 +2,7 @@
 #define COMMAND_OPTIONS_H
 #include "rosedll.h"
 
-#include <assert.h>
+#include <cstdlib>
 
 #include <functional>
 
@@ -51,9 +51,9 @@ public:
       std::cerr << msg << "\n";
     }
   }
-  void fatal(const std::string &msg) {
+  [[noreturn]] void fatal(const std::string &msg) {
     std::cerr << msg << "\n";
-    assert(false);
+    std::abort();
   }
   bool operator()(std::function<std::string()> to_print) {
     if (operator()()) {

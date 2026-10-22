@@ -1,9 +1,9 @@
 #ifndef ROSE_SG_GRAPH_TEMPLATE_H
 #define ROSE_SG_GRAPH_TEMPLATE_H
 
-#include <algorithm>
-
 #include <cstddef>
+
+#include <iterator>
 
 #include <map>
 
@@ -11,27 +11,19 @@
 
 #include <set>
 
-#include <tuple>
-
 #include <unordered_set>
 
 #include <utility>
 
 #include <vector>
 
+#include "Cxx_Grammar.h"
 #include "interproceduralCFG.h"
-
-#include "rose.h"
-
 #include "staticCFG.h"
 
 struct Vertex {
   SgGraphNode *sg = nullptr;
-  CFGNode cfgnd;
-};
-
-struct Edge {
-  SgDirectedGraphEdge *gedge = nullptr;
+  VirtualCFG::CFGNode cfgnd;
 };
 
 class myGraph {
@@ -81,7 +73,7 @@ public:
   std::pair<edge_descriptor, bool> add_edge(vertex_descriptor from,
                                             vertex_descriptor to) {
     edge_descriptor id = edges_.size();
-    edges_.push_back(EdgeRecord{from, to, Edge{}});
+    edges_.push_back(EdgeRecord{from, to});
     out_edges_[from].push_back(id);
     in_edges_[to].push_back(id);
     return std::make_pair(id, true);
@@ -131,7 +123,6 @@ private:
   struct EdgeRecord {
     vertex_descriptor from;
     vertex_descriptor to;
-    Edge data;
   };
 
   std::vector<Vertex> vertices_;
@@ -143,30 +134,18 @@ private:
 };
 
 using VertexID = myGraph::vertex_descriptor;
-using EdgeID = myGraph::edge_descriptor;
 
-std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
-getAllNodesAndEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start);
+std::vector<SgDirectedGraphEdge *>
+getReachableEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start);
 
 inline std::unique_ptr<myGraph>
-instantiateGraph(SgIncidenceDirectedGraph *&g,
-                 StaticCFG::InterproceduralCFG &cfg, SgNode * /*pstart*/) {
-  CFGNode startN = cfg.getEntry();
-  SgGraphNode *start = cfg.toGraphNode(startN);
-  ROSE_ASSERT(startN != nullptr);
-  ROSE_ASSERT(start != nullptr);
+instantiateGraphFromStart(SgIncidenceDirectedGraph *g, StaticCFG::CFG &cfg,
+                          SgGraphNode *start) {
   auto graph = std::make_unique<myGraph>();
-  std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
-      alledsnds = getAllNodesAndEdges(g, start);
-  std::vector<SgGraphNode *> nods = alledsnds.first;
-  std::vector<SgDirectedGraphEdge *> eds = alledsnds.second;
   std::set<std::pair<VertexID, VertexID>> prs;
   std::map<VertexID, SgGraphNode *> &graph_node = graph->getGraphNode();
   std::map<SgGraphNode *, VertexID> &vertex_link = graph->getVSlink();
-  (void)nods;
-  for (std::vector<SgDirectedGraphEdge *>::iterator j = eds.begin();
-       j != eds.end(); ++j) {
-    SgDirectedGraphEdge *u = *j;
+  for (SgDirectedGraphEdge *u : getReachableEdges(g, start)) {
     SgGraphNode *u1 = u->get_from();
     SgGraphNode *u2 = u->get_to();
     VertexID v1;
@@ -196,87 +175,50 @@ instantiateGraph(SgIncidenceDirectedGraph *&g,
     }
   }
   return graph;
+}
+
+inline std::unique_ptr<myGraph>
+instantiateGraph(SgIncidenceDirectedGraph *&g,
+                 StaticCFG::InterproceduralCFG &cfg) {
+  SgNode *entry = cfg.getEntry();
+  ROSE_ASSERT(entry != nullptr);
+  VirtualCFG::CFGNode startN(entry);
+  SgGraphNode *start = cfg.toGraphNode(startN);
+  ROSE_ASSERT(start != nullptr);
+  return instantiateGraphFromStart(g, cfg, start);
 }
 
 inline std::unique_ptr<myGraph> instantiateGraph(SgIncidenceDirectedGraph *&g,
                                                  StaticCFG::CFG &cfg) {
-  SgGraphNode *start = cfg.getEntry();
-  auto graph = std::make_unique<myGraph>();
-  std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
-      alledsnds = getAllNodesAndEdges(g, start);
-  std::vector<SgGraphNode *> nods = alledsnds.first;
-  std::vector<SgDirectedGraphEdge *> eds = alledsnds.second;
-  std::set<std::pair<VertexID, VertexID>> prs;
-  std::map<VertexID, SgGraphNode *> &graph_node = graph->getGraphNode();
-  std::map<SgGraphNode *, VertexID> &vertex_link = graph->getVSlink();
-  (void)nods;
-  for (std::vector<SgDirectedGraphEdge *>::iterator j = eds.begin();
-       j != eds.end(); ++j) {
-    SgDirectedGraphEdge *u = *j;
-    SgGraphNode *u1 = u->get_from();
-    SgGraphNode *u2 = u->get_to();
-    VertexID v1;
-    VertexID v2;
-    if (vertex_link.find(u1) == vertex_link.end()) {
-      v1 = graph->add_vertex();
-      graph_node[v1] = u1;
-      vertex_link[u1] = v1;
-      (*graph)[v1].sg = u1;
-      (*graph)[v1].cfgnd = cfg.toCFGNode(u1);
-    } else {
-      v1 = vertex_link[u1];
-    }
-    if (vertex_link.find(u2) != vertex_link.end()) {
-      v2 = vertex_link[u2];
-    } else {
-      v2 = graph->add_vertex();
-      vertex_link[u2] = v2;
-      (*graph)[v2].sg = u2;
-      graph_node[v2] = u2;
-      (*graph)[v2].cfgnd = cfg.toCFGNode(u2);
-    }
-    std::pair<VertexID, VertexID> pr(v1, v2);
-    if (prs.find(pr) == prs.end()) {
-      prs.insert(pr);
-      graph->add_edge(v1, v2);
-    }
-  }
-  return graph;
+  return instantiateGraphFromStart(g, cfg, cfg.getEntry());
 }
 
-inline std::pair<std::vector<SgGraphNode *>, std::vector<SgDirectedGraphEdge *>>
-getAllNodesAndEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start) {
-  std::vector<SgGraphNode *> fnods;
+inline std::vector<SgDirectedGraphEdge *>
+getReachableEdges(SgIncidenceDirectedGraph *g, SgGraphNode *start) {
+  ROSE_ASSERT(g != nullptr);
+  ROSE_ASSERT(start != nullptr);
   std::vector<SgDirectedGraphEdge *> feds;
-  if (g == nullptr || start == nullptr) {
-    return std::make_pair(fnods, feds);
-  }
-
   std::unordered_set<SgGraphNode *> visited_nodes;
-  std::unordered_set<SgDirectedGraphEdge *> visited_edges;
   std::vector<SgGraphNode *> queue;
   std::size_t head = 0;
 
   visited_nodes.insert(start);
-  fnods.push_back(start);
   queue.push_back(start);
 
   while (head < queue.size()) {
     SgGraphNode *node = queue[head++];
     std::set<SgDirectedGraphEdge *> oeds = g->computeEdgeSetOut(node);
     for (SgDirectedGraphEdge *edge : oeds) {
-      if (visited_edges.insert(edge).second) {
-        feds.push_back(edge);
-      }
-      SgGraphNode *next = edge != nullptr ? edge->get_to() : nullptr;
-      if (next != nullptr && visited_nodes.insert(next).second) {
-        fnods.push_back(next);
+      ROSE_ASSERT(edge->get_to() != nullptr);
+      feds.push_back(edge);
+      SgGraphNode *next = edge->get_to();
+      if (visited_nodes.insert(next).second) {
         queue.push_back(next);
       }
     }
   }
 
-  return std::make_pair(fnods, feds);
+  return feds;
 }
 
 #endif

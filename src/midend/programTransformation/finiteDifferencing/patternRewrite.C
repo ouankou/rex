@@ -1,20 +1,15 @@
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "expressionTreeEqual.h"
 
 #include "patternRewrite.h"
 
 #include "sage3basic.h"
+#include "sageInterface.h"
 
 #include <iostream>
 
 #include <type_traits>
 
 #include <vector>
-
-// DQ (8/1/2005): test use of new static function to create
-// Sg_File_Info object that are marked as transformations
-#undef SgNULL_FILE
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
 
 using namespace std;
 
@@ -25,18 +20,84 @@ void deletePattern(Pattern *pattern) {
   }
 }
 
-bool hasTraversalChild(SgNode *parent, SgNode *child) {
-  const SgNodePtrList children = parent->get_traversalSuccessorContainer();
-  return std::find(children.begin(), children.end(), child) != children.end();
+bool isRepeatablePatternRead(SgVarRefExp *reference) {
+  SgVariableSymbol *symbol = reference->get_symbol();
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+  SgDeclarationStatement *declaration =
+      symbol->get_declaration()->get_declaration();
+  ROSE_ASSERT(declaration != nullptr);
+  const auto &modifier =
+      declaration->get_declarationModifier().get_typeModifier();
+  if (modifier.get_constVolatileModifier().isVolatile() || modifier.isAtomic())
+    return false;
+  for (SgType *type = reference->get_type();;) {
+    ROSE_ASSERT(type != nullptr);
+    if (auto *qualified = isSgModifierType(type)) {
+      const auto &qualifiers = qualified->get_typeModifier();
+      if (qualifiers.get_constVolatileModifier().isVolatile() ||
+          qualifiers.isAtomic())
+        return false;
+      type = qualified->get_base_type();
+    } else if (auto *alias = isSgTypedefType(type)) {
+      type = alias->get_base_type();
+    } else {
+      return true;
+    }
+  }
 }
+
+bool isRepeatableIntegerPattern(SgExpression *expression) {
+  ROSE_ASSERT(expression != nullptr && expression->get_type() != nullptr);
+  if (!expression->get_type()->isIntegerType())
+    return false;
+  if (SgExpression *source = expression->get_originalExpressionTree()) {
+    ROSE_ASSERT(source != expression && source->get_parent() == expression);
+    return isRepeatableIntegerPattern(source);
+  }
+  if (isSgValueExp(expression))
+    return true;
+  if (auto *reference = isSgVarRefExp(expression))
+    return isRepeatablePatternRead(reference);
+  if (isSgMinusOp(expression) || isSgUnaryAddOp(expression))
+    return isRepeatableIntegerPattern(isSgUnaryOp(expression)->get_operand());
+  if (auto *cast = isSgCastExp(expression)) {
+    cast->validate_semantic_conversion();
+    const auto conversion = cast->get_semantic_conversion_kind();
+    return (conversion == SgCastExp::e_semantic_conversion_LValueToRValue ||
+            conversion == SgCastExp::e_semantic_conversion_NoOp ||
+            conversion == SgCastExp::e_semantic_conversion_IntegralCast) &&
+           isRepeatableIntegerPattern(cast->get_operand());
+  }
+  if (isSgAddOp(expression) || isSgMultiplyOp(expression)) {
+    auto *binary = isSgBinaryOp(expression);
+    return isRepeatableIntegerPattern(binary->get_lhs_operand()) &&
+           isRepeatableIntegerPattern(binary->get_rhs_operand());
+  }
+  return false;
+}
+
+class UnsignedAlgebraicPatternActionRule : public PatternActionRule {
+public:
+  using PatternActionRule::PatternActionRule;
+
+  bool doRewrite(SgNode *&node) const override {
+    if (!isSgAddOp(node) && !isSgMultiplyOp(node))
+      return false;
+    auto *expression = isSgExpression(node);
+    // Distribution and reassociation preserve modular arithmetic. Signed
+    // arithmetic can introduce overflowing intermediates on valid inputs.
+    return expression != nullptr && expression->get_type()->isUnsignedType() &&
+           isRepeatableIntegerPattern(expression) &&
+           PatternActionRule::doRewrite(node);
+  }
+};
+
 } // namespace
 
 bool RewriteRuleCombiner::doRewrite(SgNode *&n) const {
   for (vector<RewriteRule *>::const_iterator i = rules.begin();
        i != rules.end(); ++i) {
     if ((*i)->doRewrite(n)) {
-      // cout << "Rewriting using rule " << i - rules.begin() << " on node (new)
-      // " << n << " of type " << n->class_name() << endl;
       return true;
     }
   }
@@ -53,19 +114,25 @@ class DoRewriteRuleDeepVisitor : public AstSimpleProcessing {
   RewriteRule *rule;
   bool done;
   SgNode *top;
+  SgNode *displaced;
 
 public:
   DoRewriteRuleDeepVisitor(RewriteRule *rule, SgNode *top)
-      : rule(rule), done(false), top(top) {}
+      : rule(rule), done(false), top(top), displaced(nullptr) {}
 
   virtual void visit(SgNode *n) {
     SgNode *oldN = n;
     if (done)
       return;
-    // cout << "DoRewriteRuleDeepVisitor " << n->unparseToString() << endl;
+    SgNode *oldParent = oldN->get_parent();
     if (rule->doRewrite(n)) {
-      // cout << "Before set done" << endl;
       done = true; // Only do one rewrite rule at a time
+      if (oldN != n) {
+        ROSE_ASSERT(n != nullptr);
+        ROSE_ASSERT(n->get_parent() == oldParent);
+        ROSE_ASSERT(oldN->get_parent() == nullptr);
+        displaced = oldN;
+      }
       if (oldN == top)
         top = n;
     }
@@ -74,57 +141,41 @@ public:
   bool isDone() const { return done; }
 
   SgNode *getNewNode() const { return top; }
+  SgNode *getDisplacedNode() const { return displaced; }
 };
 
 bool doRewriteRuleDeep(RewriteRule *rule, SgNode *&n) {
   DoRewriteRuleDeepVisitor vis(rule, n);
   vis.traverse(n, preorder);
   n = vis.getNewNode();
-  // cout << "After visitor " << vis.isDone() << endl;
+  if (SgNode *displaced = vis.getDisplacedNode()) {
+    SageInterface::deleteAST(displaced,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+  }
   return vis.isDone();
 }
 
 void rewrite(RewriteRule *rule, SgNode *&top) {
   // Iterate until no changes are made
   while (doRewriteRuleDeep(rule, top)) {
-    // cout << top->unparseToString() << endl;
   }
 }
 
-void replaceChild(SgNode *parent, SgNode *from, SgNode *to) {
-  ROSE_ASSERT(parent);
-  ROSE_ASSERT(from);
-  ROSE_ASSERT(to);
+static void replaceChild(SgNode *parent, SgNode *from, SgNode *to) {
+  ROSE_ASSERT(from != nullptr);
+  ROSE_ASSERT(to != nullptr);
   ROSE_ASSERT(from != to);
-  ROSE_ASSERT(from != parent);
-  ROSE_ASSERT(to != parent);
   ROSE_ASSERT(from->get_parent() == parent);
-  if (!hasTraversalChild(parent, from)) {
-    cerr << "From not found: from is a " << from->class_name()
-         << " and parent is a " << parent->class_name() << endl;
-    ROSE_ABORT();
-  }
-  ROSE_ASSERT(!hasTraversalChild(parent, to));
-  if (isSgExpression(parent) && isSgExpression(from) && isSgExpression(to)) {
-    to->set_parent(parent);
-    isSgExpression(parent)->replace_expression(isSgExpression(from),
-                                               isSgExpression(to));
-    ROSE_ASSERT(!hasTraversalChild(parent, from));
-    ROSE_ASSERT(hasTraversalChild(parent, to));
-    from->set_parent(nullptr);
+  SgExpression *oldExpression = isSgExpression(from);
+  SgExpression *newExpression = isSgExpression(to);
+  ROSE_ASSERT(oldExpression != nullptr && newExpression != nullptr);
+  if (parent == nullptr) {
+    ROSE_ASSERT(newExpression->get_parent() == nullptr);
+    if (oldExpression->get_lvalue())
+      newExpression->set_lvalue(true);
     return;
   }
-  if (isSgExprStatement(parent) && isSgExpression(to)) {
-    to->set_parent(parent);
-    isSgExprStatement(parent)->set_expression(isSgExpression(to));
-    ROSE_ASSERT(!hasTraversalChild(parent, from));
-    ROSE_ASSERT(hasTraversalChild(parent, to));
-    from->set_parent(nullptr);
-    return;
-  }
-  cout << parent->sage_class_name() << " " << from->sage_class_name() << " "
-       << to->sage_class_name() << endl;
-  ROSE_ASSERT(!"replaceChild FIXME");
+  SageInterface::replaceExpression(oldExpression, newExpression, true);
 }
 
 bool PatternActionRule::doRewrite(SgNode *&n) const {
@@ -200,6 +251,8 @@ template <class Operator> class BinaryPattern : public Pattern {
 
 public:
   BinaryPattern(Pattern *lhs, Pattern *rhs) : lhs(lhs), rhs(rhs) {}
+  BinaryPattern(const BinaryPattern &) = delete;
+  BinaryPattern &operator=(const BinaryPattern &) = delete;
 
   ~BinaryPattern() {
     deletePattern(lhs);
@@ -228,12 +281,8 @@ public:
     ROSE_ASSERT(rhs_expression->get_parent() == nullptr);
     SgType *result_type = exactPatternOperatorResultType<Operator>(
         lhs_expression, rhs_expression);
-    SgExpression *op =
-        new Operator(SgNULL_FILE, lhs_expression, rhs_expression, result_type);
-    op->set_endOfConstruct(SgNULL_FILE);
-    new_lhs->set_parent(op);
-    new_rhs->set_parent(op);
-    return op;
+    return SageBuilder::buildBinaryExpression<Operator>(
+        lhs_expression, rhs_expression, result_type);
   }
 };
 
@@ -244,7 +293,20 @@ public:
   VariablePattern(std::string name) : name(name) {}
 
   virtual bool match(SgNode *n, PatternVariables &vars) const {
+    if constexpr (std::is_same_v<NodeClass, SgVarRefExp>) {
+      if (auto *cast = isSgCastExp(n)) {
+        cast->validate_semantic_conversion();
+        if (cast->cast_type() == SgCastExp::e_implicit_cast &&
+            cast->get_semantic_conversion_kind() ==
+                SgCastExp::e_semantic_conversion_LValueToRValue)
+          n = cast->get_operand();
+      }
+    }
     NodeClass *n2 = dynamic_cast<NodeClass *>(n);
+    if constexpr (std::is_same_v<NodeClass, SgVarRefExp>) {
+      if (n2 != nullptr && !isRepeatablePatternRead(n2))
+        return false;
+    }
     if (n2 &&
         (!vars[name] || (isSgExpression(n2) && isSgExpression(vars[name]) &&
                          expressionTreeEqual(isSgExpression(n2),
@@ -271,32 +333,22 @@ class NullPattern : public Pattern {
   virtual SgNode *subst(PatternVariables &vars) const {
     ROSE_ASSERT(!"Should not use NullPattern in substitutions");
     abort();
-    return nullptr;
   }
 };
 
-template <class NodeClass, class Data> class ConstantPattern : public Pattern {
-  Data value;
+class IntegerPattern : public Pattern {
+  int value;
 
 public:
-  ConstantPattern(Data value) : value(value) {}
+  IntegerPattern(int value) : value(value) {}
 
   virtual bool match(SgNode *n, PatternVariables &) const {
-    NodeClass *n2 = dynamic_cast<NodeClass *>(n);
-    if (n2 && n2->get_value() == value) {
-      return true;
-    } else
-      return false;
+    auto *integer = isSgIntVal(n);
+    return integer != nullptr && integer->get_value() == value;
   }
 
   virtual SgNode *subst(PatternVariables &) const {
-    NodeClass *n = new NodeClass(SgNULL_FILE, value);
-    n->set_endOfConstruct(SgNULL_FILE);
-    SgValueExp *valueExpression = isSgValueExp(n);
-    ROSE_ASSERT(valueExpression != nullptr);
-    valueExpression->set_literal_spelling_form(
-        SgValueExp::e_literal_canonical_generated);
-    return n;
+    return SageBuilder::buildIntVal(value);
   }
 };
 
@@ -318,39 +370,13 @@ Pattern *p_CommaOp(Pattern *lhs, Pattern *rhs) {
 
 Pattern *p_var(std::string name) { return new VariablePattern<SgNode>(name); }
 
-Pattern *p_value(std::string name) {
-  return new VariablePattern<SgValueExp>(name);
-}
-
-Pattern *p_int(int x) { return new ConstantPattern<SgIntVal, int>(x); }
+Pattern *p_int(int x) { return new IntegerPattern(x); }
 
 namespace {
 NullPattern p_wildcard_instance;
 }
 
 Pattern *p_wildcard = &p_wildcard_instance;
-
-class AddIntsPattern : public Pattern {
-  string a, b;
-
-public:
-  AddIntsPattern(string a, string b) : a(a), b(b) {}
-
-  virtual bool match(SgNode *, PatternVariables &) const {
-    ROSE_ABORT();
-    return false;
-  }
-
-  virtual SgNode *subst(PatternVariables &vars) const {
-    SgIntVal *av = isSgIntVal(vars[a]);
-    SgIntVal *bv = isSgIntVal(vars[b]);
-    ROSE_ASSERT(av && bv);
-    SgIntVal *iv = new SgIntVal(SgNULL_FILE, av->get_value() + bv->get_value());
-    iv->set_endOfConstruct(SgNULL_FILE);
-    iv->set_literal_spelling_form(SgValueExp::e_literal_canonical_generated);
-    return iv;
-  }
-};
 
 class MoveConstantsToLeftInMultiply : public RewriteRule {
 public:
@@ -369,58 +395,69 @@ public:
   }
 };
 
-class FoldIntConstantsInMultiply : public RewriteRule {
+template <class Operator> class FoldIntConstants : public RewriteRule {
 public:
   bool doRewrite(SgNode *&n) const {
-    SgMultiplyOp *m = isSgMultiplyOp(n);
-    if (!m)
+    auto *op = dynamic_cast<Operator *>(n);
+    if (!op || !hasExactPatternOperatorDomain(op))
       return false;
-    SgIntVal *lhs = isSgIntVal(m->get_lhs_operand());
-    SgIntVal *rhs = isSgIntVal(m->get_rhs_operand());
+    SgIntVal *lhs = isSgIntVal(op->get_lhs_operand());
+    SgIntVal *rhs = isSgIntVal(op->get_rhs_operand());
+    SgAddOp *nested = nullptr;
+    if constexpr (std::is_same_v<Operator, SgAddOp>) {
+      if (!lhs) {
+        nested = isSgAddOp(op->get_lhs_operand());
+        if (!nested || !hasExactPatternOperatorDomain(nested))
+          return false;
+        lhs = isSgIntVal(nested->get_rhs_operand());
+      }
+    }
     if (!lhs || !rhs)
       return false;
-    SgIntVal *iv =
-        new SgIntVal(SgNULL_FILE, lhs->get_value() * rhs->get_value());
-    iv->set_endOfConstruct(SgNULL_FILE);
-    iv->set_literal_spelling_form(SgValueExp::e_literal_canonical_generated);
-    replaceChild(n->get_parent(), n, iv);
-    n = iv;
+    int value;
+    if constexpr (std::is_same_v<Operator, SgAddOp>) {
+      if (__builtin_add_overflow(lhs->get_value(), rhs->get_value(), &value))
+        return false;
+    } else {
+      static_assert(std::is_same_v<Operator, SgMultiplyOp>);
+      if (__builtin_mul_overflow(lhs->get_value(), rhs->get_value(), &value))
+        return false;
+    }
+    SgIntVal *iv = SageBuilder::buildIntVal(value);
+    SgExpression *replacement = iv;
+    if (nested) {
+      auto *prefix = isSgExpression(
+          SageInterface::deepCopyNode(nested->get_lhs_operand()));
+      ROSE_ASSERT(prefix != nullptr && prefix->get_parent() == nullptr);
+      replacement = SageBuilder::buildAddOp(prefix, iv, op->get_type());
+    }
+    replaceChild(n->get_parent(), n, replacement);
+    n = replacement;
     return true;
   }
 };
 
 RewriteRule *getAlgebraicRules() {
   RewriteRuleCombiner *rules = new RewriteRuleCombiner();
-  rules->add(patact(p_AddOp(p_value("a"), p_value("b")),
-                    new AddIntsPattern("a", "b")));
-  rules->add(patact(p_AddOp(p_AddOp(p_var("a"), p_value("b")), p_value("c")),
-                    p_AddOp(p_var("a"), new AddIntsPattern("b", "c"))));
+  rules->add(new FoldIntConstants<SgAddOp>());
   rules->add(new MoveConstantsToLeftInMultiply());
-  rules->add(new FoldIntConstantsInMultiply());
-  rules->add(patact(p_MultiplyOp(p_AddOp(p_var("a"), p_var("b")), p_var("c")),
-                    p_AddOp(p_MultiplyOp(p_var("a"), p_var("c")),
-                            p_MultiplyOp(p_var("b"), p_var("c")))));
-  rules->add(patact(p_MultiplyOp(p_var("c"), p_AddOp(p_var("a"), p_var("b"))),
-                    p_AddOp(p_MultiplyOp(p_var("c"), p_var("a")),
-                            p_MultiplyOp(p_var("c"), p_var("b")))));
-  rules->add(patact(p_AddOp(p_var("a"), p_AddOp(p_var("b"), p_var("c"))),
-                    p_AddOp(p_AddOp(p_var("a"), p_var("b")), p_var("c"))));
+  rules->add(new FoldIntConstants<SgMultiplyOp>());
+  rules->add(new UnsignedAlgebraicPatternActionRule(
+      p_MultiplyOp(p_AddOp(p_var("a"), p_var("b")), p_var("c")),
+      p_AddOp(p_MultiplyOp(p_var("a"), p_var("c")),
+              p_MultiplyOp(p_var("b"), p_var("c")))));
+  rules->add(new UnsignedAlgebraicPatternActionRule(
+      p_MultiplyOp(p_var("c"), p_AddOp(p_var("a"), p_var("b"))),
+      p_AddOp(p_MultiplyOp(p_var("c"), p_var("a")),
+              p_MultiplyOp(p_var("c"), p_var("b")))));
+  rules->add(new UnsignedAlgebraicPatternActionRule(
+      p_AddOp(p_var("a"), p_AddOp(p_var("b"), p_var("c"))),
+      p_AddOp(p_AddOp(p_var("a"), p_var("b")), p_var("c"))));
   rules->add(patact(p_MultiplyOp(p_int(1), p_var("a")), p_var("a")));
   rules->add(patact(p_MultiplyOp(p_var("a"), p_int(1)), p_var("a")));
-  rules->add(patact(p_MultiplyOp(p_int(0), p_var("a")), p_int(0)));
-  rules->add(patact(p_MultiplyOp(p_var("a"), p_int(0)), p_int(0)));
-  return rules;
-}
-
-RewriteRule *getFiniteDifferencingRules() {
-  RewriteRuleCombiner *rules = (RewriteRuleCombiner *)getAlgebraicRules();
   rules->add(patact(
-      p_CommaOp(p_var("var"),
-                p_CommaOp(p_var("lhs"), p_AddOp(p_var("lhs"), p_var("rhs")))),
-      p_PlusAssignOp(p_var("var"), p_var("rhs"))));
+      p_MultiplyOp(p_int(0), new VariablePattern<SgVarRefExp>("a")), p_int(0)));
   rules->add(patact(
-      p_CommaOp(p_var("var"),
-                p_CommaOp(p_var("lhs"), p_AddOp(p_var("rhs"), p_var("lhs")))),
-      p_PlusAssignOp(p_var("var"), p_var("rhs"))));
+      p_MultiplyOp(new VariablePattern<SgVarRefExp>("a"), p_int(0)), p_int(0)));
   return rules;
 }

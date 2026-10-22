@@ -42,9 +42,15 @@ int rex_cross_fragment(int value) { return value; }
 // exact identities that can select the proper namespace fragment.
 #define REX_TWO_NAMESPACE_REOPENINGS()                                         \
   namespace rex_macro_reopened_fragment {                                      \
+  struct RexMacroFirstRecord {                                                 \
+    int value;                                                                 \
+  };                                                                           \
   int macro_first_value;                                                       \
   }                                                                            \
   namespace rex_macro_reopened_fragment {                                      \
+  struct RexMacroSecondRecord {                                                \
+    int value;                                                                 \
+  };                                                                           \
   int macro_second_value;                                                      \
   }
 REX_TWO_NAMESPACE_REOPENINGS()
@@ -71,3 +77,16 @@ int main() {
 
 #include "rex_frontend_namespace_split_introducer.hpp"
 rex_split_introducer { int rex_split_introducer_value; }
+
+namespace rex_function_left_owner {
+namespace rex_function_shared {
+int rex_same_namespace_function(int value);
+int rex_same_namespace_function(int value) { return value; }
+}
+}
+namespace rex_function_right_owner {
+namespace rex_function_shared {
+int rex_same_namespace_function(int value);
+int rex_same_namespace_function(int value) { return value; }
+}
+}

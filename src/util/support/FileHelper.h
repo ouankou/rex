@@ -1,19 +1,15 @@
 #ifndef ROSE_FileHelper_H
 #define ROSE_FileHelper_H
 
-// Consider using $ROSE/src/Rose/FileSystem.h since that one is documented and
-// uses a proper path type and supports both version 2 and version 3 of
-// std::filesystem.
+// Prefer Rose/FileSystem.h for new callers using std::filesystem::path.
 
 #include "Rose/FileSystem.h"
 
 #include <filesystem>
 
-#include <list>
+#include <limits>
 
 #include <string>
-
-class PreprocessingInfo;
 
 class FileHelper {
 public:
@@ -28,11 +24,6 @@ public:
   static void ensureFolderExists(const std::string &folder) {
     std::filesystem::path fsPath(folder);
     create_directories(fsPath);
-  }
-
-  static void eraseFolder(const std::string &folder) {
-    std::filesystem::path fsPath(folder);
-    remove_all(fsPath);
   }
 
   static std::string concatenatePaths(const std::string &path1,
@@ -55,17 +46,6 @@ public:
     return Rose::FileSystem::toString(std::filesystem::path(aPath).filename());
   }
 
-  static std::string
-  makeAbsoluteNormalizedPath(const std::string &path,
-                             const std::string &workingDirectory) {
-    if (!isAbsolutePath(path)) {
-      // relative path, so prepend the working directory and then normalize
-      return normalizePath(concatenatePaths(workingDirectory, path));
-    } else {
-      return normalizePath(path);
-    }
-  }
-
   static bool isAbsolutePath(const std::string &path) {
     return path.compare(0, 1, pathDelimiter) == 0;
   }
@@ -76,22 +56,6 @@ public:
     // Note: Do not use std::filesystem::equivalent since the compared paths
     // might not exist, which will cause an error.
     return normalizePath(path1).compare(normalizePath(path2)) == 0;
-  }
-
-  static std::string
-  getIncludedFilePath(const std::list<std::string> &prefixPaths,
-                      const std::string &includedPath) {
-    for (std::list<std::string>::const_iterator prefixPathPtr =
-             prefixPaths.begin();
-         prefixPathPtr != prefixPaths.end(); prefixPathPtr++) {
-      std::string potentialPath =
-          concatenatePaths(*prefixPathPtr, includedPath);
-      if (fileExists(potentialPath)) {
-        return potentialPath;
-      }
-    }
-    // The included file was not found, so return an empty string.
-    return "";
   }
 
   // Assumes that both arguments are absolute and normalized.
@@ -112,25 +76,9 @@ public:
   }
 
   static std::string normalizePath(const std::string &aPath) {
-    std::filesystem::path fsPath(aPath);
-
-    // Some callers normalize paths that may not exist yet (e.g., generated
-    // output files). canonical() throws in that case; weakly_canonical()
-    // preserves normalization without requiring the full path to exist.
-    std::error_code ec;
-    std::filesystem::path normalizedPath =
-        std::filesystem::weakly_canonical(fsPath, ec);
-    if (!ec) {
-      return normalizedPath.string();
-    }
-
-    ec.clear();
-    normalizedPath = std::filesystem::absolute(fsPath, ec);
-    if (!ec) {
-      return normalizedPath.lexically_normal().string();
-    }
-
-    return fsPath.lexically_normal().string();
+    // Generated output paths may not exist. Resolve their existing prefix,
+    // while exposing real errors such as symlink loops and denied access.
+    return std::filesystem::weakly_canonical(aPath).string();
   }
 
   static std::string normalizePathIfPossible(const std::string &path) {
@@ -143,59 +91,34 @@ public:
     return normalizePath(path);
   }
 
-  static std::string
-  getNormalizedContainingFileName(PreprocessingInfo *preprocessingInfo) {
-    return normalizePath(
-        preprocessingInfo->get_file_info()->get_filenameString());
-  }
-
-  // Either path1 includes path2 or vice versa
-  static std::string pickMoreGeneralPath(const std::string &path1,
-                                         const std::string &path2) {
-    std::string textualPart1 = getTextualPart(path1);
-    std::string textualPart2 = getTextualPart(path2);
-    // The longer textual part should be more general, assert that
-    std::string moreGeneralPath =
-        textualPart1.size() > textualPart2.size() ? textualPart1 : textualPart2;
-    ROSE_ASSERT(endsWith(moreGeneralPath, textualPart1));
-    ROSE_ASSERT(endsWith(moreGeneralPath, textualPart2));
-    return moreGeneralPath;
-  }
-
+  // Include spellings are relative lexical paths. Resolving them against the
+  // process working directory loses the parent components needed to construct
+  // an output include search path.
   static std::string getTextualPart(const std::string &path) {
-    std::string normalizedPath = normalizePath(path);
-    // Remove all leading "../" and "./" (and they can be only leading, since
-    // the path is normalized).
-    size_t pos = normalizedPath.rfind(".." + pathDelimiter);
-    if (pos != std::string::npos) {
-      normalizedPath = normalizedPath.substr(pos + 3);
+    const auto normalized = std::filesystem::path(path).lexically_normal();
+    auto component = normalized.begin();
+    while (component != normalized.end() &&
+           (*component == "." || *component == "..")) {
+      ++component;
     }
-    pos = normalizedPath.rfind("." + pathDelimiter);
-    if (pos != std::string::npos) {
-      normalizedPath = normalizedPath.substr(pos + 2);
+    std::filesystem::path result;
+    for (; component != normalized.end(); ++component) {
+      result /= *component;
     }
-    return normalizedPath;
+    return result.string();
   }
 
-  // Count how many leading "../" are in a path (after its normalization)
   static int countUpsToParentFolder(const std::string &path) {
-    std::string normalizedPath = normalizePath(path);
-    std::string upPath = ".." + pathDelimiter;
-    int counter = 0;
-    size_t pos = normalizedPath.find(upPath);
-    while (pos != std::string::npos) {
-      counter++;
-      pos = normalizedPath.find(upPath, pos + 3);
+    const auto normalized = std::filesystem::path(path).lexically_normal();
+    int count = 0;
+    for (const auto &component : normalized) {
+      if (component != "..") {
+        break;
+      }
+      ROSE_ASSERT(count < std::numeric_limits<int>::max());
+      ++count;
     }
-    return counter;
-  }
-
-  static bool
-  endsWith(const std::string &str1,
-           const std::string &str2) { // checks that str1 ends with str2
-    if (str2.size() > str1.size())
-      return false;
-    return str1.compare(str1.size() - str2.size(), str2.size(), str2) == 0;
+    return count;
   }
 };
 

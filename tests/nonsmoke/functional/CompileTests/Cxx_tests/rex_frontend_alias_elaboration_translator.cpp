@@ -1,6 +1,7 @@
 #include "RoseAst.h"
 #include "rose.h"
 
+#include <algorithm>
 #include <map>
 #include <string>
 
@@ -8,6 +9,69 @@ int main(int argc, char **argv) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != nullptr);
   ROSE_ASSERT(frontendExitStatus(project) == 0);
+
+  SgSourceFile *sourceFile = isSgSourceFile(project->get_fileList().front());
+  ASSERT_not_null(sourceFile);
+  SgGlobal *global = sourceFile->get_globalScope();
+  ASSERT_not_null(global);
+  for (const char *name :
+       {"RexAliasRedeclaredStruct", "RexAliasForwardClass"}) {
+    SgClassDeclaration *forward = nullptr;
+    for (SgDeclarationStatement *statement : global->get_declarations()) {
+      SgClassDeclaration *declaration = isSgClassDeclaration(statement);
+      if (declaration != nullptr && declaration->get_name() == name) {
+        ROSE_ASSERT(forward == nullptr);
+        forward = declaration;
+      }
+    }
+    ASSERT_not_null(forward);
+    ROSE_ASSERT(forward->isForward());
+    ROSE_ASSERT(forward->get_isAutonomousDeclaration());
+    ROSE_ASSERT(forward->get_parent() == global);
+    ROSE_ASSERT(forward->get_scope() == global);
+    ROSE_ASSERT(!forward->get_file_info()->isCompilerGenerated());
+    SgClassDeclaration *definition =
+        isSgClassDeclaration(forward->get_definingDeclaration());
+    ASSERT_not_null(definition);
+    SgVariableDeclaration *owner =
+        isSgVariableDeclaration(definition->get_parent());
+    ASSERT_not_null(owner);
+    ROSE_ASSERT(owner->get_baseTypeDefiningDeclaration() == definition);
+    ROSE_ASSERT(!definition->get_isAutonomousDeclaration());
+    ROSE_ASSERT(definition->get_type() == forward->get_type());
+    ASSERT_not_null(definition->get_definition());
+    ROSE_ASSERT(definition->get_definition()->get_declaration() == definition);
+    ROSE_ASSERT(definition->get_definition()->get_parent() == definition);
+    ROSE_ASSERT(std::count(global->get_declarations().begin(),
+                           global->get_declarations().end(), definition) == 0);
+  }
+  for (const char *name : {"RexAliasRedeclaredEnum", "RexAliasForwardEnum"}) {
+    SgEnumDeclaration *forward = nullptr;
+    for (SgDeclarationStatement *statement : global->get_declarations()) {
+      SgEnumDeclaration *declaration = isSgEnumDeclaration(statement);
+      if (declaration != nullptr && declaration->get_name() == name) {
+        ROSE_ASSERT(forward == nullptr);
+        forward = declaration;
+      }
+    }
+    ASSERT_not_null(forward);
+    ROSE_ASSERT(forward->isForward());
+    ROSE_ASSERT(forward->get_isAutonomousDeclaration());
+    ROSE_ASSERT(forward->get_parent() == global);
+    ROSE_ASSERT(forward->get_scope() == global);
+    ROSE_ASSERT(!forward->get_file_info()->isCompilerGenerated());
+    SgEnumDeclaration *definition =
+        isSgEnumDeclaration(forward->get_definingDeclaration());
+    ASSERT_not_null(definition);
+    SgVariableDeclaration *owner =
+        isSgVariableDeclaration(definition->get_parent());
+    ASSERT_not_null(owner);
+    ROSE_ASSERT(owner->get_baseTypeDefiningDeclaration() == definition);
+    ROSE_ASSERT(!definition->get_isAutonomousDeclaration());
+    ROSE_ASSERT(definition->get_type() == forward->get_type());
+    ROSE_ASSERT(std::count(global->get_declarations().begin(),
+                           global->get_declarations().end(), definition) == 0);
+  }
 
   const std::map<std::string, bool> expected = {
       {"RexExplicitStructAlias", true}, {"RexPlainStructAlias", false},

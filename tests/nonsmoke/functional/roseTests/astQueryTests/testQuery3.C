@@ -54,6 +54,8 @@ main( int argc, char * argv[] )
    
 	 //Check if the number of statements is the same using VariantVectors and a simple NodeQuery
 	 VariantVector v1(V_SgStatement);
+     const VariantVector &statementVariants = v1;
+     v1 = statementVariants;
 	 int numberOfStatements=0;
      AstQueryNamespace::querySubTree(project,std::bind(nodeRecognized, std::placeholders::_1, std::pair<VariantVector*, int*>(&v1, &numberOfStatements)));
 
@@ -65,7 +67,9 @@ main( int argc, char * argv[] )
 	 ROSE_ASSERT( numberOfStatementsInSimple == numberOfStatements );
 
 	 //Check if the number of expressions is the same using VariantVectors and a simple NodeQuery
-	 VariantVector v2(V_SgExpression);
+     const VariantVector expressionVariants(V_SgExpression);
+     VariantVector v2(V_SgStatement);
+     v2 = expressionVariants;
 	 int numberOfExpressions=0;
      AstQueryNamespace::querySubTree(project,std::bind(nodeRecognized, std::placeholders::_1, std::pair<VariantVector*, int*>(&v2, &numberOfExpressions)));
 

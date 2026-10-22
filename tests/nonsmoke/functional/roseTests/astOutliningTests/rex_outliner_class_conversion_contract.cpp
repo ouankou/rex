@@ -1,3 +1,5 @@
+typedef enum { rex_owned_enum_zero = 0 } rex_owned_enum;
+
 struct rex_historical_base {
   virtual ~rex_historical_base() = default;
   int inherited() const { return 1; }
@@ -12,7 +14,7 @@ struct rex_left_base {
 
 struct rex_adjusted_base {
   virtual ~rex_adjusted_base() = default;
-  int inherited() const { return 3; }
+  int inherited() const { return base - 1; }
   int base = 4;
 };
 
@@ -30,6 +32,8 @@ struct rex_virtual_derived : rex_left_base, virtual rex_virtual_base {
 };
 
 struct rex_conversion_holder {
+  static const int constant = 42;
+  static const int declaration_only = 17;
   rex_historical_derived historical_values[2];
 
   int exercise(rex_multiply_derived &derived, rex_adjusted_base &base,
@@ -38,6 +42,13 @@ struct rex_conversion_holder {
     int result = 0;
 #pragma rose_outline
     {
+      rex_owned_enum enum_value = rex_owned_enum_zero;
+      result += enum_value;
+      const int *constant_address = &constant;
+      const int &constant_reference = constant;
+      result += *constant_address + constant_reference + constant;
+      result += declaration_only;
+
       // This is the exact class-lvalue UncheckedDerivedToBase shape from
       // test_61_2020.cpp. The old late outliner repair deleted this cast node.
       result += historical_values[0].inherited();
@@ -62,3 +73,15 @@ struct rex_conversion_holder {
     return result;
   }
 };
+
+const int rex_conversion_holder::constant;
+
+int main() {
+  rex_conversion_holder holder;
+  rex_multiply_derived derived;
+  rex_virtual_derived virtual_derived;
+  return holder.exercise(derived, derived, virtual_derived, virtual_derived) ==
+                 165
+             ? 0
+             : 1;
+}

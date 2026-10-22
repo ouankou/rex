@@ -3,6 +3,8 @@
 
 #include "AnalysisDebuggingUtils.h"
 
+#include "Rose/StringUtility/Escape.h"
+#include "Rose/StringUtility/FileUtility.h"
 #include "rose_test_output_path.h"
 
 #include <fstream>
@@ -37,6 +39,7 @@
 
 using namespace std;
 using namespace Rose;
+using namespace VirtualCFG;
 
 namespace {
 std::string resolveDebugOutputDir(const std::string &workDir,
@@ -180,16 +183,13 @@ void dbgBuf::init(std::streambuf *baseBuf) {
   synched = true;
   ownerAccess = true;
   numOpenAngles = 0;
-  // numDivs = 0;
   parentDivs.clear();
   parentDivs.push_back(0);
-  // cout << "Initially parentDivs (len="<<parentDivs.size()<<")\n";
 }
 
 // This dbgBuf has no buffer. So every character "overflows"
 // and can be put directly into the teed buffers.
 int dbgBuf::overflow(int c) {
-  // cout << "overflow\n";
   if (c == EOF) {
     return !EOF;
   } else {
@@ -197,16 +197,6 @@ int dbgBuf::overflow(int c) {
     return r1 == EOF ? EOF : c;
   }
 }
-
-// Prints the indent to the stream buffer, returns 0 on success non-0 on failure
-/*int dbgBuf::printIndent()
-{
-        string indent="";
-        for(list<string>::iterator i=indents.begin(); i!=indents.end(); i++)
-indent+=*i; int r = baseBuf->sputn(indent.c_str(), indent.length());
-        if(r!=indent.length()) return -1;
-        return 0;
-}*/
 
 // Prints the given string to the stream buffer
 int dbgBuf::printString(string s) {
@@ -217,12 +207,6 @@ int dbgBuf::printString(string s) {
 }
 
 streamsize dbgBuf::xsputn(const char *s, streamsize n) {
-  //      cout << "xputn() ownerAccess="<<ownerAccess<<" n="<<n<<"
-  //      s=\""<<string(s)<<"\"\n";
-  /*if(synched && !ownerAccess) {
-          int ret2 = printIndent();
-          if(ret2 != 0) return 0;
-  }*/
   // If the owner is printing, output their text exactly
   if (ownerAccess) {
     return baseBuf->sputn(s, n);
@@ -235,27 +219,20 @@ streamsize dbgBuf::xsputn(const char *s, streamsize n) {
     char spaceHTML[] = "&nbsp;";
     char tab[] = "\t";
     char tabHTML[] = "&#09;";
-    // char lt[]="&lt;";
-    // char gt[]="&gt;";
     while (i < n) {
       int j;
-      for (j = i; j < n && s[j] != '\n' && s[j] != ' ' &&
-                  s[j] != '\t' /* && s[j]!='<' && s[j]!='>'*/;
-           j++) {
+      for (j = i; j < n && s[j] != '\n' && s[j] != ' ' && s[j] != '\t'; j++) {
         if (s[j] == '<')
           numOpenAngles++;
         else if (s[j] == '>')
           numOpenAngles--;
       }
-      //                      cout << "char=\""<<s[j]<<"\"
-      //                      numOpenAngles="<<numOpenAngles<<"\n";
       // Send out all the bytes from the start of the string or the
       // last line-break until this line-break
       if (j - i > 0) {
         ret = baseBuf->sputn(&(s[i]), j - i);
         if (ret != (j - i))
           return 0;
-        // cout << "   printing char "<<i<<" - "<<j<<"\n";
       }
 
       if (j < n) {
@@ -290,14 +267,7 @@ streamsize dbgBuf::xsputn(const char *s, streamsize n) {
             if (ret != sizeof(tab) - 1)
               return 0;
           }
-        } /* else if(s[j]=='<') {
-                 ret = baseBuf->sputn(lt, sizeof(lt)-1);
-                 if(ret != sizeof(lt)-1) return 0;
-         } else if(s[j]=='>') {
-                 ret = baseBuf->sputn(gt, sizeof(gt)-1);
-                 if(ret != sizeof(gt)-1) return 0;
-         }*/
-        // cout << "   printing <BR>\n";
+        }
       }
 
       // Point i to immediately after the line-break
@@ -314,7 +284,6 @@ int dbgBuf::sync() {
   if (r != 0)
     return -1;
 
-  // cout << "Synch synched="<<synched<<" ownerAccess="<<ownerAccess<<"\n";
   if (synched && !ownerAccess) {
     int ret2 = printString("<br>\n");
     if (ret2 != 0)
@@ -336,23 +305,12 @@ void dbgBuf::ownerAccessing() {
   synched = true;
 }
 
-void dbgBuf::enterFunc(string funcName /*, string indent*/) {
+void dbgBuf::enterFunc(string funcName) {
   funcs.push_back(funcName);
-  // indents.push_back(indent);
   //  Increment the index of this function within its parent
-  // cout << "Incrementing parentDivs (len="<<parentDivs.size()<<") from
-  // "<<*(parentDivs.rbegin())<<" to ";
   (*(parentDivs.rbegin()))++;
-  /*cout << *(parentDivs.rbegin())<<": div=";
-  ostringstream divName;
-  for(list<int>::iterator d=parentDivs.begin(); d!=parentDivs.end(); d++) {
-          if(d!=parentDivs.end())
-                  divName << *d << "_";
-  }
-  cout << divName.str()<<"\n";*/
   // Add a new level to the parentDivs list, starting the index at 0
   parentDivs.push_back(0);
-  // numDivs++;
 }
 
 void dbgBuf::exitFunc(string funcName) {
@@ -367,7 +325,6 @@ void dbgBuf::exitFunc(string funcName) {
     exit(-1);
   }
   funcs.pop_back();
-  // indents.pop_back();
   parentDivs.pop_back();
 }
 
@@ -418,7 +375,6 @@ void dbgStream::init(string title, string dbgFileName, string workDir,
     exit(-1);
   }
 
-  // std::ostream::rdbuf(&buf);
   buf.init(dbgFile.rdbuf());
   this->imgPath = imgPath;
   this->dbgFileName = dbgFileName;
@@ -480,20 +436,6 @@ dbgStream::~dbgStream() {
   summaryF << "\t</body>\n";
   summaryF << "</html>\n\n";
   summaryF.close();
-
-  // Run CPP on the output file to incorporate the summary into the main file
-  //{
-  //      ostringstream cmd;
-  //      cmd << "mv "<<dbgFileName<<" "<<dbgFileName<<".tmp";
-  //      system(cmd.str().c_str());
-  //}
-  //
-  //{
-  //      ostringstream cmd;
-  //      cmd << "cpp -E -x c -P -C "<<dbgFileName<<".tmp > "<<dbgFileName;
-  //      //cout << cmd.str()<<"\n";
-  //      system(cmd.str().c_str());
-  //}
 }
 
 void dbgStream::printDetailFileHeader(string title) {
@@ -572,10 +514,10 @@ void dbgStream::printDetailFileTrailer() {
   *(this) << "</html>\n\n";
 }
 
-void dbgStream::enterFunc(string funcName /*, string indent*/) {
+void dbgStream::enterFunc(string funcName) {
   buf.ownerAccessing();
 
-  buf.enterFunc(funcName /*, indent*/);
+  buf.enterFunc(funcName);
 
   ostringstream divName;
   for (list<int>::iterator d = buf.parentDivs.begin();
@@ -676,11 +618,7 @@ string dbgStream::addDOT(dottable &obj) {
   imgFName << "dbg_imgs/image_" << numImages << ".svg";
   ostringstream graphName;
   graphName << "graph_" << numImages;
-  ostringstream ret;
-  addDOT(imgFName.str(), graphName.str(), obj.toDOT(graphName.str()), *this);
-
-  return ret.str();
-
+  addDOT(imgFName.str(), obj.toDOT(graphName.str()), *this);
   return imgFName.str();
 }
 
@@ -693,7 +631,7 @@ std::string dbgStream::addDOTStr(dottable &obj) {
   ostringstream graphName;
   graphName << "graph_" << numImages;
   ostringstream ret;
-  addDOT(imgFName.str(), graphName.str(), obj.toDOT(graphName.str()), ret);
+  addDOT(imgFName.str(), obj.toDOT(graphName.str()), ret);
 
   return ret.str();
 }
@@ -703,21 +641,15 @@ std::string dbgStream::addDOTStr(dottable &obj) {
 std::string dbgStream::addDOT(string dot) {
   ostringstream imgFName;
   imgFName << "dbg_imgs/image_" << numImages << ".svg";
-  ostringstream graphName;
-  graphName << "graph_" << numImages;
-
-  addDOT(imgFName.str(), graphName.str(), dot, *this);
+  addDOT(imgFName.str(), dot, *this);
 
   return imgFName.str();
 }
 
 // The common work code for all the addDOT methods
-void dbgStream::addDOT(string imgFName, string graphName, string dot,
-                       ostream &ret) {
+void dbgStream::addDOT(string imgFName, string dot, ostream &ret) {
   ostringstream dotFName;
   dotFName << imgPath << "/image_" << numImages << ".dot";
-  ostringstream mapFName;
-  mapFName << imgPath << "/image_" << numImages << ".map";
 
   ofstream dotFile;
   dotFile.open(dotFName.str().c_str());
@@ -725,77 +657,14 @@ void dbgStream::addDOT(string imgFName, string graphName, string dot,
   dotFile.close();
 
   // Create the SVG file's picture of the dot file
-  /*pid_t child = fork();
-  // Child
-  if(child==0)
-  {*/
   ostringstream cmd;
   cmd << "dot -Tsvg -o" << imgPath << "/image_" << numImages << ".svg "
-      << dotFName.str() << "&"; // -Tcmapx -o"<<mapFName.str()<<"
+      << dotFName.str() << "&";
   cout << "Command \"" << cmd.str() << "\"\n";
   system(cmd.str().c_str());
-  /*      exit(0);
-  // ERROR
-  } else if(child<0) {
-          cout << "dbgStream::addDOTStr() ERROR forking!";
-          exit(-1);
-  }*/
-
-  //// Identify the names of the nodes in the dot file
-  // ostringstream namesFName; namesFName << imgPath << "/image_" << numImages
-  // << ".names";
-  //{
-  //       ostringstream cmd; cmd << "~/Compilers/dot2Nodes.pl
-  //       "<<dotFName.str()<<" > "<<namesFName.str(); // -Tcmapx
-  //       -o"<<mapFName.str()<<"
-  //       //cout << "Command \""<<cmd.str()<<"\"\n";
-  //       system(cmd.str().c_str());
-  // }
-  //
-  //// Read the names of the dot file's node
-  // ifstream namesFile(namesFName.str().c_str());
-  // string line;
-  // set<string> nodes;
-  // if(namesFile.is_open()) {
-  //       while(namesFile.good()) {
-  //               getline(namesFile, line);
-  //               //*(this) << line << endl;
-  //               if(line!="") nodes.insert(line);
-  //       }
-  //       namesFile.close();
-  // }
-  // else {
-  //       cout << "dbgStream::addDOT() ERROR opening file
-  //       \""<<namesFName.str()<<"\" for reading!"<<endl;
-  // }
 
   ret << "\t\t\t" << tabs(buf.funcs.size() + 1) << "image_" << numImages
-      << ":<img src=\"" << imgFName
-      << "\" "; // <a href=\"image_" << numImages << ".dot\">
-  // usemap=\""<<graphName.str()<<"\"
-  ret << "><br>\n"; // </a>
-
-  // ret << "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<embed height=\"100%\"
-  // width=\"100%\" pluginspage=\"http://www.adobe.com/svg/viewer/install\"
-  // src=\""<<imgFName<<"\">"<<endl; ret <<
-  // "\t\t\t"<<tabs(buf.funcs.size()+1)<<"<object height=\"100%\" width=\"100%\"
-  // data=\""<<imgFName<<"\" type=\"image/svg+xml\"></object>"<<endl;
-
-  // Open the map file and copy its contents into the output stream
-  /*ifstream mapFile(mapFName.str().c_str());
-  string line;
-  //cout << "opening file \""<<mapFName.str()<<"\" for reading!"<<endl;
-  if(mapFile.is_open()) {
-          while(mapFile.good()) {
-                  getline(mapFile, line);
-                  ret << line << endl;
-          }
-          mapFile.close();
-  }
-  else {
-          cout << "dbgStream::addDOT() ERROR opening file
-  \""<<mapFName.str()<<"\" for reading!"<<endl;
-  }       */
+      << ":<img src=\"" << imgFName << "\" ><br>\n";
   numImages++;
 }
 
@@ -833,7 +702,7 @@ void init(string title, string workDir, string fName) {
 }
 
 // Indicates that the application has entered or exited a function
-void enterFunc(std::string funcName /*, std::string indent="    "*/) {
+void enterFunc(std::string funcName) {
   if (!initialized)
     init("Debug Output", "", "debug");
   dbg.enterFunc(funcName);

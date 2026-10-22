@@ -7,7 +7,5 @@
 
 #include "AstStatistics.h"
 
-#include "AstWarnings.h"
-
 // DQ (7/6/2005): Added to support performance analysis of ROSE.
 #include "AstPerformance.h"

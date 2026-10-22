@@ -1,5 +1,3 @@
-// #include <rose.h>
-
 #include "mlog.h"
 
 #include "IncludeDirective.h"
@@ -7,6 +5,9 @@
 #include <cctype>
 #include <cstdio>
 #include <vector>
+
+using std::size_t;
+using std::string;
 
 namespace {
 struct PhaseTwoSpelling {

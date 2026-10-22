@@ -75,7 +75,26 @@ int main(int argc, char **argv) {
   SgNonrealDecl *nestedConcept = nullptr;
   SgNonrealDecl *builtinDeclaration = nullptr;
   bool sawBuiltinTemplateId = false;
+  SgTemplateClassDeclaration *deducedClass = nullptr;
+  SgInitializedName *deducedVariable = nullptr;
+  SgInitializedName *qualifiedDeducedVariable = nullptr;
   for (SgNode *node : RoseAst(project)) {
+    if (SgTemplateClassDeclaration *classDeclaration =
+            isSgTemplateClassDeclaration(node)) {
+      if (classDeclaration->get_name() == "rex_nonreal_deduced_class") {
+        deducedClass = classDeclaration;
+      }
+    }
+    if (SgInitializedName *variable = isSgInitializedName(node)) {
+      if (variable->get_name() == "rex_nonreal_deduced_variable") {
+        ROSE_ASSERT(deducedVariable == nullptr);
+        deducedVariable = variable;
+      } else if (variable->get_name() ==
+                 "rex_nonreal_qualified_deduced_variable") {
+        ROSE_ASSERT(qualifiedDeducedVariable == nullptr);
+        qualifiedDeducedVariable = variable;
+      }
+    }
     SgNonrealDecl *declaration = isSgNonrealDecl(node);
     if (declaration == nullptr) {
       continue;
@@ -92,10 +111,12 @@ int main(int argc, char **argv) {
         builtinDeclaration = declaration;
         break;
       case SgNonrealDecl::e_nonreal_template_id: {
-        const std::string semanticName =
-            declaration->get_semantic_name().getString();
-        ROSE_ASSERT(semanticName.find('<') != std::string::npos);
-        ROSE_ASSERT(semanticName.rfind('>') != std::string::npos);
+        ROSE_ASSERT(declaration->get_templateDeclaration() != nullptr);
+        ROSE_ASSERT(!declaration->get_tpl_args().empty());
+        for (SgTemplateArgument *argument : declaration->get_tpl_args()) {
+          ROSE_ASSERT(argument != nullptr);
+          ROSE_ASSERT(argument->get_parent() == declaration);
+        }
         sawBuiltinTemplateId = true;
         break;
       }
@@ -128,6 +149,22 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(builtinDeclaration->get_file_info()->isCompilerGenerated());
   ROSE_ASSERT(isSgGlobal(exactAuxiliaryOwner(builtinDeclaration)) != nullptr);
   ROSE_ASSERT(sawBuiltinTemplateId);
+
+  ROSE_ASSERT(deducedClass != nullptr);
+  ROSE_ASSERT(deducedVariable != nullptr);
+  ROSE_ASSERT(qualifiedDeducedVariable != nullptr);
+  for (SgInitializedName *variable :
+       {deducedVariable, qualifiedDeducedVariable}) {
+    SgNonrealType *deducedType =
+        isSgNonrealType(variable->get_type()->findBaseType());
+    ROSE_ASSERT(deducedType != nullptr);
+    SgNonrealDecl *deducedDeclaration =
+        isSgNonrealDecl(deducedType->get_declaration());
+    ROSE_ASSERT(deducedDeclaration != nullptr);
+    ROSE_ASSERT(deducedDeclaration->get_templateDeclaration() ==
+                deducedClass->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(deducedDeclaration->get_tpl_args().empty());
+  }
 
   AstTests::runAllTests(project);
   return 0;

@@ -276,14 +276,7 @@ include_directories(
   ${CMAKE_SOURCE_DIR}/src/midend/programTransformation/transformationTracking
 )
 
-if(TARGET tools_moveDeclarationToInnermostScope_exe)
-  set(_move_decl_tool_target tools_moveDeclarationToInnermostScope_exe)
-else()
-  add_executable(moveDeclarationToInnermostScope_test_tool
-    ${CMAKE_SOURCE_DIR}/tools/moveDeclarationToInnermostScope.C)
-  target_link_libraries(moveDeclarationToInnermostScope_test_tool ROSE_DLL ${link_with_libraries})
-  set(_move_decl_tool_target moveDeclarationToInnermostScope_test_tool)
-endif()
+set(_move_decl_tool_target tools_moveDeclarationToInnermostScope_exe)
 
 set(_reference_root
   ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/moveDeclarationTool/referenceResults)
@@ -494,6 +487,15 @@ set_tests_properties(
   PROPERTIES
     ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_move_output_dir}"
     RESOURCE_LOCK rex_move_declaration_boundary_ownership)
+
+add_test(NAME moveDecl_rex_macro_merge_runtime
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_move_declaration_macro_merge.py
+    $<TARGET_FILE:${_move_decl_tool_target}>
+    ${CMAKE_CXX_COMPILER}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_move_declaration_macro_merge.C)
+set_tests_properties(moveDecl_rex_macro_merge_runtime
+  PROPERTIES LABELS "rex;AST;CFE;UNPARSER")
 
 get_property(_move_decl_registered_tests DIRECTORY PROPERTY TESTS)
 if(_move_decl_registered_tests)

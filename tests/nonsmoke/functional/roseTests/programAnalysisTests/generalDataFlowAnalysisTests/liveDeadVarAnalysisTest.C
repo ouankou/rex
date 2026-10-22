@@ -39,7 +39,6 @@ using namespace std;
 #include "printAnalysisStates.h"
 
 #include "liveDeadVarAnalysis.h"
-int numFails = 0, numPass = 0;
 
 static std::string get_debug_output_dir() {
   const char *env = std::getenv("ROSE_TEST_OUTPUT_DIR");
@@ -59,88 +58,97 @@ static void erase_all(std::string &value, const std::string &needle) {
   }
 }
 
-bool gfilter(CFGNode cfgn) {
-  SgNode *node = cfgn.getNode();
-
-  switch (node->variantT()) {
-  // Keep the last index for initialized names. This way the def of the variable
-  // doesn't propagate to its assign initializer.
-  case V_SgInitializedName:
-    return (cfgn == node->cfgForEnd());
-
-  default:
-    return cfgn.isInteresting();
-  }
-}
-
-//-----------------------------------------------------------
-
-//-----------------------------------------------------------
 int main(int argc, char *argv[]) {
   printf("========== S T A R T liveness analysis  ==========\n");
   SgProject *project = frontend(argc, argv);
-
-  initAnalysis(project);
-  Dbg::init("Live dead variable analysis Test", get_debug_output_dir(),
-            "index.html");
-
-  liveDeadAnalysisDebugLevel = 1;
-  analysisDebugLevel = 1;
-  if (liveDeadAnalysisDebugLevel) {
-    printf("*******************************************************************"
-           "**\n");
-    printf("**********   Live Dead Variable Analysis (Liveness Analysis)   "
-           "******\n");
-    printf("*******************************************************************"
-           "**\n");
+  ASSERT_not_null(project);
+  if (project->get_frontendErrorCode() != 0) {
+    const int status = frontendExitStatus(project);
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    return status;
   }
 
-  LiveDeadVarsAnalysis ldva(project);
-  //     ldva.filter = gfilter; // the defaultFitler can provide the same
-  //     semantics now
-  UnstructuredPassInterDataflow ciipd_ldva(&ldva);
-  //     assert (ciipd_ldva.filter == gfilter);
-  ciipd_ldva.runAnalysis();
-
-  // grab live-in information from a Pragma Declaration
-  // Sample pragma is
-  // #pragma rose [LiveVarsLattice:liveVars=[mem,j,k,bound]]
-  Rose_STL_Container<SgNode *> nodeList =
-      NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
-  for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
-       i != nodeList.end(); i++) {
-    SgPragmaDeclaration *pdecl = isSgPragmaDeclaration((*i));
-    ROSE_ASSERT(pdecl != NULL);
-    // skip irrelevant pragmas
-    if (SageInterface::extractPragmaKeyword(pdecl) != "rose")
-      continue;
-
-    LiveVarsLattice *lattice = getLiveOutVarsAt(&ldva, pdecl, 0);
-    string lattice_str = lattice->str();
-    erase_all(lattice_str, " ");
-    cout << lattice_str << endl;
-    std::string pragma_str = pdecl->get_pragma()->get_pragma();
-    pragma_str.erase(0, 5);
-
-    // pragma_str.erase(remove_if(pragma_str.begin(), pragma_str.end(),
-    // isspace), pragma_str.end());
-    //
-    //  string.erase(std::remove_if(string.begin(), string.end(), std::isspace),
-    //  string.end());
-
-    erase_all(pragma_str, " ");
-
-    cout << pragma_str << endl;
-    if (lattice_str == pragma_str) {
-      cout << "Verified!" << endl;
-    } else {
-      cout << "pragma gives reference result:" << pragma_str << endl;
-      cout << "liveness results are not identical!" << endl;
-      assert(false);
+  {
+    for (SgNode *node :
+         NodeQuery::querySubTree(project, V_SgFunctionDeclaration)) {
+      auto *declaration = isSgFunctionDeclaration(node);
+      const auto &parameters = declaration->get_parameterList()->get_args();
+      if (parameters.size() < 2)
+        continue;
+      const varID first(parameters[0]), second(parameters[1]);
+      const std::set<varID> expected{first, second};
+      LiveVarsLattice live(expected);
+      live.remapVars({{first, second}, {second, first}}, Function(declaration));
+      ROSE_ASSERT(live.liveVars == expected);
+      if (parameters.size() > 2) {
+        const varID third(parameters[2]);
+        const std::set<varID> chainExpected{second, third};
+        LiveVarsLattice chain(std::set<varID>{first, third});
+        chain.remapVars({{first, second}, {second, third}},
+                        Function(declaration));
+        ROSE_ASSERT(chain.liveVars == chainExpected);
+      }
     }
-  }
 
-  // Output the dot graph
-  Dbg::dotGraphGenerator(&ldva);
+    initAnalysis(project);
+    Dbg::init("Live dead variable analysis Test", get_debug_output_dir(),
+              "index.html");
+
+    liveDeadAnalysisDebugLevel = 1;
+    analysisDebugLevel = 1;
+    if (liveDeadAnalysisDebugLevel) {
+      printf(
+          "*******************************************************************"
+          "**\n");
+      printf("**********   Live Dead Variable Analysis (Liveness Analysis)   "
+             "******\n");
+      printf(
+          "*******************************************************************"
+          "**\n");
+    }
+
+    LiveDeadVarsAnalysis ldva(project);
+    UnstructuredPassInterDataflow ciipd_ldva(&ldva);
+    ciipd_ldva.runAnalysis();
+
+    // grab live-in information from a Pragma Declaration
+    // Sample pragma is
+    // #pragma rose [LiveVarsLattice:liveVars=[mem,j,k,bound]]
+    Rose_STL_Container<SgNode *> nodeList =
+        NodeQuery::querySubTree(project, V_SgPragmaDeclaration);
+    for (Rose_STL_Container<SgNode *>::iterator i = nodeList.begin();
+         i != nodeList.end(); i++) {
+      SgPragmaDeclaration *pdecl = isSgPragmaDeclaration((*i));
+      ROSE_ASSERT(pdecl != NULL);
+      // skip irrelevant pragmas
+      if (SageInterface::extractPragmaKeyword(pdecl) != "rose")
+        continue;
+
+      LiveVarsLattice *lattice = getLiveOutVarsAt(&ldva, pdecl, 0);
+      string lattice_str = lattice->str();
+      erase_all(lattice_str, " ");
+      cout << lattice_str << endl;
+      std::string pragma_str = pdecl->get_pragma()->get_pragma();
+      pragma_str.erase(0, 5);
+
+      erase_all(pragma_str, " ");
+
+      cout << pragma_str << endl;
+      if (lattice_str == pragma_str) {
+        cout << "Verified!" << endl;
+      } else {
+        cout << "pragma gives reference result:" << pragma_str << endl;
+        cout << "liveness results are not identical!" << endl;
+        ROSE_ASSERT(false);
+      }
+    }
+
+    // Output the dot graph
+    Dbg::dotGraphGenerator(&ldva);
+  }
+  clearAnalysis();
+  SageInterface::deleteAST(project,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
   return 0;
 }

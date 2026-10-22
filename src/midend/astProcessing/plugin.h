@@ -61,8 +61,6 @@ SOFTWARE.
 #include <string>
 
 #include <vector>
-// #include <memory> // unique_ptr C++11 feature!!
-#include <dlfcn.h> // dlopen()
 
 class SgProject;
 namespace Rose {
@@ -100,11 +98,8 @@ template <typename IteratorT> class iterator_range {
   IteratorT begin_iterator, end_iterator;
 
 public:
-  // TODO: Add SFINAE to test that the Container's iterators match the range's
-  //       iterators.
   template <typename Container>
   iterator_range(Container &c)
-      // TODO: Consider ADL/non-member begin/end calls.
       : begin_iterator(c.begin()), end_iterator(c.end()) {}
   iterator_range(IteratorT begin_iterator, IteratorT end_iterator)
       : begin_iterator(begin_iterator), end_iterator(end_iterator) {}
@@ -138,13 +133,11 @@ public:
   const char *getName() const { return Name; }
   const char *getDesc() const { return Desc; }
   T *instantiate() const { return Ctor(); }
-  // T* instantiate() const { return Ctor(); }
 };
 
 /// Traits for registry entries. If using other than SimpleRegistryEntry, it
 /// is necessary to define an alternate traits class.
 template <typename T> class RegistryTraits {
-  // RegistryTraits() = delete;
   RegistryTraits() {};
 
 public:
@@ -169,7 +162,6 @@ public:
   class iterator;
 
 private:
-  // Registry() = delete;
   Registry() {};
 
   static void Announce(const entry &E) {
@@ -309,8 +301,6 @@ public:
     Add(const char *Name, const char *Desc)
         : Entry(Name, Desc, CtorFn), Node(Entry) {}
   };
-
-  /// Registry::Parser now lives in llvm/Support/RegistryParser.h.
 };
 
 // Since these are defined in a header file, plugins must be sure to export

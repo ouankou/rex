@@ -1,5 +1,3 @@
-#include <iostream>
-
 #include <sstream>
 
 #include "DomainInfo.h"
@@ -13,11 +11,6 @@ typedef LatticeElemList<DomainCond>::iterator DomainInfoIterator;
 DomainCondConstIterator DomainInfo::GetConstIterator() const {
   return new IteratorImplTemplate<DomainCond, DomainInfoIterator>(
       DomainInfoIterator(ConstRef()));
-}
-
-DomainCondUpdateIterator DomainInfo::GetUpdateIterator() {
-  return new IteratorImplTemplate<DomainCond &, DomainInfoIterator>(
-      DomainInfoIterator(UpdateRef()));
 }
 
 DomainInfo::DomainInfo()
@@ -34,10 +27,6 @@ bool DomainInfo::AddCond(const DomainCond &c) { return UpdateRef().AddElem(c); }
 
 bool DomainInfo::operator|=(const DomainInfo &that) {
   return UpdateRef() |= that.ConstRef();
-}
-
-void DomainInfo::UpdateDomainCond(bool (*Update)(DomainCond &info)) {
-  UpdateRef().UpdateElem(Update);
 }
 
 std::string DomainInfo::toString() const {
@@ -186,7 +175,7 @@ void DomainCond ::RestrictDepInfo(DepInfo &dep, DepDirection dir) const {
 
 DomainCond::DomainCond(DepInfo &dep, DepDirection dir) {
   DepInfo dep1 = Reverse(dep);
-  DepInfo::operator=((dir == DEP_SRC) ? dep *dep1 : dep1 *dep);
+  DepInfo::operator=((dir == DEP_SRC) ? dep * dep1 : dep1 * dep);
 }
 
 DomainInfo operator-(const DomainCond &d1, const DomainCond &d2) {

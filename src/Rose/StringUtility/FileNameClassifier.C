@@ -1,40 +1,14 @@
-// DQ (6/25/2009): Added comments to this file.
-
-// This file contains the code to classify files as being either user files or
-// system files. The classification levesl are more envolved but this support
-// allows users to extress rules that apply to there own code differently than
-// to the STL for example.  The approach is to associate a classification with
-// files based on their location and sometimes also the filename. Thus analysis
-// can be done for user code that checks a rule but skips non-user code where
-// that rule might not be valid.
-
-// DQ (6/25/2009): Greg White reported that the file locations for STL (and
-// other system files) are not correctly interpreted when soft-links are used.
-// Need to use "lstat()" and "readlink()" to chase down and resolved links so
-// that we can more robustly classify files. Note that system files used in ROSE
-// are in fact links to the system files used in the back-end vendor compiler,
-// so this is important for classification of system files used in processing
-// software using ROSE.
-
-// DQ (2/11/2010): Added so that we can detect what compiler is being used to
-// compile this file.
 #include "Rose/StringUtility/FileUtility.h"
 
 #include "Rose/StringUtility.h"
-
-#include "mlog.h"
 
 #include <algorithm>
 
 #include <cassert>
 
-#include <cstdlib>
-
 #include <filesystem>
 
 #include <map>
-
-#include <stdexcept>
 
 #include "rose_config.h"
 
@@ -45,23 +19,17 @@
 using namespace std;
 using namespace Rose;
 
-// DQ (2/8/2010): I don't like namespaces used to define functions (too
-// unclear). namespace Rose { namespace StringUtility {
-
 namespace {
-bool startsWith(const string &str, const string &substr) {
-  if (str.length() < substr.length())
-    return false;
-  int result = str.compare(0, substr.length(), substr);
-  return (result == 0);
-}
-
-bool endsWith(const string &str, const string &substr) {
-  if (str.length() < substr.length())
-    return false;
-  int result =
-      str.compare(str.length() - substr.length(), substr.length(), substr);
-  return (result == 0);
+bool hasPathComponents(const std::filesystem::path &fileName,
+                       const char *directory, const char *child) {
+  for (auto it = fileName.begin(); it != fileName.end(); ++it) {
+    if (*it != directory)
+      continue;
+    auto next = it;
+    if (++next != fileName.end() && *next == child)
+      return true;
+  }
+  return false;
 }
 
 vector<string> splitPathComponents(const string &path) {
@@ -82,9 +50,6 @@ bool componentPathStartsWith(const vector<string> &path,
   return std::equal(prefix.begin(), prefix.end(), path.begin());
 }
 
-// TODO can we static initialize stl structures?
-// if so it'd be better to create these as sets
-// test for existance, which would be *much* faster (and safer)
 const char *LINUX_INCLUDES[] = {
     "acpi",  "asm",      "asm-generic", "asm-i386", "asm-x86_64", "config",
     "linux", "math-emu", "media",       "net",      "pcmcia",     "rxrpc",
@@ -134,53 +99,46 @@ const char *GLIBCXX_INCLUDES[] = {
     "set",       "sstream", "stack",      "stdexcept", "streambuf", "string",
     "typeinfo",  "utility", "valarray",   "vector",    NULL};
 
-bool charListMatches(const char **clist, const string &prefix,
-                     const string &fileName) {
-  const char **substr;
-  substr = clist;
-  while (*substr != NULL) {
-    string inclstr = prefix;
-    inclstr += *substr;
-    if (fileName.find(inclstr) != string::npos)
+bool includePathMatches(const char *const *headers,
+                        const std::filesystem::path &fileName) {
+  for (const char *const *header = headers; *header != nullptr; ++header) {
+    if (hasPathComponents(fileName, "include", *header))
       return true;
-    substr++;
   }
   return false;
 }
 
 Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
-#ifndef CXX_IS_ROSE_CODE_GENERATION
   using namespace std::filesystem;
 
-  if (charListMatches(LINUX_INCLUDES, "include/", fileName)) {
+  const path filePath(fileName);
+  if (includePathMatches(LINUX_INCLUDES, filePath)) {
     return Rose::StringUtility::FILENAME_LIBRARY_LINUX;
   }
-  if (charListMatches(GLIBC_INCLUDES, "include/", fileName)) {
+  if (includePathMatches(GLIBC_INCLUDES, filePath)) {
     return Rose::StringUtility::FILENAME_LIBRARY_C;
   }
-  if (fileName.find("lib/gcc") != string::npos) {
+  if (hasPathComponents(filePath, "lib", "gcc")) {
     return Rose::StringUtility::FILENAME_LIBRARY_GCC;
   }
   static const RosePathRoots roots = resolveRosePaths(nullptr);
-  if (fileName.find("rose.h") != string::npos ||
+  if (filePath.filename() == "rose.h" ||
       rosePathIsWithinTree(roots.rose_include_root, fileName) ||
       rosePathIsWithinTree(roots.compiler_header_root, fileName) ||
       rosePathIsWithinTree(roots.builtin_header_root, fileName)) {
     return Rose::StringUtility::FILENAME_LIBRARY_ROSE;
   }
 
-  // the path of C++ header files does not have to contain "c++"
-  // if (fileName.find("c++") != string::npos)
   {
     const char **substr = STL_INCLUDES;
     while (*substr != NULL) {
-      if (endsWith(fileName, *substr))
+      if (filePath.filename() == *substr)
         return Rose::StringUtility::FILENAME_LIBRARY_STL;
       ++substr;
     }
   }
 
-  path p = fileName;
+  path p = filePath;
   while (!p.empty()) {
     path parent = p.parent_path();
     if (parent == p)
@@ -202,19 +160,6 @@ Rose::StringUtility::FileNameLibrary classifyLibrary(const string &fileName) {
       return Rose::StringUtility::FILENAME_LIBRARY_STDCXX;
   }
 
-  /*
-  if (fileName.find("c++") != string::npos)
-  {
-      const char ** substr = GLIBCXX_INCLUDES;
-      while (*substr != NULL)
-      {
-          if (endsWith(fileName, *substr))
-              return FILENAME_LIBRARY_STDCXX;
-          ++substr;
-      }
-  }
-  */
-#endif
   return Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN;
 }
 } // namespace
@@ -258,14 +203,6 @@ Rose::StringUtility::OSType Rose::StringUtility::getOSType() {
     return OS_TYPE_UNKNOWN;
 }
 
-void Rose::StringUtility::homeDir(string &dir) {
-  const char *home = getenv("HOME");
-  if (!home || *home == '\0') {
-    throw std::runtime_error("homeDir: HOME environment variable is not set");
-  }
-  dir = home;
-}
-
 // Update FileNameInfo class with details about where the
 // file comes from and what library it might be a part of
 Rose::StringUtility::FileNameClassification
@@ -299,31 +236,22 @@ Rose::StringUtility::classifyFileName(
   if (!std::filesystem::exists(fileName))
     return FileNameClassification(FILENAME_LOCATION_NOT_EXIST, "Unknown", 0);
 
-  string appPath = appPathConst;
-
   for (std::map<string, string>::const_iterator it = libPathCollection.begin();
        it != libPathCollection.end(); ++it) {
-    if (startsWith(fileName, it->first)) {
+    if (rosePathIsWithinTree(it->first, fileName)) {
       return FileNameClassification(FILENAME_LOCATION_LIBRARY, it->second,
-                                    directoryDistance(fileName, appPath));
+                                    directoryDistance(fileName, appPathConst));
     }
   }
 
   // Consider all non-absolute paths to be application code.
-  // Ensure all appPaths are given with a trailing slash since they
-  // represent directories.
-  if (appPath.empty() || *(appPath.end() - 1) != '/')
-    appPath += '/';
-
-  if (!startsWith(fileName, "/")) {
+  if (!std::filesystem::path(fileName).is_absolute()) {
     return FileNameClassification(FILENAME_LOCATION_USER,
                                   "User", // FILENAME_LIBRARY_USER,
                                   0);
   }
 
-  // If this is anywhere in the home dir or whitelis
-  // then return that it's part of the application/user code
-  if (startsWith(fileName, appPath)) {
+  if (rosePathIsWithinTree(appPathConst, fileName)) {
     return FileNameClassification(FILENAME_LOCATION_USER,
                                   "User", // FILENAME_LIBRARY_USER,
                                   0);
@@ -332,19 +260,19 @@ Rose::StringUtility::classifyFileName(
   FileNameLibrary filenameLib = classifyLibrary(fileName);
   if (filenameLib != Rose::StringUtility::FILENAME_LIBRARY_UNKNOWN) {
     return FileNameClassification(FILENAME_LOCATION_LIBRARY, filenameLib,
-                                  directoryDistance(fileName, appPath));
+                                  directoryDistance(fileName, appPathConst));
   }
 
   if (os == OS_TYPE_LINUX) {
-    if (startsWith(fileName, "/usr") || startsWith(fileName, "/opt")) {
-      return FileNameClassification(FILENAME_LOCATION_LIBRARY,
-                                    classifyLibrary(fileName),
-                                    directoryDistance(fileName, appPath));
+    if (rosePathIsWithinTree("/usr", fileName) ||
+        rosePathIsWithinTree("/opt", fileName)) {
+      return FileNameClassification(FILENAME_LOCATION_LIBRARY, filenameLib,
+                                    directoryDistance(fileName, appPathConst));
     }
   }
   return FileNameClassification(FILENAME_LOCATION_UNKNOWN,
                                 "Unknown", // FILENAME_LIBRARY_UNKNOWN,
-                                directoryDistance(fileName, appPath));
+                                directoryDistance(fileName, appPathConst));
 }
 
 const string
@@ -353,6 +281,3 @@ Rose::StringUtility::stripDotsFromHeaderFileName(const string &name) {
     return name;
   return name.substr(name.find(" ") + 1);
 }
-
-// } namespace
-// } namespace

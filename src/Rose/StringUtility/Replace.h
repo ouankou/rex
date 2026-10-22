@@ -8,19 +8,13 @@
 namespace Rose {
 namespace StringUtility {
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//                                      Functions for replacing a pattern with
-//                                      another one in a string
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-/** Replace a pattern with another one in a string
+/** Replace every occurrence of a nonempty pattern in a string.
  *
  * @param input Input string.
  * @param search Substring to replace.
  * @param replacedWith Replacement text.
  * @return Updated string.
- *
- *  @{ */
+ */
 ROSE_UTIL_API std::string replaceAllCopy(const std::string &input,
                                          const std::string &search,
                                          const std::string &replacedWith);

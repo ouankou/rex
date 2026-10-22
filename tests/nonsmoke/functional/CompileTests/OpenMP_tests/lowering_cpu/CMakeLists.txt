@@ -28,92 +28,16 @@ if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; lowering_cpu tests require bash")
 endif()
 
-if(NOT CMAKE_C_COMPILER_ID STREQUAL "Clang")
-  message(WARNING "OpenMP lowering CPU compare tests require Clang; disabling lowering_cpu tests")
-  return()
-endif()
-
-set(_omp_cpu_compiler "${CMAKE_C_COMPILER}")
-
-# Prefer the LLVM OpenMP header resolved at configure time.
-set(_llvm_omp_header "")
-if(ROSE_LLVM_OPENMP_INCLUDE_DIR AND EXISTS "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
-  set(_llvm_omp_header "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
-endif()
-
-execute_process(
-  COMMAND "${_omp_cpu_compiler}" --print-resource-dir
-  OUTPUT_VARIABLE _clang_resource_dir
-  OUTPUT_STRIP_TRAILING_WHITESPACE
-  ERROR_QUIET)
-if(NOT _llvm_omp_header AND _clang_resource_dir AND EXISTS "${_clang_resource_dir}/include/omp.h")
-  set(_llvm_omp_header "${_clang_resource_dir}/include/omp.h")
-endif()
-
-if(NOT _llvm_omp_header)
-  set(_omp_header_candidates "")
-
-  if(LLVM_LIBRARY_DIRS)
-    foreach(_llvm_lib_dir IN LISTS LLVM_LIBRARY_DIRS)
-      file(GLOB _llvm_hdrs "${_llvm_lib_dir}/clang/*/include/omp.h")
-      list(APPEND _omp_header_candidates ${_llvm_hdrs})
-    endforeach()
-  endif()
-
-  if(LLVM_DIR)
-    get_filename_component(_llvm_prefix_guess "${LLVM_DIR}/../../.." ABSOLUTE)
-    file(GLOB _llvm_hdrs "${_llvm_prefix_guess}/lib/clang/*/include/omp.h")
-    list(APPEND _omp_header_candidates ${_llvm_hdrs})
-  endif()
-
-  file(GLOB _sys_llvm_hdrs "/usr/lib/llvm-*/lib/clang/*/include/omp.h")
-  list(APPEND _omp_header_candidates ${_sys_llvm_hdrs})
-
-  list(REMOVE_DUPLICATES _omp_header_candidates)
-  if(_omp_header_candidates)
-    list(SORT _omp_header_candidates COMPARE NATURAL)
-    list(GET _omp_header_candidates -1 _llvm_omp_header)
-  endif()
-endif()
-
-if(NOT _llvm_omp_header OR NOT EXISTS "${_llvm_omp_header}")
-  message(WARNING "Unable to locate LLVM OpenMP header (omp.h); disabling lowering_cpu tests")
-  return()
-endif()
-
-# Prefer the LLVM OpenMP runtime resolved at configure time.
-set(_iomp_dir "")
-if(ROSE_LLVM_OPENMP_RUNTIME_DIR)
-  if(EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/libiomp5.so" OR
-     EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/libomp.so" OR
-     EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/libiomp5.a" OR
-     EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/libomp.a")
-    set(_iomp_dir "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
-  endif()
-endif()
-if(NOT _iomp_dir)
-  execute_process(
-    COMMAND "${_omp_cpu_compiler}" -fopenmp=libiomp5 -print-file-name=libiomp5.so
-    OUTPUT_VARIABLE _iomp_lib
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_QUIET)
-  if(_iomp_lib AND NOT _iomp_lib STREQUAL "libiomp5.so" AND EXISTS "${_iomp_lib}")
-    get_filename_component(_iomp_dir "${_iomp_lib}" DIRECTORY)
-  else()
-    execute_process(
-      COMMAND "${_omp_cpu_compiler}" -fopenmp=libiomp5 -print-file-name=libomp.so
-      OUTPUT_VARIABLE _iomp_lib
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_QUIET)
-    if(_iomp_lib AND NOT _iomp_lib STREQUAL "libomp.so" AND EXISTS "${_iomp_lib}")
-      get_filename_component(_iomp_dir "${_iomp_lib}" DIRECTORY)
-    endif()
-  endif()
-  unset(_iomp_lib)
-endif()
-if(NOT _iomp_dir)
-  message(WARNING "Unable to locate LLVM OpenMP runtime via ${_omp_cpu_compiler}; disabling lowering_cpu tests")
-  return()
+set(_omp_cpu_compiler "${ROSE_LLVM_CLANG_C_DRIVER}")
+set(_llvm_omp_header "${ROSE_LLVM_OPENMP_INCLUDE_DIR}/omp.h")
+set(_iomp_dir "${ROSE_LLVM_OPENMP_RUNTIME_DIR}")
+if(NOT _omp_cpu_compiler OR NOT EXISTS "${_omp_cpu_compiler}" OR
+   NOT ROSE_LLVM_OPENMP_INCLUDE_DIR OR NOT EXISTS "${_llvm_omp_header}" OR
+   NOT _iomp_dir OR NOT IS_DIRECTORY "${_iomp_dir}" OR
+   NOT ROSE_LLVM_OPENMP_RUNTIME_LIBRARY OR
+   NOT EXISTS "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}")
+  message(FATAL_ERROR
+    "OpenMP lowering CPU tests require the configured LLVM driver, header and runtime")
 endif()
 
 # Stage only omp.h so include lookup still uses the active compiler's std headers.
@@ -146,7 +70,7 @@ function(add_omp_lowering_cpu_compare_test input_file mode)
             "${_omp_cpu_test_output_dir}/${_name}"
             "${mode}"
             "${_omp_header_stage_dir}"
-            "${_iomp_dir}"
+            "${ROSE_LLVM_OPENMP_RUNTIME_LIBRARY}"
             "${CMAKE_SOURCE_DIR}/src/midend/programTransformation/ompLowering"
             "${input_file}"
             "${ROSE_OPENMP_VERSION}")

@@ -67,15 +67,7 @@ add_test(
     test2.passed
 )
 
-set(_rose_include_flags)
-foreach(entry IN LISTS ROSE_INCLUDES)
-  if(entry MATCHES "^-I" OR entry MATCHES "^-isystem")
-    list(APPEND _rose_include_flags ${entry})
-  else()
-    list(APPEND _rose_include_flags -I${entry})
-  endif()
-endforeach()
-string(JOIN " " _rose_include_flags_str ${_rose_include_flags})
+string(JOIN " " _rose_include_flags_str ${_functional_include_flags})
 
 set(_ast_query_cxx_grammar_timeout 1800)
 set(_ast_query_cxx_grammar_ctest_timeout 1900)

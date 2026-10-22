@@ -19,32 +19,43 @@ Function name:"::VectorXY::operator="
 Read references:
 	SgDotExp@0:0	"::VectorXY::x"
 	SgDotExp@0:0	"::VectorXY::y"
+	SgPointerDerefExp@0:0	NULL SgInitializedName
 	SgThisExp@0:0	NULL SgInitializedName
+	SgThisExp@0:0	NULL SgInitializedName
+	SgThisExp@0:0	NULL SgInitializedName
+	SgVarRefExp@0:0	""
+	SgVarRefExp@0:0	""
 Write references:
 	SgArrowExp@0:0	"::VectorXY::x"
 	SgArrowExp@0:0	"::VectorXY::y"
 Read var names:
 	"::VectorXY::x"
 	"::VectorXY::y"
-Write var names:
-	"::VectorXY::x"
-	"::VectorXY::y"
---------------------------------------------------
-Function name:"::VectorXY::VectorXY"
-Write references:
-	SgVarRefExp@14:17	"::VectorXY::x"
-	SgVarRefExp@14:24	"::VectorXY::y"
+	""
 Write var names:
 	"::VectorXY::x"
 	"::VectorXY::y"
 --------------------------------------------------
 Function name:"::VectorXY::VectorXY"
 Read references:
+	SgThisExp@14:17	NULL SgInitializedName
+	SgThisExp@14:24	NULL SgInitializedName
+Write references:
+	SgArrowExp@14:17	"::VectorXY::x"
+	SgArrowExp@14:24	"::VectorXY::y"
+Write var names:
+	"::VectorXY::x"
+	"::VectorXY::y"
+--------------------------------------------------
+Function name:"::VectorXY::VectorXY"
+Read references:
+	SgThisExp@15:37	NULL SgInitializedName
+	SgThisExp@15:43	NULL SgInitializedName
 	SgVarRefExp@15:39	"xx"
 	SgVarRefExp@15:45	"yy"
 Write references:
-	SgVarRefExp@15:37	"::VectorXY::x"
-	SgVarRefExp@15:43	"::VectorXY::y"
+	SgArrowExp@15:37	"::VectorXY::x"
+	SgArrowExp@15:43	"::VectorXY::y"
 Read var names:
 	"xx"
 	"yy"
@@ -59,7 +70,9 @@ Read references:
 	SgVarRefExp@24:19	"i"
 	SgVarRefExp@24:26	"i"
 	SgVarRefExp@25:16	"i"
+	SgVarRefExp@25:5	"bcVelocity"
 Write references:
+	SgConstructorInitializer@25:21	NULL SgInitializedName
 	SgInitializedName@23:3	"bcVelocity"
 	SgInitializedName@24:8	"i"
 	SgPntrArrRefExp@25:5	"bcVelocity"
@@ -83,7 +96,9 @@ Read references:
 	SgVarRefExp@24:19	"i"
 	SgVarRefExp@24:26	"i"
 	SgVarRefExp@25:16	"i"
+	SgVarRefExp@25:5	"bcVelocity"
 Write references:
+	SgConstructorInitializer@25:21	NULL SgInitializedName
 	SgInitializedName@24:8	"i"
 	SgPntrArrRefExp@25:5	"bcVelocity"
 	SgVarRefExp@0:0	"::VectorXY::x"

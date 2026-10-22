@@ -4,7 +4,6 @@ void SgTemplateMemberFunctionRefExp::post_construction_initialization() {}
 
 SgTemplateMemberFunctionSymbol *
 SgTemplateMemberFunctionRefExp::get_symbol() const {
-  // return isSgTemplateMemberFunctionSymbol(get_symbol_i());
   return get_symbol_i();
 }
 
@@ -13,7 +12,6 @@ void SgTemplateMemberFunctionRefExp::set_symbol(
   set_symbol_i(symbol);
 }
 
-// DQ (2/8/2009): I always wanted to have this function!
 SgMemberFunctionDeclaration *
 SgTemplateMemberFunctionRefExp::getAssociatedMemberFunctionDeclaration() const {
   SgTemplateMemberFunctionSymbol *memberFunctionSymbol = get_symbol();
@@ -45,85 +43,63 @@ SgTemplateMemberFunctionRefExp::getAssociatedMemberFunctionDeclaration() const {
 // which is a problem in the name qualification support for C++ (interfering
 // with the token-based unparsing).
 int SgTemplateMemberFunctionRefExp::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
   return p_name_qualification_length;
 }
 
 void SgTemplateMemberFunctionRefExp::set_name_qualification_length(
     int name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_name_qualification_length = name_qualification_length;
 }
 
 bool SgTemplateMemberFunctionRefExp::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_type_elaboration_required;
 }
 
 void SgTemplateMemberFunctionRefExp::set_type_elaboration_required(
     bool type_elaboration_required) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
-
   p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgTemplateMemberFunctionRefExp::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
   return p_global_qualification_required;
 }
 
 void SgTemplateMemberFunctionRefExp::set_global_qualification_required(
     bool global_qualification_required) {
-  ROSE_ASSERT(this != NULL);
-
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   p_global_qualification_required = global_qualification_required;
 }
 
 int SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_length()
     const {
-  ROSE_ASSERT(this != NULL);
   return p_explicit_name_qualification_length;
 }
 
 void SgTemplateMemberFunctionRefExp::set_explicit_name_qualification_length(
     int explicit_name_qualification_length) {
-  ROSE_ASSERT(this != NULL);
   p_explicit_name_qualification_length = explicit_name_qualification_length;
 }
 
 bool SgTemplateMemberFunctionRefExp::get_explicit_global_qualification() const {
-  ROSE_ASSERT(this != NULL);
   return p_explicit_global_qualification;
 }
 
 void SgTemplateMemberFunctionRefExp::set_explicit_global_qualification(
     bool explicit_global_qualification) {
-  ROSE_ASSERT(this != NULL);
   p_explicit_global_qualification = explicit_global_qualification;
 }
 
 const SgStringList &
 SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_tokens() const {
-  ROSE_ASSERT(this != NULL);
   return p_explicit_name_qualification_tokens;
 }
 
 SgStringList &
 SgTemplateMemberFunctionRefExp::get_explicit_name_qualification_tokens() {
-  ROSE_ASSERT(this != NULL);
   return p_explicit_name_qualification_tokens;
 }
 
 void SgTemplateMemberFunctionRefExp::set_explicit_name_qualification_tokens(
     const SgStringList &explicit_name_qualification_tokens) {
-  ROSE_ASSERT(this != NULL);
   p_explicit_name_qualification_tokens = explicit_name_qualification_tokens;
 }

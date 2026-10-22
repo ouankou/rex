@@ -13,6 +13,9 @@ concurrency:
 
 env:
   LLVM_VERSION: 22
+  # EXT-OPENMP-TOPOLOGY-IDS: docs/codebase-audit/external-exceptions.md.
+  # Use libomp's documented Linux topology reader in every native CI profile.
+  KMP_TOPOLOGY_METHOD: cpuinfo
 
 jobs:
   full-tests:
@@ -54,11 +57,9 @@ jobs:
       run: cmake --build build -j"$(nproc)"
 
     - name: Run full tests
-      env:
-        ROSE_TEST_TIMEOUT_SCALE: "2"
       run: |
         set -o pipefail
-        ctest --test-dir build --no-tests=error -j"$(nproc)" --timeout 3000 --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
+        ctest --test-dir build --no-tests=error -j"$(nproc)" --output-on-failure --output-junit ctest.junit.xml 2>&1 | tee ctest-full.log
 
     - name: Upload full test log
       if: ${{ always() && !env.ACT }}
@@ -101,20 +102,40 @@ jobs:
     - name: Install dependencies
       run: |
         scripts/ci-install-deps native "${{ env.LLVM_VERSION }}"
-        # Ubuntu 26.04 selects the uutils multicall implementation of env(1).
-        # Valgrind gives a traced shebang interpreter its synthetic argv[0],
-        # which a multicall binary interprets as an unknown utility name before
-        # the script can run.  Select Ubuntu's standalone GNU coreutils
-        # alternative atomically so nested executable scripts stay inside the
-        # MemCheck child-tracing boundary.
+        # EXT-VALGRIND-MULTICALL-ENV: docs/codebase-audit/external-exceptions.md.
+        # Older uutils env rejects Valgrind's synthetic interpreter argv[0].
+        # Use Ubuntu's GNU alternative; CMake checks traced env dispatch
+        # before enabling the MemCheck scripts.
         sudo apt-get install -y --allow-remove-essential \
           coreutils-from-gnu \
-          coreutils-from-uutils-
-        env_version="$(/usr/bin/env --version 2>&1)"
-        if [[ "${env_version}" != *"GNU coreutils"* ]]; then
-          echo "MemCheck requires standalone GNU /usr/bin/env, got: ${env_version}" >&2
-          exit 1
-        fi
+          coreutils-from-uutils- \
+          ubuntu-dbgsym-keyring
+        /usr/bin/env --version
+
+    - name: Install exact utility debug symbols
+      # EXT-GREP-PATTERN-ARRAY / EXT-MAWK-BUILTIN-ARENA /
+      # EXT-COREUTILS-MKTEMP-FILENAMES / EXT-BASH-TERMINAL-COMMAND /
+      # EXT-GIT-INIT-CHDIR-LIST:
+      # docs/codebase-audit/external-exceptions.md.
+      run: |
+        # Ubuntu's signed debug archive provides persistent package companions.
+        # Pin them to installed utility versions; a mismatch is a setup failure.
+        sudo tee /etc/apt/sources.list.d/rex-ddebs.sources > /dev/null <<'SOURCES'
+        Types: deb
+        URIs: http://ddebs.ubuntu.com/
+        Suites: resolute resolute-updates
+        Components: main
+        Signed-By: /usr/share/keyrings/ubuntu-dbgsym-keyring.gpg
+        SOURCES
+        sudo apt-get update
+        packages=()
+        for package in grep gnu-coreutils mawk bash git; do
+          version=$(dpkg-query --show --showformat='${Version}' "${package}")
+          packages+=("${package}-dbgsym=${version}")
+        done
+        sudo apt-get install -y "${packages[@]}"
+        python3 scripts/ci-verify-memcheck-symbols \
+          /usr/bin/grep /usr/bin/mktemp /usr/bin/awk /usr/bin/bash /usr/bin/git > memcheck-symbols.json
 
     - name: Configure (Debug + Valgrind)
       run: |
@@ -169,8 +190,13 @@ jobs:
         name: memcheck-logs-${{ matrix.shard }}-of-8
         path: |
           ctest-memcheck.log
+          memcheck-symbols.json
+          build/Testing/TAG
+          build/Testing/*/DynamicAnalysis.xml
           build/Testing/Temporary/MemoryChecker.*.log
+          build/Testing/Temporary/LastDynamicAnalysis*.log
           build/Testing/Temporary/LastTest.log
+          build/Testing/rex-name-set-*/
         if-no-files-found: warn
 
   sanitizer:
@@ -209,7 +235,7 @@ jobs:
           -DENABLE-SANITIZER=ON \
           -DROSE_SANITIZERS="address;leak;undefined"
 
-    - name: Build
+    - name: Build with sanitizers
       run: cmake --build build -j"$(nproc)"
 
     - name: Run sanitizer on CI selection
@@ -220,12 +246,18 @@ jobs:
         UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
       run: |
         set -o pipefail
-        ctest --test-dir build --no-tests=error -R "astInterface|testQuery|rex" -LE death -j"$(nproc)" --timeout 6000 --output-on-failure 2>&1 | tee ctest-sanitizer.log
+        python3 scripts/run_ctest_name_set.py \
+          --test-dir build --include-regex 'astInterface|testQuery|rex' \
+          --exclude-label death --jobs "$(nproc)" --timeout 6000 \
+          2>&1 | tee ctest-sanitizer.log
 
     - name: Upload sanitizer log
       if: ${{ always() && !env.ACT }}
       uses: actions/upload-artifact@v7
       with:
         name: sanitizer-log
-        path: ctest-sanitizer.log
+        path: |
+          ctest-sanitizer.log
+          build/Testing/rex-name-set-*/
+          build/Testing/Temporary/LastTest.log
         if-no-files-found: warn

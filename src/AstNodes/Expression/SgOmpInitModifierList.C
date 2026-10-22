@@ -58,12 +58,12 @@ int SgOmpInitModifierList::replace_expression(SgExpression *old_expression,
   for (SgOmpInitModifierPtrList::iterator current = modifiers.begin();
        current != modifiers.end(); ++current) {
     if (*current == old_expression) {
+      ROSE_ASSERT(position == modifiers.end());
       position = current;
     }
   }
-  if (position == modifiers.end()) {
+  if (position == modifiers.end())
     return 0;
-  }
   if (old_expression == new_expression) {
     return 1;
   }

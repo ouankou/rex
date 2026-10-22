@@ -141,7 +141,8 @@ public:
   bool finish() override;
 
   ConstantPropagationAnalysisTransfer(const Function &func,
-                                      const DataflowNode &n, NodeState &state,
+                                      const VirtualCFG::DataflowNode &n,
+                                      NodeState &state,
                                       const std::vector<Lattice *> &dfInfo);
 };
 
@@ -163,16 +164,16 @@ public:
 
   // generates the initial lattice state for the given dataflow node, in the
   // given function, with the given NodeState
-  void genInitState(const Function &func, const DataflowNode &n,
+  void genInitState(const Function &func, const VirtualCFG::DataflowNode &n,
                     const NodeState &state,
                     std::vector<Lattice *> &initLattices,
                     std::vector<NodeFact *> &initFacts);
 
-  bool transfer(const Function &func, const DataflowNode &n, NodeState &state,
-                const std::vector<Lattice *> &dfInfo);
+  bool transfer(const Function &func, const VirtualCFG::DataflowNode &n,
+                NodeState &state, const std::vector<Lattice *> &dfInfo);
 
   std::shared_ptr<IntraDFTransferVisitor>
-  getTransferVisitor(const Function &func, const DataflowNode &n,
+  getTransferVisitor(const Function &func, const VirtualCFG::DataflowNode &n,
                      NodeState &state, const std::vector<Lattice *> &dfInfo);
 };
 

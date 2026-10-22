@@ -452,6 +452,7 @@ endforeach()
 
 set(_gfortran_f90_additional_tests
   enum_1.f90
+  oldstyle_1.f90
   implicit_2.f90
   implicit_derived_type_1.f90
   iso_fortran_env_1.f90

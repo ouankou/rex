@@ -1,13 +1,20 @@
-#ifndef ASTATTRIBUTEDOT_C
-#define ASTATTRIBUTEDOT_C
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstAttributeDOT.h"
 
 #include "sage3basic.h"
 
-// DQ (3/19/2017): These functions do not appear to ever be called (experiment
-// with commenting it out). Note that these are used in the
-// tutorial/wholeGraphFilterOnPersistantAttributes.C file.
+namespace {
+std::string joinDotOptions(const std::vector<std::string> &options) {
+  std::string result;
+  bool first = true;
+  for (const std::string &option : options) {
+    if (!first)
+      result += ", ";
+    result += option;
+    first = false;
+  }
+  return result;
+}
+} // namespace
 
 AstAttributeDOT::AstAttributeDOT() {
   style = UnknownListElementDOTStyles;
@@ -81,21 +88,7 @@ void AstAttributeDOT::set_extra_options(std::string extraOptions) {
 };
 
 std::string AstAttributeDOT::get_dot_options_string() {
-  std::string optionsString;
-
-  //"shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at
-  //\\N\",sides=6,peripheries=1,color=\"Blue\",fillcolor=red,fontname=\"7x13bold\",fontcolor=black,style=filled"
-  std::vector<std::string> optionsStringVector = get_dot_options_list();
-
-  for (unsigned int i = 0; i < optionsStringVector.size(); i++) {
-
-    if (i == 0)
-      optionsString = optionsStringVector[0];
-    else
-      optionsString += ", " + optionsStringVector[i];
-  }
-
-  return optionsString;
+  return joinDotOptions(get_dot_options_list());
 };
 
 std::vector<std::string> AstAttributeDOT::get_dot_options_list() {
@@ -125,13 +118,10 @@ std::vector<std::string> AstAttributeDOT::get_dot_options_list() {
   return optionsStringVector;
 };
 
-// #ASR: 07/07/10
-// Fixed non-standard invocation of base class constructor for gcc 4.5.0
 DOTGraphEdge::DOTGraphEdge(SgNode *from, SgNode *to) : AstAttributeDOT() {
   edgeNodes.first = from;
   edgeNodes.second = to;
   arrowType = UnknownListElementArrowTypes;
-  //    AstAttributeDOT::AstAttributeDOT();
 };
 
 std::pair<SgNode *, SgNode *> DOTGraphEdge::get_edge() { return edgeNodes; };
@@ -165,7 +155,7 @@ std::string DOTGraphEdge::get_arrow_type_string() {
     break;
 
   case invodot:
-    returnString = "invdot";
+    returnString = "invodot";
     break;
 
   case none:
@@ -242,29 +232,12 @@ std::vector<std::string> DOTGraphEdge::get_dot_options_list() {
 };
 
 std::string DOTGraphEdge::get_dot_options_string() {
-  std::string optionsString;
-
-  //"shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at
-  //\\N\",sides=6,peripheries=1,color=\"Blue\",fillcolor=red,fontname=\"7x13bold\",fontcolor=black,style=filled"
-  std::vector<std::string> optionsStringVector = get_dot_options_list();
-
-  for (unsigned int i = 0; i < optionsStringVector.size(); i++) {
-
-    if (i == 0)
-      optionsString = optionsStringVector[0];
-    else
-      optionsString += ", " + optionsStringVector[i];
-  }
-
-  return optionsString;
+  return joinDotOptions(get_dot_options_list());
 };
 
-// #ASR: 07/07/2010
-// Modified constructor to call base class constructor for the standard
 DOTGraphNode::DOTGraphNode(SgNode *n) : AstAttributeDOT() {
   node = n;
   shape = UnknownListElementDOTShapeTypes;
-  //      AstAttributeDOT::AstAttributeDOT();
   set_label(n->class_name());
 };
 
@@ -334,23 +307,5 @@ std::vector<std::string> DOTGraphNode::get_dot_options_list() {
 }
 
 std::string DOTGraphNode::get_dot_options_string() {
-  std::string optionsString;
-
-  // "shape=polygon,regular=0,URL=\"\\N\",tooltip=\"more info at
-  // \\N\",sides=6,peripheries=1,color=\"Blue\",fillcolor=red,fontname=\"7x13bold\",fontcolor=black,style=filled"
-  std::vector<std::string> optionsStringVector = get_dot_options_list();
-
-  for (unsigned int i = 0; i < optionsStringVector.size(); i++) {
-    if (i == 0)
-      optionsString = optionsStringVector[0];
-    else
-      optionsString += ", " + optionsStringVector[i];
-  }
-
-  return optionsString;
+  return joinDotOptions(get_dot_options_list());
 }
-
-// DQ (3/19/2017): These functions do not appear to ever be called (experiment
-// with commenting it out).
-
-#endif

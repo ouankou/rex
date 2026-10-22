@@ -42,13 +42,16 @@ int main(int argc, char **argv) {
   if (argc != 3)
     return 2;
   const std::string mode = argv[1];
-  if (mode != "--lp64" && mode != "--ilp32")
+  if (mode != "--lp64" && mode != "--ilp32" && mode != "--llp64")
     return 2;
 
   std::vector<std::string> frontend_args{argv[0], "-rose:openmp:ast_only",
                                          "-rose:skipfinalCompileStep"};
   if (mode == "--ilp32")
     frontend_args.push_back("-m32");
+  else if (mode == "--llp64")
+    frontend_args.insert(frontend_args.end(),
+                         {"-target", "x86_64-pc-windows-msvc"});
   frontend_args.insert(frontend_args.end(), {"-c", argv[2]});
   SgProject *project = frontend(frontend_args);
   ROSE_ASSERT(project != nullptr && project->get_fileList().size() == 1);
@@ -67,6 +70,25 @@ int main(int argc, char **argv) {
               nullptr);
 
   OmpSupport::lower_omp(source);
+
+  size_t induction_count = 0;
+  size_t bound_count = 0;
+  for (SgInitializedName *name : SageInterface::querySubTree<SgInitializedName>(
+           source, V_SgInitializedName)) {
+    if (name->get_name() == "__index_") {
+      ++induction_count;
+      ROSE_ASSERT(name->get_type() == SageBuilder::buildLongLongType());
+    } else if (name->get_name() == "__lower_" ||
+               name->get_name() == "__upper_" ||
+               name->get_name() == "__stride_") {
+      ++bound_count;
+      SgType *expected =
+          mode == "--lp64" ? static_cast<SgType *>(SageBuilder::buildLongType())
+                           : SageBuilder::buildLongLongType();
+      ROSE_ASSERT(name->get_type() == expected);
+    }
+  }
+  ROSE_ASSERT(induction_count == 1 && bound_count == 3);
 
   std::vector<SgTypedefDeclaration *> lowered_int64_typedefs;
   for (SgTypedefDeclaration *declaration :
@@ -134,8 +156,9 @@ int main(int argc, char **argv) {
                   definition->get_declaration() == function &&
                   canonical != nullptr &&
                   canonical->get_definingDeclaration() == function &&
-                  name->get_scope() == definition->get_body() &&
-                  symbol != nullptr && symbol->get_declaration() == name);
+                  name->get_scope() == definition && symbol != nullptr &&
+                  symbol->get_parent() == definition->get_symbol_table() &&
+                  symbol->get_declaration() == name);
       ++defining_device_parameter_count;
       continue;
     }

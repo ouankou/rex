@@ -7,8 +7,41 @@
 
 #include <string>
 
-#include "VectorCommandOptions.h"
 using namespace std;
+
+void requireSizeofComparison() {
+  using namespace SageBuilder;
+  SgType *sizeType = buildUnsignedLongType();
+  SgSizeOfOp *first = buildSizeOfOp(buildIntType(), sizeType);
+  SgSizeOfOp *same = buildSizeOfOp(buildIntType(), sizeType);
+  SgSizeOfOp *different = buildSizeOfOp(buildDoubleType(), sizeType);
+  SgSizeOfOp *value = buildSizeOfOp(buildIntVal(1), sizeType);
+  SgSizeOfOp *sameValue = buildSizeOfOp(buildIntVal(1), sizeType);
+  ROSE_ASSERT(expressionTreeEqual(first, same));
+  ROSE_ASSERT(!expressionTreeEqual(first, different));
+  ROSE_ASSERT(!expressionTreeEqual(first, value));
+  ROSE_ASSERT(!expressionTreeEqual(value, first));
+  ROSE_ASSERT(expressionTreeEqual(value, sameValue));
+  for (SgSizeOfOp *expression : {first, same, different, value, sameValue})
+    SageInterface::deleteAST(expression);
+}
+
+void requireCastComparison() {
+  using namespace SageBuilder;
+  auto cast = [](SgType *type) {
+    return buildCastExp(buildDoubleVal(1.5), type, SgCastExp::e_C_style_cast,
+                        SgCastExp::e_semantic_conversion_FloatingToIntegral,
+                        SgCastExp::e_value_category_prvalue, {}, type);
+  };
+  SgCastExp *first = cast(buildIntType());
+  SgCastExp *same = cast(buildIntType());
+  SgCastExp *different = cast(buildLongType());
+  ROSE_ASSERT(expressionTreeEqual(first, same));
+  ROSE_ASSERT(!expressionTreeEqual(first, different));
+  ROSE_ASSERT(!expressionTreeEqual(different, first));
+  for (SgCastExp *expression : {first, same, different})
+    SageInterface::deleteAST(expression);
+}
 
 void requireGeneratedPreprocessingOwnership(SgNode *root,
                                             const std::string &marker) {
@@ -57,38 +90,18 @@ void requireGeneratedPreprocessingOwnership(SgNode *root,
 }
 
 int main(int argc, char *argv[]) {
-  // Main Function for default example ROSE Preprocessor
-  // This is an example of a preprocessor that can be built with ROSE
-
-  // Build the project object (AST) which we will fill up with multiple files
-  // and use as a handle for all processing of the AST(s) associated with one or
-  // more source files.
   vector<string> argvList(argv, argv + argc);
-  VectorCmdOptions::GetInstance()->SetOptions(argvList);
   SgProject *sageProject = frontend(argvList);
-  // FixSgProject(sageProject);
-
-  // AstTests::runAllTests(const_cast<SgProject*>(project));
+  requireSizeofComparison();
+  requireCastComparison();
   AstTests::runAllTests(sageProject);
 
   legacy::PRE::partialRedundancyElimination(sageProject);
   requireGeneratedPreprocessingOwnership(sageProject,
                                          "Partial redundancy elimination:");
 
-  // AstPDFGeneration().generateInputFiles(sageProject);
-
   AstTests::runAllTests(sageProject);
 
-  // AstPDFGeneration().generateInputFiles(sageProject);
-
-  // Generate the final C++ source code from the potentially modified SAGE AST
   sageProject->unparse();
-
-  // What remains is to run the specified compiler (typically the C++ compiler)
-  // using the generated output file (unparsed and transformed application code)
-  // to generate an object file. int finalCombinedExitStatus =
-  // sageProject.compileOutput();
-
-  // return exit code from complilation of generated (unparsed) code
   return 0;
 }

@@ -37,9 +37,11 @@ if [[ -z "$(find "${json_dir}" -type f -name '*.json' -print -quit)" ]]; then
   exit 1
 fi
 
+# Every pathname is compared independently, so sorting the list adds no check.
+# EXT-COREUTILS-SORT-ARGUMENTS documents the redundant process's retained argv.
 mapfile -t baseline_outputs < <(
   cd "${baseline_dir}"
-  find . -maxdepth 1 -type f \( -name 'rose_*.c' -o -name 'rex_lib_*.cu' \) | sort
+  find . -maxdepth 1 -type f \( -name 'rose_*.c' -o -name 'rex_lib_*.cu' \)
 )
 
 if [[ "${#baseline_outputs[@]}" -eq 0 ]]; then

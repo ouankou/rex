@@ -1,42 +1,39 @@
-// do not include the following files from rose.h
-#define CFG_ROSE_H
-#define CONTROLFLOWGRAPH_H
-#define PRE_H
-#define ASTDOTGENERATION_TEMPLATES_C
-
-#include "sage3.h"
+#include "sage3basic.h"
 
 #include "AstInterface_ROSE.h"
 
 #include "CPPAstInterface.h"
 
-#include <cstring>
-using namespace std;
-//! Check if a node is a data member access function for an object,
-// such as dot (object.a) or arrow (objectptr->a)expression
-// If yest, return the object, and the data field name
 bool CPPAstInterface ::IsMemberAccess(const AstNodePtr &_s, AstNodePtr *obj,
                                       std::string *field) {
   SgNode *s = AstNodePtrImpl(_s).get_ptr();
-  SgVarRefExp *var = 0;
-  switch (s->variantT()) {
-  case V_SgDotExp: {
-    SgDotExp *dot = isSgDotExp(s);
-    if (obj != 0)
-      *obj = AstNodePtrImpl(dot->get_lhs_operand());
-    if (field != 0 && (var = isSgVarRefExp(dot->get_rhs_operand())) != 0)
-      *field = var->get_symbol()->get_name().str();
-  } break;
-  case V_SgArrowExp: {
-    SgArrowExp *arrow = isSgArrowExp(s);
-    if (obj != 0)
-      *obj = AstNodePtrImpl(arrow->get_lhs_operand());
-    if (field != 0 && (var = isSgVarRefExp(arrow->get_rhs_operand())) != 0)
-      *field = var->get_symbol()->get_name().str();
-  } break;
-  default:
+  if (isSgDotExp(s) == nullptr && isSgArrowExp(s) == nullptr)
+    return false;
+  auto *member = isSgBinaryOp(s);
+  SgExpression *selector = member->get_rhs_operand();
+  ASSERT_not_null(selector);
+  ASSERT_not_null(member->get_lhs_operand());
+  ROSE_ASSERT(selector->get_parent() == member &&
+              member->get_lhs_operand()->get_parent() == member);
+  (void)selector->get_type();
+  SgSymbol *symbol = nullptr;
+  if (auto *variable = isSgVarRefExp(selector)) {
+    symbol = variable->get_symbol();
+  } else if (auto *reference = isSgNonrealRefExp(selector)) {
+    if (reference->get_resolved_function_declaration() != nullptr ||
+        reference->get_semantic_role() == SgNonrealRefExp::e_dependent_callable)
+      return false;
+    symbol = reference->get_symbol();
+  } else {
     return false;
   }
+  ASSERT_not_null(symbol);
+  ASSERT_not_null(symbol->get_symbol_basis());
+  ROSE_ASSERT(!symbol->get_name().is_null());
+  if (obj != nullptr)
+    *obj = member->get_lhs_operand();
+  if (field != nullptr)
+    *field = symbol->get_name().getString();
   return true;
 }
 
@@ -46,10 +43,6 @@ AstNodePtr CPPAstInterface::CreateFunctionCall(const AstNodePtr &func,
                                                  args.begin(), args.end()));
 }
 
-// Check if a node '_s' is a member function call of an object
-//  If yes, store the object into 'obj', member function name into 'func',
-//  function arguments into '_args' and the dot or arrow expressions nodes into
-//  'access'
 bool CPPAstInterface ::IsMemberFunctionCall(const AstNodePtr &_s,
                                             AstNodePtr *obj, std::string *func,
                                             AstNodePtr *access,
@@ -60,97 +53,50 @@ bool CPPAstInterface ::IsMemberFunctionCall(const AstNodePtr &_s,
   if (!impl->IsFunctionCall(s, &f, &args)) {
     return false;
   }
-  // Excluding member function reference expressions.
-  switch (f->variantT()) {
-  case V_SgMemberFunctionRefExp:
-    break;
-  default:
+  if (isSgFunctionRefExp(f) == nullptr &&
+      isSgTemplateFunctionRefExp(f) == nullptr &&
+      isSgMemberFunctionRefExp(f) == nullptr &&
+      isSgTemplateMemberFunctionRefExp(f) == nullptr) {
     return false;
   }
-  // Store member function access nodes: dot, or arrow expressions in ROSE AST
-  if (access != 0) {
-    AstNodePtrImpl dot = f->get_parent();
-    assert(dot->variantT() == V_SgDotExp || dot->variantT() == V_SgArrowExp);
-    *access = dot;
+  SgFunctionDeclaration *called =
+      SgFunctionCallExp::getAssociatedFunctionDeclarationForCallee(
+          isSgExpression(f));
+  ASSERT_not_null(called);
+  auto *declaration = isSgMemberFunctionDeclaration(called);
+  if (declaration == nullptr)
+    return false;
+  const bool hasObjectArgument =
+      isSgMemberFunctionRefExp(f) != nullptr ||
+      isSgTemplateMemberFunctionRefExp(f) != nullptr ||
+      isSgDotExp(f->get_parent()) != nullptr ||
+      isSgArrowExp(f->get_parent()) != nullptr;
+  if (hasObjectArgument)
+    ROSE_ASSERT(!args.empty());
+  if (access != nullptr) {
+    SgNode *callee = f;
+    while (isSgExpression(callee->get_parent()) != nullptr &&
+           isSgFunctionCallExp(callee->get_parent()) == nullptr)
+      callee = callee->get_parent();
+    auto *call = isSgFunctionCallExp(callee->get_parent());
+    ROSE_ASSERT(call != nullptr && call->get_function() == callee);
+    *access = callee;
   }
-  // Store the member function's name
-  if (func != 0)
-    *func = isSgMemberFunctionRefExp(f)->get_symbol()->get_name().str();
-
-  SgDeclarationStatement *fun_decl =
-      isSgMemberFunctionRefExp(f)->getAssociatedMemberFunctionDeclaration();
-  SgDeclarationStatement *defn_decl = fun_decl->get_definingDeclaration();
-  bool is_static =
-      (fun_decl == 0) ? false
-                      : (fun_decl->get_declarationModifier()
-                             .get_storageModifier()
-                             .isStatic() ||
-                         (defn_decl != 0 && defn_decl->get_declarationModifier()
-                                                .get_storageModifier()
-                                                .isStatic()));
-  // Store object from the first argument
-  if (obj != 0) {
-    if (is_static) {
-      *obj = 0;
-    } else if (args.size() > 0) {
-      *obj = AstNodePtrImpl(args.front());
-    } else {
-      std::cerr << "Error: non static member function call should have at "
-                   "least one argument.\n";
-    }
+  if (func != nullptr) {
+    auto *instantiation =
+        isSgTemplateInstantiationMemberFunctionDecl(declaration);
+    *func = (instantiation != nullptr ? instantiation->get_templateName()
+                                      : declaration->get_name())
+                .getString();
   }
-  // Store function call arguments, excluding the firt one
-  if (_args != 0 && !is_static) {
+  const bool isStatic =
+      declaration->get_declarationModifier().get_storageModifier().isStatic();
+  ROSE_ASSERT(isStatic || hasObjectArgument);
+  if (obj != nullptr)
+    *obj = isStatic ? AST_NULL : args.front();
+  if (hasObjectArgument)
     args.erase(args.begin());
+  if (_args != nullptr)
     *_args = args;
-  }
   return true;
-}
-//! Check if a node is a variable reference to pointer or C++ reference type
-//! variables
-bool CPPAstInterface ::IsPointerVariable(const AstNodePtr &_n) {
-  SgNode *n = AstNodePtrImpl(_n).get_ptr();
-  SgVarRefExp *var = isSgVarRefExp(n);
-  if (var == 0)
-    return false;
-  SgVariableSymbol *varsym = var->get_symbol();
-  SgType *t = varsym->get_type();
-  if (t->variantT() == V_SgPointerType || t->variantT() == V_SgReferenceType) {
-    return true;
-  }
-  return false;
-}
-
-AstNodePtr CPPAstInterface ::GetVarScope(const AstNodePtr &_n) {
-  SgNode *n = AstNodePtrImpl(_n).get_ptr();
-  SgInitializedName *decl = isSgInitializedName(n);
-  if (decl == 0) {
-    SgVarRefExp *var = isSgVarRefExp(n);
-    assert(var != 0);
-    SgVariableSymbol *varsym = var->get_symbol();
-    decl = varsym->get_declaration();
-  }
-  SgStatement *vardecl = isSgStatement(decl->get_parent());
-  assert(vardecl != 0);
-  SgScopeStatement *scope = vardecl->get_scope();
-  return AstNodePtrImpl(scope);
-}
-
-bool CPPAstInterface ::IsPlusPlus(const AstNodePtr &_s, AstNodePtr *opd) {
-  AstNodePtrImpl s(_s);
-  AstNodePtr op;
-  std::string fname;
-  AstNodeList args;
-  if (IsFunctionCall(s, &op, &args) && IsVarRef(op, 0, &fname) &&
-      strstr(fname.c_str(), "operator++") != 0) {
-    if (opd != 0)
-      *opd = AstNodePtrImpl(args.front());
-    return true;
-  }
-  if (s->variantT() == V_SgPlusPlusOp) {
-    if (opd != 0)
-      *opd = AstNodePtrImpl(isSgPlusPlusOp(s.get_ptr())->get_operand());
-    return true;
-  }
-  return false;
 }

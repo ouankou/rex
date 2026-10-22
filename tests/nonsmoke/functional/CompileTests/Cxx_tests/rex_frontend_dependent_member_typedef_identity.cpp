@@ -2,6 +2,18 @@ struct RexDependentTypedefTarget {
   void accept(int);
 };
 
+template <class T> struct RexDependentFieldOwner {
+  int field;
+};
+
+template <> struct RexDependentFieldOwner<double> {
+  double field;
+};
+
+template <class T> auto rex_dependent_field(RexDependentFieldOwner<T> &owner) {
+  return owner.field;
+}
+
 template <class T> class RexDependentTypedefOwner {
 public:
   typedef void (T::*RexDependentCallback)(int);

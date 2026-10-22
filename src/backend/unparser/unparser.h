@@ -10,12 +10,9 @@
 
 #include "unparser_opt.h"
 
-// #include <algorithm>
-
 #include "name_qualification_support.h"
 
 #include "unparseCxx_types.h"
-// #include "unparseCxx_templates.h"
 
 #include "modified_sage.h"
 
@@ -51,25 +48,6 @@ using UnparsePreprocessingInfoRewriteMap =
 #else
 #define MAX_F90_LINE_LEN 132
 #endif
-
-#define KAI_NONSTD_IOSTREAM 1
-
-#if USE_OLD_MECHANISM_OF_HANDLING_PREPROCESSING_INFO
-// I think this is part of the connection to lex support for comments
-// extern ROSEAttributesList* getPreprocessorDirectives( char *fileName);
-#endif
-
-/*
- * This function is used by the SgNode object to connect the unparser to the
- * AST.
- *
- * This function hides the complexity of generating a string from any subtree
- * of the AST (represented by a SgNode*).
- *
- * This function uses the standard stringstream mechanism in C++ to
- * convert the stream output to a string.
- */
-std::string get_output_filename(SgFile &file);
 
 /** @brief Backend C and C++ code generator.
  *
@@ -163,14 +141,6 @@ public:
   UnparseDelegate *delegate;
 
 private:
-  // DQ (12/5/2006): Output information that can be used to colorize properties
-  // of generated code (useful for debugging).
-  int embedColorCodesInGeneratedCode;
-
-  // DQ (12/5/2006): Output separate file containing source position information
-  // for highlighting (useful for debugging).
-  int generateSourcePositionCodes;
-
   NameQualificationContext ownedNameQualifications;
   NameQualificationContext *nameQualifications;
   const UnparsePreprocessingInfoRewriteMap *preprocessingInfoRewrites;
@@ -243,13 +213,6 @@ public:
   void unparseFile(SgSourceFile *file, SgUnparse_Info &info,
                    SgScopeStatement *unparseScope = nullptr);
   //! remove unneccessary white space to build a condensed string
-
-  // DQ (12/5/2006): Output separate file containing source position information
-  // for highlighting (useful for debugging).
-  int get_embedColorCodesInGeneratedCode();
-  int get_generateSourcePositionCodes();
-  void set_embedColorCodesInGeneratedCode(int x);
-  void set_generateSourcePositionCodes(int x);
 
   // DQ (8/7/2018): Refactored code for name qualification (so that we can call
   // it once before all files are unparsed (where we unparse multiple files

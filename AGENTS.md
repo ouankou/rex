@@ -37,7 +37,7 @@ cmake .. \
     -DENABLE-C=ON \
     -DENABLE-FORTRAN=ON \
     -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-cmake --build . -j$(nproc)
+cmake --build . -j1
 cmake --install .
 ```
 
@@ -60,3 +60,15 @@ cmake --install .
 *   **Clang Version:** The project is pinned to LLVM/Clang 22. Do not attempt to fix build errors by downgrading; fix the code to match the modern API.
 *   **ROSE Upstream Sync:** For any ROSE/LLNL upstream sync task, use the repo-local skill at `.codex/skills/rose-upstream-sync/SKILL.md`. Upstream ROSE is a read-only source: fetch/log/show/diff only; never push, open PRs/issues/comments, request reviews, or mention upstream maintainers. Never restore abandoned REX components such as EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, legacy autotools/Tup paths, or dropped OpenMP designs.
 *   **Documentation:** Refer to `AGENTS.md` for the most up-to-date specific instructions for this cleanup branch.
+
+## Mandatory audit resource and validation limits
+
+User requirements, reaffirmed after host RAM exhaustion:
+
+* Never exceed **48,000,000,000 bytes of total audit RAM** or **200,000,000,000 bytes of total audit disk usage**. These limits apply collectively, not per build or worker.
+* Use the existing `rex-audit-bounded` container for heavy work. Verify its 24 GiB RAM, zero-swap allowance, four-CPU and 512-process limits before restarting it. Run one build or plain CTest job at a time; do not create custom runners or new containers.
+* Read `build-audit/RESOURCE_STOP.json` before resuming the audit. The container was stopped after a host crash; interrupted runs are not passes. Do not relaunch the old concurrent `start-matrix*.py` scripts.
+* Run only one build or test configuration at a time, with one job. Do not create custom Python audit orchestration or test runners. Preserve diagnostic logs; do not clean build inputs while tests consume them.
+* Source manifests must include tracked and untracked build/test inputs in initialized submodules. Verify every changed input is listed before running a job; superproject-only hashes do not establish whole-tree identity.
+* Stop repeatedly rerunning full suites while known blockers remain. Complete a reviewed batch of root fixes, then run only the focused checks justified by those changes. Run the full regular, sanitizer, and Memcheck gates once the batch and audit review are ready. Repeat a gate only to verify a relevant new fix, investigate a specific failure, or replace demonstrably invalid evidence.
+* Account for the existing image, container writable layer, sparse build filesystem, host build artifacts, and temporary files when enforcing the disk limit. Preserve source changes and diagnostic evidence; reclaim obsolete compiled artifacts only after checking for active consumers.

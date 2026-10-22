@@ -94,12 +94,21 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(lambda != nullptr);
   SgClassDeclaration *closure = lambda->get_lambda_closure_class();
   ROSE_ASSERT(closure != nullptr);
-  ROSE_ASSERT(closure->get_parent() == lambda);
+  ROSE_ASSERT(closure->get_lambda_expression() == lambda);
+  ROSE_ASSERT(closure->get_class_type() ==
+              SgClassDeclaration::e_lambda_closure);
   ROSE_ASSERT(!closure->get_isAutonomousDeclaration());
   ROSE_ASSERT(lambda->get_type() == closure->get_type());
   ROSE_ASSERT(isSgClassType(lambda->get_type()) != nullptr);
   SgScopeStatement *closureScope = closure->get_scope();
   ROSE_ASSERT(closureScope != nullptr);
+  SgAuxiliaryDeclarationList *closureOwner =
+      isSgAuxiliaryDeclarationList(closure->get_parent());
+  ROSE_ASSERT(closureOwner != nullptr &&
+              closureOwner->get_parent() == closureScope &&
+              closureScope->get_auxiliary_declarations() == closureOwner);
+  ROSE_ASSERT(std::count(closureOwner->get_declarations().begin(),
+                         closureOwner->get_declarations().end(), closure) == 1);
   if (closureScope->containsOnlyDeclarations()) {
     ROSE_ASSERT(std::count(closureScope->getDeclarationList().begin(),
                            closureScope->getDeclarationList().end(),
@@ -112,7 +121,7 @@ int main(int argc, char **argv) {
   const SgNodePtrList lambdaSuccessors =
       lambda->get_traversalSuccessorContainer();
   ROSE_ASSERT(std::count(lambdaSuccessors.begin(), lambdaSuccessors.end(),
-                         closure) == 1);
+                         closure) == 0);
   requireFrontendSynthesizedOutputNode(closure);
   ROSE_ASSERT(closure->get_definition() != nullptr);
   ROSE_ASSERT(closure->get_definition()->get_parent() == closure);
@@ -266,6 +275,7 @@ int main(int argc, char **argv) {
                   SgCastExp::e_semantic_conversion_LValueToRValue) == 1);
 
   size_t sourceStaticCasts = 0;
+  size_t generatedMoveCasts = 0;
   for (SgNode *node : NodeQuery::querySubTree(project, V_SgCastExp)) {
     SgCastExp *cast = isSgCastExp(node);
     ROSE_ASSERT(cast != nullptr);
@@ -273,6 +283,25 @@ int main(int argc, char **argv) {
       continue;
     }
     cast->validate_semantic_conversion();
+    if (cast->get_file_info()->isCompilerGenerated()) {
+      auto *constructor = isSgMemberFunctionDeclaration(
+          SageInterface::getEnclosingFunctionDeclaration(cast));
+      ROSE_ASSERT(constructor != nullptr);
+      ROSE_ASSERT(constructor->get_functionModifier().getCopyMoveKind() ==
+                  SgFunctionModifier::e_move_constructor);
+      requireFrontendSynthesizedOutputNode(constructor);
+      requireFrontendSynthesizedOutputNode(cast);
+      ROSE_ASSERT(cast->get_semantic_conversion_kind() ==
+                  SgCastExp::e_semantic_conversion_NoOp);
+      auto *reference = isSgVarRefExp(cast->get_operand());
+      ROSE_ASSERT(reference != nullptr);
+      ROSE_ASSERT(reference->get_symbol() != nullptr);
+      ROSE_ASSERT(constructor->get_args().size() == 1);
+      ROSE_ASSERT(reference->get_symbol()->get_declaration() ==
+                  constructor->get_args().front());
+      ++generatedMoveCasts;
+      continue;
+    }
     requireSourceNode(cast);
     ROSE_ASSERT(cast->get_type_defining_declaration() == nullptr);
     ROSE_ASSERT(cast->get_operand() != nullptr);
@@ -280,9 +309,9 @@ int main(int argc, char **argv) {
     ++sourceStaticCasts;
   }
   ROSE_ASSERT(sourceStaticCasts == 3);
+  ROSE_ASSERT(generatedMoveCasts == 2);
 
   size_t sourceDefaultInitializers = 0;
-  size_t semanticDefaultInitializers = 0;
   size_t defaultSemanticCasts = 0;
   for (SgNode *node :
        NodeQuery::querySubTree(project, V_SgFunctionDeclaration)) {
@@ -296,61 +325,36 @@ int main(int argc, char **argv) {
     SgFunctionParameterList *syntaxParameters =
         function->get_parameterList_syntax();
     ROSE_ASSERT(semanticParameters != nullptr);
+    ROSE_ASSERT(semanticParameters->get_parent() == function);
     ROSE_ASSERT(semanticParameters->get_args().size() == 1);
+    ROSE_ASSERT(syntaxParameters == nullptr);
     SgInitializer *semanticInitializer =
         semanticParameters->get_args().front()->get_initializer();
     if (semanticInitializer == nullptr) {
-      ROSE_ASSERT(
-          syntaxParameters == nullptr ||
-          (syntaxParameters->get_args().size() == 1 &&
-           syntaxParameters->get_args().front()->get_initializer() == nullptr));
       continue;
     }
 
-    ROSE_ASSERT(syntaxParameters != nullptr);
-    ROSE_ASSERT(syntaxParameters != semanticParameters);
-    ROSE_ASSERT(syntaxParameters->get_parent() == function);
-    ROSE_ASSERT(syntaxParameters->get_args().size() == 1);
-    SgInitializer *sourceInitializer =
-        syntaxParameters->get_args().front()->get_initializer();
-    ROSE_ASSERT(sourceInitializer != nullptr);
-    ROSE_ASSERT(sourceInitializer != semanticInitializer);
+    ROSE_ASSERT(function->get_definition() != nullptr);
+    SgInitializer *sourceInitializer = semanticInitializer;
     ROSE_ASSERT(sourceInitializer->get_parent() ==
-                syntaxParameters->get_args().front());
-    ROSE_ASSERT(semanticInitializer->get_parent() ==
                 semanticParameters->get_args().front());
     requireSourceNode(sourceInitializer);
-    requireFrontendSynthesizedOutputNode(semanticInitializer);
 
     SgAssignInitializer *sourceAssignment =
         isSgAssignInitializer(sourceInitializer);
-    SgAssignInitializer *semanticAssignment =
-        isSgAssignInitializer(semanticInitializer);
     ROSE_ASSERT(sourceAssignment != nullptr);
-    ROSE_ASSERT(semanticAssignment != nullptr);
     SgCastExp *sourceSemanticCast =
         isSgCastExp(sourceAssignment->get_operand());
-    SgCastExp *semanticCloneCast =
-        isSgCastExp(semanticAssignment->get_operand());
     ROSE_ASSERT(sourceSemanticCast != nullptr);
-    ROSE_ASSERT(semanticCloneCast != nullptr);
-    ROSE_ASSERT(sourceSemanticCast != semanticCloneCast);
     ROSE_ASSERT(sourceSemanticCast->get_cast_type() ==
-                SgCastExp::e_implicit_cast);
-    ROSE_ASSERT(semanticCloneCast->get_cast_type() ==
                 SgCastExp::e_implicit_cast);
     ROSE_ASSERT(sourceSemanticCast->get_semantic_conversion_kind() >
                 SgCastExp::e_semantic_conversion_unclassified);
     ROSE_ASSERT(sourceSemanticCast->get_semantic_conversion_kind() <
                 SgCastExp::e_semantic_conversion_last);
-    ROSE_ASSERT(semanticCloneCast->get_semantic_conversion_kind() ==
-                sourceSemanticCast->get_semantic_conversion_kind());
     sourceSemanticCast->validate_semantic_conversion();
-    semanticCloneCast->validate_semantic_conversion();
     ROSE_ASSERT(sourceSemanticCast->get_parent() == sourceAssignment);
-    ROSE_ASSERT(semanticCloneCast->get_parent() == semanticAssignment);
     requireSynthesizedOutputNode(sourceSemanticCast);
-    requireFrontendSynthesizedOutputNode(semanticCloneCast);
     for (Sg_File_Info *castInfo :
          {sourceSemanticCast->get_file_info(),
           sourceSemanticCast->get_startOfConstruct(),
@@ -360,14 +364,9 @@ int main(int argc, char **argv) {
       ROSE_ASSERT(castInfo->isImplicitCast());
     }
     SgExpression *sourceOperand = sourceSemanticCast->get_operand();
-    SgExpression *semanticOperand = semanticCloneCast->get_operand();
     ROSE_ASSERT(sourceOperand != nullptr);
-    ROSE_ASSERT(semanticOperand != nullptr);
-    ROSE_ASSERT(sourceOperand != semanticOperand);
     ROSE_ASSERT(sourceOperand->get_parent() == sourceSemanticCast);
-    ROSE_ASSERT(semanticOperand->get_parent() == semanticCloneCast);
     requireSourceNode(sourceOperand);
-    requireFrontendSynthesizedOutputNode(semanticOperand);
     ROSE_ASSERT(
         sourceInitializer->get_startOfConstruct()->get_physical_file_id() ==
         sourceOperand->get_startOfConstruct()->get_physical_file_id());
@@ -383,11 +382,9 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(sourceInitializer->get_endOfConstruct()->get_col() ==
                 sourceOperand->get_endOfConstruct()->get_col());
     ++sourceDefaultInitializers;
-    ++semanticDefaultInitializers;
     ++defaultSemanticCasts;
   }
   ROSE_ASSERT(sourceDefaultInitializers == 1);
-  ROSE_ASSERT(semanticDefaultInitializers == 1);
   ROSE_ASSERT(defaultSemanticCasts == 1);
 
   size_t builtinBitCasts = 0;

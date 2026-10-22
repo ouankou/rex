@@ -1,83 +1,89 @@
 #!/usr/bin/perl
-# DO NOT DISABLE without first checking with a ROSE core developer
-my $desc = <<EOF;
-Some file systems do not distinguish between upper and lower case characters in
-a file or directory name.  Having two files with equal case insensitive names
-causes problems with certain Git operations (like clone and merge) because Git
-thinks it has created a file with a certain checksum, but the checksums don't
-match when they're rechecked later.  This checker runs in all subdirectories
-including tests and projects since violations could cause Git to not work.
-The following directories have files whose names would conflict on such a
-filesystem:
-EOF
-
-
 use strict;
-my $warning;
-my $nfail=0;
+use warnings;
+use Errno qw(ENOENT ENOTDIR);
 
-sub report_conflicts {
-  my($index) = @_;
-  for my $dir (sort keys %$index) {
-    my @failures = map {[sort keys %$_]}
-                   grep {scalar(keys %$_) > 1}
-                   values %{$index->{$dir}};
-    if (@failures) {
-      print $desc unless $nfail++;
-      print "  $dir ($warning", join(" ", @$_), ")\n" for @failures;
-    }
+# Inspect the working source, including new files. Source archives have no Git
+# metadata and use an explicit filesystem inventory. A failed Git inventory is
+# an error, never evidence that there are no conflicting names (AUD-171).
+my %index;
+
+sub record_path {
+  my ($path) = @_;
+  my $dir = ".";
+  for my $entry (split m{/}, $path) {
+    $index{$dir}{lc $entry}{$entry} = 1;
+    $dir .= "/$entry";
   }
 }
 
-sub check_git_tree {
-  open my $git, "-|", "git", "ls-tree", "-r", "--name-only", "--full-tree", "HEAD"
-      or return 0;
+sub check_directory;
 
-  my %index;
-  while (my $path = <$git>) {
-    chomp $path;
-    next if $path eq "";
-
-    my @entries = split /\//, $path;
-    my $dir = ".";
-    for my $entry (@entries) {
-      my $bucket = ($index{$dir}{lc $entry} ||= {});
-      $bucket->{$entry} = 1;
-      $dir = $dir eq "." ? "./$entry" : "$dir/$entry";
+sub check_git_worktree {
+  my ($root, $prefix) = @_;
+  open my $git, "-|", "git", "-C", $root,
+      "ls-files", "--cached", "--others", "--exclude-standard", "-z"
+      or die "cannot start Git source inventory for $root: $!\n";
+  my @paths;
+  {
+    local $/ = "\0";
+    local $! = 0;
+    while (my $path = <$git>) {
+      chomp $path;
+      push @paths, $path;
     }
+    die "cannot read Git source inventory for $root: $!\n" if $!;
   }
-  close $git;
-
-  report_conflicts(\%index);
-  return 1;
+  close $git or die "Git source inventory failed for $root (status $?)\n";
+  for my $path (@paths) {
+    my $absolute = "$root/$path";
+    unless (lstat $absolute) {
+      # A tracked file can be deleted in the working tree before being staged.
+      next if $! == ENOENT || $! == ENOTDIR;
+      die "cannot inspect $absolute: $!\n";
+    }
+    my $relative = "$prefix$path";
+    record_path($relative);
+    check_directory($absolute, "$relative/") if -d _ && ! -l $absolute;
+  }
 }
 
-sub checkdir {
-  my($dir) = @_;
-  opendir DIR, $dir or return;
-  my @entries = readdir DIR;
-  close DIR;
-
-  # Build the index hash. Each key is the lower-case name; each value is an array of names with this key
-  my %index;
+sub check_directory {
+  my ($root, $prefix) = @_;
+  if (-e "$root/.git") {
+    check_git_worktree($root, $prefix);
+    return;
+  }
+  # Exclude actual CMake build trees, not source names resembling build paths.
+  return if -f "$root/CMakeCache.txt" || -d "$root/CMakeFiles";
+  opendir my $dir, $root or die "cannot inventory directory $root: $!\n";
+  local $! = 0;
+  my @entries = readdir $dir;
+  die "cannot inventory directory $root: $!\n" if $!;
+  closedir $dir or die "cannot close directory $root: $!\n";
   for my $entry (@entries) {
-    next if $entry =~ /^\.\.?$/;
-    next if $entry =~ /^\.git$/; # Git can handle its own problems
-    next if $entry =~ /^_build/; # typical names for build directories
-    next if $entry =~ /^build_tree$/; # Jenkins' build directory
-    next if $entry =~ /~$/; # editor backup file
-    checkdir("$dir/$entry") if -d "$dir/$entry" && ! -d "$dir/$entry/include_staging";
-    my $key = lc $entry;
-    $index{$key} ||= [];
-    push @{$index{$key}}, $entry;
-  }
-
-  my @failures = grep {@$_>1} values %index;
-  if (@failures) {
-    print $desc unless $nfail++;
-    print "  $dir ($warning", join(" ", @$_), ")\n" for @failures;
+    next if $entry eq "." || $entry eq ".." || $entry eq ".git";
+    my $absolute = "$root/$entry";
+    lstat $absolute or die "cannot inspect $absolute: $!\n";
+    my $relative = "$prefix$entry";
+    record_path($relative);
+    check_directory($absolute, "$relative/") if -d _ && ! -l $absolute;
   }
 }
 
-check_git_tree() or checkdir(".");
-exit($nfail>0 ? ($warning?128:1) : 0);
+unless (eval { check_directory(".", ""); 1 }) {
+  print STDERR $@;
+  # The policy harness reserves statuses >= 128 for warnings. Inventory errors
+  # must be fatal even when Git itself returns 128 or the process cannot start.
+  exit 2;
+}
+my $failed = 0;
+for my $dir (sort keys %index) {
+  for my $key (sort keys %{$index{$dir}}) {
+    my @names = sort keys %{$index{$dir}{$key}};
+    next unless @names > 1;
+    print "Case-insensitive source filename conflicts:\n" unless $failed++;
+    print "  $dir (", join(" ", @names), ")\n";
+  }
+}
+exit($failed ? 1 : 0);

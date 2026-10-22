@@ -1,9 +1,3 @@
-/******************************************
- * Category: DFA
- * DefUse Analysis Declaration (per Function)
- * created by tps in Feb 2007
- *****************************************/
-
 #ifndef __DefUseAnalysisPF_HXX_LOADED__
 #define __DefUseAnalysisPF_HXX_LOADED__
 #include <string>
@@ -12,7 +6,6 @@
 
 class DefUseAnalysisPF : public DefUseAnalysisAbstract {
 private:
-  bool makeSureThatTheUseIsInTable(SgInitializedName *initName);
   bool makeSureThatTheDefIsInTable(SgInitializedName *initName);
 
   template <typename T> bool hasANodeAboveCurrentChanged(T cfgNode);
@@ -24,9 +17,9 @@ private:
                                T cfgNode);
 
   // def-use-sepcific ------------------
-  void handleDefCopy(SgNode *sgNode, int nrOfInEdges, SgNode *sgNodeBefore,
+  void handleDefCopy(SgNode *sgNode, SgNode *sgNodeBefore,
                      filteredCFGNodeType cfgNode);
-  void handleUseCopy(SgNode *sgNode, int nrOfInEdges, SgNode *sgNodeBefore,
+  void handleUseCopy(SgNode *sgNode, SgNode *sgNodeBefore,
                      filteredCFGNodeType cfgNode);
   template <typename T> bool defuse(T cfgNode, bool *unhandled);
 
@@ -37,14 +30,13 @@ private:
 public:
   DefUseAnalysisPF(bool debug, DefUseAnalysis *dfa_p) {
     DEBUG_MODE = debug;
-    DEBUG_MODE_EXTRA = false;
     dfa = dfa_p;
     breakPointForWhile = 0;
     breakPointForWhileNode = NULL;
   };
   virtual ~DefUseAnalysisPF() {};
-  FilteredCFGNode<IsDFAFilter> run(SgFunctionDefinition *function,
-                                   bool &abortme);
+  VirtualCFG::FilteredCFGNode<IsDFAFilter> run(SgFunctionDefinition *function,
+                                               bool &abortme);
   int getNumberOfNodesVisited();
 };
 

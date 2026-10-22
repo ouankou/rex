@@ -1,2 +1,6 @@
 #pragma omp parallel for private(myval) ordered
 #pragma omp ordered
+#pragma omp parallel for ordered schedule(static , 3)
+#pragma omp ordered
+#pragma omp parallel for ordered schedule(monotonic : dynamic , 2)
+#pragma omp ordered

@@ -3,181 +3,8 @@
 %option prefix="Rose_C_Cxx_"
 %option outfile="lex.yy.c"
 %{
-/* 
-    preproc.lex: This lexer currently recognizes C style comments, C++ style 
-    comments, preprocessor directives, and c/c++ linkage specifications.  
-    line/column/text information for each recognized directive is stored in 
-    ROSEAttributesList.  This information is used by the unparser.
-*/
-
-/*
--------------------------------------------------------------------------------------
-Originally written and modified by Markus Schordan and Dan Quinlan.
-(see ChangeLog).
-
-08-05-2006: Rewritten significantly by Ramakrishna Upadrasta.
-Reason: For supporting additional features and bug-fixing (see summary below).
-Note: The old preproc.lex is available in the same directory as preproc.original.lex
-------------------------------------------------------------------------------------
-*/
-//Ramakrishna Upadrasta
-//01-12-07: This is only version 0 of this file
-
-
-/*
-Summary of the changes:
-=========================================================================================
-    The regular expressions (and the action code) for C++ comments and 
-    C style comments has been cleaned up and are (hopefully:) upto the standard.
-=========================================================================================
-    Naming of variables: 
-        changed the lex variable names (states/start conditions) so that 
-            CXX_COMMENT to corresponds to C++ style comments (beginning with //) and 
-            C_COMMENT to correspond to C-style comments (enclosed by / * and * / ).
-        Earlier they were
-            C_COMMENT corresponded to C++ style comments
-            CPP_COMMENT corresponded to C-style comments.
-        It was felt that the names were confusing.
-        The other choice was to name the C-style comments as C_COMMENT and C++ style
-        comments as CPP_COMMENT. That was also found to be confusing, as CPP usually
-        means C Pre Processor). The new terminology is (partly) taken from makefiles which
-        allows 3 types of flags (C_FLAGS/CPP_FLAGS/CXX_FLAGS).
-
-=========================================================================================
-        Use STL types for instead of fixed size buffers for the following data structures
-        commentString, macroString and bracestack.  (earlier they were 
-                char commentString[10000000] for comments 
-                char macroString[10000000] for macro strings
-                and char bracestack[500] for matching of braces)
-=========================================================================================
-    Exact Position information for literals
-        The previous method to get the position information from legacy frontend is incorrect in 
-        most of the cases. A second scan (like this lexer does) of the input was thought 
-        to be necessary to attach additional info.
-=========================================================================================
-    Support for char literals
-        including the '\e' '\U' which would be part of 2008 standard
-        refer to ???? for details
-=========================================================================================
-    Semi colons
-        We have to ensure that semi colons for that donot actually end 
-        statements are taken care of carefully.
-        class A {
-        f(); <-- this semi colon should be taken care of carefully.
-        }
-=========================================================================================
-    Double colons (::'s)
-        They can only occur in  .........
-        we identify them with 
-=========================================================================================
-trigraphs
-    
-=========================================================================================
-    backslashes followed by newlines
-        Either inside or outside of comments
-=========================================================================================
-    Whitespace info:
-        The 
-
-=========================================================================================
-    Line number information:
-        A better line count
-
-=========================================================================================
-    Trigraphs/Digraphs
-=========================================================================================
-    Proper identification and matching of different varieties of brackets
-        Parenthesis ()
-        Curly braces {}: The support for this existed earlier
-        Square brackets []
-=========================================================================================
-    Support for keywords
-        C++
-        C
-        C99
-        C++Ox 
-            Ones only in 
-=========================================================================================
-    To be done in CHAR literals
-        wierd char literals
-        testing for octal and hex char literals
-        testing for backslashes in char literals.
-    To be done in INT literals
-        testing for 
-=========================================================================================
-    Limitations/open questions: 
-        This lexer does not handle lots of important cases, like 
-                character literals etc.  
-                Trigraph sequences, alternative tokens (lex.trigraph and lex.digraph of the standard).  
-                hexadecimal floating point literals and similar arcane stuff 
-                        (HOW DOES legacy frontend handle them? How does the preprocessor handle them?)
-    The user should probably use the compiler preprocessor if she needs such things.
-=========================================================================================
-    Use of standard variable names like ([:space:] and [:blank:]) that come with FLEX. 
-    Read the flex http://www.gnu.org/software/flex/manual/ for details. They work like C functions
-    isspace and isblank respectively.
-=========================================================================================
-=========================================================================================
-    A ROSE-sequence point in the original program is a position in the input program where 
-    synchronization of the AST happens with the input program. For now, the sequence points
-    are specific lexical tokens in the input program. In specific, they are 
-        parenthesis: () 
-        curly braces: {} 
-        semi colons: ;
-        new lines: \n
-    The possible are contenders for being sequence points
-        keywords???
-
-
-    Sequence points of the program so that exact code generation is done
-        If the code is not transformed? we synchronize the code generation
-        If the code is transformed, we synchronize the code generation immediately after the next sequence point.
-
-    An extension to the above token/character based sequence-points is to use parsing-constructs in the
-    the grammar of the source language, like
-        end of statement-sequence
-        end of function/class/namespace definition
-=========================================================================================
-    ellipsis????
-
-=========================================================================================
-=========================================================================================
-=========================================================================================
-Notes about coding style:
-    There is a unsaid tradition of separating the patterns and the actions in LEX files by tabs.
-    I am using that, though Dan prefers that whitespace be used for indentation.
-*/
-
-/*
-Test cases these (atleast fix) and effect:
-    test2005_170.C about the buffer size of (C and C++ style) comments.
-    test2001_18.C (and its related files: test2001_18A.h and test2001_18B.h): which is about the includes having code segments??????????????
-    test2006_15.C: which is about the handling of the character literals.  
-    test2005_184.C: which is about handling of backslashes at the end of C++ style comments
--------------------
-    test2005_131.C
-The ones that have singlequotes in a IF(0) and were earlier preprocessed silently, but are being flagged (incorrectly??) because we identify character literrals
-Cxx tests
-    test2004_154.C
-    test2005_178.C
-    test2005_191.C
-    test2005_194.C
-    test2005_196.C
-    test2005_198.C
-    test2005_199.C
-    test2006_16.C
-    test2006_17.C
-    test2006_18.C
-    test2006_26.C
--------------------------------------------------
-write test cases so that 
-    comments and preprocssor stuff etc.
-    
-*/
-/*
-       CHANGE LINES LIKE THIS TO ACCEPT std::string instead of char*, which makes us give it a c_str
-                    preprocessorList.addElement(macrotype,macroString_str.c_str(),globalFileName,preproc_start_line_num,preproc_start_column_num,preproc_line_num-preproc_start_line_num); 
-*/
+/* Scan C/C++ tokens, comments, and directives with source positions. */
+/* Originally written by Markus Schordan, Dan Quinlan, and Ramakrishna Upadrasta. */
 
 /* DQ (12/10/2016): This is a technique to suppress warnings in generated code that we want to be an error elsewhere in ROSE. 
    See https://gcc.gnu.org/onlinedocs/gcc/Diagnostic-Pragmas.html for more detail.
@@ -187,37 +14,20 @@ write test cases so that
 #endif
 
 #include "sage3basic.hhh"
-#include <iostream>
 #include <stdio.h>
 #include <ctype.h>
 #include <string>
 #include <string.h>
 #include <fstream>
-#include <list>
 #include <vector>
 
 /* DQ (1/21/2008): This now has a single definition in the header file: ROSE/src/frontend/SageIII/general_defs.h */
 #include "general_token_defs.h"
 
-
-
-
-
 using namespace std;
 
-#define DEBUG_LEX_PASS 0
-
-// list <stream_element*> ROSE_token_stream;
-// typedef list <stream_element*>:: iterator SE_ITR;
 LexTokenStreamTypePointer ROSE_token_stream_pointer = NULL;
 typedef LexTokenStreamType::iterator SE_ITR;
-
-struct file_pos_info curr_beginning;
-
-
-//Rama
-//#ifdef ROSE_TOKEN_IDENTIFIERS_H
-//#define ROSE_TOKEN_IDENTIFIERS_H
 
 using namespace ROSE_token_ids;
 
@@ -289,8 +99,6 @@ token_element ROSE_C_CXX_keyword_map[] =
         {"while",            C_CXX_WHILE }
    };
 
-
-
 //We know that this is a magic number. 
 //We also know how to fix it.
 #define NUM_C_CXX_KEYWORDS 63
@@ -310,7 +118,6 @@ int identify_if_C_CXX_keyword(std::string str)
 
   // DQ (9/29/2013): This loop over keywords is rather inifficent, there should be a better implementation.
 
-  // printf("got called with %s. Converted to %s\n", str.c_str(), lowered_str.c_str());
      for(int i = 0; i < NUM_C_CXX_KEYWORDS; i++)
         {
           if(lowered_str == ROSE_C_CXX_keyword_map[i].token_lexeme)
@@ -321,7 +128,6 @@ int identify_if_C_CXX_keyword(std::string str)
 
      return -1;
    }
-
 
 int getNumberOfLines( std::string internalString )
    {
@@ -371,12 +177,9 @@ int getColumnNumberOfEndOfString( std::string internalString )
 
      int endingColumnNumber   = previousLineLength;
 
-  // printf ("lexer: getColumnNumberOfEndOfString(): endingColumnNumber = %d \n",endingColumnNumber);
-
 
      return endingColumnNumber;
    }
-
 
 void add_token (std::string str, int preproc_line_num, int & preproc_column_num, int tokenId )
    {
@@ -388,11 +191,6 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
 
      int is_keyword = identify_if_C_CXX_keyword(str);
 
-#if DEBUG_LEX_PASS
-     //printf("%s is either a %s token \n",str.c_str(),(is_keyword != -1) ? "keyword" : "identifier");
-#endif
-
-
   // found a keyword?
      if (tokenId == C_CXX_PRAGMA)
         {
@@ -400,12 +198,10 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
         }
        else if(is_keyword != -1)
         {
-       // printf("%s is a keyword\n", str.c_str());
           p_tok_elem->token_id = is_keyword;
         }
        else
         {
-       // printf("%s is not a keyword\n", str.c_str());
           if (tokenId == C_CXX_SYNTAX)
              {
                p_tok_elem->token_id = C_CXX_SYNTAX;
@@ -441,19 +237,16 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
 
      int last_string_length = getColumnNumberOfEndOfString(str);
 
-  // printf ("In add_token(): preproc_column_num = %d last_string_length = %d \n",preproc_column_num,last_string_length);
 
   // p_se->ending_fpi.column_num = preproc_column_num-1;
   // p_se->ending_fpi.column_num = (preproc_column_num-1) + (last_string_length - 1);
      if (number_of_lines == 0)
         {
           p_se->ending_fpi.column_num = (preproc_column_num-1) + (last_string_length - 1);
-       // printf ("In add_token(): ending_fpi.column_num set to (preproc_column_num-1) + (last_string_length - 1) \n");
         }
        else
         {
           p_se->ending_fpi.column_num = (last_string_length - 1);
-       // printf ("In add_token(): ending_fpi.column_num set to (last_string_length - 1) \n");
         }
 
   // When using the std::string we need to subtract 1 for the null terminal.
@@ -482,7 +275,6 @@ void add_token (std::string str, int preproc_line_num, int & preproc_column_num,
 
    }
 
-
 void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo, int preproc_line_num, int preproc_column_num, int number_of_lines)
    {
   // This function is overloaded with the one above and refactors the 
@@ -497,23 +289,13 @@ void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo
      ROSE_ASSERT(preprocessingInfo != NULL);
      p_tok_elem->token_lexeme = preprocessingInfo->getString();
 
-     p_tok_elem->token_id = C_CXX_PREPROCESSING_INFO;
-
-#if DEBUG_LEX_PASS
-     printf("This is a PreprocessingInfo object processed as a token: preprocessingInfo = %p \n",preprocessingInfo);
-#endif
-
-#if DEBUG_LEX_PASS
-     for (size_t i = 0; i < p_tok_elem->token_lexeme.length(); i++)
-        {
-          printf("   --- p_tok_elem->token_lexeme[i] = %c = (ascii value) %d \n",p_tok_elem->token_lexeme[i],p_tok_elem->token_lexeme[i]);
-       // if (p_tok_elem->token_lexeme[i+1] == '\r')
-          if (p_tok_elem->token_lexeme[i+1] != '\0')
-             {
-               printf("   --- --- p_tok_elem->token_lexeme[i+1] = %c = (ascii value) %d \n",p_tok_elem->token_lexeme[i+1],p_tok_elem->token_lexeme[i+1]);
-             }
-        }
-#endif
+     const PreprocessingInfo::DirectiveType directive =
+         preprocessingInfo->getTypeOfDirective();
+     p_tok_elem->token_id =
+         directive == PreprocessingInfo::C_StyleComment ||
+                 directive == PreprocessingInfo::CplusplusStyleComment
+             ? C_CXX_COMMENTS
+             : C_CXX_PREPROCESSING_INFO;
 
      stream_element *p_se = new stream_element;
      p_se->p_tok_elem = p_tok_elem;
@@ -532,7 +314,6 @@ void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo
   // Note: we don't want to modify the value of preproc_line_num, since that will have 
   // been taken care of in the processing of the CPP directive or C/C++ comment.
   // int numberOfLines = preprocessingInfo->getNumberOfLines();
-  // ROSE_ASSERT(numberOfLines >= 1);
   // p_se->ending_fpi.line_num   = preproc_line_num + (numberOfLines - 1);
 
      p_se->ending_fpi.line_num = preproc_line_num + number_of_lines;
@@ -541,7 +322,6 @@ void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo
 
      int last_string_length = getColumnNumberOfEndOfString(p_tok_elem->token_lexeme);
 
-  // printf ("In add_preprocessingInfo_to_token_stream(): preproc_column_num = %d last_string_length = %d \n",preproc_column_num,last_string_length);
 
   // p_se->ending_fpi.column_num = preproc_column_num-1;
   // p_se->ending_fpi.column_num = last_string_length - 1;
@@ -549,22 +329,15 @@ void add_preprocessingInfo_to_token_stream (PreprocessingInfo* preprocessingInfo
      if (number_of_lines == 0)
         {
           p_se->ending_fpi.column_num = (preproc_column_num-1) + (last_string_length - 1);
-       // printf ("In add_preprocessingInfo_to_token_stream(): ending_fpi.column_num set to (preproc_column_num-1) + (last_string_length - 1) \n");
         }
        else
         {
           p_se->ending_fpi.column_num = (last_string_length - 1);
-       // printf ("In add_preprocessingInfo_to_token_stream(): ending_fpi.column_num set to (last_string_length - 1) \n");
         }
 
   // push the element onto the token stream
      ROSE_token_stream_pointer->push_back(p_se);
    }
-
-
-//#endif
-
-
 
 #include "sage3.h"
 
@@ -624,7 +397,6 @@ int i = 0;
 
 std::string commentString;
 std::string macroString;
-
 
 // DQ (4/19/2006):
 // Store the name of the current file so that we can generate Sg_File_Info objects
@@ -893,7 +665,6 @@ static void preserve_physical_line_splices(const std::string &fileName,
 
 ROSEAttributesList preprocessorList;
 
-
 //add stuff for char literals???????????
 
 /*
@@ -965,17 +736,11 @@ BEGIN NORMAL;
 %}
 
 <NORMAL>\f { 
-#if DEBUG_LEX_PASS
-     printf("%s is a form-feed token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
   // DQ (11/29/2018): Adding form feed support to ROSE.
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
    }
 
 <NORMAL>\r\n { 
-#if DEBUG_LEX_PASS
-     printf("%s is a CRLF line ending token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
   // DQ (11/29/2018): Adding CRLF line ending support to ROSE.
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
 
@@ -987,278 +752,154 @@ BEGIN NORMAL;
    }
 
 <NORMAL>"{"     { 
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n",yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"}"     { 
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n",yytext);
-#endif
 
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"("     { 
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>")"     { 
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
      /* DQ (9/29/2013): Added additional syntax to token handling */
 <NORMAL>";"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>","     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>":"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"."     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"%"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"^"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"~"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"&"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"?"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"*"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"/"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"!"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
-  // preproc_column_num++; 
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"|"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
-  // preproc_column_num++; 
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"++"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"--"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"->"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"!="     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"|="     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"<="     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>">="     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
   // preproc_column_num += 2;
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>"="     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"-"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"+"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"["     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"]"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>"#"     {
-#if DEBUG_LEX_PASS
-     printf("%s is a syntax token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
-  // preproc_column_num++; 
    }
 
 <NORMAL>(0x|0b)?((([0-9]+['])+[0-9]+)|[0-9]+) {
   // MS (7/14/2020): C++14 support for "'" in numbers, also added binary/hex prefix (octal is implicit)
   // DQ (9/29/2013): This does not accound for 0L to be a single literal
-#if DEBUG_LEX_PASS
-     printf("%s is a numeric literal token \n", yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,0);
   // preproc_column_num += strlen(yytext);
    }
 
 <NORMAL>"<" {
-#if DEBUG_LEX_PASS
-     printf("%s is a whitespace token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>">" {
-#if DEBUG_LEX_PASS
-     printf("%s is a whitespace token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_SYNTAX);
    }
 
 <NORMAL>{whitespace} { 
-#if DEBUG_LEX_PASS
-     printf("%s is a whitespace token (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,C_CXX_WHITESPACE);
    }
 
 <NORMAL>[a-zA-Z_][a-zA-Z0-9_]* {
-#if DEBUG_LEX_PASS
-    printf("%s matched identifier regex \n",yytext);
-#endif
      add_token(yytext,preproc_line_num,preproc_column_num,0);
    }
 
@@ -1289,14 +930,9 @@ BEGIN NORMAL;
 <NORMAL>"<%"     { }
       */
 
-
-
      /* DQ (9/29/2013): I think this should not be here, it can't be matched given that we handle identifiers above. */
      /*
 <NORMAL>"static_cast"   { 
-#if DEBUG_LEX_PASS
-                    printf("%s is a static_cast token \n",yytext);
-#endif
                     preproc_column_num++; 
                 }
     */
@@ -1339,9 +975,6 @@ BEGIN NORMAL;
 
 <NORMAL>"'"                     {
    /*preproc_line_num+=num_of_newlines(yytext);*/ 
-#if DEBUG_LEX_PASS
-    printf("char literal BEGIN.");    
-#endif
     add_token(yytext,preproc_line_num,preproc_column_num,0);
   // preproc_column_num+=strlen(yytext); 
      BEGIN CHAR_LIT;
@@ -1361,13 +994,8 @@ BEGIN NORMAL;
    /*end of character literal*/   
      add_token(yytext,preproc_line_num,preproc_column_num,0);
   // preproc_column_num+=strlen(yytext); 
-#if DEBUG_LEX_PASS
-    printf("char literal END.");    
-#endif
      BEGIN NORMAL;
    }
-
-
 
   /* Actions for string literals. */
 <STRING_LIT>\\\r\n              {/*eat escaped DOS line-term*/  add_token(yytext,preproc_line_num,preproc_column_num,0); preproc_line_num++; preproc_column_num=1; }
@@ -1434,7 +1062,6 @@ BEGIN NORMAL;
                           */
                          // DQ (10/1/2013): This is a bug fix the number of lines should be computed using 
                          // "preproc_line_num-preproc_start_line_num" not "preproc_line_num-preproc_start_line_num+1"
-                         // preprocessorList.addElement(PreprocessingInfo::C_StyleComment,commentString,globalFileName,preproc_start_line_num,preproc_start_column_num,preproc_line_num-preproc_start_line_num+1); 
                             preprocessorList.addElement(PreprocessingInfo::C_StyleComment,commentString,globalFileName,preproc_start_line_num,preproc_start_column_num,preproc_line_num-preproc_start_line_num); 
 
                          // This element of the token stream is special since it is from a PreprocessorInfo object.
@@ -1450,9 +1077,6 @@ BEGIN NORMAL;
 
         /*Actions while in a MACRO.*/
 <MACRO>\\\r\n   {   // Escaped CRLF line termination
-#if DEBUG_LEX_PASS
-                    printf("%s is an escaped CRLF line ending token in a CPP directive (length = %" PRIuPTR ") \n",yytext,strlen(yytext));
-#endif
                     macroString += yytext;
                     ++preproc_line_num;
                     preproc_column_num = 1;
@@ -1467,7 +1091,6 @@ BEGIN NORMAL;
 <MACRO>\n       {   // End of macro
 
                  // DQ (12/30/2018): This is where CRLF line endings are normalized, and we need to supress this.
-                 // macroString = Rose::StringUtility::fixLineTermination(macroString + yytext);
                     macroString = macroString + yytext;
 
                     preproc_line_num++; 
@@ -1484,7 +1107,6 @@ BEGIN NORMAL;
 <MACRO><<EOF>>  {   // End of macro
 
                  // DQ (12/30/2018): This is where CRLF line endings are normalized, and we need to supress this.
-                 // macroString = Rose::StringUtility::fixLineTermination(macroString + yytext);
                     macroString = macroString + yytext;
 
                     preprocessorList.addElement(macrotype, macroString, globalFileName,
@@ -1514,9 +1136,7 @@ BEGIN NORMAL;
                     preproc_column_num++; 
                 }
 
-
-  /* MS 08/31/2020: added special case of string literal inside macro; note GNU allows single double quotes in macros, but legacy frontend rejects it */
-  /* Actions for string literals. */
+  /* String literals inside macros. */
 <STRING_LIT_IN_MACRO>\\\r\n              {/*eat escaped DOS line-term*/  preproc_line_num++; preproc_column_num=1; macroString += yytext;}
 <STRING_LIT_IN_MACRO>\\\n                {/*eat escaped linefeed*/       preproc_line_num++; preproc_column_num=1; macroString += yytext;}
 <STRING_LIT_IN_MACRO>\\.                 {/*eat escaped something*/       /*preproc_column_num+=strlen(yytext);*/macroString += yytext; }
@@ -1530,7 +1150,6 @@ BEGIN NORMAL;
    /* go back into macro state */
      BEGIN MACRO; 
    }
-
 
 <C_COMMENT_INMACRO>"*/"   { 
                                 //This code copies the comment only into the macrobuffer, but not into comment buffer
@@ -1554,8 +1173,6 @@ BEGIN NORMAL;
                             }
 %%
 
-
-
 // DQ (1/4/2021): Adding support for comments and CPP directives and tokens to use new_filename.
 // DQ (3/30/2006): Modified to use C++ style string instead of C style char* string
 // ROSEAttributesList *getPreprocessorDirectives( char *fileName)
@@ -1572,10 +1189,6 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
      ROSEAttributesList *preprocessorInfoList = new ROSEAttributesList; // create a new list
      ROSE_ASSERT (preprocessorInfoList != NULL);
 
-
-
-
-  // printf ("Inside of lex file: getPreprocessorDirectives() \n");
   // ROSE_ABORT();
 
   // assert(input_token_stream_pointer == NULL);
@@ -1600,66 +1213,24 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
           globalFileName = fileName;
         }
 
+     if (!fileName.empty()) {
+       fp = fopen(fileName.c_str(), "r");
+       if (fp == NULL) {
+         fprintf(stderr, "Cannot open source file for token lexing: %s\n",
+                 fileName.c_str());
+         ROSE_ABORT();
+       }
+       yyin = fp;
+       yylex();
 
-     if ( fileName.empty() == false )
-        {
-          std::map<std::string,ROSEAttributesList* >::iterator iItr = mapFilenameToAttributes.find(fileName);
-       // std::cout << "Trying to find fileName " << fileName << std::endl;
-          if ( iItr != mapFilenameToAttributes.end())
-             {
-            // std::cout << "Found requested file: " << fileName << " size: " << iItr->second->size() << std::endl; 
-               for(std::vector<PreprocessingInfo*>::iterator jItr = iItr->second->getList().begin(); jItr != iItr->second->getList().end(); ++jItr)
-                  {
-                  // std::cout << "Inserting element" <<  (*jItr)->getString() << std::endl;
-                     preprocessorInfoList->getList().push_back(
-                         new PreprocessingInfo(**jItr));
-                  }
+       // Flex drops physical backslashes from escaped newline splices.
+       preserve_physical_line_splices(fileName, ROSE_token_stream_pointer);
 
-             }
-            else
-             {
-               fp = fopen( fileName.c_str(), "r");
-               if (fp)
-                  {
-                    yyin = fp;
-#if DEBUG_LEX_PASS
-                    printf ("In getPreprocessorDirectives(): calling yylex() \n");
-#endif
-                    yylex();
-#if DEBUG_LEX_PASS
-                    printf ("In getPreprocessorDirectives(): DONE: calling yylex() \n");
-#endif
-
-                 // Flex drops the physical backslash from escaped newline
-                 // splices in the raw token stream. Restore those exact
-                 // source characters from the on-disk file so token-based
-                 // unparsing can preserve translation-phase token splicing.
-                    preserve_physical_line_splices(fileName, ROSE_token_stream_pointer);
-
-                 // bugfix (9/29/2001)
-                 // The semantics required here is to move the elements accumulated into the
-                 // preprocessorList into the preprocessorInfoList and delete them from the
-                 // preprocessorList (which will be used again to accumulate PreprocessingInfo objects
-                 // when the next file is processed).  We have to be able to process several files using
-                 // this getPreprocessorDirectives() function.
-                    preprocessorInfoList->moveElements( preprocessorList ); // create a copy that we can pass on
-
-                 // The accumulator list should now be empty
-                    assert (preprocessorList.getLength() == 0);
-                    fclose(fp);  
-                    Rose_C_Cxx_lex_destroy();
-                  }
-                 else
-                  {
-                 // DQ (5/14/2006): Added error checking for collection of comments and CPP directives.
-                    printf ("Error: can't find the requested file (%s) \n",fileName.c_str());
-
-                 // DQ (11/8/2019): Uncomment so that we can identify calling location where this is called with a filename that does not exist (see buildFile()).
-                 // ROSE_ABORT();
-                    ROSE_ABORT();
-                  }
-             }
-        }
+       preprocessorInfoList->moveElements(preprocessorList);
+       assert(preprocessorList.getLength() == 0);
+       fclose(fp);
+       Rose_C_Cxx_lex_destroy();
+     }
 
   // DQ (1/4/2021): We need to use the globalFileName and the logic which sets it above.
   // preprocessorInfoList->setFileName(fileName);
@@ -1668,21 +1239,8 @@ ROSEAttributesList *getPreprocessorDirectives( std::string fileName, std::string
   // DQ (11/3/2019): Make sure that the filename is filled in.
      ROSE_ASSERT(preprocessorInfoList->getFileName() != "");
 
-#if DEBUG_LEX_PASS || 0
-     printf ("Leaving getPreprocessorDirectives(fileName = %s): preprocessorInfoList->size() = %d \n",fileName.c_str(),(int)preprocessorInfoList->size());
-     printf (" --- preprocessorInfoList->getFileName() = %s \n",preprocessorInfoList->getFileName().c_str());
-     printf (" --- preprocessorInfoList->getList().size() = %zu \n",preprocessorInfoList->getList().size());
-#endif
-
   // DQ (9/29/2013): Added assertion (debugging token handling in ROSE).
      ROSE_ASSERT(preprocessorInfoList->get_rawTokenStream() != NULL);
-
-#if DEBUG_LEX_PASS || 0
-     printf ("Leaving getPreprocessorDirectives(): preprocessorInfoList->get_rawTokenStream() = %p \n",preprocessorInfoList->get_rawTokenStream());
-     printf ("Leaving getPreprocessorDirectives(): preprocessorInfoList->get_rawTokenStream()->size() = %" PRIuPTR " \n",preprocessorInfoList->get_rawTokenStream()->size());
-#endif
-
-
 
      return preprocessorInfoList;
    }

@@ -1,15 +1,11 @@
-set(tools_globalVariablesInLambdas_exe_SOURCES globalVariablesInLambdas.C)
-
 add_executable(tools_globalVariablesInLambdas_exe
-               ${tools_globalVariablesInLambdas_exe_SOURCES})
+               globalVariablesInLambdas.C)
 
 target_link_libraries(tools_globalVariablesInLambdas_exe PRIVATE ROSE_DLL)
 
-# TODO: When the refactor goes live, link libraries instead of doing this
-# include hack.
 target_include_directories(
   tools_globalVariablesInLambdas_exe
-  PRIVATE ${CMAKE_BINARY_DIR} ${CMAKE_CURRENT_SOURCE_DIR} ${ROSE_INCLUDES})
+  PRIVATE ${ROSE_INCLUDES})
 
 set_target_properties(tools_globalVariablesInLambdas_exe
                       PROPERTIES OUTPUT_NAME "globalVariablesInLambdas")
@@ -17,3 +13,12 @@ set_target_properties(tools_globalVariablesInLambdas_exe
 install(TARGETS tools_globalVariablesInLambdas_exe DESTINATION bin)
 
 add_dependencies(tools tools_globalVariablesInLambdas_exe)
+
+if(ENABLE-TESTS-DIRECTORY)
+  add_test(NAME rex_tool_global_variable_lambda
+    COMMAND tools_globalVariablesInLambdas_exe
+      -rose:skipfinalCompileStep -std=c++11 -c
+      ${ROSE_TOP_SRC_DIR}/tests/nonsmoke/functional/CompileTests/Cxx11_tests/globalVariablesInLambdas_test_01.C)
+  set_tests_properties(rex_tool_global_variable_lambda
+    PROPERTIES LABELS "rex;tools;AST")
+endif()

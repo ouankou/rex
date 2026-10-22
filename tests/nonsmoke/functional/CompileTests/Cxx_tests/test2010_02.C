@@ -3,7 +3,7 @@
 
 #include "sage3basic.h"
 
-#include "collectAssociateNodes.h"
+#include "astQuery.h"
 
 #include "test_support.h"
 

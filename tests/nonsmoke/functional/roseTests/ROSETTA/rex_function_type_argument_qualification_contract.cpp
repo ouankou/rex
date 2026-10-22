@@ -140,7 +140,7 @@ TEST(NonrealQualification,
      ExplicitEmptySourcePayloadOverridesSynthesizedSemanticChain) {
   SgGlobal *global = new SgGlobal();
   SgNonrealType *outer = SageBuilder::buildSemanticNonrealType(
-      SgName("rex_semantic_namespace"), global, nullptr, nullptr);
+      SgName("rex_semantic_namespace"), global, nullptr);
   ASSERT_NE(outer, nullptr);
   SgNonrealDecl *outer_declaration = isSgNonrealDecl(outer->get_declaration());
   ASSERT_NE(outer_declaration, nullptr);
@@ -148,7 +148,7 @@ TEST(NonrealQualification,
   ASSERT_NE(outer_scope, nullptr);
 
   SgNonrealType *terminal = SageBuilder::buildSemanticNonrealType(
-      SgName("rex_unqualified_template"), outer_scope, nullptr, nullptr);
+      SgName("rex_unqualified_template"), outer_scope, nullptr);
   ASSERT_NE(terminal, nullptr);
   SgNonrealDecl *terminal_declaration =
       isSgNonrealDecl(terminal->get_declaration());
@@ -165,14 +165,14 @@ TEST(NonrealQualification,
      WrittenPayloadOverridesUnownedSemanticStructuralChain) {
   SgGlobal *global = new SgGlobal();
   SgNonrealType *outer = SageBuilder::buildSemanticNonrealType(
-      SgName("rex_written_namespace"), global, nullptr, nullptr);
+      SgName("rex_written_namespace"), global, nullptr);
   ASSERT_NE(outer, nullptr);
   SgNonrealDecl *outer_declaration = isSgNonrealDecl(outer->get_declaration());
   ASSERT_NE(outer_declaration, nullptr);
 
   SgNonrealType *terminal = SageBuilder::buildSemanticNonrealType(
       SgName("rex_qualified_template"),
-      outer_declaration->get_nonreal_decl_scope(), nullptr, nullptr);
+      outer_declaration->get_nonreal_decl_scope(), nullptr);
   ASSERT_NE(terminal, nullptr);
   SgNonrealDecl *terminal_declaration =
       isSgNonrealDecl(terminal->get_declaration());

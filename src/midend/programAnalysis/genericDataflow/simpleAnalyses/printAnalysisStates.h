@@ -40,7 +40,8 @@ public:
                       std::vector<int> &latticeNames, ab latSide,
                       std::string indent);
 
-  void visit(const Function &func, const DataflowNode &n, NodeState &state);
+  void visit(const Function &func, const VirtualCFG::DataflowNode &n,
+             NodeState &state);
 };
 
 #endif

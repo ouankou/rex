@@ -25,13 +25,12 @@ void verifyPerTranslationUnitCommandOwnership(SgProject *project) {
         file->get_originalCommandLineArgumentList();
     ROSE_ASSERT(!command.empty());
     const Rose_STL_Container<std::string> sourceInputs =
-        CommandlineProcessing::generateSourceFilenames(
-            command, project->get_binary_only());
+        CommandlineProcessing::generateSourceFilenames(command);
     ROSE_ASSERT(sourceInputs.size() == 1);
 
     const std::string absoluteSource =
         Rose::StringUtility::getAbsolutePathFromRelativePath(
-            sourceInputs.front(), true);
+            sourceInputs.front());
     ROSE_ASSERT(absoluteSource == file->get_sourceFileNameWithPath());
     ROSE_ASSERT(ownedSources.insert(absoluteSource).second);
   }

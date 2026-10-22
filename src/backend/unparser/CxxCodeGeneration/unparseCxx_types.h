@@ -16,6 +16,9 @@ private:
   Unparser *unp;
 
 public:
+  static SgDeclarationStatement *
+  inlineDefinitionForType(SgType *type, const SgUnparse_Info &info);
+  bool outputLanguageIsC(const SgUnparse_Info &info, const char *context) const;
   // GB (09/20/2007): Moved definitions to source file.
   // Unparse_Type(Unparser* unp):unp(unp){};
   // virtual ~Unparse_Type() {};
@@ -65,9 +68,6 @@ public:
 
   // DQ (3/28/2015): Adding support for GNU C typeof language extension.
   virtual void unparseTypeOfType(SgType *type, SgUnparse_Info &info);
-
-  // DQ (5/3/2013): This approach is no longer supported, as I recall.
-  // virtual void unparseQualifiedNameType(SgType* type, SgUnparse_Info& info );
 
   // DQ (6/6/2007): Test for if types should be elaborated
   bool generateElaboratedType(SgDeclarationStatement *declarationStatement,

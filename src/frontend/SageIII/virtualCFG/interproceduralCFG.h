@@ -5,11 +5,7 @@
 
 #include "staticCFG.h"
 
-#include <map>
-
 #include <set>
-
-#include <string>
 
 class SgIncidenceDirectedGraph;
 class SgGraphNode;
@@ -22,8 +18,7 @@ using VirtualCFG::CFGNode;
 
 class ROSE_DLL_API InterproceduralCFG : public CFG {
 protected:
-  virtual void buildCFG(CFGNode n, std::map<CFGNode, SgGraphNode *> &all_nodes,
-                        std::set<CFGNode> &explored,
+  virtual void buildCFG(CFGNode n, std::set<CFGNode> &explored,
                         ClassHierarchyWrapper *classHierarchy);
 
 public:
@@ -31,23 +26,17 @@ public:
 
   // The valid nodes are SgProject, SgStatement, SgExpression and
   // SgInitializedName
-  InterproceduralCFG(SgNode *node, bool is_filtered = false) : CFG() {
-    graph_ = NULL;
-    is_filtered_ = is_filtered;
-    start_ = node;
+  InterproceduralCFG(SgNode *node, bool is_filtered = false)
+      : CFG(node, is_filtered, false) {
     buildCFG();
   }
   SgNode *getEntry() { return start_; }
-  SgIncidenceDirectedGraph *getGraph() { return graph_; }
-  SgGraphNode *getGraphNode(CFGNode n) { return alNodes[n]; }
-  // Build CFG according to the 'is_filtered_' flag.
-  virtual void buildCFG() { buildFullCFG(); }
-  std::map<CFGNode, SgGraphNode *> alNodes;
-  CFGNode neededStart;
+  SgGraphNode *getGraphNode(CFGNode n) { return toGraphNode(n); }
+  void buildCFG() override { CFG::buildCFG(); }
   // Build CFG for debugging.
-  virtual void buildFullCFG();
+  void buildFullCFG() override;
   // Build filtered CFG which only contains interesting nodes.
-  virtual void buildFilteredCFG();
+  void buildFilteredCFG() override;
 };
 
 } // end of namespace StaticCFG

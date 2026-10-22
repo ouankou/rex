@@ -7,7 +7,6 @@
 #include <clang/Lex/Lexer.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <optional>
@@ -64,34 +63,6 @@ inline bool sourceQualificationMatchesSemanticIdentity(
          qualification.semantic_identity == semantic_identity;
 }
 
-inline clang::NestedNameSpecifierLoc
-sourceQualificationPrefixLoc(clang::NestedNameSpecifierLoc current) {
-  if (!current) {
-    return clang::NestedNameSpecifierLoc();
-  }
-
-  clang::NestedNameSpecifier semantic = readClangNnsApiValueDefined(
-      [&]() { return current.getNestedNameSpecifier(); });
-  if (!semantic) {
-    return clang::NestedNameSpecifierLoc();
-  }
-
-  switch (readClangNnsApiValueDefined([&]() { return semantic.getKind(); })) {
-  case clang::NestedNameSpecifier::Kind::Namespace:
-    return readClangNnsApiValueDefined(
-        [&]() { return current.getAsNamespaceAndPrefix().Prefix; });
-  case clang::NestedNameSpecifier::Kind::Type:
-    return readClangNnsApiValueDefined(
-        [&]() { return current.getAsTypeLoc().getPrefix(); });
-  case clang::NestedNameSpecifier::Kind::Global:
-  case clang::NestedNameSpecifier::Kind::MicrosoftSuper:
-  case clang::NestedNameSpecifier::Kind::Null:
-    return clang::NestedNameSpecifierLoc();
-  }
-
-  llvm_unreachable("unexpected nested-name-specifier kind");
-}
-
 [[noreturn]] inline void failSourceQualification(const char *context,
                                                  const char *detail) {
   fprintf(stderr,
@@ -127,29 +98,11 @@ sourceQualificationFileLoc(clang::SourceManager &source_manager,
   return source_manager.getFileLoc(location);
 }
 
-inline bool sourceQualificationHasNonWhitespace(const std::string &spelling) {
-  return std::any_of(spelling.begin(), spelling.end(),
-                     [](unsigned char ch) { return !std::isspace(ch); });
-}
-
-inline bool
-sourceQualificationSemanticHasGlobal(clang::NestedNameSpecifier qualifier) {
-  for (clang::NestedNameSpecifier current = qualifier; current;
-       current = nestedNameSpecifierPrefix(current)) {
-    if (readClangNnsApiValueDefined([&]() { return current.getKind(); }) ==
-        clang::NestedNameSpecifier::Kind::Global) {
-      return true;
-    }
-  }
-  return false;
-}
-
 inline bool sourceQualificationIsSemanticMacroExpansionFragment(
     clang::NestedNameSpecifierLoc qualifier_loc,
     clang::SourceManager &source_manager,
     const clang::LangOptions &lang_options) {
-  const clang::SourceRange source_range = readClangNnsApiValueDefined(
-      [&]() { return qualifier_loc.getSourceRange(); });
+  const clang::SourceRange source_range = qualifier_loc.getSourceRange();
   if (source_range.isInvalid()) {
     return false;
   }
@@ -226,8 +179,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
         "has no exact nested-name-specifier location/compiler identity");
   }
 
-  clang::NestedNameSpecifier qualifier = readClangNnsApiValueDefined(
-      [&]() { return qualifier_loc.getNestedNameSpecifier(); });
+  clang::NestedNameSpecifier qualifier = qualifier_loc.getNestedNameSpecifier();
   if (!qualifier) {
     failSourceQualification(context,
                             "has a location without semantic identity");
@@ -243,7 +195,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
           qualifier_loc, source_manager, lang_options)) {
     result.surface =
         SourceQualificationSurface::semantic_macro_expansion_fragment;
-    result.global = sourceQualificationSemanticHasGlobal(qualifier);
+    result.global = nestedNameSpecifierHasGlobal(qualifier);
     return result;
   }
   std::vector<SourceQualificationComponent> reversed_components;
@@ -251,35 +203,31 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
   std::vector<std::pair<clang::FileID, unsigned>> reversed_source_ends;
 
   for (clang::NestedNameSpecifierLoc current_loc = qualifier_loc; current_loc;
-       current_loc = sourceQualificationPrefixLoc(current_loc)) {
-    clang::NestedNameSpecifier current = readClangNnsApiValueDefined(
-        [&]() { return current_loc.getNestedNameSpecifier(); });
+       current_loc = nestedNameSpecifierLocPrefix(current_loc)) {
+    clang::NestedNameSpecifier current = current_loc.getNestedNameSpecifier();
     if (!current) {
       failSourceQualification(context,
                               "contains a location without semantic identity");
     }
 
     clang::NestedNameSpecifierLoc prefix_loc =
-        sourceQualificationPrefixLoc(current_loc);
+        nestedNameSpecifierLocPrefix(current_loc);
     clang::NestedNameSpecifier semantic_prefix =
         nestedNameSpecifierPrefix(current);
     if (static_cast<bool>(prefix_loc) != static_cast<bool>(semantic_prefix) ||
-        (prefix_loc && readClangNnsApiValueDefined([&]() {
-                         return prefix_loc.getNestedNameSpecifier();
-                       }) != semantic_prefix)) {
+        (prefix_loc &&
+         prefix_loc.getNestedNameSpecifier() != semantic_prefix)) {
       failSourceQualification(
           context, "has divergent source and semantic qualifier chains");
     }
 
-    const clang::NestedNameSpecifier::Kind kind =
-        readClangNnsApiValueDefined([&]() { return current.getKind(); });
+    const clang::NestedNameSpecifier::Kind kind = current.getKind();
     switch (kind) {
     case clang::NestedNameSpecifier::Kind::Namespace: {
       const clang::NamespaceAndPrefix semantic_namespace =
-          nestedNameSpecifierNamespaceAndPrefix(current);
+          current.getAsNamespaceAndPrefix();
       const clang::NamespaceAndPrefixLoc source_namespace =
-          readClangNnsApiValueDefined(
-              [&]() { return current_loc.getAsNamespaceAndPrefix(); });
+          current_loc.getAsNamespaceAndPrefix();
       if (semantic_namespace.Namespace == nullptr ||
           source_namespace.Namespace == nullptr ||
           semantic_namespace.Namespace != source_namespace.Namespace) {
@@ -289,16 +237,12 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
       break;
     }
     case clang::NestedNameSpecifier::Kind::Type: {
-      const clang::Type *semantic_type =
-          readClangNnsApiValueDefined([&]() { return current.getAsType(); });
-      clang::TypeLoc source_type_loc = readClangNnsApiValueDefined(
-          [&]() { return current_loc.getAsTypeLoc(); });
+      const clang::Type *semantic_type = current.getAsType();
+      clang::TypeLoc source_type_loc = current_loc.getAsTypeLoc();
       const clang::Type *source_type =
           source_type_loc.isNull()
               ? nullptr
-              : readClangNnsApiValueDefined([&]() {
-                  return source_type_loc.getType().getTypePtrOrNull();
-                });
+              : source_type_loc.getType().getTypePtrOrNull();
       if (semantic_type == nullptr || source_type == nullptr ||
           semantic_type != source_type) {
         failSourceQualification(context,
@@ -319,8 +263,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
       failSourceQualification(context, "contains a null qualifier component");
     }
 
-    clang::SourceRange local_range = readClangNnsApiValueDefined(
-        [&]() { return current_loc.getLocalSourceRange(); });
+    clang::SourceRange local_range = current_loc.getLocalSourceRange();
     if (local_range.getBegin().isInvalid() && local_range.getEnd().isValid() &&
         exact_source_begin.isValid()) {
       local_range.setBegin(exact_source_begin);
@@ -340,10 +283,9 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
     }
 
     if (prefix_loc) {
-      clang::SourceLocation prefix_end = sourceQualificationFileLoc(
-          source_manager,
-          readClangNnsApiValueDefined([&]() { return prefix_loc.getEndLoc(); }),
-          /*expansion_end=*/true);
+      clang::SourceLocation prefix_end =
+          sourceQualificationFileLoc(source_manager, prefix_loc.getEndLoc(),
+                                     /*expansion_end=*/true);
       if (prefix_end.isInvalid()) {
         failSourceQualification(context,
                                 "contains a prefix without a source end");
@@ -374,9 +316,16 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
       return source_text.str();
     };
 
+    clang::Token end_token;
+    if (clang::Lexer::getRawToken(source_end, end_token, source_manager,
+                                  lang_options, /*IgnoreWhiteSpace=*/false)) {
+      failSourceQualification(context,
+                              "cannot identify the component's final token");
+    }
+    const bool source_owns_delimiter = end_token.is(clang::tok::coloncolon);
     std::string spelling = exact_source_text();
     if (kind == clang::NestedNameSpecifier::Kind::Global) {
-      if (spelling != "::") {
+      if (!source_owns_delimiter || source_begin != source_end) {
         failSourceQualification(
             context, "has a global component whose source is not '::'");
       }
@@ -385,8 +334,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
     }
 
     bool source_macro_owns_delimiter = false;
-    if (spelling.size() < 2 ||
-        spelling.compare(spelling.size() - 2, 2, "::") != 0) {
+    if (!source_owns_delimiter) {
       // A qualifier macro can own the semantic delimiter while its physical
       // source surface is one macro-name token, for example
       // `_GLIBCXX_NAMESPACE_CXX11` expanding to `__cxx11::`.  Prove that
@@ -405,9 +353,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
       }
     }
 
-    if ((spelling.size() < 2 ||
-         spelling.compare(spelling.size() - 2, 2, "::") != 0) &&
-        !source_macro_owns_delimiter) {
+    if (!source_owns_delimiter && !source_macro_owns_delimiter) {
       // LLVM 22's namespace NestedNameSpecifierLoc can end at the namespace
       // identifier while the following '::' remains the exact delimiter for
       // that semantic component.  Consume only that mandatory token and reject
@@ -436,24 +382,9 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
             context, "has a trailing '::' without an exact file location");
       }
       spelling = exact_source_text();
-      if (spelling.size() < 2 ||
-          spelling.compare(spelling.size() - 2, 2, "::") != 0) {
-        failSourceQualification(
-            context, "has a delimiter not represented by exact source text");
-      }
     }
     if (source_macro_owns_delimiter) {
       spelling += " ";
-    } else {
-      if (spelling.size() < 2 ||
-          spelling.compare(spelling.size() - 2, 2, "::") != 0) {
-        failSourceQualification(
-            context,
-            "has a source component without an exact trailing delimiter");
-      }
-    }
-    if (!sourceQualificationHasNonWhitespace(spelling)) {
-      failSourceQualification(context, "has an empty source component");
     }
 
     const clang::FileID begin_file = source_manager.getFileID(source_begin);

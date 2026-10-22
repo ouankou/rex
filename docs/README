@@ -1,28 +1,16 @@
-ROSE/docs/README:
+REX developer documentation
 
-This directory contains documentation for the ROSE Project.
-Separate directories are:
+The Markdown pages in this directory and the generated API reference are
+published with MkDocs. MrDocs reads its configuration from docs/mrdocs.yml;
+API documentation comments and grouping definitions live in src/docs/mrdocs.
 
-Rose:
-   This directory contains the LaTeX documentation and API documentation
-   sources for the entire ROSE project. API documentation is generated
-   with MrDocs into docs/reference and published with MkDocs into _site.
-   Use scripts/build-docs to set up the docs venv and build locally.
-   The docs build will generate required headers in the build tree (for example,
-   rosePublicConfig.h and Cxx_Grammar.h) if they are missing.
-   To keep generated output under the build tree, set DOCS_SCRATCH_DIR,
-   e.g. DOCS_SCRATCH_DIR=build/docs-scratch scripts/build-docs.
+Run scripts/build-docs to set up the documentation environment and build the
+site locally. The build generates required headers, including rosePublicConfig.h
+and Cxx_Grammar.h, when necessary. To place temporary output under the build
+tree, use:
 
-Rosetta:
-   This directory contains documentation specific to ROSETTA.
-   Rosetta is a library for construction of source code generations 
-   we have developed to simplify the development of source code 
-   within ROSE. For example, an application developed with ROSETTA was 
-   used to generate the Sage III intermediate form used within ROSE.
-   ROSETTA also helps with other related source code generation as well.
-   ROSETTA is however a tool for the construction of many parts of ROSE
-   and is not particularly useful to users wishing to only develop 
-   source-to-source preprocessors using ROSE.
+  DOCS_SCRATCH_DIR=build/docs-scratch scripts/build-docs
 
-Other directories specific to 3rd party documentation used by ROSE 
-might be placed here as well (e.g. PDFlib, etc.) in the future.
+See docs/build.md for compiler build instructions and docs/api.md for the
+API documentation workflow. The codebase-audit and upstream-sync directories
+contain audit evidence and historical synchronization records.

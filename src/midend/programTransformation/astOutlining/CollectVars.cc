@@ -18,7 +18,6 @@
 #include <vector>
 
 #include "Outliner.hh"
-// #include "Transform.hh"
 
 #include "ASTtools.hh"
 
@@ -68,13 +67,14 @@ static void dump(const ASTtools::VarSymSet_t &V, const std::string &tag) {
 //       the same file )
 //
 void Outliner::collectVars(
-    const SgStatement *s,
+    const SgNode *s, const SgStatement *outline_site,
     ASTtools::VarSymSet_t &syms) // return the symbols(variables) that need to
                                  // be passed into the outlined function
 {
   // Determine the function definition surrounding 's'. The enclosing function
   // of 's'
-  const SgFunctionDefinition *outer_func_s = ASTtools::findFirstFuncDef(s);
+  const SgFunctionDefinition *outer_func_s =
+      ASTtools::findFirstFuncDef(outline_site);
   ROSE_ASSERT(outer_func_s);
 
   // U = {symbols used within 's'}
@@ -112,7 +112,8 @@ void Outliner::collectVars(
   } else {
     // Q = {symbols defined within the function surrounding 's' that are visible
     // at 's'}, including function parameters
-    ASTtools::collectLocalVisibleVarSyms(outer_func_s->get_declaration(), s, Q);
+    ASTtools::collectLocalVisibleVarSyms(outer_func_s->get_declaration(),
+                                         outline_site, Q);
     dump(Q, "Q (variables defined within the function surrounding s that are "
             "visible at s) = ");
 

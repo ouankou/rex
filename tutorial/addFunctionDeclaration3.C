@@ -23,8 +23,8 @@ int main(int argc, char *argv[]) {
   // Create a defining functionDeclaration (with a function body)
   SgName func_name = "my_function";
   SgFunctionDeclaration *func = buildDefiningFunctionDeclaration(
-      function_declaration_ownership::semanticAuxiliary(), func_name,
-      buildIntType(), parameterList, globalScope);
+      function_declaration_ownership::sourceLexicalAtTop(globalScope),
+      func_name, buildIntType(), parameterList, globalScope);
   SgBasicBlock *func_body = func->get_definition()->get_body();
 
   // push function body scope into stack
@@ -32,19 +32,16 @@ int main(int argc, char *argv[]) {
 
   // build a statement in the function body
   SgVarRefExp *var_ref = buildVarRefExp(var1_name);
-  SgPlusPlusOp *pp_expression = buildPlusPlusOp(var_ref, var_ref->get_type());
+  SgPlusPlusOp *pp_expression =
+      buildPlusPlusOp(var_ref, var_ref->get_type(), SgUnaryOp::prefix);
   SgExprStatement *new_stmt = buildExprStatement(pp_expression);
 
   // insert a statement into the function body
   appendStatement(new_stmt, func_body);
+  appendStatement(buildReturnStmt(buildVarRefExp(var1_name)), func_body);
   //  pop function body off the stack
   popScopeStack();
 
-  //  insert the function declaration into the scope at the top of the scope
-  //  stack
-  ROSE_ASSERT(detachAuxiliaryDeclaration(globalScope, func));
-  ROSE_ASSERT(func->get_parent() == nullptr);
-  prependStatement(func, globalScope);
   popScopeStack();
 
   AstTests::runAllTests(project);

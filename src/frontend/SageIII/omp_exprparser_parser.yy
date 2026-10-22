@@ -16,6 +16,10 @@ expression_parser.output -- bison -y -d -r state in the build tree
 %defines
 %define parse.error verbose
 
+%code requires {
+class SgExpression;
+}
+
 %{
 /* DQ (2/10/2014): IF is conflicting with template IF. */
 #undef IF
@@ -621,16 +625,8 @@ expression_parser.output -- bison -y -d -r state in the build tree
 
       SgSymbol *symbol = SageInterface::lookupSymbolInParentScopes(
           SgName(canonical), omp_exprparser_fortran_typed_scope);
-      std::set<SgAliasSymbol *> aliases;
-      while (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
-        if (alias->get_alias() == NULL || !aliases.insert(alias).second) {
-          std::cerr << "REX_OMP_AST_INVARIANT[fortran-typed-scope-name]: "
-                       "name '"
-                    << spelling << "' has an invalid Sage alias chain\n";
-          ROSE_ABORT();
-        }
-        symbol = alias->get_alias();
-      }
+      if (auto *alias = isSgAliasSymbol(symbol))
+        symbol = alias->get_base();
       if (symbol == NULL || (isSgVariableSymbol(symbol) == NULL &&
                              isSgEnumFieldSymbol(symbol) == NULL &&
                              isSgFunctionSymbol(symbol) == NULL)) {
@@ -983,7 +979,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
       return SageInterface::usualArithmeticConversionType(
           operand_type, SageBuilder::buildIntType(), omp_directive_node);
     case OmpExactSubexpressionKind::address_of:
-      return SageBuilder::buildPointerType(operand_type);
+      return SageBuilder::buildAddressOfResultType(operand_type);
     default:
       std::cerr << "REX_OMP_AST_INVARIANT[sage-expression-type]: C/C++ "
                    "unary operation="
@@ -1340,17 +1336,9 @@ expression_parser.output -- bison -y -d -r state in the build tree
     ROSE_ABORT();
   }
 
-  static SgSymbol *unwrapOpenMPSageAlias(SgSymbol *symbol,
-                                         const std::string &spelling) {
-    std::set<SgAliasSymbol *> aliases;
-    while (SgAliasSymbol *alias = isSgAliasSymbol(symbol)) {
-      if (alias->get_alias() == NULL || !aliases.insert(alias).second) {
-        std::cerr << "REX_OMP_AST_INVARIANT[sage-name-lookup]: identifier '"
-                  << spelling << "' has an invalid Sage alias chain\n";
-        ROSE_ABORT();
-      }
-      symbol = alias->get_alias();
-    }
+  static SgSymbol *unwrapOpenMPSageAlias(SgSymbol *symbol) {
+    if (auto *alias = isSgAliasSymbol(symbol))
+      return alias->get_base();
     return symbol;
   }
 
@@ -1384,7 +1372,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
     const auto range =
         scope->get_symbol_table()->get_table()->equal_range(SgName(name));
     for (auto entry = range.first; entry != range.second; ++entry) {
-      SgSymbol *symbol = unwrapOpenMPSageAlias(entry->second, name);
+      SgSymbol *symbol = unwrapOpenMPSageAlias(entry->second);
       if (symbol != NULL && identities.insert(symbol).second) {
         result.push_back(symbol);
       }
@@ -1625,7 +1613,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
 
   static SgScopeStatement *
   requireOpenMPQualifierScope(SgSymbol *symbol, const std::string &spelling) {
-    symbol = unwrapOpenMPSageAlias(symbol, spelling);
+    symbol = unwrapOpenMPSageAlias(symbol);
     if (SgNamespaceSymbol *namespace_symbol = isSgNamespaceSymbol(symbol)) {
       SgNamespaceDeclarationStatement *declaration =
           namespace_symbol->get_declaration();
@@ -1664,7 +1652,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
       const std::vector<SgSymbol *> &symbols, const std::string &spelling) {
     std::vector<SgSymbol *> values;
     for (SgSymbol *symbol : symbols) {
-      symbol = unwrapOpenMPSageAlias(symbol, spelling);
+      symbol = unwrapOpenMPSageAlias(symbol);
       if (isOpenMPSageValueSymbol(symbol)) {
         values.push_back(symbol);
       }
@@ -1681,7 +1669,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
 
   static SgExpression *buildOpenMPSageValueExpression(
       SgSymbol *symbol, const std::string &spelling) {
-    symbol = unwrapOpenMPSageAlias(symbol, spelling);
+    symbol = unwrapOpenMPSageAlias(symbol);
     if (SgVariableSymbol *variable = isSgVariableSymbol(symbol)) {
       if (!isKnownVariableSymbolType(variable)) {
         std::cerr << "REX_OMP_AST_INVARIANT[sage-name-lookup]: variable '"
@@ -2243,7 +2231,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
       }
       for (SgSymbol *symbol : lookupOpenMPSageMemberSymbols(
                name, base_definition, visited)) {
-        symbol = unwrapOpenMPSageAlias(symbol, name);
+        symbol = unwrapOpenMPSageAlias(symbol);
         if (symbol != NULL && identities.insert(symbol).second) {
           inherited.push_back(symbol);
         }
@@ -2310,8 +2298,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
     }
     if (member_type->isConstFunc() || member_type->isVolatileFunc() ||
         member_type->isRestrictFunc()) {
-      SgModifierType *qualified_type = new SgModifierType(this_base_type);
-      SgTypeModifier &modifier = qualified_type->get_typeModifier();
+      SgTypeModifier modifier;
       if (member_type->isConstFunc()) {
         modifier.get_constVolatileModifier().setConst();
       }
@@ -2321,12 +2308,7 @@ expression_parser.output -- bison -y -d -r state in the build tree
       if (member_type->isRestrictFunc()) {
         modifier.setRestrict();
       }
-      SgModifierType *canonical =
-          SgModifierType::insertModifierTypeIntoTypeTable(qualified_type);
-      if (canonical != qualified_type) {
-        delete qualified_type;
-      }
-      this_base_type = canonical;
+      this_base_type = SageBuilder::buildModifierType(this_base_type, modifier);
     }
     return SageBuilder::buildThisExp(symbol,
                                      SgPointerType::createType(this_base_type));
@@ -2482,6 +2464,14 @@ corresponding C type is union name defaults to YYSTYPE.
   double ftype;
   const char *stype;
   void *ptype; /* For expressions */
+  struct {
+    const char *spelling;
+    bool qualified;
+  } identifier;
+  struct {
+    SgExpression *node;
+    bool qualified_id;
+  } operand;
 }
 
         /*Some operators have a suffix 2 to avoid name conflicts with ROSE's
@@ -2497,7 +2487,8 @@ corresponding C type is union name defaults to YYSTYPE.
                                   ARRAY_SECTION STATIC_CAST SIZEOF TYPE_INT
         /*We ignore NEWLINE since we only care about the pragma string , We
            relax the syntax check by allowing it as part of line continuation */
-%token <stype> ICONSTANT EXPRESSION ID_EXPRESSION HEXCONSTANT
+%token <identifier> ID_EXPRESSION
+%token <stype> ICONSTANT EXPRESSION HEXCONSTANT
               STRING_LITERAL FORTRAN_COMMON_BLOCK
 
         /* nonterminals names, types for semantic values, only for nonterminals
@@ -2506,11 +2497,11 @@ corresponding C type is union name defaults to YYSTYPE.
 %type <ptype> expression assignment_expr conditional_expr logical_or_expr
             logical_and_expr inclusive_or_expr exclusive_or_expr and_expr
                 equality_expr relational_expr shift_expr additive_expr
-                    multiplicative_expr cast_expr primary_expr unary_expr
-                        postfix_expr parenthesized_argument_list
+                    multiplicative_expr cast_expr parenthesized_argument_list
                             parenthesized_argument_list_opt
                                 parenthesized_argument_item
                                     fortran_subscript_item
+%type <operand> primary_expr unary_expr postfix_expr
 
         /* start point for the parsing */
 %start openmp_expression
@@ -2553,89 +2544,89 @@ expression : assignment_expr
     : conditional_expr |
       logical_or_expr | unary_expr '=' assignment_expr {
   current_exp = SageBuilder::buildAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr RIGHT_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildRshiftAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::rshift_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::rshift_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr LEFT_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildLshiftAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::lshift_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::lshift_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr ADD_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildPlusAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::add_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::add_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr SUB_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildMinusAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::subtract_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::subtract_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr MUL_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildMultAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::multiply_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::multiply_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr DIV_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildDivAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::divide_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::divide_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr MOD_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildModAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::modulo_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::modulo_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr AND_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildAndAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::bit_and_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::bit_and_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr XOR_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildXorAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::bit_xor_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::bit_xor_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 }
 | unary_expr OR_ASSIGN2 assignment_expr {
   current_exp = SageBuilder::buildIorAssignOp(
-      (SgExpression *)($1), (SgExpression *)($3),
+      $1.node, (SgExpression *)($3),
       deriveOpenMPCxxAssignmentResultType(
-          OmpExactSubexpressionKind::bit_or_assign, (SgExpression *)($1),
+          OmpExactSubexpressionKind::bit_or_assign, $1.node,
           (SgExpression *)($3)));
   $$ = current_exp;
 };
@@ -2823,13 +2814,13 @@ primary_expr : ICONSTANT {
   SgValueExp *int_val = buildOpenMPIntegerLiteral((const char *)($1), false);
   free(const_cast<char *>($1));
   current_exp = int_val;
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | HEXCONSTANT {
   SgValueExp *int_val = buildOpenMPIntegerLiteral((const char *)($1), true);
   free(const_cast<char *>($1));
   current_exp = int_val;
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | STRING_LITERAL {
   const std::string source_literal((const char *)($1));
@@ -2874,25 +2865,25 @@ primary_expr : ICONSTANT {
     ROSE_ABORT();
   }
   current_exp = string_literal;
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | ID_EXPRESSION {
   SgScopeStatement *scope = SageInterface::getScope(omp_directive_node);
   ROSE_ASSERT(scope != NULL);
-  current_exp = buildOpenMPIdentifierExpression((const char *)($1), scope);
+  current_exp = buildOpenMPIdentifierExpression($1.spelling, scope);
   if (current_exp == NULL) {
     if (SageInterface::is_Fortran_language()) {
       std::cerr << "[REX-OMP-UNRESOLVED-FORTRAN-NAME] no symbol for '"
-                << (const char *)($1) << "'\n";
+                << $1.spelling << "'\n";
       ROSE_ABORT();
     } else {
       std::cerr << "[REX-OMP-UNRESOLVED-CXX-NAME] no symbol for '"
-                << (const char *)($1) << "'\n";
+                << $1.spelling << "'\n";
       ROSE_ABORT();
     }
   }
-  free(const_cast<char *>($1));
-  $$ = current_exp;
+  free(const_cast<char *>($1.spelling));
+  $$ = {current_exp, $1.qualified};
 }
 | '(' expression ')' {
   SgExpression *parenthesized = isSgExpression((SgNode *)($2));
@@ -2900,11 +2891,11 @@ primary_expr : ICONSTANT {
     parenthesized->set_need_paren(true);
     current_exp = parenthesized;
   }
-  $$ = current_exp;
+  $$ = {current_exp, false};
 };
 
 cast_expr : unary_expr {
-  current_exp = (SgExpression *)($1);
+  current_exp = $1.node;
   $$ = current_exp;
 }
 | '(' TYPE_INT ')' cast_expr {
@@ -2916,88 +2907,89 @@ cast_expr : unary_expr {
 };
 
 unary_expr : postfix_expr {
-  current_exp = (SgExpression *)($1);
-  $$ = current_exp;
+  current_exp = $1.node;
+  $$ = $1;
 }
 | PLUSPLUS unary_expr {
   current_exp = SageBuilder::buildPlusPlusOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(
           OmpExactSubexpressionKind::prefix_increment,
-          (SgExpression *)($2)),
+          $2.node),
       SgUnaryOp::prefix);
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | '+' unary_expr {
   current_exp = SageBuilder::buildUnaryAddOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(OmpExactSubexpressionKind::unary_plus,
-                                     (SgExpression *)($2)));
-  $$ = current_exp;
+                                     $2.node));
+  $$ = {current_exp, false};
 }
 | '-' unary_expr {
   current_exp = SageBuilder::buildMinusOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(OmpExactSubexpressionKind::unary_minus,
-                                     (SgExpression *)($2)));
-  $$ = current_exp;
+                                     $2.node));
+  $$ = {current_exp, false};
 }
 | '!' unary_expr {
   current_exp = SageBuilder::buildNotOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(OmpExactSubexpressionKind::logical_not,
-                                     (SgExpression *)($2)));
-  $$ = current_exp;
+                                     $2.node));
+  $$ = {current_exp, false};
 }
 | '~' unary_expr {
   current_exp = SageBuilder::buildBitComplementOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(
           OmpExactSubexpressionKind::bit_complement,
-          (SgExpression *)($2)));
-  $$ = current_exp;
+          $2.node));
+  $$ = {current_exp, false};
 }
 | '&' unary_expr {
   current_exp = SageBuilder::buildAddressOfOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(OmpExactSubexpressionKind::address_of,
-                                     (SgExpression *)($2)));
-  $$ = current_exp;
+                                     $2.node),
+      $2.qualified_id ? SgAddressOfOp::e_address_operand_qualified_id
+                      : SgAddressOfOp::e_address_operand_object);
+  $$ = {current_exp, false};
 }
 | STATIC_CAST '<' TYPE_INT '>' '(' expression ')' {
   current_exp = SageBuilder::buildCastExp(
       (SgExpression *)($6),
       deriveOpenMPCxxCastToIntResultType(OmpExactSubexpressionKind::cast),
       SgCastExp::e_static_cast);
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | SIZEOF unary_expr {
   current_exp = SageBuilder::buildSizeOfOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxSizeofResultType(
           OmpExactSubexpressionKind::sizeof_expression));
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | SIZEOF '(' TYPE_INT ')' {
   current_exp = SageBuilder::buildSizeOfOp(
       SageBuilder::buildIntType(),
       deriveOpenMPCxxSizeofResultType(OmpExactSubexpressionKind::sizeof_type));
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | '*' unary_expr {
   current_exp = SageBuilder::buildPointerDerefExp(
-      (SgExpression *)($2),
-      deriveOpenMPCxxDereferenceResultType((SgExpression *)($2)));
-  $$ = current_exp;
+      $2.node, deriveOpenMPCxxDereferenceResultType($2.node));
+  $$ = {current_exp, false};
 }
 | MINUSMINUS unary_expr {
   current_exp = SageBuilder::buildMinusMinusOp(
-      (SgExpression *)($2),
+      $2.node,
       deriveOpenMPCxxUnaryResultType(
           OmpExactSubexpressionKind::prefix_decrement,
-          (SgExpression *)($2)),
+          $2.node),
       SgUnaryOp::prefix);
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 
 ;
@@ -3057,26 +3049,26 @@ fortran_subscript_item : expression ':' expression {
 
 postfix_expr : primary_expr {
   arraySection = false;
-  current_exp = (SgExpression *)($1);
-  $$ = current_exp;
+  current_exp = $1.node;
+  $$ = $1;
 }
 | postfix_expr '(' parenthesized_argument_list_opt ')' {
   current_exp =
-      buildPostfixParenExpression((SgExpression *)($1), (SgExprListExp *)($3));
-  $$ = current_exp;
+      buildPostfixParenExpression($1.node, (SgExprListExp *)($3));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' expression ']' {
   arraySection = false;
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), (SgExpression *)($3),
-      deriveOpenMPCxxSubscriptResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, (SgExpression *)($3),
+      deriveOpenMPCxxSubscriptResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' expression ':' expression ']' {
   arraySection = true; // array section expression
                        // postfix_expr should be ID_EXPRESSION
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3097,14 +3089,14 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' expression ':' expression ':' expression ']' {
   arraySection = true; // array section expression with explicit stride
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3115,14 +3107,14 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' ':' expression ']' {
   arraySection = true; // array section expression with omitted lower bound
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3143,15 +3135,15 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' ':' ']' {
   arraySection =
       true; // array section expression with omitted lower bound and length
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3161,14 +3153,14 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' ':' expression ':' expression ']' {
   arraySection = true; // array section expression with omitted lower bound
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3179,15 +3171,15 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' ':' ':' expression ']' {
   arraySection = true; // array section expression with omitted lower bound and
                        // length, explicit stride
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3198,14 +3190,14 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' expression ':' ']' {
   arraySection = true; // array section expression with omitted length
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3215,15 +3207,15 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '[' expression ':' ':' expression ']' {
   arraySection =
       true; // array section expression with omitted length and explicit stride
   if (array_symbol == NULL) {
-    if (SgVarRefExp *vref = isSgVarRefExp((SgExpression *)($1))) {
+    if (SgVarRefExp *vref = isSgVarRefExp($1.node)) {
       array_symbol = isSgVariableSymbol(vref->get_symbol());
     }
   }
@@ -3234,49 +3226,49 @@ postfix_expr : primary_expr {
   SgSubscriptExpression *subscript =
       buildOpenMPArraySectionSubscript(lower_exp, length_exp, stride_exp);
   current_exp = SageBuilder::buildPntrArrRefExp(
-      (SgExpression *)($1), subscript,
-      deriveOpenMPArraySectionResultType((SgExpression *)($1)));
-  $$ = current_exp;
+      $1.node, subscript,
+      deriveOpenMPArraySectionResultType($1.node));
+  $$ = {current_exp, false};
 }
 | postfix_expr '.' ID_EXPRESSION {
-  SgExpression *base = (SgExpression *)($1);
+  SgExpression *base = $1.node;
   SgExpression *member =
-      buildOpenMPMemberReference(base, (const char *)($3), false);
-  free(const_cast<char *>($3));
+      buildOpenMPMemberReference(base, $3.spelling, false);
+  free(const_cast<char *>($3.spelling));
   current_exp = SageBuilder::buildDotExp(
       base, member,
       consumeOpenACCExactMemberReferenceType(
           OmpExactSubexpressionKind::member_dot, base, member));
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | postfix_expr PTR_TO ID_EXPRESSION {
-  SgExpression *base = (SgExpression *)($1);
+  SgExpression *base = $1.node;
   SgExpression *member =
-      buildOpenMPMemberReference(base, (const char *)($3), true);
-  free(const_cast<char *>($3));
+      buildOpenMPMemberReference(base, $3.spelling, true);
+  free(const_cast<char *>($3.spelling));
   current_exp = SageBuilder::buildArrowExp(
       base, member,
       consumeOpenACCExactMemberReferenceType(
           OmpExactSubexpressionKind::member_arrow, base, member));
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | postfix_expr PLUSPLUS {
   current_exp = SageBuilder::buildPlusPlusOp(
-      (SgExpression *)($1),
+      $1.node,
       deriveOpenMPCxxUnaryResultType(
           OmpExactSubexpressionKind::postfix_increment,
-          (SgExpression *)($1)),
+          $1.node),
       SgUnaryOp::postfix);
-  $$ = current_exp;
+  $$ = {current_exp, false};
 }
 | postfix_expr MINUSMINUS {
   current_exp = SageBuilder::buildMinusMinusOp(
-      (SgExpression *)($1),
+      $1.node,
       deriveOpenMPCxxUnaryResultType(
           OmpExactSubexpressionKind::postfix_decrement,
-          (SgExpression *)($1)),
+          $1.node),
       SgUnaryOp::postfix);
-  $$ = current_exp;
+  $$ = {current_exp, false};
 };
 
 /* ----------------------end for parsing expressions ------------------*/

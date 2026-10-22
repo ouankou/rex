@@ -40,12 +40,6 @@
 // for everyone else.  We are searching for a better solution.
 #include "rose_paths.h"
 
-// DQ (5/30/2004): Added to permit warnings to be placed in the source code so
-// that issues can be addressed later but called out during development (and
-// eliminated from the final released version of the source code).
-#define PRINT_DEVELOPER_WARNINGS 0
-// #define PRINT_DEVELOPER_WARNINGS 1
-
 // DQ (4/21/2009): Added test to debug use of _FILE_OFFSET_BITS macro in
 // controling size of "struct stat" #if defined(_FILE_OFFSET_BITS) #warning "The
 // _FILE_OFFSET_BITS macro should not be set yet!" #endif

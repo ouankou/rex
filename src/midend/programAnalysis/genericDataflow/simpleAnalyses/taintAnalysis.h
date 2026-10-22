@@ -4,58 +4,11 @@
 #ifndef ROSE_TaintAnalysis_H
 #define ROSE_TaintAnalysis_H
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-// Tainted flow analysis.
-//
-// The original version of this tainted flow analysis was written 2012-09 by
-// someone other than the author of the genericDataflow framework.  It is based
-// on the sign analysis (sgnAnalysis.[Ch]) in this same directory since
-// documentation for the genericDataflow framework is fairly sparse: 5 pages in
-// the tutorial, not counting the code listings) and no API reference.
-//
-// This file contains two types of comments:
-//    1. Comments that try to document some of the things I've discovered
-//    through playing with the genericDataflow framework.
-//    2. Comments and suggestions about usability, consistency, and
-//    applicability.
-//
-// [RPM 2012-09]
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// USABILITY: Names of header files aren't consistent across the genericDataflow
-// files. E.g., in the "lattice" directory we have "lattice.h" that defines the
-// Lattice class, but "ConstrGraph.h" that defines "ConstrGraph" (and apparently
-// no documentation as to what "Constr" means).
 #include "dataflow.h"
 
 #include "lattice.h"
 
-#include "liveDeadVarAnalysis.h" // misspelled? Shouldn't it be liveDeadVarsAnalysis or LiveDeadVarsAnalysis?
-
-// USABILITY: The abundant use of dynamic_cast makes it seem like something's
-// wrong with the whole dataflow design.  And I
-//            couldn't find any documentation about when it's okay to cast from
-//            Lattice to one of its subclasses, so I've made the assumption
-//            throughout that when the dynamic_cast returns null, the node in
-//            question points to a variable or expression that the live/dead
-//            analysis has determined to be dead.
-//
-// USABILITY: No API reference for the genericDataflow framework?!? It looks
-// like there are some doc-style comments
-//            describing a few function parameters, but overall documentation
-//            coverage is sparse.
-//
-// USABILITY: The genericDataflow framework always produces files named
-// "index.html", "summary.html", and "detail.html" and
-//            a directory named "dbg_imgs" regardless of any debug settings.
-//            These are apprently the result of the Dbg::init() call made from
-//            the main program, and this call is required (omitting it results
-//            in segmentation faults).  The file names are constant and
-//            therefore one should expect tests to clobber each other's outputs
-//            when run in parallel.  The contents of the files cannot be
-//            trusted.  Furthermore, since these are HTML files, an aborted test
-//            will generate only a partial HTML file which some browsers will
-//            choke on.
+#include "liveDeadVarAnalysis.h"
 
 /******************************************************************************************************************************
  * Taint Lattice
@@ -106,53 +59,30 @@ public:
   /** Returns a new copy of this vertex pointer. */
   virtual Lattice *copy() const override { return new TaintLattice(*this); }
 
-  // USABILITY: The base class defines copy() without a const argument, so we
-  // must do the same here.
   /** Assignment-like operator. Makes this object point to the same lattice
    * vertex as the `other` object. The other object must also be a TaintLattice
    * object. */
-  virtual void copy(/*const*/ Lattice *other_) override;
+  virtual void copy(Lattice *other_) override;
 
-  // USABILITY: The base class defines '==' with non-const argument and "this",
-  // so we must do the same here. USABILITY: This is not a real equality
-  // predicate since it's not reflexive.  In other words, (A==B) does not imply
-  // (B==A)
-  //            for all values of A and B.
-  /** Equality predicate, sort of. Beware that this is not true equality since
-   * it is not symmetric. */
-  virtual bool operator==(/*const*/ Lattice *other_) /*const*/ override;
+  virtual bool operator==(Lattice *other_) override;
 
-  // USABILITY: The base class defines str() with non-const "this", so we must
-  // do the same here.  That means that if we want
-  //            to use this functionality from our own methods (that have const
-  //            "this") we have to distill it out to some other place.
-  // USABILITY: The "prefix" argument is pointless. Why not just use
-  // StringUtility::prefixLines() in the base class rather
-  //            than replicate this functionality all over the place?
   /** String representation of the lattice vertex to which this object points.
    * The return value is the name of the vertex to which this object points,
    * sans "VERTEX_" prefix, and converted to lower case.  The `prefix` is
    * prepended to the returned string. */
-  virtual std::string
-  str(/*const*/ std::string /*&*/ prefix) /*const*/ override {
+  virtual std::string str(std::string prefix) override {
     return prefix + to_string();
   }
 
-  // USABILITY: We define this only because of deficiencies with the "str"
-  // signature in the base class.  Otherwise our
-  //            printing method (operator<<) could just use str().  We're trying
-  //            to avoid evil const_cast.
   /** String representation of a lattice vertex.  Returns the name of the taint
    * lattice vertex to which this object points. The returned string is one of
    * the Vertex enum constants sans the "VERTEX_" prefix and converted to lower
    * case. */
   std::string to_string() const;
 
-  // USABILITY: The base class defines meetUpdate() with a non-const argument,
-  // so we must do the same here.
   /** Merges this lattice node with another and stores the result in this node.
    * Returns true iff this node changed. */
-  virtual bool meetUpdate(/*const*/ Lattice *other_) override;
+  virtual bool meetUpdate(Lattice *other_) override;
 
   friend std::ostream &operator<<(std::ostream &o, const TaintLattice &lattice);
 };
@@ -167,12 +97,6 @@ protected:
   std::ostream *debug;
 
 public:
-  // USABILITY: Documentation as to why a live/dead analysis is used in
-  // SgnAnalysis would be nice. I tried doing it without
-  //            originally to make things simpler, but it seems that the
-  //            FiniteVarsExprProductLattice depends on it even though I saw
-  //            commented out code and comments somewhere(?) that indicated
-  //            otherwise.
   TaintAnalysis(LiveDeadVarsAnalysis *ldv_analysis)
       : ldv_analysis(ldv_analysis), debug(NULL) {}
 
@@ -184,38 +108,14 @@ public:
   void set_debug(std::ostream *os) { debug = os; }
   /** @} */
 
-  // NOTE: The "Function" type is a wrapper around SgFunctionDeclaration and
-  // the data flow traversals depend on this fact.
-  //
-  // NOTE:      The "DataflowNode" is just a VirtualCFG::DataflowNode that
-  // contains a VirtualCFG::CFGNode pointer and a
-  //            "filter". I didn't find any documentation for how "filter" is
-  //            used.
-  //
-  // USABILITY: The "initLattices" and "initFacts" are not documented. They're
-  // apparently only outputs for this function
-  //            since they seem to be empty on every call and are not const.
-  //            They're apparently not parallel arrays since the examples I
-  //            was looking at don't push the same number of items into each
-  //            vector.
-  //
-  // USABILITY: Copied from
-  // src/midend/programAnalysis/genericDataflow/simpleAnalyses/sgnAnalysis.C.
-  // I'm not sure what
-  //            it's doing yet since there's no API reference for
-  //            FiniteVarsExprsProductLattice or any of its members.
-  //
   /** Generate initial lattice state.  Generates the initial lattice state for
    * the given dataflow node, in the given function, with the given node
    * state. */
-  void genInitState(const Function &func, const DataflowNode &node,
+  void genInitState(const Function &func, const VirtualCFG::DataflowNode &node,
                     const NodeState &state,
                     std::vector<Lattice *> &initLattices,
                     std::vector<NodeFact *> &initFacts);
 
-  // USABILITY: Not documented in the API reference, so I'm more or less copying
-  // from the SgnAnalysis::transfer() method defined in
-  //            src/midend/programAnalysis/genericDataflow/sgnAnalysis.C.
   /** Adjust a result vertex pointer.  This function has an opportunity to
    * adjust the result lattice vertex pointer based on input lattice vertices at
    * a particular AST node at a particular time in the data flow.  For instance,
@@ -227,7 +127,7 @@ public:
    *  This method returns true if it changed where the result points, and false
    * otherwise.  For example, if the result originally pointed to VERTEX_BOTTOM
    * but now points to VERTEX_TAINTED then we would return true. */
-  bool transfer(const Function &func, const DataflowNode &node_,
+  bool transfer(const Function &func, const VirtualCFG::DataflowNode &node_,
                 NodeState &state, const std::vector<Lattice *> &dfInfo);
 
 protected:

@@ -1,6 +1,32 @@
 module rex_ast_json_semantic_publication_module
   implicit none
+  type :: implicit_box
+    integer :: value
+  end type implicit_box
+  interface operator(.rexchoice.)
+    module procedure integer_choice, box_choice
+  end interface
+  interface operator(.not.)
+    module procedure box_choice
+  end interface
+  interface operator(+)
+    module procedure box_choice
+  end interface
+  interface operator(-)
+    module procedure box_choice
+  end interface
 contains
+  integer function integer_choice(value)
+    integer, intent(in) :: value
+    integer_choice = value
+  end function integer_choice
+
+  function box_choice(value) result(values)
+    type(implicit_box), intent(in) :: value
+    real :: values(2)
+    values = real([value%value, value%value + 1])
+  end function box_choice
+
   function semantic_publication(values) result(text)
     integer, intent(in) :: values(1)
     character(len=semantic_publication_length(values) + lbound(values, 1) - 1) :: text
@@ -16,10 +42,17 @@ contains
 end module rex_ast_json_semantic_publication_module
 
 program rex_ast_json_fortran_procedure_source_forms
-  use rex_ast_json_semantic_publication_module
+  use rex_ast_json_semantic_publication_module, &
+      local_length => semantic_publication_length, local_box => implicit_box
   implicit none
   integer, parameter :: source_kind = kind(0)
   integer, parameter :: source_len = 2
+  type(local_box) :: operator_box
+  integer :: standalone_count
+  parameter (standalone_count = 3)
+  integer :: constant_shape
+  dimension constant_shape(2)
+  parameter (constant_shape = [1, 2])
   integer :: i_twice
   external :: i_twice
   integer, external :: j_twice
@@ -42,10 +75,15 @@ program rex_ast_json_fortran_procedure_source_forms
   integer :: dimensioned
   integer :: intrinsic_shadow_value
   integer :: semantic_publication_lengths(1)
+  integer, parameter :: data_copies = 2
+  integer :: slash_values(3) /data_copies*2,1/
+  integer :: slash_scalar /7/
+  integer :: data_values(3)
   dimension dimensioned(2:5)
 
   type :: selector_box
     integer(kind=source_kind) :: member
+    integer, pointer :: pointer_member(:)
     character :: left*2, right*3
     character, dimension(2) :: component_text*3
   end type selector_box
@@ -61,14 +99,58 @@ program rex_ast_json_fortran_procedure_source_forms
     end function unlimited_factory
   end interface
 
+  abstract interface
+    integer function rex_abstract_signature(value)
+      integer, intent(in) :: value
+    end function rex_abstract_signature
+  end interface
+  procedure(rex_abstract_signature), pointer :: abstract_proc
+  procedure(abstract_proc), pointer :: pointer_interface
+  procedure(integer(kind=source_kind)), pointer :: typed_proc
+  procedure(local_length), pointer :: renamed_proc
+  procedure(type(local_box)), pointer :: derived_proc
+  type :: procedure_box
+    procedure(rex_abstract_signature), pointer, nopass :: callback
+    procedure(rex_default_pass_signature), pointer :: implicit_callback
+    procedure(rex_default_pass_signature), pointer, pass :: explicit_callback
+    procedure(rex_named_pass_signature), pointer, pass(self) :: named_callback
+  end type procedure_box
+  abstract interface
+    integer function rex_default_pass_signature(self, value)
+      import :: procedure_box
+      class(procedure_box), intent(in) :: self
+      integer, intent(in) :: value
+    end function rex_default_pass_signature
+    integer function rex_named_pass_signature(value, self)
+      import :: procedure_box
+      integer, intent(in) :: value
+      class(procedure_box), intent(in) :: self
+    end function rex_named_pass_signature
+  end interface
+
+  data data_values /data_copies*2,1/
+
+  operator_box%value = 2
+  if ((.rexchoice. 1_4) /= 1) error stop 9
+  if ((.rexchoice. (1_4)) /= 1) error stop 14
+  if (any((.rexchoice. local_box(2)) /= [2.0, 3.0])) error stop 15
+  if (any((.rexchoice. operator_box) /= [2.0, 3.0])) error stop 10
+  if (any((.not. operator_box) /= [2.0, 3.0])) error stop 11
+  if (any((+operator_box) /= [2.0, 3.0])) error stop 12
+  if (any((-operator_box) /= [2.0, 3.0])) error stop 13
   if (i_twice(3) /= 6) error stop 1
   if (j_twice(4) /= 8) error stop 2
   if (k_twice(5) /= 10) error stop 3
   if (m_twice(6) /= 12) error stop 4
-  call intrinsic_shadow(intrinsic_shadow_value)
+  call intrinsic_shadow(value=intrinsic_shadow_value)
+  if (intrinsic_shadow_value /= 2) error stop 6
   semantic_publication_lengths = 3
   if (semantic_publication(semantic_publication_lengths) /= 'abc') error stop 5
   empty_boxes = [empty_box :: empty_box()]
+  if (any(slash_values /= [2,2,1])) error stop 7
+  if (any(data_values /= slash_values) .or. slash_scalar /= 7) error stop 8
+  go to 90283
+90283 stop 0
 
 contains
 
@@ -99,9 +181,15 @@ contains
 
   class(selector_box) function allocate_selector_box() result(output)
     allocatable :: output
+    integer, allocatable :: scratch(:)
+    integer, pointer :: scratch_pointer(:)
+    integer :: status
 
     allocate(output)
     output%member = 1
+    allocate(scratch(2), stat=status)
+    deallocate(scratch, stat=status)
+    nullify(scratch_pointer)
   end function allocate_selector_box
 end program rex_ast_json_fortran_procedure_source_forms
 
@@ -132,3 +220,13 @@ integer(kind=kind(0)) function m_twice(value)
 
   m_twice = value * 2
 end function m_twice
+
+subroutine rex_implicit_ranges
+  use rex_ast_json_semantic_publication_module, only: local_box => implicit_box
+  implicit integer(a-a,b), real(c-d), complex(kind=4)(e-f,h-h), type(local_box)(x-z)
+  a = 1
+  b = 2
+  c = 3
+  d = 4
+  x%value = a + b + int(c + d)
+end subroutine rex_implicit_ranges

@@ -7,9 +7,8 @@ void foobar() {
     /* comment comment comment */
     int k = ii;
     if (k >= 42) {
-      int m;
       int *array;
-      m = MACRO(k);
+      int m = MACRO(k);
     }
   }
 }

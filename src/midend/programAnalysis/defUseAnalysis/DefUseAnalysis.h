@@ -24,15 +24,10 @@ private:
   bool DEBUG_MODE;
   std::vector<SgInitializedName *> globalVarList;
 
-  bool visualizationEnabled;
-
   // def-use-specific --------------------
   typedef std::vector<std::pair<SgInitializedName *, SgNode *>> multitype;
-  //  typedef std::multimap < SgInitializedName* , SgNode* > multitype;
 
   typedef std::map<SgNode *, multitype> tabletype;
-  // typedef std::map< SgNode* , int > convtype;
-  // typedef __gnu_cxx::hash_map< SgNode* , int > convtype;
   typedef rose_hash::unordered_map<SgNode *, int> convtype;
 
   // local functions ---------------------
@@ -45,15 +40,13 @@ private:
   // the main table of all entries
   tabletype table;    // definition table
   tabletype usetable; // use table
-  // table for indirect definitions
-  // ideftype idefTable;
   // the helper table for visualization
   convtype vizzhelp;
   static int sgNodeCounter;
   int nrOfNodesVisited;
 
   // functions to be printed in DFAtoDOT
-  std::vector<FilteredCFGNode<IsDFAFilter>> dfaFunctions;
+  std::vector<VirtualCFG::FilteredCFGNode<IsDFAFilter>> dfaFunctions;
 
   void addAnyElement(tabletype *tabl, SgNode *sgNode,
                      SgInitializedName *initName, SgNode *defNode);
@@ -62,15 +55,7 @@ private:
   void printAnyMap(tabletype *tabl);
 
 public:
-  DefUseAnalysis(SgProject *proj)
-      : project(proj), DEBUG_MODE(false) {
-          // visualizationEnabled=true;
-          // table.clear();
-          // usetable.clear();
-          // globalVarList.clear();
-          // vizzhelp.clear();
-          // sgNodeCounter=0;
-        };
+  DefUseAnalysis(SgProject *proj) : project(proj), DEBUG_MODE(false) {};
   virtual ~DefUseAnalysis() {}
 
   std::map<SgNode *, multitype> getDefMap() { return table; }
@@ -118,7 +103,6 @@ public:
 
   int getIntForSgNode(SgNode *node);
   void dfaToDOT();
-  // void addIDefElement(SgNode* sgNode, SgInitializedName* initName);
 
   // clear the tables if necessary
   void flush() {
@@ -127,7 +111,6 @@ public:
     globalVarList.clear();
     vizzhelp.clear();
     sgNodeCounter = 1;
-    //  nrOfNodesVisited=0;
   }
 
   void flushHelp() {
@@ -135,13 +118,9 @@ public:
     sgNodeCounter = 1;
   }
 
-  void disableVisualization() { visualizationEnabled = false; }
-
   void flushDefuse() {
     table.clear();
     usetable.clear();
-    //   vizzhelp.clear();
-    // sgNodeCounter=1;
   }
 };
 

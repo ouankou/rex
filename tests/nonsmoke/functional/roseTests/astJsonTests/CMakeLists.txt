@@ -15,6 +15,58 @@ target_include_directories(rex_ast_json_required_fields PRIVATE
 target_link_libraries(rex_ast_json_required_fields
   ROSE_DLL ${link_with_libraries})
 
+set(_alignment_checkpoint_dir "${CMAKE_CURRENT_BINARY_DIR}/alignment-checkpoint")
+file(MAKE_DIRECTORY "${_alignment_checkpoint_dir}")
+add_test(NAME ASTJSON_rex_alignment_checkpoint
+  COMMAND testTranslator
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${_alignment_checkpoint_dir}/json
+    -std=gnu++14 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../CompileTests/Cxx_tests/rex_frontend_aligned_attribute_semantics.cpp
+  WORKING_DIRECTORY "${_alignment_checkpoint_dir}")
+set_tests_properties(ASTJSON_rex_alignment_checkpoint
+  PROPERTIES LABELS "ASTJSON;rex")
+
+set(_compound_qualified_dir "${CMAKE_CURRENT_BINARY_DIR}/compound-qualified")
+file(MAKE_DIRECTORY "${_compound_qualified_dir}")
+add_test(NAME ASTJSON_rex_compound_literal_qualified_source
+  COMMAND testTranslator
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${_compound_qualified_dir}/json
+    -std=gnu11 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../CompileTests/C_tests/rex_compound_literal_wrapped.c
+  WORKING_DIRECTORY "${_compound_qualified_dir}")
+set_tests_properties(ASTJSON_rex_compound_literal_qualified_source
+  PROPERTIES LABELS "ASTJSON;rex")
+
+set(_compound_array_dir "${CMAKE_CURRENT_BINARY_DIR}/compound-inferred-array")
+file(MAKE_DIRECTORY "${_compound_array_dir}")
+add_test(NAME ASTJSON_rex_compound_literal_inferred_array
+  COMMAND testTranslator
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${_compound_array_dir}/json
+    -std=gnu11 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../CompileTests/C_tests/test2013_47.c
+  WORKING_DIRECTORY "${_compound_array_dir}")
+set_tests_properties(ASTJSON_rex_compound_literal_inferred_array
+  PROPERTIES LABELS "ASTJSON;rex")
+
+add_executable(rex_ast_json_floating_values rex_ast_json_floating_values.cpp)
+target_include_directories(rex_ast_json_floating_values PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
+target_link_libraries(rex_ast_json_floating_values
+  ROSE_DLL ${link_with_libraries})
+add_test(NAME ASTJSON_rex_floating_values COMMAND rex_ast_json_floating_values)
+set_tests_properties(ASTJSON_rex_floating_values
+  PROPERTIES LABELS "ASTJSON;rex")
+
+add_executable(rex_ast_json_macro_state rex_ast_json_macro_state.cpp)
+target_include_directories(rex_ast_json_macro_state PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
+target_link_libraries(rex_ast_json_macro_state ROSE_DLL ${link_with_libraries})
+add_test(NAME ASTJSON_rex_macro_state COMMAND rex_ast_json_macro_state)
+set_tests_properties(ASTJSON_rex_macro_state PROPERTIES LABELS "ASTJSON;rex")
+
 add_executable(rex_ast_json_template_parameter_contract
   rex_ast_json_template_parameter_contract.cpp)
 target_include_directories(rex_ast_json_template_parameter_contract PRIVATE
@@ -27,6 +79,13 @@ add_executable(rex_ast_json_finalization_contract
 target_include_directories(rex_ast_json_finalization_contract PRIVATE
   ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
 target_link_libraries(rex_ast_json_finalization_contract
+  ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_ast_json_typedef_name_roundtrip
+  rex_ast_json_typedef_name_roundtrip.cpp)
+target_include_directories(rex_ast_json_typedef_name_roundtrip PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
+target_link_libraries(rex_ast_json_typedef_name_roundtrip
   ROSE_DLL ${link_with_libraries})
 
 add_executable(rex_ast_json_source_spelled_static_member
@@ -56,6 +115,14 @@ target_link_libraries(rex_ast_json_enum_owner
 
 add_executable(rex_ast_json_constructor_preinitialization
   rex_ast_json_constructor_preinitialization.cpp)
+target_include_directories(rex_ast_json_constructor_preinitialization PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/analysis
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/cfgUtils
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/lattice
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/simpleAnalyses
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/state
+  ${CMAKE_SOURCE_DIR}/src/midend/programAnalysis/genericDataflow/variables)
 target_link_libraries(rex_ast_json_constructor_preinitialization
   ROSE_DLL ${link_with_libraries})
 
@@ -141,6 +208,263 @@ target_include_directories(rex_ast_json_source_declaration_group PRIVATE
 target_link_libraries(rex_ast_json_source_declaration_group
   ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_qualified_function_roundtrip rex_qualified_function_roundtrip.cpp)
+if(ENABLE-FORTRAN)
+  set(_rex_entry_parameter_dir ${CMAKE_CURRENT_BINARY_DIR}/entry-parameter-ownership)
+  file(MAKE_DIRECTORY ${_rex_entry_parameter_dir})
+  add_test(NAME ASTJSON_rex_entry_parameter_declaration_ownership
+    WORKING_DIRECTORY ${_rex_entry_parameter_dir}
+    COMMAND testTranslator -rex:ast-json-checkpoint=pre-omp-construction
+      -rex:ast-json-dir=${_rex_entry_parameter_dir}/json
+      -rose:skipfinalCompileStep -c
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/rex_test2026_assign_assigned_goto_entry.f)
+  set_tests_properties(ASTJSON_rex_entry_parameter_declaration_ownership
+    PROPERTIES LABELS "ASTJSON;rex;Fortran")
+  find_program(REX_AST_JSON_PYTHON_EXECUTABLE NAMES python3 REQUIRED)
+  add_executable(rex_fortran_form_team_roundtrip rex_fortran_form_team_roundtrip.cpp)
+  target_link_libraries(rex_fortran_form_team_roundtrip ROSE_DLL)
+  add_test(NAME ASTJSON_rex_fortran_form_team_codegen
+    COMMAND ${REX_AST_JSON_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_form_team_codegen.py
+      $<TARGET_FILE:rex_fortran_form_team_roundtrip>
+      ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_form_team.f90)
+  set_tests_properties(ASTJSON_rex_fortran_form_team_codegen
+    PROPERTIES LABELS "ASTJSON;rex;Fortran;copy;sanitizer")
+endif()
+target_link_libraries(rex_qualified_function_roundtrip ROSE_DLL)
+set(_rex_qualified_function_dir ${CMAKE_CURRENT_BINARY_DIR}/qualified-function)
+file(MAKE_DIRECTORY ${_rex_qualified_function_dir})
+set(_rex_ast_json_codegen_flags)
+if(ENABLE-SANITIZER)
+  list(JOIN ROSE_SANITIZERS "," _rex_ast_json_codegen_sanitizers)
+  list(APPEND _rex_ast_json_codegen_flags
+    -fsanitize=${_rex_ast_json_codegen_sanitizers} -fno-omit-frame-pointer)
+endif()
+set(_rex_consteval_if_dir ${CMAKE_CURRENT_BINARY_DIR}/consteval-if)
+file(MAKE_DIRECTORY ${_rex_consteval_if_dir})
+add_test(NAME ASTJSON_rex_consteval_if_original_compile
+  COMMAND ${CMAKE_CXX_COMPILER} -std=c++23 ${_rex_ast_json_codegen_flags}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_consteval_if.cpp
+    -o ${_rex_consteval_if_dir}/original)
+set_tests_properties(ASTJSON_rex_consteval_if_original_compile
+  PROPERTIES LABELS "ASTJSON;rex;CFE" FIXTURES_SETUP rex_consteval_if_original)
+add_test(NAME ASTJSON_rex_consteval_if_original_runtime
+  COMMAND ${_rex_consteval_if_dir}/original)
+set_tests_properties(ASTJSON_rex_consteval_if_original_runtime
+  PROPERTIES LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_consteval_if_original)
+add_test(NAME ASTJSON_rex_consteval_if_checkpoint
+  WORKING_DIRECTORY ${_rex_consteval_if_dir}
+  COMMAND testTranslator -std=c++23 ${_rex_ast_json_codegen_flags}
+    -rex:ast-json-checkpoint=pre-omp-construction
+    -rex:ast-json-dir=${_rex_consteval_if_dir}/json
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_frontend_consteval_if.cpp
+    -o ${_rex_consteval_if_dir}/restored)
+set_tests_properties(ASTJSON_rex_consteval_if_checkpoint
+  PROPERTIES LABELS "ASTJSON;rex;CFE" FIXTURES_SETUP rex_consteval_if_restored)
+add_test(NAME ASTJSON_rex_consteval_if_restored_runtime
+  COMMAND ${_rex_consteval_if_dir}/restored)
+set_tests_properties(ASTJSON_rex_consteval_if_restored_runtime
+  PROPERTIES LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_consteval_if_restored)
+add_test(NAME ASTJSON_rex_qualified_function_roundtrip
+  WORKING_DIRECTORY ${_rex_qualified_function_dir}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_DIR=${_rex_qualified_function_dir}/json
+    $<TARGET_FILE:rex_qualified_function_roundtrip>
+      -std=gnu++17 ${_rex_ast_json_codegen_flags}
+      -o ${_rex_qualified_function_dir}/rex_qualified_function
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_qualified_function_input.cpp)
+set_tests_properties(ASTJSON_rex_qualified_function_roundtrip
+  PROPERTIES LABELS "ASTJSON;rex;CFE;copy" FIXTURES_SETUP rex_qualified_function)
+add_test(NAME ASTJSON_rex_qualified_function_runtime
+  COMMAND ${_rex_qualified_function_dir}/rex_qualified_function)
+set_tests_properties(ASTJSON_rex_qualified_function_runtime
+  PROPERTIES LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_qualified_function)
+add_executable(rex_ast_json_typeof_ownership rex_ast_json_typeof_ownership.cpp)
+target_link_libraries(rex_ast_json_typeof_ownership ROSE_DLL)
+set(_rex_typeof_dir ${CMAKE_CURRENT_BINARY_DIR}/typeof-ownership)
+file(MAKE_DIRECTORY ${_rex_typeof_dir})
+add_test(NAME ASTJSON_rex_typeof_original_compile
+  COMMAND ${CMAKE_C_COMPILER} -std=gnu11 ${_rex_ast_json_codegen_flags}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_typeof_ownership.c
+    -o ${_rex_typeof_dir}/original)
+set_tests_properties(ASTJSON_rex_typeof_original_compile PROPERTIES
+  LABELS "ASTJSON;rex;CFE" FIXTURES_SETUP rex_typeof_original)
+add_test(NAME ASTJSON_rex_typeof_original_runtime
+  COMMAND ${_rex_typeof_dir}/original)
+set_tests_properties(ASTJSON_rex_typeof_original_runtime PROPERTIES
+  LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_typeof_original)
+add_test(NAME ASTJSON_rex_typeof_roundtrip
+  WORKING_DIRECTORY ${_rex_typeof_dir}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_typeof_dir}/json
+    $<TARGET_FILE:rex_ast_json_typeof_ownership>
+    -std=gnu11 ${_rex_ast_json_codegen_flags}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_typeof_ownership.c
+    -o ${_rex_typeof_dir}/emitted)
+set_tests_properties(ASTJSON_rex_typeof_roundtrip PROPERTIES
+  LABELS "ASTJSON;rex;CFE;copy" FIXTURES_SETUP rex_typeof_emitted)
+add_test(NAME ASTJSON_rex_typeof_emitted_runtime
+  COMMAND ${_rex_typeof_dir}/emitted)
+set_tests_properties(ASTJSON_rex_typeof_emitted_runtime PROPERTIES
+  LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_typeof_emitted)
+set(_rex_decltype_dir ${CMAKE_CURRENT_BINARY_DIR}/decltype-ownership)
+file(MAKE_DIRECTORY ${_rex_decltype_dir})
+add_test(NAME ASTJSON_rex_decltype_original_compile
+  COMMAND ${CMAKE_CXX_COMPILER} -std=gnu++17 ${_rex_ast_json_codegen_flags}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_decltype_operands.cpp
+    -o ${_rex_decltype_dir}/original)
+set_tests_properties(ASTJSON_rex_decltype_original_compile PROPERTIES
+  LABELS "ASTJSON;rex;CFE" FIXTURES_SETUP rex_decltype_original)
+add_test(NAME ASTJSON_rex_decltype_original_runtime
+  COMMAND ${_rex_decltype_dir}/original)
+set_tests_properties(ASTJSON_rex_decltype_original_runtime PROPERTIES
+  LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_decltype_original)
+add_test(NAME ASTJSON_rex_decltype_roundtrip
+  WORKING_DIRECTORY ${_rex_decltype_dir}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_decltype_dir}/json
+    $<TARGET_FILE:rex_ast_json_typeof_ownership>
+    -std=gnu++17 ${_rex_ast_json_codegen_flags}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_decltype_operands.cpp
+    -o ${_rex_decltype_dir}/emitted)
+set_tests_properties(ASTJSON_rex_decltype_roundtrip PROPERTIES
+  LABELS "ASTJSON;rex;CFE;copy" FIXTURES_SETUP rex_decltype_emitted)
+add_test(NAME ASTJSON_rex_decltype_emitted_runtime
+  COMMAND ${_rex_decltype_dir}/emitted)
+set_tests_properties(ASTJSON_rex_decltype_emitted_runtime PROPERTIES
+  LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_decltype_emitted)
+unset(_rex_decltype_dir)
+if(ENABLE-FORTRAN)
+  set(_rex_type_roots_dir ${CMAKE_CURRENT_BINARY_DIR}/process-type-roots)
+  file(MAKE_DIRECTORY ${_rex_type_roots_dir})
+  # Flang 22 rejects -fsanitize. REX's C++ driver receives the complete
+  # configured instrumentation; original/emitted Fortran use the configured
+  # language compiler, as in the other Fortran round-trip contracts.
+  add_test(NAME ASTJSON_rex_process_type_roots_original_compile
+    COMMAND ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_process_type_roots.f90
+      -o ${_rex_type_roots_dir}/original)
+  set_tests_properties(ASTJSON_rex_process_type_roots_original_compile PROPERTIES
+    LABELS "ASTJSON;rex;Fortran" FIXTURES_SETUP rex_type_roots_original)
+  add_test(NAME ASTJSON_rex_process_type_roots_original_runtime
+    COMMAND ${_rex_type_roots_dir}/original)
+  set_tests_properties(ASTJSON_rex_process_type_roots_original_runtime PROPERTIES
+    LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_type_roots_original)
+  add_test(NAME ASTJSON_rex_process_type_roots_roundtrip
+    WORKING_DIRECTORY ${_rex_type_roots_dir}
+    COMMAND ${CMAKE_COMMAND} -E env
+      REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_type_roots_dir}/json
+      $<TARGET_FILE:rex_ast_json_typeof_ownership>
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_process_type_roots.f90
+      -o ${_rex_type_roots_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_process_type_roots_roundtrip PROPERTIES
+    LABELS "ASTJSON;rex;Fortran;copy" FIXTURES_SETUP rex_type_roots_emitted)
+  add_test(NAME ASTJSON_rex_process_type_roots_emitted_runtime
+    COMMAND ${_rex_type_roots_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_process_type_roots_emitted_runtime PROPERTIES
+    LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_type_roots_emitted)
+  unset(_rex_type_roots_dir)
+  set(_rex_character_pointer_dir ${CMAKE_CURRENT_BINARY_DIR}/character-pointer-signature)
+  file(MAKE_DIRECTORY ${_rex_character_pointer_dir})
+  add_test(NAME ASTJSON_rex_character_pointer_signature_original_compile
+    COMMAND ${CMAKE_Fortran_COMPILER}
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/rex_flang_dynamic_character_pointer_signature.f90
+      -o ${_rex_character_pointer_dir}/original)
+  set_tests_properties(ASTJSON_rex_character_pointer_signature_original_compile PROPERTIES
+    LABELS "ASTJSON;rex;Fortran" FIXTURES_SETUP rex_character_pointer_original)
+  add_test(NAME ASTJSON_rex_character_pointer_signature_original_runtime
+    COMMAND ${_rex_character_pointer_dir}/original)
+  set_tests_properties(ASTJSON_rex_character_pointer_signature_original_runtime PROPERTIES
+    LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_character_pointer_original)
+  add_test(NAME ASTJSON_rex_character_pointer_signature_roundtrip
+    WORKING_DIRECTORY ${_rex_character_pointer_dir}
+    COMMAND ${CMAKE_COMMAND} -E env
+      REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_character_pointer_dir}/json
+      $<TARGET_FILE:rex_ast_json_typeof_ownership>
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Fortran_tests/rex_flang_dynamic_character_pointer_signature.f90
+      -o ${_rex_character_pointer_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_character_pointer_signature_roundtrip PROPERTIES
+    LABELS "ASTJSON;rex;Fortran;copy" FIXTURES_SETUP rex_character_pointer_emitted)
+  add_test(NAME ASTJSON_rex_character_pointer_signature_emitted_runtime
+    COMMAND ${_rex_character_pointer_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_character_pointer_signature_emitted_runtime PROPERTIES
+    LABELS "ASTJSON;rex;runtime" FIXTURES_REQUIRED rex_character_pointer_emitted)
+  unset(_rex_character_pointer_dir)
+
+  add_executable(rex_ast_json_fortran_nominal_type_identity
+    rex_ast_json_fortran_nominal_type_identity.cpp)
+  target_link_libraries(rex_ast_json_fortran_nominal_type_identity ROSE_DLL)
+  set(_rex_nominal_type_dir ${CMAKE_CURRENT_BINARY_DIR}/fortran-nominal-type)
+  file(MAKE_DIRECTORY ${_rex_nominal_type_dir})
+  add_test(NAME ASTJSON_rex_fortran_nominal_type_original_compile
+    COMMAND ${CMAKE_Fortran_COMPILER} -fsyntax-only
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_fortran_nominal_type_identity.f90)
+  set_tests_properties(ASTJSON_rex_fortran_nominal_type_original_compile
+    PROPERTIES LABELS "ASTJSON;rex;Fortran")
+  add_test(NAME ASTJSON_rex_fortran_nominal_type_roundtrip
+    WORKING_DIRECTORY ${_rex_nominal_type_dir}
+    COMMAND ${CMAKE_COMMAND} -E env
+      REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_nominal_type_dir}/json
+      $<TARGET_FILE:rex_ast_json_fortran_nominal_type_identity> -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_fortran_nominal_type_identity.f90
+      -o ${_rex_nominal_type_dir}/emitted.o)
+  set_tests_properties(ASTJSON_rex_fortran_nominal_type_roundtrip
+    PROPERTIES LABELS "ASTJSON;rex;Fortran;copy")
+  unset(_rex_nominal_type_dir)
+
+  add_executable(rex_ast_json_project_copy_runtime
+    rex_ast_json_project_copy_runtime.cpp)
+  target_link_libraries(rex_ast_json_project_copy_runtime ROSE_DLL)
+  foreach(_rex_result_case IN ITEMS local_result imported_local_result
+      reexported_generic_producer_identity)
+    if(_rex_result_case STREQUAL "reexported_generic_producer_identity")
+      set(_rex_result_driver rex_ast_json_project_copy_runtime)
+    else()
+      set(_rex_result_driver rex_ast_json_fortran_nominal_type_identity)
+    endif()
+    set(_rex_result_source
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_fortran_${_rex_result_case}.f90)
+    set(_rex_result_dir ${CMAKE_CURRENT_BINARY_DIR}/fortran-${_rex_result_case})
+    file(MAKE_DIRECTORY ${_rex_result_dir}/original ${_rex_result_dir}/roundtrip)
+    add_test(NAME ASTJSON_rex_fortran_${_rex_result_case}_original_compile
+      WORKING_DIRECTORY ${_rex_result_dir}/original
+      COMMAND ${CMAKE_Fortran_COMPILER} ${_rex_result_source}
+        -o ${_rex_result_dir}/original/program)
+    set_tests_properties(ASTJSON_rex_fortran_${_rex_result_case}_original_compile
+      PROPERTIES LABELS "ASTJSON;rex;Fortran"
+        FIXTURES_SETUP rex_fortran_${_rex_result_case}_original)
+    add_test(NAME ASTJSON_rex_fortran_${_rex_result_case}_original_runtime
+      COMMAND ${_rex_result_dir}/original/program)
+    set_tests_properties(ASTJSON_rex_fortran_${_rex_result_case}_original_runtime
+      PROPERTIES LABELS "ASTJSON;rex;Fortran;runtime"
+        FIXTURES_REQUIRED rex_fortran_${_rex_result_case}_original)
+    add_test(NAME ASTJSON_rex_fortran_${_rex_result_case}_roundtrip
+      WORKING_DIRECTORY ${_rex_result_dir}/roundtrip
+      COMMAND ${CMAKE_COMMAND} -E env
+        REX_AST_JSON_CHECKPOINT=all REX_AST_JSON_DIR=${_rex_result_dir}/roundtrip/json
+        $<TARGET_FILE:${_rex_result_driver}>
+        ${_rex_result_source} -o ${_rex_result_dir}/roundtrip/program)
+    set_tests_properties(ASTJSON_rex_fortran_${_rex_result_case}_roundtrip
+      PROPERTIES LABELS "ASTJSON;rex;Fortran;copy"
+        FIXTURES_SETUP rex_fortran_${_rex_result_case}_emitted)
+    add_test(NAME ASTJSON_rex_fortran_${_rex_result_case}_emitted_runtime
+      COMMAND ${_rex_result_dir}/roundtrip/program)
+    set_tests_properties(ASTJSON_rex_fortran_${_rex_result_case}_emitted_runtime
+      PROPERTIES LABELS "ASTJSON;rex;Fortran;runtime"
+        FIXTURES_REQUIRED rex_fortran_${_rex_result_case}_emitted)
+  endforeach()
+  unset(_rex_result_driver)
+  unset(_rex_result_case)
+  unset(_rex_result_source)
+  unset(_rex_result_dir)
+
+
+endif()
+unset(_rex_typeof_dir)
+unset(_rex_ast_json_codegen_flags)
+unset(_rex_ast_json_codegen_sanitizers)
+
 if(ENABLE-FORTRAN)
   add_executable(rex_ast_json_fortran_program_end_name
     rex_ast_json_fortran_program_end_name.cpp)
@@ -188,6 +512,27 @@ add_test(
 set_tests_properties(ASTJSON_external_function_parameter_scope_contract
   PROPERTIES LABELS ASTJSON)
 
+set(_ast_json_source_parameters_dir
+  ${CMAKE_CURRENT_BINARY_DIR}/external-function-source-parameters-json)
+
+add_test(
+  NAME ASTJSON_external_function_source_parameters
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=pre-omp-construction
+    REX_AST_JSON_DIR=${_ast_json_source_parameters_dir}
+    REX_AST_JSON_EXPECT_DISTINCT_PARAMETERS=1
+    $<TARGET_FILE:rex_test2026_ast_json_external_scope_contract>
+      --rex-ast-json-contract-dir=${_ast_json_source_parameters_dir}
+      -rose:skipfinalCompileStep
+      -w
+      -rose:verbose
+      0
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_external_source_parameters.cpp)
+set_tests_properties(ASTJSON_external_function_source_parameters
+  PROPERTIES LABELS ASTJSON)
+
 set(_ast_json_detached_fixup_dir
   ${CMAKE_CURRENT_BINARY_DIR}/detached-file-type-fixup-json)
 
@@ -222,20 +567,48 @@ add_test(
 set_tests_properties(ASTJSON_rex_template_parameter_contract
   PROPERTIES LABELS "ASTJSON;rex")
 
+foreach(_positive_mode positive positive-external positive-external-symbol
+                       positive-producer-records)
+  string(REPLACE "-" "_" _positive_name "${_positive_mode}")
+  add_test(
+    NAME ASTJSON_rex_finalization_contract_${_positive_name}
+    COMMAND rex_ast_json_finalization_contract
+      --finalization-contract=${_positive_mode}
+      -rose:skipfinalCompileStep
+      -rose:verbose
+      0
+      -std=gnu++17
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_finalization_contract_input.cpp)
+  set_tests_properties(ASTJSON_rex_finalization_contract_${_positive_name}
+    PROPERTIES LABELS "ASTJSON;rex")
+endforeach()
+
 add_test(
-  NAME ASTJSON_rex_finalization_contract_positive
+  NAME ASTJSON_rex_lambda_constructor_preflight
   COMMAND rex_ast_json_finalization_contract
-    --finalization-contract=positive
+    --finalization-contract=lambda-constructor-preflight
+    -rose:skipfinalCompileStep -rose:verbose 0 -std=gnu++17 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_size_this_result_types_input.cpp)
+set_tests_properties(ASTJSON_rex_lambda_constructor_preflight
+  PROPERTIES LABELS "ASTJSON;rex")
+
+add_test(
+  NAME ASTJSON_rex_typedef_name_roundtrip
+  COMMAND rex_ast_json_typedef_name_roundtrip
     -rose:skipfinalCompileStep
     -rose:verbose
     0
     -std=gnu++17
     -c
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_finalization_contract_input.cpp)
-set_tests_properties(ASTJSON_rex_finalization_contract_positive
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_typedef_name_roundtrip_input.cpp)
+set_tests_properties(ASTJSON_rex_typedef_name_roundtrip
   PROPERTIES LABELS "ASTJSON;rex")
 
-foreach(_mode missing-parameter-list invalid-function-type
+foreach(_mode missing-parameter-list misowned-parameter-list invalid-function-type
+              invalid-variable-inline non-variable-inline
+              missing-parameter-scope wrong-parameter-scope
+              missing-parameter-declaration wrong-parameter-declaration
               mismatched-return-type missing-declaration-scope
               detached-declaration-scope
               missing-auxiliary-parent wrong-auxiliary-scope
@@ -244,17 +617,32 @@ foreach(_mode missing-parameter-list invalid-function-type
               inconsistent-nonreal-variable-identity
               inconsistent-specialization-family
               null-template-argument
+              mismatched-template-argument-expression
+              incompatible-template-argument-type
+              mismatched-template-argument-declaration
+              mismatched-template-argument-name
+              mismatched-class-template-arguments
+              wrong-class-template-argument-kind
+              missing-class-template-declaration
+              missing-class-definition-declaration
+              wrong-class-definition-owner-kind
+              wrong-function-definition-owner-kind
               mismatched-source-order
+              cyclic-global-parent
+              invalid-late-producer-owner
               missing-external-context invalid-external-scope
-              inconsistent-external-kind
-               cast-unknown-type cast-default-type
-               call-unknown-type call-default-type
-               inline-unknown-type inline-default-type
-               typedef-unknown-source-form
-               missing-noexcept-operand noexcept-nonbool-type
-               serializer-null-type serializer-unknown-type
-               serializer-default-type
-               serializer-unknown-typedef-source-form)
+              inconsistent-external-kind conflicting-external-context
+              legacy-external-parameter-scope
+              invalid-external-parameter-scope-owner
+              conflicting-external-parameter-scope-owner
+              cast-unknown-type cast-default-type
+              call-unknown-type call-default-type
+              inline-unknown-type inline-default-type
+              typedef-unknown-source-form
+              missing-noexcept-operand noexcept-nonbool-type
+              serializer-null-type serializer-unknown-type
+              serializer-default-type
+              serializer-unknown-typedef-source-form)
   string(REPLACE "-" "_" _mode_name "${_mode}")
   add_test(
     NAME ASTJSON_rex_finalization_${_mode_name}_is_rejected
@@ -319,6 +707,66 @@ add_test(
       -c
       ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
 set_tests_properties(ASTJSON_rex_constructor_preinitialization_roundtrip
+  PROPERTIES LABELS "ASTJSON;rex;CFE")
+
+add_test(
+  NAME ASTJSON_rex_constructor_preinitialization_cxx14_frontend
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:rex_ast_json_constructor_preinitialization>
+    -rose:skipfinalCompileStep
+    -rose:verbose 0
+    -std=gnu++14
+    -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
+set_tests_properties(ASTJSON_rex_constructor_preinitialization_cxx14_frontend
+  PROPERTIES LABELS "ASTJSON;rex;CFE")
+add_test(
+  NAME ASTJSON_rex_constructor_preinitialization_cxx14_roundtrip
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=pre-omp-construction
+    REX_AST_JSON_DIR=${_ast_json_constructor_preinitialization_dir}-cxx14
+    $<TARGET_FILE:rex_ast_json_constructor_preinitialization>
+      -rose:skipfinalCompileStep
+      -rose:verbose 0
+      -std=gnu++14
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
+set_tests_properties(ASTJSON_rex_constructor_preinitialization_cxx14_roundtrip
+  PROPERTIES LABELS "ASTJSON;rex;CFE")
+add_test(
+  NAME ASTJSON_rex_constructor_preinitialization_cxx14_no_elision
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=pre-omp-construction
+    REX_AST_JSON_DIR=${_ast_json_constructor_preinitialization_dir}-cxx14-no-elision
+    $<TARGET_FILE:rex_ast_json_constructor_preinitialization>
+      -rose:skipfinalCompileStep
+      -rose:verbose 0
+      -std=gnu++14
+      -fno-elide-constructors
+      -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
+set_tests_properties(ASTJSON_rex_constructor_preinitialization_cxx14_no_elision
+  PROPERTIES LABELS "ASTJSON;rex;CFE")
+
+add_test(
+  NAME ASTJSON_rex_constructor_preinitialization_cxx20_frontend
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND $<TARGET_FILE:rex_ast_json_constructor_preinitialization>
+    -rose:skipfinalCompileStep -rose:verbose 0 -std=gnu++20 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
+add_test(
+  NAME ASTJSON_rex_constructor_preinitialization_cxx20_roundtrip
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  COMMAND ${CMAKE_COMMAND} -E env
+    REX_AST_JSON_CHECKPOINT=pre-omp-construction
+    REX_AST_JSON_DIR=${_ast_json_constructor_preinitialization_dir}-cxx20
+    $<TARGET_FILE:rex_ast_json_constructor_preinitialization>
+      -rose:skipfinalCompileStep -rose:verbose 0 -std=gnu++20 -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_json_constructor_preinitialization_input.cpp)
+set_tests_properties(ASTJSON_rex_constructor_preinitialization_cxx20_frontend
+  ASTJSON_rex_constructor_preinitialization_cxx20_roundtrip
   PROPERTIES LABELS "ASTJSON;rex;CFE")
 
 set(_ast_json_openmp_wrapper_dir
@@ -1040,6 +1488,36 @@ set_tests_properties(ASTJSON_rex_class_type_canonical_owner
   PROPERTIES LABELS "ASTJSON;rex")
 
 if(ENABLE-FORTRAN)
+  set(_rex_namelist_dir ${CMAKE_CURRENT_BINARY_DIR}/namelist-object-identity)
+  file(MAKE_DIRECTORY ${_rex_namelist_dir})
+  add_test(NAME ASTJSON_rex_namelist_object_identity_compile
+    WORKING_DIRECTORY ${_rex_namelist_dir}
+    COMMAND testTranslator -rex:ast-json-checkpoint=all
+      -rex:ast-json-dir=${_rex_namelist_dir}/json
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_namelist_object_identity.f90
+      -o ${_rex_namelist_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_namelist_object_identity_compile PROPERTIES
+    LABELS "ASTJSON;rex;Fortran" FIXTURES_SETUP rex_namelist_object_identity)
+  add_test(NAME ASTJSON_rex_namelist_object_identity_runtime
+    COMMAND ${_rex_namelist_dir}/emitted)
+  set_tests_properties(ASTJSON_rex_namelist_object_identity_runtime PROPERTIES
+    LABELS "ASTJSON;rex;Fortran;runtime"
+    FIXTURES_REQUIRED rex_namelist_object_identity)
+  unset(_rex_namelist_dir)
+
+  find_program(REX_BINDING_PYTHON_EXECUTABLE NAMES python3 REQUIRED)
+  add_executable(rex_fortran_binding_identity rex_fortran_binding_identity.cpp)
+  target_link_libraries(rex_fortran_binding_identity
+    ROSE_DLL ${link_with_libraries})
+  add_test(NAME ASTJSON_rex_fortran_binding_identity
+    COMMAND ${REX_BINDING_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_binding_runtime.py
+      $<TARGET_FILE:rex_fortran_binding_identity>
+      ${CMAKE_Fortran_COMPILER} ${CMAKE_C_COMPILER}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_binding_identity_input.f90)
+  set_tests_properties(ASTJSON_rex_fortran_binding_identity
+    PROPERTIES LABELS "ASTJSON;rex;Fortran;runtime")
+
   set(_ast_json_fortran_program_end_name_dir
     ${CMAKE_CURRENT_BINARY_DIR}/fortran-program-end-name-json)
   set(_ast_json_fortran_program_end_name_output

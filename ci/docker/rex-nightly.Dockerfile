@@ -35,11 +35,9 @@ FROM rex-base AS runtime
 COPY --from=builder ${REX_INSTALL_DIR} ${REX_INSTALL_DIR}
 
 RUN set -eux; \
-    JAVA_HOME="$(dirname "$(dirname "$(readlink -f "$(command -v javac)")")")"; \
     printf '%s\n' \
       "${REX_INSTALL_DIR}/lib" \
       "/usr/lib/llvm-${LLVM_VERSION}/lib" \
-      "${JAVA_HOME}/lib/server" \
       > /etc/ld.so.conf.d/rex.conf; \
     ldconfig
 

@@ -50,7 +50,6 @@ class dbgBuf : public std::streambuf {
   bool ownerAccess;
   std::streambuf *baseBuf;
   std::list<std::string> funcs;
-  // std::list<std::string> indents;
 
   // The number of observed '<' characters that have not yet been balanced out
   // by '>' characters.
@@ -74,14 +73,8 @@ private:
   // and can be put directly into the teed buffers.
   virtual int overflow(int c);
 
-  // Prints the indent to the stream buffer, returns 0 on success non-0 on
-  // failure
-  // int printIndent();
-
   // Prints the given string to the stream buffer
   int printString(std::string s);
-
-  // virtual int sputc(char c);
 
   virtual std::streamsize xsputn(const char *s, std::streamsize n);
 
@@ -94,7 +87,7 @@ protected:
   void ownerAccessing();
 
   // Indicates that the application has entered or exited a function
-  void enterFunc(std::string funcName /*, std::string indent="    "*/);
+  void enterFunc(std::string funcName);
   void exitFunc(std::string funcName);
 };
 
@@ -128,12 +121,12 @@ public:
   void printDetailFileTrailer();
 
   // Indicates that the application has entered or exited a function
-  void enterFunc(std::string funcName /*, std::string indent="    "*/);
+  void enterFunc(std::string funcName);
   void exitFunc(std::string funcName);
 
   // Adds an image to the output with the given extension and returns the path
   // of this image so that the caller can write to it.
-  std::string addImage(std::string ext = ".gif");
+  std::string addImage(std::string ext = "gif");
 
   // Given a reference to an object that can be represented as a dot graph,
   // create an image from it and add it to the output. Return the path of the
@@ -147,8 +140,7 @@ public:
   // and add it to the output. Return the path of the image.
   std::string addDOT(std::string dot);
   // The common work code for all the addDOT methods
-  void addDOT(std::string imgFName, std::string graphName, std::string dot,
-              std::ostream &ret);
+  void addDOT(std::string imgFName, std::string dot, std::ostream &ret);
 };
 
 extern bool initialized;
@@ -158,12 +150,12 @@ extern dbgStream dbg;
 void init(std::string title, std::string workDir, std::string fName = "debug");
 
 // Indicates that the application has entered or exited a function
-void enterFunc(std::string funcName /*, std::string indent="    "*/);
+void enterFunc(std::string funcName);
 void exitFunc(std::string funcName);
 
 // Adds an image to the output with the given extension and returns the path of
 // this image so that the caller can write to it.
-std::string addImage(std::string ext = ".gif");
+std::string addImage(std::string ext = "gif");
 
 // Given a reference to an object that can be represented as a dot graph, create
 // an image from it and add it to the output. Return the path of the image.

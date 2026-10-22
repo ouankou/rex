@@ -1,4 +1,5 @@
 
+#include "rose.h"
 #include "SgGraphTemplate.h"
 
 #include "graphProcessing.h"
@@ -37,7 +38,7 @@ void visitorTraversal::analyzePath(std::vector<VertexID> &pathR) {
   // ss << "vector<string> sss;\n";
   for (unsigned int j = 0; j < pathR.size(); j++) {
     SgGraphNode *R = orig->getGraphNode()[pathR[j]];
-    CFGNode cf = cfg->toCFGNode(R);
+    VirtualCFG::CFGNode cf = cfg->toCFGNode(R);
     //    path.push_back(R->get_name());
     string str = cf.toString();
     str.erase(std::remove(str.begin(), str.end(), '\n'), str.end());
@@ -50,6 +51,7 @@ void visitorTraversal::analyzePath(std::vector<VertexID> &pathR) {
 }
 
 int main(int argc, char *argv[]) {
+  ss << "#include \"rose.h\"\n";
   ss << "#include \"SgGraphTemplate.h\"\n";
   ss << "#include \"graphProcessing.h\"\n";
   ss << "#include \"staticCFG.h\"\n";
@@ -107,7 +109,7 @@ int main(int argc, char *argv[]) {
   ss << "    std::vector<string> path;\n";
   ss << "   for (unsigned int j = 0; j < pathR.size(); j++) {\n";
   ss << "       SgGraphNode* R = orig->getGraphNode()[pathR[j]];\n";
-  ss << "      CFGNode cf = cfg->toCFGNode(R);\n";
+  ss << "      VirtualCFG::CFGNode cf = cfg->toCFGNode(R);\n";
   ss << "       string str = cf.toString();";
   ss << "str.erase(std::remove(str.begin(), str.end(), '\\n'), str.end());\n";
 
@@ -134,7 +136,7 @@ int main(int argc, char *argv[]) {
         "filenameString());\n";
   ss << "string dotFileName1=fileName+\".\"+ "
         "mainDef->get_declaration()->get_name() +\".dot\";\n";
-  ss << "cfgToDot(mainDef,dotFileName1);\n";
+  ss << "VirtualCFG::cfgToDot(mainDef,dotFileName1);\n";
   ss << "SgIncidenceDirectedGraph* g = cfg.getGraph();\n";
   ss << "auto mg = instantiateGraph(g, cfg);\n";
   ss << "vis->orig = mg.get();\n";

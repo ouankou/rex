@@ -5,65 +5,37 @@
 
 #include "rose_config.h"
 
-#define DEBUG__trimCtorNameQual 0
-#define DEBUG__unparseCtorInit 0
+#include <algorithm>
 
 void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
                                        SgUnparse_Info &info) {
   SgConstructorInitializer *con_init = isSgConstructorInitializer(expr);
   ASSERT_not_null(con_init);
-#if DEBUG__unparseCtorInit
-  SgType *debug_type = con_init->get_expression_type();
-  printf("Enter Unparse_ExprStmt::unparseCtorInit():\n");
-  printf("  info.inAggregateInitializer() = %s \n",
-         info.inAggregateInitializer() ? "true" : "false");
-  printf("  expr = %p = %s\n", expr, expr->class_name().c_str());
-  printf("    ->get_expression_type() = %p = %s\n", debug_type,
-         debug_type != nullptr ? debug_type->class_name().c_str() : "<null>");
-#endif
+  con_init->validate_elision();
+  if (con_init->get_argument_source() !=
+      SgConstructorInitializer::e_constructor_argument_expressions) {
+    con_init->validate_argument_context();
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[inherited-constructor-arguments]: "
+                    "semantic argument forwarding has no source spelling\n");
+    ROSE_ABORT();
+  }
   SgExprListExp *ctor_args = con_init->get_args();
   if (ctor_args == nullptr) {
     fprintf(stderr, "REX_UNPARSE_INVARIANT[constructor-initializer-arguments]: "
                     "initializer has no exact argument list\n");
     ROSE_ABORT();
   }
-  bool ctor_without_args = ctor_args->get_expressions().empty();
-#if DEBUG__unparseCtorInit
-  printf("    ->get_need_name() = %s \n",
-         con_init->get_need_name() ? "true" : "false");
-  printf("    ->get_is_braced_initialized() = %s \n",
-         con_init->get_is_braced_initialized() ? "true" : "false");
-  printf("    ->get_need_parenthesis_after_name() = %s \n",
-         con_init->get_need_parenthesis_after_name() ? "true" : "false");
-  printf("    ->get_is_used_in_conditional() = %s \n",
-         con_init->get_is_used_in_conditional() ? "true" : "false");
-  printf("  ctor_without_args = %s \n", ctor_without_args ? "true" : "false");
-#endif
-  SgMemberFunctionDeclaration *ctor_decl = con_init->get_declaration();
+  const size_t written_arguments = std::count_if(
+      ctor_args->get_expressions().begin(), ctor_args->get_expressions().end(),
+      [](SgExpression *argument) {
+        return isSgCxxDefaultInitExp(argument) == nullptr;
+      });
+  const bool ctor_without_args = written_arguments == 0;
   SgType *ctor_type = con_init->get_expression_type();
-#if DEBUG__unparseCtorInit
-  printf("  ctor_decl  = %p = %s = %s\n", ctor_decl,
-         ctor_decl ? ctor_decl->class_name().c_str() : "",
-         ctor_decl ? ctor_decl->get_name().str() : "");
-  printf("  ctor_type  = %p = %s = %s\n", ctor_type,
-         ctor_type ? ctor_type->class_name().c_str() : "",
-         isSgNamedType(ctor_type) ? ((SgNamedType *)ctor_type)->get_name().str()
-                                  : "");
-#endif
 
   SgNode *pnode = con_init->get_parent();
-  SgNode *ppnode = pnode ? pnode->get_parent() : nullptr;
-#if DEBUG__unparseCtorInit
-  printf("  pnode = %p = %s\n", pnode,
-         pnode ? pnode->class_name().c_str() : "");
-  printf("  ppnode = %p = %s\n", ppnode,
-         ppnode ? ppnode->class_name().c_str() : "");
-#endif
 
   bool use_braces = con_init->get_is_braced_initialized();
-#if DEBUG__unparseCtorInit
-  printf("  use_braces = %s\n", use_braces ? "true" : "false");
-#endif
 
   const bool use_parentheses = con_init->get_need_parenthesis_after_name();
   if (use_braces && use_parentheses) {
@@ -96,8 +68,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
         }
       }
     }
-    if (need_name || ctor_args->get_expressions().size() != 1 ||
-        exact_owner_edges != 1) {
+    if (need_name || written_arguments != 1 || exact_owner_edges != 1) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[constructor-initializer-source-form]: "
               "delimiter-free conversion requires one exact argument and "
@@ -105,9 +76,6 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
       ROSE_ABORT();
     }
   }
-#if DEBUG__unparseCtorInit
-  printf("  need_name       = %s\n", need_name ? "true" : "false");
-#endif
   if (need_name) {
     if (ctor_type == nullptr) {
       fprintf(stderr, "REX_UNPARSE_INVARIANT[constructor-initializer-type]: "
@@ -133,6 +101,7 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
     info_for_typename.unset_isWithType();
     info_for_typename.unset_SkipBaseType();
     SgUnparse_Info type_info(info_for_typename);
+    type_info.unset_SkipQualifiedNames();
     type_info.set_reference_node_for_qualification(con_init);
     type_info.set_name_qualification_length(constructor_qualification.length);
     type_info.set_global_qualification_required(
@@ -161,13 +130,6 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
   // `T t{}` to `T t;` (value-initialization vs default-initialization).
 
   const bool need_paren = use_braces || use_parentheses;
-#if DEBUG__unparseCtorInit
-  printf("  need_paren   = %s \n", need_paren ? "true" : "false");
-#endif
-#if DEBUG__unparseCtorInit
-  printf("  use_braces   = %s \n", use_braces ? "true" : "false");
-  printf("  need_paren   = %s \n", need_paren ? "true" : "false");
-#endif
 
   info_for_args.set_context_for_added_parentheses(need_paren && !use_braces);
   if (need_paren)
@@ -175,8 +137,4 @@ void Unparse_ExprStmt::unparseCtorInit(SgExpression *expr,
   unparseExpression(ctor_args, info_for_args);
   if (need_paren)
     curprint(use_braces ? "}" : ")");
-
-#if DEBUG__unparseCtorInit
-  printf("Leaving Unparse_ExprStmt::unparseCtorInit \n");
-#endif
 }

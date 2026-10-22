@@ -1,8 +1,8 @@
 
-This directory contains the code fror translators that read
+This directory contains translators that read
 the input program and output DOT graphs for the AST.
 
-DOTGenerator: 
+dotGenerator:
    Generates a graph as a tree which shows the AST.
 
 dotGeneratorWholeASTGraph: 

@@ -659,19 +659,11 @@ void DependenceTable::ClearOperatorSideEffect(SgNode *op) {
 
 bool DependenceTable::SaveOperatorSideEffect(
     SgNode *op, const AstNodePtr &varref,
-    AstUtilInterface::OperatorSideEffect relation, SgNode *details) {
-  std::string attr;
-  if (details != 0) {
-    Log.push("Skipping Side effect details: " +
-             AstInterface::AstToString(AstNodePtrImpl(details)));
-    // QY: Do not save side effect details in annotation as we currently don't
-    // use it.
-    // attr = AstUtilInterface::GetVariableSignature(details);
-  }
+    AstUtilInterface::OperatorSideEffect relation, SgNode *) {
   const std::string op_sig = AstUtilInterface::GetVariableSignature(op);
   const auto label = dependenceLabel(relation);
   DependenceEntry e(op_sig, AstUtilInterface::GetVariableSignature(varref),
-                    label.first, label.second.empty() ? attr : label.second);
+                    label.first, label.second);
   Log.push("saving dependence: " + e.to_string());
   SaveDependence(e);
   return true;

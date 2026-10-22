@@ -2,6 +2,12 @@ int rex_hex_literal = 0x2a;
 int rex_octal_literal = 052;
 int rex_separated_literal = 1'000;
 char rex_escaped_literal = '\x41';
+int rex_multichar_literal = 'AB';
+char8_t rex_utf8_literal = u8'\xC3';
+wchar_t rex_wide_literal = L'\u03a9';
+char16_t rex_utf16_literal = u'\u03a9';
+char32_t rex_utf32_literal = U'\U0001f642';
+_Float16 rex_half_literal = 1.25f16;
 float rex_hex_float_literal = 0x1.4p+0F;
 long double rex_long_double_literal = 1.25L;
 

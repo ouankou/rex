@@ -1,10 +1,14 @@
-
 #ifndef _CLANG_TO_DOT_FRONTEND_HPP_
 #define _CLANG_TO_DOT_FRONTEND_HPP_
 
-class SgSourceFile;
+#include <string>
 
-// int clang_to_dot_main(int argc, char* argv[], SgSourceFile& sageFile);
-int clang_to_dot_main(int argc, char *argv[], const char *driver_argv0);
+namespace clang {
+class CompilerInstance;
+}
 
-#endif /* _CLANG_TO_DOT_FRONTEND_HPP_ */
+// Render the same completed, diagnostic-free AST used by the Sage frontend.
+void writeClangAstGraph(clang::CompilerInstance &compiler,
+                        const std::string &filename);
+
+#endif

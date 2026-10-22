@@ -28,22 +28,21 @@ if [[ ! -s "${llvm_root}/lib/cmake/llvm/LLVMConfig.cmake" ]] ||
    [[ ! -s "${llvm_root}/lib/cmake/clang/ClangConfig.cmake" ]] ||
    [[ ! -s "${llvm_root}/lib/clang/22/include/stddef.h" ]] ||
    [[ ! -s "${llvm_root}/lib/clang/22/include/omp.h" ]] ||
-   ! grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+22\)' \
-     "${llvm_root}/lib/cmake/llvm/LLVMConfig.cmake"; then
+   [[ ! -x "${llvm_root}/bin/llvm-config" ]]; then
   echo "ci-llvm-env: ${llvm_root} is not an exact LLVM 22 installation" >&2
   return 2
 fi
-
-java_server=""
-for candidate in /usr/lib/jvm/java-*-openjdk-amd64/lib/server; do
-  if [ -d "${candidate}" ]; then
-    java_server="${candidate}"
-    break
-  fi
-done
+llvm_config_version="$("${llvm_root}/bin/llvm-config" --version)" || {
+  echo "ci-llvm-env: cannot query LLVM version from ${llvm_root}" >&2
+  return 2
+}
+if [[ ! "${llvm_config_version}" =~ ^22[.][0-9]+[.][0-9]+[A-Za-z0-9.+-]*$ ]]; then
+  echo "ci-llvm-env: ${llvm_root} reports unsupported LLVM version '${llvm_config_version}'" >&2
+  return 2
+fi
 
 export PATH="${llvm_root}/bin:${PATH}"
-export LD_LIBRARY_PATH="${llvm_root}/lib${java_server:+:${java_server}}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export LD_LIBRARY_PATH="${llvm_root}/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
 export CMAKE_PREFIX_PATH="${llvm_root}${CMAKE_PREFIX_PATH:+:${CMAKE_PREFIX_PATH}}"
 export LLVM_ROOT="${llvm_root}"
 export Clang_ROOT="${llvm_root}"

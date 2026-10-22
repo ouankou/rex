@@ -7,6 +7,8 @@
 
 #include "IteratorTmpl.h"
 
+#include <cstdlib>
+
 class GraphAccess {
 public:
   typedef enum {
@@ -23,7 +25,7 @@ public:
     case BiEdge:
       return BiEdge;
     }
-    // ROSE_ABORT();
+    std::abort();
   }
 };
 

@@ -34,17 +34,23 @@ int main(int argc, char **argv) {
   const std::string mode = argc == 2 ? argv[1] : std::string();
   if (mode == "declare-simd-missing-target") {
     static_cast<void>(new SgOmpDeclareSimdStatement(
-        new SgFunctionRefExp(static_cast<SgFunctionSymbol *>(nullptr),
-                             static_cast<SgFunctionType *>(nullptr)),
+        new SgFunctionRefExp(
+            static_cast<SgFunctionSymbol *>(nullptr),
+            SageBuilder::buildFunctionType(SageBuilder::buildVoidType(),
+                                           new SgFunctionParameterTypeList())),
         false, 0));
     return 0;
   }
   if (mode == "declare-variant-missing-target") {
     static_cast<void>(new SgOmpDeclareVariantStatement(
-        new SgFunctionRefExp(static_cast<SgFunctionSymbol *>(nullptr),
-                             static_cast<SgFunctionType *>(nullptr)),
-        new SgFunctionRefExp(static_cast<SgFunctionSymbol *>(nullptr),
-                             static_cast<SgFunctionType *>(nullptr)),
+        new SgFunctionRefExp(
+            static_cast<SgFunctionSymbol *>(nullptr),
+            SageBuilder::buildFunctionType(SageBuilder::buildVoidType(),
+                                           new SgFunctionParameterTypeList())),
+        new SgFunctionRefExp(
+            static_cast<SgFunctionSymbol *>(nullptr),
+            SageBuilder::buildFunctionType(SageBuilder::buildVoidType(),
+                                           new SgFunctionParameterTypeList())),
         false, 0));
     return 0;
   }

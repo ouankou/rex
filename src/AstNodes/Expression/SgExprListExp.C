@@ -1,11 +1,19 @@
 #include "sage3basic.h"
 
-bool SgExprListExp::empty() const {
-  if (p_expressions.empty())
-    return 1;
-  else
-    return 0;
+SgExprListExp::source_form_enum SgExprListExp::get_source_form() const {
+  return p_source_form;
 }
+
+void SgExprListExp::set_source_form(source_form_enum form) {
+  ROSE_ASSERT(form == e_expression_list_plain ||
+              form == e_expression_list_braced);
+  if (p_source_form != form) {
+    p_source_form = form;
+    markSourceMetadataAsModified();
+  }
+}
+
+bool SgExprListExp::empty() const { return p_expressions.empty(); }
 
 SgExpressionPtrList &SgExprListExp::get_expressions() { return p_expressions; }
 
@@ -24,20 +32,23 @@ void SgExprListExp::prepend_expression(SgExpression *what) {
 }
 
 int SgExprListExp::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (10/5/2007): This is a new version of this function (from Jeremiah)
-  // which observes STL vector iterator semantics.
-
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
 
   for (SgExpressionPtrList::iterator i = p_expressions.begin();
        i != p_expressions.end(); ++i) {
     if ((*i) == o) {
+      ROSE_ASSERT(o->get_parent() == this);
+      ROSE_ASSERT(std::count(p_expressions.begin(), p_expressions.end(), o) ==
+                  1);
+      if (o == n)
+        return 1;
+      ROSE_ASSERT(n->get_parent() == nullptr);
+      ROSE_ASSERT(std::find(p_expressions.begin(), p_expressions.end(), n) ==
+                  p_expressions.end());
       *i = n;
+      n->set_parent(this);
+      o->set_parent(nullptr);
       return 1;
     }
   }

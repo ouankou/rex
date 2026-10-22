@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -160,6 +161,64 @@ SgFunctionDeclaration *findExerciseDefinition(SgProject *project) {
   fail("could not find the source exercise definition");
 }
 
+std::vector<SgAssignInitializer *> captureConstantUses(SgProject *project) {
+  std::vector<SgAssignInitializer *> result;
+  size_t storageUses = 0;
+  size_t constantReads = 0;
+  size_t declarationOnlyReads = 0;
+  for (SgNode *node : NodeQuery::querySubTree(
+           findExerciseDefinition(project)->get_definition()->get_body(),
+           V_SgVarRefExp)) {
+    auto *reference = isSgVarRefExp(node);
+    if (reference->get_symbol()->get_declaration()->get_name() ==
+        "declaration_only") {
+      if (!reference->get_is_non_odr_use())
+        fail("declaration-only constant read gained a storage requirement");
+      ++declarationOnlyReads;
+    }
+    if (reference->get_symbol()->get_declaration()->get_name() != "constant")
+      continue;
+    if (reference->get_is_non_odr_use())
+      ++constantReads;
+    else
+      ++storageUses;
+    auto *copy = SageInterface::deepCopy(reference);
+    if (copy->get_is_non_odr_use() != reference->get_is_non_odr_use())
+      fail("native copying lost exact variable storage-use classification");
+    SageInterface::deleteAST(copy);
+  }
+  if (storageUses != 2 || constantReads != 1 || declarationOnlyReads != 1)
+    fail("frontend/reader lost address, reference-binding or constant-read "
+         "roles");
+  for (SgNode *node : NodeQuery::querySubTree(
+           findExerciseDefinition(project)->get_definition()->get_body(),
+           V_SgInitializedName)) {
+    auto *name = isSgInitializedName(node);
+    if (name->get_name() != "constant_address" &&
+        name->get_name() != "constant_reference")
+      continue;
+    auto *initializer = isSgAssignInitializer(name->get_initializer());
+    if (initializer == nullptr)
+      fail("static member address/reference has no exact initializer");
+    result.push_back(initializer);
+  }
+  if (result.size() != 2)
+    fail("missing static member address/reference witnesses");
+  return result;
+}
+
+void validateConstantUses(
+    const std::vector<SgAssignInitializer *> &initializers) {
+  for (SgAssignInitializer *initializer : initializers) {
+    SgExpression *operand = initializer->get_operand();
+    if (auto *address = isSgAddressOfOp(operand))
+      operand = address->get_operand();
+    if (operand == nullptr || (isSgVarRefExp(operand) == nullptr &&
+                               isSgPointerDerefExp(operand) == nullptr))
+      fail("static member storage use was replaced with an initializer value");
+  }
+}
+
 std::vector<CastSnapshot> captureSourceCasts(SgProject *project) {
   SgFunctionDeclaration *exercise = findExerciseDefinition(project);
   std::vector<CastSnapshot> snapshots;
@@ -229,6 +288,14 @@ void validateMovedCasts(SgProject *project,
         owner->get_name().getString().find("OUT_") != 0) {
       fail("checked class conversion was not moved into the outlined function");
     }
+    auto *canonical =
+        isSgFunctionDeclaration(owner->get_firstNondefiningDeclaration());
+    if (owner->get_definingDeclaration() != owner || canonical == nullptr ||
+        canonical->get_firstNondefiningDeclaration() != canonical ||
+        canonical->get_definingDeclaration() != owner ||
+        canonical->get_scope() != owner->get_scope()) {
+      fail("outliner broke the reciprocal canonical/defining function family");
+    }
     if (outlinedOwner == nullptr) {
       outlinedOwner = owner;
     } else if (outlinedOwner != owner) {
@@ -276,6 +343,51 @@ void validateMovedCasts(SgProject *project,
       }
     }
   }
+  if (crossesOutputBoundary && !snapshots.empty()) {
+    SgType *sourceClass = removeSurfaceTypeLayers(snapshots.front().resultType);
+    SgType *targetClass =
+        removeSurfaceTypeLayers(snapshots.front().cast->get_type());
+    SgScopeStatement *targetScope = outlinedOwner->get_scope();
+    auto arguments = std::make_unique<SgFunctionParameterTypeList>();
+    arguments->append_argument(SageBuilder::buildPointerType(sourceClass));
+    arguments->append_argument(SgTypeEllipse::createType());
+    auto *member = SageBuilder::buildMemberFunctionType(
+        sourceClass, arguments.get(), sourceClass,
+        SgMemberFunctionType::e_const);
+    auto *function =
+        SageBuilder::buildFunctionType(sourceClass, arguments.get());
+    if (arguments->get_parent() != nullptr)
+      arguments.release();
+    auto *targetPointer = isSgPointerType(SageBuilder::getTargetFileType(
+        SageBuilder::buildPointerType(function), targetScope));
+    auto *targetFunction =
+        targetPointer != nullptr
+            ? isSgFunctionType(targetPointer->get_base_type())
+            : nullptr;
+    auto *targetMemberPointer =
+        isSgPointerMemberType(SageBuilder::getTargetFileType(
+            SageBuilder::buildPointerMemberType(member, sourceClass),
+            targetScope));
+    auto *targetMember =
+        targetMemberPointer != nullptr
+            ? isSgMemberFunctionType(targetMemberPointer->get_base_type())
+            : nullptr;
+    if (targetFunction == nullptr || targetFunction == function ||
+        targetFunction->get_return_type() != targetClass ||
+        targetFunction->get_arguments().size() != 2 ||
+        targetFunction->get_arguments()[0] !=
+            SageBuilder::buildPointerType(targetClass) ||
+        !targetFunction->get_has_ellipses() || targetMember == nullptr ||
+        targetMember == member ||
+        targetMember->get_class_type() != targetClass ||
+        targetMember->get_return_type() != targetClass ||
+        targetMember->get_arguments() != targetFunction->get_arguments() ||
+        targetMember->get_mfunc_specifier() != SgMemberFunctionType::e_const ||
+        !targetMember->get_has_ellipses() ||
+        targetMemberPointer->get_class_type() != targetClass) {
+      fail("cross-output function/member type graph retains a source identity");
+    }
+  }
 }
 
 } // namespace
@@ -304,10 +416,40 @@ int main(int argc, char *argv[]) {
   }
   AstTests::runAllTests(project);
   const std::vector<CastSnapshot> snapshots = captureSourceCasts(project);
+  const auto constantUses = captureConstantUses(project);
+  validateConstantUses(constantUses);
 
   Outliner::outlineAll(project);
   AstTests::runAllTests(project);
   validateMovedCasts(project, snapshots,
                      mode == "new_file" || mode == "copied");
+  validateConstantUses(constantUses);
+
+  SgTreeCopy copier;
+  auto *copiedProject = isSgProject(project->copy(copier));
+  if (copiedProject == nullptr || copiedProject == project)
+    fail("native copying did not construct a distinct completed project");
+  AstTests::runAllTests(copiedProject);
+  auto copiedSnapshots = snapshots;
+  for (auto &snapshot : copiedSnapshots) {
+    auto *original = snapshot.cast;
+    snapshot.resultType = original->get_type();
+    snapshot.basePath = original->get_conversion_base_path();
+    snapshot.sourceFile = SageInterface::getEnclosingSourceFile(original);
+    snapshot.cast = isSgCastExp(copier.get_copiedNodeMap().at(original));
+    if (snapshot.cast == nullptr || snapshot.cast == original)
+      fail("native copying lost an exact outlined class conversion");
+  }
+  validateMovedCasts(copiedProject, copiedSnapshots, true);
+  std::vector<SgAssignInitializer *> copiedConstantUses;
+  for (auto *initializer : constantUses) {
+    auto *copied =
+        isSgAssignInitializer(copier.get_copiedNodeMap().at(initializer));
+    if (copied == nullptr || copied == initializer)
+      fail("native copying lost a static member storage use");
+    copiedConstantUses.push_back(copied);
+  }
+  validateConstantUses(copiedConstantUses);
+  SageInterface::deleteAST(copiedProject);
   return 0;
 }

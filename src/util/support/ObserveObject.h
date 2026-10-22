@@ -30,12 +30,11 @@ public:
 
   Iterator GetObserverIterator() const { return obList.begin(); }
   void Notify(const ObserveInfo<Observer> &info) {
-    Iterator p = obList.begin();
-    Observer *o = 0;
-    while (!p.ReachEnd()) {
-      o = *p;
-      p++;
-      info.UpdateObserver(*o);
+    const ObSetType pending(obList);
+    for (Iterator p = pending.begin(); !p.ReachEnd(); ++p) {
+      Observer *o = *p;
+      if (obList.IsMember(o))
+        info.UpdateObserver(*o);
     }
   }
   unsigned NumberOfObservers() const { return obList.NumberOfEntries(); }

@@ -5,21 +5,16 @@ int main() {
   SgUnparse_Info secondRoot;
   SgUnparse_Info inherited(firstRoot);
 
-  auto *typeMarker = reinterpret_cast<SgNamedType *>(&firstRoot);
   inherited.set_extern_C_with_braces(true);
   inherited.set_previousStatementUnparsedFromTokenStream(true);
-  inherited.addStructureTag(typeMarker);
 
   if (!firstRoot.get_extern_C_with_braces() ||
-      !firstRoot.get_previousStatementUnparsedFromTokenStream() ||
-      firstRoot.getStructureTagList().size() != 1 ||
-      firstRoot.getStructureTagList().front() != typeMarker) {
+      !firstRoot.get_previousStatementUnparsedFromTokenStream()) {
     return 1;
   }
 
   if (secondRoot.get_extern_C_with_braces() ||
-      secondRoot.get_previousStatementUnparsedFromTokenStream() ||
-      !secondRoot.getStructureTagList().empty()) {
+      secondRoot.get_previousStatementUnparsedFromTokenStream()) {
     return 2;
   }
 

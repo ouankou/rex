@@ -15,15 +15,11 @@
 
 #include <iostream>
 
-#include <sstream>
-
 #include <string>
 
 #include "ASTtools.hh"
 
 #include "Outliner.hh"
-
-#include "StmtRewrite.hh"
 
 #include "VarSym.hh"
 
@@ -88,7 +84,8 @@ void Outliner::appendIndividualFunctionCallArgs(
              // none classic)
       {
         i_arg = SageBuilder::buildAddressOfOp(
-            v_ref, ASTtools::buildAddressOfResultType(v_ref->get_type()));
+            v_ref, SageBuilder::buildAddressOfResultType(v_ref->get_type()),
+            SgAddressOfOp::e_address_operand_object);
       }
       ROSE_ASSERT(i_arg);
       e_list->append_expression(i_arg);
@@ -121,9 +118,11 @@ static void appendSingleWrapperArgument(const ASTtools::VarSymSet_t &syms,
       // using &_out_argv as a wrapper
       SgVarRefExp *wrapper_ref = SageBuilder::buildVarRefExp(arg_name, scope);
       SageInterface::appendExpression(
-          e_list, SageBuilder::buildAddressOfOp(
-                      wrapper_ref, ASTtools::buildAddressOfResultType(
-                                       wrapper_ref->get_type())));
+          e_list,
+          SageBuilder::buildAddressOfOp(
+              wrapper_ref,
+              SageBuilder::buildAddressOfResultType(wrapper_ref->get_type()),
+              SgAddressOfOp::e_address_operand_object));
     } else // using array of pointers wrapper
     {
       // using void * __out_argv[n] as a wrapper
@@ -249,19 +248,7 @@ static void appendExplicitTemplateArguments(
         ROSE_ABORT();
       }
       SgTemplateParameterVal *arg_expr =
-          SageBuilder::buildTemplateParameterVal_nfi(
-              param_index, initialized_name->get_name().getString());
-      SgType *value_type = param->get_type();
-      if (value_type == NULL)
-        value_type = initialized_name->get_type();
-      if (value_type == NULL) {
-        fprintf(stderr,
-                "REX_OUTLINER_INVARIANT[template-argument-identity]: "
-                "non-type parameter at position %d has no exact type\n",
-                param_index);
-        ROSE_ABORT();
-      }
-      arg_expr->set_valueType(value_type);
+          SageBuilder::buildTemplateParameterVal_nfi(param_index, param);
       if (surface == ExplicitTemplateArgumentSurface::generated_reference) {
         SageInterface::setOneSourcePositionForTransformation(arg_expr);
       }
@@ -321,40 +308,9 @@ static SgNonrealRefExp *buildExplicitTemplateReferenceForCall(
       local_type_template_plan);
   ROSE_ASSERT(declaration_arguments.size() == parameters.size());
 
-  // A dependent template-id needs a distinct spelling identity in the
-  // declaration scope used by SgNonrealRefExp.  Its typed arguments remain the
-  // source of truth; this semantic key is used only to keep different
-  // dependent argument lists from aliasing one declaration.
-  std::ostringstream semantic_name;
-  semantic_name << source_template->get_name().str() << '<';
-  bool first_argument = true;
-  for (SgTemplateArgument *argument : declaration_arguments) {
-    if (argument == NULL) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[template-call-identity]: template=%s "
-              "contains a null explicit argument\n",
-              source_template->get_name().str());
-      ROSE_ABORT();
-    }
-    const std::string mangled_argument = argument->get_mangled_name().str();
-    if (mangled_argument.empty()) {
-      fprintf(stderr,
-              "REX_OUTLINER_INVARIANT[template-call-identity]: template=%s "
-              "contains an argument without semantic identity\n",
-              source_template->get_name().str());
-      ROSE_ABORT();
-    }
-    if (!first_argument)
-      semantic_name << ',';
-    first_argument = false;
-    semantic_name << mangled_argument.size() << ':' << mangled_argument;
-  }
-  semantic_name << '>';
-  const SgName semantic_identity(semantic_name.str());
-
   SgNonrealType *spelling_type = SageBuilder::buildSemanticNonrealType(
       source_template->get_name(), call_scope, &declaration_arguments,
-      &semantic_identity);
+      source_template);
   SgNonrealDecl *spelling_declaration =
       spelling_type != NULL ? isSgNonrealDecl(spelling_type->get_declaration())
                             : NULL;
@@ -371,7 +327,6 @@ static SgNonrealRefExp *buildExplicitTemplateReferenceForCall(
             source_template->get_name().str());
     ROSE_ABORT();
   }
-  spelling_declaration->set_templateDeclaration(source_template);
 
   SgNonrealRefExp *reference =
       SageBuilder::buildNonrealRefExp_nfi(spelling_symbol);

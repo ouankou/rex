@@ -1,7 +1,7 @@
 #ifndef AST_UTIL_INTERFACE
 #define AST_UTIL_INTERFACE
 
-#include <assert.h>
+#include <cstdlib>
 
 #include <fstream>
 
@@ -67,8 +67,7 @@ inline std::string OperatorSideEffectName(OperatorSideEffect what) {
     return "alias";
   default:
     std::cerr << "Error: Unexpected enum value:" << what << "\n";
-    assert(false);
-    return "";
+    std::abort();
   }
 }
 

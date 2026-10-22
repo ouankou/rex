@@ -187,15 +187,18 @@ list(APPEND CXX_TESTCODES_TO_UNPARSE test2003_24.C test2004_82.C)
 list(REMOVE_DUPLICATES CXX_TESTCODES_TO_UNPARSE)
 
 foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
+  rex_get_cxx_specimen_standard_flag(standard_flag ${file_to_test})
   rex_get_cxx_specimen_extra_flags(extra_frontend_flags ${file_to_test})
 
   add_test(
     NAME ut_${file_to_test}
-    COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES} ${extra_frontend_flags}
+    COMMAND unparseToString ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+            ${standard_flag} ${extra_frontend_flags}
             -c ${TESTCODE_DIR}/${file_to_test})
   add_test(
     NAME ua_${file_to_test}
-    COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES} ${extra_frontend_flags}
+    COMMAND unparseToString --all ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+            ${standard_flag} ${extra_frontend_flags}
             -c ${TESTCODE_DIR}/${file_to_test})
 
   rex_lock_test_for_input(ut_${file_to_test} ${file_to_test})
@@ -203,6 +206,86 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
 
   set_tests_properties(ua_${file_to_test} PROPERTIES DEPENDS ut_${file_to_test} LABELS UNPARSETOSTRING)
 endforeach()
+
+foreach(_semantic_rejection IN ITEMS
+    decomposition_storage subobject_destruction unnamed_template_parameter
+    array_init_reference anonymous_field inherited_constructor)
+  set(_semantic_views direct owner)
+  if(_semantic_rejection STREQUAL "decomposition_storage")
+    set(_semantic_source ${TESTCODE_DIR}/rex_unparser_structured_binding_parent.cpp)
+    set(_semantic_diagnostic
+      "REX_UNPARSE_INVARIANT[decomposition-storage-reference]: semantic decomposition holding storage has no standalone source spelling")
+  elseif(_semantic_rejection STREQUAL "subobject_destruction")
+    set(_semantic_source
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/roseTests/programTransformationTests/rex_icg_destructor_lifetime.cpp)
+    set(_semantic_diagnostic
+      "REX_UNPARSE_INVARIANT[subobject-destruction]: semantic destructor epilogue has no standalone source spelling")
+  elseif(_semantic_rejection STREQUAL "array_init_reference")
+    set(_semantic_source
+      ${CMAKE_SOURCE_DIR}/tests/nonsmoke/unit/SageInterface/rex_constructor_semantic_name_input.cpp)
+    set(_semantic_diagnostic
+      "REX_UNPARSE_INVARIANT[array-init-reference]: semantic array-initialization reference has no source spelling")
+    set(_semantic_views direct)
+  elseif(_semantic_rejection STREQUAL "anonymous_field")
+    set(_semantic_source
+      ${TESTCODE_DIR}/rex_test2025_defaulted_special_members_anon_union.cpp)
+    set(_semantic_diagnostic
+      "REX_UNPARSE_INVARIANT[unnamed-variable-reference]: variable reference has no source identifier")
+  elseif(_semantic_rejection STREQUAL "inherited_constructor")
+    set(_semantic_source ${TESTCODE_DIR}/rex_using_terminal_name_contract.cpp)
+    set(_semantic_diagnostic
+      "REX_UNPARSE_INVARIANT[inherited-constructor-arguments]: semantic argument forwarding has no source spelling")
+    set(_semantic_views direct)
+  else()
+    set(_semantic_source ${TESTCODE_DIR}/rex_test2026_std_shared_ptr_enable_shared.cpp)
+    set(_semantic_diagnostic
+      "REX_AST_INVARIANT[template-parameter-value-identity]: referenced parameter has no source name")
+    set(_semantic_views direct)
+  endif()
+  rex_get_cxx_specimen_standard_flag(_semantic_standard ${_semantic_source})
+  rex_get_cxx_specimen_extra_flags(_semantic_extra_flags ${_semantic_source})
+  string(REPLACE "_" "-" _semantic_mode ${_semantic_rejection})
+  foreach(_semantic_view IN LISTS _semantic_views)
+    set(_semantic_test rex_unparser_${_semantic_rejection})
+    set(_semantic_owner_flag)
+    if(_semantic_view STREQUAL "owner")
+      string(APPEND _semantic_test _owner)
+      set(_semantic_owner_flag --reject-semantic-owner)
+    endif()
+    string(APPEND _semantic_test _is_rejected)
+    add_test(NAME ${_semantic_test}
+      COMMAND sh -c [=[
+ulimit -c 0
+log=$1
+diagnostic=$2
+shift 2
+set +e
+"$@" >"$log" 2>&1
+status=$?
+set -e
+test "$status" -eq 134 &&
+  test "$(grep -Fxc -- "$diagnostic" "$log")" -eq 1
+]=]
+        dummy ${_semantic_test}.log "${_semantic_diagnostic}"
+        $<TARGET_FILE:unparseToString> --reject-${_semantic_mode}
+        ${_semantic_owner_flag} ${ROSE_FLAGS} ${TESTCODE_INCLUDES}
+        ${_semantic_standard} ${_semantic_extra_flags}
+        -c ${_semantic_source})
+    set_tests_properties(${_semantic_test}
+      PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING;death")
+    rex_lock_test_for_input(${_semantic_test} ${_semantic_source})
+  endforeach()
+endforeach()
+unset(_semantic_rejection)
+unset(_semantic_views)
+unset(_semantic_source)
+unset(_semantic_diagnostic)
+unset(_semantic_standard)
+unset(_semantic_extra_flags)
+unset(_semantic_mode)
+unset(_semantic_view)
+unset(_semantic_test)
+unset(_semantic_owner_flag)
 
 add_test(
   NAME rex_issue481_typedef_const_no_double_const
@@ -404,7 +487,7 @@ foreach(_fortran_fixed_comment_index RANGE 0 1)
       $<TARGET_FILE:rex_unparser_fortran_fixed_comment_wrap>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_unparser_fortran_fixed_comment_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;Fortran;UNPARSER;death")
@@ -494,7 +577,7 @@ foreach(_fortran_source_form_contract_index RANGE
       $<TARGET_FILE:rex_unparser_fortran_source_form_contracts>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_unparser_fortran_source_form_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;AST;UNPARSER;death")
@@ -524,7 +607,6 @@ set(_frontend_preprocessing_modes
   missing-include-target
   missing-separator-after-splice
   unknown-hash-directive
-  empty-hash-directive
   invalid-hash-identifier
   null-list-entry
   invalid-fortran-fixed-byte)
@@ -537,9 +619,8 @@ set(_frontend_preprocessing_diagnostics
   "REX_FRONTEND_INVARIANT[include-directive-spelling]: reason=missing-target spelling=#include"
   [=[REX_FRONTEND_INVARIANT[macro-definition-spelling]: reason=missing-name-separator spelling=#define\\nREX_BROKEN 1]=]
   "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: unsupported hash directive=rex_unknown"
-  "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash directive has no identifier"
   "REX_FRONTEND_INVARIANT[preprocessing-directive-kind]: hash directive starts with invalid identifier character"
-  "REX_AST_INVARIANT[preprocessing-list-entry]: display label=hard-contract contains null entry index=0"
+  "REX_AST_INVARIANT[preprocessing-list-entry]: lastElement contains null entry"
   "REX_FRONTEND_INVARIANT[fortran-fixed-source-byte]: first-byte=255 is not printable ASCII, space, or tab")
 list(LENGTH _frontend_preprocessing_modes
   _frontend_preprocessing_mode_count)
@@ -568,7 +649,7 @@ foreach(_frontend_preprocessing_index
       $<TARGET_FILE:rex_frontend_preprocessing_hard_contract>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_frontend_preprocessing_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;CFE;death")
@@ -663,7 +744,7 @@ foreach(_frontend_fortran_preprocessing_invalid_index
       $<TARGET_FILE:rex_frontend_preprocessing_hard_contract>
       ${_frontend_fortran_preprocessing_fixture_dir}/${_fixture}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_frontend_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;CFE;Fortran;death")
@@ -858,7 +939,7 @@ foreach(_cxx_expression_role_index RANGE ${_cxx_expression_role_last})
       $<TARGET_FILE:rex_unparser_cxx_expression_role_contract>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_unparser_cxx_expression_role_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;AST;UNPARSER;UNPARSETOSTRING;death")
@@ -914,7 +995,7 @@ foreach(_source_provenance_index RANGE ${_source_provenance_last})
       $<TARGET_FILE:rex_unparser_source_provenance_contract>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_unparser_source_provenance_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING;death")
@@ -1005,7 +1086,7 @@ foreach(_owned_list_contract_index RANGE ${_owned_list_contract_last})
       $<TARGET_FILE:rex_unparser_owned_list_contract>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(rex_unparser_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;death")
 endforeach()
@@ -1072,8 +1153,8 @@ set(_hard_contract_modes
   context-free-named-type
   context-free-declarator-type
   detached-bool-type
-  constrained-auto-missing-source-spelling
-  unconstrained-auto-with-source-spelling
+  constrained-auto-missing-reference
+  unconstrained-auto-with-reference
   cxx-unknown-type-second
   cxx-default-type-skipped
   cxx-imaginary-type-second
@@ -1152,7 +1233,11 @@ set(_hard_contract_modes
   member-function-restrict-type-only
   member-function-restrict-declaration-only
   openacc-default
-  openacc-reduction)
+  openacc-reduction
+  function-parameter-reference-source-binding
+  decltype-parameter-reference-source-binding
+  unnamed-variable-reference-source
+  decltype-unnamed-variable-reference-source)
 set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[formatter-newline]: invalid request num=-1 indent=<none> current-indent=0 chars-on-line=0"
   "REX_UNPARSE_INVARIANT[formatter-newline]: invalid request num=1 indent=-1 current-indent=0 chars-on-line=0"
@@ -1163,7 +1248,7 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[contextual-name-qualification]: cannot qualify a null initialized name"
   "REX_UNPARSE_INVARIANT[name-qualification-declaration]: declaration-type=SgFunctionDeclaration has no exact first-nondefining identity"
   "REX_NAME_QUALIFICATION_INVARIANT[template-instantiation-function]: name=rex_missing_canonical_function has no exact function symbol in its canonical namespace scope"
-  "REX_UNPARSE_INVARIANT[preprocessing-output-owner]: attached preprocessing entry has no typed source or transformation provenance"
+  "REX_AST_INVARIANT[preprocessing-source-owner]: replacement requires detached file info and an exact existing owner"
   "REX_UNPARSE_INVARIANT[preprocessing-source-anchor]: source preprocessing entry or owner has an invalid physical range"
   "REX_UNPARSE_INVARIANT[preprocessing-source-anchor]: source comment follows its typed attachment boundary"
   "REX_UNPARSE_INVARIANT[fortran-text-context]: emission requires an active Fortran source file"
@@ -1184,7 +1269,7 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[concept-constraint]: concept name=rex_concept has no exact constraint expression"
   "REX_UNPARSE_INVARIANT[fortran-print-format]: PRINT statement has no exact format expression"
   "REX_UNPARSE_INVARIANT[fortran-dimension-source]: DIMENSION item does not have an exact variable-to-statement ownership edge"
-  "REX_UNPARSE_INVARIANT[requires-structure]: requires-expression has no nonempty owned requirement list"
+  "REX_AST_INVARIANT[requires-construction]: requires expression needs a nonempty detached requirement list and a paired detached parameter list and scope"
   "REX_UNPARSE_INVARIANT[template-identity-only]: base SgTemplateDeclaration name=rex_identity kind=1 is a semantic template identity and has no standalone source declaration\; source templates must use a typed SgTemplate*Declaration node"
   "REX_UNPARSE_INVARIANT[required-name-qualification]: required contextual qualification is missing"
   "REX_NAME_QUALIFICATION_INVARIANT[symbol-kind]: unsupported explicit symbol kind"
@@ -1209,14 +1294,14 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[unparse-to-string-type-context]: detached type=SgTypedefType requires an exact source use-site"
   "REX_UNPARSE_INVARIANT[unparse-to-string-type-context]: detached type=SgPointerType requires an exact source use-site"
   "REX_UNPARSE_INVARIANT[builtin-type-language]: context=SgTypeBool requires an exact C or C++ output language"
-  "REX_UNPARSE_INVARIANT[constrained-auto-source]: semantic constraint state has no exact source spelling"
-  "REX_UNPARSE_INVARIANT[constrained-auto-source]: semantic constraint state has no exact source spelling"
+  "REX_UNPARSE_INVARIANT[constrained-auto-source]: semantic constraint state has no exact owned concept reference"
+  "REX_UNPARSE_INVARIANT[constrained-auto-source]: semantic constraint state has no exact owned concept reference"
   "REX_UNPARSE_INVARIANT[unknown-type]: cannot emit SgTypeUnknown"
   "REX_UNPARSE_INVARIANT[default-type]: SgTypeDefault has no C/C++ source spelling"
   "REX_UNPARSE_INVARIANT[imaginary-type]: legacy imaginary type specifiers are unsupported"
   "REX_UNPARSE_INVARIANT[typedef-source-form]: name=rex_bad_alias form=0 has no exact typedef/using source form"
-  "REX_UNPARSE_INVARIANT[declarator-type]: declaration has a null type in its modifier chain"
-  "REX_UNPARSE_INVARIANT[declarator-type]: cyclic modifier type chain"
+  "ASSERTION:NULL pointer:.*sourcePrototypeBase.*base$"
+  "ASSERTION:require:.*has_source_prototype.*type == nullptr \\|\\| type != fast$"
   "REX_AST_INVARIANT[constructor-initializer-arguments]: constructor initializer has no exact argument list"
   "REX_AST_INVARIANT[exact-expression-type]: node=SgConstructorInitializer has no exact semantic result type"
   "REX_UNPARSE_INVARIANT[compound-literal-owner]: aggregate initializer has no exact initialized-name owner"
@@ -1224,13 +1309,13 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[assignment-initializer-operand]: initializer has no exact operand"
   "REX_UNPARSE_INVARIANT[braced-initializer-list]: initializer has no exact expression list"
   "REX_UNPARSE_INVARIANT[braced-initializer-element]: initializer element 0 is null"
-  "REX_UNPARSE_INVARIANT[aggregate-initializer-list]: initializer has no exact expression list"
-  "REX_UNPARSE_INVARIANT[aggregate-initializer-element]: initializer element 0 is null"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
   "REX_UNPARSE_INVARIANT[aggregate-initializer-source-form]: C/C++ aggregate initializer has invalid source form=0"
   "REX_UNPARSE_INVARIANT[designator-element]: designator 0 is not an exactly owned SgDesignator"
-  "REX_UNPARSE_INVARIANT[fortran-array-constructor-list]: aggregate initializer has no exact expression list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
   "REX_AST_INVARIANT[static-assert-message]: declaration has neither exact unevaluated-string syntax nor an exactly owned semantic message"
-  "REX_UNPARSE_INVARIANT[cuda-launch-bounds]: expression has no exact function owner and semantic type"
+  "^REX_AST_INVARIANT\\[cuda-launch-bounds\\]: function=0x[[:xdigit:]]+ has a launch bounds expression without exact ownership and semantic type$"
   "REX_UNPARSE_INVARIANT[declare-mapper-identifier]: user-defined mapper has no exact explicit identifier expression"
   "REX_UNPARSE_INVARIANT[declare-mapper-identifier]: mapper identifier kind is unspecified"
   "REX_UNPARSE_INVARIANT[openmp-context-selector]: invalid context kind=999"
@@ -1269,10 +1354,10 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[cxx-statement-structure]: case statement aliases key and range end"
   "REX_UNPARSE_INVARIANT[cxx-statement-structure]: default statement has no exactly owned body"
   "REX_UNPARSE_INVARIANT[cxx-statement-structure]: default statement has no exactly owned body"
-  "REX_UNPARSE_INVARIANT[coroutine-keyword]: await expression has invalid typed source kind=0"
-  "REX_UNPARSE_INVARIANT[coroutine-keyword]: await expression has invalid typed source kind=999"
-  "REX_UNPARSE_INVARIANT[coroutine-operand]: await expression has no exact owned operand"
-  "REX_UNPARSE_INVARIANT[coroutine-return-kind]: return statement has invalid typed source kind=999"
+  "REX_AST_INVARIANT[coroutine-keyword]: await expression has invalid typed source kind=0"
+  "REX_AST_INVARIANT[coroutine-keyword]: await expression has invalid typed source kind=999"
+  "REX_AST_INVARIANT[coroutine-operand]: await expression requires one detached operand"
+  "ASSERTION:require:.*set_return_keyword_kind.*kind == e_return_keyword_return \\|\\| kind == e_return_keyword_co_return$"
   "REX_UNPARSE_INVARIANT[gnu-visibility]: declaration has unknown visibility"
   "REX_UNPARSE_INVARIANT[gnu-visibility]: declaration has error visibility"
   "REX_UNPARSE_INVARIANT[gnu-visibility]: declaration has unknown type visibility"
@@ -1289,7 +1374,11 @@ set(_hard_contract_diagnostics
   "REX_UNPARSE_INVARIANT[member-function-restrict-role]: type-restrict=true declaration-restrict=false disagree"
   "REX_UNPARSE_INVARIANT[member-function-restrict-role]: type-restrict=false declaration-restrict=true disagree"
   "REX_UNPARSE_INVARIANT[openacc-default-kind]: invalid value=999"
-  "REX_UNPARSE_INVARIANT[openacc-reduction-operator]: invalid value=999")
+  "REX_UNPARSE_INVARIANT[openacc-reduction-operator]: invalid value=999"
+  "REX_UNPARSE_INVARIANT[function-parameter-reference]: parameter=0 levels-up=0 has no typed source declaration"
+  "REX_UNPARSE_INVARIANT[function-parameter-reference]: parameter=0 levels-up=0 has no typed source declaration"
+  "REX_UNPARSE_INVARIANT[unnamed-variable-reference]: variable reference has no source identifier"
+  "REX_UNPARSE_INVARIANT[unnamed-variable-reference]: variable reference has no source identifier")
 list(LENGTH _hard_contract_modes _hard_contract_count)
 list(LENGTH _hard_contract_diagnostics _hard_contract_diagnostic_count)
 if(NOT _hard_contract_count EQUAL _hard_contract_diagnostic_count)
@@ -1300,19 +1389,29 @@ foreach(_hard_contract_index RANGE ${_hard_contract_last})
   list(GET _hard_contract_modes ${_hard_contract_index} _mode)
   list(GET _hard_contract_diagnostics ${_hard_contract_index} _diagnostic)
   string(REPLACE "-" "_" _suffix "${_mode}")
+  if(_mode STREQUAL "typedef-null-modifier-base" OR
+     _mode STREQUAL "typedef-cyclic-modifier-base" OR
+     _mode STREQUAL "cuda-launch-bounds-owner" OR
+     _mode STREQUAL "coroutine-invalid-return-kind")
+    set(_diagnostic_match -Ec)
+  else()
+    set(_diagnostic_match -Fxc)
+  endif()
   add_test(
     NAME rex_unparser_${_suffix}_is_rejected
     COMMAND
       sh -c
-      "ulimit -c 0; set +e; \"$1\" \"$2\" >rex_unparser_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc -- \"$4\" rex_unparser_$3.log)\" -eq 1"
+      "ulimit -c 0; set +e; \"$1\" \"$2\" >rex_unparser_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep \"$5\" -- \"$4\" rex_unparser_$3.log)\" -eq 1"
       dummy
       $<TARGET_FILE:rex_unparser_backend_hard_contracts>
       "${_mode}"
       "${_suffix}"
-      "${_diagnostic}")
+      "${_diagnostic}"
+      "${_diagnostic_match}")
   set_tests_properties(rex_unparser_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;death")
 endforeach()
+unset(_diagnostic_match)
 
 add_test(
   NAME rex_ast_openmp_append_self_replacement
@@ -1332,51 +1431,33 @@ set_tests_properties(
   rex_unparser_line_directive_missing_source_location_is_rejected
   PROPERTIES LABELS "rex;UNPARSER;death")
 
-set(_line_directive_filename_modes
+foreach(_line_directive_filename_mode IN ITEMS
   quote
   backslash
   line-feed
   carriage-return
-  control-byte)
-set(_line_directive_filename_bytes
-  22
-  5c
-  0a
-  0d
-  01)
-list(LENGTH _line_directive_filename_modes _line_directive_filename_count)
-math(EXPR _line_directive_filename_last
-  "${_line_directive_filename_count} - 1")
-foreach(_line_directive_filename_index RANGE
-    ${_line_directive_filename_last})
-  list(GET _line_directive_filename_modes
-    ${_line_directive_filename_index} _line_directive_filename_mode)
-  list(GET _line_directive_filename_bytes
-    ${_line_directive_filename_index} _line_directive_filename_byte)
+  control-byte
+  trigraph)
   string(REPLACE "-" "_" _line_directive_filename_suffix
     "${_line_directive_filename_mode}")
   add_test(
-    NAME rex_unparser_line_directive_filename_${_line_directive_filename_suffix}_is_rejected
-    COMMAND
-      sh -c
-      "ulimit -c 0; set +e; \"$1\" line-directive-filename-$2 >rex_unparser_line_directive_filename_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[line-directive-filename\\]: statement=0x[[:xdigit:]]+/SgNullStatement filename has unrepresentable byte=0x${_line_directive_filename_byte} at offset=5$' rex_unparser_line_directive_filename_$3.log)\" -eq 1"
-      dummy
-      $<TARGET_FILE:rex_unparser_backend_hard_contracts>
-      "${_line_directive_filename_mode}"
-      "${_line_directive_filename_suffix}"
-      "${_line_directive_filename_byte}")
+    NAME rex_unparser_line_directive_filename_${_line_directive_filename_suffix}_is_escaped
+    COMMAND $<TARGET_FILE:rex_unparser_backend_hard_contracts>
+      "line-directive-filename-${_line_directive_filename_mode}")
   set_tests_properties(
-    rex_unparser_line_directive_filename_${_line_directive_filename_suffix}_is_rejected
-    PROPERTIES LABELS "rex;UNPARSER;death")
+    rex_unparser_line_directive_filename_${_line_directive_filename_suffix}_is_escaped
+    PROPERTIES LABELS "rex;UNPARSER")
 endforeach()
-unset(_line_directive_filename_modes)
-unset(_line_directive_filename_bytes)
-unset(_line_directive_filename_count)
-unset(_line_directive_filename_last)
-unset(_line_directive_filename_index)
 unset(_line_directive_filename_mode)
-unset(_line_directive_filename_byte)
 unset(_line_directive_filename_suffix)
+
+add_test(
+  NAME rex_unparser_line_directive_filename_nul_is_rejected
+  COMMAND sh -c
+    "ulimit -c 0; set +e; \"$1\" line-directive-filename-nul >rex_unparser_line_directive_filename_nul.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[line-directive-filename\\]: statement=0x[[:xdigit:]]+/SgNullStatement filename has unrepresentable byte=0x00 at offset=5$' rex_unparser_line_directive_filename_nul.log)\" -eq 1"
+    dummy $<TARGET_FILE:rex_unparser_backend_hard_contracts>)
+set_tests_properties(rex_unparser_line_directive_filename_nul_is_rejected
+  PROPERTIES LABELS "rex;UNPARSER;death")
 
 add_test(
   NAME rex_unparser_cxx_udl_missing_declaration_is_rejected
@@ -1534,11 +1615,37 @@ add_test(
   NAME rex_unparser_cxx_call_default_argument_is_rejected
   COMMAND
     sh -c
-    "ulimit -c 0; set +e; \"$1\" cxx-call-default-argument >rex_unparser_cxx_call_default_argument.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[function-call-argument\\]: call=0x[[:xdigit:]]+ contains an implicit default argument instead of only source-explicit arguments$' rex_unparser_cxx_call_default_argument.log)\" -eq 1"
+    "ulimit -c 0; set +e; \"$1\" cxx-call-default-argument >rex_unparser_cxx_call_default_argument.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec 'ASSERTION:require:.*post_construction_initialization.*SgCxxDefaultInitExp::is_valid_binding\\([[:space:]]*getAssociatedFunctionDeclarationForCallee\\(p_function\\),[[:space:]]*p_args->get_expressions\\(\\)\\)$' rex_unparser_cxx_call_default_argument.log)\" -eq 1"
     dummy
     $<TARGET_FILE:rex_unparser_backend_hard_contracts>)
 set_tests_properties(rex_unparser_cxx_call_default_argument_is_rejected
   PROPERTIES LABELS "rex;UNPARSER;death")
+
+add_test(
+  NAME rex_backend_output_alias_is_rejected
+  COMMAND sh -c [=[
+    ulimit -c 0
+    set -eu
+    directory="$(mktemp -d)"
+    trap 'rm -rf "$directory"' EXIT
+    source="$directory/rex_backend_source.cpp"
+    output="$directory/rex_backend_output.o"
+    : > "$source"
+    "$1" backend-compile-command "$source" "$output"
+    ln "$source" "$output"
+    set +e
+    "$1" backend-compile-command "$source" "$output" >rex_backend_output_alias.log 2>&1
+    status=$?
+    set -e
+    if test "$status" -ne 134; then
+      cat rex_backend_output_alias.log
+      printf 'source/output hard link was not rejected: exit %s\n' "$status"
+      exit 1
+    fi
+    grep -Eq '^REX_BACKEND_INVARIANT\[per-tu-command\]: reason=output-clobbers-source ' rex_backend_output_alias.log
+  ]=] dummy $<TARGET_FILE:rex_unparser_backend_hard_contracts>)
+set_tests_properties(rex_backend_output_alias_is_rejected
+  PROPERTIES LABELS "rex;backend;death")
 
 add_test(
   NAME rex_ast_function_call_literal_callee_is_rejected
@@ -1551,7 +1658,27 @@ set_tests_properties(rex_ast_function_call_literal_callee_is_rejected
   PROPERTIES LABELS "rex;AST;death")
 
 set(_ast_type_contract_modes
-  lambda-missing-closure-type
+  aggregate-constructor-invalid-source
+  aggregate-constructor-owned-list
+  aggregate-constructor-duplicate-element
+  aggregate-constructor-foreign-element
+  aggregate-constructor-null-element
+  aggregate-constructor-missing-type
+  aggregate-builder-invalid-source
+  aggregate-builder-owned-list
+  aggregate-builder-duplicate-element
+  aggregate-builder-foreign-element
+  aggregate-builder-null-element
+  aggregate-builder-missing-type
+  aggregate-builder-nfi-invalid-source
+  aggregate-builder-nfi-owned-list
+  aggregate-builder-nfi-duplicate-element
+  aggregate-builder-nfi-foreign-element
+  aggregate-builder-nfi-null-element
+  aggregate-builder-nfi-missing-type
+  lambda-missing-construction-children
+  parameter-value-unknown-type
+  parameter-value-default-type
   this-missing-result-type
   this-builder-missing-result-type
   this-symbol-type-mismatch
@@ -1574,6 +1701,10 @@ set(_ast_type_contract_modes
   implied-do-type-query
   conditional-missing-result-type
   typed-builtin-missing-result-type
+  typed-builtin-builder-invalid-type-operand
+  typed-builtin-builder-duplicate-operand
+  typed-builtin-builder-owned-operand
+  typed-builtin-unparser-duplicate-operand
   binary-missing-result-type
   unary-missing-result-type
   binary-builder-missing-result-type
@@ -1581,6 +1712,8 @@ set(_ast_type_contract_modes
   throw-nonvoid-result-type
   await-missing-result-type
   fold-default-result-type
+  fold-invalid-operator-type-query
+  fold-invalid-operator-builder
   statement-expression-unknown-result-type
   caf-coexpression-missing-result-type
   typeid-missing-result-type
@@ -1588,6 +1721,10 @@ set(_ast_type_contract_modes
   null-expression-invalid-role
   expr-list-type-query
   cuda-exec-config-type-query
+  cuda-exec-config-constructor-grid
+  cuda-exec-config-constructor-blocks
+  cuda-exec-config-constructor-owned
+  cuda-exec-config-constructor-duplicate
   range-type-query
   range-fourth-element
   subscript-type-query
@@ -1609,7 +1746,27 @@ set(_ast_type_contract_modes
   assumed-rank-type-query
   coarray-image-selector-type-query)
 set(_ast_type_contract_diagnostics
-  "REX_AST_INVARIANT[lambda-type]: lambda expression has no exact closure class type"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-owner]: initializer list already has a structural owner"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-owner]: initializer list already has a structural owner"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-owner]: initializer list already has a structural owner"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer-elements]: initializer elements must be distinct and owned by the list"
+  "REX_SAGE_BUILDER_INVARIANT[aggregate-initializer]: exact initializer list, semantic type, and source form are required"
+  "REX_AST_INVARIANT[lambda-construction]: lambda requires a detached capture list, closure, and call operator"
+  "REX_AST_INVARIANT[template-parameter-value-type]: value has no exact non-type template parameter type"
+  "REX_AST_INVARIANT[template-parameter-value-type]: value has no exact non-type template parameter type"
   "REX_AST_INVARIANT[this-result-type]: SgThisExp has no exact semantic pointer result type"
   "REX_SAGE_BUILDER_INVARIANT[this-expression]: exact class/nonreal symbol and its matching cv-qualified pointer result type are required"
   "REX_AST_INVARIANT[this-symbol-type]: SgThisExp result pointee does not match its exact class/nonreal symbol type"
@@ -1632,6 +1789,10 @@ set(_ast_type_contract_diagnostics
   "REX_AST_INVARIANT[implied-do-type]: implied-do is a control/list construct and has no standalone expression type"
   "REX_AST_INVARIANT[conditional-result-type]: conditional expression has no exact semantic result type"
   "REX_AST_INVARIANT[typed-builtin-result-type]: builtin=__builtin_offsetof has no exact semantic result type"
+  "ASSERTION:NULL pointer:.*post_construction_initialization.*p_represented_type$"
+  "REX_AST_INVARIANT[typed-builtin-expression]: operands must be distinct and unowned before construction"
+  "REX_AST_INVARIANT[typed-builtin-expression]: operands must be distinct and unowned before construction"
+  "REX_UNPARSE_INVARIANT[typed-builtin-expression]: kind=0 name=__is_integral contains a non-exclusively-owned expression argument"
   "REX_AST_INVARIANT[binary-result-type]: expression=SgAddOp has no exact semantic result type"
   "REX_AST_INVARIANT[unary-result-type]: expression=SgMinusOp has no exact semantic result type"
   "REX_AST_INVARIANT[binary-result-type-producer]: builder requires an exact semantic result type"
@@ -1639,6 +1800,8 @@ set(_ast_type_contract_diagnostics
   "REX_AST_INVARIANT[throw-result-type]: throw expression result type must be void"
   "REX_AST_INVARIANT[await-result-type]: SgAwaitExpression has no exact semantic result type"
   "REX_AST_INVARIANT[fold-result-type]: SgFoldExpression has no exact semantic result type"
+  "REX_AST_INVARIANT[fold-operator]: invalid fold operator kind"
+  "REX_AST_INVARIANT[fold-operator]: invalid fold operator kind"
   "REX_AST_INVARIANT[statement-expression-result-type]: SgStatementExpression has no exact semantic result type"
   "REX_AST_INVARIANT[caf-coexpression-result-type]: coarray reference has no exact semantic result type"
   "REX_AST_INVARIANT[typeid-result-type]: typeid expression must store its exact const reference result type"
@@ -1646,6 +1809,10 @@ set(_ast_type_contract_diagnostics
   "REX_AST_INVARIANT[null-expression-role]: null-expression builders require the exact syntactic-absence role"
   "REX_AST_INVARIANT[syntax-expression-type]: node=SgExprListExp has no standalone semantic value type"
   "REX_AST_INVARIANT[syntax-expression-type]: node=SgCudaKernelExecConfig has no standalone semantic value type"
+  "REX_AST_INVARIANT[cuda-exec-config-inputs]: grid and blocks are required"
+  "REX_AST_INVARIANT[cuda-exec-config-inputs]: grid and blocks are required"
+  "REX_AST_INVARIANT[cuda-exec-config-ownership]: operands must be distinct and unowned"
+  "REX_AST_INVARIANT[cuda-exec-config-ownership]: operands must be distinct and unowned"
   "REX_AST_INVARIANT[syntax-expression-type]: node=SgRangeExp has no standalone semantic value type"
   "REX_AST_INVARIANT[range-arity]: SgRangeExp cannot own more than start, stride, and end expressions"
   "REX_AST_INVARIANT[syntax-expression-type]: node=SgSubscriptExpression has no standalone semantic value type"
@@ -1658,7 +1825,7 @@ set(_ast_type_contract_diagnostics
   "REX_AST_INVARIANT[syntax-expression-type]: node=SgTypeExpression has no standalone semantic value type"
   "REX_AST_INVARIANT[type-expression-represented-type]: type expression builder requires an exact represented type"
   "REX_AST_INVARIANT[exact-expression-type]: node=SgSourceLocationBuiltinExp has no exact semantic result type"
-  "REX_AST_INVARIANT[pseudo-destructor-type-producer]: pseudo-destructor requires an exact object type and void member-function result type"
+  "REX_AST_INVARIANT[pseudo-destructor-type-producer]: pseudo-destructor requires a nullary, non-variadic void member-function type bound to its exact object type"
   "REX_AST_INVARIANT[vararg-result-type]: SgVarArgOp has no exact semantic result type"
   "REX_AST_INVARIANT[function-parameter-reference-type]: SgFunctionParameterRefExp has no exact semantic result type"
   "REX_AST_INVARIANT[function-parameter-reference-type]: SgFunctionParameterRefExp has no exact semantic result type"
@@ -1679,16 +1846,22 @@ foreach(_ast_type_contract_index RANGE ${_ast_type_contract_last})
   list(GET _ast_type_contract_diagnostics ${_ast_type_contract_index}
     _diagnostic)
   string(REPLACE "-" "_" _suffix "${_mode}")
+  if(_mode STREQUAL "typed-builtin-builder-invalid-type-operand")
+    set(_diagnostic_match -Ec)
+  else()
+    set(_diagnostic_match -Fxc)
+  endif()
   add_test(
     NAME rex_ast_${_suffix}_is_rejected
     COMMAND
       sh -c
-      "ulimit -c 0; set +e; \"$1\" \"$2\" >rex_ast_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc -- \"$4\" rex_ast_$3.log)\" -eq 1"
+      "ulimit -c 0; set +e; \"$1\" \"$2\" >rex_ast_$3.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep \"$5\" -- \"$4\" rex_ast_$3.log)\" -eq 1"
       dummy
       $<TARGET_FILE:rex_unparser_backend_hard_contracts>
       "${_mode}"
       "${_suffix}"
-      "${_diagnostic}")
+      "${_diagnostic}"
+      "${_diagnostic_match}")
   set_tests_properties(rex_ast_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;AST;death")
 endforeach()
@@ -1708,6 +1881,7 @@ unset(_ast_type_contract_mode_count)
 unset(_ast_type_contract_diagnostic_count)
 unset(_ast_type_contract_last)
 unset(_ast_type_contract_index)
+unset(_diagnostic_match)
 
 unset(_hard_contract_modes)
 unset(_hard_contract_diagnostics)
@@ -2028,12 +2202,42 @@ add_test(
   NAME rex_unparser_malformed_nonreal_template_is_rejected
   COMMAND
     sh -c
-    "ulimit -c 0; set +e; \"$1\" >rex_unparser_malformed_nonreal_template.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc 'REX_AST_INVARIANT[nonreal-template-name]: base=rex_malformed semantic=rex_malformed is not a complete template-id' rex_unparser_malformed_nonreal_template.log)\" -eq 1"
+    "ulimit -c 0; set +e; \"$1\" >rex_unparser_malformed_nonreal_template.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Fxc 'REX_AST_INVARIANT[nonreal-template-identity]: base=rex_malformed requires an exact typed template declaration' rex_unparser_malformed_nonreal_template.log)\" -eq 1"
     dummy
     $<TARGET_FILE:rex_unparser_malformed_nonreal_template>
 )
 set_tests_properties(rex_unparser_malformed_nonreal_template_is_rejected
   PROPERTIES LABELS "rex;UNPARSER")
+
+add_test(NAME rex_ast_alias_chain_valid
+  COMMAND $<TARGET_FILE:rex_ast_alias_provenance> valid)
+set_tests_properties(rex_ast_alias_chain_valid PROPERTIES LABELS "rex;AST")
+foreach(_alias_mode IN ITEMS self cycle null rename_null rename_mutation_null
+    rename_cycle mixed_cycle rename_basis)
+  if(_alias_mode STREQUAL "null" OR _alias_mode STREQUAL "rename_null" OR
+      _alias_mode STREQUAL "rename_mutation_null")
+    set(_alias_assertion "symbol != nullptr")
+  elseif(_alias_mode STREQUAL "rename_cycle")
+    set(_alias_assertion "seen.insert(rename).second")
+  elseif(_alias_mode STREQUAL "rename_basis")
+    set(_alias_assertion "base->get_symbol_basis() == rename->get_declaration()")
+  else()
+    set(_alias_assertion "seen.insert(alias).second")
+  endif()
+  add_test(NAME rex_ast_alias_chain_${_alias_mode}_is_rejected
+    COMMAND sh -c [=[
+ulimit -c 0
+"$1" "$2" >"rex_alias_$2.log" 2>&1
+status=$?
+test "$status" -eq 134 && grep -F "$3" "rex_alias_$2.log"
+]=]
+    dummy $<TARGET_FILE:rex_ast_alias_provenance>
+    "${_alias_mode}" "${_alias_assertion}")
+  set_tests_properties(rex_ast_alias_chain_${_alias_mode}_is_rejected
+    PROPERTIES LABELS "rex;AST;death" TIMEOUT 10)
+endforeach()
+unset(_alias_mode)
+unset(_alias_assertion)
 
 add_test(
   NAME rex_ast_alias_without_provenance_is_rejected
@@ -2153,7 +2357,7 @@ foreach(_invocation_context_index RANGE ${_invocation_context_last})
       ${_mode}
       ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_invocation_context.cpp
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(
     rex_unparser_invocation_context_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING;death")
@@ -2196,13 +2400,13 @@ set(_included_files_contract_modes
 set(_included_files_contract_diagnostics
   "^REX_UNPARSE_INVARIANT\\[header-token-map\\]: token map contains a null source-file key$"
   "^REX_UNPARSE_INVARIANT\\[header-query\\]: inventory=physical-output .* type=SgEmptyDeclaration has no file information$"
-  "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* source=.* has no associated include node$"
-  "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* associated-include=.* owns filename=.* source=.*$"
-  "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* include=.* has no parent include node$"
+  "^.*FAIL : ASSERTION:require:.*insertMaterializedSourceFile.*include != nullptr && !include->get_isRootSourceFile\\(\\) && include->get_source_file\\(\\) == sourceFile$"
+  "^.*FAIL : ASSERTION:require:.*insertMaterializedSourceFile.*include != nullptr && !include->get_isRootSourceFile\\(\\) && include->get_source_file\\(\\) == sourceFile$"
+  "^.*FAIL : ASSERTION:require:.*validateIncludeOwnership.*child != nullptr && children[.]insert\\(child\\)[.]second && child->get_parent\\(\\) == this && child->get_parent_include_file\\(\\) == this$"
   "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* parent=.* contains associated include=.* exactly 0 times instead of once$"
   "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* include=.* has no exact source spelling$"
   "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=unparse-output header=.* include=.* has absolute source spelling=.*rex_unparser_exact_leaf.hpp$"
-  "^REX_UNPARSE_INVARIANT\\[header-output-graph\\]: header=.*rex_unparser_exact_(leaf|parent)\\.hpp parent=.*rex_unparser_exact_(leaf|parent)\\.hpp has no resolved output\\; every included header requires a complete path to one CLI root$"
+  "^.*FAIL : ASSERTION:require:.*validateIncludeOwnership.*!p_isRootSourceFile && get_parent\\(\\) == p_parent_include_file && p_source_file_of_translation_unit == p_parent_include_file->get_source_file_of_translation_unit\\(\\) && p_including_source_file == p_parent_include_file->get_source_file\\(\\)$"
   "^REX_UNPARSE_INVARIANT\\[header-include-graph\\]: operation=copy-output header=.*rex_unparser_exact_copy.hpp source=.* has no associated include node$"
   "^REX_UNPARSE_INVARIANT\\[header-output-graph\\]: copied header=.*rex_unparser_exact_copy.hpp parent=.*copy_orphan.hpp has no resolved unparse or copy output$")
 list(LENGTH _included_files_contract_modes _included_files_contract_mode_count)
@@ -2230,7 +2434,7 @@ foreach(_included_files_contract_index RANGE ${_included_files_contract_last})
       $<TARGET_FILE:rex_unparser_included_files_contract>
       ${_mode}
       ${_suffix}
-      ${_diagnostic})
+      "${_diagnostic}")
   set_tests_properties(rex_unparser_included_files_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;headers;death")
 endforeach()
@@ -2310,7 +2514,7 @@ foreach(_dispatch_ownership_index RANGE ${_dispatch_ownership_last})
         $<TARGET_FILE:rex_unparser_dispatch_ownership_contract>
         ${_mode}
         ${_suffix}
-        ${_diagnostic})
+        "${_diagnostic}")
   endif()
   set_tests_properties(rex_unparser_${_suffix}_is_rejected
     PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING;death")
@@ -2336,17 +2540,17 @@ set_tests_properties(rex_unparser_template_and_tag_ownership_contract
       "rose_output_rex_frontend_explicit_instantiation_identity;rose_output_rex_frontend_function_explicit_instantiation_identity;rose_output_test2007_38;rose_output_test2018_63")
 
 set(_template_and_tag_ownership_modes
-  empty-template-name
-  empty-template-id
-  malformed-template-id
-  mismatched-template-payload
+  missing-template-primary
+  missing-template-name
+  missing-template-scope
+  injected-with-written-arguments
   for-init-foreign-owner
   for-init-empty-list)
 set(_template_and_tag_ownership_diagnostics
-  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: template name is empty"
-  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: stored declaration name is not a complete template-id rooted at the template name"
-  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: stored declaration name is not a complete template-id rooted at the template name"
-  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: typed argument list disagrees with the stored template-id payload"
+  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: class template-id has no typed primary declaration"
+  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: class template-id has no base name"
+  "REX_UNPARSE_INVARIANT[template-instantiation-identity]: class template-id has no typed semantic scope"
+  "REX_UNPARSE_INVARIANT[injected-class-name-spelling]: injected name has written arguments or no semantic arguments"
   "REX_UNPARSE_INVARIANT[for-init-owner]: for statement has no exactly owned SgForInitStatement"
   "REX_UNPARSE_INVARIANT[for-init-owner]: for initializer has no typed statement\; syntactic absence requires SgNullStatement")
 list(LENGTH _template_and_tag_ownership_modes
@@ -2389,3 +2593,8 @@ unset(_template_and_tag_ownership_index)
 unset(_mode)
 unset(_diagnostic)
 unset(_suffix)
+
+add_test(NAME rex_ast_aggregate_valid_construction
+  COMMAND rex_unparser_backend_hard_contracts aggregate-valid-construction)
+set_tests_properties(rex_ast_aggregate_valid_construction
+  PROPERTIES LABELS "rex;AST")

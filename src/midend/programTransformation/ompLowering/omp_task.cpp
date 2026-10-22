@@ -1,12 +1,9 @@
 
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "Outliner.hh"
-
-#include "RoseAst.h"
 
 #include "omp_lowering.h"
 
-#include "rex_llvm.h"
+#include "libxomp.h"
 
 #include "sage3basic.h"
 
@@ -14,8 +11,6 @@
 
 #include "sageBuilder.h"
 
-#include <limits>
-#include <sstream>
 #include <string>
 
 using namespace std;
@@ -23,9 +18,6 @@ using namespace Rose;
 using namespace SageInterface;
 using namespace SageBuilder;
 using namespace OmpSupport;
-
-extern std::vector<SgFunctionDeclaration *> *target_outlined_function_list;
-extern std::vector<SgDeclarationStatement *> *target_outlined_struct_list;
 
 static bool equals_ignore_case(const std::string &lhs, const std::string &rhs) {
   if (lhs.size() != rhs.size())
@@ -128,46 +120,15 @@ static void insert_libxompf_h_for_task(SgNode *start_node) {
   }
 }
 
-static bool is_32_bit_target(const SgNode *context) {
-  SgProject *project = SageInterface::getProject(context);
-  ROSE_ASSERT(project != NULL);
-  return project->get_mode_32_bit();
-}
-
-static StructLayoutInfo get_target_layout_info(SgType *type,
-                                               const SgNode *context) {
-  ROSE_ASSERT(type != NULL);
-
-  if (is_32_bit_target(context)) {
-    I386PrimitiveTypeLayoutGenerator primitive_generator(NULL);
-    NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
-    return layout_generator.layoutType(type);
-  }
-
-  X86_64PrimitiveTypeLayoutGenerator primitive_generator(NULL);
-  NonpackedTypeLayoutGenerator layout_generator(&primitive_generator);
-  return layout_generator.layoutType(type);
-}
-
-static int get_target_type_size_bytes(SgType *type, const SgNode *context) {
-  StructLayoutInfo layout = get_target_layout_info(type, context);
-  if (layout.size == 0 ||
-      layout.size > static_cast<size_t>(std::numeric_limits<int>::max()))
-    return -1;
-  return static_cast<int>(layout.size);
-}
-
-static int get_fortran_value_parameter_size(SgType *type,
-                                            const SgNode *context) {
-  ROSE_ASSERT(type != NULL);
-  SgType *base_type =
-      type->stripType(SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_TYPEDEF_TYPE);
-  ROSE_ASSERT(base_type != NULL);
-  return get_target_type_size_bytes(base_type, context);
-}
-
-static int get_fortran_pointer_parameter_size(const SgNode *context) {
-  return get_target_type_size_bytes(buildPointerType(buildVoidType()), context);
+static SgExpression *buildTaskIfClause(SgOmpTaskStatement *target) {
+  const auto clauses = getClause(target, V_SgOmpIfClause);
+  if (clauses.empty())
+    return buildIntVal(1);
+  ROSE_ASSERT(clauses.size() == 1);
+  auto *clause = isSgOmpIfClause(clauses.front());
+  ROSE_ASSERT(clause != nullptr);
+  ROSE_ASSERT(clause->get_expression() != nullptr);
+  return copyExpression(clause->get_expression());
 }
 
 static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
@@ -175,6 +136,10 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
 
   SgStatement *body = target->get_body();
   ROSE_ASSERT(body != NULL);
+
+  const unsigned pointer_bits = requireTargetDefaultPointerSizeBits(target);
+  ROSE_ASSERT(pointer_bits % 8 == 0);
+  const int pointer_size = static_cast<int>(pointer_bits / 8);
 
   insert_libxompf_h_for_task(target);
 
@@ -186,7 +151,7 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
   ASTtools::VarSymSet_t syms;
   ASTtools::VarSymSet_t pdSyms3;
   SgFunctionDeclaration *outlined_func =
-      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false, false);
+      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false);
   ROSE_ASSERT(outlined_func != NULL);
 
   SgBasicBlock *enclosing_body = getEnclosingRegionOrFuncDefinition(target);
@@ -196,40 +161,20 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
   SgScopeStatement *task_scope = target->get_scope();
   ROSE_ASSERT(task_scope != NULL);
 
-  int pointer_size = get_fortran_pointer_parameter_size(target);
-  if (pointer_size <= 0) {
+  if (syms.size() > MAX_OUTLINED_FUNC_PARAMETER_COUNT) {
     MLOG_ERROR_CXX("ompLowering")
-        << "transOmpTaskForFortran(): unable to determine target pointer size";
-    ROSE_ABORT();
-  }
-  if (syms.size() >
-      static_cast<size_t>(std::numeric_limits<int>::max() / pointer_size)) {
-    MLOG_ERROR_CXX("ompLowering")
-        << "transOmpTaskForFortran(): outlined task parameter size overflow";
+        << "transOmpTaskForFortran(): outlined task exceeds the runtime "
+           "parameter limit";
     ROSE_ABORT();
   }
 
-  SgExpression *parameter_cpyfn = buildIntVal(0);
-  SgExpression *parameter_arg_size =
-      buildIntVal(static_cast<int>(syms.size() * pointer_size));
-  SgExpression *parameter_arg_align = buildIntVal(4);
-  SgExpression *parameter_if_clause = buildIntVal(1);
-  if (hasClause(target, V_SgOmpIfClause)) {
-    Rose_STL_Container<SgOmpClause *> clauses =
-        getClause(target, V_SgOmpIfClause);
-    ROSE_ASSERT(clauses.size() == 1);
-    SgOmpIfClause *if_clause = isSgOmpIfClause(clauses[0]);
-    ROSE_ASSERT(if_clause != NULL);
-    ROSE_ASSERT(if_clause->get_expression() != NULL);
-    parameter_if_clause = copyExpression(if_clause->get_expression());
-  }
+  SgExpression *parameter_if_clause = buildTaskIfClause(target);
 
   SgExpression *parameter_untied =
       hasClause(target, V_SgOmpUntiedClause) ? buildIntVal(1) : buildIntVal(0);
 
   SgExprListExp *parameters =
       buildExprListExp(buildFortranOutlinedFunctionRef(outlined_func),
-                       parameter_cpyfn, parameter_arg_size, parameter_arg_align,
                        parameter_if_clause, parameter_untied);
   appendExpression(parameters, buildIntVal(static_cast<int>(syms.size() * 3)));
 
@@ -239,20 +184,15 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
     ROSE_ASSERT(sym != NULL);
     ROSE_ASSERT(sym->get_declaration() != NULL);
 
-    bool pass_by_value = isLoopIndexVariable(sym->get_declaration(), target);
+    const bool pass_by_value = pdSyms3.count(sym) == 0;
     appendExpression(parameters, buildIntVal(pass_by_value ? 1 : 0));
 
     if (pass_by_value) {
-      int value_size =
-          get_fortran_value_parameter_size(sym->get_type(), target);
-      if (value_size < 0) {
-        MLOG_ERROR_CXX("ompLowering")
-            << "transOmpTaskForFortran(): unsupported pass-by-value type for "
-            << "variable " << sym->get_name().getString() << " of type "
-            << sym->get_type()->class_name();
-        ROSE_ABORT();
-      }
-      appendExpression(parameters, buildIntVal(value_size));
+      const unsigned size_bits =
+          requireTargetScalarSizeBits(sym->get_type(), target);
+      ROSE_ASSERT(size_bits % 8 == 0);
+      appendExpression(parameters,
+                       buildIntVal(static_cast<int>(size_bits / 8)));
     } else {
       appendExpression(parameters, buildIntVal(pointer_size));
     }
@@ -269,6 +209,39 @@ static void transOmpTaskForFortran(SgOmpTaskStatement *target) {
   pastePreprocessingInfo(task_call, PreprocessingInfo::after, save_buf2);
 }
 
+static SgFunctionDeclaration *
+buildTaskCaptureCleanup(SgFunctionDeclaration *outlined, SgType *capture_type,
+                        SgStatement *task) {
+  SgScopeStatement *scope = outlined->get_scope();
+  SgNode *anchor = task;
+  while (anchor->get_parent() != scope) {
+    anchor = anchor->get_parent();
+    ROSE_ASSERT(anchor != nullptr);
+  }
+  ROSE_ASSERT(isSgStatement(anchor) != nullptr);
+  SgType *parameter_type = buildPointerType(buildVoidType());
+  const SgName name(outlined->get_name().getString() + "_destroy");
+  auto *parameters = buildFunctionParameterList(
+      buildInitializedName("capture", parameter_type));
+  auto *canonical_parameters = buildSemanticFunctionParameterList(parameters);
+  auto *canonical = buildNondefiningFunctionDeclaration(
+      function_declaration_ownership::semanticAuxiliary(), name,
+      buildVoidType(), canonical_parameters, scope);
+  auto *cleanup = buildDefiningFunctionDeclaration(
+      function_declaration_ownership::sourceLexicalBefore(
+          scope, isSgStatement(anchor)),
+      name, buildVoidType(), parameters, scope, false, canonical, nullptr,
+      false);
+  auto *body = cleanup->get_definition()->get_body();
+  auto *capture = buildVarRefExp(parameters->get_args().front(), body);
+  auto *typed_capture =
+      buildCastExp(capture, capture_type, SgCastExp::e_static_cast);
+  appendStatement(
+      buildExprStatement(buildDeleteExp(typed_capture, false, false, nullptr)),
+      body);
+  return cleanup;
+}
+
 static void transOmpTaskForC(SgOmpTaskStatement *target) {
   ROSE_ASSERT(target != NULL);
   SgStatement *body = target->get_body();
@@ -282,17 +255,19 @@ static void transOmpTaskForC(SgOmpTaskStatement *target) {
   ASTtools::VarSymSet_t syms;
   ASTtools::VarSymSet_t pdSyms3;
   SgFunctionDeclaration *outlined_func =
-      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false, false);
+      generateOutlinedTask(target, wrapper_name, syms, pdSyms3, false);
   ROSE_ASSERT(outlined_func != NULL);
 
   SgScopeStatement *task_scope = target->get_scope();
   ROSE_ASSERT(task_scope != NULL);
 
   SgExpression *parameter_data = NULL;
-  SgExpression *parameter_cpyfn = buildIntVal(0);
   SgExpression *parameter_arg_size = NULL;
   SgExpression *parameter_arg_align = NULL;
   size_t parameter_count = syms.size();
+  const bool owned_capture =
+      SageInterface::is_Cxx_language() && parameter_count != 0;
+  SgFunctionDeclaration *capture_cleanup = nullptr;
   if (parameter_count == 0) {
     parameter_data = buildIntVal(0);
     parameter_arg_size = buildIntVal(0);
@@ -300,39 +275,45 @@ static void transOmpTaskForC(SgOmpTaskStatement *target) {
   } else {
     SgVarRefExp *data_ref = buildVarRefExp(wrapper_name, task_scope);
     ROSE_ASSERT(data_ref != NULL);
-    parameter_data =
-        buildAddressOfOp(data_ref, buildPointerType(data_ref->get_type()));
-    parameter_arg_size = buildSizeOfOp(
-        data_ref->get_type(), SageInterface::requireTargetSizeType(task_scope));
-    parameter_arg_align = buildIntVal(4);
+    if (owned_capture) {
+      ROSE_ASSERT(isSgPointerType(data_ref->get_type()) != nullptr);
+      parameter_data = data_ref;
+      capture_cleanup =
+          buildTaskCaptureCleanup(outlined_func, data_ref->get_type(), target);
+    } else {
+      parameter_data = buildAddressOfOp(
+          data_ref, buildAddressOfResultType(data_ref->get_type()),
+          SgAddressOfOp::e_address_operand_object);
+      parameter_arg_size =
+          buildSizeOfOp(data_ref->get_type(),
+                        SageInterface::requireTargetSizeType(task_scope));
+      parameter_arg_align =
+          buildAlignOfOp(data_ref->get_type(),
+                         SageInterface::requireTargetSizeType(task_scope));
+    }
   }
 
-  SgExpression *parameter_if_clause = buildIntVal(1);
-  if (hasClause(target, V_SgOmpIfClause)) {
-    Rose_STL_Container<SgOmpClause *> clauses =
-        getClause(target, V_SgOmpIfClause);
-    ROSE_ASSERT(clauses.size() == 1);
-    SgOmpIfClause *if_clause = isSgOmpIfClause(clauses[0]);
-    ROSE_ASSERT(if_clause != NULL);
-    ROSE_ASSERT(if_clause->get_expression() != NULL);
-    parameter_if_clause = copyExpression(if_clause->get_expression());
-  }
+  SgExpression *parameter_if_clause = buildTaskIfClause(target);
 
   SgExpression *parameter_untied =
       hasClause(target, V_SgOmpUntiedClause) ? buildIntVal(1) : buildIntVal(0);
 
-  SgType *task_callback_type = buildPointerType(buildFunctionType(
-      buildVoidType(),
-      buildFunctionParameterTypeList(buildPointerType(buildVoidType()))));
-  SgExpression *task_callback =
-      buildCastExp(buildFunctionRefExp(outlined_func), task_callback_type,
-                   SgCastExp::e_C_style_cast);
-
-  SgExprListExp *parameters = buildExprListExp(
-      task_callback, parameter_data, parameter_cpyfn, parameter_arg_size,
-      parameter_arg_align, parameter_if_clause, parameter_untied);
-  SgExprStatement *task_call = buildFunctionCallStmt(
-      "XOMP_task", buildVoidType(), parameters, task_scope);
+  SgExprStatement *task_call;
+  if (owned_capture) {
+    auto *parameters =
+        buildExprListExp(buildFunctionRefExp(outlined_func), parameter_data,
+                         buildFunctionRefExp(capture_cleanup),
+                         parameter_if_clause, parameter_untied);
+    task_call = buildFunctionCallStmt("rex_omp_task_owned", buildVoidType(),
+                                      parameters, task_scope);
+  } else {
+    auto *parameters = buildExprListExp(buildFunctionRefExp(outlined_func),
+                                        parameter_data, buildIntVal(0),
+                                        parameter_arg_size, parameter_arg_align,
+                                        parameter_if_clause, parameter_untied);
+    task_call = buildFunctionCallStmt("XOMP_task", buildVoidType(), parameters,
+                                      task_scope);
+  }
   SageInterface::replaceStatement(target, task_call, true);
 
   pastePreprocessingInfo(task_call, PreprocessingInfo::before, save_buf1);
@@ -347,405 +328,8 @@ void OmpSupport::transOmpTask(SgNode *node) {
 
   if (SageInterface::is_Fortran_language()) {
     transOmpTaskForFortran(target);
-    return;
-  }
-
-  transOmpTaskForC(target);
-  return;
-
-  SgStatement *body = target->get_body();
-  ROSE_ASSERT(body != NULL);
-
-  SgGlobal *g_scope = SageInterface::getGlobalScope(body);
-  ROSE_ASSERT(g_scope != NULL);
-
-  // Make sure the rex_kmp.h header is included for C/C++.
-  SgSourceFile *file = getEnclosingSourceFile(target);
-  if (file != nullptr && !file->get_Fortran_only()) {
-    insertHeader(file, "rex_kmp.h", false);
-  }
-
-  ////////////////////////////////////////////////
-  //
-  // First, we need to query arguments.
-  // Start with the original function
-  //
-  std::vector<std::string> originalVarRefs;
-  std::map<std::string, SgType *> varRefTypeMap;
-  SgFunctionDeclaration *originalDec = getEnclosingFunctionDeclaration(target);
-  // for (SgInitializedName *arg : originalDec->get_args()) {
-  for (size_t i = 2; i < originalDec->get_args().size(); i++) {
-    SgInitializedName *arg = originalDec->get_args().at(i);
-    std::string name = arg->get_name();
-    originalVarRefs.push_back(name);
-    varRefTypeMap[name] = arg->get_type();
-    /*if (isSgPointerType(arg->get_type())) {
-        varRefTypeMap[name] = arg->get_type()->findBaseType();
-    }*/
-  }
-
-  // Now get the shared variables
-  std::vector<std::string> sharedVarRefs = originalVarRefs;
-  /*for (SgOmpClause *clause : target->get_clauses()) {
-      if (clause->variantT() != V_SgOmpSharedClause) continue;
-
-      SgOmpSharedClause *shared = static_cast<SgOmpSharedClause *>(clause);
-      for (SgExpression *expr : shared->get_variables()->get_expressions()) {
-          if (expr->variantT() != V_SgVarRefExp) continue;
-          SgVarRefExp *varRef = static_cast<SgVarRefExp *>(expr);
-          std::string name = varRef->get_symbol()->get_name();
-          sharedVarRefs.push_back(name);
-          varRefTypeMap[name] = varRef->get_type();
-      }
-  }*/
-
-  //
-  // Create the needed structures for this
-  //
-  // The shareds structure
-  SgClassDeclaration *strPshareds = buildStructDeclaration(
-      declaration_ownership::sourceLexical(), "shar", g_scope);
-  SgClassDefinition *strPsharedsDef = buildClassDefinition(strPshareds);
-
-  for (std::string varName : sharedVarRefs) {
-    // SgPointerType *type = buildPointerType(varRefTypeMap[varName]);
-    // SgVariableDeclaration *varD = buildVariableDeclaration(varName, type,
-    // NULL, strPsharedsDef);
-    SgVariableDeclaration *varD = buildVariableDeclaration(
-        varName, varRefTypeMap[varName], NULL, strPsharedsDef);
-    appendStatement(varD, strPsharedsDef);
-  }
-
-  SgTypedefDeclaration *tyPshareds = buildTypedefDeclaration(
-      typedef_declaration_ownership::sourceLexical(),
-      SgTypedefDeclaration::e_typedef, "pshareds",
-      buildPointerType(strPshareds->get_type()), g_scope);
-
-  // The task structure
-  SgClassDeclaration *taskStruct = buildStructDeclaration(
-      declaration_ownership::sourceLexical(), "task", g_scope);
-  SgClassDefinition *taskStructDef = buildClassDefinition(taskStruct);
-
-  SgType *sharedType = tyPshareds->get_type();
-  ROSE_ASSERT(sharedType != nullptr);
-  SgVariableDeclaration *sharedPtr =
-      buildVariableDeclaration("shareds", sharedType, NULL, taskStructDef);
-  appendStatement(sharedPtr, taskStructDef);
-
-  SgPointerType *dummyPtrType = buildPointerType(buildVoidType());
-  SgVariableDeclaration *dummyPtr =
-      buildVariableDeclaration("dummy", dummyPtrType, NULL, taskStructDef);
-  appendStatement(dummyPtr, taskStructDef);
-
-  SgTypedefDeclaration *taskTypedef = buildTypedefDeclaration(
-      typedef_declaration_ownership::sourceLexical(),
-      SgTypedefDeclaration::e_typedef, "ptask",
-      buildPointerType(taskStruct->get_type()), g_scope);
-
-  // Insert them all
-  SgStatement *firstStatement = getFirstStatement(g_scope);
-  removeStatement(strPshareds, false);
-  insertStatementAfter(firstStatement, strPshareds);
-  removeStatement(tyPshareds, false);
-  insertStatementAfter(strPshareds, tyPshareds);
-  removeStatement(taskStruct, false);
-  insertStatementAfter(tyPshareds, taskStruct);
-  removeStatement(taskTypedef, false);
-  insertStatementAfter(taskStruct, taskTypedef);
-
-  // Insert the function forward declarations
-  // TODO: This should probably be in a header somewhere
-
-  // We don't actually use this outlined function, but for some reason we need
-  // it to make sure we have all the correct parameters
-  //
-  AttachedPreprocessingInfoType save_buf1, save_buf2;
-  cutPreprocessingInfo(target, PreprocessingInfo::before, save_buf1);
-  cutPreprocessingInfo(target, PreprocessingInfo::after, save_buf2);
-  std::string wrapper_name;
-  ASTtools::VarSymSet_t syms;
-  ASTtools::VarSymSet_t
-      pdSyms3; // store all variables which should be passed by reference
-  SgFunctionDeclaration *outlined_func =
-      generateOutlinedTask(node, wrapper_name, syms, pdSyms3, true);
-  std::string outlinedName = outlined_func->get_name();
-
-  SgFunctionDefinition *funcDef = outlined_func->get_definition();
-  ROSE_ASSERT(funcDef != NULL);
-
-  /*auto of_arg1 = outlined_func->get_args().at(0);
-  auto of_arg2 = outlined_func->get_args().at(1);
-  outlined_func->get_args().clear();
-  outlined_func->get_args().push_back(of_arg1);
-  outlined_func->get_args().push_back(of_arg2);*/
-
-  funcDef->get_body()->get_statements().clear();
-
-  /*
-  // TODO: DELETE
-  SgFunctionDefinition *funcDef = getEnclosingFunctionDefinition(node);
-  ROSE_ASSERT(funcDef != NULL);
-  SgFunctionDeclaration *outlined_func = funcDef->get_declaration();
-  ROSE_ASSERT(outlined_func != NULL);
-  // END DELETE
-  */
-
-  // Start with the body
-  // First line: int *n = task->shareds->n;
-
-  SgVarRefExp *taskRef = nullptr;
-  SgVarRefExp *sharedsRef = nullptr;
-  SgArrowExp *arrow2, *arrow1;
-
-  for (std::string varName : originalVarRefs) {
-    SgVarRefExp *nRef = buildVarRefExp(varName, g_scope);
-
-    taskRef = buildVarRefExp("task", g_scope);
-    sharedsRef = buildVarRefExp("shareds", g_scope);
-    arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
-    arrow1 = buildArrowExp(arrow2, nRef, nRef->get_type());
-
-    std::string varName1 = varName + "1";
-    SgAssignInitializer *init =
-        buildAssignInitializer(arrow1, buildPointerType(buildIntType()));
-    SgVariableDeclaration *n = buildVariableDeclaration(
-        varName1, buildPointerType(buildIntType()), init, funcDef);
-    funcDef->append_statement(n);
-  }
-
-  // Now the body
-  SgExprStatement *exprStmt = static_cast<SgExprStatement *>(body);
-  SgAssignOp *expr = static_cast<SgAssignOp *>(exprStmt->get_expression());
-  SgExpression *rhs = deepCopy(expr->get_rhs_operand());
-
-  std::function<void(SgExpression *, SgScopeStatement *)> fix_names;
-  fix_names = [rhs, &fix_names](SgExpression *input,
-                                SgScopeStatement *g_scope) {
-    if (input->variantT() == V_SgVarRefExp) {
-      SgVarRefExp *ref = isSgVarRefExp(input);
-      std::string name = ref->get_symbol()->get_name() + "p__1";
-      SgVarRefExp *newRef = buildVarRefExp(name, g_scope);
-      replaceExpression(ref, newRef);
-
-    } else if (isSgPointerDerefExp(input)) {
-      SgPointerDerefExp *deref = isSgPointerDerefExp(input);
-      if (deref->get_operand()->variantT() == V_SgPointerDerefExp) {
-        SgExpression *exp = deepCopy(deref->get_operand());
-        replaceExpression(deref, exp);
-        fix_names(exp, g_scope);
-      } else {
-        fix_names(deref->get_operand(), g_scope);
-      }
-
-    } else if (isSgBinaryOp(input)) {
-      SgBinaryOp *op = static_cast<SgBinaryOp *>(input);
-      fix_names(op->get_lhs_operand(), g_scope);
-      fix_names(op->get_rhs_operand(), g_scope);
-
-    } else if (isSgUnaryOp(input)) {
-      SgUnaryOp *op = static_cast<SgUnaryOp *>(input);
-      fix_names(op->get_operand(), g_scope);
-
-    } else if (isSgFunctionCallExp(input)) {
-      SgFunctionCallExp *fc = isSgFunctionCallExp(input);
-      auto args = fc->get_args();
-      for (auto exp : args->get_expressions()) {
-        fix_names(exp, g_scope);
-      }
-    }
-  };
-  fix_names(rhs, g_scope);
-
-  SgVarRefExp *lhs;
-  if (expr->get_lhs_operand()->variantT() == V_SgPointerDerefExp) {
-    SgPointerDerefExp *deref =
-        static_cast<SgPointerDerefExp *>(expr->get_lhs_operand());
-    // TODO: We need better control
-    deref = static_cast<SgPointerDerefExp *>(deref->get_operand_i());
-    lhs = static_cast<SgVarRefExp *>(deref->get_operand_i());
   } else {
-    lhs = static_cast<SgVarRefExp *>(expr->get_lhs_operand());
+    transOmpTaskForC(target);
   }
-  ROSE_ASSERT(lhs != NULL);
-  std::string name = lhs->get_symbol()->get_name() + "p__";
-  SgVarRefExp *destRef = buildVarRefExp(name, g_scope);
-
-  taskRef = buildVarRefExp("task", g_scope);
-  sharedsRef = buildVarRefExp("shareds", g_scope);
-  arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
-  arrow1 = buildArrowExp(arrow2, destRef, destRef->get_type());
-  SgPointerType *destination_pointer_type = isSgPointerType(arrow1->get_type());
-  ROSE_ASSERT(destination_pointer_type != nullptr);
-  SgPointerDerefExp *deref =
-      buildPointerDerefExp(arrow1, destination_pointer_type->get_base_type());
-
-  SgExprStatement *assignBody = buildAssignStatement(deref, rhs);
-  funcDef->append_statement(assignBody);
-
-  // target_outlined_function_list->push_back(isSgFunctionDeclaration(outlined_func));
-
-  ///////////////////////////////////
-  // Now build the body
-  ///////////////////////////////////
-  //
-  SgBasicBlock *block = buildBasicBlock();
-  SageInterface::replaceStatement(target, block, true);
-  // ROSE_ASSERT(outlined_func->get_args().size() > 2);
-
-  // int gtid = *__global_tid;
-  SgInitializedName *arg1 = outlined_func->get_args().at(0);
-  SgVarRefExp *arg1Ref = buildVarRefExp(arg1->get_name(), g_scope);
-
-  SgPointerType *global_thread_pointer_type =
-      isSgPointerType(arg1Ref->get_type());
-  ROSE_ASSERT(global_thread_pointer_type != nullptr);
-  SgPointerDerefExp *gtidDeref = buildPointerDerefExp(
-      arg1Ref, global_thread_pointer_type->get_base_type());
-  SgAssignInitializer *gtidInit =
-      buildAssignInitializer(gtidDeref, buildIntType());
-  SgVariableDeclaration *gtid =
-      buildVariableDeclaration("gtid", buildIntType(), gtidInit, g_scope);
-  block->append_statement(gtid);
-
-  // if (__kmpc_single(NULL, gtid)) { ... }
-  SgVarRefExp *nullRef = buildVarRefExp("NULL", g_scope);
-  SgVarRefExp *gtidRef = buildVarRefExp("gtid", g_scope);
-  SgExprListExp *parameters = buildExprListExp(nullRef, gtidRef);
-  SgFunctionCallExp *fcSingle =
-      buildFunctionCallExp(getKmpcRuntimeFunctionName("__kmpc_single"),
-                           buildIntType(), parameters, g_scope);
-
-  SgBasicBlock *trueBlock = buildBasicBlock();
-  SgIfStmt *ifStmt = buildIfStmt(fcSingle, trueBlock, NULL);
-  block->append_statement(ifStmt);
-
-  // ptask task;
-  // pshareds psh;
-  SgVariableDeclaration *taskDef =
-      buildVariableDeclaration("task", taskTypedef->get_type(), NULL, g_scope);
-  SgVariableDeclaration *pshDef =
-      buildVariableDeclaration("psh", tyPshareds->get_type(), NULL, g_scope);
-  trueBlock->append_statement(taskDef);
-  trueBlock->append_statement(pshDef);
-
-  // task = (ptask)__kmpc_omp_task_alloc(NULL, gtid, 1, sizeof(task) * 4,
-  //                      sizeof(psh) * 2, &OUT__1__3690__fib__14__);
-  taskRef = buildVarRefExp("task", g_scope);
-
-  // TODO: This needs to be changed. It should be sizeof the types
-  SgSizeOfOp *taskSizeOf =
-      buildSizeOfOp(buildVarRefExp("task", g_scope),
-                    SageInterface::requireTargetSizeType(g_scope));
-  SgType *target_size_type = SageInterface::requireTargetSizeType(g_scope);
-  SgMultiplyOp *taskSizeMul =
-      buildMultiplyOp(taskSizeOf, buildIntVal(4), target_size_type);
-
-  SgSizeOfOp *sharSizeOf =
-      buildSizeOfOp(buildVarRefExp("psh", g_scope),
-                    SageInterface::requireTargetSizeType(g_scope));
-  SgMultiplyOp *sharSizeMul =
-      buildMultiplyOp(sharSizeOf, buildIntVal(4), target_size_type);
-
-  SgFunctionRefExp *outlinedRef =
-      buildFunctionRefExp(outlined_func->get_name(), g_scope);
-  SgAddressOfOp *outlinedAddr =
-      buildAddressOfOp(outlinedRef, buildPointerType(outlinedRef->get_type()));
-  parameters = buildExprListExp(buildVarRefExp("NULL", g_scope),
-                                buildVarRefExp("gtid", g_scope), buildIntVal(1),
-                                taskSizeMul, sharSizeMul, outlinedAddr);
-
-  SgFunctionCallExp *fcTaskAlloc = buildFunctionCallExp(
-      getKmpcRuntimeFunctionName("__kmpc_omp_task_alloc"),
-      buildPointerType(buildVoidType()), parameters, g_scope);
-  SgCastExp *taskCastExp = buildCastExp(fcTaskAlloc, taskTypedef->get_type());
-  SgExprStatement *taskAllocAssign = buildAssignStatement(taskRef, taskCastExp);
-  trueBlock->append_statement(taskAllocAssign);
-
-  // task->shareds->n = n;
-  // task->shareds->x = x;
-  for (std::string varName : sharedVarRefs) {
-    taskRef = buildVarRefExp("task", g_scope);
-    sharedsRef = buildVarRefExp("shareds", g_scope);
-    arrow2 = buildArrowExp(taskRef, sharedsRef, sharedsRef->get_type());
-    SgVarRefExp *memberRef = buildVarRefExp(varName, g_scope);
-    arrow1 = buildArrowExp(arrow2, memberRef, memberRef->get_type());
-    SgExprStatement *arrowAssign =
-        buildAssignStatement(arrow1, buildVarRefExp(varName, g_scope));
-    trueBlock->append_statement(arrowAssign);
-  }
-
-  // __kmpc_omp_task(NULL, gtid, task);
-  parameters = buildExprListExp(buildVarRefExp("NULL", g_scope),
-                                buildVarRefExp("gtid", g_scope),
-                                buildVarRefExp("task", g_scope));
-  SgExprStatement *ompTask =
-      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_omp_task"),
-                            buildVoidType(), parameters, g_scope);
-  trueBlock->append_statement(ompTask);
-
-  // Move everything inside the body of the if statement
-  std::vector<SgStatement *> toMove;
-  SgStatement *nextStmt = SageInterface::getNextStatement(block);
-  while (nextStmt != nullptr) {
-    toMove.push_back(nextStmt);
-    nextStmt = SageInterface::getNextStatement(nextStmt);
-  }
-
-  for (SgStatement *stmt : toMove) {
-    trueBlock->append_statement(deepCopy(stmt));
-    removeStatement(stmt);
-  }
-
-  // __kmpc_omp_taskwait(NULL, gtid);
-  // __kmpc_end_single(NULL, gtid);
-  parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *taskWait =
-      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_omp_taskwait"),
-                            buildVoidType(), parameters, g_scope);
-  trueBlock->append_statement(taskWait);
-
-  parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *endSingle =
-      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_end_single"),
-                            buildVoidType(), parameters, g_scope);
-  trueBlock->append_statement(endSingle);
-
-  // __kmpc_barrier(NULL, gtid);
-  // This goes outside the if-statement just after it
-  parameters = buildExprListExp(nullRef, gtidRef);
-  SgExprStatement *barrierFc =
-      buildFunctionCallStmt(getKmpcRuntimeFunctionName("__kmpc_barrier"),
-                            buildVoidType(), parameters, g_scope);
-  block->append_statement(barrierFc);
-
-  //
-  // Check for return statements
-  //
-  SgFunctionDefinition *parentDec = getEnclosingFunctionDefinition(block);
-  Rose_STL_Container<SgNode *> bodyList =
-      NodeQuery::querySubTree(parentDec->get_body(), V_SgStatement);
-  for (Rose_STL_Container<SgNode *>::iterator i = bodyList.begin();
-       i != bodyList.end(); i++) {
-    SgStatement *stmt = static_cast<SgStatement *>((*i));
-    if (stmt->variantT() != V_SgIfStmt) {
-      continue;
-    }
-
-    Rose_STL_Container<SgNode *> ifStmtBody =
-        NodeQuery::querySubTree(stmt, V_SgStatement);
-    for (Rose_STL_Container<SgNode *>::iterator j = ifStmtBody.begin();
-         j != ifStmtBody.end(); j++) {
-      SgStatement *stmt2 = static_cast<SgStatement *>((*j));
-      if (stmt2->variantT() != V_SgReturnStmt) {
-        continue;
-      }
-
-      SgReturnStmt *ret = buildReturnStmt();
-      replaceStatement(stmt2, ret);
-    }
-  }
-  //*/
-
-  // SgReturnStmt *ret = buildReturnStmt();
-  // replaceStatement(isSgStatement(node), buildReturnStmt());
+  retireConsumedOmpDirective(target);
 }

@@ -445,38 +445,38 @@ public:
   explicit reverse_iterator(iterator_type __x) : current(__x) {}
   reverse_iterator(const reverse_iterator &__x) : current(__x.current) {}
   template <typename _Iter> reverse_iterator(const reverse_iterator<_Iter> &__x) : current(__x.base()) {}
-  iterator_type base() const { return current; }
+  iterator_type base() const { return  current; }
   reference operator*() const {
-    _Iterator __tmp = current;
+    _Iterator __tmp =  current;
     return *(--__tmp);
   }
-  pointer operator->() const { return &(operator*()); }
+  pointer operator->() const { return &( operator*()); }
   reverse_iterator &operator++() {
-    --current;
+    -- current;
     return *(this);
   }
   reverse_iterator operator++(int ) {
-    reverse_iterator<_Iterator> __tmp = *(this);
-    --current;
+    reverse_iterator __tmp = *(this);
+    -- current;
     return __tmp;
   }
   reverse_iterator &operator--() {
-    ++current;
+    ++ current;
     return *(this);
   }
   reverse_iterator operator--(int ) {
-    reverse_iterator<_Iterator> __tmp = *(this);
-    ++current;
+    reverse_iterator __tmp = *(this);
+    ++ current;
     return __tmp;
   }
-  reverse_iterator operator+(difference_type __n) const { return reverse_iterator<_Iterator>(current - __n); }
+  reverse_iterator operator+(difference_type __n) const { return reverse_iterator( current - __n); }
   reverse_iterator &operator+=(difference_type __n) {
-    current -= __n;
+     current -= __n;
     return *(this);
   }
-  reverse_iterator operator-(difference_type __n) const { return reverse_iterator<_Iterator>(current + __n); }
+  reverse_iterator operator-(difference_type __n) const { return reverse_iterator( current + __n); }
   reverse_iterator &operator-=(difference_type __n) {
-    current += __n;
+     current += __n;
     return *(this);
   }
   reference operator[](difference_type __n) const { return *(*(this) + __n); }
@@ -504,7 +504,7 @@ public:
   typedef _Container container_type;
   explicit back_insert_iterator(_Container &__x) : container(&__x) {}
   back_insert_iterator &operator=(typename _Container::const_reference __value) {
-    container->push_back(__value);
+     container->push_back(__value);
     return *(this);
   }
   back_insert_iterator &operator*() { return *(this); }
@@ -520,7 +520,7 @@ public:
   typedef _Container container_type;
   explicit front_insert_iterator(_Container &__x) : container(&__x) {}
   front_insert_iterator &operator=(typename _Container::const_reference __value) {
-    container->push_front(__value);
+     container->push_front(__value);
     return *(this);
   }
   front_insert_iterator &operator*() { return *(this); }
@@ -537,8 +537,8 @@ public:
   typedef _Container container_type;
   insert_iterator(_Container &__x, typename _Container::iterator __i) : container(&__x), iter(__i) {}
   insert_iterator &operator=(typename _Container::const_reference __value) {
-    iter = container->insert(iter, __value);
-    ++iter;
+     iter =  container->insert( iter, __value);
+    ++ iter;
     return *(this);
   }
   insert_iterator &operator*() { return *(this); }
@@ -568,30 +568,30 @@ public:
   template <typename _Iter> __normal_iterator(const __normal_iterator<_Iter, typename __enable_if<
               (std::__are_same<_Iter, typename _Container::pointer>::__value),
         _Container>::__type> &__i) : _M_current(__i.base()) {}
-  reference operator*() const { return *_M_current; }
-  pointer operator->() const { return _M_current; }
+  reference operator*() const { return * _M_current; }
+  pointer operator->() const { return  _M_current; }
   __normal_iterator &operator++() {
-    ++_M_current;
+    ++ _M_current;
     return *(this);
   }
-  __normal_iterator operator++(int ) { return __normal_iterator<_Iterator, _Container>(_M_current++); }
+  __normal_iterator operator++(int ) { return __normal_iterator(( _M_current)++); }
   __normal_iterator &operator--() {
-    --_M_current;
+    -- _M_current;
     return *(this);
   }
-  __normal_iterator operator--(int ) { return __normal_iterator<_Iterator, _Container>(_M_current--); }
-  reference operator[](const difference_type &__n) const { return __n[_M_current]; }
+  __normal_iterator operator--(int ) { return __normal_iterator(( _M_current)--); }
+  reference operator[](const difference_type &__n) const { return __n[ _M_current]; }
   __normal_iterator &operator+=(const difference_type &__n) {
-    _M_current += __n;
+     _M_current += __n;
     return *(this);
   }
-  __normal_iterator operator+(const difference_type &__n) const { return __normal_iterator<_Iterator, _Container>(_M_current + __n); }
+  __normal_iterator operator+(const difference_type &__n) const { return __normal_iterator( _M_current + __n); }
   __normal_iterator &operator-=(const difference_type &__n) {
-    _M_current -= __n;
+     _M_current -= __n;
     return *(this);
   }
-  __normal_iterator operator-(const difference_type &__n) const { return __normal_iterator<_Iterator, _Container>(_M_current - __n); }
-  const _Iterator &base() const { return _M_current; }
+  __normal_iterator operator-(const difference_type &__n) const { return __normal_iterator( _M_current - __n); }
+  const _Iterator &base() const { return  _M_current; }
 };
 template <typename _IteratorL, typename _IteratorR, typename _Container> inline bool operator==(const __normal_iterator<_IteratorL, _Container> &__lhs, const __normal_iterator<_IteratorR, _Container> &__rhs) { return __lhs.base() == __rhs.base(); }
 template <typename _Iterator, typename _Container> inline bool operator==(const __normal_iterator<_Iterator, _Container> &__lhs, const __normal_iterator<_Iterator, _Container> &__rhs) { return __lhs.base() == __rhs.base(); }
@@ -627,7 +627,7 @@ template <bool _BoolType> struct __iter_swap {
 };
 template<> struct __iter_swap<true> {
   template <typename _ForwardIterator1, typename _ForwardIterator2> static void iter_swap(_ForwardIterator1 __a, _ForwardIterator2 __b) {
-    swap((*__a), (*__b));
+    swap(*__a, *__b);
   }
 };
 template <typename _ForwardIterator1, typename _ForwardIterator2> inline void iter_swap(_ForwardIterator1 __a, _ForwardIterator2 __b) {
@@ -859,7 +859,7 @@ template <typename _II1, typename _II2> inline bool equal(_II1 __first1, _II1 __
 }
 template <typename _IIter1, typename _IIter2, typename _BinaryPredicate> inline bool equal(_IIter1 __first1, _IIter1 __last1, _IIter2 __first2, _BinaryPredicate __binary_pred) {;
   for (; __first1 != __last1; (++__first1 , ++__first2))
-    if (!bool(__binary_pred((*__first1), (*__first2))))
+    if (!bool(__binary_pred(*__first1, *__first2)))
       return false;
   return true;
 }
@@ -874,9 +874,9 @@ template <typename _II1, typename _II2, typename _Compare> bool lexicographical_
   typedef std::__lc_rai<_Category1, _Category2> __rai_type;;;
   __last1 = __rai_type::__newlast1(__first1, __last1, __first2, __last2);
   for (; __first1 != __last1 && __rai_type::__cnd2(__first2, __last2); (++__first1 , ++__first2)) {
-    if (__comp((*__first1), (*__first2)))
+    if (__comp(*__first1, *__first2))
       return true;
-    if (__comp((*__first2), (*__first1)))
+    if (__comp(*__first2, *__first1))
       return false;
   }
   return __first1 == __last1 && __first2 != __last2;
@@ -889,7 +889,7 @@ template <typename _InputIterator1, typename _InputIterator2> pair<_InputIterato
   return pair<_InputIterator1, _InputIterator2>(__first1, __first2);
 }
 template <typename _InputIterator1, typename _InputIterator2, typename _BinaryPredicate> pair<_InputIterator1, _InputIterator2> mismatch(_InputIterator1 __first1, _InputIterator1 __last1, _InputIterator2 __first2, _BinaryPredicate __binary_pred) {;
-  while (__first1 != __last1 && bool(__binary_pred((*__first1), (*__first2)))){
+  while (__first1 != __last1 && bool(__binary_pred(*__first1, *__first2))){
     ++__first1;
     ++__first2;
   }
@@ -1103,28 +1103,28 @@ private:
 public:
   fpos() : _M_off(0), _M_state() {}
   fpos(streamoff __off) : _M_off(__off), _M_state() {}
-  operator streamoff() const { return _M_off; }
-  void state(_StateT __st) { _M_state = __st; }
-  _StateT state() const { return _M_state; }
+  operator streamoff() const { return  _M_off; }
+  void state(_StateT __st) {  _M_state = __st; }
+  _StateT state() const { return  _M_state; }
   fpos &operator+=(streamoff __off) {
-    _M_off += __off;
+     _M_off += __off;
     return *(this);
   }
   fpos &operator-=(streamoff __off) {
-    _M_off -= __off;
+     _M_off -= __off;
     return *(this);
   }
   fpos operator+(streamoff __off) const {
-    fpos<_StateT> __pos(*(this));
+    fpos __pos(*(this));
     __pos += __off;
     return __pos;
   }
   fpos operator-(streamoff __off) const {
-    fpos<_StateT> __pos(*(this));
+    fpos __pos(*(this));
     __pos -= __off;
     return __pos;
   }
-  streamoff operator-(const fpos &__other) const { return _M_off - __other._M_off; }
+  streamoff operator-(const fpos &__other) const { return  _M_off - __other._M_off; }
 };
 template <typename _StateT> inline bool operator==(const fpos<_StateT> &__lhs, const fpos<_StateT> &__rhs) { return streamoff(__lhs) == streamoff(__rhs); }
 template <typename _StateT> inline bool operator!=(const fpos<_StateT> &__lhs, const fpos<_StateT> &__rhs) { return streamoff(__lhs) != streamoff(__rhs); }
@@ -1313,8 +1313,8 @@ extern const nothrow_t nothrow;
 typedef void (*new_handler)();
 new_handler set_new_handler(new_handler ) throw();
 }
-void *operator new(std::size_t );
-void *operator new[](std::size_t );
+void *operator new(std::size_t ) throw(std::bad_alloc );
+void *operator new[](std::size_t ) throw(std::bad_alloc );
 void operator delete(void *) throw();
 void operator delete[](void *) throw();
 void *operator new(std::size_t , const std::nothrow_t &) throw();
@@ -1355,7 +1355,7 @@ public:
   pointer allocate(size_type __n, const void * = 0) {
     if (__builtin_expect(__n > (this)->max_size(), false))
       std::__throw_bad_alloc();
-    return static_cast < _Tp* >  (::operator new((__n * sizeof(_Tp))));
+    return static_cast < _Tp* >  (::operator new(__n * sizeof(_Tp)));
   }
   void deallocate(pointer __p, size_type ) { ::operator delete(__p); }
   size_type max_size() const throw() { return size_t(-1) / sizeof(_Tp); }
@@ -1708,11 +1708,11 @@ template <typename _CharT, typename _Traits> basic_ostream<_CharT, _Traits> &__o
       if (__w > __n) {
         const bool __left = ((__out.flags() & __ios_base::adjustfield) == __ios_base::left);
         if (!__left)
-          __ostream_fill(__out, (__w - __n));
+          __ostream_fill(__out, __w - __n);
         if (__out.good())
           __ostream_write(__out, __s, __n);
         if (__left && __out.good())
-          __ostream_fill(__out, (__w - __n));
+          __ostream_fill(__out, __w - __n);
       } else
         __ostream_write(__out, __s, __n);
       __out.width(0);
@@ -1801,7 +1801,7 @@ protected:
 
 public:
   explicit unary_negate(const _Predicate &__x) : _M_pred(__x) {}
-  bool operator()(const typename _Predicate::argument_type &__x) const { return !_M_pred(__x); }
+  bool operator()(const typename _Predicate::argument_type &__x) const { return ! _M_pred(__x); }
 };
 template <typename _Predicate> inline unary_negate<_Predicate> not1(const _Predicate &__pred) { return unary_negate<_Predicate>(__pred); }
 template <typename _Predicate> class binary_negate : public binary_function<typename _Predicate::first_argument_type, typename _Predicate::second_argument_type, bool>  {
@@ -1810,7 +1810,7 @@ protected:
 
 public:
   explicit binary_negate(const _Predicate &__x) : _M_pred(__x) {}
-  bool operator()(const typename _Predicate::first_argument_type &__x, const typename _Predicate::second_argument_type &__y) const { return !_M_pred(__x, __y); }
+  bool operator()(const typename _Predicate::first_argument_type &__x, const typename _Predicate::second_argument_type &__y) const { return ! _M_pred(__x, __y); }
 };
 template <typename _Predicate> inline binary_negate<_Predicate> not2(const _Predicate &__pred) { return binary_negate<_Predicate>(__pred); }
 template <typename _Arg, typename _Result> class pointer_to_unary_function : public unary_function<_Arg, _Result>  {
@@ -1820,7 +1820,7 @@ protected:
 public:
   pointer_to_unary_function() {}
   explicit pointer_to_unary_function(_Result (*__x)(_Arg )) : _M_ptr(__x) {}
-  _Result operator()(_Arg __x) const { return _M_ptr(__x); }
+  _Result operator()(_Arg __x) const { return  _M_ptr(__x); }
 };
 template <typename _Arg, typename _Result> inline pointer_to_unary_function<_Arg, _Result> ptr_fun(_Result (*__x)(_Arg )) { return pointer_to_unary_function<_Arg, _Result>(__x); }
 template <typename _Arg1, typename _Arg2, typename _Result> class pointer_to_binary_function : public binary_function<_Arg1, _Arg2, _Result>  {
@@ -1830,7 +1830,7 @@ protected:
 public:
   pointer_to_binary_function() {}
   explicit pointer_to_binary_function(_Result (*__x)(_Arg1 , _Arg2 )) : _M_ptr(__x) {}
-  _Result operator()(_Arg1 __x, _Arg2 __y) const { return _M_ptr(__x, __y); }
+  _Result operator()(_Arg1 __x, _Arg2 __y) const { return  _M_ptr(__x, __y); }
 };
 template <typename _Arg1, typename _Arg2, typename _Result> inline pointer_to_binary_function<_Arg1, _Arg2, _Result> ptr_fun(_Result (*__x)(_Arg1 , _Arg2 )) { return pointer_to_binary_function<_Arg1, _Arg2, _Result>(__x); }
 template <typename _Tp> struct _Identity : public unary_function<_Tp, _Tp>  {
@@ -1848,7 +1848,7 @@ template <typename _Pair> struct _Select2nd : public unary_function<_Pair, typen
 template <typename _Ret, typename _Tp> class mem_fun_t : public unary_function<_Tp*, _Ret>  {
 public:
   explicit mem_fun_t(_Ret ( _Tp ::*__pf)()) : _M_f(__pf) {}
-  _Ret operator()(_Tp *__p) const { return (__p->*_M_f)(); }
+  _Ret operator()(_Tp *__p) const { return (__p->* _M_f)(); }
 
 private:
   _Ret ( _Tp ::*_M_f)();
@@ -1856,7 +1856,7 @@ private:
 template <typename _Ret, typename _Tp> class const_mem_fun_t : public unary_function<const _Tp*, _Ret>  {
 public:
   explicit const_mem_fun_t(_Ret ( _Tp ::*__pf)() const ) : _M_f(__pf) {}
-  _Ret operator()(const _Tp *__p) const { return (__p->*_M_f)(); }
+  _Ret operator()(const _Tp *__p) const { return (__p->* _M_f)(); }
 
 private:
   _Ret ( _Tp ::*_M_f)() const ;
@@ -1864,7 +1864,7 @@ private:
 template <typename _Ret, typename _Tp> class mem_fun_ref_t : public unary_function<_Tp, _Ret>  {
 public:
   explicit mem_fun_ref_t(_Ret ( _Tp ::*__pf)()) : _M_f(__pf) {}
-  _Ret operator()(_Tp &__r) const { return (__r.*_M_f)(); }
+  _Ret operator()(_Tp &__r) const { return (__r.* _M_f)(); }
 
 private:
   _Ret ( _Tp ::*_M_f)();
@@ -1872,7 +1872,7 @@ private:
 template <typename _Ret, typename _Tp> class const_mem_fun_ref_t : public unary_function<_Tp, _Ret>  {
 public:
   explicit const_mem_fun_ref_t(_Ret ( _Tp ::*__pf)() const ) : _M_f(__pf) {}
-  _Ret operator()(const _Tp &__r) const { return (__r.*_M_f)(); }
+  _Ret operator()(const _Tp &__r) const { return (__r.* _M_f)(); }
 
 private:
   _Ret ( _Tp ::*_M_f)() const ;
@@ -1880,7 +1880,7 @@ private:
 template <typename _Ret, typename _Tp, typename _Arg> class mem_fun1_t : public binary_function<_Tp*, _Arg, _Ret>  {
 public:
   explicit mem_fun1_t(_Ret ( _Tp ::*__pf)(_Arg )) : _M_f(__pf) {}
-  _Ret operator()(_Tp *__p, _Arg __x) const { return (__p->*_M_f)(__x); }
+  _Ret operator()(_Tp *__p, _Arg __x) const { return (__p->* _M_f)(__x); }
 
 private:
   _Ret ( _Tp ::*_M_f)(_Arg );
@@ -1888,7 +1888,7 @@ private:
 template <typename _Ret, typename _Tp, typename _Arg> class const_mem_fun1_t : public binary_function<const _Tp*, _Arg, _Ret>  {
 public:
   explicit const_mem_fun1_t(_Ret ( _Tp ::*__pf)(_Arg ) const ) : _M_f(__pf) {}
-  _Ret operator()(const _Tp *__p, _Arg __x) const { return (__p->*_M_f)(__x); }
+  _Ret operator()(const _Tp *__p, _Arg __x) const { return (__p->* _M_f)(__x); }
 
 private:
   _Ret ( _Tp ::*_M_f)(_Arg ) const ;
@@ -1896,7 +1896,7 @@ private:
 template <typename _Ret, typename _Tp, typename _Arg> class mem_fun1_ref_t : public binary_function<_Tp, _Arg, _Ret>  {
 public:
   explicit mem_fun1_ref_t(_Ret ( _Tp ::*__pf)(_Arg )) : _M_f(__pf) {}
-  _Ret operator()(_Tp &__r, _Arg __x) const { return (__r.*_M_f)(__x); }
+  _Ret operator()(_Tp &__r, _Arg __x) const { return (__r.* _M_f)(__x); }
 
 private:
   _Ret ( _Tp ::*_M_f)(_Arg );
@@ -1904,7 +1904,7 @@ private:
 template <typename _Ret, typename _Tp, typename _Arg> class const_mem_fun1_ref_t : public binary_function<_Tp, _Arg, _Ret>  {
 public:
   explicit const_mem_fun1_ref_t(_Ret ( _Tp ::*__pf)(_Arg ) const ) : _M_f(__pf) {}
-  _Ret operator()(const _Tp &__r, _Arg __x) const { return (__r.*_M_f)(__x); }
+  _Ret operator()(const _Tp &__r, _Arg __x) const { return (__r.* _M_f)(__x); }
 
 private:
   _Ret ( _Tp ::*_M_f)(_Arg ) const ;
@@ -1926,8 +1926,8 @@ protected:
 
 public:
   binder1st(const _Operation &__x, const typename _Operation::first_argument_type &__y) : op(__x), value(__y) {}
-  typename _Operation::result_type operator()(const typename _Operation::second_argument_type &__x) const { return op(value, __x); }
-  typename _Operation::result_type operator()(typename _Operation::second_argument_type &__x) const { return op(value, __x); }
+  typename _Operation::result_type operator()(const typename _Operation::second_argument_type &__x) const { return  op( value, __x); }
+  typename _Operation::result_type operator()(typename _Operation::second_argument_type &__x) const { return  op( value, __x); }
 };
 template <typename _Operation, typename _Tp> inline binder1st<_Operation> bind1st(const _Operation &__fn, const _Tp &__x) {
   typedef typename _Operation::first_argument_type _Arg1_type;
@@ -1940,8 +1940,8 @@ protected:
 
 public:
   binder2nd(const _Operation &__x, const typename _Operation::second_argument_type &__y) : op(__x), value(__y) {}
-  typename _Operation::result_type operator()(const typename _Operation::first_argument_type &__x) const { return op(__x, value); }
-  typename _Operation::result_type operator()(typename _Operation::first_argument_type &__x) const { return op(__x, value); }
+  typename _Operation::result_type operator()(const typename _Operation::first_argument_type &__x) const { return  op(__x,  value); }
+  typename _Operation::result_type operator()(typename _Operation::first_argument_type &__x) const { return  op(__x,  value); }
 };
 template <typename _Operation, typename _Tp> inline binder2nd<_Operation> bind2nd(const _Operation &__fn, const _Tp &__x) {
   typedef typename _Operation::second_argument_type _Arg2_type;
@@ -1958,7 +1958,7 @@ typedef __pid_t pid_t;
 struct sched_param {
   int __sched_priority;
 };extern "C" {
-extern int clone(int (*__fn)(void *), void *__child_stack, int __flags, void *__arg, ... ) throw();
+extern int clone(int (*__fn)(void *__arg), void *__child_stack, int __flags, void *__arg, ... ) throw();
 extern int unshare(int __flags) throw();
 extern int sched_getcpu() throw();}
 struct __sched_param {
@@ -1966,7 +1966,7 @@ struct __sched_param {
 };
 typedef unsigned long __cpu_mask;
 typedef struct {
-  __cpu_mask __bits[16];
+  __cpu_mask __bits[(1024 / (8 * sizeof(__cpu_mask)))];
 } cpu_set_t;extern "C" {
 extern int __sched_cpucount(size_t __setsize, const cpu_set_t *__setp) throw();
 extern cpu_set_t *__sched_cpualloc(size_t __count) throw();
@@ -2188,7 +2188,7 @@ typedef struct {
     int __mask_was_saved;
   } __cancel_jmp_buf[1];
   void *__pad[4];
-} __pthread_unwind_buf_t __attribute__((aligned(16)));
+} __pthread_unwind_buf_t __attribute__((aligned)) ;
 struct __pthread_cleanup_frame {
   void (*__cancel_routine)(void *);
   void *__cancel_arg;
@@ -2206,17 +2206,17 @@ public:
   __pthread_cleanup_class(void (*__fct)(void *), void *__arg) : __cancel_routine(__fct), __cancel_arg(__arg), __do_it(1) {}
 
   ~__pthread_cleanup_class() {
-    if (__do_it)
-      __cancel_routine(__cancel_arg);
+    if ( __do_it)
+       __cancel_routine( __cancel_arg);
   }
 
-  void __setdoit(int __newval) { __do_it = __newval; }
+  void __setdoit(int __newval) {  __do_it = __newval; }
 
   void __defer() {
-    pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, (&__cancel_type));
+    pthread_setcanceltype(PTHREAD_CANCEL_DEFERRED, & __cancel_type);
   }
 
-  void __restore() const { pthread_setcanceltype(__cancel_type, 0); }
+  void __restore() const { pthread_setcanceltype( __cancel_type, 0); }
 };
 struct __jmp_buf_tag;
 extern int __sigsetjmp(struct __jmp_buf_tag *__env, int __savemask) throw();
@@ -2663,8 +2663,8 @@ public:
   typedef typename _CharT_alloc_type::const_reference const_reference;
   typedef typename _CharT_alloc_type::pointer pointer;
   typedef typename _CharT_alloc_type::const_pointer const_pointer;
-  typedef __gnu_cxx::__normal_iterator<pointer, basic_string<_CharT, _Traits, _Alloc>> iterator;
-  typedef __gnu_cxx::__normal_iterator<const_pointer, basic_string<_CharT, _Traits, _Alloc>> const_iterator;
+  typedef __gnu_cxx::__normal_iterator<pointer, basic_string> iterator;
+  typedef __gnu_cxx::__normal_iterator<const_pointer, basic_string> const_iterator;
   typedef std::reverse_iterator<const_iterator> const_reverse_iterator;
   typedef std::reverse_iterator<iterator> reverse_iterator;
 
@@ -2704,21 +2704,21 @@ private:
     _CharT *_M_refdata() throw() { return reinterpret_cast < _CharT* >  ((this) + 1); }
 
     _CharT *_M_grab(const _Alloc &__alloc1, const _Alloc &__alloc2) {
-      return (!_M_is_leaked() && __alloc1 == __alloc2)?_M_refcopy() : _M_clone(__alloc1);
+      return (! _M_is_leaked() && __alloc1 == __alloc2)? _M_refcopy() :  _M_clone(__alloc1);
     }
     static _Rep *_S_create(size_type , size_type , const _Alloc &);
 
     void _M_dispose(const _Alloc &__a) {
       if (__builtin_expect((this) != &_S_empty_rep(), false))
         if (__gnu_cxx::__exchange_and_add_dispatch(&(this)->_M_refcount, -1) <= 0)
-          _M_destroy(__a);
+           _M_destroy(__a);
     }
     void _M_destroy(const _Alloc &) throw();
 
     _CharT *_M_refcopy() throw() {
       if (__builtin_expect((this) != &_S_empty_rep(), false))
         __gnu_cxx::__atomic_add_dispatch(&(this)->_M_refcount, 1);
-      return _M_refdata();
+      return  _M_refdata();
     }
     _CharT *_M_clone(const _Alloc &, size_type __res = 0);
   };
@@ -2733,14 +2733,14 @@ public:
 
 private:
   mutable _Alloc_hider _M_dataplus;
-  _CharT *_M_data() const { return _M_dataplus._M_p; }
-  _CharT *_M_data(_CharT *__p) { return (_M_dataplus._M_p = __p); }
+  _CharT *_M_data() const { return  _M_dataplus._M_p; }
+  _CharT *_M_data(_CharT *__p) { return ( _M_dataplus._M_p = __p); }
   _Rep *_M_rep() const { return &((reinterpret_cast < _Rep* >  (_M_data()))[-1]); }
   iterator _M_ibegin() const { return iterator(_M_data()); }
   iterator _M_iend() const { return iterator(_M_data() + (this)->size()); }
   void _M_leak() {
-    if (!_M_rep()->_M_is_leaked())
-      _M_leak_hard();
+    if (! _M_rep()->_M_is_leaked())
+       _M_leak_hard();
   }
   size_type _M_check(size_type __pos, const char *__s) const {
     if (__pos > (this)->size())
@@ -2760,25 +2760,25 @@ private:
   }
   static void _M_copy(_CharT *__d, const _CharT *__s, size_type __n) {
     if (__n == 1)
-      traits_type::assign((*__d), (*__s));
+      traits_type::assign(*__d, *__s);
      else
       traits_type::copy(__d, __s, __n);
   }
   static void _M_move(_CharT *__d, const _CharT *__s, size_type __n) {
     if (__n == 1)
-      traits_type::assign((*__d), (*__s));
+      traits_type::assign(*__d, *__s);
      else
       traits_type::move(__d, __s, __n);
   }
   static void _M_assign(_CharT *__d, size_type __n, _CharT __c) {
     if (__n == 1)
-      traits_type::assign((*__d), __c);
+      traits_type::assign(*__d, __c);
      else
       traits_type::assign(__d, __n, __c);
   }
   template <class _Iterator> static void _S_copy_chars(_CharT *__p, _Iterator __k1, _Iterator __k2) {
     for (; __k1 != __k2; (++__k1 , ++__p))
-      traits_type::assign((*__p), (*__k1));
+      traits_type::assign(*__p, *__k1);
   }
   static void _S_copy_chars(_CharT *__p, iterator __k1, iterator __k2) { _S_copy_chars(__p, __k1.base(), __k2.base()); }
   static void _S_copy_chars(_CharT *__p, const_iterator __k1, const_iterator __k2) { _S_copy_chars(__p, __k1.base(), __k2.base()); }
@@ -2807,7 +2807,7 @@ public:
   basic_string(const _CharT *__s, const _Alloc &__a = _Alloc());
   basic_string(size_type __n, _CharT __c, const _Alloc &__a = _Alloc());
   template <class _InputIterator> basic_string(_InputIterator __beg, _InputIterator __end, const _Alloc &__a = _Alloc());
-  ~basic_string() { _M_rep()->_M_dispose((this)->get_allocator()); }
+  ~basic_string() {  _M_rep()->_M_dispose((this)->get_allocator()); }
   basic_string &operator=(const basic_string &__str) { return (this)->assign(__str); }
   basic_string &operator=(const _CharT *__s) { return (this)->assign(__s); }
   basic_string &operator=(_CharT __c) {
@@ -2815,12 +2815,12 @@ public:
     return *(this);
   }
   iterator begin() {
-    _M_leak();
+     _M_leak();
     return iterator(_M_data());
   }
   const_iterator begin() const { return const_iterator(_M_data()); }
   iterator end() {
-    _M_leak();
+     _M_leak();
     return iterator(_M_data() + (this)->size());
   }
   const_iterator end() const { return const_iterator(_M_data() + (this)->size()); }
@@ -2830,20 +2830,20 @@ public:
   const_reverse_iterator rend() const { return const_reverse_iterator((this)->begin()); }
 
 public:
-  size_type size() const { return _M_rep()->_M_length; }
-  size_type length() const { return _M_rep()->_M_length; }
+  size_type size() const { return  _M_rep()->_M_length; }
+  size_type length() const { return  _M_rep()->_M_length; }
   size_type max_size() const { return _Rep::_S_max_size; }
   void resize(size_type __n, _CharT __c);
   void resize(size_type __n) { (this)->resize(__n, _CharT()); }
-  size_type capacity() const { return _M_rep()->_M_capacity; }
+  size_type capacity() const { return  _M_rep()->_M_capacity; }
   void reserve(size_type __res_arg = 0);
-  void clear() { _M_mutate(0, (this)->size(), 0); }
+  void clear() {  _M_mutate(0, (this)->size(), 0); }
   bool empty() const { return (this)->size() == 0; }
   const_reference operator[](size_type __pos) const {;
     return __pos[_M_data()];
   }
   reference operator[](size_type __pos) {;;
-    _M_leak();
+     _M_leak();
     return __pos[_M_data()];
   }
   const_reference at(size_type __n) const {
@@ -2852,9 +2852,9 @@ public:
     return __n[_M_data()];
   }
   reference at(size_type __n) {
-    if (__n >= size())
+    if (__n >=  size())
       __throw_out_of_range(("basic_string::at"));
-    _M_leak();
+     _M_leak();
     return __n[_M_data()];
   }
   basic_string &operator+=(const basic_string &__str) { return (this)->append(__str); }
@@ -2870,13 +2870,13 @@ public:
     return (this)->append(__s, traits_type::length(__s));
   }
   basic_string &append(size_type __n, _CharT __c);
-  template <class _InputIterator> basic_string &append(_InputIterator __first, _InputIterator __last) { return (this)->replace(_M_iend(), _M_iend(), __first, __last); }
+  template <class _InputIterator> basic_string &append(_InputIterator __first, _InputIterator __last) { return (this)->replace( _M_iend(),  _M_iend(), __first, __last); }
   void push_back(_CharT __c) {
     const size_type __len = 1 + (this)->size();
-    if (__len > (this)->capacity() || _M_rep()->_M_is_shared())
+    if (__len > (this)->capacity() ||  _M_rep()->_M_is_shared())
       (this)->reserve(__len);
     traits_type::assign((this)->size()[_M_data()], __c);
-    _M_rep()->_M_set_length_and_sharable(__len);
+     _M_rep()->_M_set_length_and_sharable(__len);
   }
   basic_string &assign(const basic_string &__str);
   basic_string &assign(const basic_string &__str, size_type __pos, size_type __n) {
@@ -2886,8 +2886,8 @@ public:
   basic_string &assign(const _CharT *__s) {;
     return (this)->assign(__s, traits_type::length(__s));
   }
-  basic_string &assign(size_type __n, _CharT __c) { return _M_replace_aux(size_type(0), (this)->size(), __n, __c); }
-  template <class _InputIterator> basic_string &assign(_InputIterator __first, _InputIterator __last) { return (this)->replace(_M_ibegin(), _M_iend(), __first, __last); }
+  basic_string &assign(size_type __n, _CharT __c) { return  _M_replace_aux(size_type(0), (this)->size(), __n, __c); }
+  template <class _InputIterator> basic_string &assign(_InputIterator __first, _InputIterator __last) { return (this)->replace( _M_ibegin(),  _M_iend(), __first, __last); }
   void insert(iterator __p, size_type __n, _CharT __c) { (this)->replace(__p, __p, __n, __c); }
   template <class _InputIterator> void insert(iterator __p, _InputIterator __beg, _InputIterator __end) { (this)->replace(__p, __p, __beg, __end); }
   basic_string &insert(size_type __pos1, const basic_string &__str) { return (this)->insert(__pos1, __str, size_type(0), __str.size()); }
@@ -2899,22 +2899,22 @@ public:
     return (this)->insert(__pos, __s, traits_type::length(__s));
   }
   basic_string &insert(size_type __pos, size_type __n, _CharT __c) {
-    return _M_replace_aux(_M_check(__pos, "basic_string::insert"), size_type(0), __n, __c);
+    return  _M_replace_aux( _M_check(__pos, "basic_string::insert"), size_type(0), __n, __c);
   }
   iterator insert(iterator __p, _CharT __c) {;
-    const size_type __pos = __p - _M_ibegin();
-    _M_replace_aux(__pos, size_type(0), size_type(1), __c);
-    _M_rep()->_M_set_leaked();
+    const size_type __pos = __p -  _M_ibegin();
+     _M_replace_aux(__pos, size_type(0), size_type(1), __c);
+     _M_rep()->_M_set_leaked();
     return iterator(_M_data() + __pos);
   }
   basic_string &erase(size_type __pos = 0, size_type __n = npos) {
-    _M_mutate(_M_check(__pos, "basic_string::erase"), _M_limit(__pos, __n), size_type(0));
+     _M_mutate( _M_check(__pos, "basic_string::erase"),  _M_limit(__pos, __n), size_type(0));
     return *(this);
   }
   iterator erase(iterator __position) {;
-    const size_type __pos = __position - _M_ibegin();
-    _M_mutate(__pos, size_type(1), size_type(0));
-    _M_rep()->_M_set_leaked();
+    const size_type __pos = __position -  _M_ibegin();
+     _M_mutate(__pos, size_type(1), size_type(0));
+     _M_rep()->_M_set_leaked();
     return iterator(_M_data() + __pos);
   }
   iterator erase(iterator __first, iterator __last);
@@ -2927,37 +2927,37 @@ public:
     return (this)->replace(__pos, __n1, __s, traits_type::length(__s));
   }
   basic_string &replace(size_type __pos, size_type __n1, size_type __n2, _CharT __c) {
-    return _M_replace_aux(_M_check(__pos, "basic_string::replace"), _M_limit(__pos, __n1), __n2, __c);
+    return  _M_replace_aux( _M_check(__pos, "basic_string::replace"),  _M_limit(__pos, __n1), __n2, __c);
   }
   basic_string &replace(iterator __i1, iterator __i2, const basic_string &__str) { return (this)->replace(__i1, __i2, __str._M_data(), __str.size()); }
   basic_string &replace(iterator __i1, iterator __i2, const _CharT *__s, size_type __n) {;
-    return (this)->replace(__i1 - _M_ibegin(), __i2 - __i1, __s, __n);
+    return (this)->replace(__i1 -  _M_ibegin(), __i2 - __i1, __s, __n);
   }
   basic_string &replace(iterator __i1, iterator __i2, const _CharT *__s) {;
     return (this)->replace(__i1, __i2, __s, traits_type::length(__s));
   }
   basic_string &replace(iterator __i1, iterator __i2, size_type __n, _CharT __c) {;
-    return _M_replace_aux(__i1 - _M_ibegin(), __i2 - __i1, __n, __c);
+    return  _M_replace_aux(__i1 -  _M_ibegin(), __i2 - __i1, __n, __c);
   }
   template <class _InputIterator> basic_string &replace(iterator __i1, iterator __i2, _InputIterator __k1, _InputIterator __k2) {;;
     typedef typename std::__is_integer<_InputIterator>::__type _Integral;
     return _M_replace_dispatch(__i1, __i2, __k1, __k2, _Integral());
   }
   basic_string &replace(iterator __i1, iterator __i2, _CharT *__k1, _CharT *__k2) {;;
-    return (this)->replace(__i1 - _M_ibegin(), __i2 - __i1, __k1, __k2 - __k1);
+    return (this)->replace(__i1 -  _M_ibegin(), __i2 - __i1, __k1, __k2 - __k1);
   }
   basic_string &replace(iterator __i1, iterator __i2, const _CharT *__k1, const _CharT *__k2) {;;
-    return (this)->replace(__i1 - _M_ibegin(), __i2 - __i1, __k1, __k2 - __k1);
+    return (this)->replace(__i1 -  _M_ibegin(), __i2 - __i1, __k1, __k2 - __k1);
   }
   basic_string &replace(iterator __i1, iterator __i2, iterator __k1, iterator __k2) {;;
-    return (this)->replace(__i1 - _M_ibegin(), __i2 - __i1, __k1.base(), __k2 - __k1);
+    return (this)->replace(__i1 -  _M_ibegin(), __i2 - __i1, __k1.base(), __k2 - __k1);
   }
   basic_string &replace(iterator __i1, iterator __i2, const_iterator __k1, const_iterator __k2) {;;
-    return (this)->replace(__i1 - _M_ibegin(), __i2 - __i1, __k1.base(), __k2 - __k1);
+    return (this)->replace(__i1 -  _M_ibegin(), __i2 - __i1, __k1.base(), __k2 - __k1);
   }
 
 private:
-  template <class _Integer> basic_string &_M_replace_dispatch(iterator __i1, iterator __i2, _Integer __n, _Integer __val, __true_type ) { return _M_replace_aux(__i1 - _M_ibegin(), __i2 - __i1, __n, __val); }
+  template <class _Integer> basic_string &_M_replace_dispatch(iterator __i1, iterator __i2, _Integer __n, _Integer __val, __true_type ) { return  _M_replace_aux(__i1 -  _M_ibegin(), __i2 - __i1, __n, __val); }
   template <class _InputIterator> basic_string &_M_replace_dispatch(iterator __i1, iterator __i2, _InputIterator __k1, _InputIterator __k2, __false_type );
   basic_string &_M_replace_aux(size_type __pos1, size_type __n1, size_type __n2, _CharT __c);
   basic_string &_M_replace_safe(size_type __pos1, size_type __n1, const _CharT *__s, size_type __n2);
@@ -2965,7 +2965,7 @@ private:
     typedef typename iterator_traits<_InIterator>::iterator_category _Tag;
     return _S_construct(__beg, __end, __a, _Tag());
   }
-  template <class _Integer> static _CharT *_S_construct_aux(_Integer __beg, _Integer __end, const _Alloc &__a, __true_type ) { return _S_construct((static_cast < size_type >  (__beg)), __end, __a); }
+  template <class _Integer> static _CharT *_S_construct_aux(_Integer __beg, _Integer __end, const _Alloc &__a, __true_type ) { return _S_construct(static_cast < size_type >  (__beg), __end, __a); }
   template <class _InIterator> static _CharT *_S_construct(_InIterator __beg, _InIterator __end, const _Alloc &__a) {
     typedef typename std::__is_integer<_InIterator>::__type _Integral;
     return _S_construct_aux(__beg, __end, __a, _Integral());
@@ -2979,7 +2979,7 @@ public:
   void swap(basic_string &__s);
   const _CharT *c_str() const { return _M_data(); }
   const _CharT *data() const { return _M_data(); }
-  allocator_type get_allocator() const { return _M_dataplus; }
+  allocator_type get_allocator() const { return  _M_dataplus; }
   size_type find(const _CharT *__s, size_type __pos, size_type __n) const;
   size_type find(const basic_string &__str, size_type __pos = 0) const { return (this)->find(__str.data(), __pos, __str.size()); }
   size_type find(const _CharT *__s, size_type __pos = 0) const {;
@@ -3017,7 +3017,7 @@ public:
   }
   size_type find_last_not_of(_CharT __c, size_type __pos = npos) const;
   basic_string substr(size_type __pos = 0, size_type __n = npos) const {
-    return basic_string<_CharT, _Traits, _Alloc>(*(this), _M_check(__pos, "basic_string::substr"), __n);
+    return basic_string(*(this),  _M_check(__pos, "basic_string::substr"), __n);
   }
   int compare(const basic_string &__str) const {
     const size_type __size = (this)->size();
@@ -3158,59 +3158,59 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_Char
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(const basic_string &__str, size_type __pos, size_type __n) : _M_dataplus(_S_construct(__str._M_data() + __str._M_check(__pos, "basic_string::basic_string"), __str._M_data() + __str._M_limit(__pos, __n) + __pos, _Alloc()), (_Alloc())) {}
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(const basic_string &__str, size_type __pos, size_type __n, const _Alloc &__a) : _M_dataplus(_S_construct(__str._M_data() + __str._M_check(__pos, "basic_string::basic_string"), __str._M_data() + __str._M_limit(__pos, __n) + __pos, __a), __a) {}
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT *__s, size_type __n, const _Alloc &__a) : _M_dataplus(_S_construct(__s, __s + __n, __a), __a) {}
-template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT *__s, const _Alloc &__a) : _M_dataplus(_S_construct(__s, (__s?__s + traits_type::length(__s) : __s + npos), __a), __a) {}
+template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(const _CharT *__s, const _Alloc &__a) : _M_dataplus(_S_construct(__s, __s?__s + traits_type::length(__s) : __s + npos, __a), __a) {}
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc>::basic_string(size_type __n, _CharT __c, const _Alloc &__a) : _M_dataplus(_S_construct(__n, __c, __a), __a) {}
 template <typename _CharT, typename _Traits, typename _Alloc>
 template <typename _InputIterator> basic_string<_CharT, _Traits, _Alloc>::basic_string(_InputIterator __beg, _InputIterator __end, const _Alloc &__a) : _M_dataplus(_S_construct(__beg, __end, __a), __a) {}
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::assign(const basic_string &__str) {
-  if (_M_rep() != __str._M_rep()) {
+  if ( _M_rep() != __str._M_rep()) {
     const allocator_type __a = (this)->get_allocator();
     _CharT *__tmp = __str._M_rep()->_M_grab(__a, __str.get_allocator());
-    _M_rep()->_M_dispose(__a);
+     _M_rep()->_M_dispose(__a);
     _M_data(__tmp);
   }
   return *(this);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::assign(const _CharT *__s, size_type __n) {;
-  _M_check_length((this)->size(), __n, "basic_string::assign");
-  if (_M_disjunct(__s) || _M_rep()->_M_is_shared())
-    return _M_replace_safe(size_type(0), (this)->size(), __s, __n);
-   else {
+   _M_check_length((this)->size(), __n, "basic_string::assign");
+  if ( _M_disjunct(__s) ||  _M_rep()->_M_is_shared())
+    return  _M_replace_safe(size_type(0), (this)->size(), __s, __n);
+   else  {
     const size_type __pos = __s - _M_data();
     if (__pos >= __n)
       _M_copy(_M_data(), __s, __n);
      else if (__pos)
       _M_move(_M_data(), __s, __n);
-    _M_rep()->_M_set_length_and_sharable(__n);
+     _M_rep()->_M_set_length_and_sharable(__n);
     return *(this);
   }
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::append(size_type __n, _CharT __c) {
   if (__n) {
-    _M_check_length(size_type(0), __n, "basic_string::append");
+     _M_check_length(size_type(0), __n, "basic_string::append");
     const size_type __len = __n + (this)->size();
-    if (__len > (this)->capacity() || _M_rep()->_M_is_shared())
+    if (__len > (this)->capacity() ||  _M_rep()->_M_is_shared())
       (this)->reserve(__len);
     _M_assign(_M_data() + (this)->size(), __n, __c);
-    _M_rep()->_M_set_length_and_sharable(__len);
+     _M_rep()->_M_set_length_and_sharable(__len);
   }
   return *(this);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::append(const _CharT *__s, size_type __n) {;
   if (__n) {
-    _M_check_length(size_type(0), __n, "basic_string::append");
+     _M_check_length(size_type(0), __n, "basic_string::append");
     const size_type __len = __n + (this)->size();
-    if (__len > (this)->capacity() || _M_rep()->_M_is_shared()) {
-      if (_M_disjunct(__s))
+    if (__len > (this)->capacity() ||  _M_rep()->_M_is_shared()) {
+      if ( _M_disjunct(__s))
         (this)->reserve(__len);
-       else {
+       else  {
         const size_type __off = __s - _M_data();
         (this)->reserve(__len);
         __s = _M_data() + __off;
       }
     }
     _M_copy(_M_data() + (this)->size(), __s, __n);
-    _M_rep()->_M_set_length_and_sharable(__len);
+     _M_rep()->_M_set_length_and_sharable(__len);
   }
   return *(this);
 }
@@ -3218,10 +3218,10 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_Char
   const size_type __size = __str.size();
   if (__size) {
     const size_type __len = __size + (this)->size();
-    if (__len > (this)->capacity() || _M_rep()->_M_is_shared())
+    if (__len > (this)->capacity() ||  _M_rep()->_M_is_shared())
       (this)->reserve(__len);
     _M_copy(_M_data() + (this)->size(), __str._M_data(), __size);
-    _M_rep()->_M_set_length_and_sharable(__len);
+     _M_rep()->_M_set_length_and_sharable(__len);
   }
   return *(this);
 }
@@ -3230,28 +3230,28 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_Char
   __n = __str._M_limit(__pos, __n);
   if (__n) {
     const size_type __len = __n + (this)->size();
-    if (__len > (this)->capacity() || _M_rep()->_M_is_shared())
+    if (__len > (this)->capacity() ||  _M_rep()->_M_is_shared())
       (this)->reserve(__len);
     _M_copy(_M_data() + (this)->size(), __str._M_data() + __pos, __n);
-    _M_rep()->_M_set_length_and_sharable(__len);
+     _M_rep()->_M_set_length_and_sharable(__len);
   }
   return *(this);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::insert(size_type __pos, const _CharT *__s, size_type __n) {;
-  _M_check(__pos, "basic_string::insert");
-  _M_check_length(size_type(0), __n, "basic_string::insert");
-  if (_M_disjunct(__s) || _M_rep()->_M_is_shared())
-    return _M_replace_safe(__pos, size_type(0), __s, __n);
-   else {
+   _M_check(__pos, "basic_string::insert");
+   _M_check_length(size_type(0), __n, "basic_string::insert");
+  if ( _M_disjunct(__s) ||  _M_rep()->_M_is_shared())
+    return  _M_replace_safe(__pos, size_type(0), __s, __n);
+   else  {
     const size_type __off = __s - _M_data();
-    _M_mutate(__pos, 0, __n);
+     _M_mutate(__pos, 0, __n);
     __s = _M_data() + __off;
     _CharT *__p = _M_data() + __pos;
     if (__s + __n <= __p)
       _M_copy(__p, __s, __n);
      else if (__s >= __p)
       _M_copy(__p, __s + __n, __n);
-     else {
+     else  {
       const size_type __nleft = __p - __s;
       _M_copy(__p, __s, __nleft);
       _M_copy(__p + __nleft, __p + __n, __n - __nleft);
@@ -3262,84 +3262,84 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_Char
 template <typename _CharT, typename _Traits, typename _Alloc> typename basic_string<_CharT, _Traits, _Alloc>::iterator basic_string<_CharT, _Traits, _Alloc>::erase(iterator __first, iterator __last) {;
   const size_type __size = __last - __first;
   if (__size) {
-    const size_type __pos = __first - _M_ibegin();
-    _M_mutate(__pos, __size, size_type(0));
-    _M_rep()->_M_set_leaked();
+    const size_type __pos = __first -  _M_ibegin();
+     _M_mutate(__pos, __size, size_type(0));
+     _M_rep()->_M_set_leaked();
     return iterator(_M_data() + __pos);
   } else
     return __first;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::replace(size_type __pos, size_type __n1, const _CharT *__s, size_type __n2) {;
-  _M_check(__pos, "basic_string::replace");
-  __n1 = _M_limit(__pos, __n1);
-  _M_check_length(__n1, __n2, "basic_string::replace");
+   _M_check(__pos, "basic_string::replace");
+  __n1 =  _M_limit(__pos, __n1);
+   _M_check_length(__n1, __n2, "basic_string::replace");
   bool __left;
-  if (_M_disjunct(__s) || _M_rep()->_M_is_shared())
-    return _M_replace_safe(__pos, __n1, __s, __n2);
+  if ( _M_disjunct(__s) ||  _M_rep()->_M_is_shared())
+    return  _M_replace_safe(__pos, __n1, __s, __n2);
    else if ((__left = __s + __n2 <= _M_data() + __pos) || _M_data() + __pos + __n1 <= __s) {
     size_type __off = __s - _M_data();
     __left?__off : (__off += __n2 - __n1);
-    _M_mutate(__pos, __n1, __n2);
+     _M_mutate(__pos, __n1, __n2);
     _M_copy(_M_data() + __pos, _M_data() + __off, __n2);
     return *(this);
-  } else {
-    const basic_string<_CharT, _Traits, _Alloc> __tmp(__s, __n2);
-    return _M_replace_safe(__pos, __n1, __tmp._M_data(), __n2);
+  } else  {
+    const basic_string __tmp(__s, __n2);
+    return  _M_replace_safe(__pos, __n1, __tmp._M_data(), __n2);
   }
 }
 
 template <typename _CharT, typename _Traits, typename _Alloc>
 void basic_string<_CharT, _Traits, _Alloc>::_Rep::_M_destroy(const _Alloc &__a) throw() {
   const size_type __size = sizeof(_Rep_base) + ((this)->_M_capacity + 1) * sizeof(_CharT);
-  _Raw_bytes_alloc(__a).deallocate((reinterpret_cast < char* >  (this)), __size);
+  _Raw_bytes_alloc(__a).deallocate(reinterpret_cast < char* >  (this), __size);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<_CharT, _Traits, _Alloc>::_M_leak_hard() {
-  if (_M_rep() == &_S_empty_rep())
+  if ( _M_rep() == &_S_empty_rep())
     return;
-  if (_M_rep()->_M_is_shared())
-    _M_mutate(0, 0, 0);
-  _M_rep()->_M_set_leaked();
+  if ( _M_rep()->_M_is_shared())
+     _M_mutate(0, 0, 0);
+   _M_rep()->_M_set_leaked();
 }
 template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<_CharT, _Traits, _Alloc>::_M_mutate(size_type __pos, size_type __len1, size_type __len2) {
   const size_type __old_size = (this)->size();
   const size_type __new_size = __old_size + __len2 - __len1;
   const size_type __how_much = __old_size - __pos - __len1;
-  if (__new_size > (this)->capacity() || _M_rep()->_M_is_shared()) {
-    const allocator_type __a = get_allocator();
+  if (__new_size > (this)->capacity() ||  _M_rep()->_M_is_shared()) {
+    const allocator_type __a =  get_allocator();
     _Rep *__r = _Rep::_S_create(__new_size, (this)->capacity(), __a);
     if (__pos)
       _M_copy(__r->_M_refdata(), _M_data(), __pos);
     if (__how_much)
       _M_copy(__r->_M_refdata() + __pos + __len2, _M_data() + __pos + __len1, __how_much);
-    _M_rep()->_M_dispose(__a);
+     _M_rep()->_M_dispose(__a);
     _M_data(__r->_M_refdata());
   } else if (__how_much && __len1 != __len2) {
     _M_move(_M_data() + __pos + __len2, _M_data() + __pos + __len1, __how_much);
   }
-  _M_rep()->_M_set_length_and_sharable(__new_size);
+   _M_rep()->_M_set_length_and_sharable(__new_size);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<_CharT, _Traits, _Alloc>::reserve(size_type __res) {
-  if (__res != (this)->capacity() || _M_rep()->_M_is_shared()) {
+  if (__res != (this)->capacity() ||  _M_rep()->_M_is_shared()) {
     if (__res < (this)->size())
       __res = (this)->size();
-    const allocator_type __a = get_allocator();
-    _CharT *__tmp = _M_rep()->_M_clone(__a, __res - (this)->size());
-    _M_rep()->_M_dispose(__a);
+    const allocator_type __a =  get_allocator();
+    _CharT *__tmp =  _M_rep()->_M_clone(__a, __res - (this)->size());
+     _M_rep()->_M_dispose(__a);
     _M_data(__tmp);
   }
 }
 template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<_CharT, _Traits, _Alloc>::swap(basic_string &__s) {
-  if (_M_rep()->_M_is_leaked())
-    _M_rep()->_M_set_sharable();
+  if ( _M_rep()->_M_is_leaked())
+     _M_rep()->_M_set_sharable();
   if (__s._M_rep()->_M_is_leaked())
     __s._M_rep()->_M_set_sharable();
   if ((this)->get_allocator() == __s.get_allocator()) {
     _CharT *__tmp = _M_data();
     _M_data(__s._M_data());
     __s._M_data(__tmp);
-  } else {
-    const basic_string<_CharT, _Traits, _Alloc> __tmp1(_M_ibegin(), _M_iend(), __s.get_allocator());
-    const basic_string<_CharT, _Traits, _Alloc> __tmp2(__s._M_ibegin(), __s._M_iend(), (this)->get_allocator());
+  } else  {
+    const basic_string __tmp1( _M_ibegin(),  _M_iend(), __s.get_allocator());
+    const basic_string __tmp2(__s._M_ibegin(), __s._M_iend(), (this)->get_allocator());
     *(this) = __tmp2;
     __s = __tmp1;
   }
@@ -3374,13 +3374,13 @@ _CharT *basic_string<_CharT, _Traits, _Alloc>::_Rep::_M_clone(const _Alloc &__al
   const size_type __requested_cap = (this)->_M_length + __res;
   _Rep *__r = _Rep::_S_create(__requested_cap, (this)->_M_capacity, __alloc);
   if ((this)->_M_length)
-    _M_copy(__r->_M_refdata(), _M_refdata(), ((this)->_M_length));
-  __r->_M_set_length_and_sharable(((this)->_M_length));
+    _M_copy(__r->_M_refdata(),  _M_refdata(), (this)->_M_length);
+  __r->_M_set_length_and_sharable((this)->_M_length);
   return __r->_M_refdata();
 }
 template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<_CharT, _Traits, _Alloc>::resize(size_type __n, _CharT __c) {
   const size_type __size = (this)->size();
-  _M_check_length(__size, __n, "basic_string::resize");
+   _M_check_length(__size, __n, "basic_string::resize");
   if (__size < __n)
     (this)->append(__n - __size, __c);
    else if (__n < __size)
@@ -3388,20 +3388,20 @@ template <typename _CharT, typename _Traits, typename _Alloc> void basic_string<
 }
 template <typename _CharT, typename _Traits, typename _Alloc>
 template <typename _InputIterator> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::_M_replace_dispatch(iterator __i1, iterator __i2, _InputIterator __k1, _InputIterator __k2, __false_type ) {
-  const basic_string<_CharT, _Traits, _Alloc> __s(__k1, __k2);
+  const basic_string __s(__k1, __k2);
   const size_type __n1 = __i2 - __i1;
-  _M_check_length(__n1, __s.size(), "basic_string::_M_replace_dispatch");
-  return _M_replace_safe(__i1 - _M_ibegin(), __n1, __s._M_data(), __s.size());
+   _M_check_length(__n1, __s.size(), "basic_string::_M_replace_dispatch");
+  return  _M_replace_safe(__i1 -  _M_ibegin(), __n1, __s._M_data(), __s.size());
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::_M_replace_aux(size_type __pos1, size_type __n1, size_type __n2, _CharT __c) {
-  _M_check_length(__n1, __n2, "basic_string::_M_replace_aux");
-  _M_mutate(__pos1, __n1, __n2);
+   _M_check_length(__n1, __n2, "basic_string::_M_replace_aux");
+   _M_mutate(__pos1, __n1, __n2);
   if (__n2)
     _M_assign(_M_data() + __pos1, __n2, __c);
   return *(this);
 }
 template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_CharT, _Traits, _Alloc> &basic_string<_CharT, _Traits, _Alloc>::_M_replace_safe(size_type __pos1, size_type __n1, const _CharT *__s, size_type __n2) {
-  _M_mutate(__pos1, __n1, __n2);
+   _M_mutate(__pos1, __n1, __n2);
   if (__n2)
     _M_copy(_M_data() + __pos1, __s, __n2);
   return *(this);
@@ -3427,8 +3427,8 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_string<_Char
   return __str;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> typename basic_string<_CharT, _Traits, _Alloc>::size_type basic_string<_CharT, _Traits, _Alloc>::copy(_CharT *__s, size_type __n, size_type __pos) const {
-  _M_check(__pos, "basic_string::copy");
-  __n = _M_limit(__pos, __n);;
+   _M_check(__pos, "basic_string::copy");
+  __n =  _M_limit(__pos, __n);;
   if (__n)
     _M_copy(__s, _M_data() + __pos, __n);
   return __n;
@@ -3537,8 +3537,8 @@ template <typename _CharT, typename _Traits, typename _Alloc> typename basic_str
   return npos;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> int basic_string<_CharT, _Traits, _Alloc>::compare(size_type __pos, size_type __n, const basic_string &__str) const {
-  _M_check(__pos, "basic_string::compare");
-  __n = _M_limit(__pos, __n);
+   _M_check(__pos, "basic_string::compare");
+  __n =  _M_limit(__pos, __n);
   const size_type __osize = __str.size();
   const size_type __len = std::min(__n, __osize);
   int __r = traits_type::compare(_M_data() + __pos, __str.data(), __len);
@@ -3547,9 +3547,9 @@ template <typename _CharT, typename _Traits, typename _Alloc> int basic_string<_
   return __r;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> int basic_string<_CharT, _Traits, _Alloc>::compare(size_type __pos1, size_type __n1, const basic_string &__str, size_type __pos2, size_type __n2) const {
-  _M_check(__pos1, "basic_string::compare");
+   _M_check(__pos1, "basic_string::compare");
   __str._M_check(__pos2, "basic_string::compare");
-  __n1 = _M_limit(__pos1, __n1);
+  __n1 =  _M_limit(__pos1, __n1);
   __n2 = __str._M_limit(__pos2, __n2);
   const size_type __len = std::min(__n1, __n2);
   int __r = traits_type::compare(_M_data() + __pos1, __str.data() + __pos2, __len);
@@ -3567,8 +3567,8 @@ template <typename _CharT, typename _Traits, typename _Alloc> int basic_string<_
   return __r;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> int basic_string <_CharT, _Traits, _Alloc>::compare(size_type __pos, size_type __n1, const _CharT *__s) const {;
-  _M_check(__pos, "basic_string::compare");
-  __n1 = _M_limit(__pos, __n1);
+   _M_check(__pos, "basic_string::compare");
+  __n1 =  _M_limit(__pos, __n1);
   const size_type __osize = traits_type::length(__s);
   const size_type __len = std::min(__n1, __osize);
   int __r = traits_type::compare(_M_data() + __pos, __s, __len);
@@ -3577,8 +3577,8 @@ template <typename _CharT, typename _Traits, typename _Alloc> int basic_string <
   return __r;
 }
 template <typename _CharT, typename _Traits, typename _Alloc> int basic_string <_CharT, _Traits, _Alloc>::compare(size_type __pos, size_type __n1, const _CharT *__s, size_type __n2) const {;
-  _M_check(__pos, "basic_string::compare");
-  __n1 = _M_limit(__pos, __n1);
+   _M_check(__pos, "basic_string::compare");
+  __n1 =  _M_limit(__pos, __n1);
   const size_type __len = std::min(__n1, __n2);
   int __r = traits_type::compare(_M_data() + __pos, __s, __len);
   if (!__r)
@@ -3608,7 +3608,7 @@ template <typename _CharT, typename _Traits, typename _Alloc> basic_istream<_Cha
       __int_type __c = __in.rdbuf()->sgetc();
       while (__extracted < __n && !_Traits::eq_int_type(__c, __eof) && !__ct.is(__ctype_base::space, _Traits::to_char_type(__c))){
         if (__len == sizeof((__buf)) / sizeof(_CharT)) {
-          __str.append(__buf, (sizeof((__buf)) / sizeof(_CharT)));
+          __str.append(__buf, sizeof((__buf)) / sizeof(_CharT));
           __len = 0;
         }
         __len++[__buf] = _Traits::to_char_type(__c);

@@ -1,13 +1,5 @@
-// ROSE is a tool for building preprocessors, this file is an example
-// preprocessor built with ROSE. rose.C: Example (default) ROSE Preprocessor:
-// used for testing ROSE infrastructure tps (01/14/2010) : Switching from rose.h
-// to sage3.
 #include "sage3basic.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT). Interestingly it must be at the top of the
-// list of include files.
 #include "linearizeAST.h"
 
 #include "rose_config.h"
@@ -15,9 +7,6 @@
 class PostSynthesizedAttribute {
 public:
   std::vector<SgNode *> nodes;
-  PostSynthesizedAttribute() {
-
-  };
 };
 
 class PostAST : public SgBottomUpProcessing<PostSynthesizedAttribute> {
@@ -30,26 +19,13 @@ private:
     PostSynthesizedAttribute synAttrib;
 
     if (synthesizedAttributeList.size() > 2) {
-      std::string correspondingString = astNode->class_name() + " ";
-      correspondingString += (astNode)->unparseToString() + " ";
-      correspondingString += (astNode)->get_file_info()->get_filenameString();
-      correspondingString += " ";
-      correspondingString +=
-          std::to_string((astNode)->get_file_info()->get_line());
-      correspondingString += " ";
-      correspondingString +=
-          std::to_string((astNode)->get_file_info()->get_col());
-
-      if (isSgConditionalExp(astNode) != NULL)
-        std::cout << "Found conditional exp" << std::endl;
-
-      std::cout << "Node with more that two synthesized attributes: "
-                << correspondingString << std::endl;
+      if (isSgConditionalExp(astNode) == NULL &&
+          isSgExprListExp(astNode) == NULL)
+        ROSE_ABORT();
 
       if (isSgExprListExp(astNode) != NULL)
         synAttrib.nodes.push_back(astNode);
 
-      synthesizedAttributeList.size();
       for (size_t i = 0; i < synthesizedAttributeList.size(); i++) {
         if (isSgConditionalExp(astNode) != NULL && i == 1)
           synAttrib.nodes.push_back(astNode);
@@ -58,14 +34,7 @@ private:
           synAttrib.nodes.push_back(synthesizedAttributeList[i].nodes[j]);
       }
 
-#ifndef CXX_IS_ROSE_CODE_GENERATION
-      if (isSgConditionalExp(astNode) == NULL &&
-          isSgExprListExp(astNode) == NULL)
-        ROSE_ABORT();
-#endif
-    }
-#ifndef CXX_IS_ROSE_CODE_GENERATION
-    else if (synthesizedAttributeList.size() > 0) {
+    } else if (synthesizedAttributeList.size() > 0) {
       if (isSgUnaryOp(astNode) != NULL) {
         SgUnaryOp *unaryOp = isSgUnaryOp(astNode);
 
@@ -86,7 +55,6 @@ private:
       }
     } else
       synAttrib.nodes.push_back(astNode);
-#endif
 
     if (astNode == rootNode)
       nodes = synAttrib.nodes;
@@ -104,36 +72,11 @@ public:
   };
 };
 
-LinearizeInheritedAttribute::LinearizeInheritedAttribute()
-    : mustBeInherited(false) {};
-LinearizeInheritedAttribute::LinearizeInheritedAttribute(
-    const LinearizeInheritedAttribute &X) {
-  mustBeInherited = X.mustBeInherited;
-};
-
-LinearizeAST::LinearizeAST() {
-
-};
-
 LinearizeInheritedAttribute LinearizeAST::evaluateInheritedAttribute(
     SgNode *astNode, LinearizeInheritedAttribute inheritedAttribute) {
-
-  // if(isSgLocatedNode(astNode))
-  // std::cout << astNode->class_name() << " " << astNode->unparseToString() <<
-  // " " << ( inheritedAttribute.mustBeInherited ? "true":"false" ) <<std::endl;
-
   if (inheritedAttribute.mustBeInherited == true)
     return inheritedAttribute;
 
-  //     if( (isSgLocatedNode(astNode)!=NULL) && ((isSgExprStatement(astNode) !=
-  //     NULL ) ||
-  //     (isSgScopeStatement(astNode)!=NULL)||(isSgValueExp(astNode)!=NULL)||(isSgVarRefExp(astNode)!=NULL)||
-  //     isSgVariableDeclaration(astNode)!=NULL ||
-  //     (isSgLocatedNode(astNode)->get_file_info()->isCompilerGenerated() ==
-  //     false)) ){
-
-  //       if( isSgInitializer(astNode) == NULL && (isSgExpression(astNode) !=
-  //       NULL | isSgExprStatement(astNode) != NULL ))
   if (isSgBinaryOp(astNode) != NULL || isSgConditionalExp(astNode) != NULL ||
       isSgExprListExp(astNode) != NULL) {
     // This is needed when the root node that is given the traversal is part of
@@ -148,30 +91,15 @@ LinearizeInheritedAttribute LinearizeAST::evaluateInheritedAttribute(
     nodes.push_back(astNode);
   }
 
-  //   }else
-  //       nodes.push_back(astNode);
-
-  // Do not register Binary ops
-
   return inheritedAttribute;
 }
-
-void LinearizeAST::printVector(std::vector<SgNode *> &vec) {
-
-  for (std::vector<SgNode *>::iterator it_beg = vec.begin();
-       it_beg != vec.end(); ++it_beg) {
-    std::cout << (*it_beg)->class_name() << std::endl;
-  };
-};
 
 std::vector<SgNode *> LinearizeAST::get_linearization() { return nodes; }
 
 std::vector<SgNode *> linearize_subtree(SgNode *node) {
-  // Build the inherited attribute
   LinearizeInheritedAttribute inheritedAttribute;
   LinearizeAST myTraversal;
 
-  // Call the traversal starting at the sageProject node of the AST
   myTraversal.traverse(node, inheritedAttribute);
   return myTraversal.get_linearization();
 }

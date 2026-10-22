@@ -394,7 +394,7 @@ void AstUtilInterface::AddOperatorSideEffectAnnotation(
     break;
   default:
     std::cerr << "Unexpected relation: " << relation << "\n";
-    assert(0);
+    ROSE_ABORT();
   }
   if (desc != 0 && !var.is_null()) {
     if (var.is_unknown() || var.is_unknown_reference() ||

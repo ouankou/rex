@@ -7,17 +7,11 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
   // This traversal will visit ALL nodes of the AST where as the other
   // attribute based traversals visit only the embedded tree within the AST.
 
-  // Initialize array to the address of the first element of the STL vector
-  // (which is guaranteed to be contiguous storage).
-  // $CLASSNAME objectArray [] = *(Memory_Block_List.begin());
      if ($CLASSNAME::pools.empty() == false)
         {
           ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
           unsigned char** pool_bases = $CLASSNAME::pools.data();
-       // DQ (10/26/2016): To avoid operations in the visit functions that might change the list,
-       // compute the list first and then call the visit function on each list element.
-
-       // printf ("Inside of $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal) \n");
+       // Save live slots before invoking visitors that may change the pools.
 
           struct NodeEntry {
             $CLASSNAME* node;
@@ -54,98 +48,44 @@ $CLASSNAME::traverseMemoryPoolNodes(ROSE_VisitTraversal & traversal)
              }
         }
 
-  // This should not be required since all previously static data members are
-  // now static pointers and ALL IR nodes are allocated from the IR memory pools.
-     $CLASS_SPECIFIC_STATIC_MEMBERS_USING_ROSE_VISIT
    }
 
 
 void
 $CLASSNAME::traverseMemoryPoolVisitorPattern ( ROSE_VisitorPattern & visitor )
    {
-  // This function traverses the memory pool for an IR node and
-  // calls the function to execute the visitor object.
+     class VisitorTraversal : public ROSE_VisitTraversal {
+       ROSE_VisitorPattern &visitor;
 
-  // Initialize array to the address of the first element of the STL vector
-  // (which is guarenteed to be contiguous storage).
-  // $CLASSNAME objectArray [] = *(Memory_Block_List.begin());
-     if ($CLASSNAME::pools.empty() == false)
-        {
-          ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
-          unsigned char** pool_bases = $CLASSNAME::pools.data();
+     public:
+       explicit VisitorTraversal(ROSE_VisitorPattern &visitor) : visitor(visitor) {}
+       void visit(SgNode *node) override { node->accept(visitor); }
+     } traversal(visitor);
 
-          for (unsigned int i=0; i < $CLASSNAME::pools.size(); i++)
-             {
-               unsigned char* base = pool_bases[i];
-               for (unsigned j=0; j < $CLASSNAME::pool_size; j++)
-                  {
-                    if ($CLASSNAME::pool_live_flags[i][j])
-                       {
-                         $CLASSNAME* current =
-                           reinterpret_cast<$CLASSNAME*>(base + j * sizeof($CLASSNAME));
-                      // printf ("Found a valid $CLASSNAME object in the memory pool %d at position %d \n",i,j);
-                      // printf ("Calling executeVisitorMemberFunction(visitor) \n");
-                         current->executeVisitorMemberFunction(visitor);
-                      // printf ("DONE: executeVisitorMemberFunction(visitor) \n");
-                       }
-                      else
-                       {
-                      // printf ("Found a INVALID $CLASSNAME object in the memory pool \n");
-                       }
-                  }
-             }
-        }
-
-  // This should not be required since all previously static data members are
-  // now static pointers and ALL IR nodes are allocated from the IR memory pools.
-     $CLASS_SPECIFIC_STATIC_MEMBERS_USING_VISITOR_PATTERN
+     traverseMemoryPoolNodes(traversal);
    }
 
 void
 $CLASSNAME::visitRepresentativeNode(ROSE_VisitTraversal & traversal)
    {
-  // This function visits only a single IR node of the memory pool.
-  // it is typically called once for each type of IR node within
-  // the automatically generated function: traverseRepresentativeNodes().
-
-  // Initialize array to the address of the first element of the STL vector
-  // (which is guarenteed to be contiguous storage).
-  // $CLASSNAME objectArray [] = *(Memory_Block_List.begin());
-     if ($CLASSNAME::pools.empty() == false)
+     ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
+     for (size_t i = 0; i < $CLASSNAME::pools.size(); ++i)
         {
-          ROSE_ASSERT($CLASSNAME::pool_live_flags.size() == $CLASSNAME::pools.size());
-          unsigned char** pool_bases = $CLASSNAME::pools.data();
-
-       // Iterate over the memory pools
-          bool done = false;
-          unsigned i=0;
-
-       // find the first valid IR node, call visit function, and then leave
-          while ( done == false && i < $CLASSNAME::pools.size() )
+          for (size_t j = 0; j < $CLASSNAME::pool_size; ++j)
              {
-           // objectArray[i] is a single memory pool
-               unsigned j=0;
-               while (done == false && j < $CLASSNAME::pool_size)
+               if ($CLASSNAME::pool_live_flags[i][j])
                   {
-                    if ($CLASSNAME::pool_live_flags[i][j])
-                       {
-                         unsigned char* base = pool_bases[i];
-                         $CLASSNAME* current =
-                           reinterpret_cast<$CLASSNAME*>(base + j * sizeof($CLASSNAME));
-                         traversal.visit(current);
-                         done = true;
-                       }
-                    j++;
+                    unsigned char* base = $CLASSNAME::pools[i];
+                    $CLASSNAME* current =
+                      reinterpret_cast<$CLASSNAME*>(base + j * sizeof($CLASSNAME));
+                    traversal.visit(current);
+                    return;
                   }
-               i++;
              }
-
         }
    }
 
 
-// DQ (6/7/2010): Change the return type to size_t to support larger number of IR nodes
-// using values that overflow signed values of int.
 size_t
 $CLASSNAME::numberOfNodes()
    {
@@ -169,20 +109,11 @@ $CLASSNAME::numberOfNodes()
              }
         }
 
-     $CLASS_SPECIFIC_STATIC_MEMBERS_MEMORY_USED
-
      return count;
    }
 
-// DQ (6/7/2010): Change the return type to size_t to support larger number of IR nodes
-// using values that overflow signed values of int.
 size_t
 $CLASSNAME::memoryUsage()
    {
-  // This function is required because we need the class name as a type when we call sizeof
-  // There might be another way to implement this if we have a traversal that only called a
-  // representative object (one call for each type of Sage IIIIR node).
-     size_t memory = numberOfNodes() * sizeof($CLASSNAME);
-
-     return memory;
+     return numberOfNodes() * sizeof($CLASSNAME);
    }

@@ -90,7 +90,8 @@ SgModuleStatement *buildModule(Fixture &fixture, const SgName &name) {
 
 SgOmpParallelStatement *buildOmpParallel(Fixture &fixture) {
   SgBasicBlock *body = SageBuilder::buildBasicBlock();
-  SgOmpParallelStatement *parallel = new SgOmpParallelStatement(body);
+  SgOmpParallelStatement *parallel =
+      new SgOmpParallelStatement(body, new SgOmpClauseList());
   body->set_parent(parallel);
   ROSE_ASSERT(parallel->get_clause_list() != nullptr);
   parallel->get_clause_list()->set_parent(parallel);
@@ -183,7 +184,7 @@ int main(int argc, char **argv) {
         module->set_fortran_submodule_parent(SgName("ancestor:parent:extra"));
       }
     }
-    fixture.fortran.unparseModuleStmt(module, fixture.info);
+    fixture.fortran.unparseLanguageSpecificStatement(module, fixture.info);
     return 0;
   }
 
@@ -274,7 +275,7 @@ int main(int argc, char **argv) {
   }
 
   if (mode == "openmp-explicit-end-unsupported") {
-    SgOmpFlushStatement *flush = new SgOmpFlushStatement();
+    SgOmpFlushStatement *flush = new SgOmpFlushStatement(new SgOmpClauseList());
     ROSE_ASSERT(flush->get_clause_list() != nullptr);
     flush->get_clause_list()->set_parent(flush);
     SageInterface::setSourcePositionForTransformation(flush);
@@ -291,8 +292,8 @@ int main(int argc, char **argv) {
 
   if (mode == "openmp-spelling-missing" || mode == "openmp-spelling-invalid") {
     SgOmpTargetParallelForStatement *directive =
-        new SgOmpTargetParallelForStatement(
-            static_cast<SgStatement *>(nullptr));
+        new SgOmpTargetParallelForStatement(static_cast<SgStatement *>(nullptr),
+                                            new SgOmpClauseList());
     if (mode == "openmp-spelling-invalid") {
       directive->set_omp_fortran_spelling(
           static_cast<SgStatement::omp_fortran_spelling_enum>(999));
@@ -332,13 +333,13 @@ int main(int argc, char **argv) {
   }
 
   SgModuleStatement *module = buildModule(fixture, SgName("plain_module"));
-  fixture.fortran.unparseModuleStmt(module, fixture.info);
+  fixture.fortran.unparseLanguageSpecificStatement(module, fixture.info);
   fixture.unparser.cur.insert_newline(1);
 
   SgModuleStatement *submodule = buildModule(fixture, SgName("child_module"));
   submodule->set_fortran_module_kind(SgModuleStatement::e_fortran_submodule);
   submodule->set_fortran_submodule_parent(SgName("ancestor:parent"));
-  fixture.fortran.unparseModuleStmt(submodule, fixture.info);
+  fixture.fortran.unparseLanguageSpecificStatement(submodule, fixture.info);
   fixture.unparser.cur.insert_newline(1);
 
   SgBasicBlock *block =
@@ -383,7 +384,8 @@ int main(int argc, char **argv) {
   fixture.fortran.unparsePragmaDeclStmt(vendor_pragma, fixture.info);
 
   SgOmpTargetParallelForStatement *do_directive =
-      new SgOmpTargetParallelForStatement(static_cast<SgStatement *>(nullptr));
+      new SgOmpTargetParallelForStatement(static_cast<SgStatement *>(nullptr),
+                                          new SgOmpClauseList());
   do_directive->set_omp_fortran_spelling(
       SgStatement::e_omp_fortran_spelling_do);
   {

@@ -26,19 +26,21 @@ int main(int argc, char **argv) {
     if (SgFoldExpression *fold = isSgFoldExpression(node)) {
       SgType *type = requireExactType(fold);
       ROSE_ASSERT(fold->get_expression_type() == type);
-      ROSE_ASSERT(isSgNonrealType(type) != nullptr);
+      ROSE_ASSERT(type == SgTypeDependent::createType());
       ROSE_ASSERT(fold->get_operands() != nullptr);
       ROSE_ASSERT(fold->get_operands()->get_parent() == fold);
-      ROSE_ASSERT(!fold->get_operator_token().empty());
+      ROSE_ASSERT(fold->get_operator_kind() !=
+                  SgFoldExpression::e_fold_operator_unspecified);
       ++foldCount;
     }
 
     if (SgPackExpansionExpr *pack = isSgPackExpansionExpr(node)) {
       SgType *type = requireExactType(pack);
       ROSE_ASSERT(pack->get_expression_type() == type);
-      ROSE_ASSERT(isSgNonrealType(type) != nullptr);
+      ROSE_ASSERT(type == SgTypeDependent::createType());
       ROSE_ASSERT(pack->get_pattern_expression() != nullptr);
       ROSE_ASSERT(pack->get_pattern_expression()->get_parent() == pack);
+      ROSE_ASSERT(pack->get_pattern_expression()->get_type() == type);
       ++packCount;
     }
 

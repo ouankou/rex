@@ -66,7 +66,7 @@ private:
   virtual Stmt x_eq_y(const std::string &x, const std::string &y) {
     if (x == "" || y == "") {
       std::cerr << "x=" << x << "; y=" << y << "\n";
-      assert(0);
+      ROSE_ASSERT(false);
     }
     std::cout << stmtIndex << ":" << x << "=" << y << ";\n";
     return (void *)stmtIndex++;

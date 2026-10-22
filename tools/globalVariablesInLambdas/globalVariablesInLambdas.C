@@ -1,221 +1,124 @@
 // Author: Dan Quinlan
 
-// Example program to report global variables in lambda functions or anywhere in normal functions.
+// Report global variables referenced in lambda functions.
 
 #include "rose.h"
 
-// Inherited attribute (see ROSE Tutorial (Chapter 9)).
-class InheritedAttribute
-   {
-     public:
-          bool inLambdaFunction;
-          bool parentConstraintSatisfied;
-          InheritedAttribute();
-   };
+struct InheritedAttribute {
+  bool inLambdaFunction = false;
+  SgFunctionDeclaration *outerFunction = nullptr;
+};
 
-// Constructor (not really needed)
-InheritedAttribute::InheritedAttribute()
-   {
-     inLambdaFunction          = false;
-     parentConstraintSatisfied = false;
-   }
+struct SynthesizedAttribute {};
 
-// Synthesized attribute (see ROSE Tutorial (Chapter 9)).
-class SynthesizedAttribute
-   {
-     public:
-          SynthesizedAttribute();
-   };
-
-// Constructor
-SynthesizedAttribute::SynthesizedAttribute()
-   {
-   }
-
-class Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,SynthesizedAttribute>
-   {
-     public:
-          typedef std::set<SgInitializedName*> globalVariableContainerType;
-          globalVariableContainerType globalVariables;
-
-          bool onlyInLambdaFunctions;
-
-       // We need to keep track of all functions that we enter to count variables so that we 
-       // don't report variable usage on the grainularity of the lambda fuinctions themselves.
-       // We are calling these "outerFunctions" for now.
-          typedef std::set<SgFunctionDeclaration*> outerFunctionsContainerType;
-          outerFunctionsContainerType outerFunctions;
-
-          Traversal();
-          Traversal(bool input_onlyInLambdaFunctions);
-
-       // Functions required
-          InheritedAttribute   evaluateInheritedAttribute   ( SgNode* astNode, InheritedAttribute inheritedAttribute );
-          SynthesizedAttribute evaluateSynthesizedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute, SubTreeSynthesizedAttributes synthesizedAttributeList );
-   };
-
+class Traversal : public SgTopDownBottomUpProcessing<InheritedAttribute,
+                                                     SynthesizedAttribute> {
+public:
+  std::set<SgInitializedName *> globalVariables;
+  InheritedAttribute
+  evaluateInheritedAttribute(SgNode *astNode,
+                             InheritedAttribute inheritedAttribute);
+  SynthesizedAttribute evaluateSynthesizedAttribute(
+      SgNode *astNode, InheritedAttribute inheritedAttribute,
+      SubTreeSynthesizedAttributes synthesizedAttributeList);
+};
 
 InheritedAttribute
-Traversal::evaluateInheritedAttribute ( SgNode* astNode, InheritedAttribute inheritedAttribute )
-   {
-     SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(astNode);
-     if (functionDeclaration != NULL && functionDeclaration->isCompilerGenerated() == true)
-       {
-      // We we only consider lambda functions, then we need the functionDeclaration.
-         if (onlyInLambdaFunctions == false)
-            {
-              functionDeclaration = NULL;
-            }
-       }
+Traversal::evaluateInheritedAttribute(SgNode *astNode,
+                                      InheritedAttribute inheritedAttribute) {
+  SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(astNode);
+  if (functionDeclaration != nullptr) {
+    if (SageInterface::isLambdaFunction(functionDeclaration))
+      inheritedAttribute.inLambdaFunction = true;
+    else if (!inheritedAttribute.inLambdaFunction) {
+      auto *classScope = isSgClassDefinition(functionDeclaration->get_scope());
+      if (classScope == nullptr ||
+          classScope->get_declaration()->get_class_type() !=
+              SgClassDeclaration::e_lambda_closure)
+        inheritedAttribute.outerFunction = functionDeclaration;
+    }
+  }
 
-     if (onlyInLambdaFunctions == false)
-        {
-       // We want to catch all global variable references in the outer function.
-          if (inheritedAttribute.parentConstraintSatisfied == false && functionDeclaration != NULL)
-             {
-               inheritedAttribute.parentConstraintSatisfied = true;
+  if (inheritedAttribute.inLambdaFunction) {
+    SgVarRefExp *varRefExp = isSgVarRefExp(astNode);
 
-            // Save the asociated function declaration
-               SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(astNode);
-               outerFunctions.insert(functionDeclaration);
-             }
-        }
-       else
-        {
-       // We want to catch only global variable references in the lambda functions for every outer function.
-          if (inheritedAttribute.inLambdaFunction == false && inheritedAttribute.parentConstraintSatisfied == false && functionDeclaration != NULL)
-             {
-            // Save the asociated function declaration
-               outerFunctions.insert(functionDeclaration);
-             }
+    if (varRefExp != NULL) {
+      SgVariableSymbol *variableSymbol = varRefExp->get_symbol();
+      ROSE_ASSERT(variableSymbol != NULL);
+      SgInitializedName *initializedName = variableSymbol->get_declaration();
+      ROSE_ASSERT(initializedName != NULL);
 
-          if (inheritedAttribute.inLambdaFunction == false && inheritedAttribute.parentConstraintSatisfied == false && astNode->variantT() == V_SgLambdaExp)
-             {
-               inheritedAttribute.inLambdaFunction = true;
-             }
+      // Check that this is a variable from global scope.
+      SgScopeStatement *scope = initializedName->get_scope();
+      if (isSgGlobal(scope) != NULL) {
+        globalVariables.insert(initializedName);
+      }
+    }
 
-          if (inheritedAttribute.inLambdaFunction == true && inheritedAttribute.parentConstraintSatisfied == false && functionDeclaration != NULL)
-             {
-               inheritedAttribute.parentConstraintSatisfied = true;
-             }
-        }
+    // Look for declarations of arrays and check the array bounds for global
+    // variables.
+    SgInitializedName *initializedName = isSgInitializedName(astNode);
+    if (initializedName != NULL) {
+      // Need to look for cases of typedefed types.
+      SgType *type = initializedName->get_type();
+      ROSE_ASSERT(type != NULL);
 
-     if (inheritedAttribute.parentConstraintSatisfied == true)
-        {
-          SgVarRefExp* varRefExp = isSgVarRefExp(astNode);
+      SgArrayType *arrayType = isSgArrayType(type);
+      if (arrayType != NULL) {
+        SgExpression *indexExpression = arrayType->get_index();
 
-          if (varRefExp != NULL)
-             {
-               SgVariableSymbol* variableSymbol = varRefExp->get_symbol();
-               ROSE_ASSERT(variableSymbol != NULL);
-               SgInitializedName* initializedName = variableSymbol->get_declaration();
-               ROSE_ASSERT(initializedName != NULL);
+        Traversal nestedTraversal;
+        nestedTraversal.traverse(indexExpression, inheritedAttribute);
 
-            // Check that this is a variable from global scope.
-               SgScopeStatement* scope = initializedName->get_scope();
-               if (isSgGlobal(scope) != NULL)
-                  {
-                 // Save in the global variable list.
-                    globalVariables.insert(initializedName);
-                  }
-             }
+        globalVariables.insert(nestedTraversal.globalVariables.begin(),
+                               nestedTraversal.globalVariables.end());
+      }
+    }
+  }
 
-       // Look for declarations of arrays and check the array bounds for global variables.
-          SgInitializedName* initializedName = isSgInitializedName(astNode);
-          if (initializedName != NULL)
-             {
-            // Need to look for cases of typedefed types.
-               SgType* type = initializedName->get_type();
-               ROSE_ASSERT(type != NULL);
+  return inheritedAttribute;
+}
 
-               SgArrayType* arrayType = isSgArrayType(initializedName->get_type());
-               if (arrayType != NULL)
-                  {
-                    SgExpression* indexExpression = arrayType->get_index();
+SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
+    SgNode *astNode, InheritedAttribute inheritedAttribute,
+    SynthesizedAttributesList /* childAttributes */) {
+  SgFunctionDeclaration *functionDeclaration = isSgFunctionDeclaration(astNode);
+  if (functionDeclaration != nullptr &&
+      functionDeclaration == inheritedAttribute.outerFunction) {
+    if (globalVariables.empty() == false) {
+      printf("file: %s function: %s global variables: ",
+             functionDeclaration->get_file_info()->get_filenameString().c_str(),
+             functionDeclaration->get_name().str());
+      for (SgInitializedName *initializedName : globalVariables) {
+        printf("%s ", initializedName->get_name().str());
+      }
+      printf("\n");
 
-                 // Use the same constraint
-                    Traversal nestedTraversal(onlyInLambdaFunctions);
+      globalVariables.clear();
+    }
+  }
 
-                 // Call the traversal starting at the project (root) node of the AST
-                    nestedTraversal.traverse(indexExpression,inheritedAttribute);
+  return {};
+}
 
-                    if (nestedTraversal.globalVariables.empty() == false)
-                       {
-                      // Copy the globalVariables assocoated with the nestedTraversal of the
-                      // array size declaration into the globalVariables of the current traversal.
-                         globalVariables.insert(nestedTraversal.globalVariables.begin(),nestedTraversal.globalVariables.end());
-                       }
+int main(int argc, char *argv[]) {
+  SgProject *project = frontend(argc, argv);
+  ROSE_ASSERT(project != NULL);
+  if (project->get_frontendErrorCode() != 0) {
+    const int status = frontendExitStatus(project);
+    SageInterface::deleteAST(project,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
+    return status;
+  }
 
-                  }
-             }
-        }
+  InheritedAttribute inheritedAttribute;
 
-  // This will call the default copy constructor for InheritedAttribute.
-     return inheritedAttribute;
-   }
+  Traversal astTraversal;
 
-   SynthesizedAttribute Traversal::evaluateSynthesizedAttribute(
-       SgNode *astNode, InheritedAttribute /* inheritedAttribute */,
-       SynthesizedAttributesList /* childAttributes */) {
-     SynthesizedAttribute localResult;
+  astTraversal.traverseInputFiles(project, inheritedAttribute);
 
-  // printf ("evaluateSynthesizedAttribute(): astNode = %p = %s \n",astNode,astNode->class_name().c_str());
-
-     SgFunctionDeclaration* functionDeclaration = isSgFunctionDeclaration(astNode);
-     if (functionDeclaration != NULL && outerFunctions.find(functionDeclaration) != outerFunctions.end())
-        {
-       // Report the global variables referenced for the function here.
-          if (globalVariables.empty() == false)
-             {
-               printf ("file: %s function: %s global variables: ",functionDeclaration->get_file_info()->get_filenameString().c_str(),functionDeclaration->get_name().str());
-               for (globalVariableContainerType::iterator i = globalVariables.begin(); i != globalVariables.end(); i++)
-                  {
-                    SgInitializedName* initializedName = *i;
-                    printf ("%s ",initializedName->get_name().str());
-                  }
-               printf ("\n");
-
-            // Empty the set.
-               globalVariables.clear();
-             }
-        }
-
-     return localResult;
-   }
-
-Traversal::Traversal()
-   {
-     onlyInLambdaFunctions = false;
-   }
-
-Traversal::Traversal(bool input_onlyInLambdaFunctions)
-   {
-     onlyInLambdaFunctions = input_onlyInLambdaFunctions;
-   }
-
-int
-main ( int argc, char* argv[] )
-   {
-  // Build the abstract syntax tree
-     SgProject* project = frontend(argc,argv);
-     ROSE_ASSERT (project != NULL);
-
-  // Build the inherited attribute
-     InheritedAttribute inheritedAttribute;
-
-  // Case we want to detect:
-  //   1) Use of global variables in all lmbda functions in each function.
-  //   2) Use of global variables in all functions (independent of use of lambda functions).
-
-     // DQ (3/30/2017): Use the default that matches the filename.
-     bool onlyInLambdaFunctions = true;
-
-     // Define the traversal
-     Traversal astTraversal(onlyInLambdaFunctions);
-
-  // Call the traversal starting at the project (root) node of the AST
-     astTraversal.traverseInputFiles(project,inheritedAttribute);
-
-  // return 0;
-     return backendCompilesUsingOriginalInputFile(project);
-   }
+  const int status = backendCompilesUsingOriginalInputFile(project);
+  SageInterface::deleteAST(project,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  return status;
+}

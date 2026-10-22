@@ -99,14 +99,16 @@ while (@ARGV>0) {
 sub fix {
   my($filename) = @_;
   $Text::Tabs::tabstop = $do_fix;
-  open FILE, "<", $filename or return "$0: $filename: $!\n";
-  my @lines = expand(<FILE>);
-  close FILE;
-  rename $filename, "$filename~"; # ignore failure
-  open FILE, ">", $filename or return "$0: $filename: $!\n";
-  print FILE @lines;
-  close FILE;
-  return undef;
+  open FILE, "<", $filename or die "$0: cannot open $filename: $!\n";
+  local $! = 0;
+  my @lines = <FILE>;
+  die "$0: cannot read $filename: $!\n" if $!;
+  close FILE or die "$0: cannot close $filename: $!\n";
+  rename $filename, "$filename~"
+      or die "$0: cannot back up $filename: $!\n";
+  open FILE, ">", $filename or die "$0: cannot write $filename: $!\n";
+  print FILE expand(@lines) or die "$0: cannot write $filename: $!\n";
+  close FILE or die "$0: cannot close $filename: $!\n";
 }
 
 # Process each specified file and/or directory, provided the file has a
@@ -115,39 +117,35 @@ my $nfail=0;
 my $files = FileLister->new(@ARGV);
 while (my $filename = $files->next_file) {
   next unless $filename =~ /\.(h|hh|hpp|c|C|cpp|yy|ll?)$/;
-  next if $filename =~ /\/legacy frontend\//; # We don't own legacy frontend sources and therefore can't enforce style constraints
   next if is_disabled($filename);
 
-  if (open FILE, "<", $filename) {
-    my($has_tabs,$linenum);
-    while (<FILE>) {
-      $linenum++;
-      if (/\t/) {
-	$has_tabs = 1;
-	if ($do_verbose && !$do_fix) {
-	  print STDERR "$filename:$linenum: line contains ASCII HT (tab) characters\n";
-	} else {
-	  last;
-	}
+  open FILE, "<", $filename or die "$0: cannot open $filename: $!\n";
+  local $! = 0;
+  my($has_tabs,$linenum);
+  while (<FILE>) {
+    $linenum++;
+    if (/\t/) {
+      $has_tabs = 1;
+      if ($do_verbose && !$do_fix) {
+        print STDERR "$filename:$linenum: line contains ASCII HT (tab) characters\n";
+      } else {
+        last;
       }
     }
-    close FILE;
+  }
+  die "$0: cannot read $filename: $!\n" if $!;
+  close FILE or die "$0: cannot close $filename: $!\n";
 
-    # Change tabs to spaces?
-    if ($has_tabs) {
-      if ($do_fix) {
-	my $error = fix $filename;
-	$has_tabs = 0 unless $error;
-      }
-    }
+  if ($has_tabs && $do_fix) {
+    fix $filename;
+    $has_tabs = 0;
+  }
 
-    # Errors
-    if ($has_tabs) {
-      $nfail++;
-      unless ($do_verbose) {
-	print $desc if 1==$nfail;
-	print "    $filename\n";
-      }
+  if ($has_tabs) {
+    $nfail++;
+    unless ($do_verbose) {
+      print $desc if 1==$nfail;
+      print "    $filename\n";
     }
   }
 }

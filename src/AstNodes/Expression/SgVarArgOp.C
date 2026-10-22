@@ -1,7 +1,5 @@
 #include "sage3basic.h"
 
-// This function helps to provide a uniform interface even though the type is
-// help in a field called p_expression_type.
 SgType *SgVarArgOp::get_type() const {
   if (p_expression_type == nullptr ||
       isSgTypeUnknown(p_expression_type) != nullptr ||
@@ -15,19 +13,23 @@ SgType *SgVarArgOp::get_type() const {
 }
 
 int SgVarArgOp::replace_expression(SgExpression *o, SgExpression *n) {
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
-
-  if (get_operand_expr() == o) {
-    set_operand_expr(n);
-    return 1;
+  if (get_operand_expr() != o) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[vararg-replacement-edge]: SgVarArgOp does not "
+            "own the requested old operand\n");
+    ROSE_ABORT();
   }
+  ROSE_ASSERT(o->get_parent() == this);
+  if (o == n)
+    return 1;
 
-  fprintf(stderr,
-          "REX_AST_INVARIANT[vararg-replacement-edge]: SgVarArgOp does not "
-          "own the requested old operand\n");
-  ROSE_ABORT();
+  ROSE_ASSERT(n->get_parent() == nullptr);
+  set_operand_expr(n);
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  return 1;
 }
 
 int SgVarArgOp::get_name_qualification_length() const {

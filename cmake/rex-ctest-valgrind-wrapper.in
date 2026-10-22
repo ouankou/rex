@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# EXT-PERL-INTERPRETER-CLEANUP: docs/codebase-audit/external-exceptions.md.
+# Use Perl's documented full teardown for RTH/policy interpreters and their
+# children. Releasing the arenas keeps their allocations visible to Memcheck
+# without process-wide Perl leak suppressions.
+export PERL_DESTRUCT_LEVEL=2
+
 real_valgrind="@ROSE_REAL_VALGRIND@"
 configured_compilers=(
   "@ROSE_CTEST_MEMCHECK_C_COMPILER@"
@@ -51,98 +57,153 @@ for configured_compiler in "${configured_compilers[@]}"; do
   fi
 done
 
+# CTest supplies one fixed filename per test. Traced processes reopen log files
+# with truncation, including an exec that keeps the same PID (%p and %n do not
+# preserve the earlier report). Use a FIFO as Valgrind's log destination and one
+# reader for CTest's file, so every fork/exec writes to a continuous stream.
+# Explicit %p patterns remain direct Valgrind requests outside this CTest path.
+ctest_log=""
+report_directory=""
+memory_error_status=1
+for (( index = 0; index < cmd_index; ++index )); do
+  if [[ "${args[index]}" == --error-exitcode=* ]]; then
+    requested_status="${args[index]#--error-exitcode=}"
+    if [[ ! "${requested_status}" =~ ^[0-9]{1,3}$ ]] ||
+       ((10#${requested_status} < 1 || 10#${requested_status} > 255)); then
+      echo "CTest requires a Valgrind error exit code between 1 and 255" >&2
+      exit 1
+    fi
+    memory_error_status=$((10#${requested_status}))
+  fi
+  if [[ "${args[index]}" == --log-file=* ]]; then
+    if [[ -n "${ctest_log}" ]]; then
+      echo "multiple Valgrind log filenames at the CTest boundary" >&2
+      exit 1
+    fi
+    ctest_log="${args[index]#--log-file=}"
+    if [[ -z "${ctest_log}" ]]; then
+      echo "empty Valgrind log filename at the CTest boundary" >&2
+      exit 1
+    fi
+    if [[ "${ctest_log}" != *%p* ]]; then
+      report_directory="$(mktemp -d -- "${ctest_log}.stream.XXXXXX")"
+      args[index]="--log-file=${report_directory}/report.pipe"
+    fi
+  fi
+done
+
+if [[ -n "${report_directory}" ]]; then
+  marker_index=${cmd_index}
+  if [[ "${args[cmd_index - 1]}" == -- ]]; then
+    marker_index=$((cmd_index - 1))
+  fi
+  args=("${args[@]:0:marker_index}"
+    "--error-markers=REX_MEMCHECK_ERROR_BEGIN,REX_MEMCHECK_ERROR_END"
+    "${args[@]:marker_index}")
+  cmd_index=$((cmd_index + 1))
+fi
+
+run_checked_command() {
+  if [[ -z "${report_directory}" ]]; then
+    exec "$@"
+  fi
+
+  local report_fd keepalive_fd reader_pid
+  exec {report_fd}>"${ctest_log}"
+  mkfifo -- "${report_directory}/report.pipe"
+  cat <"${report_directory}/report.pipe" >&"${report_fd}" &
+  reader_pid=$!
+  exec {report_fd}>&-
+  # Keep the reader alive between sequential RTH commands and across exec.
+  # Only this wrapper owns the keepalive; traced processes open the FIFO itself.
+  exec {keepalive_fd}>"${report_directory}/report.pipe"
+  local status=0
+  "$@" {keepalive_fd}>&- || status=$?
+  exec {keepalive_fd}>&-
+  local reader_status=0
+  wait "${reader_pid}" || reader_status=$?
+  rm -- "${report_directory}/report.pipe"
+  # EXT-VALGRIND-REPORT-ARTIFACTS: an instrumented abort may leave a core
+  # beside its log destination. Retain diagnostic artifacts and preserve the
+  # command's failure status; only the FIFO itself belongs to stream cleanup.
+  # See docs/codebase-audit/external-exceptions.md.
+  (
+    shopt -s nullglob dotglob
+    artifacts=("${report_directory}"/*)
+    if ((${#artifacts[@]})); then
+      echo "Valgrind diagnostic artifacts retained in ${report_directory}" >&2
+    else
+      rmdir -- "${report_directory}"
+    fi
+  )
+  if ((reader_status != 0)); then
+    echo "Valgrind report collection failed: ${reader_status}" >&2
+    exit "${reader_status}"
+  fi
+  if [[ ! -s "${ctest_log}" ]]; then
+    echo "Valgrind produced no report: ${ctest_log}" >&2
+    if ((status == 0)); then
+      exit 1
+    fi
+    exit "${status}"
+  fi
+  # CTest can report memory defects yet exit zero when the test command
+  # succeeds. A parent may also ignore its child's error exit status. Gate on
+  # the complete report stream, while preserving an existing command failure.
+  # Valgrind emits error markers immediately: an exec into an excluded compiler
+  # can omit the final ERROR SUMMARY, but must not discard earlier errors.
+  if ((status == 0)); then
+    local report_status=0
+    # Another process can be partway through a long line when this complete
+    # marker arrives. Its PID prefix need not start the combined stream's line.
+    grep -Eq '==[^=]+== REX_MEMCHECK_ERROR_BEGIN$' "${ctest_log}" || report_status=$?
+    case "${report_status}" in
+      0) status=${memory_error_status};;
+      1) ;;
+      *) exit "${report_status}";;
+    esac
+  fi
+  exit "${status}"
+}
+
 if [[ "${tool}" == */rth_run.pl ]]; then
+  rth_trace_children=no
+  for option in "${args[@]:0:cmd_index}"; do
+    if [[ "$option" == --trace-children=* ]]; then
+      rth_trace_children="${option#--trace-children=}"
+    fi
+  done
+  if [[ "$rth_trace_children" != yes ]]; then
+    echo "RTH Memcheck requires --trace-children=yes" >&2
+    exit 1
+  fi
   rth_timeout_scale="@ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE@"
   if [[ -z "${ROSE_TEST_TIMEOUT_SCALE:-}" && "${rth_timeout_scale}" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
     export ROSE_TEST_TIMEOUT_SCALE="${rth_timeout_scale}"
   fi
-  valgrind_words=("${real_valgrind}" "${args[@]:0:cmd_index}")
-  valgrind_command=""
-  printf -v valgrind_command "%q " "${valgrind_words[@]}"
-  valgrind_command="${valgrind_command% }"
-  exec "${tool}" "VALGRIND=${valgrind_command}" "${args[@]:cmd_index + 1}"
+  # Instrument the harness interpreter and trace every command it launches.
+  # Some RTH configs omit the historical ${VALGRIND} placeholder entirely;
+  # setting that variable alone leaves those tests uninstrumented. Empty it
+  # explicitly so configs that do use it do not nest Valgrind instances.
+  args+=("VALGRIND=")
 fi
 
-# Valgrind executes its primary program itself instead of asking the kernel to
-# dispatch an executable script.  On Ubuntu 26.04, passing an
-# `#!/usr/bin/env bash` script directly therefore gives the Rust coreutils
-# multicall binary Valgrind's synthetic argv[0] (`memcheck-<arch>-linux`).  The
-# multicall dispatcher rejects that name before the script can run.  Resolve
-# the same shebang boundary explicitly so that Valgrind's primary executable
-# is the real interpreter and both the script and its traced children remain
-# instrumented.
+# CMake requires standalone GNU env; Valgrind handles script dispatch directly.
+# Reject a missing env command here because env would re-execute the script.
 if [[ -n "${tool_path}" && -f "${tool_path}" ]]; then
-  shebang_line=""
-  if ! IFS= read -r shebang_line <"${tool_path}" &&
-     [[ -z "${shebang_line}" ]]; then
-    echo "cannot read possible executable script: ${tool_path}" >&2
-    exit 1
-  fi
-
-  if [[ "${shebang_line}" == '#!'* ]]; then
-    shebang_spec="${shebang_line:2}"
-    if [[ "${shebang_spec}" == *$'\r'* ]]; then
-      echo "executable script has a carriage return in its shebang: ${tool_path}" >&2
+  script_prefix="$(head -c 2 -- "${tool_path}")"
+  if [[ "${script_prefix}" == '#!' ]]; then
+    shebang_line=""
+    if ! IFS= read -r shebang_line <"${tool_path}" &&
+       [[ -z "${shebang_line}" ]]; then
+      echo "cannot read executable script: ${tool_path}" >&2
       exit 1
     fi
-    while [[ "${shebang_spec}" =~ ^[[:blank:]] ]]; do
-      shebang_spec="${shebang_spec:1}"
-    done
-    while [[ "${shebang_spec}" =~ [[:blank:]]$ ]]; do
-      shebang_spec="${shebang_spec:0:${#shebang_spec} - 1}"
-    done
-    if [[ -z "${shebang_spec}" ]]; then
-      echo "executable script has an empty shebang interpreter: ${tool_path}" >&2
+    if [[ "${shebang_line}" =~ ^'#!'[[:blank:]]*/([^[:blank:]]*/)*env[[:blank:]]*$ ]]; then
+      echo "env shebang does not name an interpreter: ${tool_path}" >&2
       exit 1
     fi
-
-    shebang_interpreter="${shebang_spec%%[[:blank:]]*}"
-    shebang_argument="${shebang_spec:${#shebang_interpreter}}"
-    while [[ "${shebang_argument}" =~ ^[[:blank:]] ]]; do
-      shebang_argument="${shebang_argument:1}"
-    done
-    if [[ "${shebang_interpreter}" != /* ]]; then
-      echo "executable script shebang interpreter is not absolute: ${tool_path}: ${shebang_interpreter}" >&2
-      exit 1
-    fi
-    if [[ ! -x "${shebang_interpreter}" ]]; then
-      echo "executable script shebang interpreter is missing or not executable: ${tool_path}: ${shebang_interpreter}" >&2
-      exit 1
-    fi
-
-    interpreter_words=()
-    if [[ "$(basename -- "${shebang_interpreter}")" == "env" ]]; then
-      if [[ -z "${shebang_argument}" ]]; then
-        echo "env shebang does not name an interpreter: ${tool_path}" >&2
-        exit 1
-      fi
-      if [[ "${shebang_argument}" =~ [[:blank:]] ]]; then
-        echo "env shebang must name exactly one interpreter without options: ${tool_path}: ${shebang_argument}" >&2
-        exit 1
-      fi
-      if [[ "${shebang_argument}" == -* ||
-            "${shebang_argument}" == *=* ]]; then
-        echo "env shebang options and assignments are unsupported at the Valgrind boundary: ${tool_path}: ${shebang_argument}" >&2
-        exit 1
-      fi
-      resolved_interpreter="$(command -v -- "${shebang_argument}" 2>/dev/null || true)"
-      if [[ -z "${resolved_interpreter}" || ! -x "${resolved_interpreter}" ]]; then
-        echo "env shebang interpreter is missing or not executable: ${tool_path}: ${shebang_argument}" >&2
-        exit 1
-      fi
-      interpreter_words+=("$(readlink -f -- "${resolved_interpreter}")")
-    else
-      interpreter_words+=("$(readlink -f -- "${shebang_interpreter}")")
-      if [[ -n "${shebang_argument}" ]]; then
-        # Linux passes the entire optional shebang argument as one argv entry.
-        interpreter_words+=("${shebang_argument}")
-      fi
-    fi
-
-    exec "${real_valgrind}" "${args[@]:0:cmd_index}" \
-      "${interpreter_words[@]}" "${tool_path}" \
-      "${args[@]:cmd_index + 1}"
   fi
 fi
 
-exec "${real_valgrind}" "$@"
+run_checked_command "${real_valgrind}" "${args[@]}"

@@ -1,4 +1,6 @@
 #include "sage3basic.h"
+
+#include "manglingSupport.h"
 #include "sageInterface.h"
 
 #include "AstInterface.h"
@@ -13,26 +15,16 @@
 
 #include "ROSE_FALLTHROUGH.h"
 
-#include "astPostProcessing.h"
-
-#include "unparser.h"
-
-#include "unparser_opt.h"
+#include <algorithm>
+#include <charconv>
+#include <limits>
 
 #include <iostream>
 
-#include <stdexcept>
-
-#include <stdlib.h>
-
-#include <string.h>
-
-// jichi (9/29/2009): Add test for Fortran language
 #define IS_FORTRAN_LANGUAGE() SageInterface::is_Fortran_language()
 
 #define NEW_EXPR_STMT(stmt, exp)                                               \
   stmt = new SgExprStatement(GetFileInfo(), exp);                              \
-  exp->set_parent(stmt);                                                       \
   stmt->set_endOfConstruct(stmt->get_file_info())
 
 #define NEW_SYMBOL(sym, className, scope, name)                                \
@@ -46,11 +38,10 @@
 
 #define NEW_BLOCK1(block, stmt)                                                \
   NEW_BLOCK(block);                                                            \
-  block->append_statement(stmt);                                               \
-  stmt->set_parent(block)
+  block->append_statement(stmt)
 
 #define NEW_FUNCTION_REF(fr, fsym)                                             \
-  fr = new SgFunctionRefExp(GetFileInfo(), fsym);                              \
+  fr = new SgFunctionRefExp(GetFileInfo(), fsym, (fsym)->get_type());          \
   fr->set_endOfConstruct(fr->get_file_info())
 
 #define NEW_MFUNCTION_REF(fr, fsym)                                            \
@@ -68,23 +59,12 @@
   ROSE_ASSERT(fcall##_function_type->get_return_type() != nullptr);            \
   fcall = new SgFunctionCallExp(GetFileInfo(), fref, args,                     \
                                 fcall##_function_type->get_return_type());     \
-  fcall->set_endOfConstruct(fcall->get_file_info());                           \
-  fref->set_parent(fcall);                                                     \
-  args->set_parent(fcall)
+  fcall->set_endOfConstruct(fcall->get_file_info())
 
 #define NEW_VAR_INIT(init, var, exp)                                           \
   init = new SgAssignInitializer(GetFileInfo(), exp, var->get_type());         \
   init->set_endOfConstruct(init->get_file_info());                             \
-  exp->set_parent(init);                                                       \
-  var->set_initializer(init);                                                  \
-  exp->set_parent(init);                                                       \
-  init->set_parent(var)
-
-#define NEW_ASSIGN(exp, lhs, rhs)                                              \
-  exp = new SgAssignOp(GetFileInfo(), lhs, rhs, lhs->get_type());              \
-  exp->set_endOfConstruct(exp->get_file_info());                               \
-  lhs->set_parent(exp);                                                        \
-  rhs->set_parent(exp);
+  var->set_initializer(init)
 
 #define NEW_BIN_OP(op, className, lhs, rhs, result_type)                       \
   op = new className(GetFileInfo(), lhs, rhs, result_type);                    \
@@ -97,23 +77,16 @@
                    new SgBasicBlock(GetFileInfo()));                           \
   r->set_has_end_statement(true);                                              \
   r->set_endOfConstruct(r->get_file_info());                                   \
-  r->get_false_body()->set_endOfConstruct(r->get_file_info());                 \
-  cond->set_parent(r);                                                         \
-  tbody->set_parent(r);                                                        \
-  r->get_false_body()->set_parent(r)
+  r->get_false_body()->set_endOfConstruct(r->get_file_info())
 
 #define NEW_IF_ELSE(r, cond, tbody, fbody)                                     \
   r = new SgIfStmt(GetFileInfo(), cond, tbody, fbody);                         \
   r->set_has_end_statement(true);                                              \
-  r->set_endOfConstruct(r->get_file_info());                                   \
-  cond->set_parent(r);                                                         \
-  tbody->set_parent(r);                                                        \
-  fbody->set_parent(r)
+  r->set_endOfConstruct(r->get_file_info())
 
 namespace {
 DebugLog DebugVariable("-debugvariable");
 DebugLog DebugScope("-debugscope");
-DebugLog DebugDiff("-debugdiff");
 DebugLog DebugDecl("-debugdecl");
 static std::function<std::string(const SgFunctionDeclaration *)>
     function_name_mangling_;
@@ -246,27 +219,13 @@ SgNode *stripExactAddressOriginConversions(SgNode *expression,
 }
 } // namespace
 
-SgType *AstInterfaceImpl::GetTypeInt() {
-  static SgType *typeint = 0;
-  if (typeint == 0)
-    typeint = new SgTypeInt();
-  return typeint;
-}
+SgType *AstInterfaceImpl::GetTypeInt() { return SageBuilder::buildIntType(); }
 
 std::string StripGlobalQualifier(std::string name) {
   if (name.size() > 2 && name[0] == ':' && name[1] == ':') {
     return std::string(name.c_str() + 2);
   }
   return name;
-}
-
-std::string StripQualifier(std::string name) {
-  unsigned i = name.size();
-  for (; i > 0; --i) {
-    if (name[i - 1] == ':' && i > 1 && name[i - 2] == ':')
-      break;
-  }
-  return std::string(name.c_str() + i);
 }
 
 void AstInterface ::SetRoot(const AstNodePtr &root) {
@@ -322,17 +281,6 @@ bool DebugNewVar() {
   return r == 1;
 }
 
-bool DebugType() {
-  static int r = 0;
-  if (r == 0) {
-    if (CmdOptions::GetInstance()->HasOption("-debugtype"))
-      r = 1;
-    else
-      r = -1;
-  }
-  return r == 1;
-}
-
 bool DebugSymbol() {
   static int r = 0;
   if (r == 0) {
@@ -351,28 +299,22 @@ Sg_File_Info *GetFileInfo() {
   return Sg_File_Info::generateDefaultFileInfoForTransformationNode();
 }
 
-SgScopeStatement *GetNullScope() {
-  static SgGlobal *global = 0;
-  if (global == 0) {
-    global = new SgGlobal(GetFileInfo());
-  }
-  return global;
-}
-
 inline bool HasNullParent(SgNode *n) {
-  return n->get_parent() == 0 || n->get_parent() == GetNullScope();
+  return n != nullptr && n->get_parent() == nullptr;
 }
 
-inline SgVarRefExp *ToVarRef(AstInterfaceImpl &fa, SgNode *exp) {
+inline SgVarRefExp *ToVarRef(SgNode *exp) {
   switch (exp->variantT()) {
   case V_SgVarRefExp:
     return isSgVarRefExp(exp);
   case V_SgInitializedName: {
     SgInitializedName *var = isSgInitializedName(exp);
-    SgName varname = var->get_name();
-    SgNode *r = fa.CreateVarRef(std::string(varname.str()), exp);
-    r->set_parent(exp->get_parent());
-    return isSgVarRefExp(r);
+    auto *scope = var->get_scope();
+    ASSERT_not_null(scope);
+    auto *symbol = isSgVariableSymbol(scope->find_symbol_from_declaration(var));
+    ASSERT_not_null(symbol);
+    ASSERT_require(symbol->get_declaration() == var);
+    return SageBuilder::buildVarRefExp(symbol);
   }
   default:
     break;
@@ -380,8 +322,8 @@ inline SgVarRefExp *ToVarRef(AstInterfaceImpl &fa, SgNode *exp) {
   return 0;
 }
 
-inline SgExpression *ToExpression(AstInterfaceImpl &fa, SgNode *s) {
-  SgExpression *exp = ToVarRef(fa, s);
+inline SgExpression *ToExpression(SgNode *s) {
+  SgExpression *exp = ToVarRef(s);
   if (exp == 0)
     exp = isSgExpression(s);
   return exp;
@@ -410,38 +352,13 @@ SgStatement *ToStatement(SgNode *_stmts) {
 }
 
 SgClassDefinition *GetClassDefn(SgClassDeclaration *classDecl) {
-  SgDeclarationStatement *decl = classDecl->get_definingDeclaration();
-  assert(decl != 0);
-  classDecl = isSgClassDeclaration(decl);
-  assert(classDecl != 0);
-  SgClassDefinition *classDefn = classDecl->get_definition();
-  return classDefn;
-}
-
-SgClassDefinition *GetClassDefinition(SgNamedType *classtype) {
-  if (classtype->variantT() == V_SgTypedefType) {
-    return GetClassDefinition(
-        isSgNamedType(isSgTypedefType(classtype)->get_base_type()));
-  }
-  SgDeclarationStatement *decl = classtype->get_declaration();
-  if (decl->variantT() == V_SgClassDeclaration ||
-      decl->variantT() == V_SgTemplateClassDeclaration)
-    return GetClassDefn(isSgClassDeclaration(decl));
-  else {
-    cerr << "unexpected class declaration type: " << decl->sage_class_name()
-         << endl;
-    ROSE_ABORT();
-  }
+  ASSERT_not_null(classDecl);
+  auto *defining = isSgClassDeclaration(classDecl->get_definingDeclaration());
+  ASSERT_not_null(defining);
+  return defining->get_definition();
 }
 
 SgStatement *GetScope(SgNode *loc) {
-  // DQ (3/23/2006): It is particularly dangerous in C++ to
-  // interperate the scope from the structure.  Places where this
-  // could be a problem now carry the scope explicitly (this step
-  // was introduced after Qing's work on the AstInterface).
-  // I have fixed up this code to report the correct scope
-  // using the virtual get_scope() function for SgStatements.
-
   if (loc == 0 || loc->get_parent() == 0)
     return 0;
 
@@ -493,37 +410,15 @@ SgStatement *GetScope(SgNode *loc) {
 
 SgStatement *AstInterfaceImpl::GetScope(SgNode *loc) { return ::GetScope(loc); }
 
-// Strip leading "const" and tailing '&'
-std::string StripParameterType(const std::string &name) {
-  std::string r = name;
-  if (name.substr(0, 5) == "const")
-    r = name.substr(5, name.size() - 5);
-  ROSE_ASSERT(!r.empty());
-  size_t end = r.size() - 1;
-  if (r[end] == '&') {
-    r[end] = ' ';
-  }
-  std::string result = "";
-  for (size_t i = 0; i < r.size(); ++i) {
-    if (r[i] != ' ')
-      result.push_back(r[i]);
-  }
-  return result;
-}
-
 SgNode *CreateAssignment(AstInterfaceImpl &fa, SgExpression *lhsexp,
                          SgExpression *rhsexp) {
-  // assert(HasNullParent(lhsexp));
-  // assert(HasNullParent(rhsexp));
   SgExpression *exp = 0;
   SgType *lhstype = lhsexp->get_type();
 
   if (lhstype->variantT() == V_SgClassType) {
     SgClassType *lhstype1 = isSgClassType(lhstype);
-    SgName classname = lhstype1->get_name();
-    SgClassDeclaration *c = isSgClassDeclaration(fa.LookupNestedDeclaration(
-        std::string(classname.str()), fa.get_scope(lhsexp)));
-    assert(c != 0);
+    SgClassDeclaration *c = isSgClassDeclaration(lhstype1->get_declaration());
+    ROSE_ASSERT(c != nullptr);
     SgExpressionPtrList args;
     args.push_back(rhsexp);
     SgMemberFunctionSymbol *f = fa.GetMemberFunc(c, "operator=", &args);
@@ -537,7 +432,7 @@ SgNode *CreateAssignment(AstInterfaceImpl &fa, SgExpression *lhsexp,
     }
   }
   if (exp == 0) {
-    NEW_ASSIGN(exp, lhsexp, rhsexp);
+    exp = SageBuilder::buildAssignOp(lhsexp, rhsexp, lhstype);
   }
   return exp;
 }
@@ -570,171 +465,6 @@ std::string unparseToString(SgNode *s) {
     r = r + s->unparseToString();
   }
   return r;
-}
-
-// We now allow fully qualified names in annotations for side effects
-// e.g.  VectorXY::a   : static vs. non-static class members
-//  Namespace1::space2::y
-//  Start from the simplest case first, to be extended later on.
-//  Case 1:  class::member
-SgVariableSymbol *LookupQualifiedVar(const std::string &name,
-                                     SgScopeStatement *loc) {
-  int sz = name.size();
-  assert(sz != 0);
-  assert(loc);
-
-  int pos = 0;
-  // skip leading :: if they are present.
-  if (sz >= 2 && name[0] == ':' && name[1] == ':')
-    pos = 2;
-
-  assert(sz - 2 != 0);
-
-  SgScopeStatement *cur_scope = SageInterface::getGlobalScope(loc);
-
-  // split the name into segments
-  string currentname;
-  SgDeclarationStatement *matched_decl = NULL; // matched decl
-  SgInitializedName *initname = NULL;
-  while (pos <= sz) // we reach the last + 1 pos, very tricky here!!
-  {
-    if (name[pos] == ':' || pos == sz) // reached last char +1 or current is :.
-                                       // we have a complete name so far.
-    {
-      assert(currentname.size() != 0);
-      if (name[pos] == ':') {
-        if (name[pos - 1] != ':') // this is the first : of ::
-        {
-          assert(pos + 1 < sz && name[pos + 1] == ':');
-          pos += 2; // skip two chars
-        } else // this is the second :, impossible if we always skip by two :
-        {
-          cerr << "Error: unexpected : appears in LookUpQualifiedVar()" << endl;
-          ROSE_ABORT();
-        }
-      } else // last char?
-        pos++;
-
-      // we now have find a full name, use it to find the declaration matching
-      // the name
-      assert(cur_scope);
-      SgDeclarationStatementPtrList decl_ptr_list =
-          cur_scope->getDeclarationList();
-      for (size_t i = 0; i < decl_ptr_list.size(); i++) {
-        SgDeclarationStatement *cur_decl = decl_ptr_list[i];
-        if (SgClassDeclaration *class_decl = isSgClassDeclaration(cur_decl)) {
-          // must be a defining class declaration
-          class_decl =
-              isSgClassDeclaration(class_decl->get_definingDeclaration());
-          if (!class_decl)
-            continue;
-
-          if (class_decl->get_name().getString() == currentname) {
-            matched_decl = cur_decl;
-            // update the scope to be the new declaration, when applicable
-            cur_scope = class_decl->get_definition();
-            break;
-          }
-        } else if (SgNamespaceDeclarationStatement *ns_decl =
-                       isSgNamespaceDeclarationStatement(cur_decl)) {
-          // must be a defining declaration
-          ns_decl = isSgNamespaceDeclarationStatement(
-              ns_decl->get_definingDeclaration());
-          if (ns_decl->get_name().getString() == currentname) {
-            matched_decl = cur_decl;
-            cur_scope = ns_decl->get_definition();
-            break;
-          }
-        } else if (SgVariableDeclaration *var_decl =
-                       isSgVariableDeclaration(cur_decl)) {
-          // var declaration only has a nondefining one
-          if ((initname = var_decl->get_decl_item(SgName(currentname)))) {
-            matched_decl = cur_decl;
-            cur_scope = NULL;
-            break;
-          }
-        }
-        // other types of declarations, we just skip them. no use in qualified
-        // names TODO: double check this
-      }
-      if (!matched_decl) {
-        if (cur_scope != NULL) {
-          cerr << "Warning: cannot find qualified name for " << currentname
-               << " within scope " << cur_scope->class_name() << " @ "
-               << cur_scope->get_file_info()->get_line() << endl;
-        } else {
-          cerr << "Warning: cannot find qualified name " << currentname << endl;
-        }
-        return NULL; // cannot find the declaration
-      }
-
-      // reset name to accept next name
-      currentname = "";
-    } else // characters other than :, accumulate to current name
-    {
-      currentname.push_back(name[pos++]);
-    }
-  }
-
-  assert(initname);
-  return isSgVariableSymbol(initname->search_for_symbol_from_symbol_table());
-}
-
-SgVariableSymbol *LookupVar(const std::string &name, SgScopeStatement *loc) {
-  const char *start = name.c_str();
-
-  // check if it is a fully qualified name, if yes, use the special lookup
-  // function instead
-  if (name.find("::") != string::npos)
-    return LookupQualifiedVar(name, loc);
-
-  SgClassDefinition *cdef = isSgClassDefinition(loc);
-  if (cdef != 0) {
-    SgVariableSymbol *r =
-        dynamic_cast<SgVariableSymbol *>(cdef->lookup_symbol(start));
-    if (DebugSymbol()) {
-      if (r == 0)
-        std::cerr << "failed to find variable " << start;
-      else
-        std::cerr << "found variable " << start;
-      std::cerr << " in scope " << unparseToString(loc) << "\n";
-      std::cerr << " symbols of which include: ";
-      for (SgSymbol *p = cdef->first_any_symbol(); p != 0;
-           p = cdef->next_any_symbol())
-        std::cerr << p->get_name().str() << ";";
-      std::cerr << "\n";
-    }
-    if (r != 0)
-      return r;
-    SgBaseClassPtrList &l = cdef->get_inheritances();
-    for (SgBaseClassPtrList::iterator p = l.begin(); p != l.end(); ++p) {
-      SgBaseClass *cur = *p;
-      SgClassDeclaration *decl = cur->get_base_class();
-      assert(decl != 0);
-      SgClassDefinition *def = GetClassDefn(decl);
-      assert(def != 0);
-      r = LookupVar(name, def);
-      if (r != 0)
-        return r;
-    }
-    return 0;
-  } else {
-    SgVariableSymbol *f = 0;
-    do {
-      f = dynamic_cast<SgVariableSymbol *>(loc->lookup_symbol(start));
-      if (DebugSymbol()) {
-        if (f == 0)
-          std::cerr << "failed to find variable ";
-        else
-          std::cerr << "found variable ";
-        std::cerr << start << " in scope " << unparseToString(loc) << "\n";
-      }
-      if (loc->variantT() == V_SgGlobal || f != 0)
-        break;
-      loc = loc->get_scope();
-    } while (loc != 0 && f == 0);
-    return f;
-  }
 }
 
 SgNode *AstInterfaceImpl::LookupNestedDeclaration(const std::string &name,
@@ -863,8 +593,21 @@ SgNode *AstInterfaceImpl::LookupNestedDeclaration(const std::string &name,
 
 SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
                                               SgNode *loc) {
-  assert(loc != 0);
+  ROSE_ASSERT(loc != nullptr);
   const char *start = name.c_str();
+  const SgName sought(start);
+  auto pendingInScope = [&](SgScopeStatement *candidate) {
+    for (auto it = newVarList.rbegin(); it != newVarList.rend(); ++it) {
+      if (it->scope != candidate)
+        continue;
+      const SgName &pendingName = it->symbol->get_name();
+      if (candidate->isCaseInsensitive()
+              ? SgName::caseInsensitiveEquality(pendingName, sought)
+              : pendingName == sought)
+        return it->symbol;
+    }
+    return static_cast<SgVariableSymbol *>(nullptr);
+  };
 
   // check if it is a fully qualified name, if yes, use the special lookup
   // function instead
@@ -874,9 +617,7 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
     if (initname != 0) {
       SgVariableSymbol *varsym =
           isSgVariableSymbol(initname->search_for_symbol_from_symbol_table());
-      if (varsym == 0) {
-        NEW_SYMBOL(varsym, SgVariableSymbol, initname->get_scope(), initname);
-      }
+      ROSE_ASSERT(varsym != nullptr);
       return varsym;
     }
     return 0;
@@ -897,6 +638,8 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
   if (cdef != 0) {
     SgVariableSymbol *r =
         dynamic_cast<SgVariableSymbol *>(cdef->lookup_symbol(start));
+    if (r == nullptr)
+      r = pendingInScope(cdef);
     if (DebugSymbol()) {
       if (r == 0)
         std::cerr << "failed to find variable " << start;
@@ -914,10 +657,11 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
     SgBaseClassPtrList &l = cdef->get_inheritances();
     for (SgBaseClassPtrList::iterator p = l.begin(); p != l.end(); ++p) {
       SgBaseClass *cur = *p;
+      ASSERT_not_null(cur);
       SgClassDeclaration *decl = cur->get_base_class();
-      assert(decl != 0);
+      ASSERT_not_null(decl);
       SgClassDefinition *def = GetClassDefn(decl);
-      assert(def != 0);
+      ASSERT_not_null(def);
       r = LookupVar(name, def);
       if (r != 0)
         return r;
@@ -929,6 +673,8 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
     SgVariableSymbol *f = 0;
     do {
       f = dynamic_cast<SgVariableSymbol *>(loc_scope->lookup_symbol(start));
+      if (f == nullptr)
+        f = pendingInScope(loc_scope);
       if (DebugSymbol()) {
         if (f == 0)
           std::cerr << "failed to find variable ";
@@ -943,68 +689,6 @@ SgVariableSymbol *AstInterfaceImpl::LookupVar(const std::string &name,
     return f;
   }
 }
-
-class SageSetTransformation : public AstTopDownProcessing<AstNodePtrImpl> {
-  AstNodePtrImpl evaluateInheritedAttribute(SgNode *astNode,
-                                            AstNodePtrImpl inheritedValue) {
-    Sg_File_Info *r = astNode->get_file_info();
-    r->setTransformation();
-    r->setCompilerGenerated();
-    r->setOutputInCodeGeneration();
-    return astNode;
-  }
-
-public:
-  SageSetTransformation() {}
-  void operator()(SgNode *node) {
-    AstTopDownProcessing<AstNodePtrImpl>::traverse(node, node->get_parent());
-  }
-};
-class SageResetParent : public AstTopDownProcessing<AstNodePtrImpl> {
-  AstNodePtrImpl evaluateInheritedAttribute(SgNode *astNode,
-                                            AstNodePtrImpl inheritedValue) {
-    if (inheritedValue != 0) {
-      // assert(astNode->get_parent() == inheritedValue || astNode->get_parent()
-      // == 0);
-      astNode->set_parent(inheritedValue.get_ptr());
-    }
-    return astNode;
-  }
-
-public:
-  SageResetParent() {}
-  void operator()(SgNode *node) {
-    AstTopDownProcessing<AstNodePtrImpl>::traverse(node, node->get_parent());
-  }
-};
-
-/* QY: 7/2011 This function is not invoked anywhere
-SgSymbol* AddDecls( AstInterfaceImpl* scope, const
-SgDeclarationStatementPtrList& decls)
-{
-     SgSymbol* result = 0;
-     for (SgDeclarationStatementPtrList::const_iterator p = decls.begin(); p !=
-decls.end(); ++p) { SgDeclarationStatement* cur = *p; cur->set_file_info(
-GetFileInfo()); SgFunctionDeclaration* d1 = isSgFunctionDeclaration(cur); if (d1
-!= 0) { result = scope->AddFunc(d1);
-         }
-         else {
-            SgVariableDeclaration* d2 = isSgVariableDeclaration(cur);
-            if (d2 != 0) {
-                result = scope->AddVar(d2);
-            }
-            else  {
-               SgClassDeclaration* d3 = isSgClassDeclaration(cur);
-               if (d3 != 0)
-                   result = scope->AddClass(d3);
-               else
-                   ROSE_ABORT();
-            }
-         }
-    }
-    return result;
-}
-*/
 
 SgMemberFunctionSymbol *
 AstInterfaceImpl::GetMemberFunc(SgClassDeclaration *decl,
@@ -1021,7 +705,7 @@ AstInterfaceImpl::GetMemberFunc(SgClassDeclaration *decl,
     SgFunctionSymbol *f = def->lookup_function_symbol(start);
     if (f != 0) {
       SgMemberFunctionSymbol *mf = isSgMemberFunctionSymbol(f);
-      assert(mf != 0);
+      ROSE_ASSERT(mf != nullptr);
       return mf;
     } else {
       cerr << "AstInterface.C GetMemberFunc() cannot find a symbol for "
@@ -1050,17 +734,16 @@ AstInterfaceImpl::GetMemberFunc(SgClassDeclaration *decl,
         SgType *ta = (*pa)->get_type();
         ASSERT_not_null(tp);
         ASSERT_not_null(ta);
-        if (tp->get_mangled() != ta->get_mangled()) {
+        if (!SageInterface::isEquivalentType(tp, ta)) {
           match = false;
           break;
         }
       }
       if (match) {
-        // QY:1/7/08: this should be only temporary. should not create a new
-        // symbol if the symbol is already in the symbol table (no search
-        // mechanism available yet?)
-        SgMemberFunctionSymbol *f = new SgMemberFunctionSymbol(md);
-        return f;
+        SgMemberFunctionSymbol *symbol =
+            isSgMemberFunctionSymbol(md->get_symbol_from_symbol_table());
+        ROSE_ASSERT(symbol != nullptr);
+        return symbol;
       }
     }
   }
@@ -1114,58 +797,12 @@ SgFunctionSymbol *AstInterfaceImpl::LookupFunction(const char *start,
     cur = cur->get_scope();
   } while (cur != 0 && f == 0);
   if (DebugSymbol()) {
-    if (cur == 0 || cur == GetNullScope())
-      std::cerr << "exit with cur = " << (cur == 0 ? "NULL" : "NULL scope")
-                << "\n";
+    if (cur == nullptr)
+      std::cerr << "exit with cur = NULL\n";
     else
       std::cerr << "exit with cur = " << cur->sage_class_name() << "\n";
   }
   return f;
-}
-
-SgClassSymbol *AstInterfaceImpl::AddClass(SgClassDeclaration *d) {
-  assert(global != 0);
-  SgDeclarationStatementPtrList &l = global->get_declarations();
-  l.insert(l.begin(), d);
-  SgClassSymbol *NEW_SYMBOL(c, SgClassSymbol, global, d);
-  return c;
-}
-
-SgFunctionSymbol *AstInterfaceImpl::AddFunc(SgFunctionDeclaration *d) {
-  assert(global != 0);
-  SgDeclarationStatementPtrList &l = global->get_declarations();
-  l.insert(l.begin(), d);
-  SgFunctionSymbol *NEW_SYMBOL(f, SgFunctionSymbol, global, d);
-  d->set_parent(global);
-  return f;
-}
-
-SgMemberFunctionSymbol *
-AstInterfaceImpl::AddMemberFunc(SgClassDefinition *def,
-                                SgMemberFunctionDeclaration *d) {
-  SgMemberFunctionSymbol *NEW_SYMBOL(f, SgMemberFunctionSymbol, def, d);
-  d->set_parent(def);
-  return f;
-}
-
-void AstInterfaceImpl::SaveVarDecl(SgVariableDeclaration *d,
-                                   SgScopeStatement *curscope) {
-  if (curscope == 0)
-    curscope = scope;
-  assert(curscope != 0);
-
-  d->set_parent(curscope);
-  newVarList.push_back(
-      std::pair<SgScopeStatement *, SgVariableDeclaration *>(curscope, d));
-}
-
-SgVariableSymbol *AstInterfaceImpl::InsertVar(SgInitializedName *d,
-                                              SgScopeStatement *curscope) {
-  if (curscope == 0)
-    curscope = scope;
-  assert(curscope != 0);
-  SgVariableSymbol *NEW_SYMBOL(v, SgVariableSymbol, curscope, d);
-  return v;
 }
 
 SgVariableSymbol *AstInterfaceImpl::NewVar(SgType *type,
@@ -1173,49 +810,52 @@ SgVariableSymbol *AstInterfaceImpl::NewVar(SgType *type,
                                            bool makeunique, bool delayDecl,
                                            SgExpression *initexp,
                                            SgScopeStatement *loc) {
+  SgScopeStatement *targetScope = loc != nullptr ? loc : scope;
+  ROSE_ASSERT(targetScope != nullptr);
+  ROSE_ASSERT(delayDecl || loc != nullptr);
+  ROSE_ASSERT(type != nullptr && !SageInterface::containsUnknownType(type));
+  ROSE_ASSERT(initexp == nullptr || initexp->get_parent() == nullptr);
+
   std::string varname = _name;
   if (varname == "") {
     varname = "_var_";
     makeunique = true;
   }
   if (makeunique) {
-    char buf[20];
-    sprintf(buf, "%d", newVarIndex);
-    varname = varname + std::string(buf);
-    ++newVarIndex;
+    const std::string baseName = varname;
+    do {
+      varname = baseName + std::to_string(newVarIndex++);
+    } while (LookupVar(varname, targetScope) != nullptr);
   }
 
-  SgVariableSymbol *v = LookupVar(varname, (loc == 0) ? scope : loc);
-  if (v == 0) {
-    // variable declaration has not been inserted
-    SgName name(varname.c_str());
-    SgType *t = isSgType(type);
-    assert(t != 0);
-    SgInitializedName *def = new SgInitializedName(GetFileInfo(), name, t);
-    def->set_endOfConstruct(def->get_file_info());
-    v = InsertVar(def, loc);
-    SgVariableDeclaration *decl = new SgVariableDeclaration(GetFileInfo());
-    decl->set_endOfConstruct(decl->get_file_info());
+  if (!makeunique && LookupVar(varname, targetScope) != nullptr) {
+    std::cerr << "REX_AST_INVARIANT[new-variable-name]: '" << varname
+              << "' already has a symbol in the target scope\n";
+    ROSE_ABORT();
+  }
 
-    if (initexp != 0) {
-      SgAssignInitializer *NEW_VAR_INIT(init, def, initexp);
-      decl->append_variable(def, init);
-    } else
-      decl->append_variable(def, 0);
-    def->set_parent(decl);
-    if (delayDecl)
-      SaveVarDecl(decl, loc);
-    else if (loc != 0) {
-      loc->insertStatementInScope(decl, true);
-      decl->set_parent(loc);
-    } else
-      ROSE_ABORT();
+  SgName name(varname.c_str());
+  SgInitializedName *def = new SgInitializedName(GetFileInfo(), name, type);
+  def->set_endOfConstruct(def->get_file_info());
+  SgVariableDeclaration *decl = new SgVariableDeclaration(GetFileInfo());
+  decl->set_endOfConstruct(decl->get_file_info());
 
+  if (initexp != 0) {
+    SgAssignInitializer *NEW_VAR_INIT(init, def, initexp);
+    decl->append_variable(def, init);
   } else {
-    std::cerr << "Warning: new var has already been initialized: " << varname
-              << "\n";
+    decl->append_variable(def, 0);
   }
-  return v;
+  decl->set_scope(targetScope);
+  SgVariableSymbol *symbol = new SgVariableSymbol(def);
+  def->set_scope(targetScope);
+  if (delayDecl) {
+    newVarList.push_back({targetScope, decl, symbol});
+  } else {
+    targetScope->insertStatementInScope(decl, true);
+    targetScope->insert_symbol(def->get_name(), symbol);
+  }
+  return symbol;
 }
 
 SgFunctionSymbol *AstInterfaceImpl::GetFunc(const std::string &name) {
@@ -1227,25 +867,24 @@ SgFunctionSymbol *AstInterfaceImpl::GetFunc(const std::string &name) {
 SgFunctionSymbol *
 AstInterfaceImpl::NewFunc(const std::string &name, SgType *rtype,
                           const list<SgInitializedName *> &args) {
-  const char *start = name.c_str();
-  SgFunctionType *ft = new SgFunctionType(rtype, false);
-  SgFunctionDeclaration *d =
-      new SgFunctionDeclaration(GetFileInfo(), start, ft);
-  for (list<SgInitializedName *>::const_iterator p = args.begin();
-       p != args.end(); ++p) {
-    SgInitializedName *cur = *p;
-    d->append_arg(cur);
+  ASSERT_not_null(global);
+  auto *parameters = SageBuilder::buildFunctionParameterList();
+  for (SgInitializedName *argument : args) {
+    ASSERT_not_null(argument);
+    SageInterface::appendArg(parameters, argument);
   }
-  return AddFunc(d);
-}
-
-SgClassSymbol *AstInterfaceImpl ::NewClass(const std::string &classname) {
-  if (DebugSymbol())
-    std::cerr << "adding new class " << classname << "\n";
-  SgClassDeclaration *decl =
-      new SgClassDeclaration(GetFileInfo(), classname.c_str());
-
-  return AddClass(decl);
+  SgFunctionDeclaration *declaration =
+      SageBuilder::buildNondefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::sourceLexicalAtTop(
+              global),
+          name, rtype, parameters, global);
+  auto *canonical =
+      isSgFunctionDeclaration(declaration->get_firstNondefiningDeclaration());
+  ASSERT_not_null(canonical);
+  auto *symbol =
+      isSgFunctionSymbol(global->find_symbol_from_declaration(canonical));
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == canonical);
+  return symbol;
 }
 
 SgMemberFunctionSymbol *
@@ -1253,29 +892,28 @@ AstInterfaceImpl ::NewMemberFunc(SgClassDeclaration *classDecl,
                                  const std::string &name, SgType *rtype,
                                  const list<SgInitializedName *> &args) {
   const char *start = name.c_str();
+  ASSERT_not_null(classDecl);
+  SgClassType *classType = isSgClassType(classDecl->get_type());
+  ASSERT_not_null(classType);
   SgClassDefinition *classDefn = GetClassDefn(classDecl);
-  if (classDefn == 0) {
-    if (DebugSymbol())
-      std::cerr << " creating new class defn " << classDecl->get_name().str()
-                << "when member function " << start << "was not found. \n";
-    classDefn = new SgClassDefinition(GetFileInfo(), classDecl);
-    classDefn->set_endOfConstruct(classDefn->get_file_info());
-    assert(scope != 0);
-    classDecl->set_parent(scope);
-    classDecl->set_definition(classDefn);
+  ASSERT_not_null(classDefn);
+  auto *parameters = SageBuilder::buildFunctionParameterList();
+  for (SgInitializedName *argument : args) {
+    ASSERT_not_null(argument);
+    SageInterface::appendArg(parameters, argument);
   }
-
-  SgMemberFunctionType *ft = new SgMemberFunctionType(rtype, false);
-  SgMemberFunctionDeclaration *d =
-      new SgMemberFunctionDeclaration(GetFileInfo(), start, ft, 0);
-  d->set_scope(classDefn);
-  for (list<SgInitializedName *>::const_iterator p = args.begin();
-       p != args.end(); ++p) {
-    SgInitializedName *cur = *p;
-    d->append_arg(cur);
-  }
-
-  return AddMemberFunc(classDefn, d);
+  SgMemberFunctionDeclaration *declaration =
+      SageBuilder::buildNondefiningMemberFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::sourceLexicalAtTop(
+              classDefn),
+          start, rtype, parameters, classDefn);
+  auto *canonical = isSgMemberFunctionDeclaration(
+      declaration->get_firstNondefiningDeclaration());
+  ASSERT_not_null(canonical);
+  auto *symbol = isSgMemberFunctionSymbol(
+      classDefn->find_symbol_from_declaration(canonical));
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == canonical);
+  return symbol;
 }
 
 AstNodePtr GetFunctionDecl(const AstNodePtr &_s);
@@ -1283,65 +921,55 @@ AstNodePtr GetFunctionDecl(const AstNodePtr &_s);
 std::string AstInterface::GetGlobalUniqueName(const AstNodePtr &_scope,
                                               std::string expname,
                                               bool do_not_add_file_name) {
-  SgNode *scope = AstNodePtrImpl(_scope).get_ptr();
-  assert(scope != 0);
-  std::string result = expname;
-  std::string scopename = expname;
-  if (function_name_mangling_ && IsFunctionDefinition(_scope)) {
-    auto *decl = isSgFunctionDeclaration(GetFunctionDecl(_scope).get_ptr());
-    assert(decl != 0);
-    scopename = function_name_mangling_(decl);
-    if (expname != "") {
-      return scopename + "::" + expname;
-    }
-    return scopename;
+  SgNode *node = _scope.get_ptr();
+  ASSERT_not_null(node);
+  auto *function = isSgFunctionDeclaration(node);
+  if (auto *definition = isSgFunctionDefinition(node)) {
+    function = definition->get_declaration();
+    ASSERT_not_null(function);
   }
-  while (scope != 0 && scope->variantT() != V_SgGlobal) {
-    DebugVariable([&scope]() {
-      return "GetGlobalUniqueName:scope:" + AstToString(scope);
-    });
-    if (IsBlock(scope, &scopename) && scopename != "" &&
-        result.find(scopename + "::") >= result.size()) {
-      DebugVariable([&scopename]() {
-        return "GetGlobalUniqueName:scope_name:" + scopename;
-      });
-      if (result == "")
-        result = scopename;
-      else {
-        auto result_in_scopename_index = scopename.find(result);
-        bool result_in_scopename = result_in_scopename_index < scopename.size();
-        // Check that result is indeed part of the scope name on both ends (b0
-        // and b1).
-        bool b0_is_good = result_in_scopename_index == 0 ||
-                          (result_in_scopename &&
-                           scopename[result_in_scopename_index - 1] == ':');
-        bool b1_is_good =
-            result_in_scopename &&
-            (result_in_scopename_index + result.size() == scopename.size() ||
-             scopename[result_in_scopename_index + result.size()] == '_');
-        if (b0_is_good && b1_is_good)
-          result = scopename;
-        else
-          result = scopename + "::" + result;
+  std::string prefix;
+  if (function != nullptr) {
+    prefix = function_name_mangling_ ? function_name_mangling_(function)
+                                     : function->get_mangled_name().getString();
+    ROSE_ASSERT(!prefix.empty());
+    if (function_name_mangling_)
+      return expname.empty() ? prefix : prefix + "::" + expname;
+  } else {
+    auto *scope = isSgScopeStatement(node);
+    if (scope == nullptr)
+      scope = SageInterface::getScope(node);
+    ASSERT_not_null(scope);
+    if (isSgDeclarationScope(scope) || isSgFunctionParameterScope(scope)) {
+      if (auto *owner = isSgDeclarationStatement(scope->get_parent())) {
+        prefix = owner->get_mangled_name().getString();
+      } else {
+        auto *requiresExpression = isSgRequiresExpr(scope->get_parent());
+        ASSERT_not_null(requiresExpression);
+        ROSE_ASSERT(requiresExpression->get_local_parameter_scope() == scope);
+        prefix = mangleQualifiers(scope->get_scope()).getString() +
+                 "::" + mangleExpression(requiresExpression);
       }
-    }
-    scope = AstInterfaceImpl::GetScope(scope);
-  }
-  if (!do_not_add_file_name) {
-    if (scopename == "main" ||
-        CmdOptions::GetInstance()->HasOption("-global_via_filename")) {
-      std::string filename = scope->get_file_info()->get_filenameString();
-      auto location = filename.rfind("/");
-      if (location < filename.size()) {
-        filename = filename.substr(location + 1);
-      }
-      if (result.find(filename) >= result.size()) {
-        result = filename + "::" + result;
-      }
+      ROSE_ASSERT(!prefix.empty());
+    } else {
+      prefix = mangleQualifiers(scope).getString();
+      ROSE_ASSERT(isSgGlobal(scope) || !prefix.empty());
     }
   }
-  result.erase(std::remove_if(result.begin(), result.end(), ::isspace),
-               result.end());
+  std::string result = prefix.empty() ? expname : prefix;
+  if (!prefix.empty() && !expname.empty())
+    result += "::" + expname;
+  if (function == nullptr)
+    function = SageInterface::getEnclosingFunctionDeclaration(node);
+  if (!do_not_add_file_name &&
+      ((function != nullptr && function->get_name() == "main" &&
+        isSgGlobal(function->get_scope())) ||
+       CmdOptions::GetInstance()->HasOption("-global_via_filename"))) {
+    auto *file = SageInterface::getEnclosingSourceFile(node);
+    ASSERT_not_null(file);
+    result = Rose::StringUtility::stripPathFromFileName(file->getFileName()) +
+             "::" + result;
+  }
   return result;
 }
 
@@ -1429,7 +1057,7 @@ std::string AstInterface::AstTypeToString(const AstNodePtr &n) {
   default:
     std::cerr << "Error: Unhandled case."
               << "\n";
-    assert(0);
+    ROSE_ABORT();
   }
   return res;
 }
@@ -1464,18 +1092,16 @@ std::string AstInterface::getAstLocation(const AstNodePtr &_s) {
 
 void AstInterface::FreeAstTree(const AstNodePtr &n) {}
 
-void NotifyTreeCopy(AstInterfaceImpl &fa, const AstNodePtr &_orig,
-                    const AstNodePtr &_n) {
-  AstNodePtrImpl orig(_orig), n(_n);
-  vector<SgNode *> childvec = orig->get_traversalSuccessorContainer();
-  vector<SgNode *> childvec1 = n->get_traversalSuccessorContainer();
-  assert(childvec.size() == childvec1.size());
-  for (size_t i = 0; i < childvec.size(); ++i) {
-    AstNodePtrImpl c = childvec[i], c1 = childvec1[i];
-    if (c != c1)
-      NotifyTreeCopy(fa, c, c1);
+void NotifyTreeCopy(AstInterfaceImpl &fa, SgNode *original,
+                    const AstInterface::CopyBindings &copies) {
+  for (auto *child : original->get_traversalSuccessorContainer()) {
+    auto copy = copies.find(child);
+    if (child != nullptr && copy != copies.end() && copy->second != child)
+      NotifyTreeCopy(fa, child, copies);
   }
-  CopyAstRecord info(fa, orig, n);
+  auto copy = copies.find(original);
+  ASSERT_require(copy != copies.end());
+  CopyAstRecord info(fa, original, copy->second);
   fa.Notify(info);
 };
 
@@ -1491,19 +1117,88 @@ bool AstInterface ::get_fileInfo(const AstNodePtr &_n, std::string *fname,
   return true;
 }
 
-AstNodePtr AstInterface ::CopyAstTree(const AstNodePtr &_orig) {
-  SgNode *orig = AstNodePtrImpl(_orig).get_ptr();
+AstInterface::CopyScope::CopyScope(AstInterface &interface,
+                                   CopyBindings &bindings)
+    : interface(interface), bindings(bindings), previous(interface.copyScope) {
+  interface.copyScope = this;
+}
+
+AstInterface::CopyScope::~CopyScope() { interface.copyScope = previous; }
+
+AstNodePtr AstInterface::GetCopySource(const AstNodePtr &node) const {
+  if (copyScope == nullptr)
+    return node;
+  for (auto *scope = copyScope; scope != nullptr; scope = scope->previous) {
+    auto mapped = scope->bindings.find(node.get_ptr());
+    if (mapped != scope->bindings.end()) {
+      ASSERT_not_null(mapped->second);
+      return mapped->second;
+    }
+  }
+  if (auto *symbol = isSgVariableSymbol(node.get_ptr())) {
+    if (auto *basis = symbol->get_declaration()) {
+      auto *mapped = isSgInitializedName(GetCopySource(basis).get_ptr());
+      ASSERT_not_null(mapped);
+      if (mapped != basis) {
+        auto *scope = mapped->get_scope();
+        ASSERT_not_null(scope);
+        auto *target =
+            isSgVariableSymbol(scope->find_symbol_from_declaration(mapped));
+        ASSERT_not_null(target);
+        ASSERT_require(target->get_declaration() == mapped);
+        return target;
+      }
+    }
+  }
+  for (auto *owner = node == AST_NULL ? nullptr : node.get_ptr()->get_parent();
+       owner != nullptr; owner = owner->get_parent())
+    for (auto *scope = copyScope; scope != nullptr; scope = scope->previous) {
+      auto mapped = scope->bindings.find(owner);
+      ASSERT_require(mapped == scope->bindings.end() ||
+                     mapped->second == owner);
+    }
+  return node;
+}
+
+AstNodePtr AstInterface::CopyAstTree(const AstNodePtr &_orig,
+                                     CopyBindings *copies) {
+  struct BoundCopy : SgTreeCopy {
+    const AstInterface &interface;
+    explicit BoundCopy(const AstInterface &interface) : interface(interface) {}
+    SgNode *
+    plannedExternalSemanticCopyEdge(const SgNode *original) const override {
+      auto *target =
+          interface.GetCopySource(const_cast<SgNode *>(original)).get_ptr();
+      return target == original ? nullptr : target;
+    }
+  } copyOption(*this);
+  SgNode *orig = GetCopySource(_orig).get_ptr();
   if (orig == 0) {
     return _orig;
   }
+  if (auto *symbol = isSgVariableSymbol(orig)) {
+    ASSERT_require(copies == nullptr);
+    if (auto *basis = symbol->get_declaration())
+      return ToVarRef(GetCopySource(basis).get_ptr());
+    return SageBuilder::buildVarRefExp(symbol);
+  }
   if (orig->variantT() == V_SgInitializedName) {
-    AstNodePtrImpl r(ToVarRef(*impl, orig));
+    ASSERT_require(copies == nullptr);
+    AstNodePtrImpl r(ToVarRef(orig));
     return r;
   }
-  SgTreeCopy copyOption;
   SgNode *r = orig->copy(copyOption);
+  if (copies != nullptr) {
+    *copies = copyOption.get_copiedNodeMap();
+    for (auto *scope = copyScope; scope != nullptr; scope = scope->previous)
+      for (const auto &entry : scope->bindings) {
+        auto copied = copyOption.get_copiedNodeMap().find(entry.second);
+        if (copied != copyOption.get_copiedNodeMap().end())
+          copies->emplace(entry.first, copied->second);
+      }
+  }
   if (impl->NumberOfObservers())
-    NotifyTreeCopy(*impl, _orig, AstNodePtrImpl(r));
+    NotifyTreeCopy(*impl, orig, copyOption.get_copiedNodeMap());
   return AstNodePtrImpl(r);
 }
 
@@ -1573,7 +1268,6 @@ bool AstInterface::IsExecutableStmt(const AstNodePtr &_s) {
   case V_SgBreakStmt:
   case V_SgContinueStmt:
   case V_SgReturnStmt:
-  case V_SgSpawnStmt:
     // case V_SgVariableDeclaration:
     //  QY: Do not consider vardecl as executable or it will break loopProcessor
     return true;
@@ -1651,6 +1345,57 @@ bool AstInterface::IsIf(const AstNodePtr &_s, AstNodePtr *cond,
   } break;
   default:
     return false;
+  }
+  return true;
+}
+
+AstNodePtr AstInterface::GetRuntimeDeclarationCondition(const AstNodePtr &s) {
+  return GetRuntimeDeclarationCondition(s, nullptr);
+}
+
+AstNodePtr
+AstInterface::GetRuntimeDeclarationCondition(const AstNodePtr &s,
+                                             AstNodePtr *declaration) {
+  if (declaration != nullptr)
+    *declaration = AST_NULL;
+  auto *scope = isSgScopeStatement(s.get_ptr());
+  SgStatement *condition = nullptr;
+  if (auto *statement = isSgIfStmt(scope))
+    condition = statement->get_conditional();
+  else if (auto *statement = isSgWhileStmt(scope))
+    condition = statement->get_condition();
+  else if (auto *statement = isSgForStatement(scope))
+    condition = statement->get_test();
+  else if (auto *statement = isSgSwitchStatement(scope))
+    condition = statement->get_item_selector();
+  else
+    return AST_NULL;
+  SgExpression *value = SageInterface::getConditionValue(scope);
+  if (declaration != nullptr && isSgVariableDeclaration(condition) != nullptr)
+    *declaration = AstNodePtrImpl(condition);
+  if (auto *statement = isSgIfStmt(scope);
+      statement != nullptr && statement->get_is_if_constexpr_statement())
+    return AST_NULL;
+  return value != nullptr && value->get_parent() == scope
+             ? AstNodePtrImpl(value)
+             : AST_NULL;
+}
+
+bool AstInterface::IsIfWithKnownRuntimeBranch(const AstNodePtr &s,
+                                              AstNodePtr *body,
+                                              AstNodePtr *condition) {
+  auto *statement = isSgIfStmt(AstNodePtrImpl(s).get_ptr());
+  if (statement == nullptr || !statement->runtime_branch_is_known())
+    return false;
+  if (body != nullptr)
+    *body = statement->runtime_branch_is_true() ? statement->get_true_body()
+                                                : statement->get_false_body();
+  if (condition != nullptr) {
+    auto *declaration = isSgVariableDeclaration(statement->get_conditional());
+    ROSE_ASSERT(statement->get_conditional() == nullptr ||
+                declaration != nullptr ||
+                isSgExprStatement(statement->get_conditional()) != nullptr);
+    *condition = declaration;
   }
   return true;
 }
@@ -1838,9 +1583,6 @@ bool AstInterface::IsFunctionDefinition(const AstNodePtr &_s, std::string *name,
       *returntype = AstNodeTypeImpl(decl->get_type());
     if (name != 0)
       *name = string(decl->get_name().str());
-    // I can't seem to get parameters from an SgNonrealDecl -Jim Leek
-    //      if (paramtype != 0 || params != 0)
-    //  l = decl->get_parameterList();
     break;
   }
   // Liao 2/6/2015, try to extend to support Fortran
@@ -2130,20 +1872,21 @@ AstNodePtr AstInterface::CreateAllocateArray(const AstNodePtr &_arr,
                                              const AstNodeType &_elemtype,
                                              const AstNodeList &indexsize) {
   SgType *elemtype = AstNodeTypeImpl(_elemtype).get_ptr();
+  ROSE_ASSERT(elemtype != nullptr && !indexsize.empty());
   SgType *atype = elemtype;
-  for (AstNodeList::const_iterator p = indexsize.begin(); p != indexsize.end();
-       ++p) {
+  for (auto p = indexsize.rbegin(); p != indexsize.rend() - 1; ++p) {
     SgExpression *exp = isSgExpression(AstNodePtrImpl(*p).get_ptr());
     assert(exp != 0);
-    atype = new SgArrayType(atype, exp);
+    atype =
+        SageBuilder::buildArrayType(atype, SageInterface::copyExpression(exp));
   }
-  SgType *baseType = elemtype;
-  assert(baseType != NULL);
-  SgExpression *arr = ToExpression(*impl, AstNodePtrImpl(_arr).get_ptr());
-  SgNewExp *rhs = new SgNewExp(
-      GetFileInfo(), atype, 0,
-      new SgConstructorInitializer(GetFileInfo(), NULL, NULL, baseType, false,
-                                   false, false, true));
+  auto *bound = isSgExpression(AstNodePtrImpl(indexsize.front()).get_ptr());
+  ROSE_ASSERT(bound != nullptr);
+  SgExpression *arr = ToExpression(AstNodePtrImpl(_arr).get_ptr());
+  SgNewExp *rhs = SageBuilder::buildNewExp(
+      atype, SgPointerType::createType(atype),
+      SageInterface::copyExpression(bound), SgNewExp::e_written_array_bound,
+      nullptr, nullptr, nullptr, 0, nullptr, 1);
   return AstNodePtrImpl(::CreateAssignment(*impl, arr, rhs));
 }
 
@@ -2154,41 +1897,18 @@ AstNodePtr AstInterface::CreateDeleteArray(const AstNodePtr &_arr) {
   return AstNodePtrImpl(new SgDeleteExp(GetFileInfo(), var, true));
 }
 
-AstNodePtr AstInterface::CreateLoop(const AstNodePtr &_cond,
-                                    const AstNodePtr &_body) {
-  SgStatement *cond = isSgStatement(AstNodePtrImpl(_cond).get_ptr());
-  assert(cond != 0);
-  SgStatement *bstmt = isSgStatement(AstNodePtrImpl(_body).get_ptr());
-  assert(bstmt != 0);
-  SgBasicBlock *body = isSgBasicBlock(AstNodePtrImpl(_body).get_ptr());
-  if (body == 0) {
-    NEW_BLOCK1(body, bstmt);
-  }
-  SgNode *result = new SgWhileStmt(GetFileInfo(), cond, body);
-  cond->set_parent(result);
-  body->set_parent(result);
-  return AstNodePtrImpl(result);
-}
-
 AstNodePtr AstInterface::CreateAssignment(const AstNodePtr &_lhs,
                                           const AstNodePtr &_rhs) {
   SgNode *lhs = AstNodePtrImpl(_lhs).get_ptr(),
          *rhs = AstNodePtrImpl(_rhs).get_ptr();
-  SgExpression *lhsexp = ToExpression(*impl, lhs);
-  SgExpression *rhsexp = ToExpression(*impl, rhs);
+  SgExpression *lhsexp = ToExpression(lhs);
+  SgExpression *rhsexp = ToExpression(rhs);
   AstNodePtrImpl res = ::CreateAssignment(*impl, lhsexp, rhsexp);
   if (impl->NumberOfObservers()) {
     CopyAstRecord info(*impl, _rhs, _lhs);
     impl->Notify(info);
   }
   return res;
-}
-
-bool AstInterface::IsIOInputStmt(const AstNodePtr &s, AstNodeList *varlist) {
-  return false;
-}
-bool AstInterface::IsIOOutputStmt(const AstNodePtr &s, AstNodeList *explist) {
-  return false;
 }
 
 //! Check if $_exp$ is a single integer constant; if yes, return the constant
@@ -2212,17 +1932,17 @@ bool AstInterface::IsConstant(const AstNodePtr &_exp, string *valtype,
       AstNodePtrImpl(_exp).get_ptr(), "AstInterface::IsConstant", false);
   if (exp == 0)
     return false;
+  const char *type;
+  bool integer_literal = false;
   switch (exp->variantT()) {
   case V_SgStringVal:
-    if (valtype != 0)
-      *valtype = "string";
+    type = "string";
     break;
   case V_SgCharVal:
   case V_SgWcharVal:
   case V_SgSignedCharVal:
   case V_SgUnsignedCharVal:
-    if (valtype != 0)
-      *valtype = "char";
+    type = "char";
     break;
   case V_SgShortVal:
   case V_SgUnsignedShortVal:
@@ -2233,63 +1953,210 @@ bool AstInterface::IsConstant(const AstNodePtr &_exp, string *valtype,
   case V_SgLongLongIntVal:
   case V_SgUnsignedLongLongIntVal:
   case V_SgUnsignedLongVal:
-    if (valtype != 0)
-      *valtype = "int";
+    type = "int";
+    integer_literal = true;
     break;
   case V_SgFloatVal:
-    if (valtype != 0)
-      *valtype = "float";
+    type = "float";
     break;
   case V_SgDoubleVal:
   case V_SgLongDoubleVal:
-    if (valtype != 0)
-      *valtype = "double";
+    type = "double";
     break;
-  case V_SgSizeOfOp: /* consider size of a constant b/c it's value doesn't
-                        change */
-  {
-    if (valtype != 0)
-      *valtype = "int";
-    break;
-  }
   default:
     return false;
-  };
-  if (val != 0) {
-    assert(isSgType(exp) == 0);
-    *val = exp->unparseToString();
+  }
+  if (valtype != nullptr)
+    *valtype = type;
+  if (val != nullptr) {
+    assert(isSgType(exp) == nullptr);
+    if (auto *enumerator = isSgEnumVal(exp))
+      *val = std::to_string(enumerator->get_value());
+    else if (integer_literal)
+      *val = isSgValueExp(exp)->get_constant_folded_value_as_string();
+    else
+      *val = exp->unparseToString();
   }
   return true;
 }
 
-//! Two references are the same if they have the same name and same scope
-bool AstInterface::IsSameVarRef(const AstNodePtr &_n1, const AstNodePtr &_n2) {
-  AstNodePtrImpl n1(_n1), n2(_n2);
-  string name1, name2;
-  if (IsVarRef(n1, 0, &name1, 0, 0, /*use_global_unique_name=*/true) &&
-      IsVarRef(n2, 0, &name2, 0, 0, /*use_global_unique_name=*/true)) {
-    return name1 == name2;
+namespace {
+SgInitializedName *referencedVariable(SgNode *node) {
+  if (SgInitializedName *name = isSgInitializedName(node))
+    return name;
+  if (SgVarRefExp *reference = isSgVarRefExp(node)) {
+    SgVariableSymbol *symbol = reference->get_symbol();
+    ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+    return symbol->get_declaration();
+  }
+  if (SgNonrealRefExp *reference = isSgNonrealRefExp(node)) {
+    if (reference->get_resolved_variable_declaration() != nullptr)
+      return SageInterface::requireResolvedVariableTemplateReference(
+          reference, "AstInterface::IsSameVarRef");
+  }
+  return nullptr;
+}
+
+SgInitializedName *staticDataMember(SgNode *node) {
+  if (isSgDotExp(node) || isSgArrowExp(node))
+    node = isSgBinaryOp(node)->get_rhs_operand();
+  auto *name = referencedVariable(node);
+  if (name == nullptr || isSgClassDefinition(name->get_scope()) == nullptr)
+    return nullptr;
+  auto *declaration = isSgVariableDeclaration(name->get_declaration());
+  ASSERT_not_null(declaration);
+  auto *variableTemplate = isSgTemplateVariableDeclaration(declaration);
+  if (variableTemplate != nullptr &&
+      variableTemplate->get_specializedTemplateDeclaration() != nullptr) {
+    declaration = SageInterface::requireCanonicalVariableTemplatePrimary(
+        variableTemplate, "staticDataMember");
+  } else {
+    declaration =
+        isSgVariableDeclaration(declaration->get_firstNondefiningDeclaration());
+    ASSERT_not_null(declaration);
+    ROSE_ASSERT(declaration->get_firstNondefiningDeclaration() == declaration);
+  }
+  return declaration->get_declarationModifier().get_storageModifier().isStatic()
+             ? name
+             : nullptr;
+}
+
+SgFunctionDeclaration *referencedFunction(SgNode *node) {
+  SgFunctionSymbol *symbol = nullptr;
+  switch (node->variantT()) {
+  case V_SgFunctionRefExp:
+    symbol = isSgFunctionRefExp(node)->get_symbol();
+    break;
+  case V_SgTemplateFunctionRefExp:
+    symbol = isSgTemplateFunctionRefExp(node)->get_symbol();
+    break;
+  case V_SgMemberFunctionRefExp:
+    symbol = isSgMemberFunctionRefExp(node)->get_symbol();
+    break;
+  case V_SgTemplateMemberFunctionRefExp:
+    symbol = isSgTemplateMemberFunctionRefExp(node)->get_symbol();
+    break;
+  default:
+    return nullptr;
+  }
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+  return symbol->get_declaration();
+}
+
+SgInitializedName *implicitThisMember(SgNode *node) {
+  if (isSgDotExp(node) == nullptr && isSgArrowExp(node) == nullptr)
+    return nullptr;
+  SgBinaryOp *member = isSgBinaryOp(node);
+  SgNode *base = stripExactValueIdentityConversions(
+      member->get_lhs_operand(), "IsSameVarRef member base", false);
+  return isSgThisExp(base) != nullptr
+             ? referencedVariable(member->get_rhs_operand())
+             : nullptr;
+}
+
+bool sameTypedReference(SgNode *left, SgNode *right) {
+  if (left == nullptr || right == nullptr)
+    return false;
+  left = stripExactValueIdentityConversions(left, "IsSameVarRef", false);
+  right = stripExactValueIdentityConversions(right, "IsSameVarRef", false);
+  auto *leftStatic = staticDataMember(left);
+  auto *rightStatic = staticDataMember(right);
+  if (leftStatic != nullptr || rightStatic != nullptr)
+    return leftStatic != nullptr && leftStatic == rightStatic;
+  SgInitializedName *leftVariable = referencedVariable(left);
+  SgInitializedName *rightVariable = referencedVariable(right);
+  if ((leftVariable != nullptr && implicitThisMember(right) == leftVariable) ||
+      (rightVariable != nullptr && implicitThisMember(left) == rightVariable)) {
+    SgFunctionDefinition *owner =
+        SageInterface::getEnclosingFunctionDefinition(left);
+    return owner != nullptr &&
+           owner == SageInterface::getEnclosingFunctionDefinition(right);
+  }
+  if (leftVariable != nullptr || rightVariable != nullptr)
+    return leftVariable != nullptr && leftVariable == rightVariable;
+  if (left->variantT() != right->variantT())
+    return false;
+  SgFunctionDeclaration *leftFunction = referencedFunction(left);
+  if (leftFunction != nullptr)
+    return leftFunction == referencedFunction(right);
+  if (SgThisExp *leftThis = isSgThisExp(left)) {
+    SgThisExp *rightThis = isSgThisExp(right);
+    SgFunctionDefinition *owner =
+        SageInterface::getEnclosingFunctionDefinition(leftThis);
+    return owner != nullptr &&
+           owner == SageInterface::getEnclosingFunctionDefinition(rightThis) &&
+           leftThis->get_class_symbol() == rightThis->get_class_symbol() &&
+           leftThis->get_nonreal_symbol() == rightThis->get_nonreal_symbol() &&
+           leftThis->get_type() == rightThis->get_type();
+  }
+  if (SgPointerDerefExp *dereference = isSgPointerDerefExp(left))
+    return sameTypedReference(dereference->get_operand(),
+                              isSgPointerDerefExp(right)->get_operand());
+  if (SgCastExp *cast = isSgCastExp(left)) {
+    SgCastExp *other = isSgCastExp(right);
+    cast->validate_semantic_conversion();
+    other->validate_semantic_conversion();
+    return cast->get_cast_type() == other->get_cast_type() &&
+           cast->get_semantic_conversion_kind() ==
+               other->get_semantic_conversion_kind() &&
+           cast->get_value_category() == other->get_value_category() &&
+           cast->get_conversion_base_path() ==
+               other->get_conversion_base_path() &&
+           cast->get_type() == other->get_type() &&
+           sameTypedReference(cast->get_operand(), other->get_operand());
+  }
+  if (isSgDotExp(left) != nullptr || isSgArrowExp(left) != nullptr ||
+      isSgDotStarOp(left) != nullptr || isSgArrowStarOp(left) != nullptr) {
+    SgBinaryOp *member = isSgBinaryOp(left);
+    SgBinaryOp *other = isSgBinaryOp(right);
+    return sameTypedReference(member->get_rhs_operand(),
+                              other->get_rhs_operand()) &&
+           sameTypedReference(member->get_lhs_operand(),
+                              other->get_lhs_operand());
   }
   return false;
 }
+} // namespace
+
+bool AstInterface::IsSameVarRef(const AstNodePtr &left,
+                                const AstNodePtr &right) {
+  return sameTypedReference(left.get_ptr(), right.get_ptr());
+}
+
+namespace {
+SgFunctionSymbol *directFreeFunctionSymbol(SgNode *node) {
+  if (node == nullptr)
+    return nullptr;
+  SgFunctionSymbol *symbol = nullptr;
+  switch (node->variantT()) {
+  case V_SgFunctionRefExp:
+    symbol = isSgFunctionRefExp(node)->get_symbol();
+    break;
+  case V_SgTemplateFunctionRefExp:
+    symbol = isSgTemplateFunctionRefExp(node)->get_symbol();
+    break;
+  default:
+    return nullptr;
+  }
+  ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+  return symbol;
+}
+} // namespace
 
 bool AstInterface::IsMin(const AstNodePtr &_exp) {
-  std::string name;
-  if (!IsVarRef(_exp, 0, &name, 0, 0)) {
+  SgFunctionSymbol *symbol = directFreeFunctionSymbol(_exp.get_ptr());
+  if (symbol == nullptr)
     return false;
-  }
-  if (name == "min" || name == "min2" || name == "min3")
-    return true;
-  return false;
+  const std::string name = symbol->get_name().getString();
+  return name == "min" || name == "min2" || name == "min3";
 }
 
 bool AstInterface::IsMax(const AstNodePtr &_exp) {
-  std::string name;
-  if (!IsVarRef(_exp, 0, &name, 0, 0))
+  SgFunctionSymbol *symbol = directFreeFunctionSymbol(_exp.get_ptr());
+  if (symbol == nullptr)
     return false;
-  if (name == "max" || name == "max2" || name == "max3")
-    return true;
-  return false;
+  const std::string name = symbol->get_name().getString();
+  return name == "max" || name == "max2" || name == "max3";
 }
 
 //! Check if $_exp$ is a variable reference (including all name references which
@@ -2312,7 +2179,8 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
           SageInterface::requireResolvedVariableTemplateReference(
               reference, "AstInterface::IsVarRef");
       decl = resolved_name;
-      scope = AstInterfaceImpl::GetScope(resolved_name);
+      scope = resolved_name->get_scope();
+      ASSERT_not_null(scope);
       if (vartype != 0)
         *vartype = resolved_name->get_type();
       if (varname != 0)
@@ -2385,7 +2253,9 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
     if (varname != 0)
       *varname = sb->get_name().str();
     decl = sb->get_declaration();
-    scope = AstInterfaceImpl::GetScope(decl);
+    ASSERT_not_null(decl);
+    scope = sb->get_declaration()->get_scope();
+    ASSERT_not_null(scope);
   } break;
   case V_SgThisExp: {
     const SgThisExp *var = isSgThisExp(exp);
@@ -2408,7 +2278,8 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
     if (varname != 0)
       *varname = var->get_name().str();
     decl = var;
-    scope = AstInterfaceImpl::GetScope(var);
+    scope = var->get_scope();
+    ASSERT_not_null(scope);
   } break;
   case V_SgPointerDerefExp:
     if (has_ptr_deref != 0) {
@@ -2429,35 +2300,50 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
       break;
     }
     return false;
-  case V_SgDotStarOp: {
-    const SgBinaryOp *exp1 = isSgBinaryOp(exp);
-    SgVarRefExp *var2 = isSgVarRefExp(exp1->get_rhs_operand());
-    if (var2 == 0)
+  case V_SgDotStarOp:
+  case V_SgArrowStarOp: {
+    auto *member = isSgBinaryOp(exp);
+    std::string object_name, member_name;
+    if (!IsVarRef(stripExactValueIdentityConversions(member->get_lhs_operand(),
+                                                     "IsVarRef member pointer",
+                                                     false),
+                  nullptr, &object_name, _scope, defined_in_global,
+                  use_global_unique_name) ||
+        !IsVarRef(
+            stripExactValueIdentityConversions(
+                member->get_rhs_operand(), "IsVarRef member pointer", false),
+            nullptr, &member_name, nullptr, nullptr, use_global_unique_name))
       return false;
-    if (has_ptr_deref != 0) {
+    if (has_ptr_deref != nullptr)
       *has_ptr_deref = true;
-    }
-    SgVariableSymbol *sb2 = var2->get_symbol();
-    if (vartype != 0)
-      *vartype = sb2->get_type();
-    if (varname != 0) {
-      *varname = StripQualifier(std::string(sb2->get_name().str()));
-    }
-  } break;
+    if (vartype != nullptr)
+      *vartype = member->get_type();
+    if (varname != nullptr)
+      *varname = object_name + (isSgDotStarOp(member) ? ".*(" : "->*(") +
+                 member_name + ")";
+    return true;
+  }
   case V_SgArrowExp:
-    if (has_ptr_deref != 0 &&
-        !isSgThisExp(isSgBinaryOp(exp)->get_lhs_operand())) {
-      *has_ptr_deref = true;
-    }
-    ROSE_FALLTHROUGH;
   case V_SgDotExp: {
     const SgBinaryOp *exp1 = isSgBinaryOp(exp);
     SgNode *lhs = exp1->get_lhs_operand();
+    if (auto *member = staticDataMember(exp)) {
+      if (vartype != nullptr)
+        *vartype = exp1->get_type();
+      if (has_ptr_deref != nullptr)
+        *has_ptr_deref = false;
+      return IsVarRef(member, nullptr, varname, _scope, defined_in_global,
+                      use_global_unique_name);
+    }
+    if (isSgArrowExp(exp) && has_ptr_deref != nullptr && !isSgThisExp(lhs))
+      *has_ptr_deref = true;
     if (isSgThisExp(lhs) != 0) {
       if (!IsVarRef(exp1->get_rhs_operand(), vartype, varname, _scope,
                     defined_in_global, use_global_unique_name, has_ptr_deref)) {
         return false;
       }
+      if (vartype != nullptr)
+        *vartype = exp1->get_type();
       return true;
     }
     while (SgCastExp *cast = isSgCastExp(lhs)) {
@@ -2510,41 +2396,26 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
                   use_global_unique_name, has_ptr_deref)) {
       return false;
     }
-    SgNode *rhs = exp1->get_rhs_operand();
-    SgVarRefExp *var2 = isSgVarRefExp(rhs);
-    SgNonrealRefExp *nonreal_var = isSgNonrealRefExp(rhs);
-    SgType *member_type = nullptr;
-    std::string member_name;
-    if (var2 != nullptr) {
-      SgVariableSymbol *sb2 = var2->get_symbol();
-      if (sb2 == nullptr)
-        return false;
-      member_type = sb2->get_type();
-      member_name = sb2->get_name().str();
-    } else if (nonreal_var != nullptr &&
-               nonreal_var->get_resolved_variable_declaration() != nullptr) {
-      SgInitializedName *resolved_name =
-          SageInterface::requireResolvedVariableTemplateReference(
-              nonreal_var, "AstInterface::IsVarRef member access");
-      member_type = resolved_name->get_type();
-      member_name = resolved_name->get_name().str();
-    } else {
+    SgInitializedName *member = referencedVariable(exp1->get_rhs_operand());
+    if (member == nullptr)
       return false;
-    }
     if (vartype != 0)
-      *vartype = member_type;
+      *vartype = exp1->get_type();
     if (varname != 0) {
       auto dot = (exp->variantT() == V_SgDotExp) ? "." : "->";
-      *varname = varname1 + dot + StripQualifier(member_name);
+      *varname = varname1 + dot + member->get_name().getString();
     }
-  } break;
+    if (_scope != nullptr)
+      *_scope = scope;
+    return true;
+  }
   default:
     return false;
   }
   if (_scope != 0 || defined_in_global != 0 || use_global_unique_name) {
     if (scope == 0 && decl != 0) {
       std::cerr << "Both should be defined, or neither should. \n";
-      assert(false);
+      ROSE_ABORT();
     }
     if (_scope != 0 && scope != 0) {
       *_scope = (isSgScopeStatement(scope) ? scope
@@ -2557,7 +2428,11 @@ bool AstInterfaceImpl::IsVarRef(SgNode *exp, SgType **vartype,
         return "Variable-scope:" + *varname + ":" +
                AstInterface::AstToString(scope);
       });
-      if (scope != 0) {
+      SgInitializedName *variable = isSgInitializedName(decl);
+      if (variable != nullptr &&
+          isSgTemplateVariableDeclaration(variable->get_parent()) != nullptr) {
+        *varname = variable->get_mangled_name().getString();
+      } else if (scope != 0) {
         if (decl != scope) {
           *varname = AstInterface::GetGlobalUniqueName(scope, *varname);
         } else {
@@ -2606,7 +2481,7 @@ bool AstInterface::IsVarRef(const AstNodePtr &_exp, AstNodeType *vartype,
 std::string AstInterface::GetScopeName(const AstNodePtr &_scope) {
   SgNode *s = AstNodePtrImpl(_scope).get_ptr();
   SgScopeStatement *scope = isSgScopeStatement(s);
-  assert(scope != 0);
+  ROSE_ASSERT(scope != 0);
   return StripGlobalQualifier(scope->get_qualified_name().str());
 }
 
@@ -2618,8 +2493,7 @@ string AstInterface::GetVarName(const AstNodePtr &exp,
   }
   std::cerr << "Error: expecting a variable reference but getting:" +
                    AstToString(exp);
-  assert(false);
-  return "";
+  ROSE_ABORT();
 }
 
 AstNodeType AstInterface::GetExpressionType(const AstNodePtr &s) {
@@ -2656,8 +2530,8 @@ bool AstInterface::IsFunctionType(const AstNodeType &t,
 
 string AstInterface::NewVar(const AstNodeType &_type, const string &name,
                             bool makeunique, bool delayInsert,
-                            const AstNodePtr &_declLoc,
-                            const AstNodePtr &_init) {
+                            const AstNodePtr &_declLoc, const AstNodePtr &_init,
+                            AstNodePtr *createdSymbol) {
   if (DebugNewVar())
     std::cerr << "Enter NewVar:" << name << "\n";
   SgType *type = AstNodeTypeImpl(_type).get_ptr();
@@ -2675,12 +2549,15 @@ string AstInterface::NewVar(const AstNodeType &_type, const string &name,
 
   SgExpression *e = 0;
   if (_init != AST_NULL)
-    e = ToExpression(*impl, (SgNode *)_init.get_ptr());
+    e = ToExpression((SgNode *)_init.get_ptr());
   SgVariableSymbol *sb =
       impl->NewVar(isSgType(type), name, makeunique, delayInsert, e, scope);
-#ifndef NDEBUG
   SgInitializedName *def = sb->get_declaration();
-  assert(def != 0 && !HasNullParent(def));
+  ROSE_ASSERT(def != nullptr);
+  if (createdSymbol != nullptr)
+    *createdSymbol = sb;
+#ifndef NDEBUG
+  assert(!HasNullParent(def));
 #endif
 
   if (DebugNewVar())
@@ -2690,48 +2567,34 @@ string AstInterface::NewVar(const AstNodeType &_type, const string &name,
   return varname;
 }
 
-void AstInterface::AddNewVarDecls() { impl->AddNewVarDecls(); }
-
-void AstInterface::CopyNewVarDecls(const AstNodePtr &nblock, bool clear) {
+void AstInterface::CopyNewVarDecls(const AstNodePtr &nblock) {
   SgBasicBlock *blk = isSgBasicBlock((SgNode *)nblock.get_ptr());
   if (blk == 0) {
     std::cerr << "nblock is not a block: " << AstToString(nblock) << "\n";
     ROSE_ABORT();
   }
-  impl->CopyNewVarDecls(blk, clear);
+  impl->CopyNewVarDecls(blk);
 }
 
-void AstInterfaceImpl::AddNewVarDecls() {
-  for (size_t i = newVarList.size(); i > 0; --i) {
-    std::pair<SgScopeStatement *, SgVariableDeclaration *> cur =
-        newVarList[i - 1];
-    cur.first->insertStatementInScope(cur.second, true);
-    cur.second->set_parent(cur.first);
+void AstInterfaceImpl::CopyNewVarDecls(SgBasicBlock *blk) {
+  ROSE_ASSERT(blk != nullptr);
+  for (const PendingVariable &pending : newVarList) {
+    SgVariableDeclaration *declaration = pending.declaration;
+    ROSE_ASSERT(declaration->get_parent() == nullptr);
+    const SgInitializedNamePtrList &names = declaration->get_variables();
+    ROSE_ASSERT(names.size() == 1);
+    SgInitializedName *name = names.front();
+    ROSE_ASSERT(name != nullptr && name->get_parent() == declaration);
+    ROSE_ASSERT(name->get_scope() == pending.scope);
+    ROSE_ASSERT(declaration->get_scope() == pending.scope);
+    ROSE_ASSERT(pending.symbol->get_declaration() == name);
+    ROSE_ASSERT(blk->lookup_symbol(name->get_name()) == nullptr);
+    blk->append_statement(declaration);
+    declaration->set_scope(blk);
+    name->set_scope(blk);
+    blk->insert_symbol(name->get_name(), pending.symbol);
   }
   newVarList.clear();
-}
-
-void AstInterfaceImpl::CopyNewVarDecls(SgBasicBlock *blk, bool clear) {
-  for (size_t i = 0; i < newVarList.size(); ++i) {
-    std::pair<SgScopeStatement *, SgVariableDeclaration *> cur = newVarList[i];
-    SgVariableDeclaration *s = cur.second;
-    if (!clear) {
-      SgTreeCopy copyOption;
-      s = isSgVariableDeclaration(cur.second->copy(copyOption));
-    }
-    assert(s != 0);
-    blk->append_statement(s);
-    s->set_parent(blk);
-    // QY: each new decl has only one variable*/
-    const SgInitializedNamePtrList &names = s->get_variables();
-    assert(names.size() == 1);
-    SgInitializedName *n = *names.begin();
-    assert(n != 0);
-    n->set_parent(s);
-    InsertVar(n, blk);
-  }
-  if (clear)
-    newVarList.clear();
 }
 
 SgVarRefExp *AstInterfaceImpl::CreateFieldRef(SgNode *decl, std::string name2) {
@@ -2827,8 +2690,7 @@ SgExpression *AstInterfaceImpl::CreateVarRef(std::string varname, SgNode *loc) {
     }
     if (member_type->isConstFunc() || member_type->isVolatileFunc() ||
         member_type->isRestrictFunc()) {
-      SgModifierType *qualified_type = new SgModifierType(this_base_type);
-      SgTypeModifier &modifier = qualified_type->get_typeModifier();
+      SgTypeModifier modifier;
       if (member_type->isConstFunc()) {
         modifier.get_constVolatileModifier().setConst();
       }
@@ -2838,17 +2700,12 @@ SgExpression *AstInterfaceImpl::CreateVarRef(std::string varname, SgNode *loc) {
       if (member_type->isRestrictFunc()) {
         modifier.setRestrict();
       }
-      SgModifierType *canonical =
-          SgModifierType::insertModifierTypeIntoTypeTable(qualified_type);
-      if (canonical != qualified_type) {
-        delete qualified_type;
-      }
-      this_base_type = canonical;
+      this_base_type = SageBuilder::buildModifierType(this_base_type, modifier);
     }
     SgType *this_pointer_type = SgPointerType::createType(this_base_type);
     SgThisExp *p =
         new SgThisExp(GetFileInfo(), isSgClassSymbol(class_symbol),
-                      isSgNonrealSymbol(class_symbol), 0, this_pointer_type);
+                      isSgNonrealSymbol(class_symbol), this_pointer_type);
     p->set_endOfConstruct(p->get_file_info());
     return p;
   }
@@ -2870,7 +2727,8 @@ SgExpression *AstInterfaceImpl::CreateVarRef(std::string varname, SgNode *loc) {
   for (size_t i = 0; i < deref_count; ++i) {
     r = new SgPointerDerefExp(
         GetFileInfo(), r,
-        requireElementResultType(r->get_type(), "AstInterface::CreateVarRef"));
+        requireElementResultType(r->get_type(), "AstInterface::CreateVarRef"),
+        SgUnaryOp::prefix);
   }
   return r;
 }
@@ -2885,78 +2743,72 @@ AstNodePtr AstInterface::CreateVarRef(std::string varname,
 }
 
 AstNodeType AstInterface::GetType(const string &name) {
+  ROSE_ASSERT(!name.empty());
   if (name[name.size() - 1] == '*') {
     string name1 = name.substr(0, name.size() - 1);
     SgType *t = isSgType(AstNodeTypeImpl(GetType(name1)).get_ptr());
-    SgPointerType *ptr = t->get_ptr_to();
-    if (ptr == 0) {
-      ptr = new SgPointerType(t);
-      t->set_ptr_to(ptr);
-    }
-    return AstNodeTypeImpl(ptr);
+    ROSE_ASSERT(t != nullptr);
+    return AstNodeTypeImpl(SgPointerType::createType(t));
   } else if (name == "char")
-    return AstNodeTypeImpl(new SgTypeChar());
+    return AstNodeTypeImpl(SageBuilder::buildCharType());
   else if (name == "int")
     return AstNodeTypeImpl(AstInterfaceImpl::GetTypeInt());
   else if (name == "long")
-    return AstNodeTypeImpl(new SgTypeLong());
+    return AstNodeTypeImpl(SageBuilder::buildLongType());
   else if (name == "void")
-    return AstNodeTypeImpl(new SgTypeVoid());
+    return AstNodeTypeImpl(SageBuilder::buildVoidType());
   else if (name == "float")
-    return AstNodeTypeImpl(new SgTypeFloat());
+    return AstNodeTypeImpl(SageBuilder::buildFloatType());
   else if (name == "double")
-    return AstNodeTypeImpl(new SgTypeDouble());
+    return AstNodeTypeImpl(SageBuilder::buildDoubleType());
   else if (name == "string")
-    return AstNodeTypeImpl(new SgTypeString());
+    return AstNodeTypeImpl(SageBuilder::buildStringType(nullptr));
   else if (name == "bool")
-    return AstNodeTypeImpl(new SgTypeBool());
+    return AstNodeTypeImpl(SageBuilder::buildBoolType());
   else {
     SgClassDeclaration *c = isSgClassDeclaration(
         impl->LookupNestedDeclaration(name, impl->get_scope(0)));
     if (c == 0) {
       cerr << "Error: not recognize type name : " << name << endl;
       ROSE_ABORT();
-    } else
-      return AstNodeTypeImpl(new SgClassType(c));
+    }
+    SgClassType *type = isSgClassType(c->get_type());
+    ROSE_ASSERT(type != nullptr);
+    return AstNodeTypeImpl(type);
   }
+}
+
+AstNodeType AstInterface::GetPointerType(const AstNodeType &base) {
+  SgType *type = AstNodeTypeImpl(base).get_ptr();
+  ROSE_ASSERT(type != nullptr && !SageInterface::containsUnknownType(type));
+  return AstNodeTypeImpl(SgPointerType::createType(type));
 }
 
 AstNodeType AstInterface::GetArrayType(const AstNodeType &base,
                                        const AstNodeList &index) {
-  if (IS_FORTRAN_LANGUAGE()) {
-    SgType *btype = AstNodeTypeImpl(base).get_ptr();
-    SgArrayType *atype = new SgArrayType(btype);
-
-    SgExprListExp *NEW_EXPR_LIST(dim);
-    for (AstNodeList::const_iterator p = index.begin(); p != index.end(); ++p) {
-      SgExpression *i = isSgExpression(AstNodePtrImpl(*p).get_ptr());
-      assert(i);
-      dim->append_expression(i);
-      i->set_parent(dim);
-    }
-    atype->set_dim_info(dim);
-    dim->set_parent(atype);
-
-    atype->set_rank(1);
-    return AstNodeTypeImpl(atype);
-
-  } else {
-
-    SgType *r = AstNodeTypeImpl(base).get_ptr();
-    for (AstNodeList::const_iterator p = index.begin(); p != index.end(); ++p) {
-      if (AstNodePtrImpl(*p).get_ptr()->variantT() != V_SgIntVal) {
-        return AstNodeTypeImpl(new SgPointerType(r));
-      }
-    }
-    for (AstNodeList::const_iterator p1 = index.begin(); p1 != index.end();
-         ++p1) {
-      SgExpression *ie = isSgExpression(AstNodePtrImpl(*p1).get_ptr());
-      assert(ie != 0);
-      r = new SgArrayType(r, ie);
-    }
-
-    return AstNodeTypeImpl(r);
+  SgType *type = AstNodeTypeImpl(base).get_ptr();
+  ROSE_ASSERT(type != nullptr && !SageInterface::containsUnknownType(type));
+  ROSE_ASSERT(!index.empty());
+  SgExpressionPtrList bounds;
+  for (const AstNodePtr &node : index) {
+    SgExpression *bound = isSgExpression(AstNodePtrImpl(node).get_ptr());
+    ROSE_ASSERT(bound != nullptr && bound->get_parent() == nullptr);
+    ROSE_ASSERT(bound->get_type() != nullptr &&
+                !SageInterface::containsUnknownType(bound->get_type()));
+    ROSE_ASSERT(std::find(bounds.begin(), bounds.end(), bound) == bounds.end());
+    bounds.push_back(bound);
   }
+
+  if (IS_FORTRAN_LANGUAGE()) {
+    SgExprListExp *NEW_EXPR_LIST(dim);
+    for (SgExpression *bound : bounds)
+      dim->append_expression(bound);
+    return AstNodeTypeImpl(SageBuilder::buildArrayType(type, dim));
+  }
+
+  for (SgExpression *bound : bounds)
+    type = SageBuilder::buildArrayType(type, bound);
+  return AstNodeTypeImpl(type);
 }
 
 bool AstInterface::IsAddressOfOp(const AstNodePtr &_s, AstNodePtr *ref) {
@@ -3124,13 +2976,23 @@ bool AstInterface::IsMemoryAccess(const AstNodePtr &_s, AstNodeList *subrefs) {
   case V_SgDotExp:
   case V_SgArrowExp: {
     SgNode *rhs = isSgBinaryOp(s)->get_rhs_operand();
-    if (rhs != nullptr && rhs->variantT() == V_SgVarRefExp) {
+    if (referencedVariable(rhs) != nullptr) {
       if (subrefs != 0) {
         subrefs->push_back(s);
       }
       return true;
     }
     return false;
+  }
+  case V_SgDotStarOp:
+  case V_SgArrowStarOp: {
+    SgType *type = isSgBinaryOp(s)->get_type();
+    ASSERT_not_null(type);
+    if (isSgFunctionType(type->stripTypedefsAndModifiers()))
+      return false;
+    if (subrefs != nullptr)
+      subrefs->push_back(s);
+    return true;
   }
   case V_SgFunctionRefExp:
   case V_SgTemplateFunctionRefExp:
@@ -3567,7 +3429,8 @@ bool AstInterface::IsBlock(const AstNodePtr &_exp) {
   return false;
 }
 
-//! Check if $s$ is a function call; if yes, return the function and arguments
+// Arguments are expressions or inherited fixed-parameter identities. The
+// returned constructor retains its typed forwarding and variadic context.
 bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
                                       AstNodeList *args) {
   if (s == nullptr) {
@@ -3576,11 +3439,9 @@ bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
   SgNode *exp = s;
   SgNode *f = 0;
   SgExprListExp *argexp = 0;
+  SgFunctionParameterList *incoming = nullptr;
 
   switch (exp->variantT()) {
-    //  case V_SgNonrealRefExp:
-    // SgNonrealRef is from an uninstantiated template, so ignore it.  -Jim Leek
-    // return false;
   case V_SgExprStatement:
     exp = isSgExprStatement(exp)->get_expression();
     return IsFunctionCall(exp, func, args);
@@ -3599,19 +3460,12 @@ bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
       cast->validate_semantic_conversion();
       const SgCastExp::semantic_conversion_kind_enum conversion =
           cast->get_semantic_conversion_kind();
-      if (conversion !=
-              SgCastExp::e_semantic_conversion_FunctionToPointerDecay &&
-          conversion != SgCastExp::e_semantic_conversion_LValueToRValue &&
-          conversion != SgCastExp::e_semantic_conversion_NoOp) {
+      if (cast->cast_type() != SgCastExp::e_implicit_cast ||
+          (conversion !=
+               SgCastExp::e_semantic_conversion_FunctionToPointerDecay &&
+           conversion != SgCastExp::e_semantic_conversion_LValueToRValue &&
+           conversion != SgCastExp::e_semantic_conversion_NoOp)) {
         break;
-      }
-      if (cast->cast_type() != SgCastExp::e_implicit_cast) {
-        std::cerr
-            << "REX_AST_INVARIANT[function-call-callee-conversion]: function "
-               "call="
-            << fs << " has a source-explicit cast classified as transparent "
-            << static_cast<int>(conversion) << std::endl;
-        ROSE_ABORT();
       }
       f = cast->get_operand();
     }
@@ -3652,10 +3506,20 @@ bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
   } break;
   case V_SgConstructorInitializer: {
     SgConstructorInitializer *isinit_exp = isSgConstructorInitializer(exp);
+    isinit_exp->validate_argument_context();
     if (isinit_exp->get_class_decl() != 0 &&
         isinit_exp->get_declaration() != 0) {
       f = exp;
-      argexp = isSgConstructorInitializer(exp)->get_args();
+      if (isinit_exp->get_argument_source() ==
+          SgConstructorInitializer::e_constructor_argument_expressions) {
+        argexp = isinit_exp->get_args();
+      } else {
+        auto *entry = isSgInitializedName(isinit_exp->get_parent());
+        auto *list = isSgCtorInitializerList(entry->get_parent());
+        auto *owner = isSgMemberFunctionDeclaration(list->get_parent());
+        incoming = owner->get_parameterList();
+        ROSE_ASSERT(incoming != nullptr && incoming->get_parent() == owner);
+      }
     } else
       return false;
   } break;
@@ -3692,17 +3556,8 @@ bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
     if (args != 0)
       args->push_back(cur);
   } break;
-  case V_SgMemberFunctionRefExp: {
-    if (args != 0)
-      args->push_back(0);
-    break;
-  }
+  case V_SgMemberFunctionRefExp:
   case V_SgTemplateMemberFunctionRefExp: {
-    SgTemplateMemberFunctionSymbol *sym =
-        isSgTemplateMemberFunctionRefExp(f)->get_symbol();
-    if (sym != nullptr && sym->get_name() == "operator()") {
-      break;
-    }
     if (args != 0)
       args->push_back(0);
     break;
@@ -3710,19 +3565,24 @@ bool AstInterfaceImpl::IsFunctionCall(SgNode *s, SgNode **func,
   default:
     break;
   }
-  if (argexp != 0) {
-    SgExpressionPtrList l = argexp->get_expressions();
-    for (SgExpressionPtrList::iterator p = l.begin(); p != l.end(); ++p) {
-      if (args != 0) {
-        args->push_back(*p);
+  if (args != nullptr) {
+    if (incoming != nullptr) {
+      for (SgInitializedName *parameter : incoming->get_args()) {
+        ROSE_ASSERT(parameter != nullptr &&
+                    parameter->get_parent() == incoming);
+        ROSE_ASSERT(parameter->get_type() != nullptr);
+        if (!isSgTypeEllipse(parameter->get_type()))
+          args->emplace_back(parameter);
       }
+    } else if (argexp != nullptr) {
+      for (SgExpression *argument : argexp->get_expressions())
+        args->emplace_back(argument);
     }
   }
   if (func != 0)
     *func = f;
   return true;
 }
-/* Does not deal correctly with templates SgNorealExp */
 bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
                                   AstNodeList *args, AstNodeList *outargs,
                                   AstTypeList *paramtypes,
@@ -3732,7 +3592,6 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
   if (outargs != 0 && args == 0)
     args = &Args;
   SgNode *f;
-  // Grab functionRefExp and argument expression list
   if (!AstInterfaceImpl::IsFunctionCall(s.get_ptr(), &f, args))
     return false;
 
@@ -3742,7 +3601,11 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     *fname = AstNodePtrImpl(f);
   }
   if (outargs != 0 || paramtypes != 0 || returntype != 0) {
-    if (SgNonrealRefExp *dependent_callee = isSgNonrealRefExp(f)) {
+    if (SgNonrealRefExp *dependent_callee = isSgNonrealRefExp(f);
+        dependent_callee != nullptr &&
+        isSgNonrealType(
+            dependent_callee->get_type()->stripTypedefsAndModifiers()) !=
+            nullptr) {
       SgNonrealSymbol *dependent_symbol = dependent_callee->get_symbol();
       Sg_File_Info *position = dependent_callee->get_startOfConstruct();
       std::cerr
@@ -3764,6 +3627,7 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
     AstTypeList PTlist;
     if (paramtypes == 0)
       paramtypes = &PTlist;
+    SgFunctionType *ftype = nullptr;
     if (SgConstructorInitializer *ctor_init = isSgConstructorInitializer(f)) {
       SgFunctionDeclaration *decl = ctor_init->get_declaration();
       if (decl == nullptr) {
@@ -3795,7 +3659,7 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
           t = t->stripTypedefsAndModifiers();
         }
       }
-      SgFunctionType *ftype = isSgFunctionType(t);
+      ftype = isSgFunctionType(t);
       if (ftype != 0) {
         SgTypePtrList atypes = ftype->get_arguments();
         for (SgTypePtrList::const_iterator p = atypes.begin();
@@ -3834,23 +3698,15 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
         ROSE_ABORT();
       }
       AstNodeList::const_iterator p1 = args->begin();
-      SgMemberFunctionRefExp *member_ref = isSgMemberFunctionRefExp(f);
-      SgTemplateMemberFunctionRefExp *template_member_ref =
-          isSgTemplateMemberFunctionRefExp(f);
-      SgMemberFunctionDeclaration *member_decl =
-          member_ref != nullptr
-              ? member_ref->getAssociatedMemberFunctionDeclaration()
-              : (template_member_ref != nullptr
-                     ? template_member_ref
-                           ->getAssociatedMemberFunctionDeclaration()
-                     : nullptr);
-      if (member_decl != nullptr) {
-        const bool is_static = member_decl->get_declarationModifier()
-                                   .get_storageModifier()
-                                   .isStatic();
-        SgMemberFunctionType *member_type =
-            isSgMemberFunctionType(member_decl->get_type());
-        if (member_type == nullptr || p1 == args->end()) {
+      if (auto *member_type = isSgMemberFunctionType(ftype)) {
+        auto *member_decl = isSgMemberFunctionDeclaration(
+            SgFunctionCallExp::getAssociatedFunctionDeclarationForCallee(
+                isSgExpression(f)));
+        const bool is_static =
+            member_decl != nullptr && member_decl->get_declarationModifier()
+                                          .get_storageModifier()
+                                          .isStatic();
+        if (p1 == args->end()) {
           std::cerr << "REX_AST_INVARIANT[member-call-object-argument]: member "
                        "callee="
                     << f
@@ -3880,6 +3736,9 @@ bool AstInterface::IsFunctionCall(const AstNodePtr &_s, AstNodePtr *fname,
         AstNodePtr ref = *p1;
         SgType *referenced_type = nullptr;
         if (SgReferenceType *ref_type = isSgReferenceType(t)) {
+          referenced_type = ref_type->get_base_type();
+        } else if (SgRvalueReferenceType *ref_type =
+                       isSgRvalueReferenceType(t)) {
           referenced_type = ref_type->get_base_type();
         } else if (SgPointerType *ptr_type = isSgPointerType(t)) {
           if (IsAddressOfOp(*p1, &ref)) {
@@ -3914,11 +3773,38 @@ AstNodeType AstInterface::GetBaseType(const AstNodeType &t) {
 }
 
 namespace {
-std::string astInterfaceSemanticTypeName(SgType *type) {
+std::string astInterfaceSemanticTypeName(SgType *type, bool use_global_name) {
   ASSERT_not_null(type);
 
   if (SgNamedType *named_type = isSgNamedType(type)) {
-    const std::string name = named_type->get_name();
+    auto *declaration = named_type->get_declaration();
+    ASSERT_not_null(declaration);
+    std::string name;
+    if (auto *instantiation = isSgTemplateInstantiationDecl(declaration)) {
+      auto *primary = instantiation->get_templateDeclaration();
+      ASSERT_not_null(primary);
+      name = primary->get_qualified_name().getString();
+    } else {
+      name = named_type->get_name().getString();
+      if (use_global_name) {
+        auto *scope = declaration->get_scope();
+        ASSERT_not_null(scope);
+        std::set<SgScopeStatement *> visited;
+        bool local = false;
+        while (!isSgGlobal(scope)) {
+          ROSE_ASSERT(visited.insert(scope).second);
+          if (!isSgNamespaceDefinitionStatement(scope) &&
+              !isSgClassDefinition(scope)) {
+            local = true;
+            break;
+          }
+          scope = scope->get_scope();
+          ASSERT_not_null(scope);
+        }
+        name = local ? named_type->get_mangled().getString()
+                     : named_type->get_qualified_name().getString();
+      }
+    }
     if (name.empty()) {
       fprintf(stderr,
               "REX_AST_INVARIANT[ast-interface-type-name]: named type=%s has "
@@ -3929,13 +3815,19 @@ std::string astInterfaceSemanticTypeName(SgType *type) {
     return name;
   }
   if (SgReferenceType *reference_type = isSgReferenceType(type)) {
-    return astInterfaceSemanticTypeName(reference_type->get_base_type()) + "&";
+    return astInterfaceSemanticTypeName(reference_type->get_base_type(),
+                                        use_global_name) +
+           "&";
   }
   if (SgRvalueReferenceType *reference_type = isSgRvalueReferenceType(type)) {
-    return astInterfaceSemanticTypeName(reference_type->get_base_type()) + "&&";
+    return astInterfaceSemanticTypeName(reference_type->get_base_type(),
+                                        use_global_name) +
+           "&&";
   }
   if (SgPointerType *pointer_type = isSgPointerType(type)) {
-    return astInterfaceSemanticTypeName(pointer_type->get_base_type()) + "*";
+    return astInterfaceSemanticTypeName(pointer_type->get_base_type(),
+                                        use_global_name) +
+           "*";
   }
   if (SgModifierType *modifier_type = isSgModifierType(type)) {
     const SgTypeModifier &modifier = modifier_type->get_typeModifier();
@@ -3949,8 +3841,8 @@ std::string astInterfaceSemanticTypeName(SgType *type) {
     if (modifier.isRestrict()) {
       result += "restrict ";
     }
-    return result +
-           astInterfaceSemanticTypeName(modifier_type->get_base_type());
+    return result + astInterfaceSemanticTypeName(modifier_type->get_base_type(),
+                                                 use_global_name);
   }
 
   switch (type->variant()) {
@@ -4037,7 +3929,8 @@ std::string astInterfaceSemanticTypeName(SgType *type) {
   case T_COMPLEX: {
     SgTypeComplex *complex_type = isSgTypeComplex(type);
     ASSERT_not_null(complex_type);
-    return astInterfaceSemanticTypeName(complex_type->get_base_type()) +
+    return astInterfaceSemanticTypeName(complex_type->get_base_type(),
+                                        use_global_name) +
            " _Complex";
   }
   default:
@@ -4051,12 +3944,12 @@ std::string astInterfaceSemanticTypeName(SgType *type) {
 } // namespace
 
 void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
-                                   std::string *stripname, int *size,
+                                   std::string *stripname,
                                    bool use_global_name) {
   {
     SgPointerType *pointer_type = isSgPointerType(t);
     if (pointer_type != 0) {
-      GetTypeInfo(pointer_type->get_base_type(), tname, stripname, size,
+      GetTypeInfo(pointer_type->get_base_type(), tname, stripname,
                   use_global_name);
       if (tname != 0) {
         *tname = (*tname) + "_ptr_";
@@ -4064,20 +3957,7 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
       return;
     }
   }
-  std::string typeName = astInterfaceSemanticTypeName(t);
-  // For instantiated template types, return the original template type name.
-  if (isSgNamedType(t)) {
-    SgDeclarationStatement *decl = isSgNamedType(t)->get_declaration();
-    SgTemplateInstantiationDecl *insDecl = isSgTemplateInstantiationDecl(decl);
-    if (insDecl) {
-      typeName = insDecl->get_templateDeclaration()->get_qualified_name();
-    } else if (use_global_name) {
-      typeName =
-          AstInterface::GetGlobalUniqueName(decl, typeName,
-                                            /*do_not_add_file_name=*/true);
-    }
-  }
-
+  std::string typeName = astInterfaceSemanticTypeName(t, use_global_name);
   std::string r1 = ::StripGlobalQualifier(typeName);
   std::string result = "";
   for (size_t i = 0; i < r1.size(); ++i) {
@@ -4097,67 +3977,26 @@ void AstInterfaceImpl::GetTypeInfo(SgType *t, std::string *tname,
   if (tname != 0) {
     *tname = result;
   }
-  if (stripname != 0)
-    *stripname = StripParameterType(result);
-  if (size != 0)
-    *size = 4;
+  if (stripname != nullptr) {
+    SgType *base = t->stripType(
+        SgType::STRIP_MODIFIER_TYPE | SgType::STRIP_REFERENCE_TYPE |
+        SgType::STRIP_RVALUE_REFERENCE_TYPE | SgType::STRIP_POINTER_TYPE);
+    if (base == t)
+      *stripname = result;
+    else
+      GetTypeInfo(base, stripname, nullptr, use_global_name);
+  }
 }
 
 void AstInterface::GetTypeInfo(const AstNodeType &t, string *tname,
-                               string *stripname, int *size,
-                               bool use_global_name) {
+                               string *stripname, bool use_global_name) {
   AstInterfaceImpl::GetTypeInfo(AstNodeTypeImpl(t).get_ptr(), tname, stripname,
-                                size, use_global_name);
+                                use_global_name);
 }
 
 bool AstInterface::IsPointerType(const AstNodeType &__type) {
   AstNodeTypeImpl type(__type);
   return type.get_ptr()->variantT() == V_SgPointerType;
-}
-
-/*
-bool AstInterface::
-IsArrayType( const AstNodeType& s, AstNodeType* base)
-{
-  if (s->variantT() ==  V_SgArrayType) {
-      if (base != 0) {
-        SgType* n = s;
-        while (true) {
-          SgArrayType *arr = isSgArrayType(n);
-          if (arr == 0)
-            break;
-          n = arr->get_base_type();
-        }
-        *base = n;
-      }
-      return true;
-  }
-  return false;
-}
-*/
-
-bool AstInterface::IsArrayType(const AstNodeType &__type, int *__dim,
-                               AstNodeType *__base_type,
-                               std::string *annotation) {
-  AstNodeTypeImpl type(__type);
-  SgArrayType *t = isSgArrayType(type.get_ptr());
-  if (t == 0)
-    return false;
-
-  if (__base_type)
-    (*__base_type) = AstNodeTypeImpl(t->get_base_type());
-  if (__dim)
-    (*__dim) = t->get_rank();
-  if (annotation != 0) {
-    /*
-        SgDeclarationStatement *d = t->getAssociatedDeclaration ();
-        if (p != NULL) {
-          *annotation = p->getString();
-    std::cerr << "ANNOTATION:" << *annotation << "\n";
-        }
-    */
-  }
-  return true;
 }
 
 bool AstInterface::IsScalarType(const AstNodeType &__type) {
@@ -4197,30 +4036,40 @@ bool AstInterface::IsScalarType(const AstNodeType &__type) {
 
 bool AstInterface::GetArrayBound(const AstNodePtr &_arrayref, int dim, int &lb,
                                  int &ub) {
-  AstNodePtrImpl arrayref(_arrayref);
-  SgNode *n = arrayref.get_ptr();
-  SgArrayType *t = 0;
-  if (dim == 0) {
-    SgVarRefExp *var = isSgVarRefExp(n);
-    if (var == 0)
-      return false;
-    SgVariableSymbol *sb = var->get_symbol();
-    SgType *vt = sb->get_type();
-    t = isSgArrayType(vt);
-  } else {
-    for (int i = 0; i < dim; ++i) {
-      n = n->get_parent();
-    }
-    SgPntrArrRefExp *ar = isSgPntrArrRefExp(n);
-    if (ar == 0)
-      return false;
-    t = isSgArrayType(ar->get_type());
-  }
-  if (t == 0)
+  ROSE_ASSERT(dim >= 0);
+  auto *expression = isSgExpression(_arrayref.get_ptr());
+  if (expression == nullptr)
     return false;
-  SgExpression *exp = t->get_index();
+  while (auto *cast = isSgCastExp(expression)) {
+    if (cast->get_semantic_conversion_kind() !=
+        SgCastExp::e_semantic_conversion_ArrayToPointerDecay)
+      break;
+    expression = cast->get_operand();
+    ASSERT_not_null(expression);
+  }
+
+  const unsigned strip =
+      SgType::STRIP_TYPEDEF_TYPE | SgType::STRIP_MODIFIER_TYPE |
+      SgType::STRIP_REFERENCE_TYPE | SgType::STRIP_RVALUE_REFERENCE_TYPE;
+  SgType *type = expression->get_type()->stripType(strip);
+  for (int dimension = 0; dimension < dim; ++dimension) {
+    if (auto *array = isSgArrayType(type))
+      type = array->get_base_type();
+    else if (auto *pointer = isSgPointerType(type))
+      type = pointer->get_base_type();
+    else
+      return false;
+    ASSERT_not_null(type);
+    type = type->stripType(strip);
+  }
+  auto *array = isSgArrayType(type);
+  int extent;
+  if (array == nullptr || !IsConstInt(array->get_index(), &extent))
+    return false;
+  ROSE_ASSERT(extent >= 0);
   lb = 0;
-  return IsConstInt(AstNodePtrImpl(exp), &ub);
+  ub = extent - 1;
+  return true;
 }
 
 //! Check whether $_s$ is an expression; If yes, return the expression
@@ -4282,8 +4131,13 @@ bool AstInterface::IsLoop(const AstNodePtr &_s, AstNodePtr *init,
     }
     if (incr != 0)
       *incr = AstNodePtrImpl(f->get_increment());
-    if (cond != 0)
-      *cond = AstNodePtrImpl(f->get_test_expr());
+    if (cond != 0) {
+      SgStatement *test = f->get_test();
+      if (isSgVariableDeclaration(test) != nullptr)
+        *cond = AstNodePtrImpl(test);
+      else
+        *cond = AstNodePtrImpl(f->get_test_expr());
+    }
     if (body != 0)
       *body = AstNodePtrImpl(f->get_loop_body());
   } break;
@@ -4365,6 +4219,7 @@ bool AstInterfaceImpl::IsFortranLoop(const SgNode *s, SgNode **ivar,
       return false;
 
     SgNode *init1 = init.front();
+    ROSE_ASSERT(init1 != nullptr);
     SgNode *ivarast, *lbast, *ubast, *stepast;
 
     if (!IsAssignment(init1, &ivarast, &lbast)) {
@@ -4374,18 +4229,41 @@ bool AstInterfaceImpl::IsFortranLoop(const SgNode *s, SgNode **ivar,
         if (names.size() != 1)
           return false;
         SgInitializedName *var = names.front();
+        ROSE_ASSERT(var != nullptr);
         ivarast = var;
-        SgExpression *def = var->get_initializer();
-        if (def != 0 && def->variantT() != V_SgAssignInitializer)
+        SgAssignInitializer *assign =
+            isSgAssignInitializer(var->get_initializer());
+        if (assign == nullptr)
           return false;
-        lbast = isSgAssignInitializer(def)->get_operand();
+        lbast = assign->get_operand();
       } else
         return false;
     }
-    string varname;
-    if (!IsVarRef(ivarast, 0, &varname))
+    ROSE_ASSERT(ivarast != nullptr && lbast != nullptr);
+    auto variableDeclaration = [](SgNode *node) -> SgInitializedName * {
+      ROSE_ASSERT(node != nullptr);
+      if (SgInitializedName *name = isSgInitializedName(node))
+        return name;
+      SgNode *value = AstInterface::SkipCasting(node);
+      if (SgNonrealRefExp *nonreal = isSgNonrealRefExp(value)) {
+        if (nonreal->get_resolved_variable_declaration() == nullptr)
+          return nullptr;
+        return SageInterface::requireResolvedVariableTemplateReference(
+            nonreal, "AstInterface::IsFortranLoop");
+      }
+      SgVarRefExp *reference = isSgVarRefExp(value);
+      if (reference == nullptr)
+        return nullptr;
+      SgVariableSymbol *symbol = reference->get_symbol();
+      ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+      return symbol->get_declaration();
+    };
+    SgInitializedName *indexDeclaration = variableDeclaration(ivarast);
+    if (indexDeclaration == nullptr)
       return false;
 
+    if (isSgExprStatement(fs->get_test()) == nullptr)
+      return false;
     SgExpression *test = fs->get_test_expr();
     int t = test->variantT();
     switch (t) {
@@ -4398,13 +4276,13 @@ bool AstInterfaceImpl::IsFortranLoop(const SgNode *s, SgNode **ivar,
     }
 
     SgNode *testlhs = isSgBinaryOp(test)->get_lhs_operand();
-    string testvarname;
-    if (!IsVarRef(AstInterface::SkipCasting(testlhs), 0, &testvarname) ||
-        varname != testvarname)
+    if (variableDeclaration(testlhs) != indexDeclaration)
       return false;
 
     ubast = isSgBinaryOp(test)->get_rhs_operand();
     SgExpression *incr = fs->get_increment();
+    if (incr == nullptr)
+      return false;
     switch (incr->variantT()) {
     case V_SgPlusAssignOp:
       break;
@@ -4413,9 +4291,7 @@ bool AstInterfaceImpl::IsFortranLoop(const SgNode *s, SgNode **ivar,
     }
 
     SgNode *incrlhs = isSgBinaryOp(incr)->get_lhs_operand();
-    string incrvarname;
-    if (!IsVarRef(AstInterface::SkipCasting(incrlhs), 0, &incrvarname) ||
-        varname != incrvarname)
+    if (variableDeclaration(incrlhs) != indexDeclaration)
       return false;
     stepast = isSgBinaryOp(incr)->get_rhs_operand();
     if (ivar != 0)
@@ -4483,26 +4359,35 @@ AstNodePtr
 AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
                          const AstNodePtr &_ub, const AstNodePtr &_step,
                          const AstNodePtr &_stmts, bool decrementIvar) {
-  // jichi(9/11/2009): Add in support for SgFortranDo.
-  if (IS_FORTRAN_LANGUAGE()) { // Generate fortran loop.
-    AstNodePtrImpl ivar(_ivar), lb(_lb), ub(_ub), step(_step), stmts(_stmts);
-    assert(lb != 0);
+  AstNodePtrImpl ivar(_ivar), lb(_lb), ub(_ub), step(_step), stmts(_stmts);
+  ROSE_ASSERT(ivar.get_ptr() != nullptr && ub.get_ptr() != nullptr &&
+              step.get_ptr() != nullptr && stmts.get_ptr() != nullptr);
+  auto isExpressionInput = [](SgNode *node) {
+    return isSgExpression(node) != nullptr ||
+           isSgInitializedName(node) != nullptr;
+  };
+  ROSE_ASSERT(isExpressionInput(ivar.get_ptr()) &&
+              isExpressionInput(ub.get_ptr()) &&
+              isExpressionInput(step.get_ptr()));
+  ROSE_ASSERT(isSgStatement(stmts.get_ptr()) != nullptr ||
+              isSgExpression(stmts.get_ptr()) != nullptr);
+  if (lb.get_ptr() != nullptr)
+    ROSE_ASSERT(isExpressionInput(lb.get_ptr()));
 
-    // Create new loop.
+  if (IS_FORTRAN_LANGUAGE()) {
+    ROSE_ASSERT(lb.get_ptr() != nullptr);
+
     SgFortranDo *result = new SgFortranDo(GetFileInfo());
     result->set_endOfConstruct(result->get_file_info());
 
-    // Set loop expressions.
-    SgExpression *ivarexp = ToExpression(*impl, ivar.get_ptr());
-    SgExpression *lbexp = ToExpression(*impl, lb.get_ptr());
-    SgExpression *ubexp = ToExpression(*impl, ub.get_ptr());
-    SgExpression *stepexp = ToExpression(*impl, step.get_ptr());
+    SgExpression *ivarexp = ToExpression(ivar.get_ptr());
+    SgExpression *lbexp = ToExpression(lb.get_ptr());
+    SgExpression *ubexp = ToExpression(ub.get_ptr());
+    SgExpression *stepexp = ToExpression(step.get_ptr());
 
     SgExpression *initexp =
         isSgExpression(::CreateAssignment(*impl, ivarexp, lbexp));
-    assert(initexp != 0);
-    ivarexp->set_parent(initexp);
-    ubexp->set_parent(initexp);
+    ROSE_ASSERT(initexp != nullptr);
 
     result->set_initialization(initexp);
     initexp->set_parent(result);
@@ -4513,37 +4398,34 @@ AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
     result->set_increment(stepexp);
     stepexp->set_parent(result);
 
-    // set loop body
     SgStatement *stmtptr = ToStatement(stmts.get_ptr());
-    assert(stmtptr != 0);
+    ROSE_ASSERT(stmtptr != nullptr);
     SgBasicBlock *b = isSgBasicBlock(stmtptr);
 
     if (b == 0) {
       NEW_BLOCK1(b, stmtptr);
     } else
-      assert(HasNullParent(b));
+      ROSE_ASSERT(HasNullParent(b));
 
     result->set_body(b);
     b->set_parent(result);
 
     result->set_has_end_statement(true);
-    result->set_parent(GetNullScope());
     return AstNodePtrImpl(result);
 
   } else {
-    AstNodePtrImpl ivar(_ivar), lb(_lb), ub(_ub), step(_step), stmts(_stmts);
     SgForStatement *result = new SgForStatement(GetFileInfo());
     result->set_endOfConstruct(result->get_file_info());
-    SgExpression *ivarexp = ToExpression(*impl, ivar.get_ptr());
-    SgExpression *lbexp = (lb == 0) ? 0 : ToExpression(*impl, lb.get_ptr());
-    SgExpression *ubexp = ToExpression(*impl, ub.get_ptr());
-    SgExpression *stepexp = ToExpression(*impl, step.get_ptr());
+    SgExpression *ivarexp = ToExpression(ivar.get_ptr());
+    SgExpression *lbexp = (lb == 0) ? 0 : ToExpression(lb.get_ptr());
+    SgExpression *ubexp = ToExpression(ub.get_ptr());
+    SgExpression *stepexp = ToExpression(step.get_ptr());
     SgNode *init = 0;
     if (lbexp != 0)
       init = ::CreateAssignment(*impl, ivarexp, lbexp);
     SgStatement *initstmt = isSgStatement(init);
     if (initstmt == 0 && init != 0) {
-      SgExpression *initexp = ToExpression(*impl, init);
+      SgExpression *initexp = ToExpression(init);
       NEW_EXPR_STMT(initstmt, initexp);
     }
     if (initstmt != 0) {
@@ -4553,7 +4435,7 @@ AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
     SgExpression *ivarexp1 = isSgExpression(
         AstNodePtrImpl(CopyAstTree(AstNodePtrImpl(ivarexp))).get_ptr());
     if (decrementIvar) {
-      assert(HasNullParent(ubexp));
+      ROSE_ASSERT(HasNullParent(ubexp));
 
       SgExpression *testExp = new SgGreaterOrEqualOp(
           GetFileInfo(), ivarexp1, ubexp, logicalOperatorResultType());
@@ -4564,7 +4446,7 @@ AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
       test->set_parent(result);
 
     } else {
-      assert(HasNullParent(ubexp));
+      ROSE_ASSERT(HasNullParent(ubexp));
 
       SgExpression *NEW_BIN_OP(testExp, SgLessOrEqualOp, ivarexp1, ubexp,
                                logicalOperatorResultType());
@@ -4575,13 +4457,13 @@ AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
 
     SgExpression *ivarexp2 = isSgExpression(
         AstNodePtrImpl(CopyAstTree(AstNodePtrImpl(ivarexp))).get_ptr());
-    assert(HasNullParent(stepexp));
+    ROSE_ASSERT(HasNullParent(stepexp));
     SgPlusAssignOp *NEW_BIN_OP(incr, SgPlusAssignOp, ivarexp2, stepexp,
                                ivarexp2->get_type());
     result->set_increment(incr);
     incr->set_parent(result);
     SgStatement *stmtptr = ToStatement(stmts.get_ptr());
-    assert(stmtptr != 0);
+    ROSE_ASSERT(stmtptr != nullptr);
     SgBasicBlock *b = isSgBasicBlock(stmtptr);
 
     if (b == 0) {
@@ -4589,7 +4471,6 @@ AstInterface::CreateLoop(const AstNodePtr &_ivar, const AstNodePtr &_lb,
     }
     result->set_loop_body(b);
     b->set_parent(result);
-    result->set_parent(GetNullScope());
     return AstNodePtrImpl(result);
   }
 }
@@ -4626,62 +4507,6 @@ AstInterface::AstNodeList AstInterface::GetBlockStmtList(const AstNodePtr &_n) {
   return result;
 }
 
-int AstInterface::GetBlockSize(const AstNodePtr &_n) {
-  AstNodePtrImpl n(_n);
-  SgStatementPtrList l;
-  switch (n->variantT()) {
-  case V_SgBasicBlock:
-    l = isSgBasicBlock(n.get_ptr())->get_statements();
-    break;
-  case V_SgForInitStatement:
-    l = isSgForInitStatement(n.get_ptr())->get_init_stmt();
-    break;
-  case V_SgSwitchStatement:
-    return 1;
-  default:
-    ROSE_ABORT();
-  }
-  return l.size();
-}
-
-AstNodePtr AstInterface::GetBlockFirstStmt(const AstNodePtr &_n) {
-  AstNodePtrImpl n(_n);
-  SgStatementPtrList l;
-  switch (n->variantT()) {
-  case V_SgBasicBlock:
-    l = isSgBasicBlock(n.get_ptr())->get_statements();
-    break;
-  case V_SgForInitStatement:
-    l = isSgForInitStatement(n.get_ptr())->get_init_stmt();
-    break;
-  case V_SgSwitchStatement:
-    return AstNodePtrImpl(isSgSwitchStatement(n.get_ptr())->get_body());
-  default:
-    ROSE_ABORT();
-  }
-  return (l.size() == 0) ? AST_NULL : AstNodePtrImpl(l.front());
-}
-
-AstNodePtr AstInterface::GetBlockLastStmt(const AstNodePtr &_n) {
-  AstNodePtrImpl n(_n);
-  SgStatementPtrList l;
-  switch (n->variantT()) {
-  case V_SgBasicBlock:
-    l = isSgBasicBlock(n.get_ptr())->get_statements();
-    break;
-  case V_SgForInitStatement:
-    l = isSgForInitStatement(n.get_ptr())->get_init_stmt();
-    break;
-  case V_SgSwitchStatement:
-    return AstNodePtrImpl(isSgSwitchStatement(n.get_ptr())->get_body());
-  default:
-    ROSE_ABORT();
-  }
-  if (l.size() > 0)
-    return AstNodePtrImpl(l.back());
-  return AST_NULL;
-}
-
 AstNodePtr AstInterface::CreateConstInt(int val) {
   SgIntVal *res = new SgIntVal(GetFileInfo(), val);
   res->set_endOfConstruct(res->get_file_info());
@@ -4690,84 +4515,104 @@ AstNodePtr AstInterface::CreateConstInt(int val) {
 
 AstNodePtr AstInterface::CreateConstant(const string &valtype,
                                         const string &val) {
+  auto parseNumber = [&](auto &number) {
+    const char *begin = val.data();
+    const char *end = begin + val.size();
+    if (begin != end && *begin == '+')
+      ++begin;
+    const auto parsed = std::from_chars(begin, end, number);
+    if (parsed.ec != std::errc{} || parsed.ptr != end) {
+      std::cerr << "REX_AST_INVARIANT[constant-value]: type=" << valtype
+                << " invalid value '" << val << "'\n";
+      ROSE_ABORT();
+    }
+  };
   if (valtype == "int") {
-    int intval = atoi(val.c_str());
+    int intval = 0;
+    parseNumber(intval);
     return CreateConstInt(intval);
   } else if (valtype == "bool") {
-    int i = atoi(val.c_str());
-    if (val == "true" || i != 0)
-      return AstNodePtrImpl(new SgBoolValExp(GetFileInfo(), -1));
-    else
-      return AstNodePtrImpl(new SgBoolValExp(GetFileInfo(), 0));
+    int value = 0;
+    if (val == "true")
+      value = 1;
+    else if (val != "false")
+      parseNumber(value);
+    return AstNodePtrImpl(new SgBoolValExp(GetFileInfo(), value != 0 ? -1 : 0));
   } else if (valtype == "string") {
-    char *r = new char[val.size() + 1];
-    strcpy(r, val.c_str());
-    SgStringVal *tmp = new SgStringVal(GetFileInfo(), r);
-    assert(tmp != NULL);
-    return AstNodePtrImpl(tmp);
+    return AstNodePtrImpl(new SgStringVal(
+        GetFileInfo(), SgStringVal::code_units_from_bytes(val)));
   } else if (valtype == "char") {
+    ROSE_ASSERT(val.size() == 1);
     return AstNodePtrImpl(new SgCharVal(GetFileInfo(), val[0]));
   } else if (valtype == "float") {
-    istringstream in(val);
     float num = 0;
-    in >> num;
+    parseNumber(num);
     return AstNodePtrImpl(new SgFloatVal(GetFileInfo(), num));
   } else if (valtype == "double") {
-    istringstream in(val);
     double num = 0;
-    in >> num;
+    parseNumber(num);
     return AstNodePtrImpl(new SgDoubleVal(GetFileInfo(), num));
   } else if (valtype == "function") {
     SgFunctionSymbol *fsym = impl->GetFunc(val);
-    if (fsym == 0) {
-      return AST_NULL;
-    }
+    ROSE_ASSERT(fsym != nullptr);
     SgFunctionRefExp *NEW_FUNCTION_REF(fr, fsym);
     return AstNodePtrImpl(fr);
   } else {
     cerr << "Error: non-recognized value type for creating constant AST: "
          << valtype << endl;
     ROSE_ABORT();
-    abort();
   }
 }
 
 SgFunctionSymbol *CreateMinMaxFunction(AstInterfaceImpl *impl,
                                        const std::string &name, int numOfPars,
                                        bool isMin) {
-  std::cerr << "MinMax create \n";
   SgType *typeint = AstInterfaceImpl::GetTypeInt();
   std::list<SgInitializedName *> pars;
   for (int i = 0; i < numOfPars; ++i) {
-    std::string parname = "a";
-    parname.push_back(i + '0');
-    SgName curname(parname.c_str());
+    SgName curname("a" + std::to_string(i));
     SgInitializedName *curVar =
         new SgInitializedName(GetFileInfo(), curname, typeint);
     pars.push_back(curVar);
   }
-  SgFunctionSymbol *funcSymbol = impl->NewFunc(name, typeint, pars);
   if (IS_FORTRAN_LANGUAGE())
-    return funcSymbol;
+    return impl->NewFunc(name, typeint, pars);
 
-  SgFunctionDeclaration *funcDecl = funcSymbol->get_declaration();
+  SgScopeStatement *scope = impl->get_scope(nullptr);
+  ASSERT_not_null(scope);
+  SgGlobal *global = SageInterface::getGlobalScope(scope);
+  ASSERT_not_null(global);
+  auto *parameters = SageBuilder::buildFunctionParameterList();
+  for (SgInitializedName *parameter : pars)
+    SageInterface::appendArg(parameters, parameter);
+  SgFunctionDeclaration *funcDecl =
+      SageBuilder::buildDefiningFunctionDeclaration(
+          SageBuilder::function_declaration_ownership::sourceLexicalAtTop(
+              global),
+          name, typeint, parameters, global);
+  ASSERT_not_null(funcDecl);
+  auto *canonical =
+      isSgFunctionDeclaration(funcDecl->get_firstNondefiningDeclaration());
+  ASSERT_not_null(canonical);
+  auto *funcSymbol =
+      isSgFunctionSymbol(global->find_symbol_from_declaration(canonical));
+  ROSE_ASSERT(funcSymbol != nullptr &&
+              funcSymbol->get_declaration() == canonical);
   funcDecl->set_requiresNameQualificationOnReturnType(false);
-  funcDecl->set_definingDeclaration(funcDecl);
-  SgBasicBlock *NEW_BLOCK(funcBody);
-  SgFunctionDefinition *funcDefn =
-      new SgFunctionDefinition(GetFileInfo(), funcBody);
-  funcBody->set_parent(funcDefn);
-  funcDefn->set_parent(funcDecl);
+  SgFunctionDefinition *funcDefn = funcDecl->get_definition();
+  ASSERT_not_null(funcDefn);
+  SgBasicBlock *funcBody = funcDefn->get_body();
+  ASSERT_not_null(funcBody);
 
   std::list<SgVariableSymbol *> parSymbols;
   for (std::list<SgInitializedName *>::const_iterator iterPars = pars.begin();
        iterPars != pars.end(); ++iterPars) {
     SgInitializedName *curPar = *iterPars;
-    SgVariableSymbol *NEW_SYMBOL(curSymbol, SgVariableSymbol, funcDefn, curPar);
+    auto *curSymbol =
+        isSgVariableSymbol(funcDefn->find_symbol_from_declaration(curPar));
+    ROSE_ASSERT(curSymbol != nullptr && curSymbol->get_declaration() == curPar);
     parSymbols.push_back(curSymbol);
   }
-  funcDecl->set_definition(funcDefn);
-  funcDecl->set_endOfConstruct(funcDecl->get_file_info());
   if (numOfPars == 2) {
     SgVarRefExp *v1 = new SgVarRefExp(GetFileInfo(), parSymbols.front());
     SgVarRefExp *v2 = new SgVarRefExp(GetFileInfo(), parSymbols.back());
@@ -4782,16 +4627,10 @@ SgFunctionSymbol *CreateMinMaxFunction(AstInterfaceImpl *impl,
     v2->set_parent(cond);
     v1 = new SgVarRefExp(GetFileInfo(), parSymbols.front());
     v2 = new SgVarRefExp(GetFileInfo(), parSymbols.back());
-    SgExpression *returnExp =
-        new SgConditionalExp(GetFileInfo(), cond, v1, v2, typeint);
-    SgConditionalExp *conditional = isSgConditionalExp(returnExp);
-    ROSE_ASSERT(conditional != nullptr);
-    conditional->set_operator_kind(
-        SgConditionalExp::e_conditional_operator_standard);
-    cond->set_parent(returnExp);
-    v1->set_parent(returnExp);
-    v2->set_parent(returnExp);
-    conditional->validate();
+    auto *returnExp =
+        new SgConditionalExp(GetFileInfo(), cond, v1, v2, typeint,
+                             SgConditionalExp::e_conditional_operator_standard);
+    returnExp->validate();
     SgStatement *returnStmt = new SgReturnStmt(GetFileInfo(), returnExp);
     funcBody->append_statement(returnStmt);
     returnStmt->set_parent(funcBody);
@@ -4838,7 +4677,6 @@ SgFunctionSymbol *CreateMinMaxFunction(AstInterfaceImpl *impl,
     }
     SgVarRefExp *resRef = new SgVarRefExp(GetFileInfo(), resSymbol);
     SgStatement *returnStmt = new SgReturnStmt(GetFileInfo(), resRef);
-    resRef->set_parent(returnStmt);
     funcBody->append_statement(returnStmt);
   }
   return funcSymbol;
@@ -4847,8 +4685,11 @@ SgFunctionSymbol *CreateMinMaxFunction(AstInterfaceImpl *impl,
 SgNode *AstInterfaceImpl ::CreateFunction(string name, int numOfPars) {
   bool isMin = (name == "min");
   bool isMax = (name == "max");
-  if ((isMin || isMax) && !IS_FORTRAN_LANGUAGE())
-    name.push_back((char)numOfPars + '0');
+  if (isMin || isMax) {
+    ROSE_ASSERT(numOfPars >= 2);
+    if (!IS_FORTRAN_LANGUAGE())
+      name += std::to_string(numOfPars);
+  }
   SgFunctionSymbol *funcSymbol = GetFunc(name);
   if (funcSymbol == 0) {
     if (isMin || isMax) {
@@ -4865,7 +4706,7 @@ SgNode *AstInterfaceImpl ::CreateFunction(string name, int numOfPars) {
 AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
   AstNodePtrImpl a0(_a0);
   assert(HasNullParent(a0.get_ptr()));
-  SgExpression *e = ToExpression(*impl, a0.get_ptr());
+  SgExpression *e = ToExpression(a0.get_ptr());
   auto require_exact_operand_type = [&]() -> SgType * {
     SgType *type = e->get_type();
     if (type == nullptr || isSgTypeUnknown(type) != nullptr ||
@@ -4880,39 +4721,36 @@ AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
   SgNode *result = 0;
   switch (op) {
   case UOP_ADDR:
-    result = new SgAddressOfOp(GetFileInfo(), e, e->get_type()->get_ptr_to());
+    result = SageBuilder::buildAddressOfOp(
+        e, SageBuilder::buildAddressOfResultType(require_exact_operand_type()),
+        SgAddressOfOp::e_address_operand_object);
     break;
   case UOP_MINUS:
-    result = new SgMinusOp(GetFileInfo(), e, e->get_type());
+    result = SageBuilder::buildMinusOp(e, require_exact_operand_type());
     break;
   case UOP_NOT:
-    result = new SgNotOp(GetFileInfo(), e, logicalOperatorResultType());
+    result = SageBuilder::buildNotOp(e, logicalOperatorResultType());
     break;
   case UOP_BIT_COMPLEMENT:
-    result =
-        new SgBitComplementOp(GetFileInfo(), e, require_exact_operand_type());
+    result = SageBuilder::buildBitComplementOp(e, require_exact_operand_type());
     break;
   case UOP_INCR1:
   case UOP_INCR1_POST: {
-    SgPlusPlusOp *increment =
-        new SgPlusPlusOp(GetFileInfo(), e, require_exact_operand_type());
-    increment->set_mode(op == UOP_INCR1 ? SgUnaryOp::Sgop_mode::prefix
-                                        : SgUnaryOp::Sgop_mode::postfix);
-    result = increment;
+    result = SageBuilder::buildPlusPlusOp(e, require_exact_operand_type(),
+                                          op == UOP_INCR1 ? SgUnaryOp::prefix
+                                                          : SgUnaryOp::postfix);
     break;
   }
   case UOP_DECR1:
   case UOP_DECR1_POST: {
-    SgMinusMinusOp *decrement =
-        new SgMinusMinusOp(GetFileInfo(), e, require_exact_operand_type());
-    decrement->set_mode(op == UOP_DECR1 ? SgUnaryOp::Sgop_mode::prefix
-                                        : SgUnaryOp::Sgop_mode::postfix);
-    result = decrement;
+    result = SageBuilder::buildMinusMinusOp(
+        e, require_exact_operand_type(),
+        op == UOP_DECR1 ? SgUnaryOp::prefix : SgUnaryOp::postfix);
     break;
   }
   case UOP_DEREF:
-    result = new SgPointerDerefExp(
-        GetFileInfo(), e,
+    result = SageBuilder::buildPointerDerefExp(
+        e,
         requireElementResultType(e->get_type(), "AstInterface::CreateUnaryOP"));
     break;
   case UOP_CAST_C:
@@ -4934,7 +4772,7 @@ AstNodePtr AstInterface::CreateUnaryOP(OperatorEnum op, const AstNodePtr &_a0) {
     std::cerr << "unexpected uop:" << op << "\n";
     ROSE_ABORT();
   }
-  e->set_parent(result);
+  ROSE_ASSERT(e->get_parent() == result);
   return AstNodePtrImpl(result);
 }
 
@@ -4942,9 +4780,8 @@ AstNodePtr AstInterface::CreateBinaryOP(OperatorEnum op, const AstNodePtr &_a0,
                                         const AstNodePtr &_a1) {
   SgNode *a0 = AstNodePtrImpl(_a0).get_ptr();
   SgNode *a1 = AstNodePtrImpl(_a1).get_ptr();
-  // assert( HasNullParent(a1) && HasNullParent(a0));
-  SgExpression *e0 = ToExpression(*impl, a0);
-  SgExpression *e1 = ToExpression(*impl, a1);
+  SgExpression *e0 = ToExpression(a0);
+  SgExpression *e1 = ToExpression(a1);
   assert(e0 != 0 && e1 != 0);
   auto require_exact_type = [](SgType *type, const char *producer) -> SgType * {
     if (type == nullptr || isSgTypeUnknown(type) != nullptr ||
@@ -5168,10 +5005,11 @@ AstNodePtr AstInterface::CreateFunctionCall(const AstNodePtr &func,
 AstNodePtr AstInterface::CreateFunctionCall(const string &fname,
                                             AstList::const_iterator b,
                                             AstList::const_iterator e) {
-  unsigned num = 0;
+  size_t num = 0;
   for (AstList::const_iterator p = b; p != e; ++p)
     ++num;
-  SgNode *f = impl->CreateFunction(fname, num);
+  ROSE_ASSERT(num <= static_cast<size_t>(std::numeric_limits<int>::max()));
+  SgNode *f = impl->CreateFunction(fname, static_cast<int>(num));
   return AstNodePtrImpl(impl->CreateFunctionCall(f, b, e));
 }
 
@@ -5203,77 +5041,13 @@ SgNode *AstInterfaceImpl::CreateFunctionCall(SgNode *func,
   return result;
 }
 
-AstNodePtr AstInterface::CreateReadStatement(const AstNodeList &l) const {
-  SgExprListExp *explist = AstNodeList2ExpressionList(l.begin(), l.end());
-  SgReadStatement *ret = new SgReadStatement(GetFileInfo());
-  assert(ret);
-  ret->set_endOfConstruct(ret->get_file_info());
-
-  ret->set_io_stmt_list(explist);
-  explist->set_parent(ret);
-
-  SgExpression *f = new SgAsteriskShapeExp(GetFileInfo());
-  f->set_endOfConstruct(f->get_file_info());
-  ret->set_format(f);
-  f->set_parent(ret);
-
-  return AstNodePtrImpl(ret);
-}
-
-AstNodePtr AstInterface::CreateNullStatement() const {
-  SgStatement *s = new SgNullStatement(GetFileInfo());
-  s->set_endOfConstruct(s->get_file_info());
-  return AstNodePtrImpl(s);
-}
-
-AstNodePtr AstInterface::CreateWriteStatement(const AstNodeList &__l) const {
-  assert(!__l.empty());
-
-  SgExprListExp *NEW_EXPR_LIST(explist);
-  for (AstNodeList::const_iterator p = __l.begin(); p != __l.end(); ++p) {
-    SgExpression *e = isSgExpression(AstNodePtrImpl(*p).get_ptr());
-    assert(e);
-    explist->append_expression(e);
-    e->set_parent(explist);
-  }
-
-  SgWriteStatement *ret = new SgWriteStatement(GetFileInfo());
-  assert(ret);
-  ret->set_endOfConstruct(ret->get_file_info());
-
-  ret->set_io_stmt_list(explist);
-  explist->set_parent(ret);
-
-  SgExpression *f = new SgAsteriskShapeExp(GetFileInfo());
-  f->set_endOfConstruct(f->get_file_info());
-  ret->set_format(f);
-  f->set_parent(ret);
-
-  return AstNodePtrImpl(ret);
-}
-
-AstNodePtr AstInterface::CreatePrintStatement(const AstNodeList &l) const {
-  SgExprListExp *explist = AstNodeList2ExpressionList(l.begin(), l.end());
-  SgPrintStatement *ret = new SgPrintStatement(GetFileInfo());
-  assert(ret);
-  ret->set_endOfConstruct(ret->get_file_info());
-
-  ret->set_io_stmt_list(explist);
-  explist->set_parent(ret);
-
-  SgExpression *f = new SgAsteriskShapeExp(GetFileInfo());
-  f->set_endOfConstruct(f->get_file_info());
-  ret->set_format(f);
-  f->set_parent(ret);
-
-  return AstNodePtrImpl(ret);
-}
-
 AstNodePtr AstInterface::CreateIf(const AstNodePtr &__cond,
                                   const AstNodePtr &__istmt,
                                   const AstNodePtr &__estmt) const {
   AstNodePtrImpl cond(__cond), istmt(__istmt);
-  assert(HasNullParent(cond.get_ptr()) && HasNullParent(istmt.get_ptr()));
+  ASSERT_require(HasNullParent(cond.get_ptr()) &&
+                 HasNullParent(istmt.get_ptr()));
+  ASSERT_require(__estmt == AST_NULL || HasNullParent(__estmt.get_ptr()));
 
   SgStatement *c = ToStatement(cond.get_ptr());
   SgBasicBlock *ib = isSgBasicBlock(istmt.get_ptr()); // if-block
@@ -5288,7 +5062,6 @@ AstNodePtr AstInterface::CreateIf(const AstNodePtr &__cond,
 
   } else {
     AstNodePtrImpl estmt(__estmt);
-    assert(HasNullParent(estmt.get_ptr()));
 
     SgBasicBlock *eb = isSgBasicBlock(estmt.get_ptr()); // else-block
     if (!eb) {
@@ -5305,7 +5078,6 @@ AstNodePtr AstInterface::CreateIf(const AstNodePtr &__cond,
 AstNodePtr AstInterface::CreateBlock(const AstNodePtr &_orig) {
   AstNodePtrImpl orig(_orig);
   SgBasicBlock *NEW_BLOCK(r);
-  r->set_parent(GetNullScope());
   if (orig != 0) {
     SgBasicBlock *r1 = isSgBasicBlock(orig.get_ptr());
     if (r1 != 0) {
@@ -5430,64 +5202,81 @@ void AstInterface::InsertAnnot(AstNodePtr const &_n, const std::string &annot,
 bool AstInterface::RemoveStmt(const AstNodePtr &_n) {
   AstNodePtrImpl n(_n);
   SgStatement *s = isSgStatement(n.get_ptr());
-  assert(s != 0);
-  SgStatement *p = isSgStatement(n->get_parent());
-  assert(p != 0);
+  ROSE_ASSERT(s != nullptr);
+  SgStatement *p = isSgStatement(s->get_parent());
+  ROSE_ASSERT(p != nullptr);
+  ROSE_ASSERT(SageInterface::isRemovableStatement(s));
   p->remove_statement(s);
-  // s->set_parent(GetNullScope()); /*QY: not reseting parent due to dangling
-  // pointers from symbols etc. */
   return true;
 }
 
 bool AstInterfaceImpl::ReplaceAst(SgNode *orig, SgNode *n) {
-  /*
-      if (!HasNullParent(n)) {
-           std::cerr << "SgNode does not have null parent: " <<
-     n->unparseToString() << "\n"; ROSE_ABORT();
-      }
-  */
+  ROSE_ASSERT(orig != nullptr);
+  ROSE_ASSERT(n != nullptr);
+  ROSE_ASSERT(orig != n);
   SgNode *p = orig->get_parent();
   if (p == 0)
     return false;
-  n->set_parent(p);
+  ROSE_ASSERT(n->get_parent() == nullptr);
+
+  size_t oldEdges = 0;
+  size_t newEdges = 0;
+  for (const auto &edge : p->returnDataMemberPointers()) {
+    if (edge.first == orig)
+      ++oldEdges;
+    if (edge.first == n)
+      ++newEdges;
+  }
+  if (oldEdges != 1 || newEdges != 0) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[ast-interface-replacement-edge]: parent=%s "
+            "has %zu original and %zu replacement edges before mutation\n",
+            p->class_name().c_str(), oldEdges, newEdges);
+    ROSE_ABORT();
+  }
 
   SgStatement *stmtOrig = isSgStatement(orig);
   SgStatement *stmtParent = isSgStatement(p);
   if (stmtOrig != 0) {
     SgStatement *stmtNew = isSgStatement(n);
-    assert(stmtParent != 0 && stmtNew != 0);
+    ROSE_ASSERT(stmtParent != nullptr && stmtNew != nullptr);
     stmtParent->replace_statement(stmtOrig, stmtNew);
-    stmtNew->set_parent(stmtParent);
+    oldEdges = 0;
+    newEdges = 0;
+    for (const auto &edge : p->returnDataMemberPointers()) {
+      if (edge.first == n)
+        ++newEdges;
+      if (edge.first == orig)
+        ++oldEdges;
+    }
+    ROSE_ASSERT(oldEdges == 0);
+    ROSE_ASSERT(newEdges == 1);
+    ROSE_ASSERT(stmtOrig->get_parent() == nullptr);
+    ROSE_ASSERT(stmtNew->get_parent() == p);
   } else {
     SgExpression *expOrig = isSgExpression(orig);
     SgExpression *expNew = isSgExpression(n);
-    assert(expOrig != 0 && expNew != 0);
-    if (stmtParent != 0) {
-      stmtParent->replace_expression(expOrig, expNew);
-      expNew->set_parent(stmtParent);
-    } else {
-      SgExpression *expParent = isSgExpression(p);
-      if (expParent != 0) {
-        expParent->replace_expression(expOrig, expNew);
-        expNew->set_parent(expParent);
-      } else {
-        SgInitializedName *nameParent = isSgInitializedName(p);
-        assert(nameParent != 0);
-        SgAssignInitializer *NEW_VAR_INIT(init, nameParent, expNew);
-      }
+    ROSE_ASSERT(expOrig != nullptr && expNew != nullptr);
+    if (isSgInitializedName(p)) {
+      ROSE_ASSERT(isSgInitializer(expOrig) != nullptr);
+      ROSE_ASSERT(isSgInitializer(expNew) != nullptr);
     }
+    SageInterface::replaceExpression(expOrig, expNew, true);
   }
-  // orig->set_parent(GetNullScope()); /*QY: not reseting parent due to dangling
-  // pointers from symbols etc. */
   return true;
 }
 bool AstInterface::ReplaceAst(const AstNodePtr &_orig, const AstNodePtr &_n) {
   SgNode *orig = AstNodePtrImpl(_orig).get_ptr();
   SgNode *n = AstNodePtrImpl(_n).get_ptr();
-  return impl->ReplaceAst(orig, n);
+  if (!impl->ReplaceAst(orig, n))
+    return false;
+  for (auto *scope = copyScope; scope != nullptr; scope = scope->previous)
+    for (auto &entry : scope->bindings)
+      if (entry.second == orig)
+        entry.second = n;
+  return true;
 }
 
-// typedef bool BoolAttribute;
 class BoolAttribute {
   bool val;
 
@@ -5551,8 +5340,6 @@ class PerformPreTransformationTraversal
   _DummyAttribute evaluateInheritedAttribute(SgNode *astNode,
                                              _DummyAttribute a) {
     if (!succ) {
-      // std::cerr << "pre operating on " << astNode << "::" <<
-      // astNode->unparseToString() << "\n";
       succ = op(fa, AstNodePtrImpl(astNode), result);
       if (succ) {
         assert(result != 0);
@@ -5564,8 +5351,6 @@ class PerformPreTransformationTraversal
   AstNodePtrImpl evaluateSynthesizedAttribute(SgNode *astNode,
                                               _DummyAttribute a,
                                               SynthesizedAttributesList l) {
-    // std::cerr << "post operating on " << astNode << "::" <<
-    // astNode->unparseToString() << "\n";
     if (orig == astNode) {
       orig = 0;
       succ = false;
@@ -5662,112 +5447,6 @@ template class AstTopDownBottomUpProcessing<_DummyAttribute, AstNodePtr>;
 template class AstBottomUpProcessing<AstNodePtr>;
 template class SgTreeTraversal<_DummyAttribute, AstNodePtr>;
 
-class CheckSymbolTable : public AstTopDownProcessing<AstNodePtrImpl> {
-public:
-  void operator()(SgNode *n) {
-    AstTopDownProcessing<AstNodePtrImpl>::traverse(n, n->get_parent());
-  }
-
-  static void fix_vardecl(SgVariableDeclaration *d) {
-    SgScopeStatement *scope = d->get_scope();
-    if (DebugSymbol()) {
-      cerr << "Adding symbol info for variable declaration: ";
-      cerr << d->unparseToString() << " : into scope " << scope << endl;
-    }
-    SgInitializedNamePtrList &l = d->get_variables();
-    for (SgInitializedNamePtrList::iterator p = l.begin(); p != l.end(); ++p) {
-      SgInitializedName *n = *p;
-      SgName name = n->get_name();
-      SgVariableSymbol *sb = scope->lookup_var_symbol(name);
-      if (sb == 0) {
-        if (DebugSymbol())
-          cerr << "Adding symbol for variable: " << name.str() << endl;
-        NEW_SYMBOL(sb, SgVariableSymbol, scope, n);
-      } else if (n != sb->get_declaration()) {
-        ROSE_ABORT();
-      }
-    }
-  }
-
-  static void fix_classdecl(SgClassDeclaration *d1) {
-    SgScopeStatement *scope = d1->get_scope();
-    if (DebugSymbol()) {
-      cerr << "Adding symbol info for class declaration: ";
-      cerr << d1->unparseToString() << endl;
-    }
-    SgName name = d1->get_name();
-    SgClassSymbol *sb = scope->lookup_class_symbol(name);
-    if (sb == 0) {
-      if (DebugSymbol())
-        cerr << "Adding symbol for class: " << name.str() << endl;
-      NEW_SYMBOL(sb, SgClassSymbol, scope, d1);
-    }
-  }
-
-private:
-  AstNodePtrImpl evaluateInheritedAttribute(SgNode *ast, AstNodePtrImpl v) {
-    if (v.get_ptr() != 0 && v != ast->get_parent()) {
-      if (ast->get_parent() == NULL)
-        ast->set_parent(v.get_ptr());
-      std::cerr << "Incorrect parent for AST: "
-                << AstInterface::AstToString(AstNodePtrImpl(ast)) << "\n";
-      std::cerr << "It has parent : "
-                << ((ast->get_parent() == v.get_ptr())
-                        ? "NULL"
-                        : AstInterface::AstToString(
-                              AstNodePtrImpl(ast->get_parent())))
-                << "\n";
-      std::cerr << "It should have parent: " << AstInterface::AstToString(v)
-                << "\n";
-      ROSE_ABORT();
-    }
-    switch (ast->variantT()) {
-    case V_SgVariableDeclaration:
-      fix_vardecl(isSgVariableDeclaration(ast));
-      break;
-    case V_SgClassDeclaration:
-      fix_classdecl(isSgClassDeclaration(ast));
-      break;
-    case V_SgVarRefExp: {
-      SgVarRefExp *var = isSgVarRefExp(ast);
-      SgScopeStatement *scope =
-          isSgScopeStatement(AstInterfaceImpl::GetScope(ast));
-      assert(scope != 0);
-      string name = var->get_symbol()->get_name().str();
-      SgVariableSymbol *r =
-          isSgVariableSymbol(AstInterfaceImpl::LookupVar(name, scope));
-      if (r == 0) {
-        cerr << "failed to find symbol for variable: " << name << " in scope "
-             << scope << endl;
-        // ROSE_ABORT();
-      } else
-        var->set_symbol(r);
-    } break;
-    default:
-      break;
-    }
-    return ast;
-  }
-};
-
-void FixSgTree(SgNode *r) {
-  assert(r != 0);
-  // AstPostProcessing(r);
-
-  if (r->get_parent() != 0 && isSgScopeStatement(r) != 0) {
-    CheckSymbolTable symbolfix;
-    symbolfix(r);
-  }
-}
-
-ROSE_DLL_API void FixSgProject(SgProject &sageProject) {
-  int filenum = sageProject.numberOfFiles();
-  for (int i = 0; i < filenum; ++i) {
-    SgFile &sageFile = sageProject.get_file(i);
-    FixSgTree(&sageFile);
-  }
-}
-
 std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
   if (_variable.get_type() == AstNodePtr::SpecialAstType::GLOBAL_SIGNATURE) {
     return _variable.get_signature();
@@ -5791,39 +5470,69 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
     }
     return semantic_type_id;
   }
+  if (SgClassDeclaration *declaration = isSgClassDeclaration(variable)) {
+    SgClassType *type = isSgClassType(declaration->get_type());
+    ROSE_ASSERT(type != nullptr);
+    return "class_" + GetVariableSignature(type);
+  }
+  if (SgClassDefinition *definition = isSgClassDefinition(variable)) {
+    SgClassDeclaration *declaration = definition->get_declaration();
+    ROSE_ASSERT(declaration != nullptr);
+    return GetVariableSignature(declaration);
+  }
+  if (SgTypedefDeclaration *declaration = isSgTypedefDeclaration(variable)) {
+    SgTypedefType *type = isSgTypedefType(declaration->get_type());
+    ROSE_ASSERT(type != nullptr);
+    return "typedef_" + GetVariableSignature(type);
+  }
   switch (variable->variantT()) {
-  case V_SgNamespaceDeclarationStatement:
-    return isSgNamespaceDeclarationStatement(variable)->get_name().getString();
-  case V_SgUsingDirectiveStatement:
-    return "using_" + isSgUsingDirectiveStatement(variable)
-                          ->get_namespaceDeclaration()
-                          ->get_name()
-                          .getString();
+  case V_SgNamespaceDeclarationStatement: {
+    auto *declaration = isSgNamespaceDeclarationStatement(variable);
+    ROSE_ASSERT(declaration->get_scope() != nullptr);
+    return declaration->get_mangled_name().getString();
+  }
+  case V_SgUsingDirectiveStatement: {
+    auto *declaration =
+        isSgUsingDirectiveStatement(variable)->get_namespaceDeclaration();
+    ROSE_ASSERT(declaration != nullptr);
+    return "using_" + GetVariableSignature(declaration);
+  }
   case V_SgEnumDeclaration: {
     SgEnumDeclaration *enum_decl = isSgEnumDeclaration(variable);
-    std::string name = enum_decl->get_name();
-    if (name.empty()) {
-      SgInitializedNamePtrList &enumerators = enum_decl->get_enumerators();
-      if (!enumerators.empty()) {
-        name = enumerators.front()->get_name();
-      }
-    }
-    return "enum_" + name;
+    return SageInterface::generateUniqueName(enum_decl, true);
   }
-  case V_SgTypedefDeclaration:
-  case V_SgTemplateTypedefDeclaration:
-    return "typedef_" +
-           AstInterface::GetGlobalUniqueName(
-               variable->get_parent(),
-               isSgTypedefDeclaration(variable)->get_name().getString(),
-               /*do_not_add_file_name=*/true);
   case V_SgStaticAssertionDeclaration:
     return OperatorDeclaration::operator_signature(fa, variable);
-  case V_SgClassDefinition:
-    return GetVariableSignature(
-        isSgClassDefinition(variable)->get_declaration());
+  case V_SgInitializedName: {
+    std::string name;
+    if (!IsVarRef(_variable, nullptr, &name, nullptr, nullptr,
+                  /*use_global_unique_name=*/true)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[variable-signature-name]: initialized "
+              "name=%p has no exact typed variable identity\n",
+              static_cast<void *>(variable));
+      ROSE_ABORT();
+    }
+    return name;
+  }
   case V_SgAssignInitializer:
     return GetVariableSignature(isSgAssignInitializer(variable)->get_operand());
+  case V_SgSizeOfOp: {
+    auto *operation = isSgSizeOfOp(variable);
+    (void)operation->get_type();
+    return mangleExpression(operation);
+  }
+  case V_SgCastExp: {
+    SgCastExp *cast = isSgCastExp(variable);
+    cast->validate_semantic_conversion();
+    ASSERT_not_null(cast->get_type());
+    ASSERT_not_null(cast->get_operand());
+    return "cast_" + std::to_string(static_cast<int>(cast->cast_type())) + "_" +
+           std::to_string(
+               static_cast<int>(cast->get_semantic_conversion_kind())) +
+           "_" + GetVariableSignature(cast->get_type()) + "(" +
+           GetVariableSignature(cast->get_operand()) + ")";
+  }
   case V_SgConstructorInitializer: {
     SgConstructorInitializer *ctor_init = isSgConstructorInitializer(variable);
     if (SgMemberFunctionDeclaration *decl = ctor_init->get_declaration()) {
@@ -5832,15 +5541,10 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
     if (SgClassDeclaration *class_decl = ctor_init->get_class_decl()) {
       return GetVariableSignature(class_decl);
     }
-    if (SgType *expr_type = ctor_init->get_expression_type()) {
-      return GetVariableSignature(expr_type);
-    }
-    return "_UNKNOWN_" + variable->class_name();
+    SgType *expr_type = ctor_init->get_expression_type();
+    ROSE_ASSERT(expr_type != nullptr);
+    return GetVariableSignature(expr_type);
   }
-  case V_SgClassDeclaration:
-  case V_SgTemplateClassDeclaration:
-    return "class_" +
-           std::string(isSgClassDeclaration(variable)->get_name().str());
   default:
     break;
   }
@@ -5892,8 +5596,11 @@ std::string AstInterface::GetVariableSignature(const AstNodePtr &_variable) {
       return res + name;
     }
   }
-  res += "_UNKNOWN_" + variable->class_name();
-  return res;
+  fprintf(stderr,
+          "REX_AST_INVARIANT[variable-signature-node]: unsupported node=%s "
+          "at %p\n",
+          variable->class_name().c_str(), static_cast<void *>(variable));
+  ROSE_ABORT();
 }
 
 bool AstInterface::IsLocalRef(const AstNodePtr &ref, const AstNodePtr &scope,
@@ -5957,5 +5664,3 @@ void AstInterface::SetFunctionNameMangling(
     std::function<std::string(const SgFunctionDeclaration *)> f) {
   function_name_mangling_ = f;
 }
-
-/* EOF */

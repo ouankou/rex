@@ -15,7 +15,7 @@ SgVariableDeclaration *makeOrdinaryDeclaration() {
 
 SgTypedefDeclaration *makeGeneratedTypedefDependency() {
   return new SgTypedefDeclaration(SgName("rex_generated_dependency"),
-                                  SageBuilder::buildIntType(), nullptr, nullptr,
+                                  SageBuilder::buildIntType(), nullptr,
                                   nullptr);
 }
 
@@ -54,8 +54,6 @@ SgNamespaceDeclarationStatement *makeCanonicalNamespaceShell() {
       SageBuilder::buildNamespaceDefinition();
   SgNamespaceDeclarationStatement *declaration =
       new SgNamespaceDeclarationStatement("rex_canonical", definition, false);
-  definition->set_parent(declaration);
-  definition->set_namespaceDeclaration(declaration);
   SageInterface::setOneSourcePositionForTransformation(declaration);
   SageInterface::setOneSourcePositionForTransformation(definition);
 

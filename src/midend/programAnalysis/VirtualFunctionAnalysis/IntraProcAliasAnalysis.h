@@ -10,30 +10,42 @@
 
 #include <algorithm>
 
-#include <cstdint>
-
 #include <memory>
+
+#include <set>
 
 #include <unordered_map>
 
-//~ using namespace std;
+namespace AliasAnalysisDetail {
+ROSE_DLL_API void deleteOwnedGraph(SgIncidenceDirectedGraph *graph);
+ROSE_DLL_API SgMemberFunctionRefExp *
+virtualFunctionReference(SgFunctionCallExp *call);
+} // namespace AliasAnalysisDetail
 
 //! A struct to hold the information about an alias node
 struct AliasRelationNode {
-  //! The VariableSymbol participating in aliasing
-  SgVariableSymbol *var;
+  //! Storage, allocation, computed value or typed null identity.
+  SgNode *var = nullptr;
   //! Dereference Level
   //!  *a  +1
   //! **a  +2
   //!   a   0
   //!  &a  -1
-  int derefLevel;
+  int derefLevel = 0;
 
   bool operator==(const AliasRelationNode &that) const {
-    ASSERT_require(reinterpret_cast<std::intptr_t>(this) !=
-                   reinterpret_cast<std::intptr_t>(nullptr));
     return (this->var == that.var && this->derefLevel == that.derefLevel);
   }
+};
+
+namespace ProcessExpression {
+void processLHS(SgNode *node, AliasRelationNode &arNode);
+void processRHS(SgNode *node, AliasRelationNode &arNode);
+} // namespace ProcessExpression
+
+struct AliasWriteEffects {
+  std::set<SgNode *> may;
+  std::set<SgNode *> must;
 };
 
 struct AliasCfgFilter {
@@ -46,33 +58,49 @@ struct AliasCfgFilter {
   bool operator()(StaticCFG::CFGNode cfgn) const {
     SgNode *node = cfgn.getNode();
     switch (node->variantT()) {
+    case V_SgFunctionDefinition:
     case V_SgBasicBlock:
-      return cfgn == node->cfgForBeginning() || cfgn == node->cfgForBeginning();
+      return cfgn == node->cfgForBeginning() || cfgn == node->cfgForEnd();
     case V_SgAssignStatement:
     case V_SgAssignOp:
     case V_SgAssignInitializer:
-      // return (cfgn == node->cfgForBeginning());
       return (cfgn == node->cfgForEnd());
     case V_SgConditionalExp:
-      return (cfgn.getIndex() == 1);
     case V_SgConstructorInitializer:
     case V_SgFunctionCallExp:
+      return cfgn == node->cfgForEnd();
     case V_SgReturnStmt:
       return (cfgn == node->cfgForBeginning());
-      // return (cfgn == node->cfgForEnd());
     default:
-      return false;
+      break;
     }
+    auto *expression = isSgExpression(node);
+    if (expression == nullptr || cfgn != node->cfgForEnd() ||
+        !expression->has_semantic_value_type())
+      return false;
+    auto *type = expression->get_type()->stripTypedefsAndModifiers();
+    if (isSgTypeVoid(type) ||
+        (!isSgCastExp(expression) && !isSgPointerType(type) &&
+         !isSgReferenceType(type) && !isSgRvalueReferenceType(type) &&
+         !isSgIntegralType(type) && !isSgEnumType(type) &&
+         !isSgNullptrValExp(expression)))
+      return false;
+    AliasRelationNode value;
+    ProcessExpression::processRHS(expression, value);
+    return value == AliasRelationNode{expression, 0};
   }
 };
 // Base class for CompactRepresentation
 class CompReprBase {
 
 public:
+  AliasWriteEffects writes;
+
   CompReprBase() {}
-  //! Given a VariableSymbol and Dereference level compute the Aliases
-  virtual void computeAliases(SgVariableSymbol *var, int derefLevel,
+  virtual void computeAliases(SgNode *var, int derefLevel,
                               std::vector<SgGraphNode *> &) = 0;
+  virtual void computeValues(SgNode *var, int derefLevel,
+                             std::vector<SgGraphNode *> &) = 0;
 
   //! Given a GraphNode and Dereference level compute the Aliases
   virtual void computeAliases(SgGraphNode *node, int derefLevel,
@@ -86,29 +114,18 @@ public:
   virtual void addMayAliasRelation(const AliasRelationNode &left,
                                    const AliasRelationNode &right) = 0;
 
-  //! compute hash of the graph
-  virtual unsigned long getHash() const = 0;
   //! Get the Graph
   virtual SgIncidenceDirectedGraph *getGraph() const = 0;
 
   //! Merge two CompRepr
   virtual void merge(const CompReprBase &) = 0;
 
-  //! Print to Dot file
-  virtual void toDot(const std::string &file_name) = 0;
-
 protected:
-  SgIncidenceDirectedGraph *graph;
-  unsigned long hash;
+  SgIncidenceDirectedGraph *graph = nullptr;
   /**
    * Protected Destructor to make sure the client code can't delete it
    */
-  // DQ (12/6/2016): Aded virtual to fix compiler warning that we want to
-  // considered an error: -Wdelete-non-virtual-dtor
-  virtual ~CompReprBase() {
-    delete graph;
-    graph = NULL;
-  }
+  virtual ~CompReprBase() { AliasAnalysisDetail::deleteOwnedGraph(graph); }
 };
 
 // The actual Compact Representation. It's implemented
@@ -124,40 +141,17 @@ class CompactRepresentation : public CompReprBase {
   //! Merge a graph with this compact representation
   void merge(SgIncidenceDirectedGraph *thatGraph);
 
-  //! Update the Hash
-  void updateHash(SgNode *from, SgNode *to);
-
   //! Initialize CompactRepresentation
   void init();
 
   //! add a Graph Edge
   void addEdge(SgGraphNode *g_from, SgGraphNode *g_to);
 
-  //! Process Nodes
-  void processNodes(std::ostream &o, SgGraphNode *n,
-                    std::set<SgGraphNode *> &explored);
-
-  //! Print Nodes and Edges
-  void printNodePlusEdges(std::ostream &o, SgGraphNode *node);
-
-  //! Print Nodes
-  void printNode(std::ostream &o, SgGraphNode *node);
-
-  //! Print Edges
-  void printEdge(std::ostream &o, SgDirectedGraphEdge *edge, bool isInEdge);
-
 public:
-  //! Get the Mapping from SgNode to SgGraphNode
-  std::unordered_map<SgNode *, SgGraphNode *> getNodesMapping() {
-    return all_nodes;
-  }
   CompactRepresentation() { init(); }
 
   //! Get the Graph
   SgIncidenceDirectedGraph *getGraph() const { return graph; }
-
-  //! Get the Hash
-  unsigned long getHash() const { return hash; }
 
   //! Copy constructor for CompactRepresentation
   CompactRepresentation(const CompactRepresentation &copy);
@@ -165,9 +159,10 @@ public:
   //! Assignment operator overload for Compactrepresentation
   CompactRepresentation &operator=(const CompactRepresentation &p);
 
-  //! Given a VariableSymbol and Dereference level return list of aliases
-  void computeAliases(SgVariableSymbol *var, int derefLevel,
+  void computeAliases(SgNode *var, int derefLevel,
                       std::vector<SgGraphNode *> &nodes);
+  void computeValues(SgNode *var, int derefLevel,
+                     std::vector<SgGraphNode *> &nodes);
 
   //! Given a graph node and Dereference level return list of aliases
   void computeAliases(SgGraphNode *node, int derefLevel,
@@ -184,19 +179,12 @@ public:
   //! Merge two CompactRepresentations
   void merge(const CompReprBase &that);
 
-  //! == Operator overload for CompactRepresentation. Implemented using hashing
-  //! for efficiency
+  //! Compare alias identities, edges and write effects.
   bool operator==(const CompactRepresentation &that) const;
-
-  //! != Operator overload for CompactRepresentation. Implemented using hashing
-  //! for efficiency
-  bool operator!=(const CompactRepresentation &that) const;
-
-  //! Prints CompactRepresentation to Dot File.
-  void toDot(const std::string &file_name);
 };
 
-//! A Shared Pointer Wrapper for CompactRepresentation
+//! Null means unreachable/pending; an allocated empty graph is reachable
+//! with no alias facts.
 class CompReprPtr {
   //! The shared pointer holding th CompactRepresentation
   std::shared_ptr<CompReprBase> ptr;
@@ -241,8 +229,6 @@ class AliasInfoGenerator {
       aliasRelations;
 
 public:
-  AliasInfoGenerator();
-
   //! Initialize
   void init(SgGraphNode *n);
 
@@ -262,8 +248,8 @@ public:
   std::vector<std::pair<AliasRelationNode, AliasRelationNode>>
   getAliasRelations(SgGraphNode *node);
 
-  //! Adds a new alias relation for a CFG Node
-  void addNewAliasRelation(
+  //! Returns whether a new alias relation was added for a CFG node.
+  bool addNewAliasRelation(
       SgGraphNode *node,
       std::pair<AliasRelationNode, AliasRelationNode> a_relation);
 
@@ -274,14 +260,6 @@ public:
   //! Get all the return statements
   std::vector<AliasRelationNode> getReturnStmts() { return returnStmts; }
 };
-
-namespace ProcessExpression {
-//! Helper Function to process Left Hand Side of an Expression
-void processLHS(SgNode *node, struct AliasRelationNode &arNode);
-
-//! Helper Function to process Right Hand Side of an Expression
-void processRHS(SgNode *node, struct AliasRelationNode &arNode);
-} // namespace ProcessExpression
 
 //! Helper class to collect Alias Relations
 class CollectAliasRelations {
@@ -296,7 +274,6 @@ class CollectAliasRelations {
 
 public:
   enum COLOR { WHITE = 0, GREY, BLACK };
-  enum TRAVERSAL_TYPE { TOPOLOGICAL = 0, NON_TOPOLOGICAL };
 
   CollectAliasRelations(StaticCFG::CFG *_cfg, AliasInfoGenerator *_g)
       : cfg(_cfg), g(_g) {}
@@ -330,16 +307,8 @@ protected:
   //! List of all the CFGNodes in topological order
   std::vector<SgGraphNode *> cfgNodes;
 
-  // typedef FilteredCFGNode<AliasCfgFilter> FilteredCfgNode;
-  // typedef FilteredCFGEdge<AliasCfgFilter> FilteredCfgEdge;
-
-  //! Entry CompactRepresentation of the function
-  CompReprPtr entry;
-
   //! Exit CompactRepresentation of the function
   CompReprPtr exit;
-
-  unsigned long checkPointHash;
 
   //! Constructs the CFG
   virtual void buildCFG();
@@ -353,13 +322,11 @@ protected:
       &resolver;
 
   //! Retrieve Alias Relations from Function Parameters. Map data between actual
-  //! and formal parameters. Handles return values as well.
+  //! and formal parameters.
   void getFunctionParametersAliasRelations(
       SgFunctionCallExp *f_exp, SgFunctionDeclaration *funcDecl,
       std::vector<std::pair<AliasRelationNode, AliasRelationNode>>
-          &arg_relations,
-      std::vector<std::pair<AliasRelationNode, AliasRelationNode>>
-          &return_relations);
+          &arg_relations);
 
   //! Retrieve Alias Relations from Constructor Parameters.
   void getConstructorParametersAliasRelations(
@@ -377,11 +344,9 @@ protected:
 
   // Get all the aliases
   void getAliases(CompReprPtr &ptr, AliasRelationNode &node,
-                  std::vector<SgVariableSymbol *> &aliases);
+                  std::vector<SgType *> &aliases);
 
 public:
-  // ReachingDefinitionAnalysis(SgNode *head) :
-  // DataFlowAnalysis<ReachingDefNode, ReachingDefinitions>(head),  g(0) {
   IntraProcAliasAnalysis(
       SgNode *head, ClassHierarchyWrapper *_classHierarchy,
       CallGraphBuilder *_cgB,
@@ -391,7 +356,7 @@ public:
           &resolver);
 
   //! Get the Entry CompactRepresentation Graph for the function
-  CompReprPtr getFunctionEntry() { return entry; }
+  CompReprPtr getFunctionEntry() { return gen->getEntryData(cfg->getEntry()); }
 
   //! Get the Exit CompactRepresentation Graph for the function
   CompReprPtr getFunctionExit() { return exit; }
@@ -416,8 +381,6 @@ public:
   //! Initialized the Analysis
   void init() {}
 
-  // DQ (12/6/2016): Aded virtual to fix compiler warning that we want to
-  // considered an error: -Wdelete-non-virtual-dtor
   //! Destructor
   virtual ~IntraProcAliasAnalysis();
 

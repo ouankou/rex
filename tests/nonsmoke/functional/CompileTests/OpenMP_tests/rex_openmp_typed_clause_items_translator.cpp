@@ -48,6 +48,7 @@ int main(int argc, char **argv) {
         argument == "--replacement-null" || argument == "--replacement-owned" ||
         argument == "--replacement-wrong-apply-payload" ||
         argument == "--replacement-wrong-init-payload" ||
+        argument == "--replacement-wrong-prefer-type" ||
         argument == "--replacement-list-wrong-type") {
       ROSE_ASSERT(mode.empty());
       mode = argument;
@@ -367,7 +368,7 @@ int main(int argc, char **argv) {
 
   SgIntVal *init_expression = SageBuilder::buildIntVal(7);
   SgOmpInitModifier *expression_modifier = new SgOmpInitModifier(
-      SgOmpClause::e_omp_init_modifier_prefer_type, init_expression);
+      SgOmpClause::e_omp_init_modifier_depinfo_in, init_expression);
   init_expression->set_parent(expression_modifier);
   exerciseOwnedExpressionReplacement(expression_modifier, init_expression);
 
@@ -410,6 +411,17 @@ int main(int argc, char **argv) {
     invalid_expression->set_parent(named_modifier);
     named_modifier->replace_expression(invalid_expression,
                                        SageBuilder::buildIntVal(7));
+  } else if (mode == "--replacement-wrong-prefer-type") {
+    for (SgNode *node : NodeQuery::querySubTree(project, V_SgOmpInitModifier)) {
+      auto *modifier = isSgOmpInitModifier(node);
+      if (modifier->get_kind() ==
+          SgOmpClause::e_omp_init_modifier_prefer_type) {
+        modifier->replace_expression(modifier->get_expression(),
+                                     SageBuilder::buildIntVal(8));
+        return 0;
+      }
+    }
+    ROSE_ABORT();
   } else if (mode == "--replacement-list-wrong-type") {
     modifier_list->replace_expression(modifier_list->get_modifiers().back(),
                                       SageBuilder::buildIntVal(8));

@@ -1,5 +1,3 @@
-
-include_directories(${KDE4_INCLUDES} ${KDE4_INCLUDE_DIR} ${QT_INCLUDES})
 include_directories(${ROSE_INCLUDES})
 
 if(ENABLE-FORTRAN)
@@ -17,5 +15,3 @@ endif()
 
 add_subdirectory(AstDeleteTests)
 add_subdirectory(FortranTests)
-
-########### install files ###############

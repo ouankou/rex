@@ -6,20 +6,7 @@
 
 #include "grammar.h"
 
-// What should be the behavior of the default constructor for Grammar
-
 void Grammar::setUpNodes() {
-  // This function sets up the type system for the grammar.  In this case it
-  // implements the C++ grammar, but this will be modified to permit all
-  // grammars to contain elements of the C++ grammar.  Modified grammars will
-  // add and subtract elements from this default C++ grammar.
-
-  // print out all the available nonterminals (error checking/debugging)
-  // terminalList.display("Called from Grammar::setUpNodes()");
-  // nonTerminalList.display("Called from Grammar::setUpNodes()");
-
-  // printf ("Exiting after test in Grammar::setUpNodes()! \n");
-
   AstNodeClass &Expression = *lookupTerminal(terminalList, "Expression");
   AstNodeClass &Statement = *lookupTerminal(terminalList, "Statement");
 
@@ -27,7 +14,6 @@ void Grammar::setUpNodes() {
   NEW_TERMINAL_MACRO(CommonBlockObject, "CommonBlockObject",
                      "TEMP_CommonBlockObject");
 
-  // Liao 11/1/2010, move SgInitializedName to SgLocatedNode
   NEW_TERMINAL_MACRO(InitializedName, "InitializedName", "InitializedNameTag");
 
   // DQ (9/3/2014): Adding support for C++11 lambda expresions.
@@ -43,11 +29,14 @@ void Grammar::setUpNodes() {
                      "T_STATEMENT_ATTRIBUTE");
   NEW_TERMINAL_MACRO(StatementAttributeList, "StatementAttributeList",
                      "T_STATEMENT_ATTRIBUTE_LIST");
+  NEW_TERMINAL_MACRO(AlignmentSpecifier, "AlignmentSpecifier",
+                     "T_ALIGNMENT_SPECIFIER");
+  NEW_TERMINAL_MACRO(FortranImplicitRange, "FortranImplicitRange",
+                     "T_FORTRAN_IMPLICIT_RANGE");
   NEW_TERMINAL_MACRO(NamespaceSourceFragment, "NamespaceSourceFragment",
                      "T_NAMESPACE_SOURCE_FRAGMENT");
 
-#if USE_OMP_IR_NODES // Liao, 5/30/2009 add nodes for OpenMP Clauses,
-                     // they have source position info and should be traversed
+  // they have source position info and should be traversed
   // add all terminals first, then bottom-up traverse class hierarchy to define
   // non-terminals
   /*
@@ -353,7 +342,6 @@ void Grammar::setUpNodes() {
           OmpDoacrossClause | OmpOtherwiseClause | OmpInductionClause |
           OmpApplyClause | OmpInitClause | OmpDirectiveKindClause,
       "OmpClause", "OmpClauseTag", false);
-#endif
 
   // ***********************************************************************
   // ***********************************************************************
@@ -429,55 +417,24 @@ void Grammar::setUpNodes() {
   // negara1 (08/10/2011): Support for included files (i.e. headers) bodies.
   NEW_TERMINAL_MACRO(HeaderFileBody, "HeaderFileBody", "TEMP_Header_File_Body");
 
-  // DQ (11/26/2013): Moved SgToken to be before the UntypedNode IR nodes.
-  // NEW_TERMINAL_MACRO (Token, "Token", "TOKEN" );
+  NEW_TERMINAL_MACRO(CxxLiteralToken, "CxxLiteralToken", "CXX_LITERAL_TOKEN");
+  NEW_TERMINAL_MACRO(CxxLiteralTokenList, "CxxLiteralTokenList",
+                     "CXX_LITERAL_TOKEN_LIST");
 
-  // ***************************************************************************************
-  // ***************************************************************************************
-  //                                 Untyped IR Node Support
-  // ***************************************************************************************
-  // ***************************************************************************************
-  // DQ (11/26/2013): Adding support for untyped AST IR nodes to support
-  // translation of ATterm based untyped ASTs into ROSE so that we will have
-  // tools (inherited attribute and synthizied attribute traversals) from which
-  // to build the ROSE AST (typed AST) and define a proper frontend.
-
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
-
-  // ***************************************************************************************
-  //                              END of Untyped IR Node Support
-  // ***************************************************************************************
-
-  // DQ (11/26/2013): Added UntypedNode to be derived from LocatedNodeSupport.
-  // DQ (10/6/2008): Migrate some of the SgSupport derived IR nodes, that truly
-  // have a position in the source code, to SgLocatedNode.  Start with some of
-  // the newer IR nodes which are traversed and thus are forced to have an
-  // interface for the source position interface information (already present in
-  // the SgLocatedNode base class).  Eventually a number of the IR nodes
-  // currently derived from SgSupport should be moved to be here (e.g.
-  // SgTemplateArgument, SgTemplateParameter, and a number of the new Fortran
-  // specific IRnodes, etc.).
   NEW_NONTERMINAL_MACRO(
       LocatedNodeSupport,
-      CommonBlockObject | InitializedName | InterfaceBody | HeaderFileBody |
-          RenamePair | OmpClause | AccClause | LambdaCapture |
-          LambdaCaptureList | DeclarationScopeList | AuxiliaryDeclarationList |
-          OmpClauseList | StatementAttribute | StatementAttributeList |
-          NamespaceSourceFragment | OmpContextSelectorProperty |
-          OmpContextSelector | OmpContextSelectorSet,
+      CxxLiteralToken | CxxLiteralTokenList | CommonBlockObject |
+          InitializedName | InterfaceBody | HeaderFileBody | RenamePair |
+          OmpClause | AccClause | LambdaCapture | LambdaCaptureList |
+          DeclarationScopeList | AuxiliaryDeclarationList | OmpClauseList |
+          StatementAttribute | StatementAttributeList | AlignmentSpecifier |
+          FortranImplicitRange | NamespaceSourceFragment |
+          OmpContextSelectorProperty | OmpContextSelector |
+          OmpContextSelectorSet,
       "LocatedNodeSupport", "LocatedNodeSupportTag", false);
-
-  // DQ (3/24/2007): Added support for tokens in the IR (to support threading of
-  // the token stream onto the AST as part of an alternative, and exact, form of
-  // code generation within ROSE. NEW_NONTERMINAL_MACRO (LocatedNode, Expression
-  // | Statement, "LocatedNode", "LocatedNodeTag" );
 
   NEW_TERMINAL_MACRO(Token, "Token", "TOKEN");
 
-  // Liao 11/2/2010, LocatedNodeSupport is promoted to the first location since
-  // SgInitializedName's internal type is used in some Statement
-  // NEW_NONTERMINAL_MACRO (LocatedNode, LocatedNodeSupport| Statement |
-  // Expression | Token, "LocatedNode", "LocatedNodeTag", false );
   NEW_NONTERMINAL_MACRO(LocatedNode,
                         Token | LocatedNodeSupport | Statement | Expression,
                         "LocatedNode", "LocatedNodeTag", false);
@@ -486,14 +443,22 @@ void Grammar::setUpNodes() {
   AstNodeClass &Symbol = *lookupTerminal(terminalList, "Symbol");
   AstNodeClass &Support = *lookupTerminal(terminalList, "Support");
 
-  // printf ("nonTerminalList.size() = %" PRIuPTR " \n",nonTerminalList.size());
+  NEW_TERMINAL_MACRO(CxxArrayInitBinding, "CxxArrayInitBinding",
+                     "CXX_ARRAY_INIT_BINDING");
+  CxxArrayInitBinding.setFunctionPrototype("HEADER_CXX_ARRAY_INIT_BINDING",
+                                           "../Grammar/Node.code");
+  CxxArrayInitBinding.setDataPrototype(
+      "SgExpression*", "common_source", "= nullptr", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
+      REQUIRED_TRAVERSAL_MEMBER);
+  CxxArrayInitBinding.setDataPrototype(
+      "SgCastExp::value_category_enum", "common_value_category",
+      "= SgCastExp::e_value_category_unclassified", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // NEW_NONTERMINAL_MACRO (Node, Type | Symbol | LocatedNode | Support, "Node",
-  // "NodeTag" ); NEW_NONTERMINAL_MACRO (Node, Support | Type | LocatedNode |
-  // Symbol | AsmNode, "Node", "NodeTag", false ); NEW_NONTERMINAL_MACRO (Node,
-  // Type | Symbol | LocatedNode | Support, "Node", "NodeTag" );
-  NEW_NONTERMINAL_MACRO(Node, Support | Type | LocatedNode | Symbol, "Node",
-                        "NodeTag", false);
+  NEW_NONTERMINAL_MACRO(
+      Node, Support | Type | LocatedNode | Symbol | CxxArrayInitBinding, "Node",
+      "NodeTag", false);
 
   // ***********************************************************************
   // ***********************************************************************
@@ -505,34 +470,14 @@ void Grammar::setUpNodes() {
   Node.setPredeclarationString("HEADER_NODE_PREDECLARATION",
                                "../Grammar/Node.code");
 
-  // DQ (3/25/2006): Put it back since we can't control the ordering of
-  // generated functions sufficently to have this be a means to document ROSE.
-  // DQ (3/24/2006): Move to before common code to better organize documentation
-  // Node.setFunctionPrototype        ( "HEADER", "../Grammar/Node.code");
-
-  // MK: the following two function calls could be wrapped into a single one:
   Node.setFunctionPrototype("HEADER", "../Grammar/Common.code");
   Node.setSubTreeFunctionPrototype("HEADER", "../Grammar/Common.code");
 
-  // DQ (3/25/2006): Put it back since we can't control the ordering of
-  // generated functions sufficently to have this be a means to document ROSE.
-  // DQ (3/24/2006): Move to before common code
   Node.setFunctionPrototype("HEADER", "../Grammar/Node.code");
 
   // This function exists everywhere (at each node of the grammar)!
   Node.setSubTreeFunctionPrototype("HEADER_IS_CLASSNAME",
                                    "../Grammar/Node.code");
-
-  // This function exists everywhere (at each node of the grammar)!
-  // Node.setSubTreeFunctionPrototype    ( "HEADER_PARSER",
-  // "../Grammar/Node.code"); Can't use the leafNodeList until we have built the
-  // tree!!! leafNodeList.setSubTreeFunctionPrototype    ( "HEADER_PARSER",
-  // "../Grammar/Node.code"); leafNodeList.setFunctionPrototype    (
-  // "HEADER_PARSER", "../Grammar/Node.code");
-
-  // Build it everywhere for now (though it is likely only required on the
-  // leaves)
-  Node.setSubTreeFunctionPrototype("HEADER_PARSER", "../Grammar/Node.code");
 
   // MK: I moved the following data member declaration from ../Grammar/Node.code
   // to this position, we rely on the access functions to be defined in the
@@ -541,43 +486,30 @@ void Grammar::setUpNodes() {
                         NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
                         NO_COPY_DATA);
 
-  // DQ (7/23/2005): Let these be automatically generated by ROSETTA!
-  // Opps, these can't be generated by ROSETTA, since it would result
-  // in the recursive call to set_isModified (endless recursion).
-  // QY: we need a boolean flag for tracking the updates to an ast node
+  // A semantic copy preserves the source edit state. Copy-construction
+  // rebinding uses its exact identity transaction without marking source edits.
   Node.setDataPrototype("bool", "isModified", "= false",
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
-  // DQ (12/3/2014): We need a concept of contains modified code so that we can
-  // support the unparsing from the token stream.
+                        NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  Node.setDataPrototype("uint64_t", "lastMutationSequence", "= 0",
+                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   Node.setDataPrototype("bool", "containsTransformation", "= false",
+                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+
+  // Checkpoint numbering belongs to this node's lifetime. Copies acquire their
+  // own numbering; recycling a memory-pool address must not inherit an old ID.
+  Node.setDataPrototype("uint64_t", "ast_json_node_id", "= 0",
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-  // DQ (10/21/2005): Adding memory pool support variable via ROSETTA so that
-  // file I/O can be supported. Node.setDataPrototype("$CLASSNAME
-  // *","freepointer","= NULL",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE, NO_COPY_DATA);
   Node.setDataPrototype("$CLASSNAME*", "freepointer",
-                        "= AST_FileIO::IS_VALID_POINTER()",
+                        "= ASTMemoryPool::validNodeMarker()",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-  // DQ (1/31/2006): We can introduce this here since it will be set in each
-  // constructor call. but the trick is to set the initializer to an empty
-  // string so that the initialization in the constructor will not be output by
-  // ROSETTA. DQ (1/31/2006): This is support for the single global function
-  // type table (stores all function types using mangled names).  To support
-  // this static data member we have to build special version of the access
-  // functions (so that the access member functions will be static as well).
-  // Support for SgFunctionTypeTable* SgNode::globalFunctionTypeTable = new
-  // SgFunctionTypeTable(); Node.setDataPrototype("static
-  // SgFunctionTypeTable*","globalFunctionTypeTable","= new
-  // SgFunctionTypeTable()",
-  //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE, NO_COPY_DATA);
+  // Static table storage is defined separately from generated constructors.
   Node.setDataPrototype("static SgFunctionTypeTable*",
                         "globalFunctionTypeTable", "", NO_CONSTRUCTOR_PARAMETER,
                         NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
@@ -589,11 +521,6 @@ void Grammar::setUpNodes() {
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
-  // DQ (3/12/2007): Added static mangled name map, used to improve performance
-  // of mangled name lookup. Node.setDataPrototype("static
-  // SgMangledNameListPtr","globalMangledNameMap","",
-  //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE, NO_COPY_DATA);
   Node.setDataPrototype("static std::unordered_map<SgNode*,std::string>",
                         "globalMangledNameMap", "", NO_CONSTRUCTOR_PARAMETER,
                         NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
@@ -604,25 +531,12 @@ void Grammar::setUpNodes() {
                         NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
                         NO_COPY_DATA);
 
-  // Not clear how to best to this, perhaps ROSETTA should define a function.
-  // DQ (11/25/2007): Language classification field.  Now that we are supporting
-  // multiple languages it is helpful to have a way to classify the IR nodes as
-  // to what language they belong.  Most are shared (which can be the default)
-  // but many are language specific. Node.setDataPrototype("static
-  // long","language_classification_bit_vector","",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE, NO_COPY_DATA);
-
   LocatedNode.setFunctionPrototype("HEADER", "../Grammar/LocatedNode.code");
-  // LocatedNode.setDataPrototype     ( "Sg_File_Info*", "file_info", "= NULL",
-  //              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //              DEF_DELETE);
-  // New interface functions for startOfConstruct and endOfConstruct information
   LocatedNode.setDataPrototype("Sg_File_Info*", "startOfConstruct", "= NULL",
-                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                               CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
   LocatedNode.setDataPrototype("Sg_File_Info*", "endOfConstruct", "= NULL",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
 
   // Preserve whether the frontend declaration range ends in a macro expansion
@@ -630,50 +544,26 @@ void Grammar::setUpNodes() {
   // string-keyed AstAttribute side channel.
   LocatedNode.setDataPrototype("bool", "source_range_ends_in_macro_expansion",
                                "= false", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                               NO_DELETE, COPY_DATA);
+                               NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                               COPY_DATA);
   // A declaration or statement that covers only a semantic fragment of a macro
   // replacement has physical invocation coordinates, but it does not own an
   // independently written token surface.  Preserve that producer fact instead
   // of asking token mapping to infer ownership from overlapping coordinates.
   LocatedNode.setDataPrototype(
       "bool", "source_range_is_macro_expansion_fragment", "= false",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE, COPY_DATA);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
-  // DQ (7/26/2008): Any comments need to be copied to a new container (deep
-  // copy), else comments added to the copy will showup in the comments for the
-  // original AST.  Fixed as part of support for bug seeding.
-  // LocatedNode.setDataPrototype     ( "AttachedPreprocessingInfoType*",
-  // "attachedPreprocessingInfoPtr", "= NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, DEF_DELETE, COPY_DATA);
+  // Each copy owns its records. Destruction must release their reciprocal
+  // owner edges before deleting the records and their container.
   LocatedNode.setDataPrototype("AttachedPreprocessingInfoType*",
                                "attachedPreprocessingInfoPtr", "= NULL",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
+  LocatedNode.setMemberDestructor("attachedPreprocessingInfoPtr",
+                                  "clearAttachedPreprocessingInfo();");
 
-  // DQ (1/2/2006): Added attribute via ROSETTA (changed to pointer to
-  // AstAttributeMechanism) Modified implementation to only be at specific IR
-  // nodes.
-
-  // DQ (6/28/2008): Make this copy the attributes and define a copy function to
-  // be called to support this!
-  // LocatedNode.setDataPrototype("AstAttributeMechanism*","attributeMechanism","=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  // LocatedNode.setDataPrototype("AstAttributeMechanism*","attributeMechanism","=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag.
-  // LocatedNode.setDataPrototype("AstAttributeMechanism*","attributeMechanism","=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, NO_DELETE, CLONE_PTR);
   LocatedNode.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                                "= NULL", NO_CONSTRUCTOR_PARAMETER,
                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -684,43 +574,33 @@ void Grammar::setUpNodes() {
   LocatedNode.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT",
                                 "../Grammar/Support.code");
 
-  // DQ (11/3/2015): Added support to use mechanism that to have set_* access
-  // functions not mark node using isModified flag. DQ (1/15/2015): We need a
-  // concept of transformation restricted to the addition or deletion or
-  // transformation of the surounding comments and CPP directives.
-  // LocatedNode.setDataPrototype("bool","containsTransformationToSurroundingWhitespace","=
-  // false",
-  //                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                       NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   LocatedNode.setDataPrototype(
       "bool", "containsTransformationToSurroundingWhitespace", "= false",
       NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE, NO_COPY_DATA);
 
-  // DQ (3/24/2007): Added support for tokens in the IR.
-  // Token.setPredeclarationString ("HEADER_TOKEN_PREDECLARATION" ,
-  // "../Grammar/LocatedNode.code");
-  Token.setFunctionPrototype("HEADER_TOKEN", "../Grammar/LocatedNode.code");
-
-  // DQ (3/24/2007): Should be be naming the string we hold in the token
-  // "lexeme", or is there a better name?
+  // A token's spelling and classification are its semantic payload and must
+  // be preserved when its owning source file is copied.
   Token.setDataPrototype("std::string", "lexeme_string", "= \"\"",
                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                         NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   Token.setDataPrototype("unsigned int", "classification_code", "= 0",
                          CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                         NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  LocatedNodeSupport.setFunctionPrototype("HEADER_LOCATED_NODE_SUPPORT",
-                                          "../Grammar/LocatedNode.code");
+  CxxLiteralToken.setFunctionPrototype("HEADER_CXX_LITERAL_TOKEN",
+                                       "../Grammar/LocatedNode.code");
+  CxxLiteralToken.setDataPrototype(
+      "SgCxxLiteralToken::token_kind_enum", "token_kind",
+      "= SgCxxLiteralToken::e_numeric_token", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxLiteralToken.setDataPrototype(
+      "std::string", "spelling", "= \"\"", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  CxxLiteralTokenList.setDataPrototype(
+      "SgCxxLiteralTokenPtrList", "tokens", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/3/2014): Adding support for C++11 lambda expresions.
-  LambdaCapture.setFunctionPrototype("HEADER_LAMBDA_CAPTURE",
-                                     "../Grammar/LocatedNode.code");
-  LambdaCaptureList.setFunctionPrototype("HEADER_LAMBDA_CAPTURE_LIST",
-                                         "../Grammar/LocatedNode.code");
-  DeclarationScopeList.setFunctionPrototype("HEADER_DECLARATION_SCOPE_LIST",
-                                            "../Grammar/LocatedNode.code");
   AuxiliaryDeclarationList.setFunctionPrototype(
       "HEADER_AUXILIARY_DECLARATION_LIST", "../Grammar/LocatedNode.code");
   OmpClauseList.setFunctionPrototype("HEADER_OMP_CLAUSE_LIST",
@@ -729,6 +609,29 @@ void Grammar::setUpNodes() {
                                           "../Grammar/Support.code");
   StatementAttributeList.setFunctionPrototype("HEADER_STATEMENT_ATTRIBUTE_LIST",
                                               "../Grammar/Support.code");
+  AlignmentSpecifier.setFunctionPrototype("HEADER_ALIGNMENT_SPECIFIER",
+                                          "../Grammar/Support.code");
+  FortranImplicitRange.setFunctionPrototype("HEADER_FORTRAN_IMPLICIT_RANGE",
+                                            "../Grammar/LocatedNode.code");
+  FortranImplicitRange.setFunctionSource("SOURCE_FORTRAN_IMPLICIT_RANGE",
+                                         "../Grammar/LocatedNode.code");
+  FortranImplicitRange.setDataPrototype(
+      "char", "first_letter", "= 0", CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE);
+  FortranImplicitRange.setDataPrototype(
+      "std::optional<char>", "last_letter", "= std::nullopt",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FortranImplicitRange.setDataPrototype(
+      "SgType*", "type", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  FortranImplicitRange.setDataPrototype(
+      "SgFortranImplicitRange::type_spec_enum", "type_spec",
+      "= SgFortranImplicitRange::e_intrinsic", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  FortranImplicitRange.setDataPrototype(
+      "SgSymbol*", "source_derived_type_symbol", "= nullptr",
+      CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
   NamespaceSourceFragment.setFunctionPrototype(
       "HEADER_NAMESPACE_SOURCE_FRAGMENT", "../Grammar/LocatedNode.code");
   NamespaceSourceFragment.setDataPrototype(
@@ -743,19 +646,6 @@ void Grammar::setUpNodes() {
       "bool", "contains_namespace_name", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // ***************************************************************************************
-  // ***************************************************************************************
-  //                                 Untyped IR Node Support
-  // ***************************************************************************************
-  // ***************************************************************************************
-  // DQ (11/26/2013): Adding support for untyped AST IR nodes to support
-  // translation of ATterm based untyped ASTs into ROSE so that we will have
-  // tools (inherited attribute and synthizied attribute traversals) from which
-  // to build the ROSE AST (typed AST) and define a proper frontend.
-
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
-
-  // DQ (10/6/2008): Moved to SgLocatedNodeSupport.
   RenamePair.setFunctionPrototype("HEADER_RENAME_PAIR",
                                   "../Grammar/LocatedNode.code");
   RenamePair.setDataPrototype("SgName", "local_name", "= \"\"",
@@ -764,19 +654,6 @@ void Grammar::setUpNodes() {
   RenamePair.setDataPrototype("SgName", "use_name", "= \"\"",
                               CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (10/6/2008): This interferes with the specification in SgLocatedNode
-  // RenamePair.setDataPrototype     ( "Sg_File_Info*", "startOfConstruct", "=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
-
-  // DQ (10/6/2008): Moved to SgLocatedNodeSupport.
-  // DQ (10/6/2008): Added support for interface bodies so that we could capture
-  // the information used to specify function declaration ro function names in
-  // interface statements.
-  InterfaceBody.setFunctionPrototype("HEADER_INTERFACE_BODY",
-                                     "../Grammar/LocatedNode.code");
 
   // Record whether the function declaration or the function name was used in
   // the interface body (F90 permits either one).
@@ -794,43 +671,15 @@ void Grammar::setUpNodes() {
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (10/6/2008): This interferes with the specification in SgLocatedNode
-  // InterfaceBody.setDataPrototype     ( "Sg_File_Info*", "startOfConstruct",
-  // "= NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
-  // InterfaceBody.setDataPrototype     ( "Sg_File_Info*", "endOfConstruct", "=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
-
-  // negara1 (08/10/2011): Added to SgLocatedNodeSupport, no need for additional
-  // functions.
-  HeaderFileBody.setFunctionPrototype("HEADER_HEADER_FILE_BODY",
-                                      "../Grammar/LocatedNode.code");
-
-  // DQ (8/23/2018): Adding support for pointer to the SgSourceFile that will
-  // record a SgSourceFile IR node for the include file (so that we can save
-  // information about comments, CPP directives, and the token stream).  This
-  // allows us to build the associated file information in the frontend instead
-  // of building it in the backend (when it is too late to generate the token
-  // stream and it's mapping to what might be an already modified AST).  It
-  // might be that this IR node (SgSourceFile) could replace the
-  // SgHeaderFileBody IR node (but let's hold of on that idea for now).
   HeaderFileBody.setDataPrototype(
       "SgSourceFile*", "include_file", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  CommonBlockObject.setFunctionPrototype("HEADER_COMMON_BLOCK_OBJECT",
-                                         "../Grammar/Support.code");
   CommonBlockObject.setDataPrototype(
       "std::string", "block_name", "=\"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   CommonBlockObject.setDataPrototype(
       "SgExprListExp*", "variable_reference_list", "= NULL",
-      // Liao 12/9/2010, it should be traversable to reach varRefExp
-      //                  NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-      //                  NO_TRAVERSAL, NO_DELETE);
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   CommonBlockObject.setDataPrototype(
@@ -838,50 +687,28 @@ void Grammar::setUpNodes() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // InitializedName.setFunctionPrototype     ( "HEADER_INITIALIZED_NAME_DATA",
-  // "../Grammar/Support.code");
-
   InitializedName.setFunctionPrototype("HEADER_INITIALIZED_NAME",
                                        "../Grammar/Support.code");
 
-  // DQ (1/18/2006): renames this to be consistant and to allow the generated
-  // functions to map to the virtual SgNode::get_file_info(). This then meens
-  // that we need to remove the use of SgInitializedName::get_fileInfo() where
-  // it is used. DQ (8/2/2004): Added fileInfo object to SgInitializedName
-  // object (to help with debugging and to generally provide source position
-  // information on those IR nodes which are traversed).
-  // InitializedName.setDataPrototype ( "Sg_File_Info*", "fileInfo", "= NULL",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        DEF_DELETE, CLONE_PTR);
-  // InitializedName.setDataPrototype ( "Sg_File_Info*", "file_info", "= NULL",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        DEF_DELETE, CLONE_PTR);
-  //   InitializedName.setDataPrototype ( "Sg_File_Info*", "startOfConstruct",
-  //   "= NULL",
-  //          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //          DEF_DELETE, CLONE_PTR);
-
-  // DQ (12/9/2004): Modified to make the access functions for this data member
-  // be automatically generated.  As part of this change Alin's set_name()
-  // member function was moved to ROSE/src/frontend/SageIII/sageSupport.[hC]
-  // since it has very specific semantics that does not apply to all cases of
-  // where the set_name() access function should be called within a
-  // SgInitializedName object (since SgInitializedName objects are used for both
-  // VariableDeclaration, preinitialization lists, etc.)
-  // InitializedName.setDataPrototype("SgName","name", "= NULL",
-  //      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //      NO_DELETE);
-  // DQ (10/9/2007): Use the ROSETTA generated version to test failure
-
+  InitializedName.setDataPrototype("SgName", "name", "= NULL",
+                                   CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                   NO_TRAVERSAL, NO_DELETE);
   InitializedName.setDataPrototype(
-      "SgName", "name", "= NULL", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-      NO_TRAVERSAL, NO_DELETE);
+      "SgAlignmentSpecifierPtrList", "alignment_specifiers", "",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
+      NO_DELETE, CLONE_TREE);
 
-  // FMZ (4/7/2009): Added for Cray pointer declaration
-
+  InitializedName.setDataPrototype("SgType*", "typeptr", "= NULL",
+                                   CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                   NO_TRAVERSAL, DELETE_IF_OWNED, CLONE_TREE);
   InitializedName.setDataPrototype(
-      "SgType*", "typeptr", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "std::optional<long long>", "storage_size_bytes", "= std::nullopt",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
+  InitializedName.setDataPrototype(
+      "std::optional<unsigned int>", "cxx_field_index", "= std::nullopt",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   // Fortran declarations have two independent type contracts.  p_typeptr is
   // the exact semantic type published by Flang; this cross-edge records the
@@ -890,6 +717,12 @@ void Grammar::setUpNodes() {
   InitializedName.setDataPrototype(
       "SgType*", "fortran_source_type", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  InitializedName.setDataPrototype(
+      "SgInitializedName::fortran_c_argument_passing_enum",
+      "fortran_c_argument_passing",
+      "= SgInitializedName::e_fortran_c_argument_none",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   // A C/C++ declarator likewise has independent semantic and source type
   // contracts.  Clang canonicalizes an explicitly written template-id to one
@@ -898,7 +731,7 @@ void Grammar::setUpNodes() {
   // write that spelling onto the shared semantic SgTemplateInstantiationDecl.
   InitializedName.setDataPrototype(
       "SgType*", "cxx_source_type", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DELETE_IF_OWNED, CLONE_TREE);
 
   // A source-written derived type-spec names a visible symbol, which may be a
   // USE-associated alias whose spelling intentionally differs from the
@@ -953,6 +786,10 @@ void Grammar::setUpNodes() {
       "= SgInitializedName::e_enum_constant_source_unclassified",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
+  InitializedName.setDataPrototype(
+      "std::optional<long long>", "enum_constant_value", "= std::nullopt",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   // REX (7/10/2026): Preserve per-declarator Fortran spelling. SgClassType and
   // SgFunctionType are shared structural types and therefore cannot encode
@@ -963,10 +800,15 @@ void Grammar::setUpNodes() {
       "= SgInitializedName::e_fortran_type_spec_default",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  InitializedName.setDataPrototype("SgName", "fortran_procedure_interface",
-                                   "= \"\"", NO_CONSTRUCTOR_PARAMETER,
-                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                   NO_DELETE);
+  InitializedName.setDataPrototype(
+      "SgExpression*", "fortran_procedure_interface", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
+      CLONE_TREE);
+  InitializedName.setDataPrototype(
+      "std::optional<SgInitializedName::FortranProcedureComponentBinding>",
+      "fortran_procedure_component_binding", "= std::nullopt",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
 
   // A Fortran entity's semantic type includes its complete array shape even
   // when a separate DIMENSION, ALLOCATABLE, COMMON, or Cray POINTER statement
@@ -988,32 +830,19 @@ void Grammar::setUpNodes() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_DATA);
 
-  // QY:11/2/04 remove itemptr
-  //   InitializedName.setDataPrototype("SgInitializedName*","itemptr", "=
-  //   NULL",
-  //                                  NO_CONSTRUCTOR_PARAMETER,
-  //                                  BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL);
-  // DQ (7/20/2004): The initptr in this SgInitializer object is NULL (set by
-  // legacy frontend/SAGE connection)
-  //                 to fix previous cycle in these objects (previously fixed
-  //                 in ASTFixes.C.
   InitializedName.setDataPrototype(
-      "SgInitializer*", "initptr", "= NULL", NO_CONSTRUCTOR_PARAMETER,
+      "SgInitializer*", "initptr", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
+      OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_AFTER_OWNER_CONSTRUCTION);
 
-  // DQ (7/20/2004): I think this is a hold over from the old implementation of
-  // SageII and that it could be removed at some point.
   InitializedName.setDataPrototype("SgInitializedName*", "prev_decl_item",
                                    "= NULL", NO_CONSTRUCTOR_PARAMETER,
                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                   NO_DELETE);
-  InitializedName.setDataPrototype(
-      "bool", "is_initializer", "= false", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+                                   NO_DELETE, COPY_REFERENCE);
   InitializedName.setDataPrototype(
       "SgDeclarationStatement*", "declptr", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
   // SgVariableDefinition is structurally owned by the exact initialized name
   // that it describes.  The historical declptr field cannot express that
@@ -1028,27 +857,11 @@ void Grammar::setUpNodes() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       NO_DELETE, CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (3/4/2007): We want to force the copy mechanism to skip building a new
-  // SgStorageModifier when making a copy (use NO_COPY_DATA to do this).  The
-  // p_storageModifier is handled internally in SageIII. DQ (4/28/2004): Use new
-  // modifier classes instead of older interface
-  // InitializedName.setDataPrototype("int","storage_class_attributes", "=
-  // e_unknown_storage_class",
-  //              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //              NO_TRAVERSAL);
-  // InitializedName.setDataPrototype("SgStorageModifier*","storageModifier", "=
-  // NULL",
-  //              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //              DEF_DELETE);
+  // post_construction_initialization allocates a fresh modifier for each copy.
   InitializedName.setDataPrototype("SgStorageModifier*", "storageModifier",
                                    "= NULL", NO_CONSTRUCTOR_PARAMETER,
                                    NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                    DEF_DELETE, NO_COPY_DATA);
-#ifdef BUILD_X_VERSION_TERMINALS
-  InitializedName.setDataPrototype(
-      "SgX_DeclarationStatement*", "X_declptr", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
   // DQ (11/15/2004): class declarations for nested classes can appear outside
   // the scope of the class to which they belong, thus the parent information is
   // not sufficent to define the relationship of nested classes (and typedefs
@@ -1057,31 +870,20 @@ void Grammar::setUpNodes() {
   // (consistant with the design of the member function declaration).
   InitializedName.setDataPrototype(
       "SgScopeStatement*", "scope", "= NULL", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
-  // DQ (12/11/2004): Extra information when used as an entry within a
-  // preinitialization list! There is perhaps a better design possible (adding
-  // an new IR node and deriving it from the InitializedName). But that is a bit
-  // more complex than  think is justified at present while I experiment with
-  // this fix. I need to save information about if an entry in the
-  // preinitialization list is associated with the initialization of a base
-  // class or a data member.  This information (if a base class) is used to know
-  // what names in the preinitialization list need to be reset (when they are
-  // template names (to replace names such as "A___L9" with "A<int>").  See
-  // testcode2004_160.C.
   InitializedName.setDataPrototype(
       "SgInitializedName::preinitialization_enum", "preinitialization",
       "= e_unknown_preinitialization", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/3/2006): Added attribute via ROSETTA (changed to pointer to
-  // AstAttributeMechanism) Modified implementation to only be at specific IR
-  // nodes.
-  //   InitializedName.setDataPrototype("AstAttributeMechanism*","attributeMechanism","=
-  //   NULL",
-  //          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //          NO_DELETE, NO_COPY_DATA);
-
-  // FMZ (2/18/2009)
+  InitializedName.setDataPrototype(
+      "SgInitializedName*", "ctor_initializer_field_target", "= NULL",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
+  InitializedName.setDataPrototype(
+      "std::optional<unsigned int>", "ctor_initializer_source_order",
+      "= std::nullopt", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   InitializedName.setDataPrototype(
       "bool", "isCoArray", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
@@ -1097,147 +899,56 @@ void Grammar::setUpNodes() {
       "std::string", "register_name_string", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/30/2019): I think this is redundent with the similar data member
-  // below. DQ (12/20/2006): Record if global name qualification is required on
-  // the type. See test2003_01.C for an example of where this is required. Note
-  // that for a variable declaration (SgVariableDeclaration) this information is
-  // recorded directly on the SgVariableDeclaration node.  This use on the
-  // InitializedName is reserved for function parameters, and I am not sure if
-  // it is useful anyhwere else.
   InitializedName.setDataPrototype(
       "bool", "requiresGlobalNameQualificationOnType", "= false",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (11/20/2007): FORTRAN SUPPORT -- The shape of this variable (if it is an
-  // array) was not specified in the declaration.  This is typically the result
-  // of a subsequent "allocatable statement" after the declaration. The
-  // allocatable statement specifies the shape of an array and that it is
-  // appropriate for use with pointers (I think).
   InitializedName.setDataPrototype(
       "bool", "shapeDeferred", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/20/2007): FORTRAN SUPPORT -- The initializer may be defined directly
-  // in the variable declaration or in a separate "data statement".  This flag
-  // records if the initializer was defered (e.g. to a data statement).
   InitializedName.setDataPrototype(
       "bool", "initializationDeferred", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/3/2009): Added support for gnu variable attributes.  Note that these
-  // can be specified on a per variable basis and because a variable declaration
-  // can contain many variables, the attributs must live with the
-  // SgInitializedName (in the future we might define aSgVariableModifier and
-  // refactor this code there). Note that more than one value can be set, so
-  // this implements a bit vector of flags to be used.
   InitializedName.setDataPrototype(
       "SgBitVector", "gnu_attribute_modifierVector", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU constructor priority (added paramter
-  // "N" as in "void f __attribute__((constructor (N)));")
-  InitializedName.setDataPrototype(
-      "unsigned long int", "gnu_attribute_initialization_priority", "= 0",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU attributes
-  InitializedName.setDataPrototype(
-      "std::string", "gnu_attribute_named_weak_reference", "=\"\"",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU attributes
-  InitializedName.setDataPrototype("std::string", "gnu_attribute_named_alias",
-                                   "=\"\"", NO_CONSTRUCTOR_PARAMETER,
-                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                   NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU attributes
-  InitializedName.setDataPrototype(
-      "std::string", "gnu_attribute_cleanup_function", "=\"\"",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU attributes
   InitializedName.setDataPrototype("std::string", "gnu_attribute_section_name",
                                    "=\"\"", NO_CONSTRUCTOR_PARAMETER,
                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                    NO_DELETE);
 
-  // DQ (3/1/2013): To support letting zero being an acceptable value, we want
-  // to make the default value -1. To do this we need for this value to be
-  // signed, since the range of values is so small it can be a short value. DQ
-  // (1/3/2009): Added support for alignment specfication using gnu attributes
-  // (zero is used as the default to imply no alignment specification).
-  // InitializedName.setDataPrototype("unsigned long int",
-  // "gnu_attribute_alignment", "= 0",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
-  // InitializedName.setDataPrototype("short", "gnu_attribute_alignment", "=
-  // -1",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
   InitializedName.setDataPrototype(
       "int", "gnu_attribute_alignment", "= -1", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/11/2010): Added support for fortran "protected" marking of variables.
   InitializedName.setDataPrototype(
       "bool", "protected_declaration", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/30/2019): This is needed to support pointers to member type
-  // variables, currently supporting in the SgVariableDeclaration, but that
-  // support is not general enough as in where pointer to member types are
-  // passed to function.
   InitializedName.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/30/2019): This is needed to support pointers to member type
-  // variables, currently supporting in the SgVariableDeclaration, but that
-  // support is not general enough as in where pointer to member types are
-  // passed to function.
   InitializedName.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/30/2019): This is needed to support pointers to member type
-  // variables, currently supporting in the SgVariableDeclaration, but that
-  // support is not general enough as in where pointer to member types are
-  // passed to function.
   InitializedName.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification on the type referenced by
-  // the InitializedName (not the SgInitializedName itself since it might be
-  // referenced from several places, I think). InitializedName.setDataPrototype
-  // ( "int", "name_qualification_length_for_type", "= 0",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
   InitializedName.setDataPrototype(
       "int", "name_qualification_length_for_type", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // InitializedName.setDataPrototype("bool","type_elaboration_required_for_type","=
-  // false",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
   InitializedName.setDataPrototype(
       "bool", "type_elaboration_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // InitializedName.setDataPrototype("bool","global_qualification_required_for_type","=
-  // false",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
   InitializedName.setDataPrototype(
       "bool", "global_qualification_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1272,55 +983,41 @@ void Grammar::setUpNodes() {
       "SgStringList", "source_name_qualification_tokens", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // DQ (2/2/2014): The secondary declaration for an array may be specified
-  // using empty bracket sysntax. For example: "int array[];" This can be
-  // important to preserve when the primary declaration uses an array bound that
-  // is declared between the secondary and primary declarations.  See
-  // test2014_81.c and test2014_06.C.
-  InitializedName.setDataPrototype("bool", "hasArrayTypeWithEmptyBracketSyntax",
-                                   "= false", NO_CONSTRUCTOR_PARAMETER,
-                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                   NO_DELETE);
-
-  // DQ (7/26/2014): Added support for C11 "_Alignas" keyword (alternative
-  // alignment specification).
-  InitializedName.setDataPrototype(
-      "bool", "using_C11_Alignas_keyword", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  InitializedName.setDataPrototype(
-      "SgNode*", "constant_or_type_argument_for_Alignas_keyword", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-
-  // DQ (8/2/2014): Using C++11 auto keyword.
-  InitializedName.setDataPrototype(
-      "bool", "using_auto_keyword", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   InitializedName.setDataPrototype(
       "SgType *", "auto_decltype", "= NULL", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // REX (3/9/2026): Preserve the user-visible binding pattern for C++
-  // structured bindings as typed AST instead of an ad-hoc string attribute.
+  InitializedName.setDataPrototype(
+      "SgDeclarationScope*", "structured_binding_scope", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
   InitializedName.setDataPrototype(
       "SgExprListExp*", "structured_binding_pattern", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE, CLONE_PTR, OPTIONAL_TRAVERSAL_MEMBER);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      CLONE_PTR, OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (1/24/2016): Adding support to mark this to use the __device__ keyword.
   InitializedName.setDataPrototype(
-      "bool", "using_device_keyword", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgInitializedName::structured_binding_kind_enum",
+      "structured_binding_kind",
+      "= SgInitializedName::e_not_structured_binding", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  InitializedName.setDataPrototype(
+      "SgInitializedName*", "structured_binding_owner", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
+  InitializedName.setDataPrototype(
+      "SgExpression*", "structured_binding_value", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
+  InitializedName.setDataPrototype(
+      "SgInitializedName*", "structured_binding_holding_variable", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
 
-  // DQ (11/14/2016): This is C++11 syntax for direct brace initalization
-  // (e.g. int n{} for legacy frontend 4.11 and greater).
   InitializedName.setDataPrototype(
       "bool", "is_braced_initialized", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/30/2019): Is initialized using the "A a = B" copy constructor
-  // syntax as opposed to the "A a(B)" syntax. This appears to make a
-  // different in Cxx11_tests/test2019_454.C.
   InitializedName.setDataPrototype(
       "bool", "using_assignment_copy_constructor_syntax", "= false",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -1330,26 +1027,31 @@ void Grammar::setUpNodes() {
       "bool", "needs_definitions", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/10/2019): Need to be able to specify function parameters that are a
-  // part of C++11 parameter pack associated with variadic templates.
   InitializedName.setDataPrototype(
       "bool", "is_parameter_pack", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   InitializedName.setDataPrototype(
       "bool", "is_pack_element", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  InitializedName.setDataPrototype("bool", "deduction_guide_default_available",
+                                   "= false", NO_CONSTRUCTOR_PARAMETER,
+                                   BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                   NO_DELETE, COPY_DATA);
 
-  // DQ (9/3/2014): Adding support for C++11 lambda expresions.
-  // DQ (/3/2014): I think this makes more sense to be an expression (typically
-  // a SgVarRefExp).
-  LambdaCapture.setDataPrototype("SgExpression*", "capture_variable", "= NULL",
+  LambdaCapture.setFunctionSource(
+      "SOURCE_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Node.code");
+  LambdaCapture.setFunctionPrototype(
+      "HEADER_LAMBDA_CAPTURE_POST_CONSTRUCTION_INITIALIZATION",
+      "../Grammar/Node.code");
+  LambdaCapture.setDataPrototype("SgExpression*", "capture_variable", "",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-                                 OPTIONAL_TRAVERSAL_MEMBER);
+                                 REQUIRED_TRAVERSAL_MEMBER);
   LambdaCapture.setDataPrototype(
-      "SgExpression*", "source_closure_variable", "= NULL",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+      "SgExpression*", "capture_initializer", "= NULL", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+      REQUIRED_TRAVERSAL_MEMBER);
   LambdaCapture.setDataPrototype("SgExpression*", "closure_variable", "= NULL",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
@@ -1361,6 +1063,9 @@ void Grammar::setUpNodes() {
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
   LambdaCapture.setDataPrototype("bool", "pack_expansion", "= false",
+                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                                 NO_TRAVERSAL, NO_DELETE);
+  LambdaCapture.setDataPrototype("bool", "is_init_capture", "= false",
                                  CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                  NO_TRAVERSAL, NO_DELETE);
 
@@ -1403,6 +1108,19 @@ void Grammar::setUpNodes() {
   StatementAttributeList.setDataPrototype(
       "SgStatementAttributePtrList", "attributes", "", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
+  AlignmentSpecifier.setDataPrototype(
+      "SgAlignmentSpecifier::spelling_enum", "spelling",
+      "= SgAlignmentSpecifier::e_unspecified", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  AlignmentSpecifier.setDataPrototype(
+      "SgExpression*", "operand", "= NULL", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE,
+      OPTIONAL_TRAVERSAL_MEMBER);
+  AlignmentSpecifier.setDataPrototype(
+      "bool", "is_pack_expansion", "= false", CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  AlignmentSpecifier.setFunctionSource("SOURCE_ALIGNMENT_SPECIFIER",
+                                       "../Grammar/Support.code");
 
   // ***********************************************************************
   // ***********************************************************************
@@ -1415,41 +1133,11 @@ void Grammar::setUpNodes() {
   Node.setSubTreeFunctionSource("SOURCE", "../Grammar/Common.code");
 
   Node.setFunctionSource("SOURCE", "../Grammar/Node.code");
-  Node.setFunctionSource("SOURCE_ROOT_NODE_ERROR_FUNCTION",
-                         "../Grammar/Node.code");
-
-  Node.setSubTreeFunctionSource("SOURCE_ERROR_FUNCTION",
-                                "../Grammar/Node.code");
-  Node.excludeFunctionSource("SOURCE_ERROR_FUNCTION", "../Grammar/Node.code");
-
   Node.editSubstitute("CONSTRUCTOR_BODY", " ");
-
-  // Parse functions are only built for the higher level grammars since they
-  // parse from a lower level grammar into a higher level grammer (thus they are
-  // not defined within the root grammar (the C+ grammar)).
-  if (isRootGrammar() == false)
-    Node.setSubTreeFunctionSource("SOURCE_PARSER",
-                                  "../Grammar/parserSourceCode.macro");
 
   // Source code for LocatedNode
   LocatedNode.setFunctionSource("SOURCE", "../Grammar/LocatedNode.code");
   LocatedNode.editSubstitute("CONSTRUCTOR_BODY", " ");
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // LocatedNode.setAutomaticGenerationOfDestructor(false);
-
-  // DQ (3/24/2007): Added support for tokens in the IR.
-  Token.setFunctionSource("SOURCE_TOKEN", "../Grammar/LocatedNode.code");
-
-  LocatedNodeSupport.setFunctionSource("SOURCE_LOCATED_NODE_SUPPORT",
-                                       "../Grammar/LocatedNode.code");
-
-  // DQ (9/3/2014): Adding support for C++11 lambda expresions.
-  LambdaCapture.setFunctionSource("SOURCE_LAMBDA_CAPTURE",
-                                  "../Grammar/LocatedNode.code");
-  LambdaCaptureList.setFunctionSource("SOURCE_LAMBDA_CAPTURE_LIST",
-                                      "../Grammar/LocatedNode.code");
-  DeclarationScopeList.setFunctionSource("SOURCE_DECLARATION_SCOPE_LIST",
-                                         "../Grammar/LocatedNode.code");
   AuxiliaryDeclarationList.setFunctionSource(
       "SOURCE_AUXILIARY_DECLARATION_LIST", "../Grammar/LocatedNode.code");
   OmpClauseList.setFunctionSource("SOURCE_OMP_CLAUSE_LIST",
@@ -1461,52 +1149,13 @@ void Grammar::setUpNodes() {
   NamespaceSourceFragment.setFunctionSource("SOURCE_NAMESPACE_SOURCE_FRAGMENT",
                                             "../Grammar/LocatedNode.code");
 
-  // ***************************************************************************************
-  // ***************************************************************************************
-  //                                 Untyped IR Node Support
-  // ***************************************************************************************
-  // ***************************************************************************************
-  // DQ (11/26/2013): Adding support for untyped AST IR nodes to support
-  // translation of ATterm based untyped ASTs into ROSE so that we will have
-  // tools (inherited attribute and synthizied attribute traversals) from which
-  // to build the ROSE AST (typed AST) and define a proper frontend.
-
-  // Rasmussen (08/25/2022): Removed all untyped Sage nodes.
-
   // DQ (10/6/2008): Moved from SgSupport.
   RenamePair.setFunctionSource("SOURCE_RENAME_PAIR",
                                "../Grammar/LocatedNode.code");
 
-  // DQ (10/6/2008): Moved from SgSupport.
-  InterfaceBody.setFunctionSource("SOURCE_INTERFACE_BODY",
-                                  "../Grammar/LocatedNode.code");
-
-  // negara1 (08/10/2011): Added to SgLocatedNodeSupport.
-  HeaderFileBody.setFunctionSource("SOURCE_HEADER_FILE_BODY",
-                                   "../Grammar/LocatedNode.code");
-
-  // DQ (11/21/2007): support for common block statements
-  CommonBlockObject.setFunctionSource("SOURCE_COMMON_BLOCK_OBJECT",
-                                      "../Grammar/Support.code");
-
   InitializedName.setFunctionSource("SOURCE_INITIALIZED_NAME",
                                     "../Grammar/Support.code");
-  // Some functions we want to only be defined for higher level grammars (not
-  // the root C++ grammar)
   ROSE_ASSERT(InitializedName.associatedGrammar != NULL);
-  // ROSE_ASSERT(InitializedName.associatedGrammar->getParentGrammar() != NULL);
-  // ROSE_ASSERT(InitializedName.associatedGrammar->getParentGrammar()->getGrammarName()
-  // != NULL);
-  if (verbose) {
-    printf("### "
-           "InitializedName.associatedGrammar->getParentGrammar()->"
-           "getGrammarName() = %s \n",
-           (InitializedName.associatedGrammar->getParentGrammar() == NULL)
-               ? "ROOT GRAMMAR"
-               : InitializedName.associatedGrammar->getParentGrammar()
-                     ->getGrammarName()
-                     .c_str());
-  }
 
   // ***********************************************************************
   // ***********************************************************************
@@ -1514,7 +1163,6 @@ void Grammar::setUpNodes() {
   // ***********************************************************************
   // ***********************************************************************
 
-#if USE_OMP_IR_NODES
   // supporting clause nodes
   // declared enum types within SgOmpClause
   OmpClause.setFunctionPrototype("HEADER_OMP_CLAUSE",
@@ -1554,6 +1202,10 @@ void Grammar::setUpNodes() {
       "SgExpression*", "expression", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
+  OmpDestroyClause.setFunctionPrototype("HEADER_OMP_DESTROY_CLAUSE",
+                                        "../Grammar/Support.code");
+  OmpDestroyClause.setFunctionSource("SOURCE_OMP_DESTROY_CLAUSE",
+                                     "../Grammar/Support.code");
   OmpAtClause.setDataPrototype("SgOmpClause::omp_at_kind_enum", "kind",
                                "=e_omp_at_unknown", CONSTRUCTOR_PARAMETER,
                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1707,13 +1359,6 @@ void Grammar::setUpNodes() {
       NO_DELETE);
 
   // clauses with variable lists
-  // Liao 9/27/2010, per user's report, modeling the variable reference use
-  // SgVarRefExp
-  // OmpVariablesClause.setDataPrototype ( "SgInitializedNamePtrList",
-  // "variables", "", OmpVariablesClause.setDataPrototype (
-  // "SgVarRefExpPtrList", "variables", "",
-  //                    NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
-  //                    DEF_TRAVERSAL, NO_DELETE);
   // Using a SgNode for variable list, avoiding mixed container + simple member
   OmpVariablesClause.setDataPrototype(
       "SgExprListExp*", "variables", "= NULL", CONSTRUCTOR_PARAMETER,
@@ -2036,7 +1681,6 @@ void Grammar::setUpNodes() {
       "SgOmpClause::omp_depobj_modifier_enum", "modifier",
       "=e_omp_depobj_modifier_unknown", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-#endif
 
   // ***********************************************************************
   // ***********************************************************************

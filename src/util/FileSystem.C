@@ -1,12 +1,8 @@
 #include "Rose/FileSystem.h"
 
-#include <cerrno>
-
 #include <chrono>
 
 #include <filesystem>
-
-#include <fstream>
 
 #include <random>
 
@@ -18,8 +14,6 @@
 
 namespace Rose {
 namespace FileSystem {
-
-const char *tempNamePattern = "rose-%%%%%%%-%%%%%%%";
 
 bool baseNameMatches::operator()(const Path &path) {
   return std::regex_match(path.filename().string(), re_);
@@ -69,21 +63,7 @@ Path createTemporaryDirectory() {
       std::make_error_code(std::errc::file_exists));
 }
 
-Path makeNormal(const Path &path) {
-  std::vector<Path> components;
-  for (std::filesystem::path::const_iterator i = path.begin(); i != path.end();
-       ++i) {
-    if (0 == i->string().compare("..") && !components.empty()) {
-      components.pop_back();
-    } else if (0 != i->string().compare(".")) {
-      components.push_back(*i);
-    }
-  }
-  Path result;
-  for (const Path &component : components)
-    result /= component;
-  return result;
-}
+Path makeNormal(const Path &path) { return path.lexically_normal(); }
 
 Path makeAbsolute(const Path &path, const Path &root) {
   return makeNormal(path.is_absolute() ? path : absolute(root / path));
@@ -125,20 +105,8 @@ std::vector<Path> findNamesRecursively(const Path &root) {
 }
 
 void copyFile(const Path &src, const Path &dst) {
-  // Use stream I/O here for portability across toolchains and filesystem
-  // implementations. Use path::string rather than path::native in order to
-  // support Filesystem version 2.
-  std::ifstream in(src.string().c_str(), std::ios::binary);
-  std::ofstream out(dst.string().c_str(), std::ios::binary);
-  out << in.rdbuf();
-  if (in.fail()) {
-    throw std::filesystem::filesystem_error(
-        "read failed", src, std::error_code(errno, std::system_category()));
-  }
-  if (out.fail()) {
-    throw std::filesystem::filesystem_error(
-        "write failed", dst, std::error_code(errno, std::system_category()));
-  }
+  std::filesystem::copy_file(src, dst,
+                             std::filesystem::copy_options::overwrite_existing);
 }
 
 // Copies files to dstDir so that their name relative to dstDir is the same as

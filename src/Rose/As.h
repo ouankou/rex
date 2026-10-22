@@ -16,18 +16,6 @@ namespace Rose {
  *  This function handles `std::shared_ptr` and raw pointers, including Sage AST
  * node pointers.
  *
- *  @code
- *  #include <Rose/As.h>
- *
- *  SgType *type = ...;
- *  if (auto array = Rose::as<SgArrayType>(type)) {         // equivalent to
- * `isSgArrayType(node)` if (Rose::as<SgTypeBool>(array->get_base_type())) { //
- * equivalent to `isSgTypeBool(node)` std::cout <<"the type is an array of
- * Boolean\n";
- *      }
- *  }
- *  @endcode
- *
  *  @{ */
 /** Cast a shared pointer to a derived type.
  *

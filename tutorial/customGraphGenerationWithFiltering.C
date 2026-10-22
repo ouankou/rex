@@ -99,7 +99,7 @@ void translateGraph(_GraphStructure &graph, _NodePredicate _nodePred,
   }
 };
 
-struct filterNodes : public unary_function<Node *, bool> {
+struct filterNodes {
 public:
   bool operator()(Node *test) {
     if ("src" == test->toString())
@@ -108,14 +108,14 @@ public:
   }
 };
 
-struct testPredNodes : public unary_function<Node *, void> {
+struct testPredNodes {
 public:
   void operator()(Node *test) {
     // std::cout << "Found a Node" << std::endl;
   }
 };
 
-struct testPredEdges : public unary_function<Edge *, void> {
+struct testPredEdges {
 public:
   void operator()(Edge *test) {
     // std::cout << "Found an Edge" << std::endl;

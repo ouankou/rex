@@ -5,104 +5,52 @@
 #include <algorithm>
 
 #include <unordered_map>
+#include <vector>
+
 void VirtualFunctionAnalysis::run() {
-
-  printf("In VirtualFunctionAnalysis::run() \n");
-
-  VariantVector call_variants(V_SgFunctionCallExp);
+  isExecuted = false;
+  resolver.clear();
+  initializeAnalysis();
   Rose_STL_Container<SgNode *> call_nodes =
-      NodeQuery::queryMemoryPool(call_variants);
-  vector<SgExpression *> callSites;
-  callSites.reserve(call_nodes.size());
-  for (SgNode *node : call_nodes) {
-    if (SgExpression *expr = isSgExpression(node)) {
-      callSites.push_back(expr);
-    }
-  }
-
-  printf("In VirtualFunctionAnalysis::run(): after queryMemoryPool on "
-         "V_SgFunctionCallExp \n");
-
-  VariantVector ctor_variants(V_SgConstructorInitializer);
+      NodeQuery::querySubTree(project, V_SgFunctionCallExp);
   Rose_STL_Container<SgNode *> ctor_nodes =
-      NodeQuery::queryMemoryPool(ctor_variants);
+      NodeQuery::querySubTree(project, V_SgConstructorInitializer);
+  std::vector<SgExpression *> callSites;
+  callSites.reserve(call_nodes.size() + ctor_nodes.size());
+  for (SgNode *node : call_nodes) {
+    auto *call = isSgFunctionCallExp(node);
+    ASSERT_not_null(call);
+    callSites.push_back(call);
+  }
 
-  printf("In VirtualFunctionAnalysis::run(): callSites.insert() \n");
-
-  callSites.reserve(callSites.size() + ctor_nodes.size());
   for (SgNode *node : ctor_nodes) {
-    if (SgExpression *expr = isSgExpression(node)) {
-      callSites.push_back(expr);
-    }
+    auto *constructor = isSgConstructorInitializer(node);
+    ASSERT_not_null(constructor);
+    callSites.push_back(constructor);
   }
-
-  printf("DONE: VirtualFunctionAnalysis::run(): callSites.insert() \n");
-
-  // Not all SgFunctionCallExp or SgConstructorInitialize nodes appear in
-  // functions--some are also in templates (for classes or functions) and we
-  // don't want to process those. Templates are not really part of a control
-  // flow graph or call graph until after they're instantiated.
-  for (vector<SgExpression *>::iterator csi = callSites.begin();
-       csi != callSites.end(); ++csi) {
-    if (SgFunctionDeclaration *fdecl =
-            SageInterface::getEnclosingNode<SgFunctionDeclaration>(*csi)) {
-      if (isSgTemplateMemberFunctionDeclaration(fdecl) ||
-          isSgTemplateFunctionDeclaration(fdecl))
-        *csi = NULL;
-    }
-
-    printf("In VirtualFunctionAnalysis::run(): loop 1 \n");
-  }
-
-  printf("In VirtualFunctionAnalysis::run(): erase \n");
 
   callSites.erase(
-      std::remove(callSites.begin(), callSites.end(), (SgExpression *)NULL),
+      std::remove_if(
+          callSites.begin(), callSites.end(),
+          [](SgExpression *callSite) {
+            if (CallTargetSet::isNonExecutableCallExpression(callSite))
+              return true;
+            auto *declaration =
+                SageInterface::getEnclosingFunctionDeclaration(callSite);
+            return declaration != nullptr &&
+                   !callGraphDeclHasIndependentCallableIdentity(declaration);
+          }),
       callSites.end());
-
-  printf("DONE: VirtualFunctionAnalysis::run(): erase \n");
-
-  unsigned int index;
-  resolver.clear();
-
-  printf("DONE: VirtualFunctionAnalysis::run(): clear \n");
-
-  for (index = 0; index < callSites.size(); index++) {
-    std::vector<SgFunctionDeclaration *> funcs;
-
-    printf(
-        "In VirtualFunctionAnalysis::run(): getPropertiesForExpression() \n");
-
-    CallTargetSet::getPropertiesForExpression(callSites[index], classHierarchy,
-                                              funcs);
-
-    // Virtual Function
-    if (isSgFunctionCallExp(callSites[index]) && funcs.size() > 1)
-      funcs.clear();
-    resolver[callSites[index]] = funcs;
-
-    printf("In VirtualFunctionAnalysis::run(): loop 2 \n");
+  for (SgExpression *callSite : callSites) {
+    auto &targets = resolver[callSite];
+    auto *call = isSgFunctionCallExp(callSite);
+    if (call == nullptr ||
+        AliasAnalysisDetail::virtualFunctionReference(call) == nullptr)
+      CallTargetSet::getPropertiesForExpression(callSite, classHierarchy,
+                                                targets);
   }
-
-  printf("In VirtualFunctionAnalysis::run(): PtrAliasAnalysis::run() \n");
-
-  PtrAliasAnalysis::run();
-
-  printf("DONE: VirtualFunctionAnalysis::run(): PtrAliasAnalysis::run() \n");
-
-  for (index = 0; index < callSites.size(); index++) {
-    if (resolver.at(callSites[index]).size() == 0) {
-      std::vector<SgFunctionDeclaration *> funcs;
-      CallTargetSet::getPropertiesForExpression(callSites[index],
-                                                classHierarchy, funcs);
-      resolver[callSites[index]] = funcs;
-    }
-
-    printf("In VirtualFunctionAnalysis::run(): loop 3 \n");
-  }
+  InterProcDataFlowAnalysis::run();
   isExecuted = true;
-
-  printf("Leaving VirtualFunctionAnalysis::run() \n");
 }
 
 void VirtualFunctionAnalysis::resolveFunctionCall(
@@ -134,22 +82,18 @@ void VirtualFunctionAnalysis::pruneCallGraph(CallGraphBuilder &builder) {
     if (defDecl == NULL)
       continue;
 
-    Rose_STL_Container<SgNode *> functionCallExpList =
-        NodeQuery::querySubTree(defDecl, V_SgFunctionCallExp);
     std::vector<SgFunctionDeclaration *> functions;
-    for (SgNode *functionCallExp : functionCallExpList) {
-      functions.insert(functions.end(),
-                       resolver.at(isSgExpression(functionCallExp)).begin(),
-                       resolver.at(isSgExpression(functionCallExp)).end());
-    }
-
-    Rose_STL_Container<SgNode *> ctorInitList =
-        NodeQuery::querySubTree(defDecl, V_SgConstructorInitializer);
-    for (SgNode *ctorInit : ctorInitList) {
-      functions.insert(functions.end(),
-                       resolver.at(isSgExpression(ctorInit)).begin(),
-                       resolver.at(isSgExpression(ctorInit)).end());
-    }
+    for (VariantT kind : {V_SgFunctionCallExp, V_SgConstructorInitializer})
+      for (SgNode *node : NodeQuery::querySubTree(defDecl, kind)) {
+        auto *expression = isSgExpression(node);
+        ASSERT_not_null(expression);
+        if (SageInterface::getEnclosingFunctionDeclaration(expression) !=
+                defDecl ||
+            CallTargetSet::isNonExecutableCallExpression(expression))
+          continue;
+        const auto &resolved = resolver.at(expression);
+        functions.insert(functions.end(), resolved.begin(), resolved.end());
+      }
 
     std::set<SgDirectedGraphEdge *> edges = graph->computeEdgeSetOut(it.second);
 

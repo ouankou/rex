@@ -1,16 +1,8 @@
-set(virtualCFG_SRC memberFunctions.C)
-
-if(NOT ENABLE-INTERNALFRONTENDDEVELOPMENT)
-  list(APPEND virtualCFG_SRC
-    virtualCFG.C cfgToDot.C memberFunctions.C staticCFG.C customFilteredCFG.C
-    interproceduralCFG.C)
-endif()
-
-add_library(virtualCFG OBJECT ${virtualCFG_SRC})
+add_library(virtualCFG OBJECT
+  virtualCFG.C cfgToDot.C memberFunctions.C staticCFG.C
+  interproceduralCFG.C)
 add_dependencies(virtualCFG rosetta_generated)
 
-
-########### install files ###############
 install(
   FILES virtualCFG.h staticCFG.h cfgToDot.h filteredCFG.h
         filteredCFGImpl.h customFilteredCFG.h interproceduralCFG.h

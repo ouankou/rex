@@ -6,6 +6,7 @@
 //-------------------------------------------------------------------
 #include "rose.h"
 
+#include <filesystem>
 #include <stdio.h>
 
 using namespace SageBuilder;
@@ -24,9 +25,10 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   SgStatement *stmt1 = getFirstStatement(getFirstGlobalScope(project));
 
-  // case 1. Calling it with project available, but input file does not exist
+  // case 1. Generate an output-only file in an existing project.
   remove(fileName.c_str());
-  SgSourceFile *sgfile = isSgSourceFile(buildFile(fileName, fileName, project));
+  SgSourceFile *sgfile = buildGeneratedSourceFile(fileName, project);
+  ROSE_ASSERT(!std::filesystem::exists(fileName));
 
   // try to add something into the new file
   SgGlobal *global = sgfile->get_globalScope();
@@ -41,9 +43,10 @@ int main(int argc, char *argv[]) {
     appendStatement(copy, isSgScopeStatement(global));
   }
 
-  // case 2. Calling it without the project parameter and without input file
+  // case 2. Generate an output-only file with a newly created project.
   remove(fileName2.c_str());
-  SgSourceFile *sgfile2 = isSgSourceFile(buildFile(fileName2, fileName2));
+  SgSourceFile *sgfile2 = buildGeneratedSourceFile(fileName2);
+  ROSE_ASSERT(!std::filesystem::exists(fileName2));
 
   // try to add something into the new file
   SgGlobal *global2 = sgfile2->get_globalScope();
@@ -72,6 +75,14 @@ int main(int argc, char *argv[]) {
   appendStatement(varDecl3, isSgScopeStatement(global3));
   // test AST copy across SgSourceFile
   SgStatement *varDecl4_cp = deepCopy<SgStatement>(stmt1);
+  // The parsed generated file already contains the original definition. Give
+  // the new copy its own variable identity before publishing it in that scope.
+  SgVariableDeclaration *copiedDeclaration =
+      isSgVariableDeclaration(varDecl4_cp);
+  ROSE_ASSERT(copiedDeclaration != nullptr);
+  for (SgInitializedName *variable : copiedDeclaration->get_variables()) {
+    variable->set_name(SgName("copied_" + variable->get_name().getString()));
+  }
   appendStatement(varDecl4_cp, isSgScopeStatement(global3));
 
   AstTests::runAllTests(project);

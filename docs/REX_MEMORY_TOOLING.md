@@ -47,7 +47,7 @@ cmake --build build-valgrind -j"$(nproc)"
 
 If Valgrind lives elsewhere, use:
 - `-DWITH-VALGRIND=/path/to/prefix` or
-- `-DWITH-VALGRIND-BIN=/path/to/bin -DWITH-VALGRIND-INCLUDE=/path/to/include -DWITH-VALGRIND-LIB=/path/to/lib`
+- `-DWITH-VALGRIND-BIN=/path/to/bin -DWITH-VALGRIND-INCLUDE=/path/to/include`
 
 ## Running tests
 
@@ -69,6 +69,17 @@ ctest --test-dir build-valgrind -T memcheck -R "<regex>" -LE death -j"$(nproc)" 
 Use `ctest -N -R "<regex>"` to list tests before running memcheck.
 
 ## LSan and external runtime allocations
+
+For the whole-codebase audit, the external-issue policy and evidence register are
+in [codebase-audit/README.md](codebase-audit/README.md#external-behavior-policy)
+and [codebase-audit/external-exceptions.md](codebase-audit/external-exceptions.md).
+Use stock LLVM 22 by default. First correct REX integration through supported
+APIs and ownership. Narrow external-report suppressions require origin and
+correctness evidence, an inline register reference, and explicit recheck/removal
+conditions. Neither external ownership nor an existing suppression justifies
+hiding a REX defect or a correctness-affecting issue. Dependency forks are not
+required. Full audit validation runs all eligible tests, beyond the scheduled
+memory CI selections below.
 
 Some toolchain/runtime components allocate process-lifetime memory that LSan
 cannot attribute cleanly. To keep sanitizer runs actionable, REX ships
@@ -92,11 +103,40 @@ single-digit percentage timing margin.
 ## How memcheck works in REX
 
 When configured with Valgrind, CTest uses the build’s memcheck settings:
-- `CTEST_MEMORYCHECK_COMMAND` is set to the Valgrind binary.
+- `CTEST_MEMORYCHECK_COMMAND` uses the configured wrapper to launch Valgrind.
 - Options include leak checking, all leak kinds, `--error-exitcode=1`, and `--trace-children=yes`.
 - Valgrind suppressions live in `scripts/rex-suppressions-for-valgrind`.
+- Reviewed utility exceptions require package-matched debug symbols for exact
+  allocation frames. The external register records tested package versions,
+  build IDs and source ownership. Missing symbols leave reports visible; do not
+  broaden the patterns to compensate. Weekly CI installs exact-version packages
+  from Ubuntu's signed debug archive and verifies each ELF build ID with
+  `scripts/ci-verify-memcheck-symbols` before tests. This uses Ubuntu's documented
+  [debug-package installation](https://ubuntu.com/server/docs/how-to/debugging/debug-symbol-packages/)
+  and fails on missing or mismatched companions. Interpreter teardown uses
+  `PERL_DESTRUCT_LEVEL=2`, inherited from the configured wrapper.
 
 Because child tracing is enabled, helper processes (Perl, Python, shell scripts) can be checked too. This can surface non-ROSE leaks; those should be handled via suppressions when they are clearly external and process-lifetime only.
+
+The wrapper sends Valgrind output through a FIFO to one reader that writes
+CTest's report. Traced processes can reopen that stream without erasing earlier
+diagnostics. A regular file, even with `%p` or `%p.%n` in its name, can lose an
+error when the same process execs another instrumented program. The wrapper
+waits for the report stream to finish and fails on immediate Valgrind error
+markers, including errors from a child whose parent returns zero and errors
+before an exec that produces no final summary. Collection failures also fail
+the test. CTest can otherwise exit zero despite recording memory defects.
+`rex_ctest_valgrind_wrapper_contract` exercises these boundaries, concurrent
+children, and preservation of the command's own failure status. See
+[AUD-038 evidence](codebase-audit/nightly-outliner-timeout.md#validation-record).
+
+CTest's `PASS_REGULAR_EXPRESSION` can override even the wrapper's nonzero exit.
+The configured post-Memcheck hook therefore checks the completed dashboard's
+XML defect counts independently. Any reported defect or unreadable/incomplete
+dashboard fails the Memcheck command. `rex_ctest_memcheck_result_contract`
+proves that output matching cannot accept a memory defect and that subsequent
+clean runs and show-only inventories remain usable. The hook does not change
+test expectations, selections, or suppressions.
 
 The weekly workflow runs the reviewed `astInterface|testQuery|rex` MemCheck
 selection in eight shards.  Before executing a shard,
@@ -132,9 +172,7 @@ avoids unrelated standard-library input.
 The complete AST-interface `<regex>` query also remains in regular and
 sanitizer CTest; Memcheck runs the same query executable against an additional
 bounded `basic_regex` instantiation.
-`rex_weekly_memory_workflow_contract` hard-checks both the exclusion list and
-the registered replacements.  Adding an exclusion without an equivalent
-bounded instrumented test is an error.
+Every performance exclusion must retain an equivalent bounded instrumented test.
 
 The same rule applies to two older integration families whose useful operation
 is buried behind unrelated frontend volume. `interfaceFunctionCoverage` over
@@ -168,15 +206,23 @@ enabled, both the interpreter and every REX process launched by the script are
 checked.
 
 Nested executable scripts cross the same boundary after the primary process
-starts. CTest MemCheck therefore hard-requires the standalone GNU
-`/usr/bin/env`: unlike a multicall executable, it does not dispatch from the
-synthetic `argv[0]` supplied by Valgrind. Ubuntu 26.04 selects uutils by
-default, so the weekly job atomically replaces `coreutils-from-uutils` with the
-distribution's `coreutils-from-gnu` alternative before configuration and then
-verifies the implementation. CMake rejects an incompatible interpreter at
-configure time. No script test is excluded or allowed to escape child tracing.
+starts. CMake probes `/usr/bin/env` under Valgrind for split arguments and the
+synthetic interpreter `argv[0]`, rejecting incompatible dispatch at configuration.
+Older uutils releases reject that name; uutils 0.10 passes the traced probe and
+the nested released/leaking controls. Weekly CI keeps Ubuntu's GNU coreutils
+alternative for the affected distribution. No script test escapes child tracing.
 
 ## Interpreting memcheck results
+
+`rex_symbol_table_allocation_failure` replaces global `new`/`delete` to throw
+at successive allocation boundaries and verify that failed index publication
+preserves ownership and lookups. Valgrind replaces those operators itself, so
+this probe runs in native CTest and is explicitly excluded from Memcheck.
+`rex_symbol_table_ownership` compiles the same specimen without allocator
+replacement and checks successful insertion, reindexing and removal under
+Memcheck. AST JSON tests retain their normal allocator and memory coverage.
+Remove this exclusion if allocation faults can be injected through the actual
+index allocator under Memcheck without changing compiler behavior.
 
 Memcheck failures can be either memory issues or functional failures:
 

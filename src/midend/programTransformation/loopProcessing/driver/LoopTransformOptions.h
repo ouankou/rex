@@ -15,7 +15,6 @@
 class ArrangeNestingOrder;
 class LoopNestFusion;
 class LoopBlocking;
-class LoopPar;
 class CopyArrayOperator;
 class AstNodePtr;
 class LoopTransformInterface;
@@ -42,9 +41,8 @@ private:
   ArrangeNestingOrder *icOp;
   LoopNestFusion *fsOp;
   LoopBlocking *bkOp;
-  LoopPar *parOp;
   CopyArrayOperator *cpOp;
-  unsigned cacheline, reuseDist, splitlimit, defaultblocksize, parblocksize;
+  unsigned cacheline, reuseDist, splitlimit, defaultblocksize;
   LoopTransformOptions();
   virtual ~LoopTransformOptions();
 
@@ -55,7 +53,6 @@ public:
   void RegisterOption(OptRegistryType *t);
 
   LoopBlocking *GetBlockSel() const { return bkOp; }
-  LoopPar *GetParSel() const { return parOp; }
   CopyArrayOperator *GetCopyArraySel() const { return cpOp; }
   ArrangeNestingOrder *GetInterchangeSel() const { return icOp; }
   LoopNestFusion *GetFusionSel() const { return fsOp; }
@@ -63,9 +60,7 @@ public:
   unsigned GetReuseDistance() const { return reuseDist; }
   unsigned GetTransAnalSplitLimit() const { return splitlimit; }
   unsigned GetDefaultBlockSize() const { return defaultblocksize; }
-  unsigned GetParBlockSize() const { return parblocksize; }
   void SetDefaultBlockSize(unsigned size) { defaultblocksize = size; }
-  void SetParBlockSize(unsigned size) { parblocksize = size; }
   bool DoDynamicTuning() const;
   unsigned GetDynamicTuningIndex() const;
 
@@ -76,10 +71,7 @@ public:
     MULTI_LEVEL_OPT = 3,
     LOOP_OPT = 3,
     DATA_OPT = 4,
-    LOOP_DATA_OPT = 7,
-    PAR_OPT = 8,
-    PAR_LOOP_OPT = 11,
-    PAR_LOOP_DATA_OPT = 15
+    LOOP_DATA_OPT = 7
   } OptType;
 
   OptType GetOptimizationType();
@@ -88,7 +80,6 @@ public:
                   std::vector<std::string> *known_opt = 0);
 
   void SetBlockSel(LoopBlocking *sel);
-  void SetParSel(LoopPar *sel);
   void SetCopySel(CopyArrayOperator *sel);
   void SetInterchangeSel(ArrangeNestingOrder *sel);
   void SetFusionSel(LoopNestFusion *sel);

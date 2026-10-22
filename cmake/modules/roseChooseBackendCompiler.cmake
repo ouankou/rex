@@ -1,247 +1,105 @@
-# Check compilers and version number
-#  Liao 11/25/2009
-# Backend compiler selection and version metadata for CMake.
-#
-# use the results to setup rose_config.h later on
-# --------check C compiler -----------------------
-include (CMakeDetermineCCompiler)
+# CMake has already identified the enabled languages. Publish that metadata for
+# generated configuration headers instead of rediscovering compilers or parsing
+# their human-readable banners through shell pipelines.
+function(rex_cpp_string_literal value output)
+  string(REPLACE "\\" "\\\\" value "${value}")
+  string(REPLACE "\"" "\\\"" value "${value}")
+  # Public configuration headers also have C consumers, which process trigraphs.
+  string(REPLACE "?" "\\?" value "${value}")
+  string(REPLACE "\n" "\\n" value "${value}")
+  string(REPLACE "\r" "\\r" value "${value}")
+  set(${output} "\"${value}\"" PARENT_SCOPE)
+endfunction()
 
-if("${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
-  if(NOT BACKEND_C_COMPILER)
-    set(BACKEND_C_COMPILER  ${CMAKE_C_COMPILER})
-  endif()
-  execute_process(
-    COMMAND ${BACKEND_C_COMPILER} -dumpversion
-    COMMAND cut -d. -f1
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER)
-  # for unknown reason, some tail control character will show up in OUTPUT_VARIABLE
-  # We use regex to fill out non numeric characters to get the right numbers
-  string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER ${BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER})
-  if(VERBOSE)
-    message("CMAKE_C_COMPILER= ${CMAKE_C_COMPILER}^")
-  endif()
-
-  execute_process(
-    COMMAND basename ${BACKEND_C_COMPILER}
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_NAME_WITHOUT_PATH)
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_C_COMPILER_NAME_WITHOUT_PATH ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_C_COMPILER_NAME_WITHOUT_PATH=${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}^")
+function(rose_backend_compiler_metadata language backend_language)
+  set(_compiler "${CMAKE_${language}_COMPILER}")
+  set(_version "${CMAKE_${language}_COMPILER_VERSION}")
+  if(NOT _compiler OR NOT CMAKE_${language}_COMPILER_LOADED OR
+     NOT CMAKE_${language}_COMPILER_ID)
+    message(FATAL_ERROR
+      "Backend ${language} metadata requires an enabled, identified CMake compiler")
   endif()
 
-  execute_process(
-    COMMAND ${BACKEND_C_COMPILER} -dumpversion
-    COMMAND cut -d. -f2
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_MINOR_VERSION_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_C_COMPILER_MINOR_VERSION_NUMBER})
-  execute_process(
-    COMMAND ${BACKEND_C_COMPILER} -dumpversion
-    COMMAND cut -d. -f3
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER ${BACKEND_C_COMPILER_PATCH_LEVEL_NUMBER})
-
-elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Clang")
-  if(NOT BACKEND_C_COMPILER)
-    set(BACKEND_C_COMPILER  ${CMAKE_C_COMPILER})
-  endif()
-  execute_process(
-    COMMAND basename ${BACKEND_C_COMPILER}
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_NAME_WITHOUT_PATH)
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_C_COMPILER_NAME_WITHOUT_PATH ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_C_COMPILER_NAME_WITHOUT_PATH=${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}^")
-  endif()
-
-  execute_process(
-    COMMAND ${BACKEND_C_COMPILER} --version
-    COMMAND grep -Po "(?<=version )[^;]+"
-    COMMAND cut -d. -f1
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER  ${BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER})
-	execute_process(
-	  COMMAND ${BACKEND_C_COMPILER} --version
-	  COMMAND grep -Po "(?<=version )[^;]+"
-	  COMMAND cut -d. -f2
-	  OUTPUT_VARIABLE BACKEND_C_COMPILER_MINOR_VERSION_NUMBER)
-	string(REGEX MATCH "[0-9]+" BACKEND_C_COMPILER_MINOR_VERSION_NUMBER  ${BACKEND_C_COMPILER_MINOR_VERSION_NUMBER})
-elseif("${CMAKE_C_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_C_COMPILER_ID}" STREQUAL "IntelLLVM")
-  if(NOT BACKEND_C_COMPILER)
-    set(BACKEND_C_COMPILER  ${CMAKE_C_COMPILER})
-  endif()
-  execute_process(
-    COMMAND basename ${BACKEND_C_COMPILER}
-    OUTPUT_VARIABLE BACKEND_C_COMPILER_NAME_WITHOUT_PATH)
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_C_COMPILER_NAME_WITHOUT_PATH ${BACKEND_C_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_C_COMPILER_NAME_WITHOUT_PATH=${BACKEND_C_COMPILER_NAME_WITHOUT_PATH}^")
-  endif()
-  execute_process(
-    COMMAND ${BACKEND_C_COMPILER} --version
-    OUTPUT_VARIABLE _intel_c_version
-    ERROR_VARIABLE _intel_c_version_err
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_STRIP_TRAILING_WHITESPACE)
-  set(_intel_c_version_combined "${_intel_c_version}\n${_intel_c_version_err}")
-  string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _intel_c_match "${_intel_c_version_combined}")
-  if(_intel_c_match)
-    set(BACKEND_C_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
-    set(BACKEND_C_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
-  endif()
-endif()
-
-# --------check CXX compiler -----------------------
-include(roseCMakeDetermineCXXCompiler)
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  if(NOT BACKEND_CXX_COMPILER)
-    set(BACKEND_CXX_COMPILER  ${CMAKE_CXX_COMPILER})
-  endif()
-  execute_process(
-    COMMAND ${BACKEND_CXX_COMPILER} -dumpversion
-    COMMAND cut -d. -f1
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER)
-  # Fix definition of BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH when it is /usr/bin/c++ so that it reveals the vendor
-  if(NOT BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH STREQUAL "g++")
-    execute_process(
-      COMMAND basename ${BACKEND_CXX_COMPILER}
-      OUTPUT_VARIABLE BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
-    string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
-  endif()
-  string(REGEX MATCH "[0-9]+" BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER  ${BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER})
-  execute_process(
-    COMMAND basename ${BACKEND_CXX_COMPILER}  
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER= ${BACKEND_CXX_COMPILER}")
-  endif()
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH= ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}")
-  endif()
-  
-  execute_process(
-    COMMAND ${BACKEND_CXX_COMPILER} -dumpversion
-    COMMAND cut -d. -f2
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER ${BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER})
-
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  if(NOT BACKEND_CXX_COMPILER)
-    set(BACKEND_CXX_COMPILER  ${CMAKE_CXX_COMPILER})
-  endif()
-  execute_process(
-    COMMAND basename ${BACKEND_CXX_COMPILER}  
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER= ${BACKEND_CXX_COMPILER}")
-  endif()
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH= ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}")
-  endif()
-  execute_process(
-    COMMAND ${BACKEND_CXX_COMPILER} --version
-    COMMAND grep -Po "(?<=version )[^;]+"
-    COMMAND cut -d. -f1
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER  ${BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER})
-  execute_process(
-    COMMAND ${BACKEND_CXX_COMPILER} --version
-    COMMAND grep -Po "(?<=version )[^;]+"
-    COMMAND cut -d. -f2
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER)
-  string(REGEX MATCH "[0-9]+" BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER  ${BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER})
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
-  if(NOT BACKEND_CXX_COMPILER)
-    set(BACKEND_CXX_COMPILER  ${CMAKE_CXX_COMPILER})
-  endif()
-  execute_process(
-    COMMAND basename ${BACKEND_CXX_COMPILER}
-    OUTPUT_VARIABLE BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH)
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER= ${BACKEND_CXX_COMPILER}")
-  endif()
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH})
-  if(VERBOSE)
-    message("BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH= ${BACKEND_CXX_COMPILER_NAME_WITHOUT_PATH}")
-  endif()
-  execute_process(
-    COMMAND ${BACKEND_CXX_COMPILER} --version
-    OUTPUT_VARIABLE _intel_cxx_version
-    ERROR_VARIABLE _intel_cxx_version_err
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    ERROR_STRIP_TRAILING_WHITESPACE)
-  set(_intel_cxx_version_combined "${_intel_cxx_version}\n${_intel_cxx_version_err}")
-  string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _intel_cxx_match "${_intel_cxx_version_combined}")
-  if(_intel_cxx_match)
-    set(BACKEND_CXX_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
-    set(BACKEND_CXX_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
-  endif()
-endif()
-
-if(ENABLE-FORTRAN)
-  # --------check Fortran compiler -----------------------
-  include(roseCMakeDetermineFortranCompiler)
-
-  if(NOT BACKEND_FORTRAN_COMPILER)
-    set(BACKEND_FORTRAN_COMPILER ${CMAKE_Fortran_COMPILER})
-  endif()
-
-  get_filename_component(BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER}" NAME)
-  string(REGEX MATCH "[a-zA-Z0-9/.+-]+" BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH "${BACKEND_FORTRAN_COMPILER_NAME_WITHOUT_PATH}")
-
-  set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "")
-  set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "")
-
-  # First try compiler-native queries (GNU supports -dumpfullversion/-dumpversion)
-  if("${CMAKE_Fortran_COMPILER_ID}" STREQUAL "GNU")
-    if(VERBOSE)
-      message("Querying GNU Fortran version via -dumpfullversion")
+  # An independent BACKEND_* override cannot inherit the identity/version of
+  # CMake's selected compiler. Configure that compiler through CMAKE_* instead.
+  if(BACKEND_${backend_language}_COMPILER)
+    get_filename_component(_backend_compiler
+      "${BACKEND_${backend_language}_COMPILER}" REALPATH)
+    get_filename_component(_configured_compiler "${_compiler}" REALPATH)
+    if(NOT _backend_compiler STREQUAL _configured_compiler)
+      message(FATAL_ERROR
+        "BACKEND_${backend_language}_COMPILER must identify the configured "
+        "CMAKE_${language}_COMPILER '${_compiler}'; configure the compiler "
+        "through CMAKE_${language}_COMPILER instead")
     endif()
-    execute_process(
-      COMMAND ${BACKEND_FORTRAN_COMPILER} -dumpfullversion
-      OUTPUT_VARIABLE _fortran_version_full
-      ERROR_VARIABLE _fortran_version_full_err
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_STRIP_TRAILING_WHITESPACE
-      RESULT_VARIABLE _fortran_full_status)
-    if(_fortran_full_status EQUAL 0 AND NOT _fortran_version_full STREQUAL "")
-      string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _fortran_version_match "${_fortran_version_full}")
-      if(_fortran_version_match)
-        set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
-        set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
+  endif()
+
+  if(NOT _version MATCHES "^([0-9]+)\\.([0-9]+)\\.([0-9]+)(\\.[0-9]+)?$")
+    message(FATAL_ERROR
+      "CMake did not provide a complete numeric ${language} compiler version: '${_version}'")
+  endif()
+  set(BACKEND_${backend_language}_COMPILER_MAJOR_VERSION_NUMBER
+    "${CMAKE_MATCH_1}" PARENT_SCOPE)
+  set(BACKEND_${backend_language}_COMPILER_MINOR_VERSION_NUMBER
+    "${CMAKE_MATCH_2}" PARENT_SCOPE)
+  get_filename_component(_name "${_compiler}" NAME)
+  set(BACKEND_${backend_language}_COMPILER "${_compiler}" PARENT_SCOPE)
+  set(BACKEND_${backend_language}_COMPILER_NAME_WITHOUT_PATH
+    "${_name}" PARENT_SCOPE)
+  separate_arguments(_command NATIVE_COMMAND "${CMAKE_${language}_COMPILER_ARG1}")
+  list(PREPEND _command "${_compiler}")
+  set(BACKEND_${backend_language}_COMPILER_COMMAND "${_command}" PARENT_SCOPE)
+endfunction()
+
+# A mixed-language link needs the runtimes that its driver does not add itself.
+# Use CMake's compiler detection results; library names are toolchain metadata.
+function(rex_backend_runtime_options language driver output)
+  set(_options)
+  foreach(_directory IN LISTS CMAKE_${language}_IMPLICIT_LINK_DIRECTORIES)
+    if(NOT _directory IN_LIST CMAKE_${driver}_IMPLICIT_LINK_DIRECTORIES)
+      list(APPEND _options "-L${_directory}")
+    endif()
+  endforeach()
+  foreach(_directory IN LISTS CMAKE_${language}_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES)
+    if(NOT _directory IN_LIST CMAKE_${driver}_IMPLICIT_LINK_FRAMEWORK_DIRECTORIES)
+      list(APPEND _options "-F${_directory}")
+    endif()
+  endforeach()
+  foreach(_library IN LISTS CMAKE_${language}_IMPLICIT_LINK_LIBRARIES)
+    if(NOT _library IN_LIST CMAKE_${driver}_IMPLICIT_LINK_LIBRARIES)
+      if(IS_ABSOLUTE "${_library}" OR _library MATCHES "^-")
+        list(APPEND _options "${_library}")
+      else()
+        list(APPEND _options "-l${_library}")
       endif()
     endif()
-  endif()
+  endforeach()
+  set(${output} "${_options}" PARENT_SCOPE)
+endfunction()
 
-  # Generic fallback: parse `<major>.<minor>` from `--version`
-  if(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "" OR BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "")
-    execute_process(
-      COMMAND ${BACKEND_FORTRAN_COMPILER} --version
-      OUTPUT_VARIABLE _fortran_version_stdout
-      ERROR_VARIABLE _fortran_version_stderr
-      OUTPUT_STRIP_TRAILING_WHITESPACE
-      ERROR_STRIP_TRAILING_WHITESPACE
-      RESULT_VARIABLE _fortran_version_status)
-    set(_fortran_version_combined "${_fortran_version_stdout}\n${_fortran_version_stderr}")
-    string(REGEX MATCH "([0-9]+)\\.([0-9]+)" _fortran_generic_match "${_fortran_version_combined}")
-    if(_fortran_generic_match)
-      set(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER "${CMAKE_MATCH_1}")
-      set(BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER "${CMAKE_MATCH_2}")
-    endif()
-  endif()
-
-  if(BACKEND_FORTRAN_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "" OR BACKEND_FORTRAN_COMPILER_MINOR_VERSION_NUMBER STREQUAL "")
-    message(FATAL_ERROR "Could not determine Fortran compiler version from ${BACKEND_FORTRAN_COMPILER}")
-  endif()
+rose_backend_compiler_metadata(C C)
+rose_backend_compiler_metadata(CXX CXX)
+if(ENABLE-FORTRAN)
+  rose_backend_compiler_metadata(Fortran FORTRAN)
 endif()
 
-if("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-  # using Clang
+foreach(_path_field IN ITEMS
+    CMAKE_C_COMPILER CMAKE_CXX_COMPILER CMAKE_Fortran_COMPILER
+    ROSE_TOP_BINARY_DIR ROSE_TOP_SRC_DIR
+    ROSE_LLVM_OPENMP_RUNTIME_LIBRARY ROSE_CLANG_CUDA_RUNTIME_INCLUDE_DIR
+    LLVM_OPENMP_INCLUDE_PATH)
+  rex_cpp_string_literal("${${_path_field}}" REX_${_path_field}_LITERAL)
+endforeach()
+unset(_path_field)
+
+set(BACKEND_CXX_IS_CLANG_COMPILER 0)
+set(BACKEND_CXX_IS_GNU_COMPILER 0)
+set(BACKEND_CXX_IS_INTEL_COMPILER 0)
+if(CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
   set(BACKEND_CXX_IS_CLANG_COMPILER 1)
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-  # using GCC
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
   set(BACKEND_CXX_IS_GNU_COMPILER 1)
-elseif("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Intel" OR "${CMAKE_CXX_COMPILER_ID}" STREQUAL "IntelLLVM")
-  # using Intel C++
+elseif(CMAKE_CXX_COMPILER_ID STREQUAL "Intel" OR
+       CMAKE_CXX_COMPILER_ID STREQUAL "IntelLLVM")
   set(BACKEND_CXX_IS_INTEL_COMPILER 1)
 endif()

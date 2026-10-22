@@ -728,14 +728,11 @@ void mirrorNamespaceFragmentSymbolsToGlobalDefinition(
 
 } // namespace
 
-void SgInitializedName::fixupCopy_symbols(SgNode *, SgCopyHelp &) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgInitializedName::fixupCopy_symbols() %p = %s \n", this,
-         this->get_name().str());
-#endif
-
-  // DQ (11/7/2007): I think that there is nothing to do here specific to symbol
-  // and symbol tables.
+void SgInitializedName::fixupCopy_symbols(SgNode *copy,
+                                          SgCopyHelp &help) const {
+  auto *copiedName = isSgInitializedName(copy);
+  requireExactCopiedSymbolRoot(this, copiedName, help, "initialized-name");
+  fixupExactCopiedSupportSymbols(this, copiedName, help);
 }
 
 void SgStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
@@ -743,11 +740,6 @@ void SgStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   // SgVariableDeclaration because the copy function in the parent of the
   // variable declaration sets the parent of the SgVariableDeclaration and we
   // need this parent in the fixupCopy function in the SgInitializedName.
-
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgStatement::fixupCopy_symbols() for %p = %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgLocatedNode::fixupCopy_symbols(copy, help);
 }
@@ -957,10 +949,6 @@ void SgOmpThreadprivateStatement::fixupCopy_symbols(SgNode *copy,
 }
 
 void SgExpression::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgExpression::fixupCopy_symbols() for %p = %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   Rose_STL_Container<SgNode *> children_original =
       const_cast<SgExpression *>(this)->get_traversalSuccessorContainer();
@@ -986,22 +974,10 @@ void SgThisExp::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   requireExactCopiedSymbolRoot(this, copiedThis, help, "this-expression");
 }
 
-void SgLocatedNode::fixupCopy_symbols(SgNode *, SgCopyHelp &) const {
-#if DEBUG_FIXUP_COPY
-  printf(
-      "Inside of SgLocatedNode::fixupCopy_symbols() for %p = %s copy = %p \n",
-      this, this->class_name().c_str(), copy);
-#endif
-}
+void SgLocatedNode::fixupCopy_symbols(SgNode *, SgCopyHelp &) const {}
 
 void SgScopeStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgScopeStatement::fixupCopy_symbols() for %p = %s copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
-  // Call the base class fixupCopy member function
   SgStatement::fixupCopy_symbols(copy, help);
 
   SgScopeStatement *copyScopeStatement = isSgScopeStatement(copy);
@@ -1023,16 +999,9 @@ void SgScopeStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   // declarations are owned by typed edges, namespace reopenings, catch
   // conditions, or compiler-generated semantic nodes.
   SageInterface::fixupReferencesToSymbols(this, copyScopeStatement, help);
-
-  // printf ("\nLeaving SgScopeStatement::fixupCopy_symbols() for %p = %s copy =
-  // %p \n\n",this,this->class_name().c_str(),copy);
 }
 
 void SgGlobal::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgGlobal::fixupCopy_symbols() for %p copy = %p \n", this,
-         copy);
-#endif
 
   SgGlobal *global_copy = isSgGlobal(copy);
   ROSE_ASSERT(global_copy != NULL);
@@ -1055,18 +1024,9 @@ void SgGlobal::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
   fixupCanonicalDeclarationCopiesForSymbols(this->getDeclarationList(),
                                             global_copy, help);
-
-  // printf ("\nLeaving SgGlobal::fixupCopy_symbols() this = %p = %s  copy = %p
-  // \n",this,this->class_name().c_str(),copy);
 }
 
-// JJW 2/1/2008 Added support for statement expressions
 void SgExprStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgSgExprStatement::fixupCopy_symbols() for %p = %s copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgExprStatement *es_copy = isSgExprStatement(copy);
   ROSE_ASSERT(es_copy != NULL);
@@ -1076,20 +1036,10 @@ void SgExprStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
   expression_original->fixupCopy_symbols(expression_copy, help);
 
-  // Call the base class fixupCopy member function
   SgStatement::fixupCopy_symbols(copy, help);
-
-  // printf ("\nLeaving SgExprStatement::fixupCopy_symbols() this = %p = %s copy
-  // = %p \n",this,this->class_name().c_str(),copy);
 }
 
-// DQ (10/6/2007): Added fixup function to set scopes not set properly by the
-// ROSETTA generated copy!
 void SgBasicBlock::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgBasicBlock::fixupCopy_symbols() for %p = %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgBasicBlock *block_copy = isSgBasicBlock(copy);
   ROSE_ASSERT(block_copy != NULL);
@@ -1097,22 +1047,11 @@ void SgBasicBlock::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
   fixupCanonicalStatementCopiesForSymbols(this->getStatementList(), block_copy,
                                           help);
 
-  // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_symbols(copy, help);
-
-  // printf ("\nLeaving SgBasicBlock::fixupCopy_symbols() this = %p = %s  copy =
-  // %p \n",this,this->class_name().c_str(),copy);
 }
 
 void SgDeclarationStatement::fixupCopy_symbols(SgNode *copy,
                                                SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgDeclarationStatement::fixupCopy_symbols() for %p = %s "
-         "copy = %p (defining = %p firstNondefining = %p) \n",
-         this, this->class_name().c_str(), copy,
-         this->get_definingDeclaration(),
-         this->get_firstNondefiningDeclaration());
-#endif
 
   SgDeclarationStatement *copiedDeclaration = isSgDeclarationStatement(copy);
   if (copiedDeclaration == nullptr) {
@@ -1127,100 +1066,58 @@ void SgDeclarationStatement::fixupCopy_symbols(SgNode *copy,
   fixupExactCopiedOwnedDeclarationScopeSymbols(this, copiedDeclaration, help);
   fixupExactCopiedTemplateParameterSymbols(this, copiedDeclaration, help);
 
+  if (isSgInterfaceStatement(this) != nullptr ||
+      isSgStatementFunctionStatement(this) != nullptr ||
+      isSgNonrealDecl(this) != nullptr) {
+    fixupExactCopiedOwnedSuccessorSymbols(this, copiedDeclaration, help,
+                                          "fortran-procedure-owner");
+  }
+
   // Call the base class fixupCopy member function (this will setup the parent)
   SgStatement::fixupCopy_symbols(copy, help);
 }
 
 void SgFunctionDeclaration::fixupCopy_symbols(SgNode *copy,
                                               SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("\nIn SgFunctionDeclaration::fixupCopy_symbols(): for function = %s = "
-         "%p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
 
   SgFunctionDeclaration *functionDeclaration_copy =
       isSgFunctionDeclaration(copy);
   ROSE_ASSERT(functionDeclaration_copy != NULL);
 
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   fixupExactCopiedFunctionDeclaratorScopeSymbols(this, functionDeclaration_copy,
                                                  help);
+
+  SgFunctionParameterScope *parameterScope = get_functionParameterScope();
+  if (parameterScope != nullptr && parameterScope->get_parent() == this) {
+    SgFunctionParameterScope *copiedParameterScope =
+        functionDeclaration_copy->get_functionParameterScope();
+    requireExactCopiedSymbolChild(
+        this, parameterScope, functionDeclaration_copy, copiedParameterScope,
+        help, "function-parameter-scope");
+    parameterScope->fixupCopy_symbols(copiedParameterScope, help);
+  }
 
   // Setup the scopes of the SgInitializedName objects in the paraleter list
   ROSE_ASSERT(get_parameterList() != NULL);
   get_parameterList()->fixupCopy_symbols(
       functionDeclaration_copy->get_parameterList(), help);
 
-  // Setup the details in the SgFunctionDefinition (this may have to rebuild the
-  // sysmbol table) printf ("In SgFunctionDeclaration::fixupCopy_symbols():
-  // this->get_definition() = %p \n",this->get_definition());
   if (this->get_definition() != NULL) {
-    // DQ (3/15/2014): The defining declaration should not be marked
-    // (isForward() == true).
-    if (isForward() == true) {
-      printf("Error: The defining declaration should not be marked "
-             "(isForward() == true) \n");
-      printf("SgFunctionDeclaration::fixupCopy_symbols(): (isForward() == "
-             "true): functionDeclaration_copy = %p = %s \n",
-             functionDeclaration_copy,
-             functionDeclaration_copy->class_name().c_str());
-      printf(
-          "   --- functionDeclaration_copy->get_firstNondefiningDeclaration() "
-          "= %p \n",
-          functionDeclaration_copy->get_firstNondefiningDeclaration());
-      printf("   --- functionDeclaration_copy->get_definingDeclaration()       "
-             "  = %p \n",
-             functionDeclaration_copy->get_definingDeclaration());
-
-      functionDeclaration_copy->get_file_info()->display(
-          "SgFunctionDeclaration::fixupCopy_scopes(): (isForward() == true): "
-          "debug");
-
-      // Reset this!
-      // functionDeclaration_copy->unsetForward();
-    }
     ROSE_ASSERT(isForward() == false);
-
-    // DQ (2/26/2009): Handle special cases where the copyHelp function is
-    // non-trivial. Is every version of copyHelp object going to be a problem?
-
-    // For the outlining, our copyHelp object does not copy defining function
-    // declarations and substitutes a non-defining declarations, so if the copy
-    // has been built this way then skip trying to reset the
-    // SgFunctionDefinition. printf ("In
-    // SgFunctionDeclaration::fixupCopy_symbols():
-    // functionDeclaration_copy->get_definition() = %p
-    // \n",functionDeclaration_copy->get_definition());
-    // this->get_definition()->fixupCopy_symbols(functionDeclaration_copy->get_definition(),help);
     if (functionDeclaration_copy->get_definition() != NULL) {
       this->get_definition()->fixupCopy_symbols(
           functionDeclaration_copy->get_definition(), help);
     }
-
-    // If this is a declaration with a definition then it is a defining
-    // declaration
-    // functionDeclaration_copy->set_definingDeclaration(functionDeclaration_copy);
   }
-
-  // printf ("\nLeaving SgFunctionDeclaration::fixupCopy_symbols(): for function
-  // = %s = %p = %s copy = %p
-  // \n",this->get_name().str(),this,this->class_name().c_str(),copy);
 }
 
 // DQ (10/6/2007): Added fixup function to set scopes not set properly by the
 // ROSETTA generated copy!
 void SgFunctionParameterList::fixupCopy_symbols(SgNode *copy,
                                                 SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgFunctionParameterList::fixupCopy_symbols() for %p = %s "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   SgFunctionParameterList *copyFunctionParameterList =
@@ -1248,11 +1145,6 @@ void SgFunctionParameterList::fixupCopy_symbols(SgNode *copy,
 
 void SgMemberFunctionDeclaration::fixupCopy_symbols(SgNode *copy,
                                                     SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("In SgMemberFunctionDeclaration::fixupCopy_symbols(): for function = "
-         "%s = %p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
 
   SgMemberFunctionDeclaration *memberFunctionDeclaration_copy =
       isSgMemberFunctionDeclaration(copy);
@@ -1263,7 +1155,6 @@ void SgMemberFunctionDeclaration::fixupCopy_symbols(SgNode *copy,
   get_CtorInitializerList()->fixupCopy_symbols(
       memberFunctionDeclaration_copy->get_CtorInitializerList(), help);
 
-  // Call the base class fixupCopy member function
   SgFunctionDeclaration::fixupCopy_symbols(copy, help);
 }
 
@@ -1287,85 +1178,49 @@ void SgTemplateParameter::fixupCopy_symbols(SgNode *copy,
 
 void SgTemplateDeclaration::fixupCopy_symbols(SgNode *copy,
                                               SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("\nInside of SgTemplateDeclaration::fixupCopy_symbols() for %p = %s "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
-  // Also call the base class version of the fixupCopy() member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 }
 
 void SgTemplateInstantiationDefn::fixupCopy_symbols(SgNode *copy,
                                                     SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgTemplateInstantiationDefn::fixupCopy_symbols() for class "
-         "= %s class definition %p = %s copy = %p \n",
-         this->get_declaration()->get_name().str(), this,
-         this->class_name().c_str(), copy);
-#endif
 
-  // Call the base class fixupCopy member function
   SgClassDefinition::fixupCopy_symbols(copy, help);
 }
 
 void SgTemplateInstantiationDecl::fixupCopy_symbols(SgNode *copy,
                                                     SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("\nIn SgTemplateInstantiationDecl::fixupCopy_symbols(): for function "
-         "= %s = %p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
 
   SgTemplateInstantiationDecl *templateClassDeclaration_copy =
       isSgTemplateInstantiationDecl(copy);
   ROSE_ASSERT(templateClassDeclaration_copy != NULL);
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgClassDeclaration::fixupCopy_symbols(copy, help);
 }
 
 void SgTemplateInstantiationMemberFunctionDecl::fixupCopy_symbols(
     SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("\nIn SgTemplateInstantiationMemberFunctionDecl::fixupCopy_symbols(): "
-         "for function = %s = %p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
 
   SgTemplateInstantiationMemberFunctionDecl
       *templateMemberFunctionDeclaration_copy =
           isSgTemplateInstantiationMemberFunctionDecl(copy);
   ROSE_ASSERT(templateMemberFunctionDeclaration_copy != NULL);
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgMemberFunctionDeclaration::fixupCopy_symbols(copy, help);
 }
 
 void SgTemplateInstantiationFunctionDecl::fixupCopy_symbols(
     SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("\nIn SgTemplateInstantiationFunctionDecl::fixupCopy_symbols(): for "
-         "function = %s = %p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
 
   SgTemplateInstantiationFunctionDecl *templateFunctionDeclaration_copy =
       isSgTemplateInstantiationFunctionDecl(copy);
   ROSE_ASSERT(templateFunctionDeclaration_copy != NULL);
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgFunctionDeclaration::fixupCopy_symbols(copy, help);
 }
 
 void SgFunctionDefinition::fixupCopy_symbols(SgNode *copy,
                                              SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgFunctionDefinition::fixupCopy_symbols() for %p = %s copy "
-         "= %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgFunctionDefinition *functionDefinition_copy = isSgFunctionDefinition(copy);
   ROSE_ASSERT(functionDefinition_copy != NULL);
@@ -1373,7 +1228,6 @@ void SgFunctionDefinition::fixupCopy_symbols(SgNode *copy,
   ROSE_ASSERT(get_body() != NULL);
   get_body()->fixupCopy_symbols(functionDefinition_copy->get_body(), help);
 
-  // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
   // printf ("\nLeaving SgFunctionDefinition::fixupCopy_symbols() for %p = %s
@@ -1382,13 +1236,7 @@ void SgFunctionDefinition::fixupCopy_symbols(SgNode *copy,
 
 void SgVariableDeclaration::fixupCopy_symbols(SgNode *copy,
                                               SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgVariableDeclaration::fixupCopy_symbols() for %p = %s "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   SgVariableDeclaration *variableDeclaration_copy =
@@ -1467,13 +1315,6 @@ void SgVariableDeclaration::fixupCopy_symbols(SgNode *copy,
 
 void SgClassDeclaration::fixupCopy_symbols(SgNode *copy,
                                            SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgClassDeclaration::fixupCopy_symbols() for class = %s = "
-         "%p = %s copy = %p (defining = %p firstNondefining = %p) \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy,
-         this->get_definingDeclaration(),
-         this->get_firstNondefiningDeclaration());
-#endif
 
   SgClassDeclaration *classDeclaration_copy = isSgClassDeclaration(copy);
   ROSE_ASSERT(classDeclaration_copy != NULL);
@@ -1482,7 +1323,6 @@ void SgClassDeclaration::fixupCopy_symbols(SgNode *copy,
   SgClassDefinition *classDefinition_copy =
       classDeclaration_copy->get_definition();
 
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   if (isForward() == false) {
@@ -1492,12 +1332,6 @@ void SgClassDeclaration::fixupCopy_symbols(SgNode *copy,
 
 void SgClassDefinition::fixupCopy_symbols(SgNode *copy,
                                           SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgClassDefinition::fixupCopy_symbols() for class = %s "
-         "class definition %p = %s copy = %p \n",
-         this->get_declaration()->get_name().str(), this,
-         this->class_name().c_str(), copy);
-#endif
 
   SgClassDefinition *classDefinition_copy = isSgClassDefinition(copy);
   ROSE_ASSERT(classDefinition_copy != NULL);
@@ -1511,15 +1345,11 @@ void SgClassDefinition::fixupCopy_symbols(SgNode *copy,
 
   while ((i_original != this->get_inheritances().end()) &&
          (i_copy != classDefinition_copy->get_inheritances().end())) {
-    // Check the parent pointer to make sure it is properly set
     ROSE_ASSERT((*i_original)->get_parent() != NULL);
     ROSE_ASSERT((*i_original)->get_parent() == this);
 
     (*i_original)->fixupCopy_symbols(*i_copy, help);
 
-    // DQ (11/7/2007): This was already setup on fixupCopy_scopes, but we can
-    // test it here.
-    // (*i_copy)->set_parent(classDefinition_copy);
     ROSE_ASSERT((*i_copy)->get_parent() != NULL);
     ROSE_ASSERT((*i_copy)->get_parent() == classDefinition_copy);
 
@@ -1530,7 +1360,6 @@ void SgClassDefinition::fixupCopy_symbols(SgNode *copy,
   fixupCanonicalDeclarationCopiesForSymbols(this->getDeclarationList(),
                                             classDefinition_copy, help);
 
-  // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
   // printf ("\nLeaving SgClassDefinition::fixupCopy_symbols() this = %p = %s
@@ -1538,65 +1367,24 @@ void SgClassDefinition::fixupCopy_symbols(SgNode *copy,
 }
 
 void SgBaseClass::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgBaseClass::fixupCopy_symbols() for baseclass = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
-
-  SgBaseClass *baseClass_copy = isSgBaseClass(copy);
-  ROSE_ASSERT(baseClass_copy != NULL);
-
-  const SgNonrealBaseClass *nrBaseClass = isSgNonrealBaseClass(this);
-  SgNonrealBaseClass *nrBaseClass_copy = isSgNonrealBaseClass(copy);
-
-  if (this->get_base_class() != NULL) {
-    ROSE_ASSERT(nrBaseClass == NULL);
-    ROSE_ASSERT(nrBaseClass_copy == NULL);
-    ROSE_ASSERT(baseClass_copy->get_base_class() != NULL);
-  } else if (nrBaseClass != NULL) {
-    ROSE_ASSERT(nrBaseClass->get_base_class_nonreal() != NULL);
-
-    ROSE_ASSERT(nrBaseClass_copy != NULL);
-    ROSE_ASSERT(nrBaseClass_copy->get_base_class_nonreal() != NULL);
-  } else {
-    ROSE_ABORT();
-  }
+  SgBaseClass::fixupCopy_scopes(copy, help);
 }
 
 void SgLabelStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgLabelStatement::fixupCopy_symbols() for %p = %s copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgLabelStatement *labelStatement_copy = isSgLabelStatement(copy);
   ROSE_ASSERT(labelStatement_copy != NULL);
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgStatement::fixupCopy_symbols(copy, help);
 }
 
 void SgGotoStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf(
-      "Inside of SgGotoStatement::fixupCopy_symbols() for %p = %s copy = %p \n",
-      this, this->class_name().c_str(), copy);
-#endif
 
-  // Also call the base class version of the fixupCopycopy() member function
   SgStatement::fixupCopy_symbols(copy, help);
 }
 
 void SgTypedefDeclaration::fixupCopy_symbols(SgNode *copy,
                                              SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgTypedefDeclaration::fixupCopy_symbols() for typedef name "
-         "= %s = %p = %s copy = %p \n",
-         this->get_name().str(), this, this->class_name().c_str(), copy);
-#endif
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   // DQ (10/14/2007): Handle the case of a type defined in the base type of the
@@ -1621,15 +1409,7 @@ void SgTypedefDeclaration::fixupCopy_symbols(SgNode *copy,
 
 void SgEnumDeclaration::fixupCopy_symbols(SgNode *copy,
                                           SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgEnumDeclaration::fixupCopy_symbols() for %p = %s copy = "
-         "%p (defining = %p firstNondefining = %p) \n",
-         this, this->class_name().c_str(), copy,
-         this->get_definingDeclaration(),
-         this->get_firstNondefiningDeclaration());
-#endif
 
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   SgEnumDeclaration *enumDeclaration_copy = isSgEnumDeclaration(copy);
@@ -1666,12 +1446,6 @@ void SgEnumDeclaration::fixupCopy_symbols(SgNode *copy,
 
 void SgNamespaceDeclarationStatement::fixupCopy_symbols(
     SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgNamespaceDeclarationStatement::fixupCopy_symbols() for "
-         "%p = %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 
   SgNamespaceDeclarationStatement *namespaceDeclaration_copy =
@@ -1692,39 +1466,23 @@ void SgNamespaceDeclarationStatement::fixupCopy_symbols(
 
 void SgNamespaceDefinitionStatement::fixupCopy_symbols(SgNode *copy,
                                                        SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgNamespaceDefinitionStatement::fixupCopy_symbols() for %p "
-         "= %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
   SgNamespaceDefinitionStatement *namespaceDefinition_copy =
       isSgNamespaceDefinitionStatement(copy);
   ROSE_ASSERT(namespaceDefinition_copy != NULL);
 
   fixupCanonicalDeclarationCopiesForSymbols(this->getDeclarationList(),
                                             namespaceDefinition_copy, help);
-  // Call the base class fixupCopy member function
   SgScopeStatement::fixupCopy_symbols(copy, help);
   mirrorNamespaceFragmentSymbolsToGlobalDefinition(namespaceDefinition_copy);
 }
 
 void SgTemplateInstantiationDirectiveStatement::fixupCopy_symbols(
     SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of "
-         "SgTemplateInstantiationDirectiveStatement::fixupCopy_symbols() for "
-         "%p = %s copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
-  // Call the base class fixupCopy member function
   SgDeclarationStatement::fixupCopy_symbols(copy, help);
 }
 
 void SgProject::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgProject::fixupCopy_symbols() \n");
-#endif
 
   SgProject *project_copy = isSgProject(copy);
   ROSE_ASSERT(project_copy != NULL);
@@ -1738,70 +1496,62 @@ void SgProject::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 }
 
 void SgSourceFile::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgFile::fixupCopy_symbols() \n");
-#endif
 
   SgSourceFile *file_copy = isSgSourceFile(copy);
   ROSE_ASSERT(file_copy != NULL);
 
-  // Call fixup on the global scope
+  SgFileList *external = get_frontendExternalFileList();
+  SgFileList *copiedExternal = file_copy->get_frontendExternalFileList();
+  ROSE_ASSERT((external == nullptr) == (copiedExternal == nullptr));
+  if (external != nullptr) {
+    ROSE_ASSERT(external->get_listOfFiles().size() ==
+                copiedExternal->get_listOfFiles().size());
+    for (SgFile *file : external->get_listOfFiles()) {
+      const auto entry = help.get_copiedNodeMap().find(file);
+      ROSE_ASSERT(entry != help.get_copiedNodeMap().end());
+      auto *copiedFile = isSgFile(entry->second);
+      ASSERT_not_null(file);
+      ASSERT_not_null(copiedFile);
+      file->fixupCopy_symbols(copiedFile, help);
+    }
+  }
+
   ROSE_ASSERT(get_globalScope() != NULL);
   ROSE_ASSERT(file_copy->get_globalScope() != NULL);
   get_globalScope()->fixupCopy_symbols(file_copy->get_globalScope(), help);
 }
 
 void SgIfStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgIfStmt::fixupCopy_symbols() this = %p = %s  copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
-
-  // SgStatement::fixupCopy_symbols(copy,help);
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
   SgIfStmt *ifStatement_copy = isSgIfStmt(copy);
   ROSE_ASSERT(ifStatement_copy != NULL);
 
-  // The symbol table should not have been setup yet!
-  // ROSE_ASSERT(ifStatement_copy->get_symbol_table()->size() == 0);
-
-  this->get_conditional()->fixupCopy_symbols(
-      ifStatement_copy->get_conditional(), help);
+  ROSE_ASSERT(get_if_statement_kind() ==
+              ifStatement_copy->get_if_statement_kind());
+  ROSE_ASSERT((get_conditional() == nullptr) ==
+              get_is_if_consteval_statement());
+  if (get_conditional() != nullptr)
+    get_conditional()->fixupCopy_symbols(ifStatement_copy->get_conditional(),
+                                         help);
+  else
+    ROSE_ASSERT(ifStatement_copy->get_conditional() == nullptr);
 
   SgStatement *thsTruBody = this->get_true_body();
   ROSE_ASSERT(thsTruBody != NULL);
   SgStatement *ifStmtCopyTruBody = ifStatement_copy->get_true_body();
   ROSE_ASSERT(ifStmtCopyTruBody != NULL);
-  SgScopeStatement *scopeStmntCopyTrueBody =
-      isSgScopeStatement(ifStmtCopyTruBody);
-
-  // printf ("\nProcess the TRUE body of the SgIfStmt \n\n");
-
   thsTruBody->fixupCopy_symbols(ifStmtCopyTruBody, help);
 
   ROSE_ASSERT((this->get_false_body() != NULL) ==
               (ifStatement_copy->get_false_body() != NULL));
-  SgScopeStatement *scopeStmntCopyFalseBody =
-      isSgScopeStatement(ifStatement_copy->get_false_body());
-
-  // printf ("\nProcess the FALSE body of the SgIfStmt \n\n");
-
   if (this->get_false_body() != NULL) {
     this->get_false_body()->fixupCopy_symbols(
         ifStatement_copy->get_false_body(), help);
   }
-
-  // printf ("\nLeaving SgIfStmt::fixupCopy_symbols() this = %p = %s  copy = %p
-  // \n",this,this->class_name().c_str(),copy);
 }
 
 void SgForStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgForStatement::fixupCopy_symbols() this = %p = %s  copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgForStatement *forStatement_copy = isSgForStatement(copy);
   ROSE_ASSERT(forStatement_copy != NULL);
@@ -1832,11 +1582,6 @@ void SgForStatement::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
 void SgRangeBasedForStatement::fixupCopy_symbols(SgNode *copy,
                                                  SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgRangeBasedForStatement::fixupCopy_symbols() this = %p = "
-         "%s  copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgRangeBasedForStatement *forStatement_copy =
       isSgRangeBasedForStatement(copy);
@@ -1875,11 +1620,6 @@ void SgRangeBasedForStatement::fixupCopy_symbols(SgNode *copy,
 
 void SgForInitStatement::fixupCopy_symbols(SgNode *copy,
                                            SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgForInitStatement::fixupCopy_symbols() this = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgStatement::fixupCopy_symbols(copy, help);
 
@@ -1911,11 +1651,6 @@ void SgForInitStatement::fixupCopy_symbols(SgNode *copy,
 
 void SgCatchStatementSeq::fixupCopy_symbols(SgNode *copy,
                                             SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgCatchStatementSeq::fixupCopy_symbols() this = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgStatement::fixupCopy_symbols(copy, help);
 
@@ -1960,11 +1695,6 @@ void SgCatchStatementSeq::fixupCopy_symbols(SgNode *copy,
 }
 
 void SgWhileStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf(
-      "Inside of SgWhileStmt::fixupCopy_symbols() this = %p = %s  copy = %p \n",
-      this, this->class_name().c_str(), copy);
-#endif
 
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
@@ -1980,11 +1710,6 @@ void SgWhileStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 }
 
 void SgDoWhileStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgDoWhileStmt::fixupCopy_symbols() this = %p = %s  copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
@@ -2001,11 +1726,6 @@ void SgDoWhileStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
 void SgSwitchStatement::fixupCopy_symbols(SgNode *copy,
                                           SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgSwitchStatement::fixupCopy_symbols() this = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
@@ -2021,11 +1741,6 @@ void SgSwitchStatement::fixupCopy_symbols(SgNode *copy,
 }
 
 void SgTryStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf(
-      "Inside of SgTryStmt::fixupCopy_symbols() this = %p = %s  copy = %p \n",
-      this, this->class_name().c_str(), copy);
-#endif
 
   SgStatement::fixupCopy_symbols(copy, help);
 
@@ -2065,11 +1780,6 @@ void SgTryStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
 void SgCatchOptionStmt::fixupCopy_symbols(SgNode *copy,
                                           SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgCatchOptionStmt::fixupCopy_symbols() this = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgScopeStatement::fixupCopy_symbols(copy, help);
 
@@ -2128,11 +1838,6 @@ void SgCatchOptionStmt::fixupCopy_symbols(SgNode *copy,
 }
 
 void SgCaseOptionStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgCaseOptionStmt::fixupCopy_symbols() this = %p = %s  copy "
-         "= %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgStatement::fixupCopy_symbols(copy, help);
 
@@ -2146,11 +1851,6 @@ void SgCaseOptionStmt::fixupCopy_symbols(SgNode *copy, SgCopyHelp &help) const {
 
 void SgDefaultOptionStmt::fixupCopy_symbols(SgNode *copy,
                                             SgCopyHelp &help) const {
-#if DEBUG_FIXUP_COPY
-  printf("Inside of SgDefaultOptionStmt::fixupCopy_symbols() this = %p = %s  "
-         "copy = %p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 
   SgStatement::fixupCopy_symbols(copy, help);
 
@@ -2180,10 +1880,4 @@ void SgTemplateArgument::fixupCopy_symbols(SgNode *copy,
       templateArgument_copy->get_templateDeclaration(), help,
       "template-argument-declaration");
   fixupExactCopiedSupportSymbols(this, templateArgument_copy, help);
-
-#if DEBUG_FIXUP_COPY
-  printf("\nIn SgTemplateArgument::fixupCopy_symbols(): this = %p = %s copy = "
-         "%p \n",
-         this, this->class_name().c_str(), copy);
-#endif
 }

@@ -142,12 +142,6 @@ std::string SymbolicExpr ::toString() const {
       begin = false;
     r = r + iter.Current().toString();
   }
-  /*QY: prefix output
-    std::string r = GetOPName() + "(";
-    for (OpdIterator iter = GetOpdIterator();
-         !iter.ReachEnd(); iter.Advance())
-      r = r + iter.Current().toString();
-  */
   r = r + ")";
   return r;
 }
@@ -418,7 +412,6 @@ SymbolicVal ApplyBinOP(OPApplicator &op, const SymbolicVal &v1,
 
 SymbolicVal ApplyUnaryOP(OPApplicator &op, const SymbolicVal &v) {
   SymbolicExpr *r = op.CreateExpr();
-  // r->AddOpd(v, &op);
   r->AddOpd(v);
   return SymbolicVal(r);
 }

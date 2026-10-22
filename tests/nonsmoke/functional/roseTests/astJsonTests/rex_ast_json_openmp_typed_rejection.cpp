@@ -572,7 +572,14 @@ int main(int argc, char **argv) {
         selectorInSet(ast, set, SgOmpClause::e_omp_context_trait_vendor);
     Rose::AstJson::NodeRecord &score = selectorScore(ast, selector);
     score.kind = "SgFloatVal";
-    score.properties.object["value"] = Rose::AstJson::JsonValue::string("7.5");
+    score.variant = V_SgFloatVal;
+    score.properties.object["type"] = Rose::AstJson::parseJson(
+        Rose::AstJson::rawTypeJson(SageBuilder::buildFloatType(), {}));
+    score.properties.object.erase("value");
+    score.properties.object["value_bits"] =
+        Rose::AstJson::parseJson(Rose::AstJson::rawFloatingValueBits(7.5f));
+    score.properties.object["value_string"] =
+        Rose::AstJson::JsonValue::string("7.5f");
     expectedMessage =
         "context selector score is not an integer or enum expression";
   } else if (mode == "negative-context-score") {

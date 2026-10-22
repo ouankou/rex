@@ -3,6 +3,7 @@
 
 #include "AstDOTGeneration.h"
 
+#include <memory>
 #include <string>
 
 #include <vector>
@@ -83,19 +84,11 @@ public:
 
   void addEdges();
 
-  // void generate(string filename, SgProject* node);
-  // void generateInputFiles(SgProject* node, traversalType tt=TOPDOWNBOTTOMUP,
-  // std::string filenamePostfix="");
-
-  // void addEdges ( std::list<EdgeType> & edgeList );
   virtual std::string additionalNodeInfo(SgNode *node);
   virtual std::string additionalNodeOptions(SgNode *node);
 
-  // DQ (3/5/2007) added mechanism to add options (to add color, etc.)
   virtual std::string additionalEdgeInfo(SgNode *from, SgNode *to,
                                          std::string label);
-  virtual std::string additionalEdgeOptions(SgNode *from, SgNode *to,
-                                            std::string label);
 
   // This generates code for the DOT graph node
   std::string unparseToCompleteStringForDOT(SgNode *astNode);
@@ -162,8 +155,6 @@ public:
   void skipNode(SgNode *n);
   void skipEdge(EdgeType e);
 
-  void addEdges();
-
   virtual std::string additionalNodeInfo(SgNode *node);
 
   // DQ (11/1/2003) added mechanism to add options (to add color, etc.)
@@ -226,7 +217,6 @@ public:
     s_Filter_Flags(std::vector<std::string> &argvList);
     //! Print out help about command options to set flags
     void print_commandline_help();
-    ~s_Filter_Flags();
     void print_filter_flags();
 
   private:
@@ -234,13 +224,16 @@ public:
     void setDefault();
   };
 
-  s_Filter_Flags *filterFlags; // each instance has its own flag set
+private:
+  std::unique_ptr<s_Filter_Flags> ownedFilterFlags;
+
+public:
+  s_Filter_Flags *filterFlags;
 
   // Store a DOT graph (really just a list of nodes and edges in a traversal)
   CustomMemoryPoolDOTGenerationData DOTgraph;
   // Constructor
   CustomMemoryPoolDOTGeneration(s_Filter_Flags *f = NULL);
-  // ~CustomMemoryPoolDOTGeneration();
 
   // Call add functions in CustomMemoryPoolDOTGenerationData class
   void addNode(NodeType n);
@@ -268,10 +261,6 @@ public:
   // Default filter to simplify the whole AST graph
   void defaultFilter(SgNode *n);
 
-  // DQ (8/14/2008): Added to reduce the size and complexity of graphs of the
-  // executable format.
-  void binaryExecutableFormatFilter(SgNode *node);
-
   // Mechanism to ignore all SgFile Info IR nodes (often they just get in the
   // way)
   void fileInfoFilter(SgNode *node);
@@ -291,9 +280,6 @@ public:
   void variableDeclarationFilter(SgNode *n);
   void ctorInitializerListFilter(SgNode *n);
   void symbolFilter(SgNode *n);
-
-private:
-  void internal_init(s_Filter_Flags *f = NULL);
 };
 
 #endif // WHOLE_AST_H

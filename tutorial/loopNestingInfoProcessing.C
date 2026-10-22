@@ -142,11 +142,6 @@ SynNestingDepth LoopLevelProcessing::evaluateSynthesizedAttribute(
       new NestingLevelAnnotation(nestingLevel, nestingDepth);
   ROSE_ASSERT(nla != NULL);
 
-  // DQ (1/2/2006): Added support for new attribute interface.
-  // printf ("LoopLevelProcessing::evaluateSynthesizedAttribute(): using new
-  // attribute interface \n");
-  // node->attribute.add("loopNestingInfo",nla);
-  // node->attribute().add("loopNestingInfo",nla);
   node->addNewAttribute("loopNestingInfo", nla);
 
   //! return the maximum nesting depth as synthesized attribute
@@ -154,9 +149,6 @@ SynNestingDepth LoopLevelProcessing::evaluateSynthesizedAttribute(
 }
 
 int main(int argc, char **argv) {
-  // command line parameters are passed to legacy frontend
-  // non-legacy frontend parameters are passed (through) to ROSE (and the vendor
-  // compiler)
   SgProject *root = frontend(argc, argv);
   LoopLevelProcessing t;
 

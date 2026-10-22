@@ -1,14 +1,5 @@
-######## Generate rose_paths.C #########
-
-# Simplifies variable reference and escape sequence evaluation in the following file generating commands.
-cmake_policy(SET CMP0053 NEW)
-
-file(REMOVE ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp)
-file(WRITE  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "\#include <string> \n\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* Use the same header file to declare these variables as is used to reference them so that they will be globally available (and not local). */\n")
-file(APPEND  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "\#include \"rose_paths.h\" \n\n")
+file(WRITE ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "\#include \"rose_paths.h\"\n\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* Paths derived from the CMake source/build/install roots. */\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_GFORTRAN_PATH          = \"${CMAKE_Fortran_COMPILER}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_SOURCE_TREE           = \"${ROSE_TOP_SRC_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_TREE            = \"${ROSE_TOP_BINARY_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_PREFIX        = \"${CMAKE_INSTALL_PREFIX}\";\n")
@@ -17,51 +8,35 @@ file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string 
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_INSTALL_CLANG_INCLUDE_DIR = \"${CLANG_BUILTIN_HEADERS_INSTALL_DIR}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR = \"${ROSE_TOP_BINARY_DIR}/include-staging\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_LIB_DIR         = \"${CMAKE_LIBRARY_OUTPUT_DIRECTORY}\";\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "\n/* Additional interesting data to provide. */\n")
-# Match the historical Autoconf meaning of configure_date. CMake honors
-# SOURCE_DATE_EPOCH for string(TIMESTAMP), which keeps reproducible builds
-# deterministic when their environment requests it.
-string(TIMESTAMP _rose_configure_date "%Y-%m-%d %H:%M:%S UTC" UTC)
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_CONFIGURE_DATE     = \"${_rose_configure_date}\";\n")
-unset(_rose_configure_date)
+if(NOT DEFINED ROSE_CONFIGURE_DATE)
+  string(TIMESTAMP ROSE_CONFIGURE_DATE "%Y-%m-%d %H:%M:%S UTC" UTC)
+  set(ROSE_CONFIGURE_DATE "${ROSE_CONFIGURE_DATE}" CACHE INTERNAL
+      "Time of the initial REX configuration")
+endif()
+file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_CONFIGURE_DATE     = \"${ROSE_CONFIGURE_DATE}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_OS           = \"${CMAKE_HOST_SYSTEM_VERSION}\";\n")
 file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "const std::string ROSE_BUILD_CPU          = \"${CMAKE_HOST_SYSTEM_PROCESSOR}\";\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* Numeric form of ROSE version -- assuming ROSE version x.y.zL \(where */\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* x, y, and z are numbers, and L is a single lowercase letter from a to j\), */\n")
-file(APPEND ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp "/* the numeric value is x * 1000000 + y * 10000 + z * 100 + \(L - 'a'\). */\n")
+configure_file(
+  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp
+  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C COPYONLY)
 
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C.tmp
-    ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.C)
-
-execute_process(
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
+configure_file(
   ${ROSE_TOP_SRC_DIR}/src/util/rose_paths.h
-  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.h)
+  ${ROSE_TOP_BINARY_DIR}/src/util/rose_paths.h COPYONLY)
 
 # needed to properly define ROSE_UTIL_API
 add_definitions(-DROSE_UTIL_EXPORTS)
 
-######## build sub libraries ##########
 add_subdirectory(commandlineProcessing)
 add_subdirectory(graphs)
 add_subdirectory(support)
 
-######## build main library ###########
-set(rose_util_src
+add_library(util_main OBJECT
   ${CMAKE_BINARY_DIR}/src/util/rose_paths.C
   FileSystem.C
-  Unique.C
   mlog.C
-  rose_getline.C
   processSupport.C
-  rose_getline.C
-  rose_path_resolver.C
-  rose_strtoull.C)
-
-add_library(util_main OBJECT ${rose_util_src})
-add_dependencies(util_main generate_rosePublicConfig)
+  rose_path_resolver.C)
 
 add_library(roseUtil INTERFACE)
 target_sources(roseUtil INTERFACE
@@ -69,13 +44,8 @@ target_sources(roseUtil INTERFACE
   $<TARGET_OBJECTS:util_commandlineProcessing>
   $<TARGET_OBJECTS:util_support>
   $<TARGET_OBJECTS:util_graphs>)
-if(SQLITE3_FOUND_LIB)
-  target_link_libraries(roseUtil INTERFACE ${SQLITE3_LIBRARY})
-endif()
 
-########### install files ###############
 install(FILES
-  processSupport.h rose_paths.h mlog.h ROSE_ASSERT.h ROSE_ABORT.h ROSE_DEPRECATED.h ROSE_UNUSED.h ROSE_FALLTHROUGH.h FileSystem.h
-  Unique.h timing.h rose_getline.h rose_strtoull.h rose_isnan.h
-  rose_pragma_message.h rose_path_resolver.h rose_test_output_path.h
+  processSupport.h rose_paths.h mlog.h ROSE_ASSERT.h ROSE_ABORT.h ROSE_DEPRECATED.h ROSE_FALLTHROUGH.h
+  rose_path_resolver.h rose_test_output_path.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

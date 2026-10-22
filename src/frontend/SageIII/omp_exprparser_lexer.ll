@@ -168,9 +168,9 @@ int             { return (TYPE_INT); }
                       spelling.push_back(*character);
                     }
                   }
-                  omp_exprparser_lval.stype = strdup(spelling.c_str());
+                  omp_exprparser_lval.identifier = {strdup(spelling.c_str()), true};
                   return (ID_EXPRESSION); }
-{id}            { omp_exprparser_lval.stype = strdup(yytext);
+{id}            { omp_exprparser_lval.identifier = {strdup(yytext), false};
                   return (ID_EXPRESSION); }
 
 "/"{id}"/"/{fortran_block_end}  { omp_exprparser_lval.stype = strdup(yytext); return (FORTRAN_COMMON_BLOCK); }

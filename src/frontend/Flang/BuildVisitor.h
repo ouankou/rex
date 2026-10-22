@@ -4,6 +4,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <iostream>
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
@@ -63,14 +64,23 @@ public:
   template <typename T> void Before(T &) {}
   template <typename T> double Build(T &); // not void, never used
 
+  void setStatementLabel(std::optional<Fortran::parser::Label> label) {
+    if (!label) {
+      return;
+    }
+    const auto value = *label;
+    if (value < 1 || value > 99999) {
+      std::cerr << "REX_FLANG_INVARIANT[numeric-label]: invalid Fortran "
+                   "statement label "
+                << value << '\n';
+      ROSE_ABORT();
+    }
+    label_ = label;
+  }
+
   // Save and subsequently remove any label
   template <typename T> void Before(Fortran::parser::Statement<T> &x) {
-    if (x.label) {
-      const int labelValue = static_cast<int>(x.label.value());
-      if (labelValue > 0) {
-        label_ = x.label;
-      }
-    }
+    setStatementLabel(x.label);
     BeginStatementSource(x.source);
     PublishSemanticNamesBeforeStatement(x.statement);
   }
@@ -80,12 +90,7 @@ public:
     // generic pre-consumption publication walk here would manufacture a
     // semantic-only object before the USE builder can publish its exact
     // use-associated identity and source anchor.
-    if (x.label) {
-      const int labelValue = static_cast<int>(x.label.value());
-      if (labelValue > 0) {
-        label_ = x.label;
-      }
-    }
+    setStatementLabel(x.label);
     BeginStatementSource(x.source);
   }
   template <typename T> void Post(Fortran::parser::Statement<T> &x) {
@@ -112,21 +117,7 @@ public:
       Build(x);
       Post(x);
       return false; // Walk() does not visit descendents
-    }
-#define USE_FROM_FLANG 0
-#if USE_FROM_FLANG
-    else if constexpr (HasTypedExpr<T>::value) {
-      // Format the expression representation from semantics
-      if (asFortran_ && x.typedExpr) {
-        // Probably not useful for high-level builder?
-        // asFortran_->expr(out_, *x.typedExpr);
-        return false;
-      } else {
-        return true;
-      }
-    }
-#endif
-    else {
+    } else {
       Before(x);
       return true; // there's no Build() defined here, Walk() the descendents
     }
@@ -139,41 +130,6 @@ public:
   }
   template <typename T> bool Pre(T &x) { return PreImpl(x); }
   template <typename T> void Post(T &) {}
-
-  void setKindSelectorType(std::optional<Fortran::parser::KindSelector> &x) {
-    // KindSelector std::variant<ScalarIntConstantExpr, StarSize> u;
-    using namespace Fortran;
-    if (x) {
-      common::visit(common::visitors{[&](parser::KindSelector::StarSize &y) {
-                                       if (type_ != nullptr) {
-                                         type_->set_hasTypeKindStar(true);
-                                       }
-                                     },
-                                     [&](auto &y) { return; }},
-                    x->u);
-    }
-  }
-
-  void Post(Fortran::parser::IntrinsicTypeSpec &x) {
-    // IntrinsicTypeSpec std::variant<IntegerTypeSpec, Real, DoublePrecision,
-    // Complex, Character, Logical, DoubleComplex> u;
-    using namespace Fortran;
-    common::visit(
-        common::visitors{
-            [&](Fortran::parser::IntrinsicTypeSpec::DoublePrecision &y) {
-              return;
-            },
-            [&](Fortran::parser::IntrinsicTypeSpec::Character &y) { return; },
-            [&](Fortran::parser::IntrinsicTypeSpec::DoubleComplex &y) {
-              return;
-            },
-            // TODO: put back setting kind selector by integrating with latest
-            // flang version
-            [&](Fortran::parser::IntegerTypeSpec
-                    &y) { /*setKindSelectorType(y.v);*/ },
-            [&](auto &y) { /*setKindSelectorType(y.kind);*/ }},
-        x.u);
-  }
 
   // Call back to the traversal framework.
   template <typename T> void Walk(T &x) { Fortran::parser::Walk(x, *this); }
@@ -208,18 +164,6 @@ public:
       bool is_declare_variant = false,
       const Fortran::parser::Name *declare_variant_base_name = nullptr);
 
-  // Call back to the traversal framework for Expr
-  template <typename T> void Walk(/*const*/ T &x, SgExpression *sage) {
-    std::cerr << "--> TODO: make an expression visitor???\n";
-    Fortran::parser::Walk(x, *this);
-  }
-
-  // Call back to the traversal framework.
-  template <typename T, typename S> void Walk(T &x, S *sage) {
-    std::cerr << "--> TODO: What is this for???\n";
-    Fortran::parser::Walk(x, *this);
-  }
-
   void RegisterSemanticSymbol(const Fortran::semantics::Symbol *semantic,
                               SgSymbol *sage);
   void RegisterVisibleSemanticSymbol(const Fortran::semantics::Symbol *semantic,
@@ -233,13 +177,6 @@ public:
   IsVisibleSemanticGenericProcedure(const Fortran::semantics::Symbol *semantic,
                                     const SgName &local_name,
                                     SgScopeStatement *visibility_scope) const;
-  void RegisterStatementFunctionTypePlaceholder(
-      const Fortran::semantics::Symbol *semantic, SgVariableSymbol *sage);
-  SgVariableSymbol *LookupStatementFunctionTypePlaceholder(
-      const Fortran::semantics::Symbol *semantic) const;
-  SgVariableSymbol *ConsumeStatementFunctionTypePlaceholder(
-      const Fortran::semantics::Symbol *semantic,
-      SgScopeStatement *expected_scope);
   SgSymbol *
   LookupSemanticSymbol(const Fortran::semantics::Symbol *semantic) const;
   SgSymbol *LookupSemanticSymbol(const Fortran::semantics::Symbol *semantic,
@@ -263,6 +200,8 @@ public:
   SgClassSymbol *
   LookupSemanticClassSymbol(const Fortran::semantics::Symbol *semantic,
                             SgScopeStatement *semantic_scope) const;
+  SgClassSymbol *LookupCanonicalSemanticClassSymbol(
+      const Fortran::semantics::Symbol *semantic) const;
   SgClassSymbol *LookupSemanticClassSymbolInExactScope(
       const Fortran::semantics::Symbol *semantic,
       SgScopeStatement *exact_scope) const;
@@ -272,6 +211,8 @@ public:
       const Fortran::semantics::Symbol *semantic) const;
   SgVariableSymbol *
   LookupSemanticComponentSymbol(const Fortran::semantics::Symbol *semantic);
+  void PublishImportedDerivedTypeComponents(
+      const Fortran::semantics::Symbol &semantic, SgClassSymbol *published);
   void RegisterSemanticObjectType(const Fortran::semantics::Symbol *semantic,
                                   SgType *sage);
   SgType *
@@ -298,8 +239,6 @@ public:
   void RegisterSemanticNamelistGroup(const Fortran::semantics::Symbol *semantic,
                                      SgScopeStatement *scope,
                                      SgNameGroup *group);
-  bool IsVisibleSemanticNamelist(const Fortran::semantics::Symbol *semantic,
-                                 SgScopeStatement *semantic_scope) const;
   void RegisterSemanticGenericProcedureSpecific(
       const Fortran::semantics::Symbol *generic, const SgName &local_name,
       const Fortran::semantics::Symbol *specific, SgFunctionSymbol *sage,
@@ -381,9 +320,6 @@ public:
                                             const char *boundary);
   const Fortran::parser::CharBlock &
   RequireCurrentStatementSource(const char *producer) const;
-  const char *RequireCharacterLiteralSubstringSearchBegin() const;
-  void ConsumeCharacterLiteralSubstringSource(
-      const Fortran::parser::CharBlock &source);
 
   // ProgramUnit
   void Build(Fortran::parser::MainProgram &);
@@ -466,7 +402,7 @@ public:
   void Build(Fortran::parser::DeclarationTypeSpec::Class &x);
   void Build(Fortran::parser::DeclarationTypeSpec::TypeStar &x);
   void Build(Fortran::parser::DeclarationTypeSpec::ClassStar &x);
-  void Build(Fortran::parser::DeclarationTypeSpec::Record &x);
+  void Build(Fortran::parser::DeclarationTypeSpec::Record &);
 
   // ExecutionPart
   void Build(Fortran::parser::AssignmentStmt &);
@@ -477,6 +413,10 @@ public:
   void Build(Fortran::parser::IfConstruct &);
   void Build(Fortran::parser::IfStmt &);
   void Build(Fortran::parser::CaseConstruct &);
+  void Build(Fortran::parser::ChangeTeamConstruct &);
+  void Build(Fortran::parser::CriticalConstruct &);
+  void Build(Fortran::parser::SelectRankConstruct &);
+  void Build(Fortran::parser::SelectTypeConstruct &);
   void Build(Fortran::parser::WhereConstruct &);
   void Build(Fortran::parser::ForallConstruct &);
   void Build(Fortran::parser::WhereStmt &);
@@ -492,6 +432,7 @@ public:
   void Build(Fortran::parser::Statement<Fortran::parser::ActionStmt> &);
   void
   Build(Fortran::parser::UnlabeledStatement<Fortran::parser::ActionStmt> &);
+  void Build(Fortran::parser::ActionStmt &);
   void Build(Fortran::parser::Statement<Fortran::parser::WhereStmt> &);
   void Build(Fortran::parser::Statement<Fortran::parser::ForallStmt> &);
   void
@@ -502,6 +443,7 @@ public:
 
   // ActionStmt
   void Build(Fortran::parser::AllocateStmt &);
+  void Build(Fortran::parser::FormTeamStmt &);
   void Build(Fortran::parser::BackspaceStmt &);
   void Build(Fortran::parser::CloseStmt &);
   void Build(Fortran::parser::ContinueStmt &);
@@ -524,6 +466,12 @@ public:
   void Build(Fortran::parser::AssignStmt &);
   void Build(Fortran::parser::AssignedGotoStmt &);
   void Build(Fortran::parser::StopStmt &);
+  void Build(Fortran::parser::SyncAllStmt &);
+  void Build(Fortran::parser::SyncImagesStmt &);
+  void Build(Fortran::parser::SyncMemoryStmt &);
+  void Build(Fortran::parser::SyncTeamStmt &);
+  void Build(Fortran::parser::LockStmt &);
+  void Build(Fortran::parser::UnlockStmt &);
   void Build(Fortran::parser::WaitStmt &);
   void Build(Fortran::parser::WriteStmt &);
   void Build(Fortran::parser::PrintStmt &);
@@ -535,7 +483,6 @@ public:
 
   void BuildPrefix(std::list<Fortran::parser::PrefixSpec> &,
                    LanguageTranslation::FunctionModifierList &);
-  void BuildSuffix(Fortran::parser::Suffix &, std::string &);
 
   // Build types using a synthesized attribute
   void BuildType(Fortran::parser::DeclarationTypeSpec &x, SgType *&type) {
@@ -552,13 +499,9 @@ public:
       const Fortran::parser::CharLength &length,
       const Fortran::parser::CharBlock &statementSource, SgType *&result);
 
-  // Accessor for statement label
-  const std::vector<std::string> getLabels() const {
-    if (label_) {
-      std::vector<std::string> result{std::to_string(label_.value())};
-      return result;
-    }
-    return std::vector<std::string>{};
+  std::optional<int> getLabel() const {
+    return label_ ? std::optional<int>(static_cast<int>(*label_))
+                  : std::nullopt;
   }
 
   // Access functions for synthesized attributes
@@ -586,6 +529,15 @@ private:
       visitor_.PublishSemanticNameBeforeConsumption(name);
       return false;
     }
+    // ACCESS records visibility; it does not consume or declare its names.
+    bool Pre(Fortran::parser::AccessStmt &) { return false; }
+    bool Pre(Fortran::parser::EntryStmt &entry) {
+      // ENTRY produces its procedure name; its dummy and result names are
+      // consumed.
+      Fortran::parser::Walk(std::get<1>(entry.t), *this);
+      Fortran::parser::Walk(std::get<2>(entry.t), *this);
+      return false;
+    }
     template <typename T> bool Pre(T &) { return true; }
     template <typename T> void Post(T &) {}
 
@@ -602,7 +554,6 @@ private:
     std::optional<Fortran::parser::CharBlock> source;
     std::optional<SourcePositionPair> positions;
     SgScopeStatement *lexical_owner = nullptr;
-    const char *character_literal_substring_cursor = nullptr;
   };
 
   struct MaterializedFortranInclude {
@@ -643,11 +594,6 @@ private:
   struct SemanticCommonBlockBinding {
     SgScopeStatement *scope;
     SgCommonBlockObject *common_block;
-  };
-
-  struct SemanticNamelistBinding {
-    SgScopeStatement *scope;
-    std::vector<SgNameGroup *> groups;
   };
 
   struct SemanticGenericProcedureBinding {
@@ -736,10 +682,13 @@ private:
   void
   ConsumePrebuiltFortranUseStatements(Fortran::parser::SpecificationPart &spec);
   void PredeclareInternalSubprograms(
+      Fortran::parser::SpecificationPart &specification,
       std::optional<Fortran::parser::InternalSubprogramPart> &part);
   void PredeclareModuleSubprograms(
+      Fortran::parser::SpecificationPart &specification,
       std::optional<Fortran::parser::ModuleSubprogramPart> &part);
   void PredeclareContainedSubprograms(
+      Fortran::parser::SpecificationPart &specification,
       Fortran::parser::InternalSubprogramPart *internal_part,
       Fortran::parser::ModuleSubprogramPart *module_part);
   void ApplyStatementLabel(SgStatement *stmt, SgScopeStatement *scope) const;
@@ -820,14 +769,9 @@ private:
       active_directive_local_semantic_types_;
   std::unordered_map<const Fortran::semantics::Symbol *, SgTypeString *>
       provisional_dynamic_character_lengths_;
-  std::unordered_map<const Fortran::semantics::Symbol *, SgVariableSymbol *>
-      statement_function_type_placeholders_;
   std::unordered_map<const Fortran::semantics::Symbol *,
                      std::vector<SemanticCommonBlockBinding>>
       semantic_common_blocks_;
-  std::unordered_map<const Fortran::semantics::Symbol *,
-                     std::vector<SemanticNamelistBinding>>
-      semantic_namelists_;
   std::vector<SemanticGenericProcedureSpecificBinding>
       semantic_generic_procedure_specifics_;
   std::vector<PendingSemanticGenericInterfaceSpecific>

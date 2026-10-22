@@ -1,18 +1,7 @@
-// Author: Markus Schordan
-// $Id: AstReverseProcessing.h,v 1.3 2008/01/08 02:56:38 dquinlan Exp $
-
 #ifndef ASTREVERSEPROCESSING_H
 #define ASTREVERSEPROCESSING_H
 
-// tps (01/08/2010) Added sage3basic since this doesnt compile under gcc4.1.2
-// #include "sage3basic.h"
-// #include "sage3.h"
-
 #include "AstProcessing.h"
-
-//////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE PREFIX PROCESSING
-//////////////////////////////////////////////////////////////////////////////////////////
 
 template <typename InheritedAttributeType>
 class AstReversePrefixInhProcessing
@@ -55,10 +44,6 @@ protected:
           &succContainer);
 };
 
-//////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE BRANCH PROCESSING
-//////////////////////////////////////////////////////////////////////////////////////////
-
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 class AstReverseBranchInhSynProcessing
     : public AstTopDownBottomUpProcessing<InheritedAttributeType,
@@ -100,21 +85,6 @@ protected:
           SynthesizedAttributeType>::SuccessorsContainer &succContainer);
 };
 
-// Author: Markus Schordan
-// $Id: AstReverseProcessing.C,v 1.3 2008/01/08 02:56:38 dquinlan Exp $
-
-// DQ (3/12/2006): This is now not required, the file name is
-// changed to rose_config.h and is included directly by rose.h.
-// #ifdef HAVE_CONFIG_H
-// #include <config.h>
-// #endif
-
-//////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE PRFIX PROCESSING
-//////////////////////////////////////////////////////////////////////////////////////////
-
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class InheritedAttributeType>
 AstReversePrefixInhProcessing<
     InheritedAttributeType>::AstReversePrefixInhProcessing() {
@@ -130,8 +100,6 @@ void AstReversePrefixInhProcessing<InheritedAttributeType>::setNodeSuccessors(
   AstSuccessorsSelectors::selectReversePrefixSuccessors(node, succContainer);
 }
 
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class SynthesizedAttributeType>
 AstReversePrefixSynProcessing<
     SynthesizedAttributeType>::AstReversePrefixSynProcessing() {
@@ -147,8 +115,6 @@ void AstReversePrefixSynProcessing<SynthesizedAttributeType>::setNodeSuccessors(
   AstSuccessorsSelectors::selectReversePrefixSuccessors(node, succContainer);
 }
 
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 AstReversePrefixInhSynProcessing<
     InheritedAttributeType,
@@ -169,12 +135,6 @@ void AstReversePrefixInhSynProcessing<InheritedAttributeType,
   AstSuccessorsSelectors::selectReversePrefixSuccessors(node, succContainer);
 }
 
-//////////////////////////////////////////////////////////////////////////////////////////
-// REVERSE BRANCH PROCESSING
-//////////////////////////////////////////////////////////////////////////////////////////
-
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class InheritedAttributeType, class SynthesizedAttributeType>
 AstReverseBranchInhSynProcessing<
     InheritedAttributeType,
@@ -195,8 +155,6 @@ void AstReverseBranchInhSynProcessing<InheritedAttributeType,
   AstSuccessorsSelectors::selectReverseBranchSuccessors(node, succContainer);
 }
 
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class InheritedAttributeType>
 AstReverseBranchInhProcessing<
     InheritedAttributeType>::AstReverseBranchInhProcessing() {
@@ -212,8 +170,6 @@ void AstReverseBranchInhProcessing<InheritedAttributeType>::setNodeSuccessors(
   AstSuccessorsSelectors::selectReverseBranchSuccessors(node, succContainer);
 }
 
-// GB (09/25/2007): Added constructor to set flag to indicate that this is not a
-// default traversal.
 template <class SynthesizedAttributeType>
 AstReverseBranchSynProcessing<
     SynthesizedAttributeType>::AstReverseBranchSynProcessing() {

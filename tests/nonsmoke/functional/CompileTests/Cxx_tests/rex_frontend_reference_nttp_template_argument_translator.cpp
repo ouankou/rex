@@ -71,10 +71,40 @@ int main(int argc, char **argv) {
         referencedVariable(semantic_expression);
     ROSE_ASSERT(written_variable != nullptr);
     ROSE_ASSERT(written_variable == semantic_variable);
-    ROSE_ASSERT(written_variable->get_name() == "rex_reference_nttp_object");
+    if (written_variable->get_name() != "rex_reference_nttp_object") {
+      ROSE_ASSERT(written_variable->get_name() == "object");
+      auto *owner =
+          isSgTemplateInstantiationDefn(written_variable->get_scope());
+      ROSE_ASSERT(owner != nullptr);
+      auto *declaration =
+          isSgTemplateInstantiationDecl(owner->get_declaration());
+      ROSE_ASSERT(declaration != nullptr);
+      ROSE_ASSERT(declaration->get_templateName() == "RexReferenceNttpOwner");
+      ROSE_ASSERT(declaration->get_semanticTemplateArguments().size() == 1);
+      ROSE_ASSERT(isSgTypeInt(declaration->get_semanticTemplateArguments()
+                                  .front()
+                                  ->get_type()) != nullptr);
+    }
+    ROSE_ASSERT(instantiation->get_templateArguments().empty());
+    const auto &canonical_arguments =
+        instantiation->get_deducedTemplateArguments();
+    ROSE_ASSERT(canonical_arguments.size() == 1);
+    ROSE_ASSERT(canonical_arguments.front() != nullptr &&
+                canonical_arguments.front()->get_parent() == instantiation);
+    ROSE_ASSERT(SageInterface::isEquivalentType(
+        canonical_arguments.front()->get_type(), semantic.front()->get_type()));
+    SgExpression *canonical_expression =
+        canonical_arguments.front()->get_expression();
+    ROSE_ASSERT(referencedVariable(canonical_expression) == written_variable);
+    auto *canonical_reference = isSgVarRefExp(canonical_expression);
+    ROSE_ASSERT(canonical_reference != nullptr);
+    ROSE_ASSERT(canonical_reference->get_explicit_name_qualification_length() ==
+                -1);
+    ROSE_ASSERT(
+        canonical_reference->get_explicit_name_qualification_tokens().empty());
     ++matching_references;
   }
 
-  ROSE_ASSERT(matching_references == 1);
+  ROSE_ASSERT(matching_references == 2);
   return backend(project);
 }

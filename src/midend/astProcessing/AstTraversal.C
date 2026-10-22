@@ -1,21 +1,10 @@
-
-
-// Author: Markus Schordan
-// $Id: AstTraversal.C,v 1.3 2006/04/24 00:21:32 dquinlan Exp $
-
-#ifndef ASTRESTRUCTURE_C
-#define ASTRESTRUCTURE_C
-
 #include "AstTraversal.h"
 
 #include "sage3basic.h"
 
-// DQ (12/31/2005): This is OK if not declared in a header file
 using namespace std;
 
-void AstPreOrderTraversal::preOrderVisit(SgNode * /*node*/) {
-  // cout << "Visiting : " << node->sage_class_name() << endl;
-}
+void AstPreOrderTraversal::preOrderVisit(SgNode * /*node*/) {}
 
 void AstPreOrderTraversal::setChildrenContainer(SgNode *node,
                                                 std::vector<SgNode *> &c) {
@@ -77,5 +66,3 @@ void AstCycleTest::setChildrenContainer(SgNode *node,
 }
 
 void AstCycleTest::postOrderVisit(SgNode *) { activeNodes.pop_back(); }
-
-#endif

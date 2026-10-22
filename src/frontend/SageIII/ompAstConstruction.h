@@ -1,8 +1,7 @@
 #ifndef _OMP_AST_CONSTRUCTION
 #define _OMP_AST_CONSTRUCTION
 
-#include "AstSimpleProcessing.h"
-
+#include "Cxx_Grammar.h"
 #include "OpenMPIR.h"
 
 #include <cstddef>
@@ -249,17 +248,7 @@ private:
   friend struct OpenMPConversionSessionAccess;
 };
 
-class SgVarRefExpVisitor : public AstSimpleProcessing {
-private:
-  std::vector<SgExpression *> expressions;
-
-public:
-  SgVarRefExpVisitor();
-  std::vector<SgExpression *> get_expressions();
-  void visit(SgNode *node);
-};
-
-void processOpenMP(SgSourceFile *sageFilePtr);
+void processOpenMP(SgSourceFile *&sageFilePtr);
 
 void requireOpenMPConversionSession();
 void registerOpenACCCxxExactSemanticBindings(

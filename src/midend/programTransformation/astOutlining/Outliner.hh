@@ -27,6 +27,8 @@
 
 #include <cstdlib>
 
+#include <map>
+
 #include <set>
 
 #include <string>
@@ -41,6 +43,11 @@ class SgPragmaDeclaration;
 //@}
 
 namespace Outliner {
+// Exact source capture identities and their published formal parameters.
+// Names are output spelling; consumers must use these bindings for semantics.
+using OutlinedFunctionParameterBindings =
+    std::map<const SgVariableSymbol *, SgInitializedName *>;
+
 struct OutlinedLocalTypeTemplateEntry {
   SgType *source_type = nullptr;
   SgType *defining_parameter_type = nullptr;
@@ -194,49 +201,28 @@ const std::string DEFAULT_OUTPUT_PATH = "/tmp";
 // path to this file.
 ROSE_DLL_API extern std::string MASTER_SHARED_LIB_NAME;
 
-// DQ (7/13/2021): Save the SgSourceFile used when handling dynamic libraries.
-ROSE_DLL_API extern SgSourceFile *saved_source_file_for_dynamic_library;
-
 //! Stores the main results of an outlining transformation.
 struct Result {
   //! The outlined function's declaration and definition.
-  SgFunctionDeclaration *decl_;
+  SgFunctionDeclaration *decl_ = nullptr;
 
   //! A call statement to invoke the outlined function.
-  SgStatement *call_;
+  SgStatement *call_ = nullptr;
 
   //! A SgFile pointer to the newly generated source file containing the
   // outlined function if -rose:outline:new_file is specified (useNewFile==true)
-  SgFile *file_;
+  SgFile *file_ = nullptr;
 
-  // DQ (8/7/2019): Store data required to support defering the transformation
-  // to insert the outlined function prototypes into class declaration (when
-  // this is required to support the outlined function's access to protected or
-  // private data members).
-  SgDeclarationStatement *target_class_member;
-  SgDeclarationStatement *new_function_prototype;
-
-  // DQ (11/19/2020): DeferredTransformation support was moved to the
-  // SageInterface namespace to support more general usage. DQ (8/15/2019):
-  // Adding support to defere the transformations in header files (a performance
-  // improvement). DeferredTransformation deferredTransformation;
   SageInterface::DeferredTransformation deferredTransformation;
 
-  // DQ (12/5/2019): Added ROSE_DLL_API for shared-library symbol visibility.
   ROSE_DLL_API Result(void); //! Sets all fields to 0
 
-  // DQ (11/19/2020): DeferredTransformation support was moved to the
-  // SageInterface namespace to support more general usage. DQ (8/15/2019):
-  // Adding support to defere the transformations in header files (a performance
-  // improvement). Result (SgFunctionDeclaration *, SgStatement *, SgFile*
-  // file=NULL); ROSE_DLL_API Result (SgFunctionDeclaration *, SgStatement *,
-  // SgFile* file, DeferredTransformation deferredTransformation);
   ROSE_DLL_API
   Result(SgFunctionDeclaration *, SgStatement *, SgFile *file,
          SageInterface::DeferredTransformation deferredTransformation);
 
   ROSE_DLL_API Result(const Result &);   //! Copy constructor.
-  ROSE_DLL_API ~Result(void){};          //! Shallow; does not delete fields.
+  ROSE_DLL_API ~Result(void) = default;  //! Shallow; does not delete fields.
   ROSE_DLL_API bool isValid(void) const; //! Returns true iff result is usable
 };
 
@@ -355,9 +341,10 @@ Result outlineBlock(SgBasicBlock *b, const std::string &name,
  * focus on generic operations while the caller should handle their special
  * variables in advance.
  */
-void collectVars(const SgStatement *s, ASTtools::VarSymSet_t &syms);
-// void collectVars (const SgStatement* s, ASTtools::VarSymSet_t& syms,
-// ASTtools::VarSymSet_t& private_syms);
+// Inspect root without changing its ownership. outline_site supplies lexical
+// visibility when root is a type-owned expression rather than a statement.
+void collectVars(const SgNode *root, const SgStatement *outline_site,
+                 ASTtools::VarSymSet_t &syms);
 
 /*!\brief Generate a new source file under the same SgProject as
  * target, the file's base name is file_name_str. Suffix is automatically
@@ -367,24 +354,17 @@ ROSE_DLL_API SgSourceFile *generateNewSourceFile(SgBasicBlock *target,
                                                  const std::string &file_name);
 
 /*!\brief Obtain the file handle to the separated source file storing outlined
- * functions. This file will be compiled to .so dynamically loadable library.
+ * functions. In dlopen mode, the outliner leaves this source enabled for
+ * unparsing and excludes it from the main program's compile/link step; the
+ * caller compiles it separately as a shared library.
  * target is the input code block for outlining. It provides SgProject and input
  * file name info. the lib source file's name convention is
  * rose_input_lib.[c|cxx].
  */
 ROSE_DLL_API SgSourceFile *getLibSourceFile(SgBasicBlock *target);
-
-// DQ (3/20/2019): This function operates on the new file used to support
-// outlined function definitions.
-/* \brief XXX
- * This function operates on the new file used to support outlined function
- * definitions. We use a copy of the file where the code will be outlined FROM,
- * so that if there are references to declarations in the outlined code we can
- * support the outpiled code with those references.  This approach has the added
- * advantage of also supporting the same include file tree as the original file
- * where the outlined code is being taken from.
- */
-// ROSE_DLL_API void replaceFunctionDefinitionsWithDeclarations(SgNode *node);
+ROSE_DLL_API SgSourceFile *
+getLibSourceFile(SgBasicBlock *target,
+                 const std::vector<SgFunctionDeclaration *> &definitionsToMove);
 
 /*!\brief the lib source file's name convention is rose_input_lib.[c|cxx].
  *
@@ -393,6 +373,8 @@ ROSE_DLL_API SgSourceFile *getLibSourceFile(SgBasicBlock *target);
  *
  */
 ROSE_DLL_API std::string generateLibSourceFileName(SgBasicBlock *target);
+
+ROSE_DLL_API SgType *captureValueType(SgType *type);
 
 /*!\brief Generate a struct declaration to wrap all variables to be passed to
  * the outlined function There are two ways to wrap a variable: Using its value
@@ -446,10 +428,7 @@ SgClassDeclaration *generateParameterStructureDeclaration(
  *
  *  \pre The statement does not contain non-local control flow.
  */
-// DQ (2/25/2009): Modified function interface to pass "SgBasicBlock*" as not
-// const parameter. SgFunctionDeclaration* generateFunction (const SgBasicBlock*
-// s,const std::string& func_name_str,const ASTtools::VarSymSet_t&
-// syms,SgScopeStatement* scope);
+//! Consumes an optional detached leading parameter list before publication.
 ROSE_DLL_API
 SgFunctionDeclaration *generateFunction(
     SgBasicBlock *s, const std::string &func_name_str,
@@ -457,16 +436,14 @@ SgFunctionDeclaration *generateFunction(
     const ASTtools::VarSymSet_t &
         pdSyms, // variables using their addresses as parameters of the outlined
                 // functions, compared to use their values (pass-by-value)
-    // const std::set<SgInitializedName*>& readOnlyVars, // optional
-    // readOnlyVariables to optimize type of parameter when no wrapper is used.
-    // const std::set< SgInitializedName *>& liveOuts, // optional live out
-    // variables to optimize away the copy-back statements in variable cloning
     const std::set<SgInitializedName *>
         &restoreVars, // variables need to be restored after their clones finish
                       // computation
     SgClassDeclaration *struct_decl, /*optional struct type to wrap parameters*/
     SgScopeStatement *scope,
-    OutlinedLocalTypeTemplatePlan &local_type_template_plan);
+    OutlinedLocalTypeTemplatePlan &local_type_template_plan,
+    OutlinedFunctionParameterBindings &parameter_bindings,
+    SgFunctionParameterList *leading_parameters = nullptr);
 
 //! Generate packing (wrapping) statements for the variables to be passed
 // return the unique wrapper parameter for the outlined function

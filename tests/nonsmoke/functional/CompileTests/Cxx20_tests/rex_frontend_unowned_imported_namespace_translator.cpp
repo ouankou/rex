@@ -1,3 +1,4 @@
+#include "clang-decl-utils.hpp"
 #include "clang-frontend-private.hpp"
 #include "nodeQuery.h"
 #include "rose.h"
@@ -11,6 +12,7 @@
 #include <clang/Basic/IdentifierTable.h>
 #include <clang/Basic/LangOptions.h>
 #include <clang/Basic/SourceManager.h>
+#include <set>
 #include <string>
 
 namespace {
@@ -84,6 +86,21 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(definition->get_file_info()->isFrontendSpecific());
   }
   ROSE_ASSERT(namespace_count == 1);
+  std::set<SgFunctionDeclaration *> callees;
+  for (auto *node : NodeQuery::querySubTree(project, V_SgFunctionCallExp)) {
+    auto *call = isSgFunctionCallExp(node);
+    auto *function = call->getAssociatedFunctionDeclaration();
+    ROSE_ASSERT(function != nullptr);
+    auto *canonical =
+        Rose::ClangFrontend::canonical_function_identity(function);
+    ROSE_ASSERT(canonical != nullptr);
+    auto *symbol = canonical->get_symbol_from_symbol_table();
+    ROSE_ASSERT(symbol != nullptr && symbol->get_symbol_basis() == canonical);
+    ROSE_ASSERT(symbol->get_parent() ==
+                canonical->get_scope()->get_symbol_table());
+    callees.insert(canonical);
+  }
+  ROSE_ASSERT(callees.size() == 3);
   const SgStringList &externals =
       source->get_frontendExternalOwnershipPathList();
   ROSE_ASSERT(

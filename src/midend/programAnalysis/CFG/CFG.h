@@ -34,26 +34,6 @@ void BuildCFG(AstInterface &fa, const AstInterface::AstNodeList &head,
               BuildCFGConfig<Node> &g);
 }; // namespace ROSE_Analysis
 
-namespace OpenAnalysis {
-class CFG;
-class ROSE_CFG_Wrap {
-  CFG *oaCfg;
-
-public:
-  ROSE_CFG_Wrap(const AstNodePtr &head);
-  ~ROSE_CFG_Wrap();
-
-  CFG &get_OA_CFG() const { return *oaCfg; }
-};
-
-template <class Node>
-void OA2ROSE_CFG_Translate(ROSE_CFG_Wrap &wrap, BuildCFGConfig<Node> &ng);
-
-template <class Node>
-void BuildCFG(AstInterface &fa, const AstNodePtr &head,
-              BuildCFGConfig<Node> &g);
-}; // namespace OpenAnalysis
-
 bool debug_cfg();
 
 inline std::string CFGConfig::EdgeType2String(EdgeType e) {
@@ -101,7 +81,6 @@ private:
     if (s == AST_NULL)
       return true;
     AstNodeList stmts;
-    AstNodePtr first;
     if (fa.IsBlock(s, 0, &stmts) && stmts.size() == 0) {
       if (debug_cfg())
         std::cerr << "block " << AstInterface::AstToString(s) << " is empty "
@@ -110,12 +89,7 @@ private:
     } else {
       if (debug_cfg()) {
         std::cerr << "block " << AstInterface::AstToString(s)
-                  << " is not empty ";
-        if (first != AST_NULL)
-          std::cerr << "first statement: " << AstInterface::AstToString(first)
-                    << std::endl;
-        else
-          std::cerr << std::endl;
+                  << " is not empty " << std::endl;
       }
     }
     return false;
@@ -138,7 +112,6 @@ private:
     switch (t) {
     case EXIT:
       exitMap.InsertMapping(s.get_ptr(), n);
-      break;
       break;
     case START:
       startMap.InsertMapping(s.get_ptr(), n);
@@ -282,6 +255,10 @@ private:
             (!isPostLoop && IsCurNodeEmpty()) ? AddStmt(fa, lastNode, cond),
         lastNode                              : MapStmt(fa, cond, START, true);
 
+        if (const auto value = fa.GetRuntimeDeclarationCondition(s);
+            value != AST_NULL)
+          AddStmt(fa, testNode, value);
+
         if (!isPostLoop) {
           AddBranch(lastNode, testNode, BuildCFGConfig<Node>::ALWAYS);
         } else {
@@ -338,11 +315,41 @@ private:
     }
     Node *exitNode = MapStmt(fa, s, EXIT);
 
+    AstNodePtr selectedBody, runtimeCondition;
+    if (fa.IsIfWithKnownRuntimeBranch(s, &selectedBody, &runtimeCondition)) {
+      if (t == AstInterface::PreVisit) {
+        Node *lastNode = GetCurNode();
+        if (runtimeCondition != AST_NULL)
+          AddStmt(fa, lastNode, runtimeCondition);
+        if (!IsBodyEmpty(fa, selectedBody)) {
+          Node *bodyNode = MapStmt(fa, selectedBody, START);
+          AddBranch(lastNode, bodyNode, CFGConfig::ALWAYS);
+          SetStmtNode(selectedBody, exitNode, EXIT);
+          SetCurNode(bodyNode);
+        } else {
+          AddBranch(lastNode, exitNode, CFGConfig::ALWAYS);
+          SetCurNode(exitNode);
+        }
+        this->Skip(s);
+        if (selectedBody != AST_NULL)
+          this->SkipUntil(selectedBody);
+      } else {
+        Node *lastNode = GetCurNode(false);
+        if (lastNode != nullptr)
+          AddBranch(lastNode, exitNode, CFGConfig::ALWAYS);
+        SetCurNode(exitNode);
+      }
+      return true;
+    }
+
     if (t == AstInterface::PreVisit) {
       Node *lastNode = GetCurNode();
       assert(cond != AST_NULL);
       Node *testNode = IsCurNodeEmpty() ? AddStmt(fa, lastNode, cond)
                                         : MapStmt(fa, cond, START, true);
+      if (const auto value = fa.GetRuntimeDeclarationCondition(s);
+          value != AST_NULL)
+        AddStmt(fa, testNode, value);
       AddBranch(lastNode, testNode, CFGConfig::ALWAYS);
       Node *falseNode =
           IsBodyEmpty(fa, falseBody) ? 0 : MapStmt(fa, falseBody, START);
@@ -447,15 +454,10 @@ private:
       AddStmt(fa, lastNode, s);
     else if (n == 0 && IsCurNodeEmpty()) {
       AddStmt(fa, lastNode, s);
-      SetStmtNode(s, lastNode, START);
     } else if (n != 0) {
-      if (n == 0) {
-        n = MapStmt(fa, s, START, true);
-      } else
-        AddStmt(fa, n, s);
+      AddStmt(fa, n, s);
       AddBranch(lastNode, n, CFGConfig::ALWAYS);
       SetCurNode(n);
-      SetStmtNode(s, n, START);
     }
     return ProcessAstTree::ProcessStmt(fa, s);
   }
@@ -473,10 +475,7 @@ void ROSE_Analysis::BuildCFG(AstInterface &fa,
                              const AstInterface::AstNodeList &stmts,
                              BuildCFGConfig<Node> &g) {
   BuildCFGTraverse<Node> op(g);
-  for (AstInterface::AstNodeList::const_iterator p = stmts.begin();
-       p != stmts.end(); ++p) {
-    op(fa, *p);
-  }
+  op(fa, stmts);
 }
 
 #endif

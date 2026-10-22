@@ -5,9 +5,6 @@
 
 #include "clang-decl-utils.hpp"
 #include "clang-frontend-private.hpp"
-#include "clang-frontend-utils.hpp"
 #include "clang-nns-utils.hpp"
-#include "clang-to-dot-private.hpp"
-#include "clang-to-rose-support.hpp"
 
 #endif

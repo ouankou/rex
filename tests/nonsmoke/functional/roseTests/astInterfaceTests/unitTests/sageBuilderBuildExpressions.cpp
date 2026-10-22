@@ -20,14 +20,6 @@ TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgLongIntVal2) {
   EXPECT_EQ(is<SgLongIntVal>(p), true);
   EXPECT_EQ(p->get_value(), 0);
 }
-/*
-TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgLongIntVal3) {
-  SgLongIntVal *p = SageBuilder::buildLongIntValHex(0);
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgLongIntVal>(p), true);
-  EXPECT_EQ(p->get_value(), 0);
-}
-*/
 TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgShortVal4) {
   SgShortVal *p = SageBuilder::buildShortVal(0);
   ASSERT_EQ(isNull(p), false);
@@ -118,14 +110,6 @@ TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgLongIntVal16) {
   EXPECT_EQ(is<SgLongIntVal>(p), true);
   EXPECT_EQ(p->get_value(), 42);
 }
-/*
-TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgLongIntVal17) {
-  SgLongIntVal *p = SageBuilder::buildLongIntValHex(42);
-  ASSERT_EQ(isNull(p), false);
-  EXPECT_EQ(is<SgLongIntVal>(p), true);
-  EXPECT_EQ(p->get_value(), 42);
-}
-*/
 TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgShortVal18) {
   SgShortVal *p = SageBuilder::buildShortVal(42);
   ASSERT_EQ(isNull(p), false);
@@ -195,4 +179,3 @@ TEST(GeneratedSageBuilderBuildExpressionTestSuite, buildSgUnsignedLongLongIntVal
   EXPECT_EQ(is<SgUnsignedLongLongIntVal>(p), true);
   EXPECT_EQ(p->get_value(), 42);
 }
-

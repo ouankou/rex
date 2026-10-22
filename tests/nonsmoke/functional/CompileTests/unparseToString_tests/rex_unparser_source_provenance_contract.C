@@ -159,9 +159,14 @@ int main(int argc, char **argv) {
     SgIntVal *rhs = markTransformation(SageBuilder::buildIntVal_nfi(2, "2"));
     SgAddOp *owner = markTransformation(
         SageBuilder::buildAddOp(lhs, rhs, SageBuilder::buildIntType()));
-    SgFunctionCallExp *semantic_call = markTransformation(new SgFunctionCallExp(
-        static_cast<SgExpression *>(nullptr),
-        static_cast<SgExprListExp *>(nullptr), static_cast<SgType *>(nullptr)));
+    auto *type = SageBuilder::buildIntType();
+    auto *signature = SageBuilder::buildFunctionType(
+        type, SageBuilder::buildFunctionParameterTypeList());
+    auto *callee = SageBuilder::buildCastExp(
+        SageBuilder::buildIntVal(0), SageBuilder::buildPointerType(signature),
+        SgCastExp::e_reinterpret_cast);
+    auto *semantic_call = SageBuilder::buildFunctionCallExp(
+        callee, type, SageBuilder::buildExprListExp());
     owner->set_originalExpressionTree(semantic_call);
     semantic_call->set_parent(owner);
     unparseWithCxxContext(owner);

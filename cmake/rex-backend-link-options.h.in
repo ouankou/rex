@@ -1,0 +1,17 @@
+#ifndef REX_BACKEND_LINK_OPTIONS_H
+#define REX_BACKEND_LINK_OPTIONS_H
+
+#include <initializer_list>
+
+namespace RexBackend {
+constexpr std::initializer_list<const char *> cCompilerCommand{
+@BACKEND_C_COMPILER_COMMAND_CPP@};
+constexpr std::initializer_list<const char *> cxxCompilerCommand{
+@BACKEND_CXX_COMPILER_COMMAND_CPP@};
+constexpr std::initializer_list<const char *> fortranCompilerCommand{
+@BACKEND_FORTRAN_COMPILER_COMMAND_CPP@};
+constexpr std::initializer_list<const char *> cxxRuntimeLinkOptions{
+@REX_CXX_RUNTIME_LINK_OPTIONS_CPP@};
+}
+
+#endif

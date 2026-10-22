@@ -6,71 +6,20 @@
 
 #include "mlog.h"
 
-#include "rose_paths.h"
-
 #include <algorithm>
 
 #include <filesystem>
 
-#include <iostream>
-
-#include <iterator>
-
-#include <string.h>
-
 #include <vector>
 
-// Use Brian Gunney's String List Assignent (SLA) library
 #include "sla.h"
 
-#include <time.h>
-
-// DQ (12/31/2005): This is allowed in C files where it can not
-// effect the users application (just not in header files).
 using namespace std;
 
 Rose_STL_Container<std::string>
     CommandlineProcessing::extraCppSourceFileSuffixes;
 
-// DQ (7/8/2005):
-Rose_STL_Container<string>
-CommandlineProcessing::generateArgListFromString(string commandline) {
-  Rose_STL_Container<string> argList;
-
-  // DQ (12/21/2006): Required to be long to avoid "if (subStringEnd ==
-  // string::npos)" always evaluating to false.
-  unsigned long int subStringStart = 0;
-  unsigned long int subStringEnd = commandline.find(" ");
-
-  // printf ("commandline.size() = %ld \n",commandline.size());
-  while (subStringStart < commandline.size()) {
-    string subString =
-        commandline.substr(subStringStart, subStringEnd - subStringStart);
-    // printf ("subString (%ld,%ld) = %s
-    // \n",subStringStart,subStringEnd,subString.c_str());
-
-    // DQ (8/1/2005): Fix suggested by Milind (supporting astMerge in
-    // compilation of multiple files) subStringStart = subStringEnd;
-    // subStringEnd   = commandline.find(" ",subStringStart+1);
-    subStringStart = subStringEnd + 1;
-    subStringEnd = commandline.find(" ", subStringStart);
-
-    // printf ("New values subStringStart = %ld subStringEnd = %ld
-    // \n",subStringStart,subStringEnd);
-    if (subStringEnd == string::npos) {
-      subStringEnd = commandline.size();
-      // printf ("Reset subStringEnd = %ld \n",subStringEnd);
-    }
-
-    argList.push_back(subString);
-  }
-
-  return argList;
-}
-
 //! Convert a vector of string to a single string
-// std::string CommandlineProcessing::generateStringFromArgList(
-// Rose_STL_Container<std::string> & argList)
 std::string CommandlineProcessing::generateStringFromArgList(
     const Rose_STL_Container<std::string> &argList) {
   string result;
@@ -85,9 +34,8 @@ std::string CommandlineProcessing::generateStringFromArgList(
 
 Rose_STL_Container<string>
 CommandlineProcessing::generateArgListFromArgcArgv(int argc,
-                                                   const char *argv[]) {
+                                                   const char *const argv[]) {
   Rose_STL_Container<string> argList;
-  // printf ("In generateArgListFromArgcArgv(): argc = %d \n",argc);
   for (int i = 0; i < argc; i++) {
     if (argv[i] != NULL)
       argList.push_back(argv[i]);
@@ -96,119 +44,23 @@ CommandlineProcessing::generateArgListFromArgcArgv(int argc,
   return argList;
 }
 
-string CommandlineProcessing::generateStringFromArgList(
-    Rose_STL_Container<string> argList, bool skipInitialEntry,
-    bool skipSourceFiles) {
-  string returnString;
-
-  for (Rose_STL_Container<string>::iterator i = argList.begin();
-       i != argList.end(); ++i) {
-    if (skipInitialEntry && i == argList.begin())
-      continue;
-    if (skipSourceFiles == true) {
-      string arg = *i;
-      string suffix = "";
-      if (arg.length() > 2)
-        suffix = arg.substr(arg.size() - 2);
-      if (suffix == ".C") {
-        // DQ (5/13/2004): It was not a great idea to put this filter into this
-        // function remove it and handle the filtering of definition_list_file
-        // better ...  later!
-        continue;
-      }
-    }
-    // returnString += *i;
-    returnString += *i + " ";
-  }
-
-  // printf ("In generateStringFromArgList(): returnString = %s
-  // \n",returnString.c_str());
-
-  return returnString;
-}
-
-void CommandlineProcessing::generateArgcArgvFromList(
-    Rose_STL_Container<string> argList, int &argc, char **&argv) {
-  // Build the modified argc and argv (returned by reference)
-  if (argv != NULL) {
-    printf("Error: argv input shoud be NULL! \n");
-    ROSE_ABORT();
-  }
-
-  ROSE_ASSERT(argv == NULL);
-  argc = argList.size();
-  argv = (char **)malloc((argc + 1) * sizeof(char **));
-  ROSE_ASSERT(argv != NULL);
-  argv[argc] = NULL;
-  for (int i = 0; i < argc; i++) {
-    // DQ (9/25/2007): Moved from std::list to std::vector.
-    // string tempString = argList.front();
-    // argList.pop_front();
-    string tempString = argList[i];
-    // argList.erase(argList.begin());
-
-    int length = tempString.length();
-    argv[i] = (char *)malloc((length + 1) * sizeof(char));
-    strcpy(argv[i], tempString.c_str());
-    // printf ("argv[%d] = %s \n",i,argv[i]);
-  }
-}
-
-void CommandlineProcessing::deleteArgcArgv(int argc, char **argv) {
-  if (argv == nullptr)
-    return;
-
-  for (int i = 0; i < argc; i++) {
-    free(argv[i]);
-  }
-  free(argv);
-}
-
 void CommandlineProcessing::removeArgs(vector<string> &argv, string prefix) {
-  int prefixLength = prefix.length();
-
-  // printf ("In CommandlineProcessing::removeArgs prefix = %s prefixLength = %d
-  // \n",prefix.c_str(),prefixLength);
-
-  for (unsigned int i = 0; i < argv.size(); i++) {
-    string argString = argv[i];
-    // printf ("argString = %s \n",argString.c_str());
-
-    if (argString.substr(0, prefixLength) == prefix) {
-      // printf ("Found an option to remove (removeArgs): %s
-      // \n",argString.c_str());
-
-      // keep track of elements so that they can be deleted later (after exit
-      // from loop over the eleents)
-      argv.erase(argv.begin() + i);
-      --i; // To counteract the i++ in the loop header
-    }
+  for (auto it = argv.begin(); it != argv.end();) {
+    if (it->compare(0, prefix.size(), prefix) == 0)
+      it = argv.erase(it);
+    else
+      ++it;
   }
 }
 
 void CommandlineProcessing::removeArgsWithParameters(vector<string> &argv,
                                                      string prefix) {
-  unsigned int prefixLength = prefix.length();
-
-  // printf ("In CommandlineProcessing::removeArgs prefix = %s prefixLength = %d
-  // \n",prefix.c_str(),prefixLength);
-
-  for (unsigned int i = 0; i < argv.size(); i++) {
-    string argString = argv[i];
-
-    // printf ("i = %d argString = %s \n",i,argString.c_str());
-
-    if ((argString.length() >= prefixLength) &&
-        argString.substr(0, prefixLength) == prefix) {
-      // printf ("Found an option to remove (removeArgsWithParameters): %s
-      // \n",argString.c_str());
+  for (size_t i = 0; i < argv.size();) {
+    if (argv[i].compare(0, prefix.size(), prefix) == 0) {
       ROSE_ASSERT(i + 1 < argv.size());
-
-      // printf ("Argv[%d] = %s %s \n",i,argv[i],argv[i+1]);
-
       argv.erase(argv.begin() + i, argv.begin() + i + 2);
-      --i; // To counteract the i++ in the loop header
-    }
+    } else
+      ++i;
   }
 }
 //! Remove file names specified in filenameList from argv, except for
@@ -217,91 +69,14 @@ void CommandlineProcessing::removeAllFileNamesExcept(
     vector<string> &argv, Rose_STL_Container<std::string> filenameList,
     std::string exceptFilename) {
 
-  vector<string>::iterator argv_iter = argv.begin();
-  while (argv_iter != argv.end()) {
-    string argString = *(argv_iter);
-    bool shouldDelete = false;
-
-    Rose_STL_Container<std::string>::iterator filenameIterator =
-        filenameList.begin();
-    while (filenameIterator != filenameList.end()) {
-      // DQ (1/17/2009): This is a match with filenameIterator = a.out and
-      // argString = a.out.new! I think we only want to do anything about exact
-      // matches. if ( argString.substr(0,filenameIterator->size()) ==
-      // *filenameIterator )
-      if (argString == *filenameIterator) {
-        if (*filenameIterator != exceptFilename) {
-          shouldDelete = true;
-          break;
-        }
-      }
-      filenameIterator++;
-    } // end while filename iterator
-
-    if (shouldDelete) {
-      // vector::erase() return a random access iterator pointing to the new
-      // location of the element that followed the last element erased by the
-      // function call Essentially, it returns an iterator points to next
-      // element.
-      argv_iter = argv.erase(argv_iter);
-    } else
-      argv_iter++;
-  } // end while argv_iter
-}
-
-Rose_STL_Container<string> CommandlineProcessing::generateOptionList(
-    const Rose_STL_Container<string> &argList, string inputPrefix) {
-  // This function returns a list of options using the inputPrefix (with the
-  // inputPrefix stripped off). It does NOT modify the argList passed as a
-  // reference.
-  Rose_STL_Container<string> optionList;
-  unsigned int prefixLength = inputPrefix.length();
-  for (Rose_STL_Container<string>::const_iterator i = argList.begin();
-       i != argList.end(); i++) {
-    if ((*i).substr(0, prefixLength) == inputPrefix) {
-      // get the rest of the string as the option
-      string option = (*i).substr(prefixLength);
-      optionList.push_back(option);
-    }
-  }
-  return optionList;
-}
-
-Rose_STL_Container<string>
-CommandlineProcessing::generateOptionWithNameParameterList(
-    Rose_STL_Container<string> &argList, string inputPrefix, string newPrefix) {
-  // This function returns a list of options using the inputPrefix (with the
-  // inputPrefix stripped off and replaced if new Prefix is provided.
-  // It also modified the input argList to remove matched options.
-
-  Rose_STL_Container<string> optionList;
-  Rose_STL_Container<string> deleteList;
-  int prefixLength = inputPrefix.length();
-  Rose_STL_Container<string>::iterator it = argList.begin();
-  while (it != argList.end()) {
-    if (it->substr(0, prefixLength) == inputPrefix) {
-      // get the rest of the string as the option
-      optionList.push_back((newPrefix == "")
-                               ? it->substr(prefixLength)
-                               : newPrefix + it->substr(prefixLength));
-      it = argList.erase(it);
-
-      // That sounds real buggy as to detect if an option has parameters it
-      // assumes inputPrefix-ed options are consecutive.
-      if (it->substr(0, prefixLength) != inputPrefix) {
-        optionList.push_back(*it);
-        it = argList.erase(it);
-
-      } else {
-        printf("Error: missing parameter in option with parameter \n");
-        ROSE_ABORT();
-      }
-    } else {
+  for (auto it = argv.begin(); it != argv.end();) {
+    if (*it != exceptFilename &&
+        std::find(filenameList.begin(), filenameList.end(), *it) !=
+            filenameList.end())
+      it = argv.erase(it);
+    else
       ++it;
-    }
   }
-
-  return optionList;
 }
 
 bool CommandlineProcessing::isOption(vector<string> &argv, string optionPrefix,
@@ -313,19 +88,11 @@ bool CommandlineProcessing::isOption(vector<string> &argv, string optionPrefix,
   return (optionCount > 0);
 }
 
-// Available options are: string,float,double,int,short,long,unsigned int,
-// unsigned short, unsigned long, char
-
-// DQ (2/12/2004): All parameters are handled as strings so no type
-// specialization is required
 bool CommandlineProcessing::isOptionWithParameter(vector<string> &argv,
                                                   string optionPrefix,
                                                   string option,
                                                   int &optionParameter,
                                                   bool removeOption) {
-  // Use 1 at end of argument list to SLA to force removal of option from argv
-  // and decrement of argc int optionCount = sla(&argc, argv,
-  // optionPrefix.c_str(), "($)", option.c_str(), removeOption);
   int localOptionParameter = 0;
   int optionCount = sla(argv, optionPrefix, "($)^", option,
                         &localOptionParameter, removeOption ? 1 : -1);
@@ -348,94 +115,52 @@ bool CommandlineProcessing::isOptionWithParameter(vector<string> &argv,
 
 void CommandlineProcessing::addListToCommandLine(
     vector<string> &argv, string prefix, Rose_STL_Container<string> argList) {
-  // bool outputPrefix = false;
-  // for (unsigned int i = 0; i < argList.size(); ++i)
   for (size_t i = 0; i < argList.size(); ++i) {
-    // DQ (1/25/2017): Original version of code (required for C test codes to
-    // pass, see C_tests directory). However, this causes a problem for the
-    // frontend-parameter support (which is fixed by the code below).
     argv.push_back(prefix + argList[i]);
   }
 }
 
-// PC (4/27/2006): Support for custom source file suffixes
 bool CommandlineProcessing::isSourceFilename(string name) {
-  initSourceFileSuffixList();
+  static constexpr const char *sourceSuffixes[] = {
+      ".c",   ".i",   ".h",   ".C",    ".cc",   ".CC",   ".cp",  ".c++",
+      ".C++", ".cpp", ".CPP", ".cxx",  ".CXX",  ".H",    ".hh",  ".hpp",
+      ".hxx", ".ii",  ".ccm", ".c++m", ".cppm", ".cxxm", ".iim", ".iih",
+      ".cu",  ".cui", ".ocl", ".cl",   ".cli"};
 
-  // Move to using a consistent mechanism for determining source file names
-  // using CommandlineProcessing [Rasmussen 2024.04.19]
-
-  // Use std::filesystem for file suffix inspection.
-  string suffix = std::filesystem::path(name).extension().string();
-  if (suffix.size() && suffix[0] == '.') {
-    // Remove '.' from filename extension
-    suffix = suffix.substr(1, suffix.size() - 1);
-  }
+  const string extension = std::filesystem::path(name).extension().string();
+  const string suffix = extension.empty() ? "" : extension.substr(1);
 
   if (CommandlineProcessing::isFortranFileNameSuffix(suffix))
     return true;
 
-  int length = name.size();
-  for (string &suffix : validSourceFileSuffixes) {
-    int jlength = suffix.size();
-    if ((length > jlength) &&
-        (name.compare(length - jlength, jlength, suffix) == 0)) {
-      return true;
-    }
-  }
-
-  for (string &suffix : extraCppSourceFileSuffixes) {
-    int jlength = suffix.size();
-    if ((length > jlength) &&
-        (name.compare(length - jlength, jlength, suffix) == 0)) {
-      return true;
-    }
-  }
-  return false;
+  const bool builtInSource =
+      std::find(std::begin(sourceSuffixes), std::end(sourceSuffixes),
+                extension) != std::end(sourceSuffixes);
+  const bool customCppSource =
+      std::find(extraCppSourceFileSuffixes.begin(),
+                extraCppSourceFileSuffixes.end(),
+                suffix) != extraCppSourceFileSuffixes.end();
+  return builtInSource || customCppSource;
 }
 
 bool CommandlineProcessing::isObjectFilename(string name) {
-  initObjectFileSuffixList();
-
-  int length = name.size();
-  for (string &suffix : validObjectFileSuffixes) {
-    int jlength = suffix.size();
-    if ((length > jlength) &&
-        (name.compare(length - jlength, jlength, suffix) == 0)) {
-      return true;
-    }
-  }
-
-  return false;
+  const string extension = std::filesystem::path(name).extension().string();
+  return extension == ".o" || extension == ".obj";
 }
 
 void CommandlineProcessing::addCppSourceFileSuffix(const string &suffix) {
+  if (suffix.empty() || suffix.find('.') != string::npos) {
+    fprintf(stderr,
+            "Invalid C++ source suffix '%s': expected one extension "
+            "component without a dot\n",
+            suffix.c_str());
+    ROSE_ABORT();
+  }
   extraCppSourceFileSuffixes.push_back(suffix);
 }
 
-// Rama
-// Also refer to the code in functions isCppFileNameSuffix  Dan and I added in
-// StringUtility For now define CASE_SENSITIVE_SYSTEM to be true, as we are
-// currently a UNIXish project.
-#ifndef CASE_SENSITIVE_SYSTEM
-#define CASE_SENSITIVE_SYSTEM 1
-#endif
-
 bool CommandlineProcessing::isCFileNameSuffix(const std::string &suffix) {
-  // Returns true only if this is a valid C source file name extension (suffix)
-
-  // C source files conventionally use the suffixes ".c", C header files often
-  // use ".h".
-
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-  if (suffix == "c" || suffix == "i" || suffix == "h")
-    returnValue = true;
-
-  return returnValue;
+  return suffix == "c" || suffix == "i" || suffix == "h";
 }
 
 bool CommandlineProcessing::isAssemblerFileNameSuffix(
@@ -446,337 +171,98 @@ bool CommandlineProcessing::isAssemblerFileNameSuffix(
 }
 
 bool CommandlineProcessing::isCppFileNameSuffix(const std::string &suffix) {
-  // Returns true only if this is a valid C++ source file name extension
-  // (suffix)
-
-  // C++ source files conventionally use one of the suffixes .C, .cc, .cpp,
-  // .CPP, .c++, .cp, or .cxx; C++ header files often use .hh or .H; and
-  // preprocessed C++ files use the suffix .ii.  GCC recognizes files with these
-  // names and compiles them as C++ programs even if you call the compiler the
-  // same way as for compiling C programs (usually with the name gcc).
-
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "C" || suffix == "cc" || suffix == "CC" || suffix == "cp" ||
-      suffix == "c++" || suffix == "C++" || suffix == "cpp" ||
-      suffix == "CPP" || suffix == "cxx" || suffix == "CXX" || suffix == "H" ||
-      suffix == "hh" || suffix == "hpp" || suffix == "hxx" || suffix == "ii" ||
-      suffix == "ccm" || suffix == "c++m" || suffix == "cppm" ||
-      suffix == "cxxm" || suffix == "iim" || suffix == "iih")
-#else // It is a case insensitive system
-  if (suffix == "cc" || suffix == "cp" || suffix == "c++" || suffix == "cpp" ||
-      suffix == "cxx" || suffix == "CC" || suffix == "CP" || suffix == "C++" ||
-      suffix == "CPP" || suffix == "CXX")
-#endif
-    returnValue = true;
-
-  if (find(extraCppSourceFileSuffixes.begin(), extraCppSourceFileSuffixes.end(),
-           suffix) != extraCppSourceFileSuffixes.end()) {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "C" || suffix == "cc" || suffix == "CC" || suffix == "cp" ||
+         suffix == "c++" || suffix == "C++" || suffix == "cpp" ||
+         suffix == "CPP" || suffix == "cxx" || suffix == "CXX" ||
+         suffix == "H" || suffix == "hh" || suffix == "hpp" ||
+         suffix == "hxx" || suffix == "ii" || suffix == "ccm" ||
+         suffix == "c++m" || suffix == "cppm" || suffix == "cxxm" ||
+         suffix == "iim" || suffix == "iih" ||
+         find(extraCppSourceFileSuffixes.begin(),
+              extraCppSourceFileSuffixes.end(),
+              suffix) != extraCppSourceFileSuffixes.end();
 }
 
 bool CommandlineProcessing::isFortranFileNameSuffix(const std::string &suffix) {
   // Returns true only if this is a valid Fortran source file name extension
   // (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" || suffix == "fxx" ||
-      suffix == "caf"
-      // For Fortran, upper case is used to indicate that CPP preprocessing is
-      // required.
-      || suffix == "F" || suffix == "F77" || suffix == "F90" ||
-      suffix == "F95" || suffix == "F03" || suffix == "F08" ||
-      suffix == "FXX" || suffix == "CAF" || suffix == "rmod" ||
-      suffix == "mod" || suffix == "RMOD" ||
-      suffix == "MOD" // importing module declaration
-  )
-#else // It is a case insensitive system
-  if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" || suffix == "fxx" || suffix == "F" ||
-      suffix == "F77" || suffix == "F90" || suffix == "F95" ||
-      suffix == "F03" || suffix == "F08" || suffix == "FXX" ||
-      suffix == "CAF" || suffix == "rmod" ||
-      suffix == "mod" // importing module declaration
-  )
-#endif
-    returnValue = true;
-
-  return returnValue;
+  // Uppercase Fortran variants request preprocessing.
+  return suffix == "f" || suffix == "f77" || suffix == "f90" ||
+         suffix == "f95" || suffix == "f03" || suffix == "f08" ||
+         suffix == "fxx" || suffix == "caf" || suffix == "F" ||
+         suffix == "F77" || suffix == "F90" || suffix == "F95" ||
+         suffix == "F03" || suffix == "F08" || suffix == "FXX" ||
+         suffix == "CAF" || suffix == "rmod" || suffix == "mod" ||
+         suffix == "RMOD" || suffix == "MOD";
 }
 
 bool CommandlineProcessing::isFortranFileNameSuffixRequiringCPP(
     const std::string &suffix) {
-  // Returns false only if this is a Fortran source file not requireing C
-  // preprocessing (file extension (suffix) is *.f??)
+  // Lowercase Fortran suffixes do not request preprocessing.
 
-  bool returnValue = true;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  // For Fortran, upper case is used to indicate that CPP preprocessing is
-  // required.
-  if (suffix == "f" || suffix == "f77" || suffix == "f90" || suffix == "f95" ||
-      suffix == "f03" || suffix == "f08" || suffix == "fxx" ||
-      suffix == "caf" || suffix == "rmod" || suffix == "mod")
-    returnValue = false;
-#else
-  // It is a case insensitive system (assume that C preprocessing is required
-  // since I don't know how to tell the difference.
-  returnValue = true;
-#endif
-
-  return returnValue;
+  return suffix != "f" && suffix != "f77" && suffix != "f90" &&
+         suffix != "f95" && suffix != "f03" && suffix != "f08" &&
+         suffix != "fxx" && suffix != "caf" && suffix != "rmod" &&
+         suffix != "mod";
 }
 
 bool CommandlineProcessing::isFortran77FileNameSuffix(
     const std::string &suffix) {
-  // DQ (11/17/2007): Added fortran mode specific suffix checking
-
   // Returns true only if this is a valid Fortran 77 source file name extension
   // (suffix)
-
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
 
   // DQ (12/10/2007): Fortran 77 codes are defined by a *.f suffix, not a *.F77
   // suffix. But to make the system more robust, accept either as recognised F77
   // Fortran source.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  // if ( suffix == "f77" || suffix == "F77" )
-  // if ( suffix == "f" || suffix == "F" )
-  if (suffix == "f" || suffix == "F" || suffix == "f77" || suffix == "F77")
-#else // It is a case insensitive system
-  // if ( suffix == "f77" )
-  // if ( suffix == "f" )
-  if (suffix == "f" || suffix == "f77")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "f" || suffix == "F" || suffix == "f77" || suffix == "F77";
 }
 
 bool CommandlineProcessing::isFortran90FileNameSuffix(
     const std::string &suffix) {
-  // DQ (11/17/2007): Added fortran mode specific suffix checking
-
   // Returns true only if this is a valid Fortran 90 source file name extension
   // (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f90" || suffix == "F90" || suffix == "rmod" ||
-      suffix == "mod" || suffix == "RMOD" || suffix == "MOD")
-#else // It is a case insensitive system
-  if (suffix == "f90" || suffix == "rmod" || suffix == "mod")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "f90" || suffix == "F90" || suffix == "rmod" ||
+         suffix == "mod" || suffix == "RMOD" || suffix == "MOD";
 }
 
 bool CommandlineProcessing::isFortran95FileNameSuffix(
     const std::string &suffix) {
-  // DQ (11/17/2007): Added fortran mode specific suffix checking
-
   // Returns true only if this is a valid Fortran 95 source file name extension
   // (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f95" || suffix == "F95")
-#else // It is a case insensitive system
-  if (suffix == "f95")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "f95" || suffix == "F95";
 }
 
 bool CommandlineProcessing::isFortran2003FileNameSuffix(
     const std::string &suffix) {
-  // DQ (11/17/2007): Added fortran mode specific suffix checking
-
   // Returns true only if this is a valid Fortran 2003 source file name
   // extension (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f03" || suffix == "F03")
-#else // It is a case insensitive system
-  if (suffix == "f03")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "f03" || suffix == "F03";
 }
 
 bool CommandlineProcessing::isFortran2008FileNameSuffix(
     const std::string &suffix) {
-  // DQ (11/17/2007): Added fortran mode specific suffix checking
-
   // Returns true only if this is a valid Fortran 2008 source file name
   // extension (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "f08" || suffix == "F08")
-#else
-  // It is a case insensitive system
-  if (suffix == "f08")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "f08" || suffix == "F08";
 }
 
 bool CommandlineProcessing::isCoArrayFortranFileNameSuffix(
     const std::string &suffix) {
-  // DQ (1/23/2009): Added Co-Array fortran mode specific suffix checking
-
   // Returns true only if this is a valid Co-Array Fortran (extension of Fortran
   // 2003) source file name extension (suffix)
 
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "caf" || suffix == "CAF")
-#else // It is a case insensitive system
-  if (suffix == "caf")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "caf" || suffix == "CAF";
 }
 
-// TV (05/17/2010) Support for CUDA
 bool CommandlineProcessing::isCudaFileNameSuffix(const std::string &suffix) {
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "cu" || suffix == "cui")
-#else // It is a case insensitive system
-  if (suffix == "cu")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return suffix == "cu" || suffix == "cui";
 }
 
-// TV (05/17/2010) Support for OpenCL
 bool CommandlineProcessing::isOpenCLFileNameSuffix(const std::string &suffix) {
-  bool returnValue = false;
-
-  // For now define CASE_SENSITIVE_SYSTEM to be true, as we are currently a
-  // UNIXish project.
-
-#if (CASE_SENSITIVE_SYSTEM == 1)
-  if (suffix == "ocl" || suffix == "cl" || suffix == "cli")
-#else // It is a case insensitive system
-  if (suffix == "ocl" || suffix == "cl")
-#endif
-  {
-    returnValue = true;
-  }
-
-  return returnValue;
-}
-
-void CommandlineProcessing::initSourceFileSuffixList() {
-  // For more notes on why some of these are rather bizzarely commented,
-  // look at the function isCppFileNameSuffix and isFortranFileNameSuffix
-
-  static bool first_call = true;
-
-  if (first_call == true) {
-    // DQ (1/5/2008): For a binary (executable) file, no suffix is a valid
-    // suffix, so allow this case validSourceFileSuffixes.push_back("");
-
-    // Keep suffix-driven discovery identical to the Clang 22 types accepted by
-    // REX's C, C++, CUDA, and OpenCL frontends. Objective-C and OpenCL C++
-    // suffixes are intentionally excluded and rejected by the command-line
-    // layer.
-    static const char *clangSourceSuffixes[] = {
-        ".c",   ".i",   ".h",   ".C",    ".cc",   ".CC",   ".cp",  ".c++",
-        ".C++", ".cpp", ".CPP", ".cxx",  ".CXX",  ".H",    ".hh",  ".hpp",
-        ".hxx", ".ii",  ".ccm", ".c++m", ".cppm", ".cxxm", ".iim", ".iih",
-        ".cu",  ".cui", ".ocl", ".cl",   ".cli"};
-    validSourceFileSuffixes.insert(validSourceFileSuffixes.end(),
-                                   std::begin(clangSourceSuffixes),
-                                   std::end(clangSourceSuffixes));
-    first_call = false;
-  }
-}
-
-// Initialization of static data member
-// std::list<std::string> *CommandlineProcessing::validSourceFileSuffixes =
-// NULL;
-
-void CommandlineProcessing::initObjectFileSuffixList() {
-  static bool first_call = true;
-
-  if (first_call == true) {
-#if (CASE_SENSITIVE_SYSTEM == 1)
-    validObjectFileSuffixes.push_back(".o");
-    validObjectFileSuffixes.push_back(".obj");
-#else
-    // it is a case insensitive system
-    validObjectFileSuffixes.push_back(".O");
-    validObjectFileSuffixes.push_back(".OBJ");
-#endif
-    first_call = false;
-  }
+  return suffix == "ocl" || suffix == "cl" || suffix == "cli";
 }

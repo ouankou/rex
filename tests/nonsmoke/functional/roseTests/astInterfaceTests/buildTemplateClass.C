@@ -100,15 +100,14 @@ int main(int argc, char *argv[]) {
   SgTemplateVariableDeclaration *var0_decl =
       SageBuilder::buildTemplateVariableDeclaration(
           SageBuilder::declaration_ownership::sourceLexical(), SgName("Value"),
-          t_par1_type, nullptr, t_class_defn);
+          t_par1_type, nullptr, t_class_defn, nullptr, {});
   var0_decl->get_declarationModifier().get_storageModifier().setStatic();
   ROSE_ASSERT(var0_decl->get_parent() == t_class_defn);
 
   SgTemplateVariableDeclaration *var1_decl =
       SageBuilder::buildTemplateVariableDeclaration(
           SageBuilder::declaration_ownership::sourceLexicalIn(scope),
-          SgName("Value"), t_par1_type, nullptr, t_class_defn,
-          SageBuilder::template_variable_entity_kind::primary_template,
+          SgName("Value"), t_par1_type, nullptr, t_class_defn, nullptr, {},
           var0_decl->get_variables().front());
   ROSE_ASSERT(var1_decl->get_parent() == scope);
   ROSE_ASSERT(var1_decl->get_variables().front()->get_scope() == t_class_defn);
@@ -116,7 +115,7 @@ int main(int argc, char *argv[]) {
   SgTemplateVariableDeclaration *var2_decl =
       SageBuilder::buildTemplateVariableDeclaration(
           SageBuilder::declaration_ownership::sourceLexical(), SgName("Valid"),
-          SageBuilder::buildBoolType(), nullptr, t_class_defn);
+          SageBuilder::buildBoolType(), nullptr, t_class_defn, nullptr, {});
   var2_decl->get_declarationModifier().get_storageModifier().setStatic();
   ROSE_ASSERT(var2_decl->get_parent() == t_class_defn);
 
@@ -127,9 +126,7 @@ int main(int argc, char *argv[]) {
           SgName("Valid"), var3_type,
           SageBuilder::buildAssignInitializer(
               SageBuilder::buildBoolValExp(false), var3_type),
-          t_class_defn,
-          SageBuilder::template_variable_entity_kind::primary_template,
-          var2_decl->get_variables().front());
+          t_class_defn, nullptr, {}, var2_decl->get_variables().front());
   ROSE_ASSERT(var3_decl->get_parent() == scope);
   ROSE_ASSERT(var3_decl->get_variables().front()->get_scope() == t_class_defn);
 

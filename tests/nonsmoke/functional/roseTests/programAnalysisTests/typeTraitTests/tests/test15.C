@@ -141,48 +141,63 @@ public:
 int FirstNonStaticSameAsOneOfBaseTypes::i;
 int FirstNonStaticSameAsOneOfBaseTypes::j;
 
+void Foo() {
+  // if we have a NOT in if's conditional, then the test expects for false from
+  // the triat else expects true
+  if (__is_standard_layout(int))
+    ;
+  if (!__is_standard_layout(int &))
+    ;
+  if (__is_standard_layout(int *))
+    ;
+  if (__is_standard_layout(int[]))
+    ;
 
+  if (__is_standard_layout(SimpleStruct))
+    ;
+  if (!__is_standard_layout(SimpleStruct &))
+    ;
+  if (__is_standard_layout(SimpleStruct *))
+    ;
+  if (__is_standard_layout(SimpleStruct[]))
+    ;
 
+  if (__is_standard_layout(NestedStruct))
+    ;
+  if (!__is_standard_layout(NestedStruct &))
+    ;
+  if (__is_standard_layout(NestedStruct *))
+    ;
+  if (__is_standard_layout(NestedStruct[]))
+    ;
 
+  if (__is_standard_layout(NoVirtualFunctions))
+    ;
+  if (!__is_standard_layout(VirtualFunctions))
+    ;
 
+  if (__is_standard_layout(NoVirtualBaseClass))
+    ;
+  if (!__is_standard_layout(VirtualBaseClass))
+    ;
 
-void Foo(){
-    // if we have a NOT in if's conditional, then the test expects for false from the triat else expects true
-    if(__is_standard_layout(int));
-    if(__is_standard_layout(int&));
-    if(__is_standard_layout(int*));
-    if(__is_standard_layout(int[]));
+  if (__is_standard_layout(SameAccessControl))
+    ;
+  if (!__is_standard_layout(DifferentAccessControl))
+    ;
 
-    
-    if(__is_standard_layout(SimpleStruct));
-    if(__is_standard_layout(SimpleStruct&));
-    if(__is_standard_layout(SimpleStruct*));
-    if(__is_standard_layout(SimpleStruct[]));
+  if (__is_standard_layout(
+          MostDerivedHasNonStaticDataAndNoneOfBaseClassesHaveNonStaticData))
+    ;
+  if (!__is_standard_layout(
+          MostDerivedHasNonStaticDataAndBaseClassesAlsoHasNonStaticData))
+    ;
 
-    if(__is_standard_layout(NestedStruct));
-    if(__is_standard_layout(NestedStruct&));
-    if(__is_standard_layout(NestedStruct*));
-    if(__is_standard_layout(NestedStruct[]));
-    
-    
-    if(__is_standard_layout(NoVirtualFunctions));
-    if(!__is_standard_layout(VirtualFunctions));
+  if (__is_standard_layout(OnlyOneBaseClassHasNonStaticData))
+    ;
+  if (!__is_standard_layout(MultipleBaseClassesWithNonStaticData))
+    ;
 
-    if(__is_standard_layout(NoVirtualBaseClass));
-    if(!__is_standard_layout(VirtualBaseClass));
-
-    if(__is_standard_layout(SameAccessControl));
-    if(!__is_standard_layout(DifferentAccessControl));
-    
-    if(__is_standard_layout(MostDerivedHasNonStaticDataAndNoneOfBaseClassesHaveNonStaticData));
-    if(!__is_standard_layout(MostDerivedHasNonStaticDataAndBaseClassesAlsoHasNonStaticData));
-
-    if(__is_standard_layout(OnlyOneBaseClassHasNonStaticData));
-    if(!__is_standard_layout(MultipleBaseClassesWithNonStaticData));
-
-    if(!__is_standard_layout(FirstNonStaticSameAsOneOfBaseTypes));
-
-    
-    
-    
+  if (!__is_standard_layout(FirstNonStaticSameAsOneOfBaseTypes))
+    ;
 }

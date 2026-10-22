@@ -13,7 +13,8 @@ int main(int argc, char **argv) {
   } else if (mode == "source") {
     (new SgOmpSourceExpression("nested(7)"))->get_type();
   } else if (mode == "classification") {
-    SgStringVal *unevaluatedString = new SgStringVal("rex_unevaluated_message");
+    SgStringVal *unevaluatedString = new SgStringVal(
+        SgStringVal::code_units_from_bytes("rex_unevaluated_message"));
     unevaluatedString->set_cxx_unevaluated(true);
     SgExpression *syntaxExpressions[] = {
         new SgFortranCommonBlockRefExp(

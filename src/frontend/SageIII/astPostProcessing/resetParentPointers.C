@@ -1,25 +1,35 @@
 #include "sage3basic.h"
 
-#include "astPostProcessing.h"
+#include "AstProcessing.h"
 #include "resetParentPointers.h"
 
+#include <cstddef>
+#include <map>
 #include <set>
-
-using namespace std;
 
 namespace {
 
+class ValidateParentPointers : public SgTopDownProcessing<SgNode *> {
+public:
+  SgNode *evaluateInheritedAttribute(SgNode *node, SgNode *parent) override;
+
+  void traceBackToRoot(SgNode *node);
+  void validateParentPointersInDeclaration(SgDeclarationStatement *declaration,
+                                           SgNode *inputParent);
+  void validateParentPointersInTemplateArgumentList(
+      const SgTemplateArgumentPtrList &templateArgList);
+};
+
 [[noreturn]] void ownershipFailure(const char *context, const SgNode *node,
                                    const SgNode *expected, const SgNode *actual,
-                                   size_t edges);
+                                   std::size_t edges);
 
 thread_local const SgNode *freshOwnershipBoundary = nullptr;
 
 class FreshOwnershipBoundaryGuard {
 public:
-  explicit FreshOwnershipBoundaryGuard(const SgNode *boundary)
-      : previous(freshOwnershipBoundary) {
-    if (boundary == nullptr || previous != nullptr) {
+  explicit FreshOwnershipBoundaryGuard(const SgNode *boundary) {
+    if (boundary == nullptr || freshOwnershipBoundary != nullptr) {
       ownershipFailure("fresh-transaction-boundary", boundary, nullptr,
                        boundary != nullptr ? boundary->get_parent() : nullptr,
                        0);
@@ -27,15 +37,12 @@ public:
     freshOwnershipBoundary = boundary;
   }
 
-  ~FreshOwnershipBoundaryGuard() { freshOwnershipBoundary = previous; }
-
-private:
-  const SgNode *previous;
+  ~FreshOwnershipBoundaryGuard() { freshOwnershipBoundary = nullptr; }
 };
 
 [[noreturn]] void ownershipFailure(const char *context, const SgNode *node,
                                    const SgNode *expected, const SgNode *actual,
-                                   size_t edges) {
+                                   std::size_t edges) {
   const SgInitializedName *initialized = isSgInitializedName(node);
   fprintf(stderr,
           "REX_AST_INVARIANT[%s]: node=%p type=%s expected-parent=%p "
@@ -53,12 +60,12 @@ private:
   ROSE_ABORT();
 }
 
-size_t countDirectOwnerEdges(const SgNode *owner, const SgNode *child) {
+std::size_t countDirectOwnerEdges(const SgNode *owner, const SgNode *child) {
   if (owner == nullptr || child == nullptr) {
     return 0;
   }
 
-  size_t edges = 0;
+  std::size_t edges = 0;
   for (const auto &successor : owner->returnDataMemberPointers()) {
     if (successor.first == child) {
       ++edges;
@@ -74,7 +81,7 @@ void requireExactParent(const SgNode *child, const SgNode *owner,
                      child != nullptr ? child->get_parent() : nullptr, 0);
   }
 
-  const size_t edges = countDirectOwnerEdges(owner, child);
+  const std::size_t edges = countDirectOwnerEdges(owner, child);
   if (child->get_parent() != owner || (requireDirectEdge && edges != 1)) {
     ownershipFailure(context, child, owner, child->get_parent(), edges);
   }
@@ -87,7 +94,7 @@ void requirePublishedParent(const SgNode *node, const char *context) {
   }
 
   const SgNode *owner = node->get_parent();
-  const size_t edges = countDirectOwnerEdges(owner, node);
+  const std::size_t edges = countDirectOwnerEdges(owner, node);
   if (edges != 1) {
     ownershipFailure(context, node, owner, owner, edges);
   }
@@ -125,7 +132,7 @@ void validateSymbolTable(SgScopeStatement *scope) {
                      0);
   }
 
-  std::map<SgSymbol *, size_t> occurrences;
+  std::map<SgSymbol *, std::size_t> occurrences;
   for (const auto &entry : *entries) {
     SgSymbol *symbol = entry.second;
     if (symbol == nullptr) {
@@ -153,7 +160,7 @@ void validateSymbol(SgSymbol *symbol, const char *context) {
     ownershipFailure(context, symbol, table, symbol->get_parent(), 0);
   }
 
-  size_t occurrences = 0;
+  std::size_t occurrences = 0;
   for (const auto &entry : *table->get_table()) {
     if (entry.second == symbol) {
       ++occurrences;
@@ -172,20 +179,7 @@ void validateOptionalDeclarationChainMember(SgDeclarationStatement *declaration,
   requirePublishedParent(declaration, context);
 }
 
-void validateNamedTypeDeclaration(SgType *type, const char *context) {
-  if (type == nullptr) {
-    ownershipFailure(context, nullptr, nullptr, nullptr, 0);
-  }
-
-  SgType *baseType = type->findBaseType();
-  SgNamedType *namedType = isSgNamedType(baseType);
-  if (namedType == nullptr) {
-    return;
-  }
-
-  SgDeclarationStatement *declaration = namedType->get_declaration();
-  requirePublishedParent(declaration, context);
-
+void validateClassDefinitionOwner(SgDeclarationStatement *declaration) {
   if (SgClassDeclaration *classDeclaration =
           isSgClassDeclaration(declaration)) {
     if (SgClassDefinition *definition = classDeclaration->get_definition()) {
@@ -202,6 +196,22 @@ void validateNamedTypeDeclaration(SgType *type, const char *context) {
   }
 }
 
+void validateNamedTypeDeclaration(SgType *type, const char *context) {
+  if (type == nullptr) {
+    ownershipFailure(context, nullptr, nullptr, nullptr, 0);
+  }
+
+  SgType *baseType = type->findBaseType();
+  SgNamedType *namedType = isSgNamedType(baseType);
+  if (namedType == nullptr) {
+    return;
+  }
+
+  SgDeclarationStatement *declaration = namedType->get_declaration();
+  requirePublishedParent(declaration, context);
+  validateClassDefinitionOwner(declaration);
+}
+
 void validateTraversalEdge(SgNode *node, SgNode *traversalParent) {
   if (isSgType(node) != nullptr) {
     return;
@@ -212,18 +222,9 @@ void validateTraversalEdge(SgNode *node, SgNode *traversalParent) {
     return;
   }
 
-  if (traversalParent == nullptr) {
-    if (isSgProject(node) == nullptr && isSgFile(node) == nullptr) {
-      ownershipFailure("detached-validation-root", node, nullptr,
-                       node->get_parent(), 0);
-    }
-    if (node->get_parent() != nullptr) {
-      ownershipFailure("root-parent", node, nullptr, node->get_parent(), 0);
-    }
-    return;
-  }
+  ROSE_ASSERT(traversalParent != nullptr);
 
-  const size_t directEdges = countDirectOwnerEdges(traversalParent, node);
+  const std::size_t directEdges = countDirectOwnerEdges(traversalParent, node);
   if (directEdges != 0) {
     requireExactParent(node, traversalParent, "traversal-owner");
   } else {
@@ -233,8 +234,6 @@ void validateTraversalEdge(SgNode *node, SgNode *traversalParent) {
     requirePublishedParent(node, "referenced-node-owner");
   }
 }
-
-} // namespace
 
 void ValidateParentPointers::traceBackToRoot(SgNode *node) {
   if (node == nullptr) {
@@ -276,25 +275,7 @@ void ValidateParentPointers::validateParentPointersInDeclaration(
       declaration->get_firstNondefiningDeclaration(),
       "first-nondefining-declaration-owner");
 
-  if (SgClassDeclaration *classDeclaration =
-          isSgClassDeclaration(declaration)) {
-    if (SgClassDefinition *definition = classDeclaration->get_definition()) {
-      SgClassDeclaration *definingDeclaration =
-          isSgClassDeclaration(classDeclaration->get_definingDeclaration());
-      if (definingDeclaration == nullptr) {
-        ownershipFailure("class-definition-canonical-owner", definition,
-                         classDeclaration, definition->get_parent(),
-                         countDirectOwnerEdges(classDeclaration, definition));
-      }
-      requireExactParent(definition, definingDeclaration,
-                         "class-definition-owner");
-    }
-  }
-}
-
-void ValidateParentPointers::validateParentPointersInType(SgType *typeNode,
-                                                          SgNode *) {
-  validateNamedTypeDeclaration(typeNode, "named-type-declaration-owner");
+  validateClassDefinitionOwner(declaration);
 }
 
 void ValidateParentPointers::validateParentPointersInTemplateArgumentList(
@@ -316,17 +297,8 @@ void ValidateParentPointers::validateParentPointersInTemplateArgumentList(
       break;
 
     case SgTemplateArgument::nontype_argument:
-      if (SgExpression *expression = argument->get_expression()) {
-        if (argument->get_initializedName() != nullptr) {
-          ownershipFailure("ambiguous-nontype-template-argument", argument,
-                           argument->get_parent(), argument->get_parent(), 0);
-        }
-        requireExactParent(expression, argument,
-                           "template-argument-expression-owner");
-      } else {
-        requireExactParent(argument->get_initializedName(), argument,
-                           "template-argument-name-owner");
-      }
+      requireExactParent(argument->get_expression(), argument,
+                         "template-argument-expression-owner");
       break;
 
     case SgTemplateArgument::template_template_argument:
@@ -344,15 +316,13 @@ void ValidateParentPointers::validateParentPointersInTemplateArgumentList(
   }
 }
 
-ValidateParentPointersInheritedAttribute
-ValidateParentPointers::evaluateInheritedAttribute(
-    SgNode *node, ValidateParentPointersInheritedAttribute inheritedAttribute) {
+SgNode *ValidateParentPointers::evaluateInheritedAttribute(SgNode *node,
+                                                           SgNode *parent) {
   if (node == nullptr) {
-    ownershipFailure("null-traversal-node", nullptr,
-                     inheritedAttribute.parentNode, nullptr, 0);
+    ownershipFailure("null-traversal-node", nullptr, parent, nullptr, 0);
   }
 
-  validateTraversalEdge(node, inheritedAttribute.parentNode);
+  validateTraversalEdge(node, parent);
   requireFileInfoOwner(node, node->get_file_info(), "file-info-owner");
   requireFileInfoOwner(node, node->get_endOfConstruct(), "end-file-info-owner");
 
@@ -382,9 +352,8 @@ ValidateParentPointers::evaluateInheritedAttribute(
     validateSymbolTable(scope);
   }
 
-  if (SgClassDeclaration *declaration = isSgClassDeclaration(node)) {
-    validateParentPointersInDeclaration(declaration,
-                                        inheritedAttribute.parentNode);
+  if (SgDeclarationStatement *declaration = isSgDeclarationStatement(node)) {
+    validateParentPointersInDeclaration(declaration, parent);
   }
 
   if (SgTemplateInstantiationDecl *declaration =
@@ -445,20 +414,10 @@ ValidateParentPointers::evaluateInheritedAttribute(
     traceBackToRoot(node);
   }
 
-  inheritedAttribute.parentNode = node;
-  return inheritedAttribute;
+  return node;
 }
 
-void validateParentPointers(SgNode *node, SgNode *parent) {
-  if (node == nullptr) {
-    ownershipFailure("null-validation-root", nullptr, parent, nullptr, 0);
-  }
-
-  ValidateParentPointersInheritedAttribute inheritedAttribute;
-  inheritedAttribute.parentNode = parent;
-  ValidateParentPointers traversal;
-  traversal.traverse(node, inheritedAttribute);
-}
+} // namespace
 
 void validateFreshSubtreeOwnership(SgNode *node, SgNode *boundary) {
   if (node == nullptr || boundary == nullptr) {
@@ -467,49 +426,6 @@ void validateFreshSubtreeOwnership(SgNode *node, SgNode *boundary) {
   }
   requireExactParent(node, boundary, "fresh-transaction-root");
   FreshOwnershipBoundaryGuard guard(boundary);
-  ValidateParentPointersInheritedAttribute inheritedAttribute;
-  inheritedAttribute.parentNode = boundary;
   ValidateParentPointers traversal;
-  traversal.traverse(node, inheritedAttribute);
-}
-
-void ValidateParentPointersOfClassAndNamespaceDeclarations::visit(
-    SgNode *node) {
-  if (node == nullptr) {
-    ownershipFailure("null-list-node", nullptr, nullptr, nullptr, 0);
-  }
-
-  if (SgClassDefinition *definition = isSgClassDefinition(node)) {
-    for (SgDeclarationStatement *member : definition->get_members()) {
-      requireExactParent(member, definition, "class-member-owner");
-    }
-  } else if (SgNamespaceDefinitionStatement *definition =
-                 isSgNamespaceDefinitionStatement(node)) {
-    for (SgDeclarationStatement *declaration : definition->get_declarations()) {
-      requireExactParent(declaration, definition,
-                         "namespace-declaration-owner");
-    }
-  } else if (SgGlobal *global = isSgGlobal(node)) {
-    for (SgDeclarationStatement *declaration : global->get_declarations()) {
-      requireExactParent(declaration, global, "global-declaration-owner");
-    }
-  } else if (SgBasicBlock *block = isSgBasicBlock(node)) {
-    for (SgStatement *statement : block->get_statements()) {
-      requireExactParent(statement, block, "basic-block-statement-owner");
-    }
-  }
-}
-
-void validateParentPointersOfClassOrNamespaceDeclarations(SgNode *node) {
-  if (node == nullptr) {
-    ownershipFailure("null-list-validation-root", nullptr, nullptr, nullptr, 0);
-  }
-  ValidateParentPointersOfClassAndNamespaceDeclarations traversal;
-  traversal.traverse(node, preorder);
-}
-
-void topLevelValidateParentPointers(SgNode *node) {
-  TimingPerformance timer("Validate parent pointers:");
-  validateParentPointers(node, node != nullptr ? node->get_parent() : nullptr);
-  validateParentPointersOfClassOrNamespaceDeclarations(node);
+  traversal.traverse(node, boundary);
 }

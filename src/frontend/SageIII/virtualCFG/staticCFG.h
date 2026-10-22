@@ -1,7 +1,7 @@
 #ifndef STATIC_CFG_H
 #define STATIC_CFG_H
 
-#include "AstAttributeMechanism.h"
+#include "Cxx_Grammar.h"
 
 #include "virtualCFG.h"
 
@@ -10,6 +10,7 @@
 #include <set>
 
 #include <string>
+#include <type_traits>
 
 class SgIncidenceDirectedGraph;
 class SgGraphNode;
@@ -19,6 +20,7 @@ namespace StaticCFG {
 
 using VirtualCFG::CFGEdge;
 using VirtualCFG::CFGNode;
+using VirtualCFG::CFGPath;
 
 class ROSE_DLL_API CFG {
 protected:
@@ -27,6 +29,8 @@ protected:
 
   //! A map from CFGNode in virtualCFG to node from staticCFG.
   std::map<CFGNode, SgGraphNode *> all_nodes_;
+  std::map<int, CFGNode> node_points_;
+  std::map<int, CFGPath> edge_paths_;
 
   //! The start node to begin CFG build.
   SgNode *start_;
@@ -41,19 +45,29 @@ protected:
   bool is_filtered_;
 
 public:
-  CFG() : graph_(NULL), start_(NULL), entry_(NULL), exit_(NULL) {}
+  CFG()
+      : graph_(NULL), start_(NULL), entry_(NULL), exit_(NULL),
+        is_filtered_(false) {}
+
+  CFG(const CFG &) = delete;
+  CFG &operator=(const CFG &) = delete;
 
 protected:
   CFG(SgNode *node, bool is_filtered, bool build_now);
 
 public:
   //! Turn a graph node into a CFGNode which is defined in VirtualCFG namespace.
-  CFGNode toCFGNode(SgGraphNode *node);
+  CFGNode toCFGNode(SgGraphNode *node) const;
+  const CFGPath &toCFGPath(SgDirectedGraphEdge *edge) const;
 
   //! Turn a CFG node into a GraphNode which is defined in VirtualCFG namespace.
   //! Returns NULL if CFGNode is not present
   SgGraphNode *toGraphNode(CFGNode &n) {
-    return ((all_nodes_.count(n) == 0) ? NULL : all_nodes_[n]);
+    auto found = all_nodes_.find(n);
+    if (found == all_nodes_.end())
+      return nullptr;
+    ROSE_ASSERT(toCFGNode(found->second) == n);
+    return found->second;
   }
 
   //! The constructor building the CFG.
@@ -103,16 +117,17 @@ public:
   SgGraphNode *cfgForEnd(SgNode *node);
 
   //! Get the index of a CFG node.
-  static int getIndex(SgGraphNode *node);
+  unsigned int getIndex(SgGraphNode *node) const;
 
   //! Output the graph to a DOT file.
   void cfgToDot(SgNode *node, const std::string &file_name);
 
 protected:
-  // void buildCFG(CFGNode n);
   template <class NodeT, class EdgeT>
-  void buildCFG(NodeT n, std::map<NodeT, SgGraphNode *> &all_nodes,
-                std::set<NodeT> &explored);
+  void buildCFG(NodeT n, std::set<NodeT> &explored);
+
+  SgGraphNode *getOrCreateGraphNode(CFGNode point);
+  void addEdge(const CFGPath &path);
 
   //! Delete all nodes and edges in the graph and release memories.
   void clearNodesAndEdges();
@@ -126,48 +141,43 @@ protected:
                          bool isInEdge);
 };
 
-//! This class stores index of each node as an attribuite of SgGraphNode.
-class CFGNodeAttribute : public AstAttribute {
-  int index_;
-  SgIncidenceDirectedGraph *graph_;
+template <class NodeT, class EdgeT>
+void CFG::buildCFG(NodeT n, std::set<NodeT> &explored) {
 
-public:
-  CFGNodeAttribute(int idx = 0, SgIncidenceDirectedGraph *graph = NULL)
-      : index_(idx), graph_(graph) {}
+  ROSE_ASSERT(n.getNode());
 
-  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
+  if (explored.count(n) > 0)
+    return;
+  explored.insert(n);
+
+  auto *from = getOrCreateGraphNode(CFGNode(n.getNode(), n.getIndex()));
+  if (auto *function = isSgFunctionDefinition(n.getNode())) {
+    if (n.getIndex() == 0)
+      entry_ = from;
+    else if (n.getIndex() == function->cfgIndexForEnd())
+      exit_ = from;
   }
 
-  int getIndex() const { return index_; }
+  std::vector<EdgeT> outEdges = n.outEdges();
 
-  void setIndex(int idx) { index_ = idx; }
-
-  const SgIncidenceDirectedGraph *getGraph() const { return graph_; }
-  SgIncidenceDirectedGraph *getGraph() { return graph_; }
-
-  void setGraph(SgIncidenceDirectedGraph *graph) { graph_ = graph; }
-};
-
-template <class EdgeT> class CFGEdgeAttribute : public AstAttribute {
-  EdgeT edge_;
-
-public:
-  CFGEdgeAttribute(const EdgeT &e) : edge_(e) {}
-
-  AstAttribute::OwnershipPolicy getOwnershipPolicy() const override {
-    return CONTAINER_OWNERSHIP;
+  for (const EdgeT &edge : outEdges) {
+    ROSE_ASSERT(edge.source() == n);
+    if constexpr (std::is_same_v<EdgeT, CFGEdge>)
+      addEdge(CFGPath(edge));
+    else
+      addEdge(edge.getPath());
   }
 
-  void setEdge(const EdgeT &e) { edge_ = e; }
+  for (const EdgeT &edge : outEdges) {
+    buildCFG<NodeT, EdgeT>(edge.target(), explored);
+  }
 
-  EdgeT getEdge() const { return edge_; }
-};
-
-// The following are some auxiliary functions, since SgGraphNode cannot provide
-// them.
-std::vector<SgDirectedGraphEdge *> outEdges(SgGraphNode *node);
-std::vector<SgDirectedGraphEdge *> inEdges(SgGraphNode *node);
+  std::vector<EdgeT> inEdges = n.inEdges();
+  for (const EdgeT &edge : inEdges) {
+    ROSE_ASSERT(edge.target() == n);
+    buildCFG<NodeT, EdgeT>(edge.source(), explored);
+  }
+}
 
 } // end of namespace StaticCFG
 

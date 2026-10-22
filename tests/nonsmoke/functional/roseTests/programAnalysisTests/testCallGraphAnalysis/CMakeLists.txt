@@ -6,29 +6,38 @@ file(MAKE_DIRECTORY ${_callgraph_output_dir})
 add_executable(testCG CG.C)
 target_link_libraries(testCG ROSE_DLL ${link_with_libraries})
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/testCallGraph.C)
-  add_executable(testCallGraph testCallGraph.C)
-  target_link_libraries(testCallGraph ROSE_DLL ${link_with_libraries})
-else()
-  message(WARNING "Missing testCallGraph.C in testCallGraphAnalysis.")
-endif()
+add_executable(testCallGraph testCallGraph.C)
+target_link_libraries(testCallGraph ROSE_DLL ${link_with_libraries})
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ClassHierarchyTestGen.cpp)
-  add_executable(classHierarchyTestGen ClassHierarchyTestGen.cpp)
-  target_link_libraries(classHierarchyTestGen ROSE_DLL ${link_with_libraries})
-else()
-  message(WARNING "Missing ClassHierarchyTestGen.cpp in testCallGraphAnalysis.")
-endif()
+add_executable(classHierarchyTestGen ClassHierarchyTestGen.cpp)
+target_link_libraries(classHierarchyTestGen ROSE_DLL ${link_with_libraries})
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/VirtualFctsTester.cpp)
-  add_executable(virtualFctsTester VirtualFctsTester.cpp)
-  target_link_libraries(virtualFctsTester ROSE_DLL ${link_with_libraries})
-else()
-  message(WARNING "Missing VirtualFctsTester.cpp in testCallGraphAnalysis.")
-endif()
+add_executable(virtualFctsTester VirtualFctsTester.cpp)
+target_link_libraries(virtualFctsTester ROSE_DLL ${link_with_libraries})
 
 add_executable(testNewCallGraph testNewCallGraph.C)
 target_link_libraries(testNewCallGraph ROSE_DLL ${link_with_libraries})
+
+add_executable(rex_callgraph_definition_promotion
+  rex_callgraph_definition_promotion.cpp)
+target_link_libraries(rex_callgraph_definition_promotion PRIVATE ROSE_DLL)
+set(_rex_definition_promotion_dir
+  "${CMAKE_CURRENT_BINARY_DIR}/rex_definition_promotion")
+file(MAKE_DIRECTORY "${_rex_definition_promotion_dir}")
+add_test(NAME rex_callgraph_definition_promotion
+  COMMAND rex_callgraph_definition_promotion -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/newCallGraph_input_01.c)
+set_tests_properties(rex_callgraph_definition_promotion PROPERTIES
+  WORKING_DIRECTORY "${_rex_definition_promotion_dir}"
+  LABELS "rex;CALLGRAPH;typed")
+add_test(NAME rex_callgraph_function_identity
+  COMMAND rex_callgraph_definition_promotion -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_callgraph_function_identity.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/test01-specimens/f1.C)
+set_tests_properties(rex_callgraph_function_identity PROPERTIES
+  WORKING_DIRECTORY "${_rex_definition_promotion_dir}"
+  LABELS "rex;CALLGRAPH;typed")
+unset(_rex_definition_promotion_dir)
 
 add_executable(rex_callgraph_implicit_conversion
   rex_callgraph_implicit_conversion.cpp)

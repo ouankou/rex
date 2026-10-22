@@ -14,16 +14,12 @@
 #include <iostream>
 
 #include <string>
-// #define TEMPLATE_ONLY
-// #include <CFG_OA.C>
-// #undef TEMPLATE_ONLY
 
 using namespace std;
 
 void PrintUsage(char *name) {
   cerr << name << " <options> " << "<program name>" << "\n";
   cerr << "-dot :generate DOT output \n";
-  cerr << "-oa : use OpenAnalysis CFG \n";
 }
 
 bool GenerateDOT(int argc, char *argv[]) {
@@ -34,61 +30,20 @@ bool GenerateDOT(int argc, char *argv[]) {
   return false;
 }
 
-bool UseOA(int argc, char *argv[]) {
-  for (int i = 1; i < argc; ++i) {
-    if (argv[i] != 0 && !strcmp(argv[i], "-oa"))
-      return true;
-  }
-  return false;
-}
-
 class TestCFGWrap {
-  int t;
-
 protected:
   DefaultCFGImpl graph;
 
 public:
-  typedef enum { ROSE, OA } AnalysisDomain;
-  TestCFGWrap(AnalysisDomain _t) : t(_t) {}
-
   void operator()(SgNode *head) {
     AstInterfaceImpl scope(head);
     AstInterface fa(&scope);
-    switch (t) {
-    case ROSE:
-      ROSE_Analysis::BuildCFG(fa, AstNodePtrImpl(head), graph);
-      break;
-      /*
-           case OA:
-              OpenAnalysis::BuildCFG(fa, AstNodePtrImpl(head), graph);
-              break;
-      */
-    default:
-      assert(false);
-    }
-  }
-};
-
-class TestCFGWrap_Text : public TestCFGWrap {
-  fstream f;
-
-public:
-  TestCFGWrap_Text(AnalysisDomain _t, const string &fname) : TestCFGWrap(_t) {
-    f.open(fname.c_str(), ios_base::out);
-  }
-  ~TestCFGWrap_Text() { f.close(); }
-
-  void operator()(SgNode *head) {
-    TestCFGWrap::operator()(head);
-    write_graph(graph, f, "edge");
-    f << "\n";
+    ROSE_Analysis::BuildCFG(fa, AstNodePtrImpl(head), graph);
   }
 };
 
 class TestCFGWrap_Stdout : public TestCFGWrap {
 public:
-  TestCFGWrap_Stdout(AnalysisDomain _t) : TestCFGWrap(_t) {}
   void operator()(SgNode *head) {
     TestCFGWrap::operator()(head);
     write_graph(graph, std::cout, "edge");
@@ -98,8 +53,6 @@ public:
 
 class TestCFGWrap_DOT : public TestCFGWrap {
 public:
-  TestCFGWrap_DOT(AnalysisDomain _t) : TestCFGWrap(_t) {}
-
   void operator()(SgNode *head, string fname) {
     TestCFGWrap::operator()(head);
     GraphDotOutput<DefaultCFGImpl> output(graph);
@@ -125,14 +78,11 @@ int main(int argc, char *argv[]) {
     SgSourceFile *sageFile = isSgSourceFile(sageProject.get_fileList()[i]);
     ROSE_ASSERT(sageFile != NULL);
 
-    TestCFGWrap::AnalysisDomain t =
-        UseOA(argc, argv) ? TestCFGWrap::OA : TestCFGWrap::ROSE;
     string filename = sageFile->getFileName();
 
-    TestCFGWrap_Stdout txtop(t);
-    // string dotname = string(strrchr(sageFile.getFileName(),'/')+1) + ".dot";
+    TestCFGWrap_Stdout txtop;
     string dotname = filename.substr(filename.rfind('/') + 1) + ".dot";
-    TestCFGWrap_DOT dotop(t);
+    TestCFGWrap_DOT dotop;
     SgGlobal *root = sageFile->get_globalScope();
     SgDeclarationStatementPtrList &declList = root->get_declarations();
     for (SgDeclarationStatementPtrList::iterator p = declList.begin();

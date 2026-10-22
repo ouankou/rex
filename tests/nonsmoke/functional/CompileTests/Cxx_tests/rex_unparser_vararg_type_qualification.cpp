@@ -12,8 +12,9 @@ struct Value {
 rex_vararg_target::Value read_value(int marker, ...) {
   __builtin_va_list arguments;
   __builtin_va_start(arguments, marker);
-  rex_vararg_target::Value result =
-      __builtin_va_arg(arguments, rex_vararg_target::Value);
+  using result_type =
+      decltype(__builtin_va_arg(arguments, rex_vararg_target::Value));
+  result_type result = __builtin_va_arg(arguments, rex_vararg_target::Value);
   __builtin_va_end(arguments);
   return result;
 }

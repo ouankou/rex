@@ -1,6 +1,4 @@
-// Expressions can be built using both bottomup (recommended ) and topdown
-// orders. Bottomup: build operands first, operation later Topdown: build
-// operation first, set operands later on.
+// Build typed operands and expressions before publishing their declarations.
 
 #include "rose.h"
 using namespace SageBuilder;
@@ -26,19 +24,21 @@ int main(int argc, char *argv[]) {
                       buildDoubleType());
   SgType *result_type = buildDoubleType();
   SgVariableDeclaration *decl = buildVariableDeclaration(
-      "result", result_type, buildAssignInitializer(init_exp, result_type));
+      "result", result_type, buildAssignInitializer(init_exp, result_type),
+      body);
 
   SgStatement *laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, decl);
 
-  // topdown: build expression first, set operands later on
+  // Build the second initializer from its existing variable symbols.
   // double result2 = alpha * beta;
   SgExpression *init_exp2 = buildMultiplyOp(
       buildVarRefExp("alpha"), buildVarRefExp("beta"), buildDoubleType());
 
   SgType *result2_type = buildDoubleType();
   SgVariableDeclaration *decl2 = buildVariableDeclaration(
-      "result2", result2_type, buildAssignInitializer(init_exp2, result2_type));
+      "result2", result2_type, buildAssignInitializer(init_exp2, result2_type),
+      body);
   laststmt = getLastStatement(topScopeStack());
   insertStatementBefore(laststmt, decl2);
 

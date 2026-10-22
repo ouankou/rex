@@ -1,22 +1,13 @@
-// DQ (10/5/2014): This is more strict now that we include rose_config.h in the
-// sage3basic.h. #include <rose.h>
-
 #include "sage3basic.h"
 
+#include <filesystem>
 #include <iostream>
 
-#include "FileHelper.h"
 #include "IncludingPreprocessingInfosCollector.h"
 
 using namespace std;
 
-#define INCLUDE_SUUPORT_DEBUG_MESSAGES 0
-
-// It is needed because otherwise, the default destructor breaks something.
-
-IncludingPreprocessingInfosCollector::~IncludingPreprocessingInfosCollector() {
-  // do nothing
-}
+IncludingPreprocessingInfosCollector::~IncludingPreprocessingInfosCollector() {}
 
 IncludingPreprocessingInfosCollector::IncludingPreprocessingInfosCollector(
     SgProject *projectNode) {
@@ -44,10 +35,10 @@ IncludingPreprocessingInfosCollector::collect() {
     const auto &resolvedDirectives =
         sourceFile->get_frontendResolvedIncludeDirectivesMap();
     for (const auto &[includedPath, directives] : resolvedDirectives) {
-      const std::string normalizedIncludedPath =
-          FileHelper::normalizePathIfPossible(includedPath);
-      if (normalizedIncludedPath.empty() ||
-          normalizedIncludedPath != includedPath || directives.empty()) {
+      if (!std::filesystem::path(includedPath).is_absolute() ||
+          std::filesystem::path(includedPath).lexically_normal().string() !=
+              includedPath ||
+          directives.empty()) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[include-owner-index]: frontend "
                 "target=%s has no exact path or directive owners\n",
@@ -60,24 +51,22 @@ IncludingPreprocessingInfosCollector::collect() {
           fprintf(stderr,
                   "REX_FRONTEND_INVARIANT[include-owner-index]: source=%s "
                   "target=%s has an unattached frontend directive=%p\n",
-                  sourceFile->getFileName().c_str(),
-                  normalizedIncludedPath.c_str(),
+                  sourceFile->getFileName().c_str(), includedPath.c_str(),
                   static_cast<void *>(directive));
           ROSE_ABORT();
         }
         const std::string normalizedIncludingPath =
-            FileHelper::getNormalizedContainingFileName(directive);
+            directive->get_file_info()->get_physical_filename();
         if (normalizedIncludingPath.empty()) {
           fprintf(stderr,
                   "REX_FRONTEND_INVARIANT[include-owner-index]: target=%s "
                   "has an owner with no exact physical source path\n",
-                  normalizedIncludedPath.c_str());
+                  includedPath.c_str());
           ROSE_ABORT();
         }
         normalizedIncludedFilesMap[normalizedIncludingPath].insert(
-            normalizedIncludedPath);
-        includingPreprocessingInfosMap[normalizedIncludedPath].insert(
-            directive);
+            includedPath);
+        includingPreprocessingInfosMap[includedPath].insert(directive);
       }
     }
   }
@@ -90,7 +79,7 @@ IncludingPreprocessingInfosCollector::collect() {
       if (owners != includingPreprocessingInfosMap.end()) {
         for (PreprocessingInfo *directive : owners->second) {
           if (directive != nullptr && directive->get_file_info() != nullptr &&
-              FileHelper::getNormalizedContainingFileName(directive) ==
+              directive->get_file_info()->get_physical_filename() ==
                   includingPath) {
             foundExactOwner = true;
             break;
@@ -172,8 +161,6 @@ void IncludingPreprocessingInfosCollector::visit(SgNode *node) {
     AttachedPreprocessingInfoType *preprocessingInfoType =
         locatedNode->getAttachedPreprocessingInfo();
     if (preprocessingInfoType != NULL) {
-      string containingFileName = FileHelper::normalizePath(
-          locatedNode->get_file_info()->get_filenameString());
       for (AttachedPreprocessingInfoType::const_iterator it =
                preprocessingInfoType->begin();
            it != preprocessingInfoType->end(); it++) {
@@ -185,7 +172,8 @@ void IncludingPreprocessingInfosCollector::visit(SgNode *node) {
             directiveType ==
                 PreprocessingInfo::CpreprocessorIncludeNextDeclaration) {
           if (SgProject::get_verbose() >= 1) {
-            cout << "Found #include directive in file: " << containingFileName
+            cout << "Found #include directive in file: "
+                 << preprocessingInfo->get_file_info()->get_physical_filename()
                  << endl;
           }
           observeIncludePreprocessingInfo(preprocessingInfo);

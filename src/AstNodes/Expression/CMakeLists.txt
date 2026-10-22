@@ -12,21 +12,21 @@ add_library(roseAstNodesExpression OBJECT
   SgAsteriskShapeExp.C
   SgAwaitExpression.C
   SgBinaryOp.C
-  SgBitComplementOp.C
   SgBracedInitializer.C
   SgCAFCoExpression.C
   SgCAFImageSelectorExp.C
   SgCallExpression.C
   SgCastExp.C
-  SgChar16Val.C
-  SgChar32Val.C
-  SgClassExp.C
   SgColonShapeExp.C
   SgCommaOpExp.C
   SgComplexVal.C
   SgConditionalExp.C
   SgConstructorInitializer.C
   SgCudaKernelCallExp.C
+  SgCudaKernelExecConfig.C
+  SgCxxArrayInitLoop.C
+  SgCxxDefaultInitExp.C
+  SgCxxSubobjectDestruction.C
   SgDeleteExp.C
   SgDesignatedInitializer.C
   SgDesignator.C
@@ -46,7 +46,6 @@ add_library(roseAstNodesExpression OBJECT
   SgLambdaExp.C
   SgMacroExpansionExp.C
   SgMemberFunctionRefExp.C
-  SgMinusMinusOp.C
   SgNewExp.C
   SgNoexceptOp.C
   SgNonrealRefExp.C
@@ -62,16 +61,15 @@ add_library(roseAstNodesExpression OBJECT
   SgOmpDirectiveLocalRefExp.C
   SgOmpSourceExpression.C
   SgPackExpansionExpr.C
-  SgPlusPlusOp.C
   SgPntrArrRefExp.C
   SgPointerDerefExp.C
   SgPseudoDestructorRefExp.C
+  SgPseudoObjectExp.C
   SgRangeExp.C
   SgSizeOfOp.C
   SgStatementExpression.C
   SgStringVal.C
   SgSubscriptExpression.C
-  SgSuperExp.C
   SgTemplateFunctionRefExp.C
   SgTemplateMemberFunctionRefExp.C
   SgTemplateParameterVal.C
@@ -82,13 +80,11 @@ add_library(roseAstNodesExpression OBJECT
   SgTypeIdOp.C
   SgTypeTraitBuiltinOperator.C
   SgUnaryOp.C
-  SgUnknownArrayOrFunctionReference.C
   SgUserDefinedBinaryOp.C
   SgUserDefinedUnaryOp.C
   SgVarArgEndOp.C
   SgVarArgOp.C
   SgVarRefExp.C
-  SgWcharVal.C
 )
 
 add_dependencies(roseAstNodesExpression rosetta_generated)

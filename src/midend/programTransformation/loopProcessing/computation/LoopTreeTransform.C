@@ -4,6 +4,7 @@
 
 #include "SinglyLinkedList.h"
 
+#include <functional>
 #include <map>
 
 #include "LoopTree.h"
@@ -26,7 +27,10 @@ void save_value(AstInterface &fa, SymbolicVal &v, const std::string &name,
     return;
   std::stringstream out;
   out << name << "_" << i;
-  SymbolicVar var(fa.NewVar(fa.GetType("int"), out.str(), true), fa.GetRoot());
+  AstNodePtr symbol;
+  std::string varname = fa.NewVar(fa.GetType("int"), out.str(), true, true,
+                                  AST_NULL, AST_NULL, &symbol);
+  SymbolicVar var(varname, fa.GetRoot(), symbol);
 
   AstNodePtr ast = fa.CreateAssignment(var.CodeGen(fa), v.CodeGen(fa));
   if (prep == 0)
@@ -225,8 +229,9 @@ LoopTreeNode *LoopTreeDistributeNode ::operator()(LoopTreeNode *n,
 
 LoopTreeNode *LoopTreeSplitStmt ::operator()(LoopTreeNode *stmt,
                                              LoopTreeNode *restr1,
-                                             LoopTreeNode *restr2) {
-  LoopTreeNode *n = stmt->CloneTree();
+                                             LoopTreeNode *restr2,
+                                             LoopTreeNode::CloneNodes &copies) {
+  LoopTreeNode *n = stmt->CloneTree(&copies);
   LoopTreeNode *tn = restr1;
   tn->Link(stmt, LoopTreeNode::AsPrevSibling);
   n->Link(tn, LoopTreeNode::AsLastChild);
@@ -260,21 +265,32 @@ LoopTreeNode *CreateSplitRestr(LoopTreeNode *l1, LoopTreeNode *l2, DepRel r) {
 LoopTreeNode *LoopTreeSplitStmt ::operator()(LoopTreeNode *stmt,
                                              LoopTreeNode *l1, LoopTreeNode *l2,
                                              DepRel rel) {
+  LoopTreeNode::CloneNodes copies;
   LoopTreeNode *n = operator()(stmt, CreateSplitRestr(l1, l2, rel),
-                               CreateSplitRestr(l1, l2, -rel));
-  SplitStmtInfo info(stmt, n, l1->LoopLevel(), l2->LoopLevel(), rel);
-  Notify(info);
+                               CreateSplitRestr(l1, l2, -rel), copies);
+  for (const auto &copy : copies) {
+    if (IsSimpleStmt(copy.first)) {
+      SplitStmtInfo info(copy.first, copy.second, l1->LoopLevel(),
+                         l2->LoopLevel(), rel);
+      Notify(info);
+    }
+  }
   return n;
 }
 
 LoopTreeNode *LoopTreeSplitStmt ::operator()(LoopTreeNode *stmt,
                                              LoopTreeNode *loop,
                                              const SymbolicVal &split) {
+  LoopTreeNode::CloneNodes copies;
   LoopTreeNode *n = operator()(
       stmt, new LoopTreeRestrLoopRange(loop, 0, SymbolicVal(), split),
-      new LoopTreeRestrLoopRange(loop, 0, split + 1, SymbolicVal()));
-  SplitStmtInfo2 info(stmt, n, loop->LoopLevel(), split);
-  Notify(info);
+      new LoopTreeRestrLoopRange(loop, 0, split + 1, SymbolicVal()), copies);
+  for (const auto &copy : copies) {
+    if (IsSimpleStmt(copy.first)) {
+      SplitStmtInfo2 info(copy.first, copy.second);
+      Notify(info);
+    }
+  }
   return n;
 }
 
@@ -492,9 +508,6 @@ bool SelectArray::select(LoopTreeNode *stmt, LoopTreeNode *cproot,
   AstInterface &fa = LoopTransformInterface::getAstInterface();
   bool mod = false;
 
-  // std::cerr << "cproot=" << cproot->toString() << "\n";
-  // std::cerr << "stmt=" << stmt->toString() << "\n";
-
   std::vector<SymbolicVar> ivars;
   std::vector<std::pair<SymbolicVar, SymbolicVal>> repl;
   std::vector<SymbolicBound> bounds;
@@ -550,7 +563,6 @@ bool SelectArray::select(LoopTreeNode *stmt, LoopTreeNode *cproot,
       curstart = newstart;
     }
     /* may need to split some dimensions into multiple ones*/
-    // std::cerr << "cur=" << cur.toString() << "\n";
     do {
       curdim = coeffs.front();
       coeffs.pop_front();
@@ -662,12 +674,17 @@ CopyArrayConfig::CopyArrayConfig(AstInterface &fa, const SelectArray &_sel,
 
 void SelectArray::set_bufname(AstInterface &fa) {
   AstNodeType buftype = basetype;
-  assert(bufsize.size() >= 1);
+  ROSE_ASSERT(!bufsize.empty());
   SymbolicVal copysize = bufsize[bufsize.size() - 1];
   if (!scalar_repl()) {
-    AstInterface::AstNodeList bufsizes;
-    bufsizes.push_back(copysize.CodeGen(fa).get_ptr());
-    buftype = fa.GetArrayType(buftype, bufsizes);
+    int constantSize;
+    if (copysize.isConstInt(constantSize)) {
+      AstInterface::AstNodeList bufsizes;
+      bufsizes.push_back(copysize.CodeGen(fa));
+      buftype = fa.GetArrayType(buftype, bufsizes);
+    } else {
+      buftype = fa.GetPointerType(buftype);
+    }
     bufname = fa.NewVar(buftype, arrname + "_buf", true);
   } else {
     int bufsizeval;
@@ -899,8 +916,10 @@ public:
     } else {
       if (sel.scalar_repl())
         ROSE_ABORT();
-      std::string ivarname = fa.NewVar(fa.GetType("int"));
-      SymbolicVar ivar(ivarname, fa.GetRoot());
+      AstNodePtr symbol;
+      std::string ivarname = fa.NewVar(fa.GetType("int"), "", false, true,
+                                       AST_NULL, AST_NULL, &symbol);
+      SymbolicVar ivar(ivarname, fa.GetRoot(), symbol);
       loopcopy_codegen(selp1, cursel.get_arrDim(), ivar, cursize, curincr, res);
     }
   }
@@ -932,8 +951,10 @@ public:
   LoopCopyInitCodeGen(const SelectArray &_sel,
                       const std::vector<SymbolicVal> &_arrindex)
       : CopyCodeGen(_sel, _arrindex) {
-    std::string bufoffsetname = fa.NewVar(fa.GetType("int"));
-    bufoffset = SymbolicVar(bufoffsetname, fa.GetRoot());
+    AstNodePtr symbol;
+    std::string bufoffsetname = fa.NewVar(fa.GetType("int"), "", false, true,
+                                          AST_NULL, AST_NULL, &symbol);
+    bufoffset = SymbolicVar(bufoffsetname, fa.GetRoot(), symbol);
   }
   LoopCopyInitCodeGen(const SelectArray &_sel,
                       const std::vector<SymbolicVal> &_arrindex,
@@ -1201,15 +1222,9 @@ LoopTreeNode *LoopTreeReplaceAst ::operator()(LoopTreeNode *h,
 }
 
 class ApplyLoopSplittingImpl {
-  typedef SymbolicVal SplitEntry;
-  typedef std::list<SplitEntry> SplitList;
+  typedef std::list<SymbolicVal> SplitList;
 
-  struct LoopLevelCompare {
-    bool operator()(const LoopTreeNode *n1, const LoopTreeNode *n2) const {
-      return n1->LoopLevel() > n2->LoopLevel();
-    }
-  };
-  typedef std::map<LoopTreeNode *, SplitList, LoopLevelCompare> SplitMap;
+  typedef std::map<LoopTreeNode *, SplitList> SplitMap;
 
   void SplitLoop(LoopTreeNode *loop, SplitList::const_iterator cur,
                  SplitList::const_iterator end) {
@@ -1222,19 +1237,37 @@ class ApplyLoopSplittingImpl {
       stmtlist.insert(stmts.Current());
     }
     SymbolicVal mid = (*cur);
-    for (PtrSetWrap<LoopTreeNode>::const_iterator listp = stmtlist.begin();
-         !listp.ReachEnd(); listp.Advance()) {
-      LoopTreeNode *curstmt = listp.Current();
-      assert(curstmt != NULL);
-      LoopTreeSplitStmt()(curstmt, loop, mid);
+    for (LoopTreeNode *body = loop->FirstChild(); body != nullptr;) {
+      LoopTreeNode *next = body->NextSibling();
+      LoopTreeSplitStmt()(body, loop, mid);
+      body = next;
     }
     SelectPtrSet<LoopTreeNode> sel(stmtlist);
-    LoopTreeDistributeNode()(loop, sel, LoopTreeDistributeNode::AFTER);
-    LoopTreeNode *loop1 = loop->NextSibling();
+    const auto *info = loop->GetLoopInfo();
+    const bool reverse = info->ReverseEnum();
+    const SymbolicVal begin = info->GetLoopLB();
+    const SymbolicVal step = info->GetStep();
+    const SymbolicVal stride = reverse ? SymbolicVal(0) - step : step;
+    LoopTreeDistributeNode()(loop, sel,
+                             reverse ? LoopTreeDistributeNode::BEFORE
+                                     : LoopTreeDistributeNode::AFTER);
+    LoopTreeNode *loop1 = reverse ? loop->PrevSibling() : loop->NextSibling();
+    ASSERT_require(loop1 != nullptr && loop1->IsLoop());
+    LoopTreeGetVarBound bounds(loop->Parent());
+    loop->GetLoopInfo()->GetBound().Intersect(SymbolicBound(SymbolicVal(), mid),
+                                              &bounds);
+    loop1->GetLoopInfo()->GetBound().Intersect(
+        SymbolicBound(mid + 1, SymbolicVal()), &bounds);
+    auto *partition = (reverse ? loop : loop1)->GetLoopInfo();
+    const SymbolicVal distance = reverse ? begin - partition->GetLoopLB()
+                                         : partition->GetLoopLB() - begin;
+    const SymbolicVal iterations = SymbolicValGenerator::GetSymbolicVal(
+        AstInterface::BOP_DIVIDE, {distance + stride - 1, stride});
+    auto &start = reverse ? partition->GetBound().ub : partition->GetBound().lb;
+    start = begin + step * iterations;
     OptimizeLoopTree(loop);
     OptimizeLoopTree(loop1);
     ++cur;
-    assert(loop1 != NULL);
     if (!loop1->SelfRemove())
       SplitLoop(loop1, cur, end);
     if (!loop->SelfRemove())
@@ -1243,28 +1276,24 @@ class ApplyLoopSplittingImpl {
 
 public:
   void operator()(LoopTreeNode *r) {
-    SplitMap splitmap;
+    std::map<int, SplitMap, std::greater<int>> splitmap;
 
     for (LoopTreeTraverse p(r); !p.ReachEnd(); p.Advance()) {
       LoopTreeNode *n = p.Current();
-      if (n->LoopTreeGetClassName() == "LoopTreeRestrLoopRange") {
-        LoopTreeRestrLoopRange *cur = dynamic_cast<LoopTreeRestrLoopRange *>(n);
+      if (auto *cur = dynamic_cast<LoopTreeRestrLoopRange *>(n)) {
         LoopTreeNode *loop = cur->GetRestrLoop();
-        SplitList &splitlist = splitmap[loop];
+        SplitList &splitlist = splitmap[loop->LoopLevel()][loop];
         VarInfo curinfo = cur->GetVarInfo();
         SymbolicVal lb = curinfo.GetBound().lb, ub = curinfo.GetBound().ub;
-        SymbolicVal mid = lb.IsNIL() ? ub : lb - 1;
         if (!lb.IsNIL())
           splitlist.push_back(lb - 1);
         if (!ub.IsNIL())
           splitlist.push_back(ub);
       }
     }
-    for (SplitMap::const_iterator splitp = splitmap.begin();
-         splitp != splitmap.end(); ++splitp) {
-      const std::pair<LoopTreeNode *const, SplitList> &cur = *splitp;
-      SplitLoop(cur.first, cur.second.begin(), cur.second.end());
-    }
+    for (const auto &level : splitmap)
+      for (const auto &entry : level.second)
+        SplitLoop(entry.first, entry.second.begin(), entry.second.end());
   }
 };
 

@@ -28,4 +28,13 @@ int normalize_single_statement_bodies(int n) {
   return total;
 }
 
-int main() { return normalize_single_statement_bodies(4); }
+int rex_normalize_range_body(int n) {
+  int values[] = {1, 2};
+  for (int value : values)
+    n += value;
+  return n;
+}
+
+int main() {
+  return rex_normalize_range_body(normalize_single_statement_bodies(4)) - 3;
+}

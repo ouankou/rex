@@ -2,11 +2,6 @@
 #include "rose.h"
 
 int main(int argc, char *argv[]) {
-  // DQ (3/6/2017): Test API to set frontend and backend options for tools
-  // (minimal output from ROSE-based tools). Note that the defaults are for
-  // minimal output from ROSE-based tools.
-  Rose::global_options.set_frontend_notes(false);
-  Rose::global_options.set_frontend_warnings(false);
   Rose::global_options.set_backend_warnings(false);
 
   SgProject *project = frontend(argc, argv);
@@ -33,13 +28,7 @@ int main(int argc, char *argv[]) {
   // compiler, only backend error code is reported.
   int status = backend(project);
 
-  // DQ (10/21/2020): Adding IR node usage statistics reporting.
-  // AstNodeStatistics::IRnodeUsageStatistics();
-
-  // DQ (10/21/2020): Adding performance reporting.
   TimingPerformance::generateReport();
-  // TimingPerformance::generateReportToFile(project);
-  // TimingPerformance::set_project(SgProject* project);
 
   return status;
 }

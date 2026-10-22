@@ -64,6 +64,15 @@ int main(int argc, char **argv) {
       sandbox.path() / "vendor-unknown" / "include" / "project_header.hpp";
   const fs::path mappedHeader =
       sandbox.path() / "vendor-custom" / "include" / "custom.h";
+  const fs::path nearCHeader =
+      sandbox.path() / "vendor-c" / "include" / "stdio.h.bak";
+  const fs::path nearRoseHeader =
+      sandbox.path() / "vendor-near" / "include" / "notrose.h";
+  const fs::path nearStlHeader =
+      sandbox.path() / "vendor-stl" / "include" / "notvector";
+  const fs::path nearGccHeader = sandbox.path() / "lib" / "gccish" / "specs";
+  const fs::path nearMappedHeader =
+      sandbox.path() / "vendor-customish" / "include" / "custom.h";
   const fs::path missingHeader =
       sandbox.path() / "missing" / "does_not_exist.h";
 
@@ -73,6 +82,11 @@ int main(int argc, char **argv) {
   touchFile(stlHeader);
   touchFile(unknownHeader);
   touchFile(mappedHeader);
+  touchFile(nearCHeader);
+  touchFile(nearRoseHeader);
+  touchFile(nearStlHeader);
+  touchFile(nearGccHeader);
+  touchFile(nearMappedHeader);
 
   const string sourceDir = appRoot.string();
 
@@ -108,6 +122,17 @@ int main(int argc, char **argv) {
   classification =
       classifyFileName(mappedHeader.string(), sourceDir, customLibraries);
   expectClassification(classification, FILENAME_LOCATION_LIBRARY, "ThirdParty");
+
+  for (const fs::path &nearMatch :
+       {nearCHeader, nearRoseHeader, nearStlHeader, nearGccHeader}) {
+    classification = classifyFileName(nearMatch.string(), sourceDir);
+    expectClassification(classification, FILENAME_LOCATION_UNKNOWN,
+                         FILENAME_LIBRARY_UNKNOWN);
+  }
+  classification =
+      classifyFileName(nearMappedHeader.string(), sourceDir, customLibraries);
+  expectClassification(classification, FILENAME_LOCATION_UNKNOWN,
+                       FILENAME_LIBRARY_UNKNOWN);
 
   // Test header filename cleanup routine
 

@@ -121,6 +121,58 @@ void assertDeclaratorOwnedDefinition(SgClassDeclaration *declaration,
   }
 }
 
+void assertTypedefTagIntroduction(SgTypedefDeclaration *owner,
+                                  SgDeclarationStatement *definition,
+                                  SgGlobal *global) {
+  ROSE_ASSERT(owner != nullptr && definition != nullptr);
+  SgDeclarationStatement *introduction =
+      owner->get_baseTypeNondefiningDeclaration();
+  ROSE_ASSERT(introduction != nullptr);
+  ROSE_ASSERT(owner->get_baseTypeDefiningDeclaration() == nullptr);
+  ROSE_ASSERT(introduction->get_parent() == owner);
+  ROSE_ASSERT(introduction->get_scope() == global);
+  ROSE_ASSERT(introduction->get_definingDeclaration() == definition);
+  ROSE_ASSERT(definition->get_firstNondefiningDeclaration() == introduction);
+  ROSE_ASSERT(definition->get_parent() == global);
+  SgNamedType *type = isSgNamedType(owner->get_base_type()->findBaseType());
+  ROSE_ASSERT(type != nullptr && type->get_declaration() == introduction);
+  if (SgClassDeclaration *record = isSgClassDeclaration(definition)) {
+    ROSE_ASSERT(record->get_isAutonomousDeclaration());
+  } else {
+    SgEnumDeclaration *enumeration = isSgEnumDeclaration(definition);
+    ROSE_ASSERT(enumeration != nullptr);
+    ROSE_ASSERT(enumeration->get_isAutonomousDeclaration());
+  }
+}
+
+void assertTypedefNestedTag(SgGlobal *global, const SgName &name,
+                            const SgName &tagName, bool returnTag) {
+  SgTypedefDeclaration *owner = findGlobalTypedef(global, name);
+  ROSE_ASSERT(owner != nullptr);
+  SgDeclarationScope *scope = owner->get_source_declarator_scope();
+  ROSE_ASSERT(scope != nullptr && scope->get_parent() == owner);
+  ROSE_ASSERT(scope->get_declarations().size() == 1);
+  SgDeclarationStatement *tag = scope->get_declarations().front();
+  ROSE_ASSERT(tag != nullptr && tag->get_parent() == scope);
+  ROSE_ASSERT(tag->get_firstNondefiningDeclaration() == tag);
+  SgClassDeclaration *record = isSgClassDeclaration(tag);
+  SgEnumDeclaration *enumeration = isSgEnumDeclaration(tag);
+  ROSE_ASSERT(record != nullptr || enumeration != nullptr);
+  ROSE_ASSERT((record != nullptr ? record->get_name()
+                                 : enumeration->get_name()) == tagName);
+  ROSE_ASSERT(!(record != nullptr
+                    ? record->get_isAutonomousDeclaration()
+                    : enumeration->get_isAutonomousDeclaration()));
+  SgFunctionType *function =
+      isSgFunctionType(owner->get_base_type()->stripType());
+  ROSE_ASSERT(function != nullptr);
+  SgType *referenced =
+      returnTag ? function->get_return_type() : function->get_arguments().at(0);
+  SgNamedType *named = isSgNamedType(referenced->findBaseType());
+  ROSE_ASSERT(named != nullptr && named->get_declaration() == tag);
+  ROSE_ASSERT(tag->get_file_info()->isOutputInCodeGeneration());
+}
+
 void assertTypedefAliasField(SgClassDefinition *definition, const SgName &name,
                              SgTypedefDeclaration *typedefDeclaration,
                              bool expectArray) {
@@ -163,6 +215,19 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(sourceFile != nullptr);
   SgGlobal *global = sourceFile->get_globalScope();
   ROSE_ASSERT(global != nullptr);
+
+  assertTypedefTagIntroduction(
+      findGlobalTypedef(global, "RexTypedefIntroducedPointer"),
+      findGlobalClass(global, "RexTypedefIntroducedRecord"), global);
+  assertTypedefTagIntroduction(
+      findGlobalTypedef(global, "RexTypedefIntroducedEnumAlias"),
+      findGlobalEnum(global, "RexTypedefIntroducedEnum"), global);
+  assertTypedefNestedTag(global, "RexTypedefFunctionReturn",
+                         "RexTypedefReturnTag", true);
+  assertTypedefNestedTag(global, "RexTypedefFunctionParameter",
+                         "RexTypedefParameterTag", false);
+  assertTypedefNestedTag(global, "RexTypedefEnumParameter",
+                         "RexTypedefParameterEnum", false);
 
   SgTypedefDeclaration *namedTypedef =
       findGlobalTypedef(global, "NamedRecordPointer");
@@ -280,6 +345,41 @@ int main(int argc, char **argv) {
                          global->get_declarations().end(),
                          incompleteEnum) == 0);
 
+  auto *macroRecord = findGlobalClass(global, "rex_return_tag_reference");
+  auto *macroReturn = findGlobalFunction(global, "rex_return_tag_reference_fn");
+  ROSE_ASSERT(macroRecord != nullptr && macroReturn != nullptr);
+  ROSE_ASSERT(macroRecord->get_parent() == global);
+  ROSE_ASSERT(macroRecord->get_scope() == global);
+  ROSE_ASSERT(macroRecord->get_isAutonomousDeclaration());
+  ROSE_ASSERT(
+      isSgClassType(macroReturn->get_orig_return_type()->findBaseType()) ==
+      macroRecord->get_type());
+  auto *macroReturnScope = macroReturn->get_function_declarator_scope();
+  ROSE_ASSERT(macroReturnScope != nullptr);
+  ROSE_ASSERT(std::count(macroReturnScope->get_declarations().begin(),
+                         macroReturnScope->get_declarations().end(),
+                         macroRecord) == 0);
+
+  auto *recordReturn = findGlobalFunction(global, "rex_return_owned_record");
+  ROSE_ASSERT(recordReturn != nullptr);
+  auto *returnPointer = isSgPointerType(recordReturn->get_orig_return_type());
+  ROSE_ASSERT(returnPointer != nullptr);
+  auto *recordType = isSgClassType(returnPointer->get_base_type());
+  ROSE_ASSERT(recordType != nullptr);
+  auto *recordDefinition = definingClassDeclaration(
+      isSgClassDeclaration(recordType->get_declaration()));
+  ROSE_ASSERT(recordDefinition != nullptr);
+  auto *recordOwner = isSgDeclarationScope(recordDefinition->get_parent());
+  ROSE_ASSERT(recordOwner != nullptr &&
+              recordOwner->get_parent() == recordReturn);
+  ROSE_ASSERT(recordDefinition->get_scope() == global);
+  ROSE_ASSERT(std::count(recordOwner->get_declarations().begin(),
+                         recordOwner->get_declarations().end(),
+                         recordDefinition) == 1);
+  ROSE_ASSERT(recordReturn->get_type_syntax_is_available());
+  ROSE_ASSERT(recordReturn->get_type_syntax()->get_return_type() ==
+              returnPointer);
+
   SgFunctionDeclaration *parameterTagFunction =
       findGlobalFunction(global, "rex_parameter_owned_tag");
   ROSE_ASSERT(parameterTagFunction != nullptr);
@@ -295,6 +395,9 @@ int main(int argc, char **argv) {
   SgClassDeclaration *parameterDefinition =
       definingClassDeclaration(parameterType->get_declaration());
   ROSE_ASSERT(parameterDefinition != nullptr);
+  ROSE_ASSERT(parameterDefinition->get_definition() != nullptr &&
+              parameterDefinition->get_definition()
+                      ->get_construction_physical_output_owner() == nullptr);
   SgDeclarationScope *parameterTagOwner =
       isSgDeclarationScope(parameterDefinition->get_parent());
   ROSE_ASSERT(parameterTagOwner != nullptr);

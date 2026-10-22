@@ -9,10 +9,6 @@ add_library( astTokenStream OBJECT
   detectMacroExpansionsToBeUnparsedAsAstTransformations.C)
 add_dependencies(astTokenStream rosetta_generated)
 
-
-
-########### install files ###############
-
 install(FILES
   linearizeAST.h
   tokenStreamMapping.h frontierDetection.h simpleFrontierDetection.h

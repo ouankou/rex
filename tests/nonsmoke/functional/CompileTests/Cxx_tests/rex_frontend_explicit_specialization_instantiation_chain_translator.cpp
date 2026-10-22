@@ -87,6 +87,7 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(sourceDefinition != nullptr);
 
   size_t directives = 0;
+  size_t macro_directives = 0;
   for (SgNode *node : NodeQuery::querySubTree(
            project, V_SgTemplateInstantiationDirectiveStatement)) {
     SgTemplateInstantiationDirectiveStatement *directive =
@@ -95,6 +96,10 @@ int main(int argc, char **argv) {
         directive != nullptr
             ? isSgTemplateInstantiationDecl(directive->get_declaration())
             : nullptr;
+    if (child != nullptr && child->get_name() == "Holder<double>") {
+      ROSE_ASSERT(child->get_class_type() == SgClassDeclaration::e_struct);
+      ++macro_directives;
+    }
     if (!isTargetInstantiation(child)) {
       continue;
     }
@@ -115,6 +120,43 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(canonical->get_definingDeclaration() == sourceDefinition);
   }
   ROSE_ASSERT(directives == 1);
+  ROSE_ASSERT(macro_directives == 1);
+
+  size_t tag_definitions = 0;
+  size_t defaulted_definitions = 0;
+  for (SgNode *node :
+       NodeQuery::querySubTree(project, V_SgTemplateInstantiationDecl)) {
+    auto *declaration = isSgTemplateInstantiationDecl(node);
+    if (declaration->get_name() == "Holder<short>" &&
+        declaration->get_definition() != nullptr) {
+      auto *canonical = isSgTemplateInstantiationDecl(
+          declaration->get_firstNondefiningDeclaration());
+      ROSE_ASSERT(canonical != nullptr && canonical != declaration);
+      ROSE_ASSERT(hasExactPhysicalSourcePosition(canonical));
+      ROSE_ASSERT(hasExactPhysicalSourcePosition(declaration));
+      ROSE_ASSERT(canonical->get_templateArguments().size() == 1);
+      ROSE_ASSERT(declaration->get_templateArguments().empty());
+      ROSE_ASSERT(canonical->get_semanticTemplateArguments().size() == 1);
+      ROSE_ASSERT(declaration->get_semanticTemplateArguments().size() == 1);
+      ROSE_ASSERT(canonical->get_type() == declaration->get_type());
+      ROSE_ASSERT(canonical->get_definingDeclaration() == declaration);
+      ++defaulted_definitions;
+    }
+    if (declaration->get_name() != "Holder<long>" ||
+        declaration->get_definition() == nullptr) {
+      continue;
+    }
+    auto *canonical = isSgTemplateInstantiationDecl(
+        declaration->get_firstNondefiningDeclaration());
+    ROSE_ASSERT(canonical != nullptr);
+    ROSE_ASSERT(hasExactPhysicalSourcePosition(canonical));
+    ROSE_ASSERT(canonical->get_class_type() == SgClassDeclaration::e_class);
+    ROSE_ASSERT(declaration->get_class_type() == SgClassDeclaration::e_struct);
+    ROSE_ASSERT(canonical->get_definingDeclaration() == declaration);
+    ++tag_definitions;
+  }
+  ROSE_ASSERT(tag_definitions == 1);
+  ROSE_ASSERT(defaulted_definitions == 1);
 
   AstTests::runAllTests(project);
   return 0;

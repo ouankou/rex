@@ -14,7 +14,6 @@
 #include <string>
 
 #include <utility>
-// #include "rose.h"
 
 struct Declaration {
   SgStatement *initVarDeclaration, *nonInitVarDeclaration, *assignment;

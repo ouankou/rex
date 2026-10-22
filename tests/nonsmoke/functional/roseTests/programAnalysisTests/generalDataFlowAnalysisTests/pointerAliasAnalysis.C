@@ -1,6 +1,11 @@
 #include "pointerAliasAnalysis.h"
 
+#include "sageBuilder.h"
+#include "sageInterface.h"
+
 #include <algorithm>
+
+using VirtualCFG::DataflowNode;
 
 // **********************************************************************
 //                     pointerAliasLattice
@@ -15,6 +20,7 @@ Lattice *pointerAliasLattice::copy() const {
 // Copies that lattice into this
 void pointerAliasLattice::copy(Lattice *that_arg) {
   pointerAliasLattice *that = dynamic_cast<pointerAliasLattice *>(that_arg);
+  ROSE_ASSERT(that != nullptr);
   Dbg::dbg << "Entering COPY : That:" << that << " -- " << that->str(" ")
            << "This :" << endl
            << " -- " << str(" ") << endl;
@@ -25,7 +31,9 @@ void pointerAliasLattice::copy(Lattice *that_arg) {
 // Checks if that equals this
 bool pointerAliasLattice::operator==(Lattice *that_arg) {
   pointerAliasLattice *that = dynamic_cast<pointerAliasLattice *>(that_arg);
-  return aliasedVariables == that->aliasedVariables;
+  ROSE_ASSERT(that != nullptr);
+  return aliasedVariables == that->aliasedVariables &&
+         aliasRelations == that->aliasRelations;
 }
 
 // Required function for printing debug information
@@ -44,13 +52,8 @@ string pointerAliasLattice::str(string indent) {
   for (set<std::pair<aliasDerefCount, aliasDerefCount>>::iterator alRel =
            aliasRelations.begin();
        alRel != aliasRelations.end(); alRel++) {
-    if ((alRel->first).var != NULL && (alRel->second).var != NULL)
-      oss << "(" << isSgVariableSymbol((alRel->first).var)->get_name() << ","
-          << (alRel->first).vID << "," << (alRel->first).derefLevel << ") ("
-          << isSgVariableSymbol((alRel->second).var)->get_name() << ","
-          << (alRel->second).vID << "," << (alRel->second).derefLevel << ")";
-    else
-      ROSE_ASSERT(((alRel->first).var == NULL && (alRel->second).var == NULL));
+    oss << "(" << alRel->first.vID << "," << alRel->first.derefLevel << ") ("
+        << alRel->second.vID << "," << alRel->second.derefLevel << ")";
   }
   oss << "}";
   return oss.str();
@@ -67,63 +70,20 @@ void pointerAliasLattice::setAliasRelation(
   aliasRelations.insert(alRel);
 }
 
-// Meet of that lattice with this lattice
-/*
-    Performs a meet on:
-        - that.aliasRelations with this.aliasRelations set. This is a union of
-   sets by ensuring we do not have duplicate elements
-        - that.aliasedVariables with this.aliasedVariables set. This can also be
-   viewed as a union of compact representation graphs and is simply a union of
-   sets byt ensuring we do not have duplicates.
-
-    If the union of either of the sets results in modification of this, we set
-   the 'modified' flag to true
-*/
 bool pointerAliasLattice::meetUpdate(Lattice *that_arg) {
-  bool modified = false;
   pointerAliasLattice *that = dynamic_cast<pointerAliasLattice *>(that_arg);
+  ROSE_ASSERT(that != nullptr);
   Dbg::dbg << "IN MEETTPDATE That:" << that->str(" ") << "This :" << str(" ")
            << endl;
 
-  // Union of Aliasrelations
-  set<std::pair<aliasDerefCount, aliasDerefCount>> thisAliasRelations =
-      aliasRelations;
-  set<std::pair<aliasDerefCount, aliasDerefCount>> thatAliasRelations =
-      that->getAliasRelations();
-  for (set<std::pair<aliasDerefCount, aliasDerefCount>>::iterator alRel =
-           thatAliasRelations.begin();
-       alRel != thatAliasRelations.end(); alRel++) {
-    // set::find() doesnt work well on pairs for some reason. Adding a search
-    // function for now
-    if (!search(thisAliasRelations, *alRel)) {
-      this->setAliasRelation(*alRel);
-      modified = true;
-    }
-  }
-
-  // Union of aliasedVariables (Compact Representation Graphs)
-  set<varID> thisAlias = aliasedVariables;
-  set<varID> thatAlias = that->getAliasedVariables();
-  Dbg::dbg << "This alias Size :" << thisAlias.size()
-           << " That alias Size :" << thatAlias.size();
-  for (set<varID>::iterator al = thatAlias.begin(); al != thatAlias.end();
-       al++) {
-    if (thisAlias.find(*al) == thisAlias.end()) {
-      this->setAliasedVariables(*al);
-      modified = true;
-    }
-  }
-  return modified;
-}
-
-template <typename T>
-bool pointerAliasLattice::search(set<T> thisSet, T value) {
-  for (typename set<T>::iterator item = thisSet.begin(); item != thisSet.end();
-       item++) {
-    if (*item == value)
-      return true;
-  }
-  return false;
+  const size_t relation_count = aliasRelations.size();
+  const size_t variable_count = aliasedVariables.size();
+  aliasRelations.insert(that->aliasRelations.begin(),
+                        that->aliasRelations.end());
+  aliasedVariables.insert(that->aliasedVariables.begin(),
+                          that->aliasedVariables.end());
+  return aliasRelations.size() != relation_count ||
+         aliasedVariables.size() != variable_count;
 }
 
 // Getter for AliasRelations
@@ -143,12 +103,6 @@ void pointerAliasLattice::clearAliasedVariables() { aliasedVariables.clear(); }
 // **********************************************************************
 //                     pointerAliasAnalysisTransfer
 // **********************************************************************
-
-/*pointerAliasAnalysisTransfer::pointerAliasAnalysisTransfer(const Function&
-func, const DataflowNode& n, NodeState& state, const std::vector<Lattice*>&
-dfInfo) : IntraDFTransferVisitor(func, n, state, dfInfo)
-{}
-*/
 
 int pointerAliasAnalysisDebugLevel = 2;
 
@@ -176,7 +130,8 @@ void pointerAliasAnalysisTransfer::visit(SgAssignOp *sgn) {
   processRHS(rhs, rightARNode);
 
   // Establish the per CFG-node alias relations
-  if ((leftARNode.var != NULL) && (rightARNode.var != NULL))
+  if (leftARNode.var != nullptr &&
+      (rightARNode.var != nullptr || isSgNewExp(rightARNode.vID.expression)))
     resLat->setAliasRelation(make_pair(leftARNode, rightARNode));
 
   // Update the aliasedVariables(Compact Representation Graph)
@@ -195,24 +150,19 @@ void pointerAliasAnalysisTransfer::visit(SgFunctionCallExp *sgn) {
 // Calculates the aliasDerefCount for left and right side of AssignInitializer
 // expression and updates lattice with alias information
 void pointerAliasAnalysisTransfer::visit(SgAssignInitializer *sgn) {
-
-  SgAssignInitializer *assgn_i = isSgAssignInitializer(sgn);
-  assert(assgn_i != NULL);
+  ROSE_ASSERT(sgn != nullptr);
   pointerAliasLattice *resLat = getLattice(sgn);
-
-  SgExpression *lhs = static_cast<SgExpression *>(assgn_i->get_parent());
-  SgExpression *rhs = assgn_i->get_operand();
-  aliasDerefCount leftARNode, rightARNode;
-
-  processLHS(lhs, leftARNode);
-  processRHS(rhs, rightARNode);
-
-  // Establish the per CFG-node alias relations
-  if ((leftARNode.var != NULL) && (rightARNode.var != NULL))
-    resLat->setAliasRelation(make_pair(leftARNode, rightARNode));
-
-  // Update the Aliases(Compact Representation Graph)
-  updateAliases(resLat->getAliasRelations(), 1);
+  ROSE_ASSERT(resLat != nullptr);
+  aliasDerefCount right;
+  processRHS(sgn->get_operand(), right);
+  if (right.var != nullptr || isSgNewExp(right.vID.expression)) {
+    set<varID> aliases;
+    computeAliases(getLattice(right.vID), right.vID, right.derefLevel + 1,
+                   aliases);
+    resLat->clearAliasedVariables();
+    for (const varID &alias : aliases)
+      resLat->setAliasedVariables(alias);
+  }
 }
 
 // Transfer function for Constructor Initalizers.
@@ -305,6 +255,8 @@ void pointerAliasAnalysisTransfer::computeAliases(pointerAliasLattice *lat,
   if (derefLevel == 0)
     result.insert(var);
   else {
+    ROSE_ASSERT(derefLevel > 0);
+    ROSE_ASSERT(lat != nullptr);
     set<varID> outS = lat->getAliasedVariables();
     for (set<varID>::iterator outVar = outS.begin(); outVar != outS.end();
          outVar++) {
@@ -327,14 +279,6 @@ void pointerAliasAnalysisTransfer::processLHS(SgNode *node,
   int derefLevel = 0;
 
   switch (node->variantT()) {
-  case V_SgInitializedName: {
-    SgInitializedName *init_exp = isSgInitializedName(node);
-    ROSE_ASSERT(init_exp != NULL);
-    sym = static_cast<SgVariableSymbol *>(
-        init_exp->get_symbol_from_symbol_table());
-    var = SgExpr2Var(init_exp->get_initializer());
-  } break;
-
   case V_SgVarRefExp: {
     var_exp = isSgVarRefExp(node);
     ROSE_ASSERT(var_exp != NULL);
@@ -393,8 +337,6 @@ void pointerAliasAnalysisTransfer::processRHS(SgNode *node,
   SgVarRefExp *var_exp;
   varID var;
   int derefLevel = 0;
-  static int new_index;
-  static map<SgExpression *, SgVariableSymbol *> new_variables;
 
   switch (node->variantT()) {
 
@@ -450,50 +392,11 @@ void pointerAliasAnalysisTransfer::processRHS(SgNode *node,
     processRHS(cast_exp->get_operand(), arNode);
     return;
   } break;
-  // C *c = new C or
-  // c = new C
-  // return new C
-  /*
-      We follow the rule that every memory location has a unique name.
-      To assign a unique name for 'new Class()' expression we assign
-     "__tmp_Mem_x" to identify it using a SgVariableSymbol name The AST is
-     updated to reflect the new variable Declaration
-  */
   case V_SgNewExp: {
     SgNewExp *new_exp = isSgNewExp(node);
-    if (new_variables.count(new_exp) == 0) {
-
-      SgScopeStatement *scope = NULL;
-      SgNode *parent = new_exp->get_parent();
-      SgStatement *stmt = NULL;
-
-      // find the nearest parent which is a statement
-      while (!(stmt = isSgStatement(parent)))
-        parent = parent->get_parent();
-
-      scope = stmt->get_scope();
-      SgType *type = new_exp->get_type()->dereference();
-      std::stringstream ss;
-      ss << "__tmp_Mem__" << new_index;
-      std::string name;
-      ss >> name;
-      SgName var_name = name;
-      new_index++;
-      assert(scope != NULL);
-
-      // Create a temporary variable so that every memory location has an
-      // assigned name
-      SageBuilder::buildVariableDeclaration_nfi(var_name, type, NULL, scope);
-
-      // SageInterface::prependStatement(var_decl, scope);
-      sym = scope->lookup_variable_symbol(var_name);
-      ROSE_ASSERT(sym != NULL);
-      new_variables[new_exp] = sym;
-    } else
-      sym = new_variables[new_exp];
-
+    ROSE_ASSERT(new_exp != nullptr);
     var = SgExpr2Var(new_exp);
-    derefLevel = derefLevel - 1;
+    derefLevel = -1;
   } break;
   default:
     sym = NULL;
@@ -525,8 +428,7 @@ pointerAliasAnalysis::pointerAliasAnalysis(LiveDeadVarsAnalysis *ldva) {
 bool pointerAliasAnalysis::transfer(const Function &func, const DataflowNode &n,
                                     NodeState &state,
                                     const std::vector<Lattice *> &dfInfo) {
-  assert(0);
-  return false;
+  ROSE_ABORT();
 }
 
 std::shared_ptr<IntraDFTransferVisitor>

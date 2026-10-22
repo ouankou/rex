@@ -1,11 +1,8 @@
 
-// tps (01/14/2010) : Switching from rose.h to sage3.
 #include "AstConsistencyTests.h"
 
 #include "sage3basic.h"
 #include "sageInterface.h"
-
-#include "unparser.h"
 
 #include "expressionTreeEqual.h"
 
@@ -15,28 +12,16 @@
 
 #include "pre.h"
 
-#include "replaceExpressionWithStatement.h"
-
-#include <iomanip>
-
 #include <iostream>
 
+#include <map>
 #include <memory>
 
 #include <vector>
 
 #include "finiteDifferencing.h"
 
-#undef FD_DEBUG
-
-// DQ (8/1/2005): test use of new static function to create
-// Sg_File_Info object that are marked as transformations
-#undef SgNULL_FILE
-#define SgNULL_FILE Sg_File_Info::generateDefaultFileInfoForTransformationNode()
-
 using namespace std;
-
-void FixSgTree(SgNode *);
 
 namespace {
 SgExpression *
@@ -63,28 +48,22 @@ finiteDifferencingOutermostImplicitConversion(SgExpression *expression) {
 
 class FdFindCopiesVisitor : public AstSimpleProcessing {
   SgExpression *target;
+  SgFunctionDefinition *function;
   vector<SgExpression *> &copies;
 
 public:
   FdFindCopiesVisitor(SgExpression *target, vector<SgExpression *> &copies)
-      : target(target), copies(copies) {
-#ifdef FD_DEBUG
-    cout << "Looking for copies of " << target->unparseToString() << endl;
-#endif
+      : target(target),
+        function(SageInterface::getEnclosingFunctionDefinition(target)),
+        copies(copies) {
+    ROSE_ASSERT(function != nullptr);
   }
 
   virtual void visit(SgNode *n) {
-#ifdef FD_DEBUG
-    cout << "FdFindCopiesVisitor visiting" << n->sage_class_name() << endl;
-#endif
-    if (isSgExpression(n) && expressionTreeEqual(isSgExpression(n), target)) {
-#ifdef FD_DEBUG
-      cout << "Found copy " << n->unparseToString() << endl;
-#endif
+    if (isSgExpression(n) &&
+        SageInterface::getEnclosingFunctionDefinition(n) == function &&
+        (n == target || expressionTreeEqual(isSgExpression(n), target))) {
       SgExpression *copy = isSgExpression(n);
-      if (isSgVarRefExp(target)) {
-        copy = finiteDifferencingOutermostImplicitConversion(copy);
-      }
       if (std::find(copies.begin(), copies.end(), copy) == copies.end()) {
         copies.push_back(copy);
       }
@@ -92,223 +71,254 @@ public:
   }
 };
 
-SgExpression *copyFiniteDifferencingValueOccurrence(SgExpression *source,
-                                                    SgNode *root) {
-  vector<SgExpression *> occurrences;
-  FdFindCopiesVisitor(source, occurrences).traverse(root, preorder);
-  if (occurrences.empty()) {
-    fprintf(stderr,
-            "REX_FINITE_DIFFERENCING_INVARIANT[value-occurrence]: source=%p/%s "
-            "has no exact typed occurrence in root=%p/%s\n",
-            static_cast<void *>(source), source->class_name().c_str(),
-            static_cast<void *>(root), root->class_name().c_str());
-    ROSE_ABORT();
-  }
-  SgExpression *copy =
-      isSgExpression(SageInterface::deepCopyNode(occurrences.front()));
-  if (copy == nullptr || copy->get_parent() != nullptr) {
-    fprintf(stderr,
-            "REX_FINITE_DIFFERENCING_INVARIANT[value-occurrence]: copied "
-            "typed value is not one detached expression\n");
-    ROSE_ABORT();
-  }
-  return copy;
-}
-
-void replaceCopiesOfExpression(SgExpression *src, SgExpression *tgt,
-                               SgNode *root) {
-#ifdef FD_DEBUG
-  cout << "replaceCopiesOfExpression: src = " << src->unparseToString()
-       << ", tgt = " << tgt->unparseToString()
-       << ", root = " << root->unparseToString() << endl;
-#endif
+static void
+replaceCopiesOfExpression(SgExpression *src, SgExpression *tgt, SgNode *root,
+                          vector<SgExpression *> &retiredExpressions,
+                          map<SgExpression *, SgExpression *> &published) {
   vector<SgExpression *> copies_of_src;
-#ifdef FD_DEBUG
-  cout << "---" << endl;
-#endif
   FdFindCopiesVisitor(src, copies_of_src).traverse(root, preorder);
-#ifdef FD_DEBUG
-  cout << copies_of_src.size() << " copy(ies) found." << endl;
-#endif
   for (unsigned int i = 0; i < copies_of_src.size(); ++i) {
     SgTreeCopy tc;
     SgExpression *copy = isSgExpression(tgt->copy(tc));
     SgExpression *replaced = copies_of_src[i];
-    SgExpression *parent = isSgExpression(replaced->get_parent());
-    assert(parent);
-    parent->replace_expression(replaced, copy);
-    copy->set_parent(parent);
-    const SgNodePtrList ownedChildren =
-        parent->get_traversalSuccessorContainer();
-    if (std::count(ownedChildren.begin(), ownedChildren.end(), replaced) != 0 ||
-        std::count(ownedChildren.begin(), ownedChildren.end(), copy) != 1) {
-      fprintf(stderr,
-              "REX_FINITE_DIFFERENCING_INVARIANT[expression-replacement]: "
-              "parent=%p/%s did not replace source=%p with copy=%p exactly "
-              "once\n",
-              static_cast<void *>(parent), parent->class_name().c_str(),
-              static_cast<void *>(replaced), static_cast<void *>(copy));
-      ROSE_ABORT();
+    ROSE_ASSERT(copy != nullptr);
+    SageInterface::replaceExpression(replaced, copy, true);
+    published.emplace(replaced, copy);
+    if (replaced != src) {
+      retiredExpressions.push_back(replaced);
     }
-    replaced->set_parent(nullptr);
-  }
-#ifdef FD_DEBUG
-  cout << "result is " << root->unparseToString() << endl;
-#endif
-}
-
-class FdFindModifyingStatementsVisitor : public AstSimpleProcessing {
-  const vector<SgVariableSymbol *> &syms;
-  vector<SgExpression *> &mods;
-  vector<SgAssignInitializer *> initializersToSplit;
-
-public:
-  FdFindModifyingStatementsVisitor(const vector<SgVariableSymbol *> &syms,
-                                   vector<SgExpression *> &mods)
-      : syms(syms), mods(mods) {}
-
-  void go(SgNode *root) {
-    // Not thread safe or reentrant
-    initializersToSplit.clear();
-    traverse(root, postorder);
-    for (unsigned int i = 0; i < initializersToSplit.size(); ++i) {
-      SgAssignOp *assignment =
-          convertInitializerIntoAssignment(initializersToSplit[i]);
-      assert(assignment->variantT() == V_SgAssignOp);
-      mods.push_back(assignment);
-    }
-  }
-
-  virtual void visit(SgNode *n) {
-    switch (n->variantT()) {
-    case V_SgAssignOp:
-    case V_SgPlusAssignOp:
-    case V_SgMinusAssignOp:
-    case V_SgAndAssignOp:
-    case V_SgIorAssignOp:
-    case V_SgMultAssignOp:
-    case V_SgDivAssignOp:
-    case V_SgModAssignOp:
-    case V_SgXorAssignOp:
-    case V_SgLshiftAssignOp:
-    case V_SgRshiftAssignOp:
-      if (legacy::anyOfListPotentiallyModifiedIn(syms, n))
-        mods.push_back(isSgExpression(n));
-      break;
-
-    case V_SgPlusPlusOp:
-    case V_SgMinusMinusOp:
-      if (legacy::anyOfListPotentiallyModifiedIn(syms, n))
-        mods.push_back(isSgExpression(n));
-      break;
-
-    case V_SgAssignInitializer: {
-      SgAssignInitializer *init = isSgAssignInitializer(n);
-      assert(init);
-      for (unsigned int i = 0; i < syms.size(); ++i) {
-        SgInitializedName *initname = syms[i]->get_declaration();
-        if (init->get_parent() == initname ||
-            init->get_parent()->get_parent() == initname) {
-          initializersToSplit.push_back(init);
-          break;
-        }
-      }
-    } break;
-
-    default:
-      break;
-    }
-  }
-};
-
-SgExpression *doFdVariableUpdate(
-    RewriteRule *rules, SgExpression *cache,
-    SgExpression *old_val /* Cannot be referenced in output tree w/o copying */,
-    SgExpression *new_val) {
-#ifdef FD_DEBUG
-  cout << "Trying to convert from " << old_val->unparseToString() << " to "
-       << new_val->unparseToString() << ", using cache "
-       << cache->unparseToString() << endl;
-#endif
-  SgTreeCopy tc;
-  SgExpression *old_valCopy = isSgExpression(old_val->copy(tc));
-  ROSE_ASSERT(old_valCopy);
-  SgCommaOpExp *innerComma =
-      new SgCommaOpExp(SgNULL_FILE, old_valCopy, new_val, new_val->get_type());
-  innerComma->set_endOfConstruct(SgNULL_FILE);
-  old_valCopy->set_parent(innerComma);
-  new_val->set_parent(innerComma);
-  SgExpression *expr =
-      new SgCommaOpExp(SgNULL_FILE, cache, innerComma, innerComma->get_type());
-  expr->set_endOfConstruct(SgNULL_FILE);
-  cache->set_parent(expr);
-  innerComma->set_parent(expr);
-  // This is done so rewrite's expression replacement code will never find a
-  // NULL parent for the expression being replaced
-  SgExprStatement *dummyExprStatement = new SgExprStatement(SgNULL_FILE, expr);
-  dummyExprStatement->set_endOfConstruct(SgNULL_FILE);
-  expr->set_parent(dummyExprStatement);
-  SgNode *exprCopyForRewrite = expr;
-  rewrite(rules, exprCopyForRewrite); // This might modify exprCopyForRewrite
-  ROSE_ASSERT(isSgExpression(exprCopyForRewrite));
-  expr = isSgExpression(exprCopyForRewrite);
-  expr->set_parent(NULL);
-  dummyExprStatement->set_expression(NULL);
-  delete dummyExprStatement;
-  SgExpression *expr2 = expr;
-  ROSE_ASSERT(expr2);
-  if ( // The rewrite rules may have changed the form of expr to something other
-       // than a comma pair
-      isSgCommaOpExp(expr2) &&
-      isSgCommaOpExp(isSgCommaOpExp(expr2)->get_rhs_operand())) {
-    SgExpression *cache2 = isSgCommaOpExp(expr2)->get_lhs_operand();
-    SgCommaOpExp *rhs =
-        isSgCommaOpExp(isSgCommaOpExp(expr2)->get_rhs_operand());
-    // SgExpression* old_val2 = rhs->get_lhs_operand();
-    SgExpression *new_val2 = rhs->get_rhs_operand();
-    // return new SgAssignOp(SgNULL_FILE, cache2, new_val2);
-    cache2->set_lvalue(true);
-    SgAssignOp *assignmentOperator =
-        new SgAssignOp(SgNULL_FILE, cache2, new_val2, cache2->get_type());
-    assignmentOperator->set_endOfConstruct(SgNULL_FILE);
-    cache2->set_parent(assignmentOperator);
-    new_val2->set_parent(assignmentOperator);
-
-#ifdef FD_DEBUG
-    printf("In doFdVariableUpdate(): assignmentOperator = %p \n",
-           assignmentOperator);
-#endif
-
-    return assignmentOperator;
-  } else {
-    return expr2;
   }
 }
 
-// Do finite differencing on one expression within one context.  The expression
-// must be defined and valid within the entire body of root.  The rewrite rules
-// are used to simplify expressions.  When a variable var is updated from
-// old_value to new_value, an expression of the form (var, (old_value,
-// new_value)) is created and rewritten.  The rewrite rules may either produce
-// an arbitrary expression (which will be used as-is) or one of the form (var,
-// (something, value)) (which will be changed to (var = value)).
-void doFiniteDifferencingOne(SgExpression *e, SgBasicBlock *root,
-                             RewriteRule *rules) {
-  SgStatementPtrList &root_stmts = root->get_statements();
-  SgStatementPtrList::iterator i;
-  for (i = root_stmts.begin(); i != root_stmts.end(); ++i) {
-    if (legacy::expressionComputedIn(e, *i))
-      break;
+static void
+deleteRetiredExpressions(const vector<SgExpression *> &expressions) {
+  for (SgExpression *expression : expressions) {
+    SageInterface::deleteAST(expression,
+                             SageInterface::DeleteAstMode::kRequireIsolated);
   }
-  if (i == root_stmts.end())
-    return; // Expression is not used within root, so quit
+}
+
+static bool isFiniteEvaluationRegion(SgExpression *expression) {
+  ROSE_ASSERT(expression != nullptr && expression->get_type() != nullptr);
+  if (SageInterface::isVolatileType(expression->get_type()))
+    return false;
+  for (SgType *type = expression->get_type();;) {
+    if (auto *modifier = isSgModifierType(type)) {
+      if (modifier->get_typeModifier().isAtomic())
+        return false;
+      type = modifier->get_base_type();
+    } else if (auto *alias = isSgTypedefType(type)) {
+      type = alias->get_base_type();
+    } else if (auto *reference = isSgReferenceType(type)) {
+      type = reference->get_base_type();
+    } else if (auto *reference = isSgRvalueReferenceType(type)) {
+      type = reference->get_base_type();
+    } else {
+      break;
+    }
+    ROSE_ASSERT(type != nullptr);
+  }
+  if (auto *reference = isSgVarRefExp(expression)) {
+    const auto &modifier = reference->get_symbol()
+                               ->get_declaration()
+                               ->get_declaration()
+                               ->get_declarationModifier()
+                               .get_typeModifier();
+    return !modifier.isAtomic() &&
+           !modifier.get_constVolatileModifier().isVolatile();
+  }
+  if (SgExpression *source = expression->get_originalExpressionTree()) {
+    ROSE_ASSERT(source != expression && source->get_parent() == expression);
+    return isFiniteEvaluationRegion(source);
+  }
+  if (isSgValueExp(expression))
+    return true;
+  if (auto *cast = isSgCastExp(expression)) {
+    cast->validate_semantic_conversion();
+    const auto conversion = cast->get_semantic_conversion_kind();
+    if (conversion == SgCastExp::e_semantic_conversion_Dynamic ||
+        conversion == SgCastExp::e_semantic_conversion_UserDefinedConversion ||
+        conversion == SgCastExp::e_semantic_conversion_ConstructorConversion)
+      return false;
+    return isFiniteEvaluationRegion(cast->get_operand());
+  }
+  if (auto *conditional = isSgConditionalExp(expression))
+    return isFiniteEvaluationRegion(conditional->get_conditional_exp()) &&
+           isFiniteEvaluationRegion(conditional->get_true_exp()) &&
+           isFiniteEvaluationRegion(conditional->get_false_exp());
+  if (auto *binary = isSgBinaryOp(expression))
+    return isFiniteEvaluationRegion(binary->get_lhs_operand()) &&
+           isFiniteEvaluationRegion(binary->get_rhs_operand());
+  if (isSgMinusOp(expression) || isSgUnaryAddOp(expression) ||
+      isSgNotOp(expression) || isSgBitComplementOp(expression) ||
+      isSgPointerDerefExp(expression))
+    return isFiniteEvaluationRegion(isSgUnaryOp(expression)->get_operand());
+  return false;
+}
+
+static bool alwaysComputesFiniteExpression(SgExpression *expression,
+                                           SgExpression *target) {
+  ROSE_ASSERT(expression != nullptr);
+  if (expression == target || expressionTreeEqual(expression, target))
+    return true;
+  if (auto *cast = isSgCastExp(expression)) {
+    cast->validate_semantic_conversion();
+    return alwaysComputesFiniteExpression(cast->get_operand(), target);
+  }
+  if (auto *conditional = isSgConditionalExp(expression)) {
+    return alwaysComputesFiniteExpression(conditional->get_conditional_exp(),
+                                          target) ||
+           (alwaysComputesFiniteExpression(conditional->get_true_exp(),
+                                           target) &&
+            alwaysComputesFiniteExpression(conditional->get_false_exp(),
+                                           target));
+  }
+  if (auto *binary = isSgBinaryOp(expression)) {
+    if (alwaysComputesFiniteExpression(binary->get_lhs_operand(), target))
+      return true;
+    return !isSgAndOp(binary) && !isSgOrOp(binary) &&
+           alwaysComputesFiniteExpression(binary->get_rhs_operand(), target);
+  }
+  if (isSgMinusOp(expression) || isSgUnaryAddOp(expression) ||
+      isSgNotOp(expression) || isSgBitComplementOp(expression) ||
+      isSgPointerDerefExp(expression))
+    return alwaysComputesFiniteExpression(
+        isSgUnaryOp(expression)->get_operand(), target);
+  return false;
+}
+
+static SgType *finiteUnsignedDomain(SgType *type) {
+  ROSE_ASSERT(type != nullptr);
+  type = type->stripTypedefsAndModifiers();
+  switch (type->variantT()) {
+  case V_SgTypeInt:
+  case V_SgTypeSignedInt:
+  case V_SgTypeUnsignedInt:
+    return SageBuilder::buildUnsignedIntType();
+  case V_SgTypeLong:
+  case V_SgTypeSignedLong:
+  case V_SgTypeUnsignedLong:
+    return SageBuilder::buildUnsignedLongType();
+  case V_SgTypeLongLong:
+  case V_SgTypeSignedLongLong:
+  case V_SgTypeUnsignedLongLong:
+    return SageBuilder::buildUnsignedLongLongType();
+  case V_SgTypeSigned128bitInteger:
+  case V_SgTypeUnsigned128bitInteger:
+    return SageBuilder::buildUnsigned128bitIntegerType();
+  default:
+    return nullptr;
+  }
+}
+
+static SgExpression *finiteCacheValue(SgVariableSymbol *symbol, SgType *type) {
+  auto read = [symbol]() { return SageBuilder::buildVarRefExp(symbol); };
+  if (type->isUnsignedType())
+    return read();
+  SgType *domain = symbol->get_type();
+  auto *maximum = SageBuilder::buildRshiftOp(
+      SageBuilder::buildBitComplementOp(
+          SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), domain),
+          domain),
+      SageBuilder::buildIntVal(1), domain);
+  auto *negative = SageBuilder::buildSubtractOp(
+      SageBuilder::buildMinusOp(
+          SageBuilder::buildCastExp(
+              SageBuilder::buildBitComplementOp(read(), domain), type),
+          type),
+      SageBuilder::buildCastExp(SageBuilder::buildIntVal(1), type), type);
+  // Both signed casts are representable, including the minimum signed value.
+  return SageBuilder::buildConditionalExp(
+      SageBuilder::buildGreaterThanOp(
+          read(), maximum,
+          SageInterface::getBoolType(symbol->get_declaration())),
+      negative, SageBuilder::buildCastExp(read(), type), type);
+}
+
+static bool finiteOperandInvariant(SgExpression *operand, SgBasicBlock *root) {
+  auto symbols = SageInterface::getSymbolsUsedInExpression(operand);
+  for (SgVariableSymbol *symbol : symbols) {
+    SgType *type =
+        symbol->get_declaration()->get_type()->stripTypedefsAndModifiers();
+    if (isSgReferenceType(type) || isSgRvalueReferenceType(type))
+      return false;
+  }
+  return !legacy::anyOfListPotentiallyModifiedIn(symbols, root);
+}
+
+// Observe operands at required evaluations. Unsigned differences avoid
+// speculative source updates and signed overflow in the cache arithmetic.
+static void
+doFiniteDifferencingOne(SgMultiplyOp *e, SgBasicBlock *root,
+                        vector<SgExpression *> &retiredExpressions) {
+  SgExpression *cachedValue = e;
+  SgType *domain = finiteUnsignedDomain(e->get_type());
+  if (domain == nullptr)
+    return;
+  auto *source = SageInterface::getEnclosingSourceFile(e);
+  ROSE_ASSERT(source != nullptr);
+  if (source->get_Fortran_only())
+    return;
   vector<SgVariableSymbol *> used_symbols =
-      SageInterface::getSymbolsUsedInExpression(e);
+      SageInterface::getSymbolsUsedInExpression(cachedValue);
+  SgBasicBlock *context = nullptr;
+  for (SgNode *owner = e->get_parent(); owner != nullptr;
+       owner = owner->get_parent()) {
+    if (auto *block = isSgBasicBlock(owner)) {
+      bool operandsVisible = true;
+      for (SgVariableSymbol *symbol : used_symbols) {
+        ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() != nullptr);
+        SgScopeStatement *scope = symbol->get_declaration()->get_scope();
+        ROSE_ASSERT(scope != nullptr);
+        operandsVisible &=
+            scope == block || SageInterface::isAncestor(scope, block);
+      }
+      if (operandsVisible)
+        context = block;
+    }
+    if (owner == root)
+      break;
+  }
+  // A cache requires a block in which every operand's declaration is visible.
+  if (context == nullptr)
+    return;
+  root = context;
+  SgStatementPtrList &root_stmts = root->get_statements();
+  SgNode *firstUse = e;
+  while (firstUse->get_parent() != root) {
+    firstUse = firstUse->get_parent();
+    ROSE_ASSERT(firstUse != nullptr);
+  }
+  auto i = std::find(root_stmts.begin(), root_stmts.end(), firstUse);
+  ROSE_ASSERT(i != root_stmts.end());
+  vector<SgExpression *> occurrences;
+  FdFindCopiesVisitor(e, occurrences).traverse(root, preorder);
+  set<SgExpression *> evaluationRoots;
+  for (SgExpression *occurrence : occurrences) {
+    SgExpression *evaluationRoot = occurrence;
+    while (auto *parent = isSgExpression(evaluationRoot->get_parent())) {
+      if (isSgInitializer(parent))
+        break;
+      evaluationRoot = parent;
+    }
+    if (!isFiniteEvaluationRegion(evaluationRoot) ||
+        !alwaysComputesFiniteExpression(evaluationRoot, e) ||
+        legacy::anyOfListPotentiallyModifiedIn(used_symbols, evaluationRoot))
+      return;
+    evaluationRoots.insert(evaluationRoot);
+  }
+  bool leftInvariant = finiteOperandInvariant(e->get_lhs_operand(), root);
+  bool rightInvariant = finiteOperandInvariant(e->get_rhs_operand(), root);
+  if (leftInvariant && rightInvariant)
+    rightInvariant = false;
   SgName cachename = "cache_fd__";
   cachename << ++SageInterface::gensym_counter;
   SgVariableDeclaration *cachedecl = SageBuilder::buildVariableDeclaration(
-      cachename, e->get_type(),
-      nullptr /* the exact initializer is published below */, root);
+      cachename, domain,
+      SageBuilder::buildAssignInitializer(
+          SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), domain),
+          domain),
+      root);
   SgInitializedName *cachevar = cachedecl->get_variables().back();
   ROSE_ASSERT(cachevar);
   cachevar->set_scope(root);
@@ -320,13 +330,90 @@ void doFiniteDifferencingOne(SgExpression *e, SgBasicBlock *root,
             "cache declaration has no exact published symbol\n");
     ROSE_ABORT();
   }
-  SgVarRefExp *vr = new SgVarRefExp(SgNULL_FILE, sym);
-  vr->set_endOfConstruct(SgNULL_FILE);
-  replaceCopiesOfExpression(e, vr, root);
-
-  vector<SgExpression *> modifications_to_used_symbols;
-  FdFindModifyingStatementsVisitor(used_symbols, modifications_to_used_symbols)
-      .go(root);
+  SgStatement *lastDeclaration = cachedecl;
+  auto snapshot = [&](const char *suffix) {
+    SgName name = cachename;
+    name << suffix;
+    auto *declaration = SageBuilder::buildVariableDeclaration(
+        name, domain,
+        SageBuilder::buildAssignInitializer(
+            SageBuilder::buildCastExp(SageBuilder::buildIntVal(0), domain),
+            domain),
+        root);
+    SageInterface::insertStatementAfter(lastDeclaration, declaration, false);
+    lastDeclaration = declaration;
+    auto *symbol = SageInterface::getFirstVarSym(declaration);
+    ROSE_ASSERT(symbol != nullptr);
+    return symbol;
+  };
+  SgVariableSymbol *previousLeft = leftInvariant ? nullptr : snapshot("_lhs");
+  SgVariableSymbol *previousRight = rightInvariant ? nullptr : snapshot("_rhs");
+  auto *cacheRead = finiteCacheValue(sym, cachedValue->get_type());
+  map<SgExpression *, SgExpression *> published;
+  replaceCopiesOfExpression(e, cacheRead, root, retiredExpressions, published);
+  SageInterface::deleteAST(cacheRead,
+                           SageInterface::DeleteAstMode::kRequireIsolated);
+  ROSE_ASSERT(cachedValue->get_parent() == nullptr);
+  for (SgExpression *evaluationRoot : evaluationRoots) {
+    auto replacement = published.find(evaluationRoot);
+    if (replacement != published.end())
+      evaluationRoot = replacement->second;
+    auto operand = [&](SgExpression *expression) {
+      auto *copy = isSgExpression(SageInterface::deepCopyNode(expression));
+      ROSE_ASSERT(copy != nullptr && copy->get_parent() == nullptr);
+      return SageBuilder::buildCastExp(copy, domain);
+    };
+    auto left = [&]() { return operand(e->get_lhs_operand()); };
+    auto right = [&]() { return operand(e->get_rhs_operand()); };
+    SgExpression *difference = nullptr;
+    if (previousLeft != nullptr) {
+      SgExpression *rightFactor;
+      if (previousRight != nullptr)
+        rightFactor = SageBuilder::buildVarRefExp(previousRight);
+      else
+        rightFactor = right();
+      difference = SageBuilder::buildMultiplyOp(
+          SageBuilder::buildSubtractOp(
+              left(), SageBuilder::buildVarRefExp(previousLeft), domain),
+          rightFactor, domain);
+    }
+    if (previousRight != nullptr) {
+      auto *term = SageBuilder::buildMultiplyOp(
+          left(),
+          SageBuilder::buildSubtractOp(
+              right(), SageBuilder::buildVarRefExp(previousRight), domain),
+          domain);
+      if (difference != nullptr)
+        difference = SageBuilder::buildAddOp(difference, term, domain);
+      else
+        difference = term;
+    }
+    ROSE_ASSERT(difference != nullptr);
+    // cache += (left-oldLeft)*oldRight + left*(right-oldRight).
+    // An invariant operand needs neither a snapshot nor its zero difference.
+    SgExpression *update = SageBuilder::buildPlusAssignOp(
+        SageBuilder::buildVarRefExp(sym), difference, domain);
+    if (previousLeft != nullptr)
+      update = SageBuilder::buildCommaOpExp(
+          update,
+          SageBuilder::buildAssignOp(SageBuilder::buildVarRefExp(previousLeft),
+                                     left(), domain),
+          domain);
+    if (previousRight != nullptr)
+      update = SageBuilder::buildCommaOpExp(
+          update,
+          SageBuilder::buildAssignOp(SageBuilder::buildVarRefExp(previousRight),
+                                     right(), domain),
+          domain);
+    auto *retained =
+        isSgExpression(SageInterface::deepCopyNode(evaluationRoot));
+    ROSE_ASSERT(retained != nullptr && retained->get_parent() == nullptr);
+    SageInterface::replaceExpression(evaluationRoot, retained, true);
+    auto *sequenced = SageBuilder::buildCommaOpExp(update, evaluationRoot,
+                                                   evaluationRoot->get_type());
+    SageInterface::replaceExpression(retained, sequenced, true);
+    retiredExpressions.push_back(retained);
+  }
 
   PreprocessingInfo *cacheComment = new PreprocessingInfo(
       PreprocessingInfo::CplusplusStyleComment,
@@ -341,258 +428,7 @@ void doFiniteDifferencingOne(SgExpression *e, SgBasicBlock *root,
   SageInterface::publishGeneratedPreprocessingInfo(cacheComment, cachedecl);
   cachedecl->addToAttachedPreprocessingInfo(cacheComment);
 
-  if (modifications_to_used_symbols.size() == 0) {
-    SgInitializer *cacheinit =
-        new SgAssignInitializer(SgNULL_FILE, e, cachevar->get_type());
-    cacheinit->set_endOfConstruct(SgNULL_FILE);
-    e->set_parent(cacheinit);
-    cachevar->set_initializer(cacheinit);
-    cacheinit->set_parent(cachevar);
-  } else {
-    for (unsigned int i = 0; i < modifications_to_used_symbols.size(); ++i) {
-      SgExpression *modstmt = modifications_to_used_symbols[i];
-#ifdef FD_DEBUG
-      cout << "Updating cache after " << modstmt->unparseToString() << endl;
-#endif
-      SgExpression *updateCache = 0;
-      SgVarRefExp *varref = new SgVarRefExp(SgNULL_FILE, sym);
-      varref->set_endOfConstruct(SgNULL_FILE);
-      SgTreeCopy tc;
-      SgExpression *eCopy = isSgExpression(e->copy(tc));
-      switch (modstmt->variantT()) {
-      case V_SgAssignOp: {
-        SgAssignOp *assignment = isSgAssignOp(modstmt);
-        assert(assignment);
-        SgExpression *lhs = assignment->get_lhs_operand();
-        SgExpression *rhs = assignment->get_rhs_operand();
-        replaceCopiesOfExpression(lhs, rhs, eCopy);
-      } break;
-
-      case V_SgPlusAssignOp:
-      case V_SgMinusAssignOp:
-      case V_SgAndAssignOp:
-      case V_SgIorAssignOp:
-      case V_SgMultAssignOp:
-      case V_SgDivAssignOp:
-      case V_SgModAssignOp:
-      case V_SgXorAssignOp:
-      case V_SgLshiftAssignOp:
-      case V_SgRshiftAssignOp: {
-        SgBinaryOp *assignment = isSgBinaryOp(modstmt);
-        assert(assignment);
-        SgExpression *lhs = assignment->get_lhs_operand();
-        SgExpression *rhs = assignment->get_rhs_operand();
-        SgExpression *lhsCopy =
-            copyFiniteDifferencingValueOccurrence(lhs, eCopy);
-        SgExpression *rhsCopy =
-            isSgExpression(SageInterface::deepCopyNode(rhs));
-        ROSE_ASSERT(lhsCopy != nullptr);
-        ROSE_ASSERT(rhsCopy != nullptr);
-        ROSE_ASSERT(lhsCopy->get_parent() == nullptr);
-        ROSE_ASSERT(rhsCopy->get_parent() == nullptr);
-        SgExpression *newval = 0;
-        switch (modstmt->variantT()) {
-#define DO_OP(op, nonassignment)                                               \
-  case V_##op: {                                                               \
-    newval = new nonassignment(SgNULL_FILE, lhsCopy, rhsCopy,                  \
-                               assignment->get_type());                        \
-    newval->set_endOfConstruct(SgNULL_FILE);                                   \
-    lhsCopy->set_parent(newval);                                               \
-    rhsCopy->set_parent(newval);                                               \
-  } break
-
-          DO_OP(SgPlusAssignOp, SgAddOp);
-          DO_OP(SgMinusAssignOp, SgSubtractOp);
-          DO_OP(SgAndAssignOp, SgBitAndOp);
-          DO_OP(SgIorAssignOp, SgBitOrOp);
-          DO_OP(SgMultAssignOp, SgMultiplyOp);
-          DO_OP(SgDivAssignOp, SgDivideOp);
-          DO_OP(SgModAssignOp, SgModOp);
-          DO_OP(SgXorAssignOp, SgBitXorOp);
-          DO_OP(SgLshiftAssignOp, SgLshiftOp);
-          DO_OP(SgRshiftAssignOp, SgRshiftOp);
-#undef DO_OP
-
-        default:
-          break;
-        }
-        assert(newval);
-        replaceCopiesOfExpression(lhs, newval, eCopy);
-      } break;
-
-      case V_SgPlusPlusOp: {
-        SgExpression *lhs = isSgPlusPlusOp(modstmt)->get_operand();
-        SgExpression *lhsCopy =
-            copyFiniteDifferencingValueOccurrence(lhs, eCopy);
-        ROSE_ASSERT(lhsCopy != nullptr);
-        ROSE_ASSERT(lhsCopy->get_parent() == nullptr);
-        SgIntVal *one = new SgIntVal(SgNULL_FILE, 1);
-        one->set_endOfConstruct(SgNULL_FILE);
-        one->set_literal_spelling_form(
-            SgValueExp::e_literal_canonical_generated);
-        SgAddOp *add =
-            new SgAddOp(SgNULL_FILE, lhsCopy, one, modstmt->get_type());
-        add->set_endOfConstruct(SgNULL_FILE);
-        lhsCopy->set_parent(add);
-        one->set_parent(add);
-        replaceCopiesOfExpression(lhs, add, eCopy);
-      } break;
-
-      case V_SgMinusMinusOp: {
-        SgExpression *lhs = isSgMinusMinusOp(modstmt)->get_operand();
-        SgExpression *lhsCopy =
-            copyFiniteDifferencingValueOccurrence(lhs, eCopy);
-        ROSE_ASSERT(lhsCopy != nullptr);
-        ROSE_ASSERT(lhsCopy->get_parent() == nullptr);
-        SgIntVal *one = new SgIntVal(SgNULL_FILE, 1);
-        one->set_endOfConstruct(SgNULL_FILE);
-        one->set_literal_spelling_form(
-            SgValueExp::e_literal_canonical_generated);
-        SgSubtractOp *sub =
-            new SgSubtractOp(SgNULL_FILE, lhsCopy, one, modstmt->get_type());
-        sub->set_endOfConstruct(SgNULL_FILE);
-        lhsCopy->set_parent(sub);
-        one->set_parent(sub);
-        replaceCopiesOfExpression(lhs, sub, eCopy);
-      } break;
-
-      default:
-        cerr << modstmt->sage_class_name() << endl;
-        ROSE_ABORT();
-        break;
-      }
-
-#ifdef FD_DEBUG
-      cout << "e is " << e->unparseToString() << endl;
-      cout << "eCopy is " << eCopy->unparseToString() << endl;
-#endif
-      updateCache = doFdVariableUpdate(rules, varref, e, eCopy);
-#ifdef FD_DEBUG
-      cout << "updateCache is " << updateCache->unparseToString() << endl;
-#endif
-      if (updateCache) {
-        ROSE_ASSERT(modstmt != NULL);
-        SgNode *ifp = modstmt->get_parent();
-        SgCommaOpExp *comma = new SgCommaOpExp(SgNULL_FILE, updateCache,
-                                               modstmt, modstmt->get_type());
-        comma->set_endOfConstruct(SgNULL_FILE);
-        modstmt->set_parent(comma);
-        updateCache->set_parent(comma);
-
-        if (ifp == NULL) {
-          printf("modstmt->get_parent() == NULL modstmt = %p = %s \n", modstmt,
-                 modstmt->class_name().c_str());
-          modstmt->get_startOfConstruct()->display(
-              "modstmt->get_parent() == NULL: debug");
-        }
-        ROSE_ASSERT(ifp != NULL);
-#ifdef FD_DEBUG
-        cout << "New expression is " << comma->unparseToString() << endl;
-        cout << "IFP is " << ifp->sage_class_name() << ": "
-             << ifp->unparseToString() << endl;
-#endif
-        if (isSgExpression(ifp)) {
-          isSgExpression(ifp)->replace_expression(modstmt, comma);
-          comma->set_parent(ifp);
-        } else {
-          // DQ (12/16/2006): Need to handle cases that are not SgExpression
-          // (now that SgExpressionRoot is not used!) cerr <<
-          // ifp->sage_class_name() << endl; assert (!"Bad parent type for
-          // inserting comma expression");
-          SgStatement *statement = isSgStatement(ifp);
-          if (statement != NULL) {
-#ifdef FD_DEBUG
-            printf("Before statement->replace_expression(): statement = %p = "
-                   "%s modstmt = %p = %s \n",
-                   statement, statement->class_name().c_str(), modstmt,
-                   modstmt->class_name().c_str());
-            SgExprStatement *expresionStatement = isSgExprStatement(statement);
-            if (expresionStatement != NULL) {
-              SgExpression *expression = expresionStatement->get_expression();
-              printf("expressionStatement expression = %p = %s \n", expression,
-                     expression->class_name().c_str());
-            }
-#endif
-            statement->replace_expression(modstmt, comma);
-            comma->set_parent(statement);
-          } else {
-            ROSE_ASSERT(ifp != NULL);
-            printf("Error: parent is neither a SgExpression nor a SgStatement "
-                   "ifp = %p = %s \n",
-                   ifp, ifp->class_name().c_str());
-            ROSE_ABORT();
-          }
-        }
-
-#ifdef FD_DEBUG
-        cout << "IFP is now " << ifp->unparseToString() << endl;
-#endif
-      }
-    }
-  }
-}
-
-// Propagate definitions of a variable to its uses.
-// Assumptions: var is only assigned at the top level of body
-//              nothing var depends on is assigned within body
-// Very simple algorithm designed to only handle simplest cases
-void simpleUndoFiniteDifferencingOne(SgBasicBlock *body, SgExpression *var) {
-  SgExpression *value = 0;
-  SgStatementPtrList &stmts = body->get_statements();
-  vector<SgStatement *> stmts_to_remove;
-
-  for (SgStatementPtrList::iterator i = stmts.begin(); i != stmts.end(); ++i) {
-    // cout << "Next statement: value = " << (value ? value->unparseToString() :
-    // "(null)") << endl; cout << (*i)->unparseToString() << endl;
-    if (isSgExprStatement(*i) &&
-        isSgAssignOp(isSgExprStatement(*i)->get_expression())) {
-      SgAssignOp *assignment =
-          isSgAssignOp(isSgExprStatement(*i)->get_expression());
-      // cout << "In assignment statement " << assignment->unparseToString() <<
-      // endl;
-      if (value)
-        replaceCopiesOfExpression(var, value, assignment->get_rhs_operand());
-      if (isSgVarRefExp(assignment->get_lhs_operand()) && isSgVarRefExp(var)) {
-        SgVarRefExp *vr = isSgVarRefExp(assignment->get_lhs_operand());
-        if (vr->get_symbol()->get_declaration() ==
-            isSgVarRefExp(var)->get_symbol()->get_declaration()) {
-          value = assignment->get_rhs_operand();
-          stmts_to_remove.push_back(*i);
-        }
-      }
-    } else {
-      if (value)
-        replaceCopiesOfExpression(var, value, *i);
-    }
-  }
-
-  for (vector<SgStatement *>::iterator i = stmts_to_remove.begin();
-       i != stmts_to_remove.end(); ++i) {
-    stmts.erase(std::find(stmts.begin(), stmts.end(), *i));
-  }
-
-  if (value) {
-    // DQ (12/17/2006): Separate out the construction of the SgAssignOp from the
-    // SgExprStatement to support debugging and testing. stmts.push_back(new
-    // SgExprStatement(SgNULL_FILE, new SgAssignOp(SgNULL_FILE, var, value)));
-    var->set_lvalue(true);
-    SgAssignOp *assignmentOperator =
-        new SgAssignOp(SgNULL_FILE, var, value, var->get_type());
-    assignmentOperator->set_endOfConstruct(SgNULL_FILE);
-    var->set_parent(assignmentOperator);
-    value->set_parent(assignmentOperator);
-
-    printf("In simpleUndoFiniteDifferencingOne(): assignmentOperator = %p \n",
-           assignmentOperator);
-
-    // DQ: Note that the parent of the SgExprStatement will be set in AST
-    // post-processing (or it should be).
-    SgExprStatement *es = new SgExprStatement(SgNULL_FILE, assignmentOperator);
-    es->set_endOfConstruct(SgNULL_FILE);
-    assignmentOperator->set_parent(es);
-    stmts.push_back(es);
-    es->set_parent(body);
-  }
+  retiredExpressions.push_back(cachedValue);
 }
 
 class FindForStatementsVisitor : public AstSimpleProcessing {
@@ -608,71 +444,57 @@ public:
 };
 
 // Move variables declared in a for statement to just outside that statement.
-void moveForDeclaredVariables(SgNode *root) {
+static void moveForDeclaredVariables(SgNode *root) {
   vector<SgForStatement *> for_statements;
   FindForStatementsVisitor(for_statements).traverse(root, preorder);
 
   for (unsigned int i = 0; i < for_statements.size(); ++i) {
     SgForStatement *stmt = for_statements[i];
-#ifdef FD_DEBUG
-    cout << "moveForDeclaredVariables: " << stmt->unparseToString() << endl;
-#endif
     SgForInitStatement *init = stmt->get_for_init_stmt();
-    if (!init)
-      continue;
+    ROSE_ASSERT(init != nullptr && init->get_parent() == stmt);
     SgStatementPtrList &inits = init->get_init_stmt();
     vector<SgVariableDeclaration *> decls;
-    for (SgStatementPtrList::iterator j = inits.begin(); j != inits.end();
-         ++j) {
-      SgStatement *one_init = *j;
-      if (isSgVariableDeclaration(one_init)) {
-        decls.push_back(isSgVariableDeclaration(one_init));
+    bool variableInitializers = true;
+    for (SgStatement *statement : inits) {
+      if (auto *declaration = isSgVariableDeclaration(statement)) {
+        decls.push_back(declaration);
+      } else if (auto *group = isSgDeclarationGroupStatement(statement)) {
+        group->validate();
+        for (SgDeclarationStatement *member : group->get_declarations()) {
+          auto *declaration = isSgVariableDeclaration(member);
+          if (declaration != nullptr)
+            decls.push_back(declaration);
+          else
+            variableInitializers = false;
+        }
       }
     }
-    if (decls.empty())
+    if (decls.empty() || !variableInitializers)
       continue;
     SgStatement *parent = isSgStatement(stmt->get_parent());
     assert(parent);
     SgBasicBlock *bb = SageBuilder::buildBasicBlock_nfi();
     SageInterface::setSourcePositionForTransformation(bb);
-    SgStatementPtrList ls;
+    SgStatementPtrList initialStatements = inits;
     for (unsigned int j = 0; j < decls.size(); ++j) {
       for (SgInitializedNamePtrList::iterator k =
                decls[j]->get_variables().begin();
            k != decls[j]->get_variables().end(); ++k) {
-#ifdef FD_DEBUG
-        cout << "Working on variable " << (*k)->get_name().getString() << endl;
-#endif
-        SgVariableSymbol *sym = new SgVariableSymbol(*k);
-        bb->insert_symbol((*k)->get_name(), sym);
-        (*k)->set_scope(bb);
-        SgAssignInitializer *kinit = 0;
-        if (isSgAssignInitializer((*k)->get_initializer())) {
-          kinit = isSgAssignInitializer((*k)->get_initializer());
-          (*k)->set_initializer(0);
-        }
-
-        if (kinit) {
-          SgVarRefExp *vr = new SgVarRefExp(SgNULL_FILE, sym);
-          vr->set_endOfConstruct(SgNULL_FILE);
-          SageInterface::setSourcePositionForTransformation(vr);
-          vr->set_lvalue(true);
-          SgAssignOp *assignment = new SgAssignOp(
-              SgNULL_FILE, vr, kinit->get_operand(), vr->get_type());
-          assignment->set_endOfConstruct(SgNULL_FILE);
-          SageInterface::setSourcePositionForTransformation(assignment);
-          vr->set_parent(assignment);
-          kinit->get_operand()->set_parent(assignment);
-          SgExprStatement *expr = new SgExprStatement(SgNULL_FILE, assignment);
-          expr->set_endOfConstruct(SgNULL_FILE);
-          SageInterface::setSourcePositionForTransformation(expr);
-          assignment->set_parent(expr);
-          ls.push_back(expr);
-          expr->set_parent(init);
-        }
+        SgInitializedName *name = *k;
+        auto *sym = isSgVariableSymbol(name->get_symbol_from_symbol_table());
+        ROSE_ASSERT(sym != nullptr && sym->get_declaration() == name);
+        SgScopeStatement *old_scope = name->get_scope();
+        ROSE_ASSERT(old_scope != nullptr &&
+                    old_scope->get_symbol_table()->exists(sym));
+        old_scope->remove_symbol(sym);
+        bb->insert_symbol(name->get_name(), sym);
+        sym->set_parent(bb->get_symbol_table());
+        name->set_scope(bb);
       }
     }
-    inits = ls;
+    inits.clear();
+    init->append_init_stmt(SageBuilder::buildNullStatement());
+    SageInterface::setOneSourcePositionForTransformation(init);
     // Replace the original loop while its physical parent relation is still
     // intact, then move the declarations and loop into the new transformation
     // block.  Reparenting the loop before replacement left a transiently
@@ -686,8 +508,10 @@ void moveForDeclaredVariables(SgNode *root) {
               static_cast<void *>(stmt), static_cast<void *>(bb));
       ROSE_ABORT();
     }
-    for (SgVariableDeclaration *declaration : decls) {
-      bb->append_statement(declaration);
+    for (SgStatement *statement : initialStatements) {
+      bb->append_statement(statement);
+      if (auto *group = isSgDeclarationGroupStatement(statement))
+        group->set_scope(bb);
     }
     bb->append_statement(stmt);
     // The original loop retains the exact source-file identity for the
@@ -721,22 +545,9 @@ public:
   vector<SgInitializedName *> initnames;
 
   virtual void visit(SgNode *n) {
-#ifdef FD_DEBUG
-    cout << "FdFindInitnamesVisitor " << n->class_name() << " " << n << endl;
-#endif
     if (isSgInitializedName(n)) {
-#ifdef FD_DEBUG
-      cout << "Init name " << isSgInitializedName(n)->get_name().getString()
-           << endl;
-#endif
       initnames.push_back(isSgInitializedName(n));
     }
-#ifdef FD_DEBUG
-    if (isSgVarRefExp(n)) {
-      cout << "Var ref "
-           << isSgVarRefExp(n)->get_symbol()->get_name().getString() << endl;
-    }
-#endif
   }
 };
 
@@ -772,27 +583,6 @@ SgExpression *finiteDifferencingSemanticOperand(SgExpression *expression) {
   return expression;
 }
 
-SgNode *finiteDifferencingSemanticParent(SgExpression *expression) {
-  ROSE_ASSERT(expression != nullptr);
-  SgNode *current = expression;
-  SgNode *parent = current->get_parent();
-  while (SgCastExp *cast = isSgCastExp(parent)) {
-    cast->validate_semantic_conversion();
-    if (cast->cast_type() != SgCastExp::e_implicit_cast) {
-      break;
-    }
-    if (cast->get_operand() != current || current->get_parent() != cast) {
-      fprintf(stderr,
-              "REX_FINITE_DIFFERENCING_INVARIANT[implicit-conversion]: "
-              "expression=%p cast=%p has no exact transparent parent edge\n",
-              static_cast<void *>(expression), static_cast<void *>(cast));
-      ROSE_ABORT();
-    }
-    current = cast;
-    parent = cast->get_parent();
-  }
-  return parent;
-}
 } // namespace
 
 class IsModifiedBadlyVisitor : public AstSimpleProcessing {
@@ -806,7 +596,8 @@ public:
   virtual void visit(SgNode *n) {
     SgVarRefExp *vr = isSgVarRefExp(n);
     if (vr && vr->get_symbol()->get_declaration() == initname) {
-      SgNode *semanticParent = finiteDifferencingSemanticParent(vr);
+      SgNode *semanticParent =
+          finiteDifferencingOutermostImplicitConversion(vr)->get_parent();
       ROSE_ASSERT(semanticParent != nullptr);
       switch (semanticParent->variantT()) {
       case V_SgReturnStmt:
@@ -818,20 +609,10 @@ public:
       case V_SgCaseOptionStmt:
       case V_SgForStatement:
       case V_SgForInitStatement:
-#ifdef FD_DEBUG
-        cout << "Statement: Variable " << initname->get_name().getString()
-             << " is safe" << endl;
-#endif
-        // Safe
         break;
 
       case V_SgPlusPlusOp:
       case V_SgMinusMinusOp:
-#ifdef FD_DEBUG
-        cout << "Inc/dec: Variable " << initname->get_name().getString()
-             << " is safe" << endl;
-#endif
-        // Safe
         break;
 
       case V_SgAddOp:
@@ -861,29 +642,15 @@ public:
       case V_SgLshiftOp:
       case V_SgRshiftOp:
       case V_SgAssignInitializer:
-#ifdef FD_DEBUG
-        cout << "Non-mutating: Variable " << initname->get_name().getString()
-             << " is safe" << endl;
-#endif
-        // Safe
         break;
 
       case V_SgExprListExp:
         if (isSgFunctionCallExp(semanticParent->get_parent())) {
           if (isPotentiallyModified(vr, semanticParent->get_parent())) {
-#ifdef FD_DEBUG
-            cout << "Function call: Variable "
-                 << initname->get_name().getString() << " is unsafe" << endl;
-#endif
             safe = false;
           }
         } else if (isSgConstructorInitializer(semanticParent->get_parent())) {
-#ifdef FD_DEBUG
-          cout << "Constructor: Variable " << initname->get_name().getString()
-               << " is unsafe" << endl;
-#endif
           safe = false;
-          // FIXME: constructors
         } else {
           cerr << semanticParent->get_parent()->sage_class_name() << endl;
           assert(!"Unknown SgExprListExp case");
@@ -892,58 +659,18 @@ public:
 
       case V_SgAssignOp:
       case V_SgPlusAssignOp:
-      case V_SgMinusAssignOp: {
-        SgBinaryOp *binop = isSgBinaryOp(semanticParent);
-        ROSE_ASSERT(binop != nullptr);
-        SgExpression *rhs =
-            finiteDifferencingSemanticOperand(binop->get_rhs_operand());
-        bool lhs_good =
-            finiteDifferencingSemanticOperand(binop->get_lhs_operand()) == vr;
-#ifdef FD_DEBUG
-        cout << "Assign case for " << initname->get_name().getString() << endl;
-        cout << "lhs_good = " << (lhs_good ? "true" : "false") << endl;
-#endif
-        SgAddOp *rhs_a = isSgAddOp(rhs);
-        SgExpression *rhs_a_lhs =
-            rhs_a ? finiteDifferencingSemanticOperand(rhs_a->get_lhs_operand())
-                  : nullptr;
-        SgExpression *rhs_a_rhs =
-            rhs_a ? finiteDifferencingSemanticOperand(rhs_a->get_rhs_operand())
-                  : nullptr;
-        if (lhs_good) {
-          if (isSgValueExp(rhs)) {
-            // Safe
-          } else if (isSgVarRefExp(rhs)) {
-            // Safe
-          } else if (isSgAssignOp(binop) && rhs_a &&
-                     ((isSgVarRefExp(rhs_a_lhs) &&
-                       isSgVarRefExp(rhs_a_lhs)
-                               ->get_symbol()
-                               ->get_declaration() == initname) ||
-                      (isSgVarRefExp(rhs_a_rhs) &&
-                       isSgVarRefExp(rhs_a_rhs)
-                               ->get_symbol()
-                               ->get_declaration() == initname))) {
-            // Safe
-          } else {
-#ifdef FD_DEBUG
-            cout << "Assign: Variable " << initname->get_name().str()
-                 << " is unsafe because of " << binop->unparseToString() << ": "
-                 << binop->get_rhs_operand()->sage_class_name() << endl;
-#endif
-            safe = false;
-          }
-        } else {
-          // Safe: RHS of assignment
-        }
-      } break;
+      case V_SgMinusAssignOp:
+      case V_SgMultAssignOp:
+      case V_SgDivAssignOp:
+      case V_SgModAssignOp:
+      case V_SgAndAssignOp:
+      case V_SgIorAssignOp:
+      case V_SgXorAssignOp:
+      case V_SgLshiftAssignOp:
+      case V_SgRshiftAssignOp:
+        break;
 
       default: {
-#ifdef FD_DEBUG
-        cout << "Default: Variable " << initname->get_name().str()
-             << " is unsafe because of " << semanticParent->unparseToString()
-             << ": " << semanticParent->sage_class_name() << endl;
-#endif
         safe = false;
       } break;
       }
@@ -965,10 +692,6 @@ void simpleIndexFiniteDifferencing(SgNode *root) {
   FdFindFunctionsVisitor ffv;
   ffv.traverse(root, preorder);
   for (unsigned int x = 0; x < ffv.functions.size(); ++x) {
-#ifdef FD_DEBUG
-    cout << "Working on function "
-         << ffv.functions[x]->get_declaration()->get_name().str() << endl;
-#endif
     SgBasicBlock *body = ffv.functions[x]->get_body();
     FdFindInitnamesVisitor fiv;
     fiv.traverse(ffv.functions[x]->get_declaration(), preorder);
@@ -977,75 +700,50 @@ void simpleIndexFiniteDifferencing(SgNode *root) {
     for (vector<SgInitializedName *>::iterator i = initnames.begin();
          i != initnames.end(); ++i) {
       SgInitializedName *initname = *i;
-#ifdef FD_DEBUG
-      cout << "Found variable " << initname->get_name().str() << endl;
-#endif
       bool safe = true;
       IsModifiedBadlyVisitor(initname, safe).traverse(body, preorder);
       if (safe)
         safe_vars.insert(initname);
-#ifdef FD_DEBUG
-      cout << "Variable " << initname->get_name().str() << " is "
-           << (safe ? "" : "not ") << "safe" << endl;
-#endif
     }
+    auto eligibleOperand = [&](SgExpression *operand) {
+      operand = finiteDifferencingSemanticOperand(operand);
+      if (isSgValueExp(operand))
+        return true;
+      auto *reference = isSgVarRefExp(operand);
+      if (reference == nullptr)
+        return false;
+      SgInitializedName *declaration =
+          reference->get_symbol()->get_declaration();
+      SgType *type = declaration->get_type()->stripTypedefsAndModifiers();
+      return !isSgReferenceType(type) && !isSgRvalueReferenceType(type) &&
+             safe_vars.count(declaration) != 0;
+    };
     FdFindMultiplicationsVisitor fmv;
     fmv.traverse(body, postorder);
     vector<SgMultiplyOp *> mult_exprs;
     for (unsigned int i = 0; i < fmv.exprs.size(); ++i) {
+      if (SageInterface::getEnclosingFunctionDefinition(fmv.exprs[i]) !=
+          ffv.functions[x])
+        continue;
       bool alreadyProcessed = false;
-      for (unsigned int j = 0; j < i; ++j) {
-        if (expressionTreeEqual(fmv.exprs[i], fmv.exprs[j])) {
+      for (SgMultiplyOp *previous : mult_exprs) {
+        if (expressionTreeEqual(fmv.exprs[i], previous)) {
           alreadyProcessed = true;
           break;
         }
       }
       if (alreadyProcessed)
         continue;
-
-#ifdef FD_DEBUG
-      cout << "Testing expression " << fmv.exprs[i]->unparseToString()
-           << " for possible FD" << endl;
-#endif
-
-      SgExpression *expr1 =
-          finiteDifferencingSemanticOperand(fmv.exprs[i]->get_lhs_operand());
-      SgExpression *expr2 =
-          finiteDifferencingSemanticOperand(fmv.exprs[i]->get_rhs_operand());
-      bool isConst1 = isSgValueExp(expr1);
-      bool isSafeVar1 =
-          isSgVarRefExp(expr1) &&
-          safe_vars.find(
-              isSgVarRefExp(expr1)->get_symbol()->get_declaration()) !=
-              safe_vars.end();
-      bool isGood1 = isConst1 || isSafeVar1;
-      bool isConst2 = isSgValueExp(expr2);
-      bool isSafeVar2 =
-          isSgVarRefExp(expr2) &&
-          safe_vars.find(
-              isSgVarRefExp(expr2)->get_symbol()->get_declaration()) !=
-              safe_vars.end();
-      bool isGood2 = isConst2 || isSafeVar2;
-#ifdef FD_DEBUG
-      cout << boolalpha << "isGood1 = " << isGood1 << ", isGood2 = " << isGood2
-           << endl;
-#endif
-      if (isGood1 && isGood2) {
-#ifdef FD_DEBUG
-        cout << "Expression is good to run FD on" << endl;
-#endif
+      if (eligibleOperand(fmv.exprs[i]->get_lhs_operand()) &&
+          eligibleOperand(fmv.exprs[i]->get_rhs_operand()) &&
+          isFiniteEvaluationRegion(fmv.exprs[i])) {
         mult_exprs.push_back(fmv.exprs[i]);
-      } else {
-#ifdef FD_DEBUG
-        cout << "Expression is not good to run FD on" << endl;
-#endif
       }
     }
-    std::unique_ptr<RewriteRule> finiteDifferencingRules(
-        getFiniteDifferencingRules());
+    vector<SgExpression *> retiredExpressions;
     for (int i = mult_exprs.size() - 1; i >= 0; --i)
-      doFiniteDifferencingOne(mult_exprs[i], body,
-                              finiteDifferencingRules.get());
+      doFiniteDifferencingOne(mult_exprs[i], body, retiredExpressions);
+    deleteRetiredExpressions(retiredExpressions);
 
     SgNode *bodyCopyForRewrite = body;
     std::unique_ptr<RewriteRule> bodyAlgebraicRules(getAlgebraicRules());

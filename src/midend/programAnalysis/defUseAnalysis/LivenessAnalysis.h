@@ -1,9 +1,3 @@
-/******************************************
- * Category: DFA
- * Liveness Analysis Declaration
- * created by tps in Nov 2008
- *****************************************/
-
 #ifndef __LivenessAnalysis_HXX_LOADED__
 #define __LivenessAnalysis_HXX_LOADED__
 #include <string>
@@ -19,9 +13,6 @@
 class ROSE_DLL_API LivenessAnalysis : public DefUseAnalysisAbstract {
 private:
   SgProject *project;
-  bool DEBUG_MODE;
-
-  SgNode *searchNode;
   //! Print out live-in and live-out variables for a node
   void printInAndOut(SgNode *sgNode);
 
@@ -32,36 +23,24 @@ private:
   std::map<SgNode *, std::vector<SgInitializedName *>> out;
 
   int nrOfNodesVisitedPF;
-  //  std::map<SgNode*,int> breakPointForWhile;
-  // std::set<SgNode*> breakPointForWhileNode;
-  int breakPointForWhile;
-  SgNode *breakPointForWhileNode;
   // the transfer function for each type of CFG node, called by run()
   template <typename T> bool defuse(T cfgNode, bool *unhandled);
   std::map<SgNode *, int> visited;
-  template <typename T> bool hasANodeAboveCurrentChanged(T source);
 
-  template <class T> void getAllNodesBelow(T source, std::vector<T> &visited);
   template <class T> void getAllNodesAbove(T source, std::vector<T> &visited);
-  bool forwardAlgo;
 
 public:
   LivenessAnalysis(bool debug, DefUseAnalysis *dfa_p) {
     dfa = dfa_p;
     DEBUG_MODE = debug;
-    DEBUG_MODE_EXTRA = false;
-    breakPointForWhile = 0;
-    breakPointForWhileNode = NULL;
   };
   virtual ~LivenessAnalysis() {}
 
   SgFunctionDefinition *getFunction(SgNode *node);
   int getNumberOfNodesVisited();
-  // Run liveness analysis on the entire project
-  // bool run(bool debug=false);
   // Run liveness analysis for a single function
-  FilteredCFGNode<IsDFAFilter> run(SgFunctionDefinition *function,
-                                   bool &abortme);
+  VirtualCFG::FilteredCFGNode<IsDFAFilter> run(SgFunctionDefinition *function,
+                                               bool &abortme);
   std::vector<SgInitializedName *> getIn(SgNode *sgNode) { return in[sgNode]; }
   std::vector<SgInitializedName *> getOut(SgNode *sgNode) {
     return out[sgNode];

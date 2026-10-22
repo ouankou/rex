@@ -14,6 +14,8 @@
 
 #include <iostream>
 
+#include <optional>
+
 #include <queue>
 
 #include <sstream>
@@ -28,14 +30,10 @@
 
 class FunctionData;
 
-// DQ (1/31/2006): Changed name and made global function type symbol table a
-// static data member. extern SgFunctionTypeTable Sgfunc_type_table; This header
-// has to be here since it uses type SgFunctionDeclarationPtrList
 #include "ClassHierarchyGraph.h"
 
-// AS(090707) Added the CallTargetSet namespace to replace the
-// CallGraphFunctionSolver class
 namespace CallTargetSet {
+bool isNonExecutableCallExpression(SgExpression *expression);
 /**
  * Return the source expression that denotes a callee after validating and
  * traversing only compiler-synthesized implicit callee conversions.  Explicit
@@ -45,18 +43,7 @@ ROSE_DLL_API SgExpression *
 unwrapExactImplicitCalleeConversions(SgExpression *functionExpression);
 
 /**
- * CallTargetSet::solveFunctionPointerCall
- *
- * \brief Finds all functions that match the function type of pointerDerefExp
- *
- * Resolving function pointer calls is hard, so the CallGraph generator doesn't
- * try very hard at it.  When asked to resolve a function pointer call, it
- *simply finds all functions that match that type in the memory pool a returns a
- *list of them.
- *
- * @param[in] pointerDerefExp : A function pointer dereference.
- * @return: A vector of all functionDeclarations that match the type of the
- *function dereferenced in pointerDerefExp
+ * Return signature-compatible functions in the dereference's exact project.
  **/
 std::vector<SgFunctionDeclaration *>
 solveFunctionPointerCall(SgPointerDerefExp *pointerDerefExp);
@@ -67,20 +54,7 @@ std::vector<SgFunctionDeclaration *>
 solveMemberFunctionPointerCall(SgExpression *, ClassHierarchyWrapper *);
 
 /**
- * CallTargetSet::solveFunctionPointerCallsFunctional
- *
- * \brief Checks if the functionDeclaration (node) matches functionType
- *
- * This is a filter called by solveFunctionPointerCall. It checks that node is
- * a functiondeclaration (or template instantiation) of type functionType.
- * If it does, it is added to a functionList and returned.  So function list can
- * have at most 1 entry.
- *
- * @param[in] node : The node we are checking.  It must be an
- *SgFunctionDeclaration
- * @param[in] functionType : The function type being checked.
- * @return: If node matched functionType, it is added on functionList and
- *returned.  Otherwise functionList is empty.
+ * Return the canonical declaration if its callable signature matches.
  **/
 Rose_STL_Container<SgFunctionDeclaration *>
 solveFunctionPointerCallsFunctional(SgNode *node, SgFunctionType *functionType);
@@ -92,12 +66,12 @@ solveMemberFunctionCall(SgClassType *, ClassHierarchyWrapper *,
                         SgMemberFunctionDeclaration *, bool,
                         bool includePureVirtualFunc = false);
 
-//! Returns the list of all constructors that may get called via an
-//! initialization.
+//! Return the selected constructor's canonical declaration.
 std::vector<SgFunctionDeclaration *>
 solveConstructorInitializer(SgConstructorInitializer *sgCtorInit);
 
-// Populates functionList with Properties of all functions that may get called.
+//! Append possible callees using canonicalFunctionDeclForCallGraph identity;
+//! preserve entries already present in propList.
 ROSE_DLL_API void getPropertiesForExpression(
     SgExpression *exp, ClassHierarchyWrapper *classHierarchy,
     Rose_STL_Container<SgFunctionDeclaration *> &propList,
@@ -166,7 +140,6 @@ struct dummyFilter {
 
 //! A function object to filter out builtin functions in a call graph (only
 //! non-builtin functions will be considered)
-// Liao, 6/17/2012
 struct ROSE_DLL_API builtinFilter {
   using result_type = bool;
   result_type operator()(SgFunctionDeclaration *node) const;
@@ -181,8 +154,6 @@ public:
   template <typename Predicate> void buildCallGraph(Predicate pred);
   //! Grab the call graph built
   SgIncidenceDirectedGraph *getGraph();
-  // void classifyCallGraph();
-
   // We map each function to the corresponding graph node
   std::unordered_map<SgFunctionDeclaration *, SgGraphNode *> &
   getGraphNodesMapping() {
@@ -210,24 +181,12 @@ private:
       GraphNodesByMangledName;
   GraphNodesByMangledName graphNodesByMangledName;
   void registerGraphNode(SgFunctionDeclaration *fdecl, SgGraphNode *graphNode);
-  SgGraphNode *getGraphNodeForMangledName(SgFunctionDeclaration *fdecl,
-                                          bool requireSourceIdentity) const;
-  SgGraphNode *getGraphNodeForConstruction(SgFunctionDeclaration *fdecl) const;
+  SgGraphNode *getGraphNodeForMangledName(SgFunctionDeclaration *fdecl) const;
   bool shouldMaterializeImplicitCallTarget(SgFunctionDeclaration *fdecl) const;
   bool shouldMaterializeResolvedCallTarget(SgFunctionDeclaration *fdecl) const;
-  SgGraphNode *
-  ensureGraphNodeForImplicitCallTarget(SgFunctionDeclaration *fdecl);
-  SgGraphNode *
-  ensureGraphNodeForResolvedCallTarget(SgFunctionDeclaration *fdecl);
-  void materializeNonFunctionImplicitCallTargets(
-      ClassHierarchyWrapper *classHierarchy);
+  std::vector<SgFunctionDeclaration *>
+  collectNonFunctionConstructorTargets(ClassHierarchyWrapper *classHierarchy);
 };
-//! Generate a dot graph named 'fileName' from a call graph
-// TODO this function is    not defined? If so, need to be removed.
-//  AstDOTGeneration::writeIncidenceGraphToDOTFile() is used instead in the
-//  tutorial. Liao 6/17/2012
-void GenerateDotGraph(SgIncidenceDirectedGraph *graph, std::string fileName);
-
 struct GetOneFuncDeclarationPerFunction {
   using result_type = Rose_STL_Container<SgNode *>;
   result_type operator()(SgNode *node);
@@ -248,83 +207,10 @@ callGraphCanonicalDeclarationChain(SgFunctionDeclaration *fdecl) {
   return fdecl;
 }
 
-static inline bool
-callGraphDeclIsBlockScopePrototype(SgFunctionDeclaration *fdecl) {
-  if (fdecl == NULL || fdecl->get_definition() != NULL ||
-      fdecl->get_definingDeclaration() != NULL ||
-      isSgMemberFunctionDeclaration(fdecl) != NULL ||
-      isSgTemplateFunctionDeclaration(fdecl) != NULL ||
-      isSgTemplateMemberFunctionDeclaration(fdecl) != NULL) {
-    return false;
-  }
-
-  for (SgNode *cursor = fdecl->get_parent(); cursor != NULL;
-       cursor = cursor->get_parent()) {
-    if (isSgFunctionDefinition(cursor) != NULL) {
-      return true;
-    }
-    if (isSgGlobal(cursor) != NULL ||
-        isSgNamespaceDefinitionStatement(cursor) != NULL ||
-        isSgClassDefinition(cursor) != NULL ||
-        isSgTemplateClassDefinition(cursor) != NULL ||
-        isSgTemplateInstantiationDefn(cursor) != NULL) {
-      return false;
-    }
-  }
-
-  return false;
-}
-
-static inline SgFunctionDeclaration *
-callGraphLookupNamespaceFunctionForBlockPrototype(
-    SgFunctionDeclaration *fdecl) {
-  if (!callGraphDeclIsBlockScopePrototype(fdecl)) {
-    return NULL;
-  }
-
-  for (SgNode *cursor = fdecl->get_parent(); cursor != NULL;
-       cursor = cursor->get_parent()) {
-    SgScopeStatement *scope = isSgScopeStatement(cursor);
-    if (scope == NULL || (isSgGlobal(scope) == NULL &&
-                          isSgNamespaceDefinitionStatement(scope) == NULL)) {
-      continue;
-    }
-
-    SgFunctionSymbol *symbol = scope->lookup_nontemplate_function_symbol(
-        fdecl->get_name(), fdecl->get_type(), NULL);
-    if (symbol == NULL) {
-      symbol = isSgFunctionSymbol(
-          scope->lookup_function_symbol(fdecl->get_name(), fdecl->get_type()));
-    }
-    if (symbol == NULL) {
-      continue;
-    }
-
-    SgFunctionDeclaration *decl =
-        isSgFunctionDeclaration(symbol->get_declaration());
-    if (decl != NULL && decl != fdecl) {
-      return callGraphCanonicalDeclarationChain(decl);
-    }
-  }
-
-  return NULL;
-}
-
 static inline SgFunctionDeclaration *
 canonicalFunctionDeclForCallGraph(SgFunctionDeclaration *fdecl) {
   ROSE_ASSERT(fdecl != NULL);
-
-  SgFunctionDeclaration *canonical = callGraphCanonicalDeclarationChain(fdecl);
-  if (canonical != fdecl) {
-    return canonical;
-  }
-
-  if (SgFunctionDeclaration *namespace_decl =
-          callGraphLookupNamespaceFunctionForBlockPrototype(fdecl)) {
-    return namespace_decl;
-  }
-
-  return fdecl;
+  return callGraphCanonicalDeclarationChain(fdecl);
 }
 
 static inline bool
@@ -513,11 +399,14 @@ static inline bool callGraphInstantiatedMemberHasClassTemplateArguments(
     return false;
   }
 
-  return !associated_class->get_templateArguments().empty();
+  return !associated_class->get_semanticTemplateArguments().empty();
 }
 
 ROSE_DLL_API bool
 callGraphDeclHasIndependentCallableIdentity(SgFunctionDeclaration *fdecl);
+
+ROSE_DLL_API std::optional<bool>
+callGraphFunctionHasUserSourceOwnership(SgFunctionDeclaration *declaration);
 
 template <typename Predicate>
 void CallGraphBuilder::buildCallGraph(Predicate pred) {
@@ -536,9 +425,6 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
           explicitInstantiationSources(explicitInstantiationSources) {}
     bool operator()(SgNode *node) {
       SgFunctionDeclaration *f = isSgFunctionDeclaration(node);
-      // TV (10/26/2018): FIXME ROSE-1487
-      // assert(!f || f==f->get_firstNondefiningDeclaration()); // node
-      // uniqueness test
       if (f == nullptr || f != canonicalFunctionDeclForCallGraph(f) ||
           isSgTemplateMemberFunctionDeclaration(f) ||
           isSgTemplateFunctionDeclaration(f)) {
@@ -635,6 +521,8 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
   for (SgNode *node : fdecl_nodes) {
     SgFunctionDeclaration *fdecl = isSgFunctionDeclaration(node);
     SgFunctionDeclaration *unique = canonicalFunctionDeclForCallGraph(fdecl);
+    if (!callGraphNodeBelongsToProject(unique, project))
+      continue;
     const bool selected = select(unique);
     if (selected && selectedDeclarations.insert(unique).second) {
       FunctionData fdata(
@@ -644,18 +532,28 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     }
   }
 
-  // A template specialization whose body is instantiated into semantic-only
-  // storage is not itself a source definition.  It becomes a graph vertex only
-  // when a source call resolves to it.  Compute that reachability from the
-  // complete candidate set before adding vertices so called specializations
-  // retain their own outgoing edges while unused explicit/implicit
-  // instantiations do not appear as invented source functions.
+  // Reached semantic definitions retain their outgoing edges even when the
+  // source predicate cannot select their unwritten declarations.
   std::set<SgFunctionDeclaration *> resolvedCallees;
-  for (const FunctionData &function : callGraphData) {
-    for (SgFunctionDeclaration *callee : function.functionList) {
-      if (callee != NULL) {
-        resolvedCallees.insert(canonicalFunctionDeclForCallGraph(callee));
-      }
+  const auto retainCallee = [&](SgFunctionDeclaration *callee) {
+    ASSERT_not_null(callee);
+    callee = canonicalFunctionDeclForCallGraph(callee);
+    resolvedCallees.insert(callee);
+    if (selectedDeclarations.count(callee) == 0 &&
+        callGraphNodeBelongsToProject(callee, project) &&
+        shouldMaterializeResolvedCallTarget(callee)) {
+      selectedDeclarations.insert(callee);
+      callGraphData.emplace_back(callee, project, &classHierarchy);
+    }
+  };
+  for (SgFunctionDeclaration *callee :
+       collectNonFunctionConstructorTargets(&classHierarchy)) {
+    retainCallee(callee);
+  }
+  for (size_t i = 0; i < callGraphData.size(); ++i) {
+    const auto callees = callGraphData[i].functionList;
+    for (SgFunctionDeclaration *callee : callees) {
+      retainCallee(callee);
     }
   }
   VariantVector referenceVariants(V_SgTemplateFunctionRefExp);
@@ -672,7 +570,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     } else if (SgNonrealRefExp *reference = isSgNonrealRefExp(node)) {
       resolved = reference->get_resolved_function_declaration();
     }
-    if (resolved != NULL) {
+    if (resolved != NULL && callGraphNodeBelongsToProject(resolved, project)) {
       resolvedCallees.insert(canonicalFunctionDeclForCallGraph(resolved));
     }
   }
@@ -697,7 +595,7 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
         resolvedCallees.count(unique) == 0) {
       continue;
     }
-    if (getGraphNodeForConstruction(unique) == NULL) {
+    if (hasGraphNodeFor(unique) == NULL) {
       std::string functionName = unique->get_qualified_name().getString();
       SgGraphNode *graphNode = new SgGraphNode(functionName);
       graphNode->set_SgNode(unique);
@@ -706,12 +604,8 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
     }
   }
 
-  materializeNonFunctionImplicitCallTargets(&classHierarchy);
-
   // Add edges to the graph
   for (FunctionData &currentFunction : callGraphData) {
-    SgFunctionDeclaration *curFuncDecl = currentFunction.functionDeclaration;
-    std::string curFuncName = curFuncDecl->get_qualified_name().getString();
     SgGraphNode *srcNode = hasGraphNodeFor(currentFunction.functionDeclaration);
     if (srcNode == NULL) {
       continue;
@@ -723,12 +617,6 @@ void CallGraphBuilder::buildCallGraph(Predicate pred) {
           canonicalFunctionDeclForCallGraph(callee);
       SgGraphNode *dstNode = getGraphNodeFor(
           callee_unique); // getGraphNode here, see function comment
-      if (dstNode == NULL) {
-        dstNode = ensureGraphNodeForImplicitCallTarget(callee_unique);
-      }
-      if (dstNode == NULL) {
-        dstNode = ensureGraphNodeForResolvedCallTarget(callee_unique);
-      }
       if (dstNode == NULL)
         continue;
       if (graph->checkIfDirectedGraphEdgeExists(srcNode, dstNode) == false)

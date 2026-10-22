@@ -152,7 +152,6 @@ set(group1_tests
   loopNormalization
   collectReadWriteVariables
   typeTraits
-  interfaceFunctionCoverage
   livenessAnalysis
   generateUniqueName
   annotateExpressionsWithUniqueNames
@@ -189,8 +188,16 @@ foreach(test ${group1_tests})
 endforeach()
 
 add_test(
+  NAME astInterface_interfaceFunctionCoverage
+  COMMAND $<TARGET_FILE:interfaceFunctionCoverage> --require-overload-coverage
+          ${TEST_CXXFLAGS} -c
+          ${CMAKE_CURRENT_SOURCE_DIR}/inputinterfaceFunctionCoverage.C
+)
+
+add_test(
   NAME astInterface_rex_interface_function_coverage_memcheck
-  COMMAND $<TARGET_FILE:interfaceFunctionCoverage> ${TEST_CXXFLAGS} -c
+  COMMAND $<TARGET_FILE:interfaceFunctionCoverage> --require-overload-coverage
+          ${TEST_CXXFLAGS} -c
           ${CMAKE_CURRENT_SOURCE_DIR}/rex_ast_interface_function_coverage_memcheck.cpp
 )
 set_tests_properties(
@@ -209,6 +216,13 @@ add_test(
 set_tests_properties(
   astInterface_rex_on_demand_qualification_missing_use_site_is_rejected
   PROPERTIES LABELS "astInterface;rex;UNPARSER;UNPARSETOSTRING;death")
+
+add_test(
+  NAME astInterface_rex_memory_pool_snapshot
+  COMMAND $<TARGET_FILE:rex_sagebuilder_typed_ownership_contract>
+          --check-memory-pool-snapshot)
+set_tests_properties(astInterface_rex_memory_pool_snapshot
+  PROPERTIES LABELS "astInterface;rex")
 
 add_test(
   NAME astInterface_rex_sagebuilder_typed_ownership_contract
@@ -298,6 +312,22 @@ set_tests_properties(astInterface_rex_cast_consumer_contract
   PROPERTIES LABELS "astInterface;rex")
 
 add_test(
+  NAME astInterface_rex_cast_consumer_contract_llp64
+  COMMAND $<TARGET_FILE:rex_cast_consumer_contract>
+          --check-llp64 ${TEST_CXXFLAGS} --target=x86_64-pc-windows-msvc -c
+          ${_rex_cast_consumer_input})
+set_tests_properties(astInterface_rex_cast_consumer_contract_llp64
+  PROPERTIES LABELS "astInterface;rex;CFE")
+
+add_test(
+  NAME astInterface_rex_cast_consumer_contract_msp430
+  COMMAND $<TARGET_FILE:rex_cast_consumer_contract>
+          --check-msp430 ${TEST_CXXFLAGS} --target=msp430 -c
+          ${_rex_cast_consumer_input})
+set_tests_properties(astInterface_rex_cast_consumer_contract_msp430
+  PROPERTIES LABELS "astInterface;rex;CFE")
+
+add_test(
   NAME astInterface_rex_expression_mangling_contract
   COMMAND $<TARGET_FILE:rex_expression_mangling_contract>)
 set_tests_properties(
@@ -319,6 +349,30 @@ function(add_rex_cast_consumer_death_test test_name mode diagnostic)
 endfunction()
 
 add_rex_cast_consumer_death_test(
+  astInterface_rex_missing_target_abi_is_rejected
+  --reject-missing-target-abi
+  "abi.available")
+
+foreach(operand placement constructor builtin)
+  add_rex_cast_consumer_death_test(
+    astInterface_rex_new_owned_${operand}_is_rejected
+    --reject-new-owned-${operand}
+    "operand->get_parent\\(\\) == nullptr")
+endforeach()
+
+add_rex_cast_consumer_death_test(
+  astInterface_rex_constructor_missing_arguments_is_rejected
+  --reject-constructor-missing-arguments
+  "^REX_AST_INVARIANT\\[constructor-initializer-mangle\\]:")
+add_rex_cast_consumer_death_test(
+  astInterface_rex_braced_owned_list_is_rejected
+  --reject-braced-owned-list
+  "initializers->get_parent\\(\\) == nullptr")
+add_rex_cast_consumer_death_test(
+  astInterface_rex_braced_owned_list_direct_is_rejected
+  --reject-braced-owned-list-direct
+  "get_initializers\\(\\)->get_parent\\(\\) == nullptr")
+add_rex_cast_consumer_death_test(
   astInterface_rex_unary_semantic_conversion_rebuild_is_rejected
   --reject-unary-cast-rebuild
   "^REX_AST_INVARIANT\\[unary-cast-rebuild\\]: AstInterface unary operators do not carry an exact cast target type, semantic conversion kind, or value category$")
@@ -336,7 +390,7 @@ add_rex_cast_consumer_death_test(
 add_rex_cast_consumer_death_test(
   astInterface_rex_dependent_cast_target_failure_is_rejected
   --reject-dependent-cast-target
-  "^REX_TEMPLATE_INVARIANT\\[type-parameter-instantiation\\]: type=0x[[:xdigit:]]+ name=T position=0 has no exact argument in a 0-argument specialization$")
+  "^REX_TEMPLATE_INVARIANT\\[type-parameter-instantiation\\]: type=0x[[:xdigit:]]+ name=T position=0 has no exact parameter/argument in a 0-parameter/0-argument specialization$")
 add_rex_cast_consumer_death_test(
   astInterface_rex_unsupported_cast_precision_policy_is_rejected
   --reject-unsupported-precision-policy
@@ -619,6 +673,63 @@ function(add_rex_sagebuilder_typed_ownership_death_test test_name mode diagnosti
 endfunction()
 
 add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_bitfield_is_rejected
+  --reject-owned-bitfield
+  "bitfield == nullptr \\|\\| bitfield->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_bitfield_constructor_is_rejected
+  --reject-owned-bitfield-constructor
+  "p_bitfield->get_parent\\(\\) == nullptr")
+
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_pragma_payload_is_rejected
+  --reject-owned-pragma-payload
+  "pragma->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_partial_pragma_source_is_rejected
+  --reject-partial-pragma-source
+  "has_start == has_end")
+
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_simple_requirement_is_rejected
+  --reject-owned-simple-requirement
+  "expression->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_nested_requirement_is_rejected
+  --reject-owned-nested-requirement
+  "constraint->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_compound_requirement_is_rejected
+  --reject-owned-compound-requirement
+  "expression->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_aliased_compound_requirement_is_rejected
+  --reject-aliased-compound-requirement
+  "type_constraint != expression")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_compound_constraint_is_rejected
+  --reject-owned-compound-constraint
+  "type_constraint->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_requirements_list_is_rejected
+  --reject-owned-requirements-list
+  "REX_AST_INVARIANT\\[requires-construction\\]: requires expression needs a nonempty detached requirement list and a paired detached parameter list and scope")
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_requires_parameters_is_rejected
+  --reject-owned-requires-parameters
+  "REX_AST_INVARIANT\\[requires-construction\\]: requires expression needs a nonempty detached requirement list and a paired detached parameter list and scope")
+
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_typeof_owned_operand_is_rejected
+  --reject-owned-typeof-operand
+  "base_expression->get_parent\\(\\) == nullptr")
+
+add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_decltype_owned_operand_is_rejected
+  --reject-owned-decltype-operand
+  "base_expression->get_parent\\(\\) == nullptr")
+
+add_rex_sagebuilder_typed_ownership_death_test(
   astInterface_rex_preclassified_nfi_source_is_rejected
   --reject-preclassified-nfi-source
   "^REX_AST_INVARIANT\\[nfi-source-state\\]: node=0x[[:xdigit:]]+/SgNullExpression no-file-info construction requires fresh null provenance start=0x[[:xdigit:]]+ end=0x[[:xdigit:]]+ operator=0x[[:xdigit:]]+ pragma-start=\\(nil\\) pragma-end=\\(nil\\)$")
@@ -718,6 +829,10 @@ add_rex_sagebuilder_typed_ownership_death_test(
   --reject-null-function-parameter-list
   "^REX_AST_INVARIANT\\[function-parameter-type-list\\]: parameter list is null; zero parameters require an explicit empty list$")
 add_rex_sagebuilder_typed_ownership_death_test(
+  astInterface_rex_owned_function_parameter_type_list_is_rejected
+  --reject-owned-function-parameter-type-list
+  "typeList->get_parent\\(\\) == nullptr")
+add_rex_sagebuilder_typed_ownership_death_test(
   astInterface_rex_null_nfi_function_parameter_type_list_is_rejected
   --reject-null-nfi-function-parameter-type-list
   "^REX_AST_INVARIANT\\[function-parameter-type-list\\]: NFI parameter list construction requires one explicit non-null type list$")
@@ -772,11 +887,11 @@ add_rex_sagebuilder_typed_ownership_death_test(
 add_rex_sagebuilder_typed_ownership_death_test(
   astInterface_rex_ordinary_variable_embedded_tag_is_rejected
   --reject-ordinary-variable-for-embedded-tag
-  "^REX_AST_INVARIANT\\[embedded-tag-variable-transaction\\]: variable=0x[[:xdigit:]]+ type=0x[[:xdigit:]]+ names pending definition=0x[[:xdigit:]]+ without the strict embedded-tag builder$")
+  "^REX_AST_INVARIANT\\[embedded-tag-variable-transaction\\]: name=rex_pending_variable type=0x[[:xdigit:]]+ pending-definition=0x[[:xdigit:]]+ requires the strict embedded-tag builder$")
 add_rex_sagebuilder_typed_ownership_death_test(
   astInterface_rex_ordinary_typedef_embedded_tag_is_rejected
   --reject-ordinary-typedef-for-embedded-tag
-  "^REX_AST_INVARIANT\\[embedded-tag-typedef-transaction\\]: typedef=0x[[:xdigit:]]+ name=rex_pending_typedef base-type=0x[[:xdigit:]]+ pending-definition=0x[[:xdigit:]]+/SgClassDeclaration name=rex_pending_typedef_tag parent=\\(nil\\)/<null> scope=0x[[:xdigit:]]+ without the strict embedded-tag builder$")
+  "^REX_AST_INVARIANT\\[embedded-tag-typedef-transaction\\]: name=rex_pending_typedef base-type=0x[[:xdigit:]]+ pending-definition=0x[[:xdigit:]]+/SgClassDeclaration requires the strict embedded-tag builder$")
 add_rex_sagebuilder_typed_ownership_death_test(
   astInterface_rex_mismatched_embedded_tag_type_is_rejected
   --reject-mismatched-embedded-tag-type
@@ -882,10 +997,10 @@ add_test(
      log=astInterface_rex_nonempty_symbol_table_rebuild_is_rejected.log && \
      rm -f \"\$log\" && \
      { set +e; \"\$@\" >\"\$log\" 2>&1; status=\$?; set -e; test \"\$status\" -eq 134; } && \
-     test \"\$(grep -Ec '^.*FAIL : ASSERTION:require:[[:space:]]+\\[[^]]*/sageInterface\\.C:[0-9]+,[[:space:]]+rebuildSymbolTable\\]:[[:space:]]+.*symbolTable->size\\(\\) == 0$' \"\$log\")\" -eq 1"
+     test \"\$(grep -Ec '^REX_COPY_INVARIANT\\[symbol-table-copy-input\\]: .* copy-size=[1-9][0-9]*$' \"\$log\")\" -eq 1"
     dummy
     $<TARGET_FILE:rex_function_prototype_chain>
-    --reject-nonempty-symbol-rebuild
+    --reject-nonempty-symbol-copy
     ${TEST_CXXFLAGS}
     -c
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_function_prototype_chain_input.C)
@@ -953,14 +1068,6 @@ add_rex_function_chain_death_test(
   "^REX_AST_INVARIANT\\[function-declaration-chain\\]: function 'rex_free_definition' first-nondefining declaration has non-reciprocal canonical links$")
 
 set_tests_properties(astInterface_interfaceFunctionCoverage PROPERTIES FAIL_REGULAR_EXPRESSION "In addToNameMap\(\): Allow this for replacement now!;Default reached in SgScopeStatement::isNamedScope" )
-
-set(_disable_interface_coverage FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   AND CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.5")
-  set(_disable_interface_coverage TRUE)
-endif()
-if(_disable_interface_coverage)
-endif()
 
 # buildFunctionDeclaration test (uses inputBlank1.C)
 add_test(
@@ -1068,14 +1175,6 @@ add_test(
   NAME astInterface_deepDelete
   COMMAND deepDelete ${TEST_CXXFLAGS} -rose:detect_dangling_pointers 1 -c ${CMAKE_CURRENT_SOURCE_DIR}/inputdeepDelete.C
 )
-set(_disable_deep_delete FALSE)
-if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
-   AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS "4.9")
-  set(_disable_deep_delete TRUE)
-endif()
-if(_disable_deep_delete)
-endif()
-
 # loopUnrolling tests (multiple tests with different parameters)
 add_test(
   NAME astInterface_loopUnrolling
@@ -1374,14 +1473,8 @@ if(ENABLE-FORTRAN)
   endforeach()
 endif()
 
-# Add subdirectories if they exist
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/typeEquivalenceTests/CMakeLists.txt)
-  add_subdirectory(typeEquivalenceTests)
-endif()
-
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/unitTests/CMakeLists.txt)
-  add_subdirectory(unitTests)
-endif()
+add_subdirectory(typeEquivalenceTests)
+add_subdirectory(unitTests)
 
 get_property(_ast_interface_registered_tests DIRECTORY PROPERTY TESTS)
 foreach(_test IN LISTS _ast_interface_registered_tests)

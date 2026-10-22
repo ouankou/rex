@@ -75,13 +75,6 @@ SgExpression *SgConditionalExp::get_true_value_exp() const {
 
 SgType *SgConditionalExp::get_type() const {
   validate();
-  if (p_expression_type == nullptr ||
-      isSgTypeUnknown(p_expression_type) != nullptr ||
-      isSgTypeDefault(p_expression_type) != nullptr) {
-    fprintf(stderr, "REX_AST_INVARIANT[conditional-result-type]: conditional "
-                    "expression has no exact semantic result type\n");
-    ROSE_ABORT();
-  }
   return p_expression_type;
 }
 
@@ -107,34 +100,23 @@ SgExpression *SgConditionalExp::get_next(int &n) const {
 }
 
 int SgConditionalExp::replace_expression(SgExpression *o, SgExpression *n) {
-  // DQ (12/17/2006): This function should have the semantics that it will
-  // represent a structural change to the AST, thus it is free to set the parent
-  // of the new expression.
-
   ROSE_ASSERT(o != NULL);
   ROSE_ASSERT(n != NULL);
   validate();
-
-  if (get_conditional_exp() == o) {
-    set_conditional_exp(n);
-    n->set_parent(this);
-    validate();
+  if (get_conditional_exp() != o && get_true_exp() != o && get_false_exp() != o)
+    return 0;
+  if (o == n)
     return 1;
-  } else {
-    if (get_true_exp() == o) {
-      set_true_exp(n);
-      n->set_parent(this);
-      validate();
-      return 1;
-    } else {
-      if (get_false_exp() == o) {
-        set_false_exp(n);
-        n->set_parent(this);
-        validate();
-        return 1;
-      } else {
-        return 0;
-      }
-    }
-  }
+
+  ROSE_ASSERT(n->get_parent() == nullptr);
+  if (get_conditional_exp() == o)
+    set_conditional_exp(n);
+  else if (get_true_exp() == o)
+    set_true_exp(n);
+  else
+    set_false_exp(n);
+  n->set_parent(this);
+  o->set_parent(nullptr);
+  validate();
+  return 1;
 }

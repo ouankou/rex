@@ -49,6 +49,14 @@ int main(int argc, char **argv) {
     requireSourceNode(variable);
     requireSourceNode(definition);
     requireSourceNode(definition->get_definition());
+    SgInitializedName *carrier = variable->get_variables().front();
+    ROSE_ASSERT(carrier->get_file_info()->isCompilerGenerated());
+    ROSE_ASSERT(carrier->get_file_info()->isFrontendSpecific());
+    ROSE_ASSERT(carrier->get_file_info()->isOutputInCodeGeneration());
+    ROSE_ASSERT(carrier->get_file_info()->get_physical_file_id() < 0);
+    ROSE_ASSERT(carrier->get_definition() != nullptr);
+    ROSE_ASSERT(
+        carrier->get_definition()->get_file_info()->isCompilerGenerated());
     ++anonymousAggregateOwners;
   }
 

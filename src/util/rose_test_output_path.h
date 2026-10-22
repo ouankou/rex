@@ -15,22 +15,11 @@ inline std::filesystem::path normalizePath(const std::filesystem::path &path) {
     return path;
   }
 
-  std::error_code ec;
   std::filesystem::path absolute_path = path;
   if (!absolute_path.is_absolute()) {
-    absolute_path = std::filesystem::absolute(absolute_path, ec);
-    if (ec) {
-      return path.lexically_normal();
-    }
+    absolute_path = std::filesystem::absolute(absolute_path);
   }
-
-  std::filesystem::path canonical_path =
-      std::filesystem::weakly_canonical(absolute_path, ec);
-  if (!ec) {
-    return canonical_path;
-  }
-
-  return absolute_path.lexically_normal();
+  return std::filesystem::weakly_canonical(absolute_path);
 }
 
 inline bool isWithinTree(const std::filesystem::path &root,
@@ -61,12 +50,8 @@ inline std::string defaultOutputDir() {
     return output_dir;
   }
 
-  std::error_code ec;
   const std::filesystem::path current_dir =
-      normalizePath(std::filesystem::current_path(ec));
-  if (ec || current_dir.empty()) {
-    return std::string();
-  }
+      normalizePath(std::filesystem::current_path());
 
   const std::filesystem::path build_root =
       normalizePath(std::filesystem::path(ROSE_BUILD_TREE));
@@ -101,11 +86,7 @@ inline std::string resolvePath(const std::string &filename,
 
   std::filesystem::path output_dir_path =
       detail::normalizePath(std::filesystem::path(output_dir_storage));
-  std::error_code ec;
-  std::filesystem::create_directories(output_dir_path, ec);
-  if (ec) {
-    return filename;
-  }
+  std::filesystem::create_directories(output_dir_path);
 
   std::filesystem::path resolved_path(filename);
   if (!resolved_path.is_absolute()) {
@@ -131,11 +112,7 @@ inline std::string resolvePath(const std::string &filename,
 
   std::filesystem::path parent_path = resolved_path.parent_path();
   if (!parent_path.empty()) {
-    ec.clear();
-    std::filesystem::create_directories(parent_path, ec);
-    if (ec) {
-      return filename;
-    }
+    std::filesystem::create_directories(parent_path);
   }
 
   return resolved_path.string();

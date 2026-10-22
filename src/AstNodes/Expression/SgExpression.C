@@ -1,10 +1,9 @@
+#include "ExpressionTypeClassification.h"
 #include "sage3basic.h"
 
+#include <algorithm>
 #include <iostream>
-
-#include <map>
-
-#include <string>
+#include <unordered_set>
 
 namespace {
 
@@ -34,19 +33,102 @@ void validateSemanticWrapperMask(SgExpression::semantic_wrapper_mask_enum mask,
 SgExpression::semantic_wrapper_mask_enum
 SgExpression::get_semantic_wrapper_mask() const {
   validateSemanticWrapperMask(p_semantic_wrapper_mask, false, this);
+  ROSE_ASSERT(((semanticWrapperBits(p_semantic_wrapper_mask) &
+                semanticWrapperBits(e_bound_temporary)) != 0) ==
+              (p_bound_temporary_destructor != nullptr));
+  ROSE_ASSERT(((semanticWrapperBits(p_semantic_wrapper_mask) &
+                semanticWrapperBits(e_materialized_temporary)) != 0) ==
+              (p_materialized_storage_duration != e_temporary_storage_none));
   return p_semantic_wrapper_mask;
 }
 
-void SgExpression::set_semantic_wrapper_mask(semantic_wrapper_mask_enum mask) {
+bool SgExpression::is_valid_temporary_materialization(
+    temporary_storage_duration_enum storage, SgInitializedName *owner) {
+  if (storage == e_temporary_storage_none ||
+      storage == e_temporary_storage_full_expression)
+    return owner == nullptr;
+  if (owner == nullptr || !SgNode::isLiveNode(owner))
+    return false;
+  auto *declaration = isSgVariableDeclaration(owner->get_parent());
+  auto *scope = owner->get_scope();
+  if (declaration == nullptr || owner->get_declptr() != declaration ||
+      scope == nullptr ||
+      std::count(declaration->get_variables().begin(),
+                 declaration->get_variables().end(), owner) != 1)
+    return false;
+  if (storage == e_temporary_storage_containing_object) {
+    const auto &field_storage =
+        declaration->get_declarationModifier().get_storageModifier();
+    return owner->get_cxx_field_index().has_value() &&
+           isSgClassDefinition(scope) != nullptr &&
+           (field_storage.isDefault() || field_storage.isMutable());
+  }
+  bool static_storage = false, thread_storage = false;
+  std::unordered_set<const SgNode *> visited;
+  for (auto *current = owner; current != nullptr;
+       current = current->get_prev_decl_item()) {
+    if (!SgNode::isLiveNode(current) || !visited.insert(current).second)
+      return false;
+    auto *variable = isSgVariableDeclaration(current->get_parent());
+    if (variable == nullptr || current->get_declptr() != variable ||
+        current->get_cxx_field_index().has_value() ||
+        std::count(variable->get_variables().begin(),
+                   variable->get_variables().end(), current) != 1)
+      return false;
+    const auto &modifier =
+        variable->get_declarationModifier().get_storageModifier();
+    static_storage |= modifier.isStatic() || modifier.isExtern();
+    thread_storage |=
+        modifier.get_thread_local_storage() || variable->get_is_thread_local();
+  }
+  while (auto *context = isSgDeclarationScope(scope)) {
+    if (!visited.insert(scope).second)
+      return false;
+    scope = context->get_scope();
+    if (scope == nullptr)
+      return false;
+  }
+  return Rose::AST::temporaryStorageMatchesOwner(
+      storage, scope->variantT(), static_storage, thread_storage);
+}
+
+bool SgExpression::is_valid_bound_temporary_destructor(
+    SgType *type, SgMemberFunctionDeclaration *destructor) {
+  auto *object = Rose::AST::selectedDestructorClass(destructor);
+  return object != nullptr && type != nullptr &&
+         Rose::AST::resolvedClassType(type) == object;
+}
+
+void SgExpression::set_semantic_wrapper_mask(
+    semantic_wrapper_mask_enum mask,
+    SgMemberFunctionDeclaration *bound_temporary_destructor,
+    temporary_storage_duration_enum materialized_storage_duration,
+    SgInitializedName *materialized_lifetime_owner) {
   validateSemanticWrapperMask(mask, false, this);
+  const bool bound =
+      (semanticWrapperBits(mask) & semanticWrapperBits(e_bound_temporary)) != 0;
+  ROSE_ASSERT(bound == (bound_temporary_destructor != nullptr));
+  ROSE_ASSERT(!bound || is_valid_bound_temporary_destructor(
+                            get_type(), bound_temporary_destructor));
+  ROSE_ASSERT(((semanticWrapperBits(mask) &
+                semanticWrapperBits(e_materialized_temporary)) != 0) ==
+              (materialized_storage_duration != e_temporary_storage_none));
+  ROSE_ASSERT(is_valid_temporary_materialization(materialized_storage_duration,
+                                                 materialized_lifetime_owner));
   p_semantic_wrapper_mask = mask;
+  p_bound_temporary_destructor = bound_temporary_destructor;
+  p_materialized_storage_duration = materialized_storage_duration;
+  p_materialized_lifetime_owner = materialized_lifetime_owner;
 }
 
 void SgExpression::add_semantic_wrapper(semantic_wrapper_mask_enum wrapper) {
   validateSemanticWrapperMask(wrapper, true, this);
   const unsigned int bits = semanticWrapperBits(get_semantic_wrapper_mask()) |
                             semanticWrapperBits(wrapper);
-  p_semantic_wrapper_mask = static_cast<semantic_wrapper_mask_enum>(bits);
+  set_semantic_wrapper_mask(static_cast<semantic_wrapper_mask_enum>(bits),
+                            p_bound_temporary_destructor,
+                            p_materialized_storage_duration,
+                            p_materialized_lifetime_owner);
 }
 
 bool SgExpression::has_semantic_wrapper(
@@ -58,44 +140,12 @@ bool SgExpression::has_semantic_wrapper(
 
 bool SgExpression::has_semantic_value_type() const {
   const SgStringVal *stringLiteral = isSgStringVal(this);
-  return (stringLiteral == nullptr || !stringLiteral->get_cxx_unevaluated()) &&
-         isSgExprListExp(this) == nullptr &&
-         isSgCudaKernelExecConfig(this) == nullptr &&
-         isSgRangeExp(this) == nullptr &&
-         isSgSubscriptExpression(this) == nullptr &&
-         isSgDesignator(this) == nullptr && isSgAsmOp(this) == nullptr &&
-         isSgSimpleRequirement(this) == nullptr &&
-         isSgTypeRequirement(this) == nullptr &&
-         isSgCompoundRequirement(this) == nullptr &&
-         isSgRequirementSubstitutionFailure(this) == nullptr &&
-         isSgNestedRequirement(this) == nullptr &&
-         isSgTypeExpression(this) == nullptr &&
-         isSgNullExpression(this) == nullptr &&
-         isSgFortranCommonBlockRefExp(this) == nullptr &&
-         isSgAsteriskShapeExp(this) == nullptr &&
-         isSgColonShapeExp(this) == nullptr &&
-         isSgAssumedRankExp(this) == nullptr &&
-         isSgImpliedDo(this) == nullptr &&
-         isSgCAFImageSelectorExp(this) == nullptr &&
-         isSgOmpNameExpression(this) == nullptr &&
-         isSgOmpSourceExpression(this) == nullptr &&
-         isSgOmpInductionItem(this) == nullptr &&
-         isSgOmpApplyTransformation(this) == nullptr &&
-         isSgOmpInitModifier(this) == nullptr &&
-         isSgOmpInitModifierList(this) == nullptr &&
-         isSgOmpAppendArgsOperation(this) == nullptr &&
-         isSgOmpMapDistDataPolicy(this) == nullptr &&
-         isSgOmpMapItem(this) == nullptr;
+  return Rose::AST::expressionHasSemanticValueType(
+      variantT(),
+      stringLiteral != nullptr && stringLiteral->get_cxx_unevaluated());
 }
 
 Sg_File_Info *SgExpression::get_file_info() const {
-  // DQ (11/8/2006): Note that the frontend translation only uses
-  // set_startOfConstruct() and set_endOfConstruct().
-
-  // This redefines get_file_info() as it is implemented for a SgLocatedNode
-  // to use the "get_operatorPosition()" instead of the get_startOfConstruct()"
-  // Most if not all operator positions will associated with syntax for the
-  // operator. return get_operatorPosition();
   Sg_File_Info *returnFileInfo = get_operatorPosition();
   if (returnFileInfo == NULL)
     returnFileInfo = get_startOfConstruct();
@@ -103,13 +153,6 @@ Sg_File_Info *SgExpression::get_file_info() const {
 }
 
 void SgExpression::set_file_info(Sg_File_Info *fileInfo) {
-  // DQ (11/8/2006): Note that the frontend translation only uses
-  // set_startOfConstruct() and set_endOfConstruct().
-
-  // This redefines get_file_info() as it is implemented for a SgLocatedNode
-  // to use the "get_operatorPosition()" instead of the get_startOfConstruct()"
-  // Most if not all operator positions will associated with syntax for the
-  // operator.
   return set_operatorPosition(fileInfo);
 }
 
@@ -124,10 +167,6 @@ int SgExpression::replace_expression(SgExpression *, SgExpression *) {
 }
 
 SgType *SgExpression::get_type() const {
-  // DQ: With this function defined we can be sure that we don't call it by
-  // accident. This catches any IR nodes where the fucntion should have been
-  // overwritten and was not.
-
   std::cerr << "Call to undefined SgExpression::get_type(): aborting\n";
   std::cerr << "dynamic type: " << this->class_name() << "\n";
   ROSE_ABORT();
@@ -138,21 +177,17 @@ SgType *SgExpression::get_type() const {
 int SgExpression::precedence() const { return 0; }
 
 int SgExpression::get_name_qualification_length() const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return 0; // p_name_qualification_length;
+  return 0;
 }
 
 void SgExpression::set_name_qualification_length(
     int /*name_qualification_length*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
@@ -161,14 +196,13 @@ void SgExpression::set_name_qualification_length(
 }
 
 bool SgExpression::get_type_elaboration_required() const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return false; // p_type_elaboration_required;
+  return false;
 }
 
 bool SgExpression::has_type_qualification_payload() const {
@@ -198,126 +232,93 @@ bool SgExpression::has_type_qualification_payload() const {
 
 void SgExpression::set_type_elaboration_required(
     bool /*type_elaboration_required*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
-
-  // p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgExpression::get_global_qualification_required() const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return false; // p_global_qualification_required;
+  return false;
 }
 
 void SgExpression::set_global_qualification_required(
     bool /*global_qualification_required*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
-
-  // p_global_qualification_required = global_qualification_required;
 }
 
 int SgExpression::get_name_qualification_for_pointer_to_member_class_length()
     const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return 0; // p_name_qualification_length;
+  return 0;
 }
 
 void SgExpression::set_name_qualification_for_pointer_to_member_class_length(
     int /*name_qualification_length*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
-
-  // p_name_qualification_length = name_qualification_length;
 }
 
 bool SgExpression::get_type_elaboration_for_pointer_to_member_class_required()
     const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return false; // p_type_elaboration_required;
+  return false;
 }
 
 void SgExpression::set_type_elaboration_for_pointer_to_member_class_required(
     bool /*type_elaboration_required*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
-
-  // p_type_elaboration_required = type_elaboration_required;
 }
 
 bool SgExpression::
     get_global_qualification_for_pointer_to_member_class_required() const {
-  ROSE_ASSERT(this != NULL);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
 
-  return false; // p_global_qualification_required;
+  return false;
 }
 
 void SgExpression::
     set_global_qualification_for_pointer_to_member_class_required(
         bool /*global_qualification_required*/) {
-  ROSE_ASSERT(this != NULL);
-  // This can't be called by the name qualification API (see test2015_26.C).
-  // set_isModified(true);
 
   printf("Error: base class virtual function called by mistake on node = %p = "
          "%s \n",
          this, this->class_name().c_str());
   ROSE_ABORT();
-
-  // p_global_qualification_required = global_qualification_required;
 }
 
-// DQ (9/23/2011): Use the vitual function version so that we can test within
-// ROSE (part of incremental testing of new original expression tree support).
-// DQ (9/19/2011): Put back the original code (non-virtual functions) so that we
-// can test against previously passing tests.
 SgExpression *SgExpression::get_originalExpressionTree() const {
   return p_originalExpressionTree;
 }
@@ -345,41 +346,22 @@ void SgExpression::set_originalExpressionTree(SgExpression *source) {
 }
 
 bool SgExpression::hasExplicitType() {
-  // DQ (3/7/2014):  This could be implemented as a virtual function but would
-  // require 11 functions to be implemented. I have thus instead implemented it
-  // as a single function on the SgType instead. We can review this if it is
-  // important.
-
-  // This function returns true only if this is either a SgTemplateParameterVal,
-  // SgComplexVal, SgThisExp, SgSizeOfOp, SgAlignOfOp, SgTypeIdOp,
-  // SgVarArgStartOp,
-  // SgVarArgStartOneOperandOp, SgVarArgOp, SgVarArgEndOp, SgVarArgCopyOp,
-  // SgNewExp, SgRefExp, SgAggregateInitializer, SgCastExp,
-  // SgConstructorInitializer, SgAssignInitializer, SgPseudoDestructorRefExp.
-
-  bool returnValue = false;
-
-  // DQ (11/10/2014): Added support for SgFunctionParameterRefExp node to store
-  // the type explicitly.
-
-  if (isSgTemplateParameterVal(this) != NULL || isSgComplexVal(this) != NULL ||
-      isSgThisExp(this) != NULL || isSgSizeOfOp(this) != NULL ||
-      isSgAlignOfOp(this) != NULL || isSgTypeIdOp(this) != NULL ||
-      isSgVarArgStartOp(this) != NULL ||
-      isSgVarArgStartOneOperandOp(this) != NULL || isSgVarArgOp(this) != NULL ||
-      isSgVarArgEndOp(this) != NULL || isSgVarArgCopyOp(this) != NULL ||
-      isSgNewExp(this) != NULL || isSgRefExp(this) != NULL ||
-      isSgAggregateInitializer(this) != NULL || isSgCastExp(this) != NULL ||
-      // isSgConstructorInitializer(this) != NULL   ||
-      // isSgAssignInitializer(this) != NULL        ||
-      // isSgPseudoDestructorRefExp(this)  != NULL  ||
-      isSgConstructorInitializer(this) != NULL ||
-      isSgPseudoDestructorRefExp(this) != NULL ||
-      isSgFunctionParameterRefExp(this) != NULL) {
-    returnValue = true;
-  }
-
-  return returnValue;
+  return isSgCxxArrayInitLoop(this) != nullptr ||
+         isSgFunctionRefExp(this) != nullptr ||
+         isSgCxxArrayInitReference(this) != nullptr ||
+         isSgTemplateParameterVal(this) != nullptr ||
+         isSgComplexVal(this) != nullptr || isSgThisExp(this) != nullptr ||
+         isSgSizeOfOp(this) != nullptr || isSgAlignOfOp(this) != nullptr ||
+         isSgTypeIdOp(this) != nullptr || isSgVarArgStartOp(this) != nullptr ||
+         isSgVarArgStartOneOperandOp(this) != nullptr ||
+         isSgVarArgOp(this) != nullptr || isSgVarArgEndOp(this) != nullptr ||
+         isSgVarArgCopyOp(this) != nullptr || isSgNewExp(this) != nullptr ||
+         isSgRefExp(this) != nullptr ||
+         isSgAggregateInitializer(this) != nullptr ||
+         isSgCastExp(this) != nullptr ||
+         isSgConstructorInitializer(this) != nullptr ||
+         isSgPseudoDestructorRefExp(this) != nullptr ||
+         isSgFunctionParameterRefExp(this) != nullptr;
 }
 
 void SgExpression::set_explicitly_stored_type(SgType *type) {
@@ -388,6 +370,21 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
   // support).
 
   switch (this->variantT()) {
+  case V_SgFunctionRefExp:
+    isSgFunctionRefExp(this)->set_function_type(type);
+    break;
+  case V_SgCxxArrayInitLoop: {
+    auto *loop = isSgCxxArrayInitLoop(this);
+    loop->set_expression_type(type);
+    loop->validate();
+    break;
+  }
+  case V_SgCxxArrayInitReference: {
+    auto *reference = isSgCxxArrayInitReference(this);
+    reference->set_expression_type(type);
+    reference->validate();
+    break;
+  }
   case V_SgNewExp: {
     SgNewExp *exp = isSgNewExp(this);
     ROSE_ASSERT(exp != NULL);
@@ -425,7 +422,16 @@ void SgExpression::set_explicitly_stored_type(SgType *type) {
   case V_SgTemplateParameterVal: {
     SgTemplateParameterVal *exp = isSgTemplateParameterVal(this);
     ROSE_ASSERT(exp != NULL);
-    exp->set_valueType(type);
+    ROSE_ASSERT(exp->get_type() == type);
+    break;
+  }
+
+  case V_SgFunctionParameterRefExp: {
+    SgFunctionParameterRefExp *exp = isSgFunctionParameterRefExp(this);
+    ROSE_ASSERT(exp != nullptr);
+    ROSE_ASSERT(!SageInterface::containsUnknownType(type));
+    exp->set_parameter_type(type);
+    ROSE_ASSERT(exp->get_type() == type);
     break;
   }
 

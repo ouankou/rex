@@ -6,7 +6,7 @@ int main(int argc, char *argv[]) {
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != NULL);
 
-  ConstantFolding::constantFoldingOptimization(project, false);
+  ConstantFolding::constantFoldingOptimization(project);
 
   // add types, testing the SageInterface API
   VariantVector vv(V_SgType);

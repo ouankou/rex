@@ -6,6 +6,7 @@
  * SPDX-License-Identifier: (BSD-3-Clause)
  */
 
+#include "Rose/FileSystem.h"
 #include "rose_paths.h"
 #include "sage3basic.h"
 #include "sage_support/utility_functions.h"
@@ -13,24 +14,24 @@
 #include <emscripten/bind.h>
 
 #include <algorithm>
-#include <cctype>
 #include <cerrno>
 #include <cstdio>
 #include <cstring>
+#include <fcntl.h>
 #include <filesystem>
-#include <fstream>
 #include <initializer_list>
+#include <memory>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace {
 
-#if !defined(REX_WASM_CLANG_C_DRIVER) ||                                       \
-    !defined(REX_WASM_CLANG_CXX_DRIVER) ||                                     \
-    !defined(REX_WASM_CLANG_RESOURCE_DIR)
-#error "REX WASM requires exact virtual Clang driver and resource paths"
+#if !defined(REX_WASM_CLANG_RESOURCE_DIR)
+#error "REX WASM requires the configured Clang resource path"
 #endif
 
 struct GeneratedFile {
@@ -55,6 +56,11 @@ bool hasAnySuffix(const std::string &text,
 
 enum class InputLanguage { C, Cxx };
 
+struct InputFile {
+  std::string name;
+  InputLanguage language;
+};
+
 bool classifyInputLanguage(const std::string &name, InputLanguage &language) {
   if (hasAnySuffix(name, {".c"})) {
     language = InputLanguage::C;
@@ -66,10 +72,6 @@ bool classifyInputLanguage(const std::string &name, InputLanguage &language) {
     return true;
   }
   return false;
-}
-
-bool isCxxLanguage(InputLanguage language) {
-  return language == InputLanguage::Cxx;
 }
 
 std::string jsonEscape(const std::string &input) {
@@ -108,59 +110,6 @@ std::string jsonEscape(const std::string &input) {
     }
   }
   return out.str();
-}
-
-std::string readFile(const std::filesystem::path &path) {
-  std::ifstream input(path, std::ios::binary);
-  std::ostringstream buffer;
-  buffer << input.rdbuf();
-  return buffer.str();
-}
-
-void writeFile(const std::filesystem::path &path, const std::string &content) {
-  std::ofstream output(path, std::ios::binary);
-  output << content;
-  if (!output) {
-    std::fprintf(stderr, "REX_WASM_INVARIANT[file-write]: cannot write '%s'\n",
-                 path.c_str());
-    ROSE_ABORT();
-  }
-}
-
-void ensureVirtualClangDriver(const std::filesystem::path &path) {
-  if (!path.is_absolute()) {
-    std::fprintf(stderr,
-                 "REX_WASM_INVARIANT[clang-driver-path]: configured driver "
-                 "path is not absolute: '%s'\n",
-                 path.c_str());
-    ROSE_ABORT();
-  }
-  if (std::filesystem::is_symlink(path) ||
-      (std::filesystem::exists(path) &&
-       !std::filesystem::is_regular_file(path))) {
-    std::fprintf(stderr,
-                 "REX_WASM_INVARIANT[clang-driver-path]: configured driver "
-                 "path is not a regular file: '%s'\n",
-                 path.c_str());
-    ROSE_ABORT();
-  }
-  if (!std::filesystem::exists(path)) {
-    writeFile(path, "REX in-process Clang driver contract\n");
-  }
-
-  std::error_code error;
-  std::filesystem::permissions(path,
-                               std::filesystem::perms::owner_exec |
-                                   std::filesystem::perms::group_exec |
-                                   std::filesystem::perms::others_exec,
-                               std::filesystem::perm_options::add, error);
-  if (error) {
-    std::fprintf(stderr,
-                 "REX_WASM_INVARIANT[clang-driver-path]: cannot make '%s' "
-                 "executable: %s\n",
-                 path.c_str(), error.message().c_str());
-    ROSE_ABORT();
-  }
 }
 
 void assertVirtualClangResourceContract() {
@@ -223,27 +172,26 @@ void ensureDirectoryAlias(const std::filesystem::path &target,
   }
 }
 
-std::string sanitizeFileName(const std::string &requested) {
+std::optional<InputFile> prepareInputFile(const std::string &requested) {
+  if (requested.find('\0') != std::string::npos) {
+    return std::nullopt;
+  }
   std::string name = std::filesystem::path(requested).filename().string();
-  if (name.empty() || name == "." || name == "..") {
-    name = "input.c";
+  InputLanguage language;
+  if (!classifyInputLanguage(name, language)) {
+    return std::nullopt;
   }
 
   for (char &ch : name) {
     const bool ok = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
                     (ch >= '0' && ch <= '9') || ch == '_' || ch == '-' ||
-                    ch == '.';
+                    ch == '.' || ch == '+';
     if (!ok) {
       ch = '_';
     }
   }
 
-  InputLanguage language;
-  if (!classifyInputLanguage(name, language)) {
-    name += ".c";
-  }
-
-  return name;
+  return InputFile{std::move(name), language};
 }
 
 std::string resultJson(bool ok, const std::string &mode, int exitCode,
@@ -278,7 +226,8 @@ collectGeneratedFiles(const std::filesystem::path &runDir,
     if (name.rfind("rose_", 0) != 0 && name.rfind("rex_lib_", 0) != 0) {
       continue;
     }
-    files.push_back({name, readFile(entry.path())});
+    files.push_back(
+        {name, Rose::FileSystem::readFile<std::string>(entry.path())});
   }
   std::sort(files.begin(), files.end(),
             [](const GeneratedFile &lhs, const GeneratedFile &rhs) {
@@ -297,16 +246,11 @@ void ensureRuntimeRoots() {
   std::filesystem::create_directories("/work");
   ensureDirectoryAlias("/rex/include-staging",
                        ROSE_BUILD_CLANG_INCLUDE_STAGING_DIR);
-  if (!std::filesystem::exists("/rex/bin/rex-wasm")) {
-    writeFile("/rex/bin/rex-wasm", "");
-  }
-  ensureVirtualClangDriver(REX_WASM_CLANG_C_DRIVER);
-  ensureVirtualClangDriver(REX_WASM_CLANG_CXX_DRIVER);
   assertVirtualClangResourceContract();
 }
 
 std::vector<std::string> buildArgs(const std::string &mode,
-                                   const std::string &inputName) {
+                                   const InputFile &input) {
   std::vector<std::string> args = {
       "/rex/bin/rex-wasm",
       "-target",
@@ -321,13 +265,12 @@ std::vector<std::string> buildArgs(const std::string &mode,
   args.push_back("--sysroot=/emscripten/sysroot");
 #endif
 
-  InputLanguage language;
-  const bool classified = classifyInputLanguage(inputName, language);
-  ROSE_ASSERT(classified);
-
-  if (isCxxLanguage(language)) {
+  args.push_back("-x");
+  if (input.language == InputLanguage::Cxx) {
+    args.push_back("c++");
     args.push_back("-std=c++17");
   } else {
+    args.push_back("c");
     args.push_back("-std=c11");
   }
 
@@ -338,44 +281,91 @@ std::vector<std::string> buildArgs(const std::string &mode,
   }
 
   args.push_back("-c");
-  args.push_back(inputName);
+  args.push_back("./" + input.name);
   return args;
 }
 
+struct ProjectDeleter {
+  void operator()(SgProject *project) const {
+    SageInterface::deleteAST(project);
+  }
+};
+
 int runRexDriver(const std::vector<std::string> &args) {
-  SgProject *project = frontend(args);
-  int frontendStatus = frontendExitStatus(project);
+  std::unique_ptr<SgProject, ProjectDeleter> project(frontend(args));
+  const int frontendStatus = frontendExitStatus(project.get());
   if (frontendStatus != 0) {
     return frontendStatus;
   }
-  return backend(project);
+  return backend(project.get());
 }
+
+int requireIo(int result, const char *operation) {
+  if (result < 0) {
+    std::fprintf(stderr, "REX_WASM_INVARIANT[log-io]: %s: %s\n", operation,
+                 std::strerror(errno));
+    ROSE_ABORT();
+  }
+  return result;
+}
+
+class CapturedLog {
+  int savedStdout_;
+  int savedStderr_;
+
+public:
+  CapturedLog() {
+    requireIo(std::fflush(stdout), "flush stdout");
+    requireIo(std::fflush(stderr), "flush stderr");
+    savedStdout_ = requireIo(dup(STDOUT_FILENO), "save stdout");
+    savedStderr_ = requireIo(dup(STDERR_FILENO), "save stderr");
+    const int log = requireIo(
+        open("rex.log", O_WRONLY | O_CREAT | O_TRUNC, 0666), "open log");
+    requireIo(dup2(log, STDOUT_FILENO), "capture stdout");
+    requireIo(dup2(log, STDERR_FILENO), "capture stderr");
+    requireIo(close(log), "close log descriptor");
+  }
+
+  ~CapturedLog() {
+    requireIo(std::fflush(stdout), "flush captured stdout");
+    requireIo(std::fflush(stderr), "flush captured stderr");
+    requireIo(dup2(savedStdout_, STDOUT_FILENO), "restore stdout");
+    requireIo(dup2(savedStderr_, STDERR_FILENO), "restore stderr");
+    requireIo(close(savedStdout_), "close saved stdout");
+    requireIo(close(savedStderr_), "close saved stderr");
+  }
+
+  CapturedLog(const CapturedLog &) = delete;
+  CapturedLog &operator=(const CapturedLog &) = delete;
+};
+
+class RunDirectory {
+  std::filesystem::path previous_;
+  std::filesystem::path directory_;
+
+public:
+  explicit RunDirectory(const std::filesystem::path &directory)
+      : previous_(std::filesystem::current_path()), directory_(directory) {
+    std::filesystem::create_directories(directory_);
+    std::filesystem::current_path(directory_);
+  }
+
+  ~RunDirectory() {
+    std::filesystem::current_path(previous_);
+    std::filesystem::remove_all(directory_);
+  }
+
+  RunDirectory(const RunDirectory &) = delete;
+  RunDirectory &operator=(const RunDirectory &) = delete;
+};
 
 std::string runWithCapturedLog(const std::vector<std::string> &args,
                                int &exitCode) {
-  const int savedStdout = dup(STDOUT_FILENO);
-  const int savedStderr = dup(STDERR_FILENO);
-  FILE *logFile = std::freopen("rex.log", "w", stdout);
-  if (logFile == nullptr) {
-    exitCode = 127;
-    return std::string("error: failed to open log: ") + std::strerror(errno);
+  {
+    CapturedLog capture;
+    exitCode = runRexDriver(args);
   }
-  dup2(STDOUT_FILENO, STDERR_FILENO);
-
-  exitCode = runRexDriver(args);
-
-  std::fflush(stdout);
-  std::fflush(stderr);
-  if (savedStdout >= 0) {
-    dup2(savedStdout, STDOUT_FILENO);
-    close(savedStdout);
-  }
-  if (savedStderr >= 0) {
-    dup2(savedStderr, STDERR_FILENO);
-    close(savedStderr);
-  }
-
-  return readFile("rex.log");
+  return Rose::FileSystem::readFile<std::string>("rex.log");
 }
 
 std::string runRex(const std::string &source, const std::string &filename,
@@ -385,26 +375,25 @@ std::string runRex(const std::string &source, const std::string &filename,
                       "error: unsupported mode '" + mode + "'");
   }
 
+  const std::optional<InputFile> input = prepareInputFile(filename);
+  if (!input) {
+    return resultJson(false, mode, 2, {},
+                      "error: unsupported source filename '" + filename +
+                          "'; a C or C++ extension is required");
+  }
+
   ensureRuntimeRoots();
 
   static int runCounter = 0;
   const std::filesystem::path runDir =
       std::filesystem::path("/work") / ("run-" + std::to_string(++runCounter));
-  std::filesystem::remove_all(runDir);
-  std::filesystem::create_directories(runDir);
+  RunDirectory directory(runDir);
 
-  const std::string inputName = sanitizeFileName(filename);
-  writeFile(runDir / inputName, source);
-
-  const std::filesystem::path oldCwd = std::filesystem::current_path();
-  std::filesystem::current_path(runDir);
+  Rose::FileSystem::writeFile(runDir / input->name, source);
 
   int exitCode = 0;
-  const std::string log =
-      runWithCapturedLog(buildArgs(mode, inputName), exitCode);
-  std::vector<GeneratedFile> files = collectGeneratedFiles(runDir, inputName);
-
-  std::filesystem::current_path(oldCwd);
+  const std::string log = runWithCapturedLog(buildArgs(mode, *input), exitCode);
+  std::vector<GeneratedFile> files = collectGeneratedFiles(runDir, input->name);
 
   const bool ok = exitCode == 0;
   return resultJson(ok, mode, exitCode, files, log);

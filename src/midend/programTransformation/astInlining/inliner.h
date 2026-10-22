@@ -1,10 +1,6 @@
 #ifndef INLINER_H
 #define INLINER_H
 
-// DQ (3/12/2006): This is now not required, the file name is
-// changed to rose_config.h and is included directly by rose.h.
-// #include "config.h"
-
 #include "inlinerSupport.h"
 
 #include "replaceExpressionWithStatement.h"
@@ -21,7 +17,6 @@
 ROSE_DLL_API bool doInline(SgFunctionCallExp *funcall,
                            bool allowRecursion = false);
 
-// a namespace
 namespace Inliner {
 // if set to true, ignore function calls within headers. Default is false.
 extern bool skipHeaders;

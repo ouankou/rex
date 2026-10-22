@@ -38,24 +38,9 @@ void AstTreeDepGraphAnal ::ComputeDataDep(const StmtNodeInfo &n1,
   impl.ComputeDataDep(n1.start, n2.start, deps1, deps2, t);
 }
 
-void AstTreeDepGraphAnal ::ComputeStmtDep(const StmtNodeInfo &n1,
-                                          const StmtNodeInfo &n2, int t) {
-  AstInterface &fa = LoopTransformInterface::getAstInterface();
-  DepGraphEdgeCreate deps1(graph, n1.node, n2.node),
-      deps2(graph, n2.node, n1.node);
-  AstNodePtr s1 = n1.start, s2 = n2.start;
-  if (s1 != s2 && ((fa.IsIOInputStmt(s1) && fa.IsIOInputStmt(s2)) ||
-                   (fa.IsIOOutputStmt(s1) && fa.IsIOOutputStmt(s2)))) {
-    if (t & DEPTYPE_IO)
-      impl.ComputeIODep(s1, s2, deps1, deps2, DEPTYPE_IO);
-  } else
-    impl.ComputeDataDep(s1, s2, deps1, deps2, t);
-}
-
 void AstTreeDepGraphAnal::ComputeCtrlDep(const StmtNodeInfo &nc,
                                          const StmtNodeInfo &ns, DepType t) {
   AstNodePtr c = nc.start, s = ns.start;
-  // bool equal  = (c == s);
   DepGraphEdgeCreate deps1(graph, nc.node, ns.node),
       deps2(graph, ns.node, nc.node);
   impl.ComputeCtrlDep(c, s, deps1, deps2, t);
@@ -66,18 +51,32 @@ bool BuildAstTreeDepGraph::ProcessIf(AstInterface &fa, const AstNodePtr &l,
                                      const AstNodePtr &truebody,
                                      const AstNodePtr &falsebody,
                                      AstInterface::TraversalVisitType t) {
+  AstNodePtr runtimeBody, runtimeCondition;
+  const bool selected =
+      fa.IsIfWithKnownRuntimeBranch(l, &runtimeBody, &runtimeCondition);
+  if (t == AstInterface::PostVisit && selected)
+    return true;
   if (t == AstInterface::PreVisit) {
     GraphAccessInterface::Node *n = graph->CreateNodeImpl(l, GetStmtDomain(l));
-    if (cond != AST_NULL) {
+    AstNodePtr evaluation = selected ? runtimeCondition : cond;
+    ROSE_ASSERT(selected || evaluation != AST_NULL);
+    if (evaluation != AST_NULL) {
       for (StmtStackType::Iterator p(stmtNodes); !p.ReachEnd(); ++p)
-        ComputeDataDep(*p, StmtNodeInfo(n, cond), DEPTYPE_DATA);
+        ComputeDataDep(*p, StmtNodeInfo(n, evaluation), DEPTYPE_DATA);
+      stmtNodes.PushFirst(StmtNodeInfo(n, evaluation));
     }
     for (StmtStackType::Iterator ps(gotoNodes); !ps.ReachEnd(); ++ps) {
       StmtNodeInfo info(n, l);
       ComputeCtrlDep((*ps), info);
     }
+    if (selected) {
+      const bool success =
+          runtimeBody == AST_NULL ||
+          ProcessAstTreeBase<AstNodePtr>::operator()(fa, runtimeBody);
+      Skip(l);
+      return success;
+    }
     ctrlNodes.PushFirst(StmtNodeInfo(n, l));
-    stmtNodes.PushFirst(StmtNodeInfo(n, cond));
   } else {
     ctrlNodes.PopFirst();
   }
@@ -88,6 +87,8 @@ bool BuildAstTreeDepGraph::ProcessIf(AstInterface &fa, const AstNodePtr &l,
 bool BuildAstTreeDepGraph::ProcessLoop(AstInterface &fa, const AstNodePtr &l,
                                        const AstNodePtr &body,
                                        AstInterface::TraversalVisitType t) {
+  if (!fa.IsFortranLoop(l) && !supportNonFortranLoop)
+    return t == AstInterface::PreVisit ? ProcessStmt(fa, l) : true;
   if (t == AstInterface::PreVisit) {
     GraphAccessInterface::Node *n = graph->CreateNodeImpl(l, GetStmtDomain(l));
     AstNodePtr init, cond, incr;
@@ -135,7 +136,7 @@ bool BuildAstTreeDepGraph ::ProcessStmt(AstInterface &fa, const AstNodePtr &s) {
   StmtNodeInfo info(n, s);
   stmtNodes.PushFirst(info);
   for (StmtStackType::Iterator ps(stmtNodes); !ps.ReachEnd(); ++ps) {
-    ComputeStmtDep((*ps), info, DEPTYPE_DATA | DEPTYPE_IO);
+    ComputeDataDep((*ps), info, DEPTYPE_DATA);
   }
   for (StmtStackType::Iterator p(ctrlNodes); !p.ReachEnd(); ++p) {
     ComputeCtrlDep((*p), info);

@@ -12,9 +12,6 @@
 
 class DOTInheritedAttribute : public SgInheritedAttribute {
 public:
-  // DQ (5/3/2006): Used to filter out compiler generated IR nodes
-  // from "rose_required_macros_and_functions.h"
-  // These are specific gnu compatability details.
   bool skipSubTree;
 
   // DQ (12/20/2018): Skip template instantiations that can make the DOT files
@@ -32,12 +29,8 @@ public:
 class DOTSynthesizedAttribute : public SgSynthesizedAttribute {
 public:
   SgNode *node;
-  std::string dotstring; // deprecated
-  DOTSynthesizedAttribute() : node(0), defaultVal(true) { dotstring = ""; };
-  ~DOTSynthesizedAttribute() {};
-  DOTSynthesizedAttribute(SgNode *n) : node(n), defaultVal(false) {
-    dotstring = "";
-  };
+  DOTSynthesizedAttribute() : node(nullptr), defaultVal(true) {}
+  DOTSynthesizedAttribute(SgNode *n) : node(n), defaultVal(false) {}
   bool isDefault() { return defaultVal; }
 
 private:
@@ -94,13 +87,8 @@ protected:
   std::string filename;
   std::string filenamePostfix;
   std::set<Node> visitedNodes;
-
-private:
 };
 
-// Since we don't include rose_config.h we can use these
-// #ifdef HAVE_EXPLICIT_TEMPLATE_INSTANTIATION
 #include "DOTGenerationImpl.h"
-// #endif
 
 #endif

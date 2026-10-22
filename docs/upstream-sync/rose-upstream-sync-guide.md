@@ -94,9 +94,9 @@ pending exampleTranslators/DOTGenerator
 pending exampleTranslators/PDFGenerator
 pending exampleTranslators/defaultTranslator
 pending exampleTranslators/documentedExamples
-pending exampleTranslators/documentedExamples/astProcessingExamples
-pending exampleTranslators/documentedExamples/astProcessingExamples/printLoopInfo
-pending exampleTranslators/documentedExamples/astProcessingExamples/printVars
+skip exampleTranslators/documentedExamples/astProcessingExamples
+skip exampleTranslators/documentedExamples/astProcessingExamples/printLoopInfo
+skip exampleTranslators/documentedExamples/astProcessingExamples/printVars
 pending exampleTranslators/documentedExamples/simpleTranslatorExamples
 pending exampleTranslators/graphicalUserInterfaceExamples
 pending exampleTranslators/graphicalUserInterfaceExamples/attributes
@@ -162,21 +162,12 @@ pending src/midend/astUtil/symbolicVal
 pending src/midend/programAnalysis
 pending src/midend/programAnalysis/CFG
 pending src/midend/programAnalysis/CallGraphAnalysis
-pending src/midend/programAnalysis/OAWrap
-pending src/midend/programAnalysis/OpenAnalysis
-pending src/midend/programAnalysis/OpenAnalysis/CFG
-pending src/midend/programAnalysis/OpenAnalysis/CallGraph
-pending src/midend/programAnalysis/OpenAnalysis/Interface
-pending src/midend/programAnalysis/OpenAnalysis/SSA
-pending src/midend/programAnalysis/OpenAnalysis/Utils
 pending src/midend/programAnalysis/VirtualFunctionAnalysis
 pending src/midend/programAnalysis/bitvectorDataflow
-pending src/midend/programAnalysis/dataflowAnalysis
 pending src/midend/programAnalysis/defUseAnalysis
 pending src/midend/programAnalysis/dominanceAnalysis
 pending src/midend/programAnalysis/genericDataflow
 pending src/midend/programAnalysis/genericDataflow/analysis
-pending src/midend/programAnalysis/genericDataflow/arrIndexLabeler
 pending src/midend/programAnalysis/genericDataflow/cfgUtils
 pending src/midend/programAnalysis/genericDataflow/lattice
 pending src/midend/programAnalysis/genericDataflow/rwAccessLabeler
@@ -190,7 +181,7 @@ pending src/midend/programAnalysis/variableRenaming
 pending src/midend/programTransformation
 pending src/midend/programTransformation/astInlining
 pending src/midend/programTransformation/astOutlining
-pending src/midend/programTransformation/astOutlining/lib_test
+skip src/midend/programTransformation/astOutlining/lib_test
 pending src/midend/programTransformation/constantFolding
 pending src/midend/programTransformation/extractFunctionArgumentsNormalization
 pending src/midend/programTransformation/finiteDifferencing
@@ -273,7 +264,7 @@ pending tests/nonsmoke/functional/CompileTests/OpenMP_tests/referenceResults
 pending tests/nonsmoke/functional/CompileTests/OvertureCode
 pending tests/nonsmoke/functional/CompileTests/RoseExample_tests
 pending tests/nonsmoke/functional/CompileTests/STL_tests
-pending tests/nonsmoke/functional/CompileTests/STL_tests/missing-support
+skip tests/nonsmoke/functional/CompileTests/STL_tests/missing-support (retired frontend builtin-header patching aids)
 pending tests/nonsmoke/functional/CompileTests/UnparseHeadersTests
 pending tests/nonsmoke/functional/CompileTests/UnparseHeadersTests/test0
 pending tests/nonsmoke/functional/CompileTests/UnparseHeadersTests/test1
@@ -471,6 +462,7 @@ Top-level upstream-only directories:
 - winspecific/
 
 Core source subtrees dropped in REX:
+- src/midend/programTransformation/astOutlining/lib_test/
 - src/3rdPartyLibraries/
 - src/3rdPartyLibraries/MSTL/
 - src/3rdPartyLibraries/POET/
@@ -532,6 +524,7 @@ Explicit file drops (never reintroduce):
 - tests/nonsmoke/functional/Utility/hash.C
 
 Docs/scripts/tools/tutorial/tests dropped from upstream:
+- exampleTranslators/documentedExamples/astProcessingExamples/ (disconnected duplicates of retained tutorials)
 - docs/IDE-Hints/
 - scripts/nmiBuildAndTestFarm/
 - scripts/spack/

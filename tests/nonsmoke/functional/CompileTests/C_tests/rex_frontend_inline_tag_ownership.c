@@ -6,6 +6,18 @@ typedef struct {
   int value;
 } AnonymousRecord;
 
+typedef struct RexTypedefIntroducedRecord *RexTypedefIntroducedPointer;
+struct RexTypedefIntroducedRecord {
+  int value;
+};
+
+typedef enum RexTypedefIntroducedEnum RexTypedefIntroducedEnumAlias;
+enum RexTypedefIntroducedEnum { rex_typedef_introduced_zero };
+
+typedef struct RexTypedefReturnTag *RexTypedefFunctionReturn(void);
+typedef int (*RexTypedefFunctionParameter)(struct RexTypedefParameterTag *);
+typedef int (*RexTypedefEnumParameter)(enum RexTypedefParameterEnum value);
+
 typedef struct RexTypedefAliasRecord {
   int value;
 } RexTypedefAliasRecord;
@@ -31,6 +43,20 @@ enum StandaloneEnum {
 };
 
 enum RexIncompleteReturnEnum rex_incomplete_enum_return(void);
+
+#define REX_RETURN_TAG_REFERENCE                                               \
+  struct rex_return_tag_reference {                                            \
+    int value;                                                                 \
+  };                                                                           \
+  struct rex_return_tag_reference *rex_return_tag_reference_fn(void);
+
+REX_RETURN_TAG_REFERENCE
+
+struct RexReturnRecord;
+
+struct RexReturnRecord {
+  int value;
+} *rex_return_owned_record(void);
 
 void rex_parameter_owned_tag(struct RexParameterRecord {
   int value;

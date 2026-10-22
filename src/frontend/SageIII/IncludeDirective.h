@@ -1,18 +1,22 @@
-#include <string>
+#ifndef ROSE_INCLUDE_DIRECTIVE_H
+#define ROSE_INCLUDE_DIRECTIVE_H
 
-using namespace std;
+#include <cstddef>
+#include <string>
 
 class IncludeDirective {
 private:
-  string includedPath;
+  std::string includedPath;
   bool isQuotedIncludeDirective;
-  size_t targetStartPos;
-  size_t targetLength;
+  std::size_t targetStartPos;
+  std::size_t targetLength;
 
 public:
-  IncludeDirective(const string &directiveText);
-  const string &getIncludedPath() const;
+  IncludeDirective(const std::string &directiveText);
+  const std::string &getIncludedPath() const;
   bool isQuotedInclude() const;
-  size_t getTargetStartPos() const;
-  size_t getTargetLength() const;
+  std::size_t getTargetStartPos() const;
+  std::size_t getTargetLength() const;
 };
+
+#endif

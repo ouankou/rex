@@ -7,52 +7,55 @@
 #include "DOTRepresentation.h"
 #include "rose_test_output_path.h"
 
-#include <cstdlib>
 #include <fstream>
-
-#include <iostream>
 
 #include <sstream>
 
-#include <typeinfo>
-
-// DQ (4/23/2006): Required for g++ 4.1.0!
-#include <assert.h>
+#include <stdexcept>
 
 inline std::string roseResolveTestOutputPath(const std::string &filename) {
   return Rose::TestOutput::resolvePath(filename);
 }
 
-template <class NodeType> DOTRepresentation<NodeType>::DOTRepresentation() {
-  dotout = new std::ostringstream();
-  assert(dotout != NULL);
-}
-
-template <class NodeType> DOTRepresentation<NodeType>::~DOTRepresentation() {
-  delete dotout;
-  dotout = NULL;
+inline std::string escape_double_quotes(const std::string &input) {
+  std::string result(input);
+  for (size_t cur = result.find('"'); cur != std::string::npos;
+       cur = result.find('"', cur + 2)) {
+    result.replace(cur, 1, "\\\"");
+  }
+  return result;
 }
 
 template <class NodeType> void DOTRepresentation<NodeType>::clear() {
-  assert(dotout != NULL);
-  delete dotout;
-  dotout = new std::ostringstream();
-  assert(dotout != NULL);
+  dotout = std::ostringstream();
+}
+
+template <class NodeType>
+void DOTRepresentation<NodeType>::writeDotoutStream(std::ostream &output) {
+  output << dotout.str();
 }
 
 template <class NodeType>
 void DOTRepresentation<NodeType>::writeToFileAsGraph(std::string filename) {
-  std::string graphName = "\"G" + filename + "\"";
+  std::string graphName = "\"G" + escape_double_quotes(filename) + "\"";
   std::string resolvedFilename = roseResolveTestOutputPath(filename);
   std::ofstream dotfile(resolvedFilename.c_str());
-  dotfile << graphStart(graphName) << (*dotout).str() << graphEnd();
+  dotfile << graphStart(graphName);
+  writeDotoutStream(dotfile);
+  dotfile << graphEnd();
+  dotfile.close();
+  if (!dotfile)
+    throw std::runtime_error("failed to write DOT graph: " + resolvedFilename);
 }
 
 template <class NodeType>
 void DOTRepresentation<NodeType>::writeToFile(std::string filename) {
   std::string resolvedFilename = roseResolveTestOutputPath(filename);
   std::ofstream dotfile(resolvedFilename.c_str());
-  dotfile << (*dotout).str();
+  writeDotoutStream(dotfile);
+  dotfile.close();
+  if (!dotfile)
+    throw std::runtime_error("failed to write DOT file: " + resolvedFilename);
 }
 
 template <class NodeType>
@@ -64,21 +67,11 @@ template <class NodeType> std::string DOTRepresentation<NodeType>::graphEnd() {
   return "}\n";
 }
 
-template <class T> T escape_double_quotes(const T &input) {
-  std::string result(input);
-  size_t cur = result.find("\"");
-  while (cur < result.size() && cur != std::string::npos) {
-    result.replace(cur, 1, "\\\"");
-    cur = result.find("\"", cur + 2);
-  }
-  return result;
-}
-
 template <class NodeType>
 void DOTRepresentation<NodeType>::addNode(NodeType node, std::string nodelabel,
                                           std::string option) {
-  (*dotout) << nodeName(node) << "[label=\"" << escape_double_quotes(nodelabel)
-            << "\" " << option << "];" << std::endl;
+  dotout << nodeName(node) << "[label=\"" << escape_double_quotes(nodelabel)
+         << "\" " << option << "];" << std::endl;
 }
 
 template <class NodeType>
@@ -86,9 +79,10 @@ void DOTRepresentation<NodeType>::addEdge(NodeType node1, TraceType downtrace,
                                           TraceType uptrace,
                                           std::string edgelabel, NodeType node2,
                                           std::string option) {
-  (*dotout) << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
-            << downtrace << ":" << uptrace << ":" << edgelabel << "\" "
-            << option << " dir=both];" << std::endl;
+  dotout << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
+         << downtrace << ":" << uptrace << ":"
+         << escape_double_quotes(edgelabel) << "\" " << option << " dir=both];"
+         << std::endl;
 }
 
 // for edges to revisited nodes (there is no uptrace)
@@ -96,17 +90,18 @@ template <class NodeType>
 void DOTRepresentation<NodeType>::addEdge(NodeType node1, TraceType downtrace,
                                           std::string edgelabel, NodeType node2,
                                           std::string option) {
-  (*dotout) << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
-            << downtrace << ":" << edgelabel << "\" " << option
-            << " arrowhead=odot];" << std::endl;
+  dotout << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
+         << downtrace << ":" << escape_double_quotes(edgelabel) << "\" "
+         << option << " arrowhead=odot];" << std::endl;
 }
 
 // for edges to revisited nodes (there is no uptrace)
 template <class NodeType>
 void DOTRepresentation<NodeType>::addEdge(NodeType node1, std::string edgelabel,
                                           NodeType node2, std::string option) {
-  (*dotout) << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
-            << edgelabel << "\" " << option << " ];" << std::endl;
+  dotout << nodeName(node1) << " -> " << nodeName(node2) << "[label=\""
+         << escape_double_quotes(edgelabel) << "\" " << option << " ];"
+         << std::endl;
 }
 
 // for edges to revisited nodes (there is no uptrace)
@@ -123,52 +118,13 @@ void DOTRepresentation<NodeType>::addNullValue(NodeType node,
                                                std::string option) {
   // a null value is represented by an edge to a diamond node, with the variable
   // name as edge label edge
-  (*dotout) << nodeName(node) << " -> " << nullNodeName(node, edgelabel)
-            << "[label=\"" << edgelabel << "\" " << "dir=none " << option
-            << "];" << std::endl;
+  dotout << nodeName(node) << " -> " << nullNodeName(node, edgelabel)
+         << "[label=\"" << escape_double_quotes(edgelabel) << "\" "
+         << "dir=none " << option << "];" << std::endl;
   // node
-  (*dotout) << nullNodeName(node, edgelabel) << "[label=\"" << nodelabel
-            << "\" shape=diamond " << option << "];" << std::endl;
-}
-
-template <class NodeType>
-void DOTRepresentation<NodeType>::addNullValue(NodeType node, TraceType trace,
-                                               std::string varname,
-                                               std::string option) {
-  // a null value is represented by an edge to a diamond node, with the variable
-  // name as edge label edge
-  (*dotout) << "n_" << node << " -> "
-            << "n_" << node << "__" << varname << "__null"
-            << "[label=\"" << trace << ":" << varname << "\" " << "dir=none "
-            << option << "];" << std::endl;
-  // node
-  (*dotout) << "n_" << node << "__" << varname << "__null"
-            << "[label=\"" << trace << ":\" shape=diamond " << option << "];"
-            << std::endl;
-}
-
-template <class NodeType>
-void DOTRepresentation<NodeType>::addEmptyContainer(NodeType node,
-                                                    TraceType trace,
-                                                    std::string varname,
-                                                    std::string option) {
-  (*dotout) << "n_" << node // node: holding null-reference to STL container,
-                            // using [] to represent container-reference
-            << " -> "
-            << "n_" << node << "__" << varname << "__null"
-            << "[" << "label=\"" << trace << ":" << varname << "[]\""
-            << " dir=none ];" << std::endl;
-  (*dotout) << "n_" << node << "__" << varname << "__null"
-            << "[label=\"\" shape=diamond ];" << std::endl; // dot-null node
-}
-
-template <class NodeType>
-std::string
-DOTRepresentation<NodeType>::containerEdgeLabel(std::string containerVarName,
-                                                ContainerIndexType count) {
-  std::ostringstream s;
-  s << containerVarName << "[" << count << "]";
-  return s.str();
+  dotout << nullNodeName(node, edgelabel) << "[label=\""
+         << escape_double_quotes(nodelabel) << "\" shape=diamond " << option
+         << "];" << std::endl;
 }
 
 template <class NodeType>
@@ -176,15 +132,6 @@ std::string DOTRepresentation<NodeType>::traceFormat(TraceType td,
                                                      TraceType bu) {
   std::ostringstream ss;
   ss << td << ":" << bu;
-  return ss.str();
-}
-
-template <class NodeType>
-std::string
-DOTRepresentation<NodeType>::traceFormat(TraceType tdPos, TraceType buPos,
-                                         TraceType tdCount, TraceType buCount) {
-  std::ostringstream ss;
-  ss << tdPos << "(" << tdCount << "): " << buPos << "(" << buCount << ")";
   return ss.str();
 }
 
@@ -200,19 +147,20 @@ std::string DOTRepresentation<NodeType>::nonQuotedNodeName(NodeType node) {
   std::ostringstream ss;
   ss << node;
   return ss.str();
-  // return string(typeid(*node).name()); // fuse set of all nodes with same
-  // type in one single node
 }
 
 template <class NodeType>
 std::string DOTRepresentation<NodeType>::nodeName(NodeType node) {
-  return "\"" + nonQuotedNodeName(node) + "\"";
+  return "\"" + escape_double_quotes(nonQuotedNodeName(node)) + "\"";
 }
 
 template <class NodeType>
 std::string DOTRepresentation<NodeType>::nullNodeName(NodeType node,
                                                       std::string extention) {
-  return "\"" + nonQuotedNodeName(node) + "__" + extention + "__null\"";
+  return "\"" +
+         escape_double_quotes(nonQuotedNodeName(node) + "__" + extention +
+                              "__null") +
+         "\"";
 }
 
 #endif

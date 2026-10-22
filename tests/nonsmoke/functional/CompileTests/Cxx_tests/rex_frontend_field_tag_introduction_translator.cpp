@@ -156,6 +156,54 @@ int main(int argc, char **argv) {
               1);
   ROSE_ASSERT(introductionPosition < namePosition);
 
+  SgVariableDeclaration *callback = findField(ownerDefinition, "callback");
+  SgInitializedName *callbackName = callback->get_variables().front();
+  ROSE_ASSERT(callbackName->get_type_elaboration_required());
+  ROSE_ASSERT(callbackName->get_type_elaboration_required_for_type());
+  SgDeclarationScope *callbackScope = callback->get_source_declarator_scope();
+  ROSE_ASSERT(callbackScope != nullptr &&
+              callbackScope->get_parent() == callback);
+  ROSE_ASSERT(callbackScope->get_declarations().size() == 2);
+  const char *tagNames[] = {"rex_field_return_tag", "rex_field_parameter_tag"};
+  for (size_t index = 0; index < 2; ++index) {
+    auto *tag = isSgClassDeclaration(callbackScope->get_declarations()[index]);
+    ROSE_ASSERT(tag != nullptr && tag->get_name() == tagNames[index]);
+    ROSE_ASSERT(tag->get_parent() == callbackScope &&
+                tag->get_scope() == global);
+    ROSE_ASSERT(!tag->get_isAutonomousDeclaration());
+    requireExactSourceSurface(tag);
+  }
+  auto *callbackType = isSgFunctionType(callbackName->get_type()->stripType());
+  ROSE_ASSERT(callbackType != nullptr);
+  auto *returnType =
+      isSgClassType(callbackType->get_return_type()->findBaseType());
+  auto *parameterType =
+      isSgClassType(callbackType->get_arguments().front()->findBaseType());
+  ROSE_ASSERT(returnType != nullptr && parameterType != nullptr);
+  ROSE_ASSERT(returnType->get_declaration() ==
+              callbackScope->get_declarations()[0]);
+  ROSE_ASSERT(parameterType->get_declaration() ==
+              callbackScope->get_declarations()[1]);
+
+  SgVariableDeclaration *variableCallback =
+      findField(global, "rex_variable_callback");
+  SgInitializedName *variableName = variableCallback->get_variables().front();
+  ROSE_ASSERT(variableName->get_type_elaboration_required());
+  ROSE_ASSERT(variableName->get_type_elaboration_required_for_type());
+  SgFunctionSymbol *parameterCallback =
+      global->lookup_function_symbol("rex_parameter_callback");
+  ROSE_ASSERT(parameterCallback != nullptr);
+  SgFunctionDeclaration *parameterFunction =
+      parameterCallback->get_declaration();
+  SgFunctionParameterList *callbackParameters =
+      parameterFunction->get_parameterList_syntax();
+  ROSE_ASSERT(callbackParameters != nullptr);
+  ROSE_ASSERT(callbackParameters->get_parent() == parameterFunction);
+  ROSE_ASSERT(callbackParameters->get_args().size() == 1);
+  SgInitializedName *callbackParameter = callbackParameters->get_args().front();
+  ROSE_ASSERT(callbackParameter->get_type_elaboration_required());
+  ROSE_ASSERT(callbackParameter->get_type_elaboration_required_for_type());
+
   const SgDeclarationStatementPtrList &globalDeclarations =
       global->get_declarations();
   ROSE_ASSERT(std::count(globalDeclarations.begin(), globalDeclarations.end(),

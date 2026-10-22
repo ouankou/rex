@@ -39,6 +39,9 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(project != nullptr);
   ROSE_ASSERT(frontendExitStatus(project) == 0);
 
+  const char *spliced_qualifier =
+      "rex_source_qualification_provenance_alias:\\\n:";
+  size_t spliced_aliases = 0;
   size_t macro_aliases = 0;
   size_t macro_delimiter_aliases = 0;
   size_t global_aliases = 0;
@@ -48,7 +51,14 @@ int main(int argc, char **argv) {
     SgTypedefDeclaration *declaration = isSgTypedefDeclaration(node);
     ROSE_ASSERT(declaration != nullptr);
     const std::string name = declaration->get_name().getString();
-    if (name == "RexMacroPayload") {
+    if (name == "RexSplicedPayload") {
+      ROSE_ASSERT(declaration->get_source_base_type_qualification_present());
+      ROSE_ASSERT(!declaration->get_source_base_type_global_qualification());
+      ROSE_ASSERT(
+          hasTokens(declaration->get_source_base_type_qualification_tokens(),
+                    {spliced_qualifier}));
+      ++spliced_aliases;
+    } else if (name == "RexMacroPayload") {
       ROSE_ASSERT(declaration->get_source_base_type_qualification_present());
       ROSE_ASSERT(!declaration->get_source_base_type_global_qualification());
       ROSE_ASSERT(
@@ -85,6 +95,20 @@ int main(int argc, char **argv) {
   ROSE_ASSERT(macro_delimiter_aliases == 1);
   ROSE_ASSERT(global_aliases == 1);
   ROSE_ASSERT(qualified_member_pointers == 1);
+  ROSE_ASSERT(spliced_aliases == 1);
+
+  size_t spliced_references = 0;
+  for (SgNode *node : NodeQuery::querySubTree(project, V_SgVarRefExp)) {
+    auto *reference = isSgVarRefExp(node);
+    auto *declaration = reference->get_symbol()->get_declaration();
+    if (declaration->get_name() != "spliced_value")
+      continue;
+    ROSE_ASSERT(!reference->get_explicit_global_qualification());
+    ROSE_ASSERT(hasTokens(reference->get_explicit_name_qualification_tokens(),
+                          {spliced_qualifier}));
+    ++spliced_references;
+  }
+  ROSE_ASSERT(spliced_references == 2);
 
   size_t qualified_values = 0;
   size_t namespace_qualified_typedef_values = 0;

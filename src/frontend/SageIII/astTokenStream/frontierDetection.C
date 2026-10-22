@@ -5,802 +5,6 @@
 using namespace std;
 using namespace Rose;
 
-// DQ (5/11/2021): Added support for selecting DOT colors, these are ALL of the
-// colors at: https://graphviz.org/doc/info/colors.html
-string dot_color_map[680] = {"aliceblue",
-                             "antiquewhite",
-                             "antiquewhite1",
-                             "antiquewhite2",
-                             "antiquewhite3",
-                             "antiquewhite4",
-                             "aqua",
-                             "aquamarine",
-                             "aquamarine1",
-                             "aquamarine2",
-                             "aquamarine3",
-                             "aquamarine4",
-                             "azure",
-                             "azure1",
-                             "azure2",
-                             "azure3",
-                             "azure4",
-                             "beige",
-                             "bisque",
-                             "bisque1",
-                             "bisque2",
-                             "bisque3",
-                             "bisque4",
-                             "black",
-                             "blanchedalmond",
-                             "blue",
-                             "blue1",
-                             "blue2",
-                             "blue3",
-                             "blue4",
-                             "blueviolet",
-                             "brown",
-                             "brown1",
-                             "brown2",
-                             "brown3",
-                             "brown4",
-                             "burlywood",
-                             "burlywood1",
-                             "burlywood2",
-                             "burlywood3",
-                             "burlywood4",
-                             "cadetblue",
-                             "cadetblue1",
-                             "cadetblue2",
-                             "cadetblue3",
-                             "cadetblue4",
-                             "chartreuse",
-                             "chartreuse1",
-                             "chartreuse2",
-                             "chartreuse3",
-                             "chartreuse4",
-                             "chocolate",
-                             "chocolate1",
-                             "chocolate2",
-                             "chocolate3",
-                             "chocolate4",
-                             "coral",
-                             "coral1",
-                             "coral2",
-                             "coral3",
-                             "coral4",
-                             "cornflowerblue",
-                             "cornsilk",
-                             "cornsilk1",
-                             "cornsilk2",
-                             "cornsilk3",
-                             "cornsilk4",
-                             "crimson",
-                             "cyan",
-                             "cyan1",
-                             "cyan2",
-                             "cyan3",
-                             "cyan4",
-                             "darkblue",
-                             "darkcyan",
-                             "darkgoldenrod",
-                             "darkgoldenrod1",
-                             "darkgoldenrod2",
-                             "darkgoldenrod3",
-                             "darkgoldenrod4",
-                             "darkgray",
-                             "darkgreen",
-                             "darkgrey",
-                             "darkkhaki",
-                             "darkmagenta",
-                             "darkolivegreen",
-                             "darkolivegreen1",
-                             "darkolivegreen2",
-                             "darkolivegreen3",
-                             "darkolivegreen4",
-                             "darkorange",
-                             "darkorange1",
-                             "darkorange2",
-                             "darkorange3",
-                             "darkorange4",
-                             "darkorchid",
-                             "darkorchid1",
-                             "darkorchid2",
-                             "darkorchid3",
-                             "darkorchid4",
-                             "darkred",
-                             "darksalmon",
-                             "darkseagreen",
-                             "darkseagreen1",
-                             "darkseagreen2",
-                             "darkseagreen3",
-                             "darkseagreen4",
-                             "darkslateblue",
-                             "darkslategray",
-                             "darkslategray1",
-                             "darkslategray2",
-                             "darkslategray3",
-                             "darkslategray4",
-                             "darkslategrey",
-                             "darkturquoise",
-                             "darkviolet",
-                             "deeppink",
-                             "deeppink1",
-                             "deeppink2",
-                             "deeppink3",
-                             "deeppink4",
-                             "deepskyblue",
-                             "deepskyblue1",
-                             "deepskyblue2",
-                             "deepskyblue3",
-                             "deepskyblue4",
-                             "dimgray",
-                             "dimgrey",
-                             "dodgerblue",
-                             "dodgerblue1",
-                             "dodgerblue2",
-                             "dodgerblue3",
-                             "dodgerblue4",
-                             "firebrick",
-                             "firebrick1",
-                             "firebrick2",
-                             "firebrick3",
-                             "firebrick4",
-                             "floralwhite",
-                             "forestgreen",
-                             "fuchsia",
-                             "gainsboro",
-                             "ghostwhite",
-                             "gold",
-                             "gold1",
-                             "gold2",
-                             "gold3",
-                             "gold4",
-                             "goldenrod",
-                             "goldenrod1",
-                             "goldenrod2",
-                             "goldenrod3",
-                             "goldenrod4",
-                             "gray",
-                             "gray0",
-                             "gray1",
-                             "gray10",
-                             "gray100",
-                             "gray11",
-                             "gray12",
-                             "gray13",
-                             "gray14",
-                             "gray15",
-                             "gray16",
-                             "gray17",
-                             "gray18",
-                             "gray19",
-                             "gray2",
-                             "gray20",
-                             "gray21",
-                             "gray22",
-                             "gray23",
-                             "gray24",
-                             "gray25",
-                             "gray26",
-                             "gray27",
-                             "gray28",
-                             "gray29",
-                             "gray3",
-                             "gray30",
-                             "gray31",
-                             "gray32",
-                             "gray33",
-                             "gray34",
-                             "gray35",
-                             "gray36",
-                             "gray37",
-                             "gray38",
-                             "gray39",
-                             "gray4",
-                             "gray40",
-                             "gray41",
-                             "gray42",
-                             "gray43",
-                             "gray44",
-                             "gray45",
-                             "gray46",
-                             "gray47",
-                             "gray48",
-                             "gray49",
-                             "gray5",
-                             "gray50",
-                             "gray51",
-                             "gray52",
-                             "gray53",
-                             "gray54",
-                             "gray55",
-                             "gray56",
-                             "gray57",
-                             "gray58",
-                             "gray59",
-                             "gray6",
-                             "gray60",
-                             "gray61",
-                             "gray62",
-                             "gray63",
-                             "gray64",
-                             "gray65",
-                             "gray66",
-                             "gray67",
-                             "gray68",
-                             "gray69",
-                             "gray7",
-                             "gray70",
-                             "gray71",
-                             "gray72",
-                             "gray73",
-                             "gray74",
-                             "gray75",
-                             "gray76",
-                             "gray77",
-                             "gray78",
-                             "gray79",
-                             "gray8",
-                             "gray80",
-                             "gray81",
-                             "gray82",
-                             "gray83",
-                             "gray84",
-                             "gray85",
-                             "gray86",
-                             "gray87",
-                             "gray88",
-                             "gray89",
-                             "gray9",
-                             "gray90",
-                             "gray91",
-                             "gray92",
-                             "gray93",
-                             "gray94",
-                             "gray95",
-                             "gray96",
-                             "gray97",
-                             "gray98",
-                             "gray99",
-                             "green",
-                             "green1",
-                             "green2",
-                             "green3",
-                             "green4",
-                             "greenyellow",
-                             "grey",
-                             "grey0",
-                             "grey1",
-                             "grey10",
-                             "grey100",
-                             "grey11",
-                             "grey12",
-                             "grey13",
-                             "grey14",
-                             "grey15",
-                             "grey16",
-                             "grey17",
-                             "grey18",
-                             "grey19",
-                             "grey2",
-                             "grey20",
-                             "grey21",
-                             "grey22",
-                             "grey23",
-                             "grey24",
-                             "grey25",
-                             "grey26",
-                             "grey27",
-                             "grey28",
-                             "grey29",
-                             "grey3",
-                             "grey30",
-                             "grey31",
-                             "grey32",
-                             "grey33",
-                             "grey34",
-                             "grey35",
-                             "grey36",
-                             "grey37",
-                             "grey38",
-                             "grey39",
-                             "grey4",
-                             "grey40",
-                             "grey41",
-                             "grey42",
-                             "grey43",
-                             "grey44",
-                             "grey45",
-                             "grey46",
-                             "grey47",
-                             "grey48",
-                             "grey49",
-                             "grey5",
-                             "grey50",
-                             "grey51",
-                             "grey52",
-                             "grey53",
-                             "grey54",
-                             "grey55",
-                             "grey56",
-                             "grey57",
-                             "grey58",
-                             "grey59",
-                             "grey6",
-                             "grey60",
-                             "grey61",
-                             "grey62",
-                             "grey63",
-                             "grey64",
-                             "grey65",
-                             "grey66",
-                             "grey67",
-                             "grey68",
-                             "grey69",
-                             "grey7",
-                             "grey70",
-                             "grey71",
-                             "grey72",
-                             "grey73",
-                             "grey74",
-                             "grey75",
-                             "grey76",
-                             "grey77",
-                             "grey78",
-                             "grey79",
-                             "grey8",
-                             "grey80",
-                             "grey81",
-                             "grey82",
-                             "grey83",
-                             "grey84",
-                             "grey85",
-                             "grey86",
-                             "grey87",
-                             "grey88",
-                             "grey89",
-                             "grey9",
-                             "grey90",
-                             "grey91",
-                             "grey92",
-                             "grey93",
-                             "grey94",
-                             "grey95",
-                             "grey96",
-                             "grey97",
-                             "grey98",
-                             "grey99",
-                             "honeydew",
-                             "honeydew1",
-                             "honeydew2",
-                             "honeydew3",
-                             "honeydew4",
-                             "hotpink",
-                             "hotpink1",
-                             "hotpink2",
-                             "hotpink3",
-                             "hotpink4",
-                             "indianred",
-                             "indianred1",
-                             "indianred2",
-                             "indianred3",
-                             "indianred4",
-                             "indigo",
-                             "invis",
-                             "ivory",
-                             "ivory1",
-                             "ivory2",
-                             "ivory3",
-                             "ivory4",
-                             "khaki",
-                             "khaki1",
-                             "khaki2",
-                             "khaki3",
-                             "khaki4",
-                             "lavender",
-                             "lavenderblush",
-                             "lavenderblush1",
-                             "lavenderblush2",
-                             "lavenderblush3",
-                             "lavenderblush4",
-                             "lawngreen",
-                             "lemonchiffon",
-                             "lemonchiffon1",
-                             "lemonchiffon2",
-                             "lemonchiffon3",
-                             "lemonchiffon4",
-                             "lightblue",
-                             "lightblue1",
-                             "lightblue2",
-                             "lightblue3",
-                             "lightblue4",
-                             "lightcoral",
-                             "lightcyan",
-                             "lightcyan1",
-                             "lightcyan2",
-                             "lightcyan3",
-                             "lightcyan4",
-                             "lightgoldenrod",
-                             "lightgoldenrod1",
-                             "lightgoldenrod2",
-                             "lightgoldenrod3",
-                             "lightgoldenrod4",
-                             "lightgoldenrodyellow",
-                             "lightgray",
-                             "lightgreen",
-                             "lightgrey",
-                             "lightpink",
-                             "lightpink1",
-                             "lightpink2",
-                             "lightpink3",
-                             "lightpink4",
-                             "lightsalmon",
-                             "lightsalmon1",
-                             "lightsalmon2",
-                             "lightsalmon3",
-                             "lightsalmon4",
-                             "lightseagreen",
-                             "lightskyblue",
-                             "lightskyblue1",
-                             "lightskyblue2",
-                             "lightskyblue3",
-                             "lightskyblue4",
-                             "lightslateblue",
-                             "lightslategray",
-                             "lightslategrey",
-                             "lightsteelblue",
-                             "lightsteelblue1",
-                             "lightsteelblue2",
-                             "lightsteelblue3",
-                             "lightsteelblue4",
-                             "lightyellow",
-                             "lightyellow1",
-                             "lightyellow2",
-                             "lightyellow3",
-                             "lightyellow4",
-                             "lime",
-                             "limegreen",
-                             "linen",
-                             "magenta",
-                             "magenta1",
-                             "magenta2",
-                             "magenta3",
-                             "magenta4",
-                             "maroon",
-                             "maroon1",
-                             "maroon2",
-                             "maroon3",
-                             "maroon4",
-                             "mediumaquamarine",
-                             "mediumblue",
-                             "mediumorchid",
-                             "mediumorchid1",
-                             "mediumorchid2",
-                             "mediumorchid3",
-                             "mediumorchid4",
-                             "mediumpurple",
-                             "mediumpurple1",
-                             "mediumpurple2",
-                             "mediumpurple3",
-                             "mediumpurple4",
-                             "mediumseagreen",
-                             "mediumslateblue",
-                             "mediumspringgreen",
-                             "mediumturquoise",
-                             "mediumvioletred",
-                             "midnightblue",
-                             "mintcream",
-                             "mistyrose",
-                             "mistyrose1",
-                             "mistyrose2",
-                             "mistyrose3",
-                             "mistyrose4",
-                             "moccasin",
-                             "navajowhite",
-                             "navajowhite1",
-                             "navajowhite2",
-                             "navajowhite3",
-                             "navajowhite4",
-                             "navy",
-                             "navyblue",
-                             "none",
-                             "oldlace",
-                             "olive",
-                             "olivedrab",
-                             "olivedrab1",
-                             "olivedrab2",
-                             "olivedrab3",
-                             "olivedrab4",
-                             "orange",
-                             "orange1",
-                             "orange2",
-                             "orange3",
-                             "orange4",
-                             "orangered",
-                             "orangered1",
-                             "orangered2",
-                             "orangered3",
-                             "orangered4",
-                             "orchid",
-                             "orchid1",
-                             "orchid2",
-                             "orchid3",
-                             "orchid4",
-                             "palegoldenrod",
-                             "palegreen",
-                             "palegreen1",
-                             "palegreen2",
-                             "palegreen3",
-                             "palegreen4",
-                             "paleturquoise",
-                             "paleturquoise1",
-                             "paleturquoise2",
-                             "paleturquoise3",
-                             "paleturquoise4",
-                             "palevioletred",
-                             "palevioletred1",
-                             "palevioletred2",
-                             "palevioletred3",
-                             "palevioletred4",
-                             "papayawhip",
-                             "peachpuff",
-                             "peachpuff1",
-                             "peachpuff2",
-                             "peachpuff3",
-                             "peachpuff4",
-                             "peru",
-                             "pink",
-                             "pink1",
-                             "pink2",
-                             "pink3",
-                             "pink4",
-                             "plum",
-                             "plum1",
-                             "plum2",
-                             "plum3",
-                             "plum4",
-                             "powderblue",
-                             "purple",
-                             "purple1",
-                             "purple2",
-                             "purple3",
-                             "purple4",
-                             "rebeccapurple",
-                             "red",
-                             "red1",
-                             "red2",
-                             "red3",
-                             "red4",
-                             "rosybrown",
-                             "rosybrown1",
-                             "rosybrown2",
-                             "rosybrown3",
-                             "rosybrown4",
-                             "royalblue",
-                             "royalblue1",
-                             "royalblue2",
-                             "royalblue3",
-                             "royalblue4",
-                             "saddlebrown",
-                             "salmon",
-                             "salmon1",
-                             "salmon2",
-                             "salmon3",
-                             "salmon4",
-                             "sandybrown",
-                             "seagreen",
-                             "seagreen1",
-                             "seagreen2",
-                             "seagreen3",
-                             "seagreen4",
-                             "seashell",
-                             "seashell1",
-                             "seashell2",
-                             "seashell3",
-                             "seashell4",
-                             "sienna",
-                             "sienna1",
-                             "sienna2",
-                             "sienna3",
-                             "sienna4",
-                             "silver",
-                             "skyblue",
-                             "skyblue1",
-                             "skyblue2",
-                             "skyblue3",
-                             "skyblue4",
-                             "slateblue",
-                             "slateblue1",
-                             "slateblue2",
-                             "slateblue3",
-                             "slateblue4",
-                             "slategray",
-                             "slategray1",
-                             "slategray2",
-                             "slategray3",
-                             "slategray4",
-                             "slategrey",
-                             "snow",
-                             "snow1",
-                             "snow2",
-                             "snow3",
-                             "snow4",
-                             "springgreen",
-                             "springgreen1",
-                             "springgreen2",
-                             "springgreen3",
-                             "springgreen4",
-                             "steelblue",
-                             "steelblue1",
-                             "steelblue2",
-                             "steelblue3",
-                             "steelblue4",
-                             "tan",
-                             "tan1",
-                             "tan2",
-                             "tan3",
-                             "tan4",
-                             "teal",
-                             "thistle",
-                             "thistle1",
-                             "thistle2",
-                             "thistle3",
-                             "thistle4",
-                             "tomato",
-                             "tomato1",
-                             "tomato2",
-                             "tomato3",
-                             "tomato4",
-                             "transparent",
-                             "turquoise",
-                             "turquoise1",
-                             "turquoise2",
-                             "turquoise3",
-                             "turquoise4",
-                             "violet",
-                             "violetred",
-                             "violetred1",
-                             "violetred2",
-                             "violetred3",
-                             "violetred4",
-                             "webgray",
-                             "webgreen",
-                             "webgrey",
-                             "webmaroon",
-                             "webpurple",
-                             "wheat",
-                             "wheat1",
-                             "wheat2",
-                             "wheat3",
-                             "wheat4",
-                             "white",
-                             "whitesmoke",
-                             "x11gray",
-                             "x11green",
-                             "x11grey",
-                             "x11maroon",
-                             "x11purple",
-                             "yellow",
-                             "yellow1",
-                             "yellow2",
-                             "yellow3",
-                             "yellow4",
-                             "yellowgreen"};
-
-// DQ (5/23/2021): Added more dark colors to the dark color map.
-string dot_dark_color_map[] = {
-    "aqua",           "aquamarine4",  "darkorange2", "azure4",
-    "bisque3",        "blue",         "blueviolet",  "brown",
-    "cadetblue",      "chartreuse",   "coral3",      "cornflowerblue",
-    "crimson",        "cyan4",        "darkblue",    "darkcyan",
-    "darkgoldenrod",  "darkgray",     "darkgreen",   "darkmagenta",
-    "darkolivegreen", "darkorange",   "darkorchid",  "darkred",
-    "darkturquoise",  "deeppink3",    "deepskyblue", "dodgerblue",
-    "firebrick",      "fuchsia",      "gold",        "goldenrod",
-    "black",          "green",        "greenyellow", "grey",
-    "hotpink",        "indigo",       "khaki",       "magenta",
-    "maroon",         "midnightblue", "navajowhite", "navy",
-    "orchid",         "peru",         "plum",        "powderblue",
-    "purple",         "red",          "royalblue",   "saddlebrown",
-    "seagreen",       "silver",       "skyblue",     "slateblue",
-    "springgreen",    "steelblue",    "tan",         "teal",
-    "turquoise",      "violetred",    "wheat",       "wheat3",
-    "yellow",         "yellowgreen"};
-
-string select_dot_dark_color(int &value) {
-  string return_string;
-
-  // Make sure that we don't access the array out of bounds.
-  ROSE_ASSERT(value >= 0);
-
-  return_string = dot_dark_color_map[value % 66];
-
-#if DEBUG_COLOR_SELECT
-  printf("Leaving select_dot_dark_color(): value = %d return_string = %s \n",
-         value, return_string.c_str());
-#endif
-
-  return return_string;
-}
-
-string select_dot_color(int &value) {
-  string return_string;
-
-  // Make sure that we don't access the array out of bounds.
-  ASSERT_require(value >= 0);
-  ASSERT_require(value <= 678);
-
-  return_string = dot_color_map[value % 680];
-
-#if DEBUG_COLOR_SELECT
-  printf("Leaving select_dot_color(): value = %d return_string = %s \n", value,
-         return_string.c_str());
-#endif
-
-  return return_string;
-}
-
-string select_unique_dot_color(int &value) {
-  // This function returns a string (color) for use in DOT graphs.
-
-#define DEBUG_COLOR_SELECT 0
-
-  // Make sure that we don't access the array out of bounds.
-  ROSE_ASSERT(value >= 0);
-  ROSE_ASSERT(value <= 678);
-
-  int initial_value = value % 679;
-  string return_string;
-
-  return_string = dot_color_map[value % 679];
-
-#if DEBUG_COLOR_SELECT
-  printf("In select_unique_dot_color(): value = %d initial_value = %d "
-         "return_string = %s \n",
-         value, initial_value, return_string.c_str());
-#endif
-
-  if (isdigit(return_string[return_string.length() - 1]) == true) {
-#if DEBUG_COLOR_SELECT
-    printf("Found color string with trailing digit \n");
-#endif
-    string test = return_string;
-    size_t last_char_pos = test.find_last_not_of("0123456789");
-    string base = test.substr(0, last_char_pos + 1);
-    return_string = base;
-
-    // increment the initial_value to the next color that does not have a
-    // trailing digit.
-    int test_value = initial_value;
-    string test_string = dot_color_map[test_value];
-    while (test_value < 679 &&
-           isdigit(test_string[test_string.length() - 1]) == true) {
-#if DEBUG_COLOR_SELECT
-      printf("TOP of loop: test_value = %d test_string = %s \n", test_value,
-             test_string.c_str());
-#endif
-      test_value++;
-      test_string = dot_color_map[test_value];
-
-#if DEBUG_COLOR_SELECT
-      printf("BOTTOM of loop: test_value = %d test_string = %s \n", test_value,
-             test_string.c_str());
-#endif
-    }
-
-    // Update the value and return_string.
-    value = test_value;
-    return_string = test_string;
-  }
-
-#if DEBUG_COLOR_SELECT
-  printf("Leaving select_unique_dot_color(): value = %d return_string = %s \n",
-         value, return_string.c_str());
-#endif
-
-  return return_string;
-}
-
 FrontierDetectionForTokenStreamMapping_InheritedAttribute::
     FrontierDetectionForTokenStreamMapping_InheritedAttribute() {
   sourceFile = nullptr;
@@ -1568,11 +772,22 @@ requireExactFunctionStructuralFrontierOwner(SgNode *node) {
         node, owner,
         "function-owned semantic scope owns physical source provenance");
   }
-  if (exactSemantic && initializers != nullptr &&
-      !initializers->get_ctors().empty()) {
-    rejectFunctionStructuralFrontierOwnership(
-        node, owner,
-        "semantic constructor-initializer wrapper contains source entries");
+  if (exactSemantic && initializers != nullptr) {
+    for (SgInitializedName *entry : initializers->get_ctors()) {
+      if (entry == nullptr || entry->get_parent() != initializers ||
+          entry->get_ctor_initializer_source_order().has_value())
+        rejectFunctionStructuralFrontierOwnership(
+            node, owner,
+            "semantic initializer list has a source or misowned entry");
+      for (Sg_File_Info *position :
+           {entry->get_file_info(), entry->get_startOfConstruct(),
+            entry->get_endOfConstruct()}) {
+        if (!SageInterface::hasExactSemanticFrontendSourcePosition(entry,
+                                                                   position))
+          rejectFunctionStructuralFrontierOwnership(
+              node, owner, "semantic initializer entry has source provenance");
+      }
+    }
   }
   return owner;
 }
@@ -1630,6 +845,42 @@ static bool requireFunctionStructuralFrontierTraversalRole(
 
 static SgDeclarationStatement *
 requireExactSourceDeclaratorStructuralFrontierOwner(SgNode *node) {
+  if (auto *definition = isSgVariableDefinition(node)) {
+    SgInitializedName *name = definition->get_vardefn();
+    SgVariableDeclaration *owner =
+        isSgVariableDeclaration(name != nullptr ? name->get_parent() : nullptr);
+    if (name == nullptr || owner == nullptr ||
+        definition->get_parent() != name ||
+        name->get_variable_definition() != definition ||
+        name->get_declptr() != owner ||
+        name->get_scope() != owner->get_scope() ||
+        std::count(owner->get_variables().begin(), owner->get_variables().end(),
+                   name) != 1) {
+      rejectSourceDeclaratorStructuralFrontierOwnership(
+          node, owner, "definition has no exact initialized-name owner");
+    }
+    const SgNodePtrList nameSuccessors =
+        name->get_traversalSuccessorContainer();
+    const SgNodePtrList ownerSuccessors =
+        owner->get_traversalSuccessorContainer();
+    if (std::count(nameSuccessors.begin(), nameSuccessors.end(), definition) !=
+            1 ||
+        std::count(ownerSuccessors.begin(), ownerSuccessors.end(), name) != 1 ||
+        !nodeHasExactSemanticDeclarationScopeProvenance(definition) ||
+        !nodeHasExactSemanticDeclarationScopeProvenance(name)) {
+      rejectSourceDeclaratorStructuralFrontierOwnership(
+          node, owner,
+          "definition has inconsistent traversal or semantic provenance");
+    }
+    const AttachedPreprocessingInfoType *preprocessing =
+        definition->get_attachedPreprocessingInfoPtr();
+    if (preprocessing != nullptr && !preprocessing->empty()) {
+      rejectSourceDeclaratorStructuralFrontierOwnership(
+          node, owner,
+          "semantic definition owns independent preprocessing syntax");
+    }
+    return owner;
+  }
   SgDeclarationScope *scope = isSgDeclarationScope(node);
   SgDeclarationStatement *owner = isSgDeclarationStatement(
       scope != nullptr ? scope->get_parent() : nullptr);
@@ -1665,19 +916,25 @@ static bool requireSourceDeclaratorStructuralFrontierTraversalRole(
     const FrontierDetectionForTokenStreamMapping_InheritedAttribute
         &inheritedAttribute) {
   if (inheritedAttribute.isSourceDeclaratorStructuralWrapper) {
-    SgDeclarationScope *scope = isSgDeclarationScope(inheritedAttribute.node);
+    SgNode *wrapper = inheritedAttribute.node;
     SgDeclarationStatement *owner =
-        requireExactSourceDeclaratorStructuralFrontierOwner(scope);
-    const SgNodePtrList scopeSuccessors =
-        scope->get_traversalSuccessorContainer();
-    if (node == nullptr || node->get_parent() != scope ||
-        std::count(scopeSuccessors.begin(), scopeSuccessors.end(), node) != 1) {
+        requireExactSourceDeclaratorStructuralFrontierOwner(wrapper);
+    const SgNodePtrList successors = wrapper->get_traversalSuccessorContainer();
+    if (node == nullptr || node->get_parent() != wrapper ||
+        std::count(successors.begin(), successors.end(), node) != 1) {
       rejectSourceDeclaratorStructuralFrontierOwnership(
-          node, owner, "wrapper payload has no exact declarator-scope edge");
+          node, owner, "wrapper payload has no exact source-declarator edge");
     }
     return false;
   }
 
+  // An implicit declarator's semantic definition is structurally owned but
+  // does not introduce a second lexical surface or hide its bitfield child.
+  if (isSgVariableDefinition(node) != nullptr &&
+      nodeHasExactSemanticDeclarationScopeProvenance(node)) {
+    (void)requireExactSourceDeclaratorStructuralFrontierOwner(node);
+    return true;
+  }
   SgDeclarationScope *scope = isSgDeclarationScope(node);
   SgDeclarationStatement *owner = isSgDeclarationStatement(
       scope != nullptr ? scope->get_parent() : nullptr);
@@ -2574,8 +1831,6 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
   // When a node that is marked as isTransformation() == true is seen, then we
   // set isFrontier = true
 
-#define DEBUG_INHERIT 0
-
   SgStatement *statement = isSgStatement(n);
 
   bool isTemplateInstantiationNode = false;
@@ -2583,37 +1838,7 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
     isTemplateInstantiationNode = SageInterface::isTemplateInstantiationNode(n);
   }
 
-#if DEBUG_INHERIT || 0
-  printf("\n\nIIIIIIIIIIIIIIIIIIIIIIIIII \n");
-  printf("*** In "
-         "FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute():"
-         " n = %p = %s \n",
-         n, n->class_name().c_str());
-  printf(" --- name ============================================= %s \n",
-         SageInterface::get_name(n).c_str());
-  printf(" --- isTemplateInstantiationNode(n)                   = %s \n",
-         isTemplateInstantiationNode ? "true" : "false");
-  printf(" --- inheritedAttribute.isPartOfTemplateInstantiation = %s \n",
-         inheritedAttribute.isPartOfTemplateInstantiation ? "true" : "false");
-  printf("IIIIIIIIIIIIIIIIIIIIIIIIII \n");
-#endif
-
-#if DEBUG_INHERIT || 0
   ASSERT_not_null(inheritedAttribute.sourceFile);
-  printf("inheritedAttribute.sourceFile              = %p \n",
-         inheritedAttribute.sourceFile);
-  printf("inheritedAttribute.unparseFromTheAST       = %s \n",
-         inheritedAttribute.unparseFromTheAST ? "true" : "false");
-  printf("inheritedAttribute.unparseUsingTokenStream = %s \n",
-         inheritedAttribute.unparseUsingTokenStream ? "true" : "false");
-#endif
-
-  ASSERT_not_null(inheritedAttribute.sourceFile);
-
-#if DEBUG_INHERIT || 0
-  printf("Building returnAttribute: inheritedAttribute.sourceFile = %s \n",
-         inheritedAttribute.sourceFile->getFileName().c_str());
-#endif
 
   FrontierDetectionForTokenStreamMapping_InheritedAttribute returnAttribute(
       inheritedAttribute.sourceFile, n);
@@ -2622,15 +1847,16 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
       requireAuxiliaryFrontierTraversalRole(n, inheritedAttribute);
   returnAttribute.isFunctionDeclarationStructuralWrapper =
       requireFunctionStructuralFrontierTraversalRole(n, inheritedAttribute);
-  returnAttribute.isSourceDeclaratorStructuralWrapper =
-      requireSourceDeclaratorStructuralFrontierTraversalRole(
-          n, inheritedAttribute);
   returnAttribute.isRangeForSemanticDeclarationWrapper =
       requireRangeForSemanticDeclarationFrontierTraversalRole(
           n, inheritedAttribute);
   returnAttribute.isPartOfRangeForSemanticDeclarationSubtree =
       requireRangeForSemanticDeclarationSubtreeTraversalRole(
           n, inheritedAttribute);
+  returnAttribute.isSourceDeclaratorStructuralWrapper =
+      requireSourceDeclaratorStructuralFrontierTraversalRole(
+          n, inheritedAttribute) &&
+      !returnAttribute.isPartOfRangeForSemanticDeclarationSubtree;
   returnAttribute.isImplicitControlFlowStructuralWrapper =
       requireImplicitControlFlowFrontierTraversalRole(n, inheritedAttribute);
   returnAttribute.isForInitDeclarationGroupWrapper =
@@ -2656,32 +1882,13 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
       returnAttribute.isForInitDeclarationGroupWrapper == false &&
       returnAttribute.isSourceLessForStructuralPayload == false &&
       isSgCatchStatementSeq(statement) == nullptr) {
-#if DEBUG_INHERIT
-    printf("In "
-           "FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute("
-           "): statement = %p = %s \n",
-           statement, statement->class_name().c_str());
-    printf(" --- statement = %s \n",
-           SageInterface::get_name(statement).c_str());
-#endif
 
-    const int physical_file_id = requireStatementPhysicalFileId(
-        statement, "frontier-inherited-statement");
-    ASSERT_require(physical_file_id >= 0);
+    requireStatementPhysicalFileId(statement, "frontier-inherited-statement");
 
     bool nodeIsFromCurrentFile =
         inheritedAttribute.isNodeFromCurrentFile(statement);
 
-#if DEBUG_INHERIT || 0
-    printf("nodeIsFromCurrentFile = %s \n",
-           nodeIsFromCurrentFile ? "true" : "false");
-#endif
-
     if (frontierContext.statementRequiresAstUnparse(statement)) {
-#if DEBUG_INHERIT
-      printf("Found an AST transformation: statement = %p = %s \n", statement,
-             statement->class_name().c_str());
-#endif
       if (inheritedAttribute.unparseFromTheAST == false) {
         returnAttribute.isFrontier = true;
       }
@@ -2689,11 +1896,6 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
       returnAttribute.unparseFromTheAST = true;
       returnAttribute.unparseUsingTokenStream = false;
     } else {
-#if DEBUG_INHERIT
-      printf("This statement is NOT a transformation: statement = %p = %s "
-             "(returnAttribute.unparseUsingTokenStream = true) \n",
-             statement, statement->class_name().c_str());
-#endif
       returnAttribute.unparseUsingTokenStream = true;
       ASSERT_require(returnAttribute.unparseFromTheAST == false);
     }
@@ -2701,65 +1903,17 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
     ASSERT_not_null(returnAttribute.sourceFile);
 
     if (nodeIsFromCurrentFile == false) {
-      // DQ (5/23/2021): This can happen when the current node is listed as
-      // compiler generated (where the source position was not available in the
-      // frontend).
-
-#if DEBUG_INHERIT
-      printf("nodeIsFromCurrentFile == false: setting "
-             "returnAttribute.isInCurrentFile = false \n");
-#endif
       returnAttribute.isInCurrentFile = false;
-      int nested_physical_file_id = physical_file_id;
-
-      if (nested_physical_file_id < 0) {
-        printf("Error: nested_physical_file_id < 0: statement = %p = %s name = "
-               "%s \n",
-               statement, statement->class_name().c_str(),
-               SageInterface::get_name(statement).c_str());
-        SgLocatedNode *locatedNode = isSgLocatedNode(statement->get_parent());
-        ASSERT_not_null(locatedNode);
-        locatedNode->get_file_info()->display(
-            "ERROR: nested_physical_file_id < 0");
-      }
-      ASSERT_require(nested_physical_file_id >= 0);
-
-      string filename =
-          Sg_File_Info::getFilenameFromID(nested_physical_file_id);
-
-#if DEBUG_INHERIT
-      printf("looking for header file: filename = %s \n", filename.c_str());
-#endif
-      ASSERT_not_null(returnAttribute.sourceFile);
     }
 
     // DQ (11/30/2013): Allow us to ignore class defintions in typedefs.
     // Mark the whole subtree as being unparsed from the AST so that synthizized
     // attributes can be more esily computed.
     if (inheritedAttribute.unparseFromTheAST == true) {
-#if DEBUG_INHERIT
-      printf("   --- Where inheritedAttribute.unparseFromTheAST == true: set "
-             "returnAttribute.unparseFromTheAST == true and "
-             "returnAttribute.unparseUsingTokenStream = false \n");
-#endif
       returnAttribute.unparseFromTheAST = true;
       returnAttribute.unparseUsingTokenStream = false;
     }
 
-#if DEBUG_INHERIT || 0
-    printf("   --- returnAttribute.isFrontier                                  "
-           "= %s \n",
-           returnAttribute.isFrontier ? "true" : "false");
-    printf("   --- returnAttribute.unparseFromTheAST                           "
-           "= %s \n",
-           returnAttribute.unparseFromTheAST ? "true" : "false");
-    printf("   --- returnAttribute.unparseUsingTokenStream                     "
-           "= %s \n",
-           returnAttribute.unparseUsingTokenStream ? "true" : "false");
-    printf("   --- returnAttribute.isInCurrentFile                             "
-           "= %s \n",
-           returnAttribute.isInCurrentFile ? "true" : "false");
-#endif
   } else if (SgCatchStatementSeq *sequence =
                  inheritedAttribute.isPartOfTemplateInstantiation
                      ? nullptr
@@ -2979,40 +2133,13 @@ FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute(
   } else {
 
     if (inheritedAttribute.unparseFromTheAST == true) {
-#if DEBUG_INHERIT && 0
-      printf("   --- Where inheritedAttribute.unparseFromTheAST == true: set "
-             "returnAttribute.unparseFromTheAST == true and "
-             "returnAttribute.unparseUsingTokenStream = false \n");
-#endif
       returnAttribute.unparseFromTheAST = true;
       returnAttribute.unparseUsingTokenStream = false;
     } else {
       // Default setting for all non-SgStatements.
       returnAttribute.unparseUsingTokenStream = true;
     }
-
-#if DEBUG_INHERIT || 0
-    printf("Non-SgStatement node: \n");
-    printf("   --- returnAttribute.isFrontier                                  "
-           "= %s \n",
-           returnAttribute.isFrontier ? "true" : "false");
-    printf("   --- returnAttribute.unparseFromTheAST                           "
-           "= %s \n",
-           returnAttribute.unparseFromTheAST ? "true" : "false");
-    printf("   --- returnAttribute.unparseUsingTokenStream                     "
-           "= %s \n",
-           returnAttribute.unparseUsingTokenStream ? "true" : "false");
-#endif
   }
-
-#if DEBUG_INHERIT
-  printf("IIIIIIIIIIIIIIIIIIIIIIIIII \n");
-  printf("*** Leaving "
-         "FrontierDetectionForTokenStreamMapping::evaluateInheritedAttribute():"
-         " n = %p = %s \n",
-         n, n->class_name().c_str());
-  printf("IIIIIIIIIIIIIIIIIIIIIIIIII \n");
-#endif
 
   ASSERT_require((returnAttribute.isPartOfAuxiliaryDeclarationSubtree ||
                   returnAttribute.isPartOfRangeForSemanticDeclarationSubtree ||
@@ -3057,17 +2184,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
   // always marked as inheritedAttribute.isFrontier == true.
 
   ASSERT_not_null(n);
-
-#define DEBUG_SYNTH 0
-
-#if DEBUG_SYNTH || 0
-  printf("\n\nSSSSSSSSSSSSSSSSSSSSSSSSSS \n");
-  printf("### In "
-         "FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute("
-         "): TOP n = %p = %s \n",
-         n, n->class_name().c_str());
-  printf("SSSSSSSSSSSSSSSSSSSSSSSSSS \n");
-#endif
 
   ASSERT_require(n == inheritedAttribute.node);
   FrontierDetectionForTokenStreamMapping_SynthesizedAttribute returnAttribute(
@@ -3750,20 +2866,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
 
   if ((statement != nullptr || sourceFile != nullptr) &&
       inheritedAttribute.isPartOfTemplateInstantiation == false) {
-#if DEBUG_SYNTH
-    printf(
-        "In "
-        "FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute()"
-        ": SgStatement or SgSourceFile = %p = %s \n",
-        n, n->class_name().c_str());
-    if (statement != nullptr) {
-      printf(" --- statement = %s \n",
-             SageInterface::get_name(statement).c_str());
-    } else {
-      printf(" --- sourceFile = %s \n",
-             SageInterface::get_name(sourceFile).c_str());
-    }
-#endif
 
     // Mark these directly.
     returnAttribute.isFrontier = inheritedAttribute.isFrontier;
@@ -3773,10 +2875,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       // DQ (5/16/2021): If this was marked to be unparsed from the AST within
       // the inherited attribute, then nothing computed on the children should
       // change that.
-#if DEBUG_SYNTH
-      printf("For inheritedAttribute.unparseFromTheAST == true: set "
-             "returnAttribute.containsNodesToBeUnparsedFromTheAST = true \n");
-#endif
       returnAttribute.containsNodesToBeUnparsedFromTheAST = true;
     }
 
@@ -3815,7 +2913,8 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
         }
       }
 
-      if (ifStatement != nullptr) {
+      if (ifStatement != nullptr &&
+          !ifStatement->get_is_if_consteval_statement()) {
         // There are special cases where we don't (at least presently) want to
         // mix the two types on unparsing. This is how those special cases are
         // handled.
@@ -3861,37 +2960,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
         // There are special cases where we don't (at least presently) want to
         // mix the two types on unparsing. This is how those special cases are
         // handled.
-#if DEBUG_SYNTH
-        printf("*** processing SgForStatement: \n");
-        printf("Synthesized attribute evaluation is part of a SgForStatement "
-               "(containing a conditional expression/statement): statment = %p "
-               "= %s \n",
-               statement, statement->class_name().c_str());
-#endif
-#if DEBUG_SYNTH
-        for (size_t i = 0; i < synthesizedAttributeList.size(); i++) {
-          printf(
-              "   --- synthesizedAttributeList[i=%" PRIuPTR
-              "].node = %p = %s isFrontier = %s unparseUsingTokenStream = %s "
-              "unparseFromTheAST = %s containsNodesToBeUnparsedFromTheAST = %s "
-              "containsNodesToBeUnparsedFromTheTokenStream = %s \n",
-              i, synthesizedAttributeList[i].node,
-              synthesizedAttributeList[i].node != nullptr
-                  ? synthesizedAttributeList[i].node->class_name().c_str()
-                  : "null",
-              synthesizedAttributeList[i].isFrontier ? "true " : "false",
-              synthesizedAttributeList[i].unparseUsingTokenStream ? "true "
-                                                                  : "false",
-              synthesizedAttributeList[i].unparseFromTheAST ? "true " : "false",
-              synthesizedAttributeList[i].containsNodesToBeUnparsedFromTheAST
-                  ? "true "
-                  : "false",
-              synthesizedAttributeList[i]
-                      .containsNodesToBeUnparsedFromTheTokenStream
-                  ? "true "
-                  : "false");
-        }
-#endif
         const auto *initializerAttribute = requireChildAttribute(
             forStatement->get_for_init_stmt(), "p_for_init_stmt", true);
         const auto *testAttribute =
@@ -3911,27 +2979,14 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
         // the loop header only when its written components genuinely mix an
         // AST-unparsed subtree with a token-unparsed subtree.
         if (containsAst && containsTokens) {
-#if DEBUG_SYNTH
-          printf("This node (SgForStatement) has children that mix the two "
-                 "different types of unparsing! \n");
-#endif
           specialCaseNode = true;
         }
       }
 
-#if DEBUG_SYNTH
-      printf("specialCaseNode = %s \n", specialCaseNode ? "true" : "false");
-#endif
       if (specialCaseNode == true) {
         // Mark the current node to be a frontier, instead of the child nodes.
         // Mark as to be unparse from the AST (no choice since subtrees must be
         // unparsed from the AST).
-#if DEBUG_SYNTH
-        printf("*** processing special case: \n");
-        printf("Handling synthesized attribute as a special case: statement = "
-               "%p = %s \n",
-               statement, statement->class_name().c_str());
-#endif
         returnAttribute.isFrontier = true;
 
         bool unparseUsingTokenStream = false;
@@ -3947,88 +3002,12 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       } else {
         // This is the non-special case.
         ASSERT_require(specialCaseNode == false);
-#if DEBUG_SYNTH
-        printf("*** processing non-special case: \n");
-        printf("(part 2): Iterate over the children (size = %zu): \n",
-               synthesizedAttributeList.size());
-#endif
         for (size_t i = 0; i < synthesizedAttributeList.size(); i++) {
           SgStatement *child_synthesized_attribute_statement =
               synthesizedAttributeList[i].node;
-#if DEBUG_SYNTH || 0
-          printf("\nCHILD -- CHILD -- CHILD -- CHILD -- CHILD -- CHILD -- "
-                 "CHILD -- CHILD -- CHILD -- CHILD \n");
-          printf("TOP OF ITERATION OVER CHILDREN \n");
-          printf(
-              "   --- child_synthesized_attribute_statement = %p = %s name = "
-              "%s \n",
-              child_synthesized_attribute_statement,
-              child_synthesized_attribute_statement != NULL
-                  ? child_synthesized_attribute_statement->class_name().c_str()
-                  : "null",
-              child_synthesized_attribute_statement != NULL
-                  ? SageInterface::get_name(
-                        child_synthesized_attribute_statement)
-                        .c_str()
-                  : "null");
-          printf("   ---   --- synthesizedAttributeList[i=%" PRIuPTR
-                 "].isFrontier                                  = %s \n",
-                 i, synthesizedAttributeList[i].isFrontier ? "true" : "false");
-          printf("   ---   --- synthesizedAttributeList[i=%" PRIuPTR
-                 "].unparseUsingTokenStream                     = %s \n",
-                 i,
-                 synthesizedAttributeList[i].unparseUsingTokenStream ? "true"
-                                                                     : "false");
-          printf("   ---   --- synthesizedAttributeList[i=%" PRIuPTR
-                 "].unparseFromTheAST                           = %s \n",
-                 i,
-                 synthesizedAttributeList[i].unparseFromTheAST ? "true"
-                                                               : "false");
-          printf("   ---   --- synthesizedAttributeList[i=%" PRIuPTR
-                 "].containsNodesToBeUnparsedFromTheAST         = %s \n",
-                 i,
-                 synthesizedAttributeList[i].containsNodesToBeUnparsedFromTheAST
-                     ? "true"
-                     : "false");
-          printf("   ---   --- synthesizedAttributeList[i=%" PRIuPTR
-                 "].containsNodesToBeUnparsedFromTheTokenStream = %s \n",
-                 i,
-                 synthesizedAttributeList[i]
-                         .containsNodesToBeUnparsedFromTheTokenStream
-                     ? "true"
-                     : "false");
-#endif
 
-#if DEBUG_SYNTH || 0
-          printf("child_synthesized_attribute_statement            = %p \n",
-                 child_synthesized_attribute_statement);
-          printf("inheritedAttribute.isPartOfTemplateInstantiation = %s \n",
-                 inheritedAttribute.isPartOfTemplateInstantiation ? "true"
-                                                                  : "false");
-#endif
           if (child_synthesized_attribute_statement != nullptr &&
               inheritedAttribute.isPartOfTemplateInstantiation == false) {
-#if DEBUG_SYNTH
-            printf("Before building FrontierNode "
-                   "(child_synthesized_attribute_statement != NULL): \n");
-            printf(" --- returnAttribute.unparseFromTheAST                     "
-                   "      = %s \n",
-                   returnAttribute.unparseFromTheAST ? "true" : "false");
-            printf(" --- returnAttribute.unparseUsingTokenStream               "
-                   "      = %s \n",
-                   returnAttribute.unparseUsingTokenStream ? "true" : "false");
-            printf(" --- returnAttribute.containsNodesToBeUnparsedFromTheAST   "
-                   "      = %s \n",
-                   returnAttribute.containsNodesToBeUnparsedFromTheAST
-                       ? "true"
-                       : "false");
-            printf(" --- "
-                   "returnAttribute."
-                   "containsNodesToBeUnparsedFromTheTokenStream = %s \n",
-                   returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-                       ? "true"
-                       : "false");
-#endif
 
             bool childNodeIsFromSameFileAsCurrentNode =
                 isChildNodeFromSameFileAsCurrentNode(
@@ -4045,21 +3024,7 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
               synthesizedAttributeList[i].unparseUsingTokenStream = true;
             }
 
-#if DEBUG_SYNTH
-            printf(
-                "synthesizedAttributeList[i].unparseUsingTokenStream = %s \n",
-                synthesizedAttributeList[i].unparseUsingTokenStream ? "true"
-                                                                    : "false");
-#endif
             if (synthesizedAttributeList[i].unparseUsingTokenStream == true) {
-#if DEBUG_SYNTH
-              printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
-                     "NN \n");
-              printf("synthesizedAttributeList[i].unparseUsingTokenStream == "
-                     "true \n");
-              printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN"
-                     "NN \n");
-#endif
               FrontierNode *frontierNode = new FrontierNode(
                   child_synthesized_attribute_statement,
                   synthesizedAttributeList[i].unparseUsingTokenStream,
@@ -4070,20 +3035,7 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
               returnAttribute.containsNodesToBeUnparsedFromTheTokenStream =
                   true;
             } else {
-#if DEBUG_SYNTH
-              printf("synthesizedAttributeList[i].unparseFromTheAST = %s \n",
-                     synthesizedAttributeList[i].unparseFromTheAST ? "true"
-                                                                   : "false");
-#endif
               if (synthesizedAttributeList[i].unparseFromTheAST == true) {
-#if DEBUG_SYNTH
-                printf(
-                    "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
-                printf(
-                    "synthesizedAttributeList[i].unparseFromTheAST == true \n");
-                printf(
-                    "NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
-#endif
                 FrontierNode *frontierNode = new FrontierNode(
                     child_synthesized_attribute_statement,
                     synthesizedAttributeList[i].unparseUsingTokenStream,
@@ -4092,17 +3044,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
                 addFrontierNode(synthesizedAttributeList[i].node, frontierNode);
                 returnAttribute.containsNodesToBeUnparsedFromTheAST = true;
               } else {
-#if DEBUG_SYNTH
-                printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
-                printf("Copy all of the child frontier nodes \n");
-                printf("NNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNNN \n");
-#endif
-#if DEBUG_SYNTH
-                printf("Current node = %p = %s not added to frontier node list "
-                       "(add any lists from frontierNodes.size() = %" PRIuPTR
-                       ") \n",
-                       n, n->class_name().c_str(), frontierNodes.size());
-#endif
                 // Lack of AST usage in the subtree implies that there are nodes
                 // unparsed from the token stream.
                 if (synthesizedAttributeList[i]
@@ -4112,75 +3053,14 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
                 }
               }
             }
-#if DEBUG_SYNTH || 0
-            printf("frontierNode = %s \n", frontierNode->display().c_str());
-#endif
-          } else {
-#if DEBUG_SYNTH
-            printf("WARNING: synthesized_attribute_statement == NULL \n");
-#endif
           }
-
-#if DEBUG_SYNTH
-          printf(" --- At base of loop over synthesized attribute list "
-                 "elements i = %" PRIuPTR " \n",
-                 i);
-          printf(" --- --- returnAttribute.node                                "
-                 "        = %p = %s \n",
-                 returnAttribute.node,
-                 returnAttribute.node != nullptr
-                     ? returnAttribute.node->class_name().c_str()
-                     : "null");
-          printf(" --- --- returnAttribute.isFrontier                          "
-                 "        = %s \n",
-                 returnAttribute.isFrontier ? "true" : "false");
-          printf(" --- --- returnAttribute.unparseFromTheAST                   "
-                 "        = %s \n",
-                 returnAttribute.unparseFromTheAST ? "true" : "false");
-          printf(" --- --- returnAttribute.unparseUsingTokenStream             "
-                 "        = %s \n",
-                 returnAttribute.unparseUsingTokenStream ? "true" : "false");
-          printf(" --- --- returnAttribute.containsNodesToBeUnparsedFromTheAST "
-                 "        = %s \n",
-                 returnAttribute.containsNodesToBeUnparsedFromTheAST ? "true"
-                                                                     : "false");
-          printf(" --- --- "
-                 "returnAttribute.containsNodesToBeUnparsedFromTheTokenStream "
-                 "= %s \n",
-                 returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-                     ? "true"
-                     : "false");
-          printf("BOTTOM OF ITERATION OVER CHILDREN \n\n");
-#endif
         }
-
-#if DEBUG_SYNTH
-        printf("DONE: (part 2) Iterate over the children: \n");
-#endif
       }
 
     } else {
       ASSERT_require(returnAttribute.containsNodesToBeUnparsedFromTheAST ==
                      true);
     }
-
-#if DEBUG_SYNTH
-    printf("* after processing of frontierNodes(): size                      = "
-           "%zu \n",
-           frontierNodes.size());
-    printf(" --- returnAttribute.isFrontier                                  = "
-           "%s \n",
-           returnAttribute.isFrontier ? "true" : "false");
-    printf(" --- returnAttribute.containsNodesToBeUnparsedFromTheAST         = "
-           "%s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheAST ? "true"
-                                                               : "false");
-    printf(" --- returnAttribute.containsNodesToBeUnparsedFromTheTokenStream = "
-           "%s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-               ? "true"
-               : "false");
-#endif
 
     // DQ (5/15/2021): Each should be false before this point.
     ASSERT_require(returnAttribute.unparseFromTheAST == false &&
@@ -4225,26 +3105,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
 
     if (statement != nullptr &&
         returnAttribute.containsNodesToBeUnparsedFromTheAST == true) {
-#if DEBUG_SYNTH
-      printf(
-          "Before building FrontierNode (statement != NULL && "
-          "returnAttribute.containsNodesToBeUnparsedFromTheAST == true): \n");
-      printf(" --- returnAttribute.unparseFromTheAST                           "
-             "= %s \n",
-             returnAttribute.unparseFromTheAST ? "true" : "false");
-      printf(" --- returnAttribute.unparseUsingTokenStream                     "
-             "= %s \n",
-             returnAttribute.unparseUsingTokenStream ? "true" : "false");
-      printf(" --- returnAttribute.containsNodesToBeUnparsedFromTheAST         "
-             "= %s \n",
-             returnAttribute.containsNodesToBeUnparsedFromTheAST ? "true"
-                                                                 : "false");
-      printf(" --- returnAttribute.containsNodesToBeUnparsedFromTheTokenStream "
-             "= %s \n",
-             returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-                 ? "true"
-                 : "false");
-#endif
       FrontierNode *frontierNode =
           new FrontierNode(statement, returnAttribute.unparseUsingTokenStream,
                            returnAttribute.unparseFromTheAST);
@@ -4255,34 +3115,6 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
       // CPP directives.
     }
 
-#if DEBUG_SYNTH && 0
-    printf("* Frontier nodes (n = %p = %s): ", n, n->class_name().c_str());
-
-    printf("Calling outputFrontierNodes() \n");
-    outputFrontierNodes();
-
-    printf("* Frontier End \n");
-#endif
-#if DEBUG_SYNTH || 0
-    printf("   --- returnAttribute.isFrontier                                  "
-           "= %s \n",
-           returnAttribute.isFrontier ? "true" : "false");
-    printf("   --- returnAttribute.unparseFromTheAST                           "
-           "= %s \n",
-           returnAttribute.unparseFromTheAST ? "true" : "false");
-    printf("   --- returnAttribute.unparseUsingTokenStream                     "
-           "= %s \n",
-           returnAttribute.unparseUsingTokenStream ? "true" : "false");
-    printf("   --- returnAttribute.containsNodesToBeUnparsedFromTheAST         "
-           "= %s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheAST ? "true"
-                                                               : "false");
-    printf("   --- returnAttribute.containsNodesToBeUnparsedFromTheTokenStream "
-           "= %s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-               ? "true"
-               : "false");
-#endif
     ASSERT_require((returnAttribute.unparseUsingTokenStream == true &&
                     returnAttribute.unparseFromTheAST == false) ||
                    (returnAttribute.unparseUsingTokenStream == false &&
@@ -4305,38 +3137,7 @@ FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute(
         inheritedAttribute.unparseUsingTokenStream;
     returnAttribute.unparseFromTheAST = inheritedAttribute.unparseFromTheAST;
     returnAttribute.containsNodesToBeUnparsedFromTheAST = false;
-
-#if DEBUG_SYNTH
-    printf("Case of non-SgStatement and non-SgSourceFile: \n");
-    printf("   --- returnAttribute.isFrontier                                  "
-           "= %s \n",
-           returnAttribute.isFrontier ? "true" : "false");
-    printf("   --- returnAttribute.unparseFromTheAST                           "
-           "= %s \n",
-           returnAttribute.unparseFromTheAST ? "true" : "false");
-    printf("   --- returnAttribute.unparseUsingTokenStream                     "
-           "= %s \n",
-           returnAttribute.unparseUsingTokenStream ? "true" : "false");
-    printf("   --- returnAttribute.containsNodesToBeUnparsedFromTheAST         "
-           "= %s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheAST ? "true"
-                                                               : "false");
-    printf("   --- returnAttribute.containsNodesToBeUnparsedFromTheTokenStream "
-           "= %s \n",
-           returnAttribute.containsNodesToBeUnparsedFromTheTokenStream
-               ? "true"
-               : "false");
-#endif
   }
-
-#if DEBUG_SYNTH
-  printf("SSSSSSSSSSSSSSSSSSSSSSSSSS \n");
-  printf("### Leaving "
-         "FrontierDetectionForTokenStreamMapping::evaluateSynthesizedAttribute("
-         "): BOTTOM n = %p = %s \n",
-         n, n->class_name().c_str());
-  printf("SSSSSSSSSSSSSSSSSSSSSSSSSS \n");
-#endif
 
   ASSERT_require((returnAttribute.unparseUsingTokenStream == true &&
                   returnAttribute.unparseFromTheAST == false) ||
@@ -4542,46 +3343,6 @@ FrontierNode *FrontierDetectionForTokenStreamMapping::getFrontierNode(
 
   FrontierNode *frontierNode = frontierMap->operator[](statement);
   return frontierNode;
-}
-
-void FrontierDetectionForTokenStreamMapping::outputFrontierNodes() {
-  std::map<int, std::map<SgStatement *, FrontierNode *> *>::iterator i =
-      frontierNodes.begin();
-  while (i != frontierNodes.end()) {
-    // Find the internal map
-    int physical_file_id = i->first;
-    std::map<SgStatement *, FrontierNode *> *frontierMap = i->second;
-    std::map<SgStatement *, FrontierNode *>::iterator j = frontierMap->begin();
-    while (j != frontierMap->end()) {
-      // Find the internal map
-      SgStatement *statement = j->first;
-      FrontierNode *frontierNode = j->second;
-
-      ASSERT_not_null(statement);
-      ASSERT_not_null(frontierNode);
-
-      printf("physical_file_id = %d statement = %p = %25s frontierNode = %p "
-             "display = %s \n",
-             physical_file_id, statement, statement->class_name().c_str(),
-             frontierNode, frontierNode->display().c_str());
-
-      j++;
-    }
-
-    i++;
-  }
-}
-
-std::string FrontierNode::display() {
-  string s;
-
-  s += string("node=") + StringUtility::numberToString(node) + string(",") +
-       node->class_name() + string(":");
-  s += string("(TS=") + (unparseUsingTokenStream == true ? "true" : "false");
-  s += string(",AST=") + (unparseFromTheAST == true ? "true" : "false") + ")";
-  s += string(" ");
-
-  return s;
 }
 
 FrontierNode::FrontierNode(const FrontierNode &X) { operator=(X); }

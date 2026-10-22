@@ -1,63 +1,23 @@
 #include "featureTests.h"
 
-// DQ (10/14/2010):  This should only be included by source files that require
-// it. This fixed a reported bug which caused conflicts with configure-time
-// macros (e.g. PACKAGE_BUGREPORT).
 #include "grammar.h"
 
 #include "rose_config.h"
 
 #include "AstNodeClass.h"
 
-#include "ROSETTA_macros.h"
-// #include "OmpAttribute.h"
+#include "grammarString.h"
 
-// What should be the behavior of the default constructor for Grammar
+#include "ROSETTA_macros.h"
 
 void Grammar::setUpSupport() {
-  // This function sets up the symbol system for the grammar.  In this case it
-  // implements the C++ grammar, but this will be modified to permit all
-  // grammars to contain elements of the C++ grammar.  Modified grammars will
-  // add and subtract elements from this default C++ grammar.
-
-  // We might want a mechanism to mark these as supporting terminals and
-  // non-terminals that are to be used for every grammar.  We might do this
-  // through the definition of separate grammar just for support and which other
-  // grammars would use or be derived from (more formally, a base class for all
-  // grammars).
-
-  // Since these represent generic support we should remove the "Sg" (though
-  // we clearly build them from ideas laid out within SAGE++ and SAGE 2.
   NEW_TERMINAL_MACRO(Name, "Name", "NameTag");
   NEW_TERMINAL_MACRO(SymbolTable, "SymbolTable", "SymbolTableTag");
 
   NEW_TERMINAL_MACRO(Pragma, "Pragma", "PragmaTag");
 
-  // const_volatile specifiers (const, volatile)
-  // storage specifiers (auto, static, register, extern, mutable)
-  // access specifiers (private, protected, public)
-  // function specifiers (inline, virtual, pure-specifier, explicit)
-  // special_function specifiers (constructor, destructor, conversion, operator)
-  // declaration specifiers (storage specifiers, type specifiers, function
-  // specifiers,
-  //           friend, typedef, export, exception-specifier)
-  // type specifier (simple-type-specifier (not in SAGE III, char, bool, int,
-  // float, etc.),
-  //           class specifier, enum specifier, elaborated-type-specifier,
-  //           cv-qualifier, restrict)
-  // elaborated-type-specifier (class, struct, union, enum, typename, typename
-  // template) linkage-specification (extern, extern "C", extern "C++")
-  // base-class-specifier (virtual, access specifiers)
-
-  // DQ (4/6/2004): Deprecated support for ModifierNodes will be replaced by two
-  // separate classes (TypeModifier, StorageModifier, AccessModifier,
-  // ConstVolatileModifier, FunctionModifier, ClassModifier) Original SAGE
-  // modfifier support (ModifierNodes)
   NEW_TERMINAL_MACRO(ModifierNodes, "ModifierNodes", "ModifierNodesTag");
 
-  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
-  // ConstVolatileModifier, StorageModifier, AccessModifier, FunctionModifier,
-  // ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
   NEW_TERMINAL_MACRO(ConstVolatileModifier, "ConstVolatileModifier",
                      "ConstVolatileModifierTag");
   NEW_TERMINAL_MACRO(StorageModifier, "StorageModifier", "StorageModifierTag");
@@ -75,16 +35,9 @@ void Grammar::setUpSupport() {
   NEW_TERMINAL_MACRO(DeclarationModifier, "DeclarationModifier",
                      "DeclarationModifierTag");
 
-  // TV (05/03/2010): OpenCL Access Mode Support
   NEW_TERMINAL_MACRO(OpenclAccessModeModifier, "OpenclAccessModeModifier",
                      "OPENCL_ACCESS_MODE");
 
-  // DQ (7/22/2006): I have decided to not list this as a modifier, since it is
-  // not a part of the C or C++ grammar. NEW_TERMINAL_MACRO (AsmOperandModifier
-  // ,"AsmOperandModifier"     , "AsmOperandModifierTag" );
-
-  // DQ (4/7/2004): Added support for modifiers (organized with a base class)
-  // DQ (4/19/2004): Added new modifiers (C++ grammar calls them specifiers)
   // DQ (4/21/2004): Order is important here since the objects are included in
   //                 other objects and the size must be known.
   NEW_NONTERMINAL_MACRO(
@@ -97,15 +50,9 @@ void Grammar::setUpSupport() {
 
   NEW_TERMINAL_MACRO(File_Info, "_File_Info", "_File_InfoTag");
 
-  // DQ (9/2/2008): Separate out the handling of source files.
-  // Note that we may at a later point distinguish source file into: ScriptFile,
-  // FortranFile, CppFile, CFile, etc. It is not clear if that is useful.
   NEW_TERMINAL_MACRO(SourceFile, "SourceFile", "SourceFileTag");
-  NEW_TERMINAL_MACRO(UnknownFile, "UnknownFile", "UnknownFileTag");
 
-  // Mark this as being able to be an IR node for now and later make it false.
-  NEW_NONTERMINAL_MACRO(File, SourceFile | UnknownFile, "File", "FileTag",
-                        false);
+  NEW_NONTERMINAL_MACRO(File, SourceFile, "File", "FileTag", false);
   NEW_TERMINAL_MACRO(FileList, "FileList", "FileListTag");
   NEW_TERMINAL_MACRO(Directory, "Directory", "DirectoryTag");
   NEW_TERMINAL_MACRO(DirectoryList, "DirectoryList", "DirectoryListTag");
@@ -114,15 +61,11 @@ void Grammar::setUpSupport() {
   NEW_TERMINAL_MACRO(Options, "Options", "OptionsTag");
   NEW_TERMINAL_MACRO(Unparse_Info, "Unparse_Info", "Unparse_InfoTag");
 
-  // DQ (9/18/2018): Adding suport for IncludeFile tree to the SgSourceFile
   NEW_TERMINAL_MACRO(IncludeFile, "IncludeFile", "IncludeFileTag");
 
   NEW_TERMINAL_MACRO(FuncDecl_attr, "FuncDecl_attr", "FuncDecl_attrTag");
   NEW_TERMINAL_MACRO(ClassDecl_attr, "ClassDecl_attr", "ClassDecl_attrTag");
 
-  // MS: reorganized lists in IR not containing non-list objects to simplify IR
-  // and traversal design
-  NEW_TERMINAL_MACRO(TypedefSeq, "TypedefSeq", "T_TYPEDEF_SEQ");
   NEW_TERMINAL_MACRO(FunctionTypeArgument, "FunctionTypeArgument",
                      "T_FUNCTION_TYPE_ARGUMENT");
   NEW_TERMINAL_MACRO(OmpIteratorDefinition, "OmpIteratorDefinition",
@@ -130,32 +73,15 @@ void Grammar::setUpSupport() {
   NEW_TERMINAL_MACRO(FunctionParameterTypeList, "FunctionParameterTypeList",
                      "T_FUNCTION_PARAMETER_TYPE_LIST");
 
-  // DQ (3/12/2004): Added support for template parameters and template
-  // arguments Parameters are defined in the template declaration (formal
-  // parameters attached to the SgTemplateDeclaration). Arguments are the values
-  // specified to build a template instantiation (actual parameters attached to
-  // the SgTemplateInstantiationDecl).
   NEW_TERMINAL_MACRO(TemplateParameter, "TemplateParameter",
                      "TemplateParameterTag");
   NEW_TERMINAL_MACRO(TemplateArgument, "TemplateArgument",
                      "TemplateArgumentTag");
 
-  // DQ (3/10/2018): I think these IR nodes are no longer used, and if so then
-  // they could be deleted. DQ (4/2/2007): Added list as separate IR node to
-  // support mixing of lists and data members in IR nodes in ROSETTA.
   NEW_TERMINAL_MACRO(TemplateParameterList, "TemplateParameterList",
                      "TemplateParameterListTag");
-  NEW_TERMINAL_MACRO(TemplateArgumentList, "TemplateArgumentList",
-                     "TemplateArgumentListTag");
 
-  // We don't use these yet, though we might in the future!
-  // Grammar::AstNodeClass  ApplyFunction( "ApplyFunction", sageGrammar,
-  // "ApplyFunction" ); Grammar::AstNodeClass  printFunction( "printFunction",
-  // sageGrammar, "printFunction" );
-
-  NEW_NONTERMINAL_MACRO(BitAttribute,
-                        FuncDecl_attr |
-                            ClassDecl_attr /* | TemplateInstDecl_attr */,
+  NEW_NONTERMINAL_MACRO(BitAttribute, FuncDecl_attr | ClassDecl_attr,
                         "BitAttribute", "BitAttributeTag", false);
 
   NEW_NONTERMINAL_MACRO(Attribute, Pragma | BitAttribute, "Attribute",
@@ -168,15 +94,6 @@ void Grammar::setUpSupport() {
                      "NonrealBaseClassTag");
   NEW_NONTERMINAL_MACRO(BaseClass, ExpBaseClass | NonrealBaseClass, "BaseClass",
                         "BaseClassTag", false);
-
-  // #define OLD_GRAPH_NODES 0
-  // #if OLD_GRAPH_NODES
-
-  // Type for graph node:
-  // DQ (8/18/2008): This should be removed in the final version; added for
-  // backward compatability!
-  //   NEW_TERMINAL_MACRO (DirectedGraphNode, "DirectedGraphNode",
-  //   "DirectedGraphNodeTag" );
 
   // Types of graph edges:
   NEW_TERMINAL_MACRO(UndirectedGraphEdge, "UndirectedGraphEdge",
@@ -207,10 +124,6 @@ void Grammar::setUpSupport() {
                         false);
 
   // Types of graphs:
-  // DQ (8/18/2008): Added support for compatability with older IR nodes (will
-  // be removed later!)
-  // NEW_TERMINAL_MACRO (DirectedGraph,     "DirectedGraph", "DirectedGraphTag"
-  // );
   NEW_TERMINAL_MACRO(IncidenceUndirectedGraph, "IncidenceUndirectedGraph",
                      "IncidenceUndirectedGraphTag");
   NEW_NONTERMINAL_MACRO(Graph,
@@ -218,26 +131,14 @@ void Grammar::setUpSupport() {
                         "Graph", "GraphTag", false);
 
   // Internal supporting IR nodes for graphs:
-  // DQ (8/18/2008): Added support for container so that we don't mix data
-  // member and list elements as children.
   NEW_TERMINAL_MACRO(GraphNodeList, "GraphNodeList", "GraphNodeListTag");
   NEW_TERMINAL_MACRO(GraphEdgeList, "GraphEdgeList", "GraphEdgeListTag");
 
-  // DQ (12/19/2005): Support for explicit qualified names in the source code
-  // (currently we generate them if they are required, but this causes the
-  // generated source to be a bit verbose for some applications).
-  NEW_TERMINAL_MACRO(QualifiedName, "QualifiedName", "QualifiedNameTag");
-
-#if USE_FORTRAN_IR_NODES
-  // DQ (11/19/2007): Support for the Fortran namelist statement
-  // (SgNamelistStatement)
   NEW_TERMINAL_MACRO(NameGroup, "NameGroup", "TEMP_Name_Group");
 
-  // DQ (12/1/2007): Support for the Fortran dimension statement
   NEW_TERMINAL_MACRO(DimensionObject, "DimensionObject",
                      "TEMP_DimensionObject");
 
-  // DQ (11/20/2007): Support for the data statement
   NEW_TERMINAL_MACRO(DataStatementGroup, "DataStatementGroup",
                      "TEMP_DataStatementGroup");
   NEW_TERMINAL_MACRO(DataStatementObject, "DataStatementObject",
@@ -245,51 +146,23 @@ void Grammar::setUpSupport() {
   NEW_TERMINAL_MACRO(DataStatementValue, "DataStatementValue",
                      "TEMP_DataStatementValue");
 
-  // DQ (12/18/2007): Support for format statement
   NEW_TERMINAL_MACRO(FormatItem, "FormatItem", "TEMP_FormatItem");
 
-  // DQ (12/23/2007): Added a list version (required for repeat_sepcification
-  // support
   NEW_TERMINAL_MACRO(FormatItemList, "FormatItemList", "TEMP_FormatItemList");
 
-  // DQ (10/6/2008): Moved to SgLocatedNodeSupport.
-  // DQ (10/3/2008): Support for the Fortran "USE" statement and its rename list
-  // option. NEW_TERMINAL_MACRO (RenamePair,     "RenamePair",
-  // "TEMP_Rename_Pair" );
-
-  // DQ (10/6/2008): Moved to SgLocatedNodeSupport.
-  // DQ (10/6/2008): Support for the Fortran "USE" statement and its rename list
-  // option. NEW_TERMINAL_MACRO (InterfaceBody,  "InterfaceBody",
-  // "TEMP_Interface_Body" );
-#endif
-
-  // DQ (7/22/2010): And now we implement a type table to make sure that each
-  // type is only built once and then properly referenced (shared). This will
-  // also make it possible to have exact type equivalence be tested using only
-  // pointer equality instead of anything more elaborate. This is also where the
-  // FunctionTypeTable should be moved (to tidy up ROSE a bit).
   NEW_TERMINAL_MACRO(TypeTable, "TypeTable", "TYPE_TABLE");
 
-  // DQ (9/15/2018): Adding support for header file usage report (for
-  // unparsing).
-  NEW_TERMINAL_MACRO(HeaderFileReport, "HeaderFileReport",
-                     "HeaderFileReportTag");
-
-  // DQ (3/30/2009): This is the moved because "#if !0" is a problem for MSVS.
-  // Note that OLD_GRAPH_NODES is set to "1" above...
   NEW_NONTERMINAL_MACRO(
       Support,
       Modifier | Name | SymbolTable | Attribute | File_Info | File | Project |
-          Options | Unparse_Info | BaseClass | TypedefSeq | TemplateParameter |
+          Options | Unparse_Info | BaseClass | TemplateParameter |
           TemplateArgument | Directory | FileList | DirectoryList |
           FunctionTypeArgument | OmpIteratorDefinition |
-          FunctionParameterTypeList | QualifiedName | TemplateArgumentList |
-          TemplateParameterList | /* RenamePair                | InterfaceBody
-                                     |*/
-          Graph | GraphNode | GraphEdge | GraphNodeList | GraphEdgeList |
-          TypeTable | NameGroup | DimensionObject | FormatItem |
-          FormatItemList | DataStatementGroup | DataStatementObject |
-          IncludeFile | DataStatementValue | HeaderFileReport,
+          FunctionParameterTypeList | TemplateParameterList | Graph |
+          GraphNode | GraphEdge | GraphNodeList | GraphEdgeList | TypeTable |
+          NameGroup | DimensionObject | FormatItem | FormatItemList |
+          DataStatementGroup | DataStatementObject | IncludeFile |
+          DataStatementValue,
       "Support", "SupportTag", false);
 
   // ***********************************************************************
@@ -303,53 +176,33 @@ void Grammar::setUpSupport() {
 
   SymbolTable.setFunctionPrototype("HEADER_SYMBOL_TABLE",
                                    "../Grammar/Support.code");
-  // DQ (5/22/2006): I think we really do need this since this is required state
-  // for iteration through all symbols (except that I had expected them to be
-  // unique).
+  // SgSymbolTable keeps this cursor for its iteration API.
+  GrammarString iterator("hash_iterator", "iterator", "",
+                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                         NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  // The cursor has no standalone value to format, especially at end().
+  iterator.setIncludeInRTI(false);
+  SymbolTable.setDataPrototype(iterator);
 
-  // AJ (10/21/2004): Modified Sage III to use STL based hash table
-  // implementation. MK: I moved the following data member declarations from
-  // ../Grammar/Support.code to this position:
-  SymbolTable.setDataPrototype("hash_iterator", "iterator", "",
-                               NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // We do not traverse the following data member for the moment!
-  // DQ (11/6/2001): changed option to permit generation of access functions
   // The name is used internally within the find member function to hold the
   // string being sought
   SymbolTable.setDataPrototype("SgName", "name", "= \"\"",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/6/2001): changed option to permit generation of access functions
   // The no_name is used internally within the find member function to indicate
   // if the name is being used
   SymbolTable.setDataPrototype("bool", "no_name", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // AJ (10/21/2004): Modified Sage III to use STL based hash table
-  // implementation. DQ (11/6/2001): changed option to permit generation of
-  // access functions
   SymbolTable.setDataPrototype(" rose_hash_multimap*", "table", "= nullptr",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, DEF_DELETE);
 
-  // DQ (6/12/2007): Fixed use of std::set<SgNode*> to use SgNodeSet so that
-  // ROSETTA's test for pointer to IR node can just look for "*" in the type.
-  // This is a internal detail of ROSETTA. DQ (3/10/2007): Adding set for
-  // symbols so that we can support fast tests for existance.
   SymbolTable.setDataPrototype("SgNodeSet", "symbolSet", "",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // Case sensitivity is owned by the live rose_hash_multimap.  Do not publish
-  // a second generated boolean: the custom SgSymbolTable constructors and
-  // setCaseInsensitive() never used it, so it was both uninitialized and able
-  // to disagree with the table that performs lookup.
-
-  // DQ (7/22/2010): Added type table to support stricter uniqueness of types
-  // and proper sharing.
   TypeTable.setFunctionPrototype("HEADER_TYPE_TABLE",
                                  "../Grammar/Support.code");
   TypeTable.setAutomaticGenerationOfConstructor(false);
@@ -363,22 +216,9 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/28/2004): Data member to hold orignal template name (without
-  // parameters or arguments) Name.setDataPrototype("string","TemplateName","",
-  //         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //         NO_DELETE);
-
   Attribute.setFunctionPrototype("HEADER_ATTRIBUTE", "../Grammar/Support.code");
   Pragma.setFunctionPrototype("HEADER_PRAGMA", "../Grammar/Support.code");
-  BitAttribute.setFunctionPrototype("HEADER_BIT_ATTRIBUTE",
-                                    "../Grammar/Support.code");
 
-  // DQ (4/6/2004): Deprecated ModifierNodes node and new separate TypeModifier
-  // and StorageModifier nodes DQ (4/19/2004): New modifiers (C++ grammar calls
-  // them specifiers)
-  //    ConstVolatileModifier, StorageModifier, AccessModifier,
-  //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-  //    TypeModifier, ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
   Modifier.setFunctionPrototype("HEADER_MODIFIER", "../Grammar/Support.code");
   ModifierNodes.setFunctionPrototype("HEADER_MODIFIER_NODES",
                                      "../Grammar/Support.code");
@@ -406,27 +246,15 @@ void Grammar::setUpSupport() {
   File_Info.setFunctionPrototype("HEADER_FILE_INFORMATION",
                                  "../Grammar/Support.code");
 
-  // Skip building a parse function for this AstNodeClass/nonterminal of the
-  // Grammar
-  if (isRootGrammar() == false) {
-    Attribute.excludeFunctionPrototype("HEADER_PARSER", "../Grammar/Node.code");
-    Attribute.excludeFunctionSource("SOURCE_PARSER",
-                                    "../Grammar/parserSourceCode.macro");
-  }
-
   SourceFile.setFunctionPrototype("HEADER_APPLICATION_SOURCE_FILE",
                                   "../Grammar/Support.code");
-  // SourceFile.setAutomaticGenerationOfConstructor(false);
-
-  UnknownFile.setFunctionPrototype("HEADER_APPLICATION_UNKNOWN_FILE",
+  IncludeFile.setFunctionPrototype("HEADER_INCLUDE_FILE",
                                    "../Grammar/Support.code");
+  IncludeFile.setFunctionSource("SOURCE_INCLUDE_FILE",
+                                "../Grammar/Support.code");
 
   File.setFunctionPrototype("HEADER_APPLICATION_FILE",
                             "../Grammar/Support.code");
-  // File.setAutomaticGenerationOfConstructor(false);
-  // Later we can have this be autogenerated (let's see what we need first)
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // File.setAutomaticGenerationOfDestructor (false);
 
   FileList.setFunctionPrototype("HEADER_APPLICATION_FILE_LIST",
                                 "../Grammar/Support.code");
@@ -435,25 +263,14 @@ void Grammar::setUpSupport() {
   DirectoryList.setFunctionPrototype("HEADER_APPLICATION_DIRECTORY_LIST",
                                      "../Grammar/Support.code");
 
-  // DQ (12/19/2005): Support for explicitly specified qualified names
-  QualifiedName.setFunctionPrototype("HEADER_QUALIFIED_NAME",
-                                     "../Grammar/Support.code");
-
   File_Info.setAutomaticGenerationOfConstructor(false);
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // File_Info.setAutomaticGenerationOfDestructor (false);
 
   Project.setFunctionPrototype("HEADER_APPLICATION_PROJECT",
                                "../Grammar/Support.code");
-  // Allow Project constructor to be automatically generated, see gitlab #126
-  // [Rasmussen 10.05.06] Project.setAutomaticGenerationOfConstructor(false);
 
   Options.setFunctionPrototype("HEADER_OPTIONS", "../Grammar/Support.code");
   Unparse_Info.setFunctionPrototype("HEADER_UNPARSE_INFO",
                                     "../Grammar/Support.code");
-
-  // MK: I have moved the following data member declarations from
-  // ../Grammar/Support.code to this place Space for unparse_type_num tag
 
   Unparse_Info.setDataPrototype("SgBitVector", "unparse_attribute", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
@@ -465,12 +282,7 @@ void Grammar::setUpSupport() {
   Unparse_Info.setDataPrototype("int", "nested_expression", "= 0",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
-  // For carrying along the variable name when printing out function/array
-  // type with the symbol's name
   Unparse_Info.setDataPrototype("std::string", "operator_name", "= \"\"",
-                                NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                NO_TRAVERSAL, NO_DELETE);
-  Unparse_Info.setDataPrototype("SgName", "var_name", "= \"\"",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
   // Keep ptr to the declaration statement
@@ -486,17 +298,6 @@ void Grammar::setUpSupport() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // Keep current scope's type, set in SgClassDefinition's unparser
-  Unparse_Info.setDataPrototype(
-      "SgNamedType*", "current_context", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // Keep track of previous array type's index string -- this is because
-  // array is built like this  A[2][3]  Array(Array(A,3),2)
-  // We do not traverse the following data member for the moment!
-  Unparse_Info.setDataPrototype(
-      "SgName", "array_index_list", "= \"\"", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // All copies made during one unparser traversal share this state, while
   // separately constructed roots have independent state. This preserves the
   // inherited-attribute behavior without process-global leakage between files
@@ -510,37 +311,6 @@ void Grammar::setUpSupport() {
   // shares only that session state.
   Unparse_Info.setAutomaticGenerationOfConstructor(false);
 
-  // DQ (9/6/2004): Added support for output of name qualification (list of
-  // classes or namespace required to resolve types)
-  // Unparse_Info.setDataPrototype("SgSymbolPtrList","listOfScopeSymbols","",
-  //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL);
-
-  // DQ (5/11/2011): This is deprecated because this is older support for name
-  // qualification. DQ (9/8/2004): Added support for output of name
-  // qualification for namespaces, needed a different variable specific for
-  // namespaces because "current_context" is a SgNamedType.
-  Unparse_Info.setDataPrototype(
-      "SgNamespaceDeclarationStatement*", "current_namespace", "= nullptr",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-
-  // DQ (3/18/2006): Support for output of information about formatting within
-  // code generation (unparsing). This information is helpful in visualizing
-  // where and why linefeeds and indentation are introduced in the code
-  // generation phase (unparsing).
-  Unparse_Info.setDataPrototype("bool", "outputCodeGenerationFormatDelimiters",
-                                "= false", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                                COPY_DATA);
-
-  // DQ (5/11/2011): This is deprecated because this is older support for name
-  // qualification. DQ (10/10/2006): Support for reference to a list that would
-  // be used for qualified name generation for any type.
-  Unparse_Info.setDataPrototype(
-      "SgQualifiedNamePtrList", "qualifiedNameList",
-      "= SgQualifiedNamePtrList()", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // DQ (10/20/2006): Added support for output of function calls.  We need to
   // know if we are unparsing a function call so that we can add the name
   // qualification properly.  The function call expression (SgFunctionCallExp)
@@ -552,9 +322,6 @@ void Grammar::setUpSupport() {
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
-  // DQ (5/11/2011): This is deprecated because this is older support for name
-  // qualification. DQ (5/22/2007): Added scope information so that we could
-  // lookup hidden list to get qualified names correct.
   Unparse_Info.setDataPrototype("SgScopeStatement*", "current_scope",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -569,22 +336,14 @@ void Grammar::setUpSupport() {
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
-  // DQ (5/11/2011): Added information required for new name qualification
-  // support. We now strore this information where the named constrcuts are
-  // referenced and this information is passed through the SgUnparse_Info
-  // object.
   Unparse_Info.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/11/2011): Added information required for new name qualification
-  // support.
   Unparse_Info.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/11/2011): Added information required for new name qualification
-  // support.
   Unparse_Info.setDataPrototype("bool", "global_qualification_required",
                                 "= false", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -594,26 +353,13 @@ void Grammar::setUpSupport() {
       "int", "nestingLevel", "= 0", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (29/8/2017): changed the language enum name so that we could use it for
-  // both input and output language specifications. DQ (9/15/2012): Added
-  // support to specify the language directly (required to unparse SgBoolVal in
-  // some cases where they are used in SgTemplateParameters in a
-  // SgTemplateInstantiation which would be constrcuted before having its parent
-  // set (thus not allowing the unparseBoolVal() to call
-  // TransformationSupport::getFile(expr) and find the associated SgFile IR
-  // node). This is only an issue during AST construction.
-  // Unparse_Info.setDataPrototype("SgFile::outputLanguageOption_enum","language","=
-  // SgFile::e_default_output_language",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-  //                            COPY_DATA);
+  // Explicit language selection supports unparsing before a node has a file
+  // ancestor, including template arguments during construction.
   Unparse_Info.setDataPrototype(
       "SgFile::languageOption_enum", "language", "= SgFile::e_default_language",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_DATA);
 
-  // DQ (1/10/2015): We need to save a pointer to the SgSourceFile to support
-  // the token based unparsing efficiently.
   Unparse_Info.setDataPrototype("SgSourceFile*", "current_source_file",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -626,19 +372,11 @@ void Grammar::setUpSupport() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_DATA);
 
-  // DQ (4/28/2017): Added information required for use of generated names in
-  // the output of types for template arguments as used in symbol table lookup.
   Unparse_Info.setDataPrototype(
       "bool", "use_generated_name_for_template_arguments", "= false",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  Unparse_Info.setDataPrototype(
-      "bool", "user_defined_literal", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/24/2020): debugging Cxx_tests/test2020_44.C need to communicate when
-  // to suppress extra parenthesis use around SgFunctionType arguments.
   Unparse_Info.setDataPrototype("bool", "context_for_added_parentheses",
                                 "= false", NO_CONSTRUCTOR_PARAMETER,
                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -650,18 +388,21 @@ void Grammar::setUpSupport() {
   NonrealBaseClass.setFunctionPrototype("HEADER_NONREAL_BASE_CLASS",
                                         "../Grammar/Support.code");
 
-  // DQ (4/29/2004): Removed in place of new modifier interface
   BaseClass.setDataPrototype("SgClassDeclaration*", "base_class", "= nullptr",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+                             NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
   // Preserve the exact type written at this inheritance use site. The
   // semantic base declaration is insufficient for typedef/alias spelling and
   // dependent template bases, and fabricating a declaration to carry that
   // spelling corrupts the class hierarchy.
   BaseClass.setDataPrototype("SgType*", "source_type", "= nullptr",
-                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+                             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                             NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
+  BaseClass.setDataPrototype("SgSymbol*", "fortran_source_derived_type_symbol",
+                             "= nullptr", NO_CONSTRUCTOR_PARAMETER,
+                             BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+                             COPY_REFERENCE);
 
   // Preserve the exact nested-name-specifier written on this inheritance use
   // site.  SgType nodes are shared semantic identities, so source spelling
@@ -702,73 +443,33 @@ void Grammar::setUpSupport() {
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/21/2019): Fix this to cause access functions to be automatically
-  // generated. DQ (11/7/2007): This should not be shared when a copy is make
-  // (see copytest_2007_26.C). DQ (4/25/2004): New interfce for modifiers
-  // (forced to make this a pointer to a SgBaseClassModifier
-  //                 because it could not be specified before the declaration of
-  //                 BaseClass, limitations in ROSETTA).
   BaseClass.setDataPrototype("SgBaseClassModifier*", "baseClassModifier",
                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
                              CLONE_PTR);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added support for name qualification.
-  // BaseClass.setDataPrototype ( "int", "name_qualification_length", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Qualification accessors must not mark the AST as modified.
   BaseClass.setDataPrototype("int", "name_qualification_length", "= 0",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // BaseClass.setDataPrototype("bool","type_elaboration_required","= false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   BaseClass.setDataPrototype("bool", "type_elaboration_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/11/2011): Added information required for new name qualification support.
-  // BaseClass.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   BaseClass.setDataPrototype("bool", "global_qualification_required", "= false",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  ExpBaseClass.setDataPrototype("SgExpression*", "base_class_exp", "= nullptr",
-                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-                                OPTIONAL_TRAVERSAL_MEMBER);
-
   NonrealBaseClass.setDataPrototype("SgNonrealDecl*", "base_class_nonreal",
                                     "= nullptr", CONSTRUCTOR_PARAMETER,
                                     BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                    NO_DELETE, COPY_DATA);
+                                    NO_DELETE, COPY_REFERENCE);
 
   FuncDecl_attr.setFunctionPrototype("HEADER_FUNCTION_DECLARATION_ATTRIBUTE",
                                      "../Grammar/Support.code");
   ClassDecl_attr.setFunctionPrototype("HEADER_CLASS_DECLARATION_ATTRIBUTE",
                                       "../Grammar/Support.code");
-  // TemplateInstDecl_attr.setFunctionPrototype(
-  // "HEADER_TEMPLATE_INSTANTIATION_DECLARATION_ATTRIBUTE",
-  // "../Grammar/Support.code");
-
-  // DQ (1/18/2006): renames this to be consistant and to allow the generated
-  // functions to map to the virtual SgNode::get_file_info(). This then meens
-  // that we need to remove the use of SgPragma::get_fileInfo() where it is
-  // used. Added to SAGE 3 (not present in SAGE 2) to support PragmaStatement
-  // (unbound pragmas)
 
   // DQ (1/11/13): The astCopy and astDelete are inconsistant if we share the
   // pointer (we need to copy using CLONE_PTR so that we will build a new
@@ -776,22 +477,12 @@ void Grammar::setUpSupport() {
   Pragma.setDataPrototype("Sg_File_Info*", "startOfConstruct", "= nullptr",
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
-  // DQ (5/3/2012): Added endOfConstruct to be uniform and prepare SgPragma API
-  // to movement of SgPragma to be derived from SgLocatedNode in the future.
   Pragma.setDataPrototype("Sg_File_Info*", "endOfConstruct", "= nullptr",
                           CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                           NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
   Pragma.setDataPrototype("short", "printed", "= 0", NO_CONSTRUCTOR_PARAMETER,
                           NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  Pragma.setDataPrototype("SgExprListExp*", "args", "= nullptr",
-                          NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                          NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. DQ (1/3/2006): Added attribute via
-  // ROSETTA (changed to pointer to AstAttributeMechanism) Modified
-  // implementation to only be at specific IR nodes.
   Pragma.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                           "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                           BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
@@ -801,10 +492,6 @@ void Grammar::setUpSupport() {
   Pragma.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT",
                            "../Grammar/Support.code");
 
-  // DQ (5/6/2005): Build support for directories in addition to files (for
-  // support of large projects) DQ (1/20/2010): I would like to avoid links and
-  // permissions etc., I hope that such details will not be required in the
-  // future.
   Directory.setDataPrototype("std::string", "name", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -813,17 +500,11 @@ void Grammar::setUpSupport() {
                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                              OPTIONAL_TRAVERSAL_MEMBER);
 
-  // Note that this must be of type: "SgDirectoryList*" since it a pointer to an
-  // IR node and not a STL list.
   Directory.setDataPrototype("SgDirectoryList*", "directoryList", "= nullptr",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                              OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. DQ (1/3/2006): Added attribute via
-  // ROSETTA (changed to pointer to AstAttributeMechanism) Modified
-  // implementation to only be at specific IR nodes.
   Directory.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -837,11 +518,6 @@ void Grammar::setUpSupport() {
       "SgFilePtrList", "listOfFiles", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. DQ (1/23/2010): Not clear if we
-  // should put attributes here, but for now it is OK. This is presently needed
-  // to avoid errors in downstream tests, but there may be a better way to avoid
-  // that error.
   FileList.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                             "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                             BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -851,67 +527,31 @@ void Grammar::setUpSupport() {
   FileList.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT",
                              "../Grammar/Support.code");
 
-  // DQ (5/6/2005): ROSETTA generated the wrong code for this case until it was
-  // fixed 5/8/2005 in Cxx_GrammarTreeTraversalSuccessorContainer.C
   DirectoryList.setDataPrototype(
-      "SgDirectoryPtrList", "listOfDirectories", "",
-      //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-      //             DEF_TRAVERSAL, NO_DELETE);
-      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE);
-
-  // DQ (12/19/2005): Support for explicitly specified qualified names (scope is
-  // a shared reference to a SgScopeStatement)
-  QualifiedName.setDataPrototype("SgScopeStatement*", "scope", "= nullptr",
-                                 CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                                 NO_TRAVERSAL, NO_DELETE);
+      "SgDirectoryPtrList", "listOfDirectories", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
 
   // ******************************************************************
   // **************************** File IR Node ************************
   // ******************************************************************
 
-  // Header declarations for Node
-  // File.setPredeclarationString     ("HEADER_APPLICATION_FILE_PREDECLARATION"
-  // , "../Grammar/Support.code");
-
-  // DQ (1/18/2006): Rename this to be consistant and to allow the generated
-  // functions to map to the virtual SgNode::get_file_info(). This then meens
-  // that we need to remove the use of SgFile::get_fileInfo() where it is used.
-  // DQ (8/17/2005): Added to make it simple to both hold the filename of the
-  // current file AND support the map mechanism required to permit string
-  // comparisions of filenames to be done using integer (key) comparision.  This
-  // removes a huge number of string comparisons from the processing of IR nodes
-  // (e.g. in the unparser, and in the traverseInFile() AST traversal
-  // mechanism). Use of this veraible will be added incrementally in the next
-  // releases.  We could have alternativel just stored the map key integer
-  // value, but that would expose the details of the implementation. As it is we
-  // have a full Sg_File_Info object and the line number and column number, and
-  // perhaps the IR node classification flags as well, are largely meaningless.
-  // A slightly better factorization might be possible in the future. RPM
-  // (12/2/2008): Data members that appear to control ROSE behavior rather than
-  // represent some
-  //                  property of the parsed source code have accessors
-  //                  generated via BUILD_FLAG_ACCESS_FUNCTIONS rather than
-  //                  BUILD_ACCESS_FUNCTIONS. The only difference between the
-  //                  two is that the FLAG version doesn't call
-  //                  set_isModified(true) in the ROSETTA-generated get_*
-  //                  methods.
-
-  // DQ (5/3/2007): Renamed to be consistant with SgLoctedNode use, but added
-  // get_file_Info() access function to support previous interface for a while.
-
-  // DQ (1/11/13): The astCopy and astDelete are inconsistant if we share the
-  // pointer (we need to copy using CLONE_PTR so that we will build a new
-  // Sg_File_Info object).
   File.setDataPrototype("Sg_File_Info*", "startOfConstruct", "= nullptr",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
 
-  // DQ (9/2/2008): We want to move this to be in the SgSourceFile
   SourceFile.setDataPrototype("SgGlobal*", "globalScope", "= nullptr",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
+                              DEF_TRAVERSAL, DELETE_IF_OWNED, CLONE_TREE,
                               OPTIONAL_TRAVERSAL_MEMBER);
+
+  // Every source-file constructor owns its token associations. The global
+  // source-file index observes this state and never owns it.
+  SourceFile.setDataPrototype(
+      "std::map<SgNode*, TokenStreamSequenceToNodeMapping*>*",
+      "tokenSubsequenceMap", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, NO_COPY_DATA);
+  SourceFile.setMemberDestructor("tokenSubsequenceMap",
+                                 "release_tokenSubsequenceMap();");
 
   // Exact target ABI type returned by sizeof/alignof.  Clang publishes this
   // from ASTContext::getSizeType(); transformations must obtain it from their
@@ -919,35 +559,15 @@ void Grammar::setUpSupport() {
   SourceFile.setDataPrototype("SgType*", "target_size_type", "= nullptr",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
+  SourceFile.setDataPrototype("SgSourceFile::target_abi_info", "target_abi",
+                              "= SgSourceFile::target_abi_info()",
+                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
-  // DQ (10/1/2008): Added support for lists of SgModuleStatement where they are
-  // not a part of the current translation unit.  A place for the information in
-  // the *.mod files to be put.  This is the data member for the list.
-  SourceFile.setDataPrototype(
-      "SgModuleStatementPtrList", "module_list", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/20/2010): Added SgTokenPtrList to support a token list at the
-  // SourceFile level. In the future we may have more than one to support pre
-  // and post processing using CPP or Fortran equivalent).
   SourceFile.setDataPrototype(
       "SgTokenPtrList", "token_list", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
-  // DQ (9/15/2011): A home for declarations that have no defined scope in the
-  // program (see test2011_80.C) Some declarations (e.g. "struct b* x;" cause a
-  // type, and thus a declaration and symbol, to be constructed with no clear
-  // indication as to which scope into which it should be defined. This has
-  // become clear as part of debugging the name qualification support.  This
-  // scope permits use to have a location (holding scope) to support this issue
-  // in C and C++.  Another example is the a templated class nested in a
-  // templated class. Here we also don't have a location for the declaration and
-  // the symbol that is generated for this case.
-  SourceFile.setDataPrototype("SgGlobal*", "temp_holding_scope", "= nullptr",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/7/2018): Mark files explicitly as header files (support for unparse
-  // headers and unparse tokens).
   SourceFile.setDataPrototype("bool", "isHeaderFile", "= false",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
@@ -957,7 +577,7 @@ void Grammar::setUpSupport() {
   // the unparser could overwrite.  Keep this identity in the IR instead of
   // encoding it through a fabricated input filename.
   SourceFile.setDataPrototype("bool", "isGeneratedSource", "= false",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
 
   // A project can also contain parsed copies and transformation-created
@@ -965,63 +585,13 @@ void Grammar::setUpSupport() {
   // the original translation units; file-list membership is not sufficient
   // to distinguish those identities.
   SourceFile.setDataPrototype("bool", "isCommandLineInputSource", "= false",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
 
-  SourceFile.setDataPrototype("bool", "isHeaderFileIncludedMoreThanOnce",
-                              "= false", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (9/15/2018): Adding support for accumulating data to support a report on
-  // header file handling (for unparsing of header files).
-  SourceFile.setDataPrototype("SgHeaderFileReport*", "headerFileReport",
-                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
-
-  // DQ (11/8/2018): These are added include directories that will be used in
-  // the generation of the backend compiler command line (before all other
-  // include directives have been output). This option supports the unparsing of
-  // header files which requires source files to be positioned a locations
-  // relative to an application root file position, and header fils to be
-  // included using additional include paths. This is required to handled header
-  // files using
-  // "../" prefixes, and different include paths are required depending upon if
-  // they are transformed.
-  // SourceFile.setDataPrototype("SgStringList","extraIncludeDirectorySpecifierList",
-  // "",
-  //                       NO_CONSTRUCTOR_PARAMETER,
-  //                       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                       NO_DELETE);
-
-  // DQ (10/10/2020): These paths are used in the construction of the backend
-  // compiler's command line. Some include paths have be be specified before, so
-  // that unparsed versions of header files will be seen instead of the original
-  // header file. And some include paths must be speficied after the users
-  // include paths so that they will not interfer with the users include files.
-  // For example: the unit test requires that the DMTCP header file path come
-  // last else some applications (e.g. wget) will find the wrong config.h header
-  // file (which is in both wget's directory paths and also within the DMTCP
-  // header files.  So we need to be more specific and specify two list of extra
-  // include directory paths, one to be inserted before the user's header file
-  // paths and one after the user's header file paths.  Different tools will
-  // have different requirements. DQ (10/10/2020): List of extra include paths
-  // to be inserted before the users include paths.
-  SourceFile.setDataPrototype(
-      "SgStringList", "extraIncludeDirectorySpecifierBeforeList", "",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  // DQ (10/10/2020): List of extra include paths to be inserted after the users
-  // include paths.
-  SourceFile.setDataPrototype(
-      "SgStringList", "extraIncludeDirectorySpecifierAfterList", "",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-
-  // DQ (11/10/2018): Define a link to the SgIncludeFile that is associated with
-  // this SgSourceFile (valid pointer only if isHeaderFile == true).
   SourceFile.setDataPrototype("SgIncludeFile*", "associated_include_file",
                               "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE);
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                              DELETE_IF_OWNED, CLONE_TREE);
 
   // Exact physical paths observed by the active frontend's include callbacks.
   // This ownership metadata is independent of the optional SgIncludeFile tree,
@@ -1043,7 +613,7 @@ void Grammar::setUpSupport() {
   SourceFile.setDataPrototype(
       "std::map<std::string, std::set<PreprocessingInfo*> >",
       "frontendResolvedIncludeDirectivesMap", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   // Physical dependencies whose declarations must not be mutated in place.
   // This includes system headers and imported Fortran module files.  Keeping
   // it separate from the include lists avoids pretending that every frontend
@@ -1052,23 +622,12 @@ void Grammar::setUpSupport() {
       "SgStringList", "frontendExternalOwnershipPathList", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // Imported module ASTs have exact structural ownership under the source
-  // file that requested them, but are not lexical project inputs and must not
-  // participate in project traversal, unparsing, or analysis.
+  // Imported modules and materialized header wrappers belong to the requesting
+  // translation unit and are not lexical project inputs.
   SourceFile.setDataPrototype("SgFileList*", "frontendExternalFileList",
                               "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/6/2018): Added to support unparsing of headers and source files for
-  // whole applications having multiple levels of directory structure.
-  // SourceFile.setDataPrototype("std::string", "applicationRootDirectory", "=
-  // \"\"",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // SourceFile.setDataPrototype("bool", "usingApplicationRootDirectory", "=
-  // false",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
+                              CLONE_TREE);
 
   // DQ (11/18/2019): Header file unparsing can depend on which SgGlobal (global
   // scope) is used from which source file. Where the IR nodes are not shared
@@ -1083,107 +642,36 @@ void Grammar::setUpSupport() {
                               "= false", NO_CONSTRUCTOR_PARAMETER,
                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/11/2021): We need to to support the dynamic library feature (used by
-  // the code segregation tool, and likely future tools). This feature is also
-  // part of outliner which supports outlining to a separate file. Also, this is
-  // used to avoid running the computation of first and last statements of
-  // include file.
-  SourceFile.setDataPrototype("bool", "isDynamicLibrary", "= false",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
-
-  UnknownFile.setDataPrototype("SgGlobal*", "globalScope", "= nullptr",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-                               OPTIONAL_TRAVERSAL_MEMBER);
-
-  // DQ (9/18/2018): Adding support for building the include file tree for each
-  // source file.
-  IncludeFile.setFunctionPrototype("HEADER_INCLUDE_FILE",
-                                   "../Grammar/Support.code");
-
-  // DQ (9/18/2018): Added source file which is initialized when unparsing
-  // headers. IncludeFile.setDataPrototype ( "SgName", "filename", "",
-  //                                 CONSTRUCTOR_PARAMETER,
-  //                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                                 NO_DELETE, NO_COPY_DATA);
   IncludeFile.setDataPrototype("SgName", "filename", "= \"\"",
                                CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/18/2018): Added source file which is initialized when unparsing
-  // headers (provides simple interface for unparer which take a SgSourceFile).
   IncludeFile.setDataPrototype("SgSourceFile*", "source_file", " = nullptr",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
-  // DQ (11/15/2018): Allow traversals of the include tree.
-  // IncludeFile.setDataPrototype ( "SgIncludeFilePtrList", "include_file_list",
-  // "",
-  //                                 NO_CONSTRUCTOR_PARAMETER,
-  //                                 BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                                 NO_DELETE, NO_COPY_DATA);
   IncludeFile.setDataPrototype(
       "SgIncludeFilePtrList", "include_file_list", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+      BUILD_LIST_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
-  // DQ (9/18/2018): Added source file which is initialized when unparsing
-  // headers.
-  IncludeFile.setDataPrototype("unsigned int", "first_source_sequence_number",
-                               " = 0", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               NO_COPY_DATA);
-  IncludeFile.setDataPrototype("unsigned int", "last_source_sequence_number",
-                               " = 0", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               NO_COPY_DATA);
-
-  IncludeFile.setDataPrototype("bool", "isIncludedMoreThanOnce", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (10/28/2018): Where a header file is used more than once we introduce
-  // the simplifying concept of a primary use.  The first use is the primary
-  // use, and this provides for an initial implementation. Note that multiple
-  // uses of the same header file may be transformed differently, so rewriting
-  // the header file might not be well defined (unless we output all versions).
-  IncludeFile.setDataPrototype("bool", "isPrimaryUse", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (10/28/2018): Add the hash for the file (to provide error checking to
-  // JIT mechanisms).
-  IncludeFile.setDataPrototype("std::string", "file_hash", "= \"\"",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/5/2018): Added more information that we have available.
   IncludeFile.setDataPrototype("SgName", "name_used_in_include_directive",
                                "= \"\"", NO_CONSTRUCTOR_PARAMETER,
                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/9/2018): Added source file link which is initialized when attaching
-  // CPP directives and comments.
   IncludeFile.setDataPrototype("SgSourceFile*",
                                "source_file_of_translation_unit", " = nullptr",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+                               NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   IncludeFile.setDataPrototype("SgSourceFile*", "including_source_file",
                                " = nullptr", NO_CONSTRUCTOR_PARAMETER,
                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               NO_COPY_DATA);
+                               COPY_REFERENCE);
 
-  // DQ (11/9/2018): Added to support link to parent of any nested include file
-  // (null indicates that the include file is the parent of a SgSourceFile.
   IncludeFile.setDataPrototype("SgIncludeFile*", "parent_include_file",
                                " = nullptr", NO_CONSTRUCTOR_PARAMETER,
                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-                               NO_COPY_DATA);
+                               COPY_REFERENCE);
 
-  // DQ (11/12/2018): Added support to detect system vs. non system includes and
-  // preincluded files. System include files are specified using <> syntax,
-  // non-system include files are specified using "" syntax, and preinclude
-  // include files are specified using a preinclude option on the commandline.
   IncludeFile.setDataPrototype("bool", "isSystemInclude", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
@@ -1191,103 +679,27 @@ void Grammar::setUpSupport() {
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/16/2018): Mark the SgIncludeFile for header files that will drive
-  // the explicit inclusion of an include path at compile time.
-  IncludeFile.setDataPrototype("bool",
-                               "requires_explict_path_for_unparsed_headers",
-                               "= false", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/12/2018): Mark this include file as not being able to support
-  // tranformations under token-based unparsing.
-  IncludeFile.setDataPrototype("bool",
-                               "can_be_supported_using_token_based_unparsing",
-                               "= true", NO_CONSTRUCTOR_PARAMETER,
-                               BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/5/2018): Added more information that we have available.
   IncludeFile.setDataPrototype("SgName", "directory_prefix", "= \"\"",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
-  IncludeFile.setDataPrototype("SgName", "name_without_path", "= \"\"",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/16/2018): Save the applicationRootDirectory.
   IncludeFile.setDataPrototype("SgName", "applicationRootDirectory", "= \"\"",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/15/2018): will_be_unparsed
-  IncludeFile.setDataPrototype("bool", "will_be_unparsed", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/15/2018): Allow us to mark the ROSE generated include file that
-  // holds macros and declarations for builtin functions.
-  IncludeFile.setDataPrototype("bool", "isRoseSystemInclude", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/21/2018): Allow us to mark the ROSE generated include files from
-  // system directories.
-  IncludeFile.setDataPrototype("bool", "from_system_include_dir", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/21/2018): Allow us to mark the ROSE generated include files from
-  // system directories.
-  IncludeFile.setDataPrototype("bool", "preinclude_macros_only", "= false",
-                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                               NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/21/2018): Allow us to mark the ROSE generated include files from
-  // system directories.
   IncludeFile.setDataPrototype("bool", "isApplicationFile", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/26/2020): Allow us to mark the SgIncludeFile as being the root
-  // (associated with the input sourde file).
   IncludeFile.setDataPrototype("bool", "isRootSourceFile", "= false",
                                NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                                NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/9/2021): Support for token-based unparsing when used with header file
-  // unparsing. IncludeFile.setDataPrototype   ( "bool",
-  // "headerFileRepresentsAllStatementsInParentScope", "= false",
-  //                                 NO_CONSTRUCTOR_PARAMETER,
-  //                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                                 NO_DELETE);
-
-  // DQ (9/18/2018): We can likely eliminate this IR node now that we store the
-  // include file tree directly DQ (9/15/2018): Adding support for report on
-  // header file handling (for unparsing).
-  HeaderFileReport.setFunctionPrototype("HEADER_HEADER_FILE_REPORT",
-                                        "../Grammar/Support.code");
-
-  HeaderFileReport.setDataPrototype(
-      "SgSourceFile*", "source_file", " = nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-
-  HeaderFileReport.setDataPrototype(
-      "SgSourceFilePtrList", "include_file_list", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
-  // DQ (9/28/2022): Use BUILD_LIST_ACCESS_FUNCTIONS for list access.
   File.setDataPrototype("SgStringList", "originalCommandLineArgumentList", "",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-  // Modified ROSE to hold variables into the File object
-  // DQ (8/10/2004): modified to be an int instead of a bool
   File.setDataPrototype("int", "verbose", "= 0", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (12/8/2007): Added support to control warnings in front-end
-  // (specifically for Fortran support to control use of warnings mode in syntax
-  // checking pass prior to calling OFP).
-  File.setDataPrototype("bool", "output_warnings", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
 
   File.setDataPrototype("bool", "C_only", "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1301,32 +713,17 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // TV (05/17/2010) Cuda support
   File.setDataPrototype("bool", "Cuda_only", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-  // TV (05/17/2010) OpenCL support
   File.setDataPrototype("bool", "OpenCL_only", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/7/2018): By default for C/C++ I now think this should be false (and
-  // it is set this way for source files. DQ (5/18/2008): Added flag to specify
-  // that CPP preprocessing is required (default true for C and C++, and Fortran
-  // with *.F?? extension an explicitly set to false for fortran with *.f??
-  // extension and binaries). Set "requires_C_preprocessor = false" to match
-  // SgFile::initialization (deprecated).
   File.setDataPrototype("bool", "requires_C_preprocessor", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (8/19/2007): Added more options specific to Fortran support
-  // File.setDataPrototype         ( "bool", "fixedFormat", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
-  // File.setDataPrototype         ( "bool", "freeFormat", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
   File.setDataPrototype("SgFile::outputFormatOption_enum", "inputFormat",
                         "= SgFile::e_unknown_output_format",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -1339,11 +736,6 @@ void Grammar::setUpSupport() {
       "SgFile::outputFormatOption_enum", "backendCompileFormat",
       "= SgFile::e_unknown_output_format", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "fortran_implicit_none", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  // Liao, 10/28/2008: Support for OpenMP 3.0 model for C/C++ pragma, will use
-  // it for Fortran later on, changed fortran_openmp to openmp
   File.setDataPrototype("bool", "openmp", "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   // Liao, 5/31/2009: Only invoke the OpenMP C/C++ and Fortran directive parsers
@@ -1367,7 +759,6 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("bool", "openmp_processed", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-  // Liao, 3/12/2020: options to support OpenACC
   File.setDataPrototype("bool", "openacc", "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   File.setDataPrototype("bool", "openacc_parse_only", "= false",
@@ -1381,15 +772,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // Liao, 1/30/2014: Support for FAIL-SAFE resilience pragma
-  File.setDataPrototype("bool", "failsafe", "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (12/11/2007): Adds support for parser to output the parser rules to be
-  // called. For Fortran support in ROSE this corresponds to the "--dump" option
-  // in the Open Fortran Parser (OFP). this option has no effect.
-  File.setDataPrototype("bool", "output_parser_actions", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
   File.setDataPrototype("bool", "exit_after_parser", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -1398,11 +780,6 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("bool", "skip_parser", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-
-  // Operational options
-  // File.setDataPrototype         ( "bool", "skip_rose", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
 
   File.setDataPrototype("bool", "skip_transformation", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
@@ -1427,53 +804,13 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/14/2013): Added options to permit selection of either overloaded
-  // operator names or use of operator syntax for function calls in the unparsed
-  // code.  The default is to reproduce the same use as in the input code. These
-  // options permit agressive levels of testing of both extremes (and overrides
-  // the default behavior to reproduce the function call use as specified in the
-  // input code.
-  File.setDataPrototype("bool", "unparse_function_calls_using_operator_syntax",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "unparse_function_calls_using_operator_names",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/30/2008): Added support for tailoring the output of unparsed
-  // disassembled instructions
-  File.setDataPrototype("bool", "unparse_instruction_addresses", "= true",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "unparse_raw_memory_contents", "= true",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "unparse_binary_file_format", "= true",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/27/2007): Added support for simple translation using separately
-  // specified language unparser. this is supported for testing alternative
-  // language code generation, not for a faithful translation between languages
-  // (which would require translation of the AST to support langauge constructs
-  // not shared between C/C++ and Fortran (for example).  This is also how the
-  // Promela support should be provided, though this work only handles C (not
-  // C++, or Fortran) and only a subset of C, plus numerous translations are
-  // required (See Christian Iwainsky's thesis). File.setDataPrototype         (
-  // "SgFile::outputLanguageOption_enum", "outputLanguage", "=
-  // SgFile::e_default_output_language",
-  //                                 NO_CONSTRUCTOR_PARAMETER,
-  //                                 BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                                 NO_DELETE);
+  // Selecting an output language does not translate the AST's constructs
+  // between languages.
   File.setDataPrototype("SgFile::languageOption_enum", "outputLanguage",
                         "= SgFile::e_default_language",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (29/8/2017): Specification of input language (we will want to get this
-  // to match all of the get_Cxx_only flags and likely reimplement those
-  // functions to use this single enum). This is general work to support more
-  // languages.
   File.setDataPrototype("SgFile::languageOption_enum", "inputLanguage",
                         "= SgFile::e_default_language",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -1505,43 +842,13 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/2/2003): Added to support -E and -H options (calling the backend
-  // directly)
   File.setDataPrototype("bool", "useBackendOnly", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/12/2004): Added to support -c on compiler command line
   File.setDataPrototype("bool", "compileOnly", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (2/13/2004): Added to support saving the frontend command line
-  File.setDataPrototype("std::string", "savedFrontendCommandLine", "= \"\"",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (6/21/2005): Backend specific template option.  This might at a later
-  // date be abstracted out as a separate class with  backend independent
-  // interface to hide the detils of backend specific (if this is possible). for
-  // th moment we include these options directly since g++ is the development
-  // platform for ROSE.  Options supported in ROSE from g++ include:
-  // -fno-implicit-templates        (suppress output of any but explicitly
-  // instantiated templates) -fno-implicit-inline-templates (suppress output of
-  // any but explicitly instantiated inline templates) -frepo (Enable automatic
-  // template instantiation)
-  File.setDataPrototype("bool", "no_implicit_templates", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "no_implicit_inline_templates", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  // File.setDataPrototype("bool","repo", "= false",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-
-  // Turn this off to avoid error in copy function (strdup(char**) error)
-  //   File.setAutomaticGenerationOfCopyFunction(false);
 
   // DQ (4/20/2006): Permit skipping all comments and CPP directives (provides
   // faster processing) But this can not be used if generating code to be
@@ -1550,45 +857,19 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/19/2006): Added to permit optional collection of all comments from
-  // header files.
   File.setDataPrototype("bool", "collectAllCommentsAndDirectives", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/24/2019): Adding an option to support addition of CPP directives to
-  // the AST.  Currently only restricted to CPP directives, and may be extended
-  // to comments later. Default is false to preserve original ROSE AST behavior.
-  File.setDataPrototype("bool", "translateCommentsAndDirectivesIntoAST",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (5/2/2021): I think this should be a static data member (later).
-  // negara1 (07/08/2011): Added to permit optional header files unparsing.
   File.setDataPrototype("bool", "unparseHeaderFiles", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/7/2001) Added support for multiple files (save the preprocessor
-  //               directives and comments into the SgFile)
-  //               the ROSEAttributesListContainer represents all preprocessor
-  //               declarations and comments from each source file (and its
-  //               corresponding include files) (thus a list of lists of lists
-  //               of cpp directives and comments!!!)
-  File.setDataPrototype("ROSEAttributesListContainerPtr",
+  File.setDataPrototype("ROSEAttributesListContainer*",
                         "preprocessorDirectivesAndCommentsList", "= nullptr",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, DEF_DELETE);
+                        NO_TRAVERSAL, DEF_DELETE, CLONE_PTR);
 
-  // DQ (5/22/2005): Added support to record the file index to support multiple
-  // file handling File.setDataPrototype("int","fileNameIndex", "= 0",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
-
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. DQ (1/3/2006): Added attribute via
-  // ROSETTA (changed to pointer to AstAttributeMechanism) Modified
-  // implementation to only be at specific IR nodes.
   File.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                         "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
@@ -1597,74 +878,22 @@ void Grammar::setUpSupport() {
                             "../Grammar/Support.code");
   File.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT", "../Grammar/Support.code");
 
-  // Testing options
-  File.setDataPrototype("bool", "KCC_frontend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "new_frontend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // Older options (will be deprecated)
-  File.setDataPrototype("bool", "disable_sage_backend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("int", "testingLevel", "= -1", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "preinit_il", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "enable_cp_backend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-  // DQ (8/8/2006): Permit marking of the generated source code with "#define
-  // ROSE_GENERATED_CODE" option requested by Yarden at IBM.
   File.setDataPrototype("bool", "markGeneratedFiles", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/19/2006): Allow testing of ROSE using input that is expected to fail
-  // (return passed if test failed)
   File.setDataPrototype("bool", "negative_test", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/24/2006): Permit optional strict language handling (enforce ANSI.ISO
-  // standards)
   File.setDataPrototype("bool", "strict_language_handling", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // AS (9/29/2008): Added support for wave on command line
-
-  File.setDataPrototype("bool", "wave", "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (10/31/2006): Support for embedded color codes in the generated code
-  // from ROSE. Different values trigger embedded codes for different types of
-  // internal data (missing information, compiler generated code, etc.).
-  File.setDataPrototype("int", "embedColorCodesInGeneratedCode", "= 0",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (10/31/2006): Support for output of source position information for
-  // visualization of source position information (debugging support). different
-  // values report source position information about different sorts of languge
-  // constructs, statements, expressions, types, etc.
-  File.setDataPrototype("int", "generateSourcePositionCodes", "= 0",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (11/29/2006): Support for use of __cplusplus macro for C mode using
-  // source file with C++ filename extension. File.setDataPrototype         (
-  // "bool", "requires_cplusplus_macro", "= false",
-  //             CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
   File.setDataPrototype("bool", "sourceFileUsesCppFileExtension", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (8/11/2007): Support for Fortran and its flavors
   File.setDataPrototype("bool", "sourceFileUsesFortranFileExtension", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -1681,8 +910,6 @@ void Grammar::setUpSupport() {
                         "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/25/2016): Added initial support in command line handling for Fortran
-  // 2008 files.
   File.setDataPrototype("bool", "sourceFileUsesFortran2008FileExtension",
                         "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1690,40 +917,11 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("bool", "sourceFileUsesCoArrayFortranFileExtension",
                         "= false", NO_CONSTRUCTOR_PARAMETER,
                         BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  File.setDataPrototype("bool", "sourceFileTypeIsUnknown", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
   // DQ (9/26/2011): Added support to detect dangling pointers in ROSE
   // translators. This is not an expensive test, but it fails for isolated parts
   // of ROSE currently so it should be made optional at this early stage (before
   // it is made a default test in the AST consistency tests).
   File.setDataPrototype("int", "detect_dangling_pointers", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // Rasmussen (8/30/2020): Added experimental support for using the Flang
-  // parser for Fortran
-  File.setDataPrototype("bool", "experimental_flang_frontend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (2/3/2009): For a library archive, these are the name of the object
-  // files it contains. This information is obtained via "ar -vox <archive>",
-  // and saving and reading the list.
-  File.setDataPrototype("SgStringList", "libraryArchiveObjectFileNameList", "",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (2/3/2009): added boolean data member to record if this is a library
-  // archive.
-  File.setDataPrototype("bool", "isLibraryArchive", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (2/5/2009): added boolean data member to record if this is an object
-  // file being processed.
-  File.setDataPrototype("bool", "isObjectFile", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
@@ -1736,14 +934,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/30/2014): Support testing of unparsing using tokens with synthetic
-  // marking of statements to be transformations.  This is used the test the
-  // transition steps between unparsing from the AST vs. the token stream.
-  File.setDataPrototype("int", "unparse_tokens_testing", "= 0",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // Liao (12/15/2016): Unparse template from its AST.
   File.setDataPrototype("bool", "unparse_template_ast", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -1757,8 +947,6 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/17/2015): Adding multifile handling support for commandline
-  // generation.
   File.setDataPrototype("bool", "multifile_support", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -1770,26 +958,11 @@ void Grammar::setUpSupport() {
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // TV (11/27/2020): Whether or not to generate a graphviz representation of
-  // the Clang internal representation
   File.setDataPrototype("bool", "clang_il_to_graphviz", "= false",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
 
-  // TV (10/01/2018): ROSE-1424
-  File.setDataPrototype("bool", "no_optimize_flag_for_frontend", "= false",
-                        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (8/19/2019): Adding support to optimize the performance of the header
-  // file unarsing. Specifically we want to limit the collection of comments and
-  // CPP dirctives to a set determined as part of the unparsing, after we know
-  // what parts of the AST have been modified, but immediately before the
-  // unparsing of each file.
-  File.setDataPrototype("bool",
-                        "header_file_unparsing_optimization_source_file",
-                        "= false", NO_CONSTRUCTOR_PARAMETER,
-                        BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+  // Header files selected for unparsing collect their preprocessing records.
   File.setDataPrototype("bool",
                         "header_file_unparsing_optimization_header_file",
                         "= false", NO_CONSTRUCTOR_PARAMETER,
@@ -1807,48 +980,26 @@ void Grammar::setUpSupport() {
   // ******************************************************************************
   // ******************************************************************************
 
-  // DQ (4/30/2009): Redesigned the Graph IR node support in ROSE.
-
-  // Todo: Turn off the suport backward compatability
-  // Todo: Remove the AstAttributeMechanism* from SgGraphNode and SgGraphEdge
-  //       in favor of the same API, but implemented using a map of maps at
-  //       the SgGraph indexed by integer values.
-
-  // DQ (5/2/2009): This is put into rose_paths.h
   // ******************************************************************************
   //                                SgGraphNode
   // ******************************************************************************
 
-  // A node contains an index, name, and a pointer to an associated IR node in
-  // the AST (approximately 8 words; 4 from SgNode).
-
   GraphNode.setFunctionPrototype("HEADER_GRAPHNODE", "../Grammar/Support.code");
 
-  // An alternative might be to keep a hash_map<int,string> in the SgGraph (to
-  // keep the size small).
   GraphNode.setDataPrototype("std::string", "name", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // This provides a link between graph nodes and AST nodes.
-  // DQ (4/25/2009): The variable name should not also be the name of a type
-  // (allowed in C++ but bad style).
   GraphNode.setDataPrototype("SgNode*", "SgNode", "= nullptr",
                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/29/2009): Added storage of index as explicit value to enumerate the
-  // nodes.
   GraphNode.setDataPrototype("int", "index", "= -1", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // Internal static counter used to initialize the index value in each node.
   GraphNode.setDataPrototype("static int", "index_counter", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. This could be defined using a map of
-  // node attributes in the SgGraph class.
   GraphNode.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -1859,18 +1010,9 @@ void Grammar::setUpSupport() {
   GraphNode.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT",
                               "../Grammar/Support.code");
 
-  // tps : TODO : This will be eliminated because it is redundant with the
-  // AstAttributeMechanism.
-  GraphNode.setDataPrototype(
-      "std::map<int, std::string>", "properties", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // ******************************************************************************
   //                                SgGraphEdge
   // ******************************************************************************
-
-  // An edge contains an index, a name, and two SgGraphNode pointers
-  // (approximately 9 words; 4 from SgNode).
 
   GraphEdge.setFunctionPrototype("HEADER_GRAPHEDGE", "../Grammar/Support.code");
   GraphEdge.setDataPrototype("SgGraphNode*", "node_A", "= nullptr",
@@ -1883,19 +1025,13 @@ void Grammar::setUpSupport() {
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (4/29/2009): Added storage of index as explicit value to enumerate the
-  // edges.
   GraphEdge.setDataPrototype("int", "index", "= -1", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // Internal static counter used to initialize the index value in each node.
   GraphEdge.setDataPrototype("static int", "index_counter", "",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. This could be defined using a map of
-  // edge attributes in the SgGraph class.
   GraphEdge.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                              BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -1905,53 +1041,12 @@ void Grammar::setUpSupport() {
   GraphEdge.setFunctionSource("SOURCE_ATTRIBUTE_SUPPORT",
                               "../Grammar/Support.code");
 
-  // DQ (8/18/2008): NOTE: "SgIntegerStringMapPtrList" does not cause ROSETTA to
-  // generate the correct code, where as "std::map<int, std::string>" appears to
-  // work better. GraphEdge.setDataPrototype("std::string","type","= \"\"",
-  //                       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                       NO_TRAVERSAL, NO_DELETE);
-  // GraphEdge.setDataPrototype("int","graph_id", "= 0",
-  //                       CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-  //                       NO_TRAVERSAL, NO_DELETE);
-  // GraphEdge.setDataPrototype("std::map<int, std::string>","properties", "",
-  //                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                       NO_TRAVERSAL, NO_DELETE);
-  // GraphEdge.setDataPrototype("SgIntegerStringMapPtrList","properties", "",
-  //                       NO_CONSTRUCTOR_PARAMETER,
-  //                       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                       NO_DELETE);
-
-  // tps : todo : remove me
-  GraphEdge.setDataPrototype(
-      "std::map<int, std::string>", "properties", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
   // ******************************************************************************
   //                      Edge Types derived from SgGraphEdge
   // ******************************************************************************
 
   DirectedGraphEdge.setFunctionPrototype("HEADER_DIRECTED_GRAPH_EDGE",
                                          "../Grammar/Support.code");
-  UndirectedGraphEdge.setFunctionPrototype("HEADER_UNDIRECTED_GRAPH_EDGE",
-                                           "../Grammar/Support.code");
-
-  // These IR nodes might be eliminated in favor of just a function to generate
-  // the same level of support using a combination of two maps in SgGraph.
-
-#ifdef ROSE_USING_GRAPH_IR_NODES_FOR_BACKWARD_COMPATABILITY
-  GraphNodeList.setFunctionPrototype("HEADER_GRAPH_NODE_LIST",
-                                     "../Grammar/Support.code");
-  GraphNodeList.setDataPrototype(
-      "rose_graph_hash_multimap", "nodes", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  GraphEdgeList.setFunctionPrototype("HEADER_GRAPH_EDGE_LIST",
-                                     "../Grammar/Support.code");
-  GraphEdgeList.setDataPrototype("rose_graph_node_edge_hash_multimap", "edges",
-                                 "", NO_CONSTRUCTOR_PARAMETER,
-                                 BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                 NO_DELETE);
-#endif
 
   // ******************************************************************************
   //                                  SgGraph
@@ -1959,9 +1054,6 @@ void Grammar::setUpSupport() {
 
   Graph.setPredeclarationString("HEADER_GRAPH_PREDECLARATION",
                                 "../Grammar/Support.code");
-  Graph.setPostdeclarationString("HEADER_GRAPH_POSTDECLARATION",
-                                 "../Grammar/Support.code");
-
   Graph.setFunctionPrototype("HEADER_GRAPH", "../Grammar/Support.code");
   Graph.setDataPrototype("std::string", "name", "= \"\"", CONSTRUCTOR_PARAMETER,
                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -1977,43 +1069,20 @@ void Grammar::setUpSupport() {
                          NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
                          NO_TRAVERSAL, NO_DELETE);
   Graph.setDataPrototype("rose_graph_string_integer_hash_multimap",
-                         "string_to_node_index_multimap", "",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
-  Graph.setDataPrototype("rose_graph_string_integer_hash_multimap",
                          "string_to_edge_index_multimap", "",
                          NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
                          NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (5/3/2009): Added support for multimap access to edges using a specific
-  // map (index --> SgGraphEdge*).
-  Graph.setDataPrototype("rose_graph_integer_edge_hash_multimap",
-                         "node_index_to_edge_multimap", "",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (4/29/2009): Added storage of index as explicit value to enumerate the
-  // graph objects. Graph.setDataPrototype("int","graph_id", "= -1",
-  //                       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-  //                       NO_TRAVERSAL, NO_DELETE);
   Graph.setDataPrototype("int", "index", "= -1", NO_CONSTRUCTOR_PARAMETER,
                          BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // Internal static counter used to initialize the index value in each node.
   Graph.setDataPrototype("static int", "index_counter", "",
                          NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                          NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. Attribute support for SgGraph
   Graph.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                          "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                          BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE,
                          CLONE_PTR);
-
-  // tps : todo : remove me
-  Graph.setDataPrototype("std::map<int, std::string>", "properties", "",
-                         NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS,
-                         NO_TRAVERSAL, NO_DELETE);
 
   Graph.setFunctionPrototype("HEADER_ATTRIBUTE_SUPPORT",
                              "../Grammar/Support.code");
@@ -2024,37 +1093,20 @@ void Grammar::setUpSupport() {
   //                          Graphs derived from SgGraph
   // ******************************************************************************
 
-  IncidenceUndirectedGraph.setFunctionPrototype(
-      "HEADER_INCIDENCE_UNDIRECTED_GRAPH", "../Grammar/Support.code");
-  IncidenceUndirectedGraph.setFunctionSource(
-      "SOURCE_INCIDENCE_UNDIRECTED_GRAPH", "../Grammar/Support.code");
-
   IncidenceDirectedGraph.setFunctionPrototype("HEADER_INCIDENCE_DIRECTED_GRAPH",
                                               "../Grammar/Support.code");
   IncidenceDirectedGraph.setFunctionSource("SOURCE_INCIDENCE_DIRECTED_GRAPH",
                                            "../Grammar/Support.code");
 
-  // This is the more uniform integer to SgGraphEdge version of
-  // rose_graph_node_edge_hash_multimap.
   IncidenceDirectedGraph.setDataPrototype(
       "rose_graph_integer_edge_hash_multimap",
       "node_index_to_edge_multimap_edgesOut", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // This is the more uniform integer to SgGraphEdge version of
-  // rose_graph_node_edge_hash_multimap. The derived class "BidirectionalGraph"
-  // might use this map differently (with different semantics).
   IncidenceDirectedGraph.setDataPrototype(
       "rose_graph_integer_edge_hash_multimap",
       "node_index_to_edge_multimap_edgesIn", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (5/3/2009): Not clear if this should add a new hash_multimap or if it
-  // just chages the semantics of the hash_multimaps in the dirived class
-  // (IncidenceDirectedGraph). This class should have a different API that make
-  // is specific to bidirectional incidence graph use.
-  BidirectionalGraph.setFunctionPrototype("HEADER_BIDIRECTIONAL_GRAPH",
-                                          "../Grammar/Support.code");
 
   // ******************************************************************
   // ************************* Project IR Node ************************
@@ -2067,13 +1119,21 @@ void Grammar::setUpSupport() {
   // SgFileList is an IR node and this is a data member pointer of that type.
   // Allow Project constructor to be automatically generated, see gitlab #126
   // [Rasmussen 10.05.06]
+  // Runtime state belongs to one project; copies start fresh.
+  Project.setDataPrototype("MutationState*", "mutationState", "= nullptr",
+                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+  Project.setMemberDestructor("mutationState", "release_mutationState();");
+  Project.setDataPrototype("CallGraphState*", "callGraphState", "= nullptr",
+                           NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                           NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
+  Project.setMemberDestructor("callGraphState", "release_callGraphState();");
+
   Project.setDataPrototype("SgFileList*", "fileList_ptr", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
                            OPTIONAL_TRAVERSAL_MEMBER);
 
-  // Project.setDataPrototype("std::list<std::string>","originalCommandLineArgumentList",
-  // "", DQ (9/28/2022): Use BUILD_LIST_ACCESS_FUNCTIONS for list access.
   Project.setDataPrototype("SgStringList", "originalCommandLineArgumentList",
                            "", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -2096,8 +1156,6 @@ void Grammar::setUpSupport() {
   File.setDataPrototype("int", "frontendErrorCode", "= 0",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
-  // Liao 4/26/2017, enable exception/signal handling of midend processing of
-  // each file
   File.setDataPrototype("int", "midendErrorCode", "= 0",
                         NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE);
@@ -2136,8 +1194,6 @@ void Grammar::setUpSupport() {
                            BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                            NO_DELETE);
 
-  // DQ (10/26/2009): After discussion with Peter, this data member should be
-  // moved to the SgFile (or SgSourceFile) object.
   Project.setDataPrototype("SgStringList", "includeDirectorySpecifierList", "",
                            NO_CONSTRUCTOR_PARAMETER,
                            BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -2150,10 +1206,6 @@ void Grammar::setUpSupport() {
       "SgStringList", "macroSpecifierList", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (10/26/2009): After discussion with Peter, this data member should be
-  // moved to the SgFile (or SgSourceFile) object. DQ (1/13/2009): Added support
-  // for GNU -include (for pre inclusion of files) and -isystem (for
-  // preinclusion of directories to be searched) options.
   Project.setDataPrototype(
       "SgStringList", "preincludeFileList", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2161,30 +1213,7 @@ void Grammar::setUpSupport() {
       "SgStringList", "preincludeDirectoryList", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/12/2004): Added to support -c on compiler command line
   Project.setDataPrototype("bool", "compileOnly", "= false",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-
-  // AS (9/29/2008): Added support for wave on command line
-  Project.setDataPrototype("bool", "wave", "= false", NO_CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (2/21/2004): Added to support prelinker on compiler command line
-  Project.setDataPrototype("bool", "prelink", "= false",
-                           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (5/20/2005): Added to support template instantiation control from
-  // command line
-  Project.setDataPrototype("SgProject::template_instantiation_enum",
-                           "template_instantiation_mode",
-                           "= SgProject::e_unknown", NO_CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (7/7/2005): Added to support AST merging (specified using several
-  // parameters).
-  Project.setDataPrototype("bool", "ast_merge", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
@@ -2201,10 +1230,6 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/1/2015): Build the access functions, but don't let the set_* access
-  // function set the "p_isModified" flag. DQ (1/3/2006): Added attribute via
-  // ROSETTA (changed to pointer to AstAttributeMechanism) Modified
-  // implementation to only be at specific IR nodes.
   Project.setDataPrototype("AstAttributeMechanism*", "attributeMechanism",
                            "= nullptr", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
@@ -2222,19 +1247,7 @@ void Grammar::setUpSupport() {
                            "= \"\"", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/16/2008): Added include/exclude path lists for use internally by
-  // translators. For example in Compass this is the basis of a mechanism to
-  // exclude processing of header files from specific directorys (where messages
-  // about the properties of the code there are not meaningful since they cannot
-  // be changed by the user). These are ment to be used by ROSE translators and
-  // as a result have unspecificed semantics in ROSE, it is just a common
-  // requirement of many uses of ROSE.
-  // Project.setDataPrototype("bool","lookForIncludePaths", "= false",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // Project.setDataPrototype("bool","lookForExcludePaths", "= false",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Translators define the semantics of these include/exclude filters.
   Project.setDataPrototype("SgStringList", "includePathList", "",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -2247,17 +1260,6 @@ void Grammar::setUpSupport() {
   Project.setDataPrototype("SgStringList", "excludeFileList", "",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-  // DQ (2/4/2009): Moved this to the SgProject since it applies to the command
-  // line and all files. DQ (1/9/2008): This permits a file to be marked
-  // explicitly as a binary file and avoids confusion when processing object
-  // files within linking (where no source file is present).
-  Project.setDataPrototype(
-      "bool", "binary_only", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (5/1/2009): Requested feature by Andreas (controls use of SQLite
-  // database for analysis). This permits multiple files to be handled
-  // separately in that program analysis which supports it.
   Project.setDataPrototype("std::string", "dataBaseFilename", "= \"\"",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -2269,7 +1271,7 @@ void Grammar::setUpSupport() {
   // number of interfaces internally, so don't change it yet.
   Project.setDataPrototype("SgDirectoryList*", "directoryList", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
+                           NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
   // DQ (4/7/2010): Support for C, C++, and Fortran. The SgProject needs this
   // state so that it can save information from the command line when there are
@@ -2301,13 +1303,6 @@ void Grammar::setUpSupport() {
 
   Project.setDataPrototype("bool", "Fortran_only", "= false",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-
-  Project.setDataPrototype("std::list<std::string>", "Fortran_ofp_jvm_options",
-                           "", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, NO_DELETE);
-  Project.setDataPrototype("std::list<std::string>", "Fortran_ofp_classpath",
-                           "", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
   // Liao 6/29/2012: support using rose translator to act like a linker wrapper
@@ -2347,44 +1342,26 @@ void Grammar::setUpSupport() {
       "= SgProject::e_original_expressions_only", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/12/2013): Added a global scope spanning files for multi-file
-  // handling.
+  // The project owns its cross-file symbol scope. A project copy must own an
+  // independent scope; sharing it lets destruction of either project invalidate
+  // the other's symbol lookup.
   Project.setDataPrototype("SgGlobal*", "globalScopeAcrossFiles", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
-                           NO_TRAVERSAL, DEF_DELETE);
+                           NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
 
-  // DQ (9/14/2013): Adding option to copy the location of the input file as the
-  // position for the generated output file. This is now demonstrated to be
-  // important in the case of ffmpeg-1.2 for the file "file.c" where it is
-  // specified as "libavutil/file.c" on the command line and we by default put
-  // it into the current directory (top level directory in the directory
-  // structure).  But it is a subtle and difficult to reproduce error that the
-  // generated file will not compile properly from the top level directory (even
-  // when the "-I<absolute path>/libavutil" is specified). We need an option to
-  // put the generated file back into the original directory where the input
-  // source files is located, so that when the generated rose_*.c file is
-  // compiled (with the backend compiler, e.g. gcc) it can use the identical
-  // rules for resolving head files as it would have for the original input file
-  // (had it been compiled using the backend compiler instead).
   Project.setDataPrototype("bool", "unparse_in_same_directory_as_input_file",
                            "= false", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/19/2014): This option "-S" is required for some build systems (e.g.
-  // valgrind).
   Project.setDataPrototype("bool",
                            "stop_after_compilation_do_not_assemble_file",
                            "= false", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/20/2014): This option "-u" or "-undefined" is required for some build
-  // systems (e.g. valgrind).
   Project.setDataPrototype("std::string", "gnuOptionForUndefinedSymbol",
                            "= \"\"", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/20/2014): This option "-m32" over-rides the 64-bit mode on 64-bit
-  // environments and is required for some build systems (e.g. valgrind).
   Project.setDataPrototype("bool", "mode_32_bit", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -2399,21 +1376,6 @@ void Grammar::setUpSupport() {
   // code to an existing file to be an error if it results in a different file.
   // Output of an identifal file is not an error.
   Project.setDataPrototype("bool", "noclobber_if_different_output_file",
-                           "= false", NO_CONSTRUCTOR_PARAMETER,
-                           BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (1/31/2014): Added optimization for a few wireshark files. This
-  // post-processing is not required for C, but is only usefule for C++ (name
-  // qualification).  Still it is only a performance problem on a handfull of
-  // files in wireshark application. So we need to provide an option to supress.
-  // This is currently being investigated further. not that this option is
-  // inconsistant with OpenMP usage, but not a problem for any other C code (the
-  // C++ aspect of this could also be fixed). This is related to a problem when
-  // the original expression trees were a part of the AST traversal, but this
-  // issue was fixed in 2012 (or so). There is as a result, less need for this
-  // post-processing phase, except that it appears to be relied upon by the
-  // OpenMP and C++ support (both of which can be fixed).
-  Project.setDataPrototype("bool", "suppressConstantFoldingPostProcessing",
                            "= false", NO_CONSTRUCTOR_PARAMETER,
                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
@@ -2432,15 +1394,10 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (9/15/2018): Added support for a report on the internal use of header
-  // file unparsing. This is to support the header file unparsing when used with
-  // and without the token based unparsing.
   Project.setDataPrototype("bool", "reportOnHeaderFileUnparsing", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (11/6/2018): Added to support unparsing of headers and source files for
-  // whole applications having multiple levels of directory structure.
   Project.setDataPrototype("std::string", "applicationRootDirectory", "= \"\"",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
@@ -2455,60 +1412,20 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/12/2020): Added additional list to support extra paths to support
-  // directories where modified header files are unparsed. This list is added to
-  // support extra directories added to support transformed header files. And
-  // additional extraIncludeDirectorySpecifierList is available on the
-  // SgSourceFile IR node to support header file directories that are source
-  // file specific.
-  // Project.setDataPrototype("SgStringList","extraIncludeDirectorySpecifierList",
-  // "",
-  //                       NO_CONSTRUCTOR_PARAMETER,
-  //                       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                       NO_DELETE);
-
-  // DQ (10/10/2020): These paths are used in the construction of the backend
-  // compiler's command line. Some include paths have be be specified before, so
-  // that unparsed versions of header files will be seen instead of the original
-  // header file. And some include paths must be speficied after the users
-  // include paths so that they will not interfer with the users include files.
-  // For example: the unit test requires that the DMTCP header file path come
-  // last else some applications (e.g. wget) will find the wrong config.h header
-  // file (which is in both wget's directory paths and also within the DMTCP
-  // header files.  So we need to be more specific and specify two list of extra
-  // include directory paths, one to be inserted before the user's header file
-  // paths and one after the user's header file paths.  Different tools will
-  // have different requirements. DQ (10/10/2020): List of extra include paths
-  // to be inserted before the users include paths.
+  // Place generated-header paths before user paths and tool-specific paths
+  // after.
   Project.setDataPrototype(
       "SgStringList", "extraIncludeDirectorySpecifierBeforeList", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // DQ (10/10/2020): List of extra include paths to be inserted after the users
-  // include paths.
   Project.setDataPrototype(
       "SgStringList", "extraIncludeDirectorySpecifierAfterList", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // DQ (4/6/2020): Now that we can support only unparsing modified header files
-  // the tests of header file unparsing (which don't modifie any headers) are
-  // not as useful as before.  So we need a flag to force setting all header
-  // files to be unparsed so that the testing will be more meaningful (and
-  // similar to before the support to only unparse the modified header files).
-  // Project.setDataPrototype("bool","unparseAllHeaderFiles", "= false",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-
   Project.setDataPrototype("bool", "skip_post_processing", "= false",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (4/4/2020): Adding support for unparse headers feature specific
-  // diagnostics. This has been changed to b a static function.
-  // Project.setDataPrototype("int","unparseHeaderFilesDebug", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
 
   Attribute.setDataPrototype("std::string", "name", "= \"\"",
                              CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
@@ -2522,18 +1439,21 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   ModifierNodes.setDataPrototype(
       "SgModifierNodes*", "next", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, CLONE_TREE);
   ModifierNodes.setAutomaticGenerationOfConstructor(false);
+  ModifierNodes.setDestructorPrologue(R"(
+    SgNode *owner = get_parent();
+    if (SgNode::isLiveNode(owner)) {
+      if (auto *type = isSgType(owner)) {
+        if (type->get_modifiers() == this)
+          type->set_modifiers(nullptr);
+      } else if (auto *previous = isSgModifierNodes(owner)) {
+        if (previous->get_next() == this)
+          previous->set_next(nullptr);
+      }
+    }
+)");
 
-  // DQ (4/6/2004): New nodes (use "modifiers" if multiple values can be set,
-  //                use "modifier" if only one value can be set).
-  // DQ (4/19/2004): New modifiers (C++ grammar calls them specifiers)
-  //    ConstVolatileModifier, StorageModifier, AccessModifier,
-  //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-  //    TypeModifier, ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
-  // DQ (4/19/2004): Commented out override of construction of constructors
-  // xxxModifier.setAutomaticGenerationOfConstructor(false);
-  // xxxModifier.setAutomaticGenerationOfDestructor (false);
   ConstVolatileModifier.setDataPrototype(
       "SgConstVolatileModifier::cv_modifier_enum", "modifier",
       "= SgConstVolatileModifier::e_unknown", NO_CONSTRUCTOR_PARAMETER,
@@ -2543,8 +1463,6 @@ void Grammar::setUpSupport() {
       "= SgStorageModifier::e_unknown", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // But added to support use by Gouchun Shi (UIUC).  Code generation support
-  // also added in unparser.
   StorageModifier.setDataPrototype(
       "bool", "thread_local_storage", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2562,15 +1480,9 @@ void Grammar::setUpSupport() {
   FunctionModifier.setDataPrototype(
       "SgBitVector", "modifierVector", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (1/3/2009): Added support for GNU constructor priority (added paramter
-  // "N" as in "void f __attribute__((constructor (N)));")
   FunctionModifier.setDataPrototype(
       "unsigned long int", "gnu_attribute_constructor_destructor_priority",
       "= 0", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
-  FunctionModifier.setDataPrototype(
-      "std::string", "gnu_attribute_named_weak_reference", "=\"\"",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
   FunctionModifier.setDataPrototype("std::string", "gnu_attribute_named_alias",
                                     "=\"\"", NO_CONSTRUCTOR_PARAMETER,
@@ -2581,15 +1493,13 @@ void Grammar::setUpSupport() {
       "gnu_attribute_nonnull_parameter_index_lists", "",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
-  // TV (05/03/2010):
   FunctionModifier.setDataPrototype(
       "SgType *", "opencl_vec_type", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   FunctionModifier.setDataPrototype(
       "SgFunctionModifier::opencl_work_group_size_t", "opencl_work_group_size",
-      "", //"= {1, 1, 1}",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      "", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
   SpecialFunctionModifier.setDataPrototype(
@@ -2632,33 +1542,11 @@ void Grammar::setUpSupport() {
       "SgElaboratedTypeModifier", "elaboratedTypeModifier", ".reset()",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (12/4/2007): GNU extension machine mode.
-  // There are a lot of these and type codes can be used to specify them.
-  TypeModifier.setDataPrototype(
-      "SgTypeModifier::gnu_extension_machine_mode_enum",
-      "gnu_extension_machine_mode",
-      "= SgTypeModifier::e_gnu_extension_machine_mode_unspecified",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (3/1/2013): To support letting zero being an acceptable value, we want
-  // to make the default value -1. To do this we need for this value to be
-  // signed, since the range of values is so small it can be a short value. DQ
-  // (1/3/2009): Added support for alignment specfication using gnu attributes
-  // (zero is used as the default to imply no alignment specification).
-  // TypeModifier.setDataPrototype("unsigned long int",
-  // "gnu_attribute_alignment", "= -1",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
-  // TypeModifier.setDataPrototype("short", "gnu_attribute_alignment", "= -1",
-  //            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //            NO_DELETE);
+  // Zero is a valid alignment; -1 means no alignment was specified.
   TypeModifier.setDataPrototype(
       "int", "gnu_attribute_alignment", "= -1", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (1/3/2009): This is used for funtion types only. I reserve values less
-  // than zero (-1 implies that this was not set, default value). Note that the
-  // standard might require this to be unsigned, but I
   TypeModifier.setDataPrototype(
       "long", "gnu_attribute_sentinel", "= -1", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2689,8 +1577,6 @@ void Grammar::setUpSupport() {
       "SgAccessModifier", "accessModifier", "", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // MK: I moved the following data member declarations from
-  // ../Grammar/Support.code to this position:
   File_Info.setDataPrototype("int", "file_id", "= NULL_FILE_ID",
                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
@@ -2698,9 +1584,6 @@ void Grammar::setUpSupport() {
                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   File_Info.setDataPrototype("int", "col", "= 0", NO_CONSTRUCTOR_PARAMETER,
                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // File_Info.setDataPrototype("bool","isPartOfTransformation","= false",
-  //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
 
   // We need a way to classify statements as being from a transformation, or a
   // if from a transformation either representing the transformation,
@@ -2730,29 +1613,8 @@ void Grammar::setUpSupport() {
                              "= 0", NO_CONSTRUCTOR_PARAMETER,
                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (2/27/2019): I want to add line number support, and use this to test if
-  // we can support CPP directives and comments added to alll shared IR nodes
-  // from all files.  If this works then we can consider a better design that
-  // would use a different data structure. DQ (2/26/2019): We need to use
-  // BUILD_LIST_ACCESS_FUNCTIONS else we return a copy of the list and only
-  // modify the copy instead of the list stored in the IR node. MK (8/2/05) :
-  // This set contains a list of file ids. During unparsing, if we encounter
-  //               a node with this Sg_File_Info object, we only want to unparse
-  //               this file if the file we are currently unparsing is in this
-  //               list. NOTE: this set should be empty unless the node is
-  //               marked as shared
-  //! This set contains a list of all file ids for which the accompanying node
-  //! should be unparsed
-  // File_Info.setDataPrototype("std::set<int>","fileIDsToUnparse","",
-  // File_Info.setDataPrototype("SgFileIdList","fileIDsToUnparse","",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // File_Info.setDataPrototype("SgFileIdList","fileIDsToUnparse","",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
-  // File_Info.setDataPrototype("SgFileIdList","fileIDsToUnparse","",
-  //        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Shared nodes are unparsed only in the listed files. The list is otherwise
+  // empty; list accessors must update the stored list rather than a copy.
   File_Info.setDataPrototype(
       "SgFileIdList", "fileIDsToUnparse", "", NO_CONSTRUCTOR_PARAMETER,
       BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -2761,73 +1623,22 @@ void Grammar::setUpSupport() {
                              BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                              NO_DELETE);
 
-  // I can't see where this is being used or that it needs to be here (these are
-  // used in unparser!) File_Info.setDataPrototype("int","referenceCount","= 0",
-  //                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-  //                            NO_TRAVERSAL, NO_DELETE);
-  // File_Info.setDataPrototype("static int","cur_line","= 0",
-  //                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-  //                            NO_TRAVERSAL, NO_DELETE);
-  // File_Info.setDataPrototype("static std::string","cur_file","= \"\"",
-  //                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-  //                            NO_TRAVERSAL, NO_DELETE);
-  File_Info.setPostdeclarationString("HEADER_UNPARSE_POSTDECLARATION",
-                                     "../Grammar/Support.code");
-
-  // DQ (2/23/2010): Added static access function for static data members
-  // (ROSETTA generates only not statuc access functions).
-  // File_Info.setDataPrototype("static std::map<int,
-  // std::string>","fileidtoname_map","",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
-  // File_Info.setDataPrototype("static std::map<std::string,
-  // int>","nametofileid_map","",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   File_Info.setDataPrototype("static std::map<int, std::string>",
                              "fileidtoname_map", "", NO_CONSTRUCTOR_PARAMETER,
                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   File_Info.setDataPrototype("static std::map<std::string, int>",
                              "nametofileid_map", "", NO_CONSTRUCTOR_PARAMETER,
                              NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // File_Info.setDataPrototype("static int","max_file_id","",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
 
-  // Note that using this feature can make the compilation for the header
-  // file sensitive to the ordering of the classes within the output file
-  Name.setPostdeclarationString("HEADER_NAME_POSTDECLARATION",
-                                "../Grammar/Support.code");
   Name.setAutomaticGenerationOfConstructor(false);
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // Name.setAutomaticGenerationOfDestructor (false);
 
   SymbolTable.setPredeclarationString("HEADER_SYMBOL_TABLE_PREDECLARATION",
                                       "../Grammar/Support.code");
-  SymbolTable.setPostdeclarationString("HEADER_SYMBOL_TABLE_POSTDECLARATION",
-                                       "../Grammar/Support.code");
   SymbolTable.setAutomaticGenerationOfConstructor(false);
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // SymbolTable.setAutomaticGenerationOfDestructor (false);
 
-  FuncDecl_attr.setPostdeclarationString(
-      "HEADER_FUNCTION_DECLARATION_ATTRIBUTE_POSTDECLARATION",
-      "../Grammar/Support.code");
   FuncDecl_attr.setAutomaticGenerationOfConstructor(false);
-  ClassDecl_attr.setPostdeclarationString(
-      "HEADER_CLASS_DECLARATION_ATTRIBUTE_POSTDECLARATION",
-      "../Grammar/Support.code");
   ClassDecl_attr.setAutomaticGenerationOfConstructor(false);
-  // TemplateInstDecl_attr.setPostdeclarationString
-  // ("HEADER_TEMPLATE_INSTANTIATION_DECLARATION_ATTRIBUTE_POSTDECLARATION",
-  //                                             "../Grammar/Support.code");
-  // TemplateInstDecl_attr.setAutomaticGenerationOfConstructor(false);
 
-  // MK: I moved the following data member declarations from
-  // ../Grammar/Support.code to this position:
   Options.setDataPrototype("std::ostream*", "default_output", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, DEF_DELETE);
@@ -2847,7 +1658,6 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/12/2004): Added to support templates
   TemplateParameter.setFunctionPrototype("HEADER_TEMPLATE_PARAMETER",
                                          "../Grammar/Support.code");
   TemplateParameter.setDataPrototype(
@@ -2856,14 +1666,10 @@ void Grammar::setUpSupport() {
       NO_TRAVERSAL, NO_DELETE);
   TemplateParameter.setDataPrototype(
       "SgType*", "type", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   TemplateParameter.setDataPrototype(
       "SgType*", "defaultTypeParameter", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  TemplateParameter.setDataPrototype(
-      "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
-      OPTIONAL_TRAVERSAL_MEMBER);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
   TemplateParameter.setDataPrototype(
       "SgExpression*", "typeConstraint", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
@@ -2880,29 +1686,37 @@ void Grammar::setUpSupport() {
   TemplateParameter.setDataPrototype(
       "SgExpression*", "defaultExpressionParameter", "= nullptr",
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_AFTER_OWNER_CONSTRUCTION);
   TemplateParameter.setDataPrototype(
       "SgDeclarationStatement*", "templateDeclaration", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // A template-template parameter always refers to its attached semantic
-  // identity through templateDeclaration.  Redeclaration-only syntax surfaces
-  // can spell a different nested template header; preserve that independently
-  // instead of manufacturing a second detached semantic identity.
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
+  // Redeclaration syntax can spell a different nested template header;
+  // preserve it independently from the semantic template identity.
   TemplateParameter.setDataPrototype(
       "SgTemplateDeclaration*", "sourceSpelledTemplateDeclaration", "= nullptr",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
       NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
   TemplateParameter.setDataPrototype(
-      "SgDeclarationStatement*", "defaultTemplateDeclarationParameter",
-      "= nullptr", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+      "SgTemplateArgument*", "defaultTemplateArgument", "= nullptr",
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_AFTER_OWNER_CONSTRUCTION);
 
-  // DQ (11/21/2011): template parameters can be "int U = 42" in which case "U"
-  // needs to be an initialized name (see test2011_157.C).
   TemplateParameter.setDataPrototype(
       "SgInitializedName*", "initializedName", "= nullptr",
       CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE,
-      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
+      COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER, DIRECT_TRAVERSAL_ACCESS,
+      COPY_AFTER_OWNER_CONSTRUCTION);
+  TemplateParameter.setDataPrototype("SgTemplateParameter*",
+                                     "canonicalNonTypeParameter", "= nullptr",
+                                     CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                     NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
+  TemplateParameter.setDataPrototype(
+      "std::optional<canonical_source_identity>", "canonical_source_identity",
+      "= std::nullopt", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   TemplateParameter.setDataPrototype(
       "SgTemplateParameter::template_parameter_keyword_enum",
       "templateParameterKeyword", "= keyword_unspecified",
@@ -2926,7 +1740,7 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   TemplateArgument.setDataPrototype(
       "SgType*", "type", "= nullptr", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_REFERENCE);
 
   // The canonical semantic type remains in p_type.  When Clang provides a
   // TemplateArgumentLoc, this separate edge records the exact source-spelled
@@ -2934,7 +1748,7 @@ void Grammar::setUpSupport() {
   // that the unparser is required to emit.
   TemplateArgument.setDataPrototype(
       "SgType*", "sourceSpelledType", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, DELETE_IF_OWNED, CLONE_TREE);
   // Preserve the qualifier written on the exact type argument use.  Presence
   // distinguishes an explicitly unqualified source spelling from missing
   // producer data; sourceSpelledType continues to own dependent qualifier
@@ -2952,160 +1766,55 @@ void Grammar::setUpSupport() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_LIST_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // Could be an array bound (integer) or some unknown type
   TemplateArgument.setDataPrototype(
       "SgExpression*", "expression", "= nullptr", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, COPY_DATA,
       OPTIONAL_TRAVERSAL_MEMBER);
 
-  // DQ (12/22/2011): The new design has a SgTemplateClassDeclaration derived
-  // from a SgClassDeclaration (and the same for SgTemplateFunctionDeclaration,
-  // etc.) So we have to change this to support the new design. Now we have to
-  // use a common base class which would be the SgDeclarationStatement. DQ: Case
-  // of a template specialization (and partial specialization) not handled here
-  // (not clear on how to do this).  This is a semantic identity edge to a
-  // declaration owned by its lexical scope, not syntax owned by the argument.
+  // This semantic identity edge refers to a declaration owned by its lexical
+  // scope, not syntax owned by the argument.
   // A copy transaction remaps the edge only when that declaration is copied
   // independently through its real structural owner.
   TemplateArgument.setDataPrototype(
       "SgDeclarationStatement*", "templateDeclaration", "= nullptr",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_REFERENCE);
 
-  // DQ (8/10/2013): template arguments can be a SgInitializedName or an
-  // expression when it is a non-type (see test2013_303.C). I think we want to
-  // eventually make this a constructor argument, but not at first.
-  TemplateArgument.setDataPrototype(
-      "SgInitializedName*", "initializedName", "= nullptr",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL,
-      NO_DELETE, COPY_DATA, OPTIONAL_TRAVERSAL_MEMBER);
-
-  // DQ (2/27/2005): Support for recognition of default template arguments
-  // (required to fix bug demonstrated in test2005_12.C)
   TemplateArgument.setDataPrototype(
       "bool", "explicitlySpecified", "= true", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/14/2011): Added support for name qualification.
-  // TemplateArgument.setDataPrototype ( "int", "name_qualification_length", "=
-  // 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
+  // Qualification accessors must not mark the AST as modified.
   TemplateArgument.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/14/2011): Added information required for new name qualification support.
-  // TemplateArgument.setDataPrototype("bool","type_elaboration_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/14/2011): Added information required for new name qualification support.
-  // TemplateArgument.setDataPrototype("bool","global_qualification_required","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "global_qualification_required", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // DQ (5/4/2013): These variables are needed to reproduce the way that we
-  // handle types in function parameters and allow the same technique to be used
-  // for template arguments. This needs to be handled using a template function
-  // where we will refactor the relevent code that can be shared between the
-  // function parameter handling in function
-  // unparseFunctionParameterDeclaration() and the template argument handling in
-  // function unparseTemplateArgument().
-
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (12/20/2006): Record if global name qualification is required on the type.
-  // See test2003_01.C for an example of where this is required. Note that for a
-  // variable declaration (SgVariableDeclaration) this information is recorded
-  // directly on the SgVariableDeclaration node.  This use on the
-  // InitializedName is reserved for function parameters, and I am not sure if
-  // it is useful anywhere else. TemplateArgument.setDataPrototype("bool",
-  // "requiresGlobalNameQualificationOnType", "= false",
-  //             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //             NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "requiresGlobalNameQualificationOnType", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added support for name qualification on the type referenced by
-  // the InitializedName (not the SgInitializedName itself since it might be
-  // referenced from several places, I think). TemplateArgument.setDataPrototype
-  // ( "int", "name_qualification_length_for_type", "= 0",
-  //        NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //        NO_DELETE);
   TemplateArgument.setDataPrototype(
       "int", "name_qualification_length_for_type", "= 0",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateArgument.setDataPrototype("bool","type_elaboration_required_for_type","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "type_elaboration_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (6/11/2015): Skip building of access functions (because it sets the
-  // isModified flag, not wanted for the name qualification step). DQ
-  // (5/12/2011): Added information required for new name qualification support.
-  // TemplateArgument.setDataPrototype("bool","global_qualification_required_for_type","=
-  // false",
-  //                            NO_CONSTRUCTOR_PARAMETER,
-  //                            BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //                            NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "global_qualification_required_for_type", "= false",
       NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // TV (10/05/2018): create a double-link chain of instances of a template
-  // argument instead of sharing (ROSE-1431)
-  TemplateArgument.setDataPrototype("SgTemplateArgument*", "previous_instance",
-                                    "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                    NO_DELETE);
-  TemplateArgument.setDataPrototype("SgTemplateArgument*", "next_instance",
-                                    "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                    BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                    NO_DELETE);
-
-  // DQ (2/10/2019): Need to be able to specify function parameters that are a
-  // part of C++11 parameter pack associated with variadic templates.
-  // TemplateArgument.setDataPrototype     ( "bool", "is_parameter_pack", "=
-  // false",
-  //           NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-  //           NO_DELETE);
   TemplateArgument.setDataPrototype(
       "bool", "is_pack_element", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
-  // DQ (3/10/2018): I think these IR nodes are not longer used.  If so then we
-  // could remove them. DQ (4/2/2007): Added list as separate IR node to support
-  // mixing of lists and data members in IR nodes in ROSETTA.
-  TemplateArgumentList.setFunctionPrototype("HEADER_TEMPLATE_ARGUMENT_LIST",
-                                            "../Grammar/Support.code");
-  TemplateArgumentList.setDataPrototype(
-      "SgTemplateArgumentPtrList", "args", "", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
   TemplateParameterList.setFunctionPrototype("HEADER_TEMPLATE_PARAMETER_LIST",
                                              "../Grammar/Support.code");
   TemplateParameterList.setDataPrototype(
@@ -3118,22 +1827,15 @@ void Grammar::setUpSupport() {
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
-  // This function exists everywhere (at each node of the grammar)!
-
   NameGroup.setFunctionPrototype("HEADER_NAME_GROUP",
                                  "../Grammar/Support.code");
-  NameGroup.setDataPrototype("std::string", "group_name", "=\"\"",
-                             NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+  NameGroup.setDataPrototype("std::string", "group_name", "",
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                              NO_TRAVERSAL, NO_DELETE);
-  // DQ (11/30/2007): Later make this a SgExpression* so that we can use it for
-  // the associate list and so that it more accurately reflects the namelist
-  // semantics.
-  NameGroup.setDataPrototype("SgStringList", "name_list", "",
-                             NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                             NO_TRAVERSAL, NO_DELETE);
+  NameGroup.setDataPrototype("SgVarRefExpPtrList", "objects", "",
+                             CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                             DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
 
-  DimensionObject.setFunctionPrototype("HEADER_DIMENSION_OBJECT",
-                                       "../Grammar/Support.code");
   DimensionObject.setDataPrototype(
       "SgInitializedName*", "array", "= nullptr", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3144,63 +1846,50 @@ void Grammar::setUpSupport() {
   DataStatementGroup.setFunctionPrototype("HEADER_DATA_STATEMENT_GROUP",
                                           "../Grammar/Support.code");
   DataStatementGroup.setDataPrototype(
-      "SgDataStatementObjectPtrList", "object_list", "",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgDataStatementObjectPtrList", "object_list", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
   DataStatementGroup.setDataPrototype(
-      "SgDataStatementValuePtrList", "value_list", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      "SgDataStatementValuePtrList", "value_list", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
 
   DataStatementObject.setFunctionPrototype("HEADER_DATA_STATEMENT_OBJECT",
                                            "../Grammar/Support.code");
+  DataStatementObject.setFunctionSource("SOURCE_DATA_STATEMENT_OBJECT",
+                                        "../Grammar/Support.code");
   DataStatementObject.setDataPrototype(
-      "SgExprListExp*", "variableReference_list", "= nullptr",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-      NO_DELETE);
+      "SgExprListExp*", "variableReference_list", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE,
+      REQUIRED_TRAVERSAL_MEMBER);
 
   DataStatementValue.setFunctionPrototype("HEADER_DATA_STATEMENT_VALUE",
                                           "../Grammar/Support.code");
   DataStatementValue.setDataPrototype(
-      "SgDataStatementValue::data_statement_value_enum",
-      "data_initialization_format", "= SgDataStatementValue::e_unknown",
-      CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // These can even be multi-dimensional implied do loops (yuk!)
-  DataStatementValue.setDataPrototype("SgExprListExp*", "initializer_list",
-                                      "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                      NO_DELETE);
-  DataStatementValue.setDataPrototype("SgExpression*", "repeat_expression",
-                                      "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                      NO_DELETE);
-  DataStatementValue.setDataPrototype("SgExpression*", "constant_expression",
-                                      "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
-                                      NO_DELETE);
+      "SgExpression*", "constant_expression", "", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE,
+      REQUIRED_TRAVERSAL_MEMBER);
+  DataStatementValue.setDataPrototype(
+      "SgExpression*", "repeat_expression", "= nullptr", CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_TREE,
+      OPTIONAL_TRAVERSAL_MEMBER);
 
-  // Support for Fortran format statement.  I have provided a separate object
-  // because I think the grammar for this construct is sufficently complex that
-  // we might want a more sophisticated implementation in the IR later.  for now
-  // I just capture the information as a string literal in an expression.
   FormatItem.setFunctionPrototype("HEADER_FORMAT_ITEM",
                                   "../Grammar/Support.code");
-  FormatItem.setDataPrototype("int", "repeat_specification", "= -1",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+  FormatItem.setFunctionSource("SOURCE_FORMAT_ITEM", "../Grammar/Support.code");
+  FormatItem.setDataPrototype("SgFormatItem::Descriptor", "descriptor", "",
+                              CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
-  FormatItem.setDataPrototype("SgExpression*", "data", "= nullptr",
-                              NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+  FormatItem.setDataPrototype("std::optional<std::uint64_t>", "repeat_count",
+                              "", CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE);
-  FormatItem.setDataPrototype("SgFormatItemList*", "format_item_list",
-                              "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                              BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-
-  // DQ (12/23/2007): Added list of SgFormatItem objects
+  FormatItem.setDataPrototype("SgFormatItemList*", "format_item_list", "",
+                              CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                              DEF_TRAVERSAL, NO_DELETE, CLONE_TREE,
+                              OPTIONAL_TRAVERSAL_MEMBER);
   FormatItemList.setFunctionPrototype("HEADER_FORMAT_ITEM_LIST",
                                       "../Grammar/Support.code");
   FormatItemList.setDataPrototype("SgFormatItemPtrList", "format_item_list", "",
-                                  NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                                  NO_TRAVERSAL, NO_DELETE);
-
-  // TV (05/03/2010): OpenCL Access Mode Support
+                                  CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                                  DEF_TRAVERSAL, NO_DELETE, CLONE_TREE);
 
   OpenclAccessModeModifier.setFunctionPrototype(
       "HEADER_OPENCL_ACCESS_MODE_MODIFIER", "../Grammar/Support.code");
@@ -3211,43 +1900,14 @@ void Grammar::setUpSupport() {
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   // ***********************************************************************
-  // ***********************************************************************
-  //                       Source Code Definition
-  // ***********************************************************************
-  // ***********************************************************************
-
-  // Source code for Node
-  // Node.setSubTreeFunctionSource ( "SOURCE", "../Grammar/Common.code" );
-  // Node.setFunctionSource( "SOURCE", "../Grammar/Node.code");
-  // Node.setFunctionSource( "SOURCE_ROOT_NODE_ERROR_FUNCTION",
-  // "../Grammar/Node.code"); Node.setSubTreeFunctionSource(
-  // "SOURCE_ERROR_FUNCTION", "../Grammar/Node.code");
-  // Node.excludeFunctionSource( "SOURCE_ERROR_FUNCTION",
-  // "../Grammar/Node.code"); Node.editSubstitute("CONSTRUCTOR_BODY"," ");
-  // Source code for LocatedNode
-  // LocatedNode.setFunctionSource( "SOURCE", "../Grammar/LocatedNode.code");
-  // LocatedNode.editSubstitute("CONSTRUCTOR_BODY"," ");
-
-  Support.setFunctionSource("SOURCE", "../Grammar/Support.code");
-
   SymbolTable.setFunctionSource("SOURCE_SYMBOL_TABLE",
                                 "../Grammar/Support.code");
 
-  // DQ (7/22/2010):
   TypeTable.setFunctionSource("SOURCE_TYPE_TABLE", "../Grammar/Support.code");
 
   Name.setFunctionSource("SOURCE_NAME", "../Grammar/Support.code");
-  Attribute.setFunctionSource("SOURCE_ATTRIBUTE", "../Grammar/Support.code");
   Pragma.setFunctionSource("SOURCE_PRAGMA", "../Grammar/Support.code");
-  BitAttribute.setFunctionSource("SOURCE_BIT_ATTRIBUTE",
-                                 "../Grammar/Support.code");
 
-  // DQ (4/6/2004): Deprecated ModifierNodes node and new separate TypeModifier
-  // and StorageModifier nodes DQ (4/19/2004): New modifiers (C++ grammar calls
-  // them specifiers)
-  //    ConstVolatileModifier, StorageModifier, AccessModifier,
-  //    FunctionModifier, SpecialFunctionModifier, DeclarationModifier,
-  //    TypeModifier, ElaboratedTypeModifier, LinkageModifier, BaseClassModifier
   Modifier.setFunctionSource("SOURCE_MODIFIER", "../Grammar/Support.code");
   ModifierNodes.setFunctionSource("SOURCE_MODIFIER_NODES",
                                   "../Grammar/Support.code");
@@ -3272,35 +1932,16 @@ void Grammar::setUpSupport() {
   BaseClassModifier.setFunctionSource("SOURCE_BASECLASS_MODIFIER",
                                       "../Grammar/Support.code");
 
-  // Place declarations of friend output operators after the BaseClassModifier
-  // Modifier.setPostdeclarationString   ("SOURCE_MODIFIER_POSTDECLARATION",
-  // "../Grammar/Support.code");
   File_Info.setFunctionSource("SOURCE_FILE_INFORMATION",
                               "../Grammar/Support.code");
 
   Directory.setFunctionSource("SOURCE_APPLICATION_DIRECTORY",
                               "../Grammar/Support.code");
-  DirectoryList.setFunctionSource("SOURCE_APPLICATION_DIRECTORY_LIST",
-                                  "../Grammar/Support.code");
   File.setFunctionSource("SOURCE_APPLICATION_FILE", "../Grammar/Support.code");
   SourceFile.setFunctionSource("SOURCE_APPLICATION_SOURCE_FILE",
                                "../Grammar/Support.code");
-  FileList.setFunctionSource("SOURCE_APPLICATION_FILE_LIST",
-                             "../Grammar/Support.code");
-  UnknownFile.setFunctionSource("SOURCE_APPLICATION_UNKNOWN_FILE",
-                                "../Grammar/Support.code");
-
-  // DQ (9/18/2-18): Adding support for the include file tree into the
-  // SgSourceFile.
-  IncludeFile.setFunctionSource("SOURCE_INCLUDE_FILE",
-                                "../Grammar/Support.code");
-
-  HeaderFileReport.setFunctionSource("SOURCE_HEADER_FILE_REPORT",
-                                     "../Grammar/Support.code");
-
   Project.setFunctionSource("SOURCE_APPLICATION_PROJECT",
                             "../Grammar/Support.code");
-  Options.setFunctionSource("SOURCE_OPTIONS", "../Grammar/Support.code");
   Unparse_Info.setFunctionSource("SOURCE_UNPARSE_INFO",
                                  "../Grammar/Support.code");
 
@@ -3310,49 +1951,27 @@ void Grammar::setUpSupport() {
   NonrealBaseClass.setFunctionSource("SOURCE_NONREAL_BASE_CLASS",
                                      "../Grammar/Support.code");
 
-  // DQ (12/19/2005): Support for explicitly specified qualified names
-  QualifiedName.setFunctionSource("SOURCE_QUALIFIED_NAME",
-                                  "../Grammar/Support.code");
-
   FuncDecl_attr.setFunctionSource("SOURCE_FUNCTION_DECLARATION_ATTRIBUTE",
                                   "../Grammar/Support.code");
   ClassDecl_attr.setFunctionSource("SOURCE_CLASS_DECLARATION_ATTRIBUTE",
                                    "../Grammar/Support.code");
-  // TemplateInstDecl_attr.setFunctionSource  (
-  // "SOURCE_TEMPLATE_INSTANTIATION_DECLARATION_ATTRIBUTE",
-  // "../Grammar/Support.code");
-
-  TypedefSeq.setFunctionPrototype("HEADER_TYPEDEF_SEQ",
-                                  "../Grammar/Support.code");
-  TypedefSeq.setFunctionSource("SOURCE_TYPEDEF_SEQ", "../Grammar/Support.code");
-
-  // DQ (9/1/2004): Since we call this constructor we should build it
-  // TypedefSeq.setAutomaticGenerationOfConstructor(false);
-  TypedefSeq.setAutomaticGenerationOfConstructor(true);
-
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // TypedefSeq.setAutomaticGenerationOfDestructor (true);
-  TypedefSeq.setDataPrototype("SgTypePtrList", "typedefs", "",
-                              NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                              NO_TRAVERSAL, NO_DELETE);
 
   FunctionParameterTypeList.setFunctionPrototype(
       "HEADER_FUNCTION_PARAMETER_TYPE_LIST", "../Grammar/Support.code");
   FunctionParameterTypeList.setFunctionSource(
       "SOURCE_FUNCTION_PARAMETER_TYPE_LIST", "../Grammar/Support.code");
   FunctionParameterTypeList.setAutomaticGenerationOfConstructor(false);
-  // DQ (12/4/2004): Now we automate the generation of the destructors
-  // FunctionParameterTypeList.setAutomaticGenerationOfDestructor (true);
-  FunctionParameterTypeList.setDataPrototype(
-      "SgTypePtrList", "arguments", "", NO_CONSTRUCTOR_PARAMETER,
-      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   FunctionTypeArgument.setFunctionPrototype("HEADER_FUNCTION_TYPE_ARGUMENT",
                                             "../Grammar/Support.code");
   FunctionTypeArgument.setFunctionSource("SOURCE_FUNCTION_TYPE_ARGUMENT",
                                          "../Grammar/Support.code");
   FunctionTypeArgument.setDataPrototype(
       "SgType*", "type", "= NULL", CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-      NO_TRAVERSAL, NO_DELETE);
+      NO_TRAVERSAL, NO_DELETE, CLONE_TREE);
+  FunctionTypeArgument.setMemberDestructor("type", R"(
+    if (SgNode::isLiveNode(p_type) && p_type->get_parent() == this)
+      p_type->set_parent(nullptr);
+)");
   FunctionTypeArgument.setDataPrototype(
       "bool", "is_pack_expansion", "= false", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
@@ -3375,70 +1994,62 @@ void Grammar::setUpSupport() {
   // One OpenMP iterator-specifier.  The named fields encode the five grammar
   // roles directly; clauses own lists of these nodes structurally instead of
   // hiding expressions in nested raw containers.
+  OmpIteratorDefinition.setFunctionPrototype("HEADER_OMP_ITERATOR_DEFINITION",
+                                             "../Grammar/Support.code");
+  OmpIteratorDefinition.setFunctionSource("SOURCE_OMP_ITERATOR_DEFINITION",
+                                          "../Grammar/Support.code");
   OmpIteratorDefinition.setDataPrototype(
-      "SgTypeExpression*", "iterator_type", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgTypeExpression*", "iterator_type", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
   OmpIteratorDefinition.setDataPrototype(
-      "SgOmpNameExpression*", "iterator_name", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgOmpNameExpression*", "iterator_name", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
   OmpIteratorDefinition.setDataPrototype(
-      "SgExpression*", "begin", "= NULL", CONSTRUCTOR_PARAMETER,
+      "SgExpression*", "begin", "", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
   OmpIteratorDefinition.setDataPrototype(
-      "SgExpression*", "end", "= NULL", CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
-      OPTIONAL_TRAVERSAL_MEMBER);
+      "SgExpression*", "end", "", CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+      DEF_TRAVERSAL, NO_DELETE, CLONE_PTR, OPTIONAL_TRAVERSAL_MEMBER);
   OmpIteratorDefinition.setDataPrototype(
       "SgExpression*", "step", "= NULL", CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE, CLONE_PTR,
       OPTIONAL_TRAVERSAL_MEMBER);
   FunctionParameterTypeList.setDataPrototype(
+      "SgFunctionParameterScope*", "source_parameter_scope", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE,
+      CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
+  FunctionParameterTypeList.setDataPrototype(
+      "SgFunctionParameterList*", "source_parameters", "= nullptr",
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE,
+      CLONE_TREE, OPTIONAL_TRAVERSAL_MEMBER);
+  FunctionParameterTypeList.setDataPrototype(
+      "SgTypePtrList", "arguments", "", NO_CONSTRUCTOR_PARAMETER,
+      NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, CLONE_TREE);
+  FunctionParameterTypeList.setDataPrototype(
       "SgFunctionTypeArgumentPtrList", "argument_qualification_use_sites", "",
-      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, NO_DELETE);
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, DEF_TRAVERSAL, DEF_DELETE);
 
-  // DQ (3/12/2004): Added for template support
   TemplateParameter.setFunctionSource("SOURCE_TEMPLATE_PARAMETER",
                                       "../Grammar/Support.code");
   TemplateArgument.setFunctionSource("SOURCE_TEMPLATE_ARGUMENT",
                                      "../Grammar/Support.code");
 
-  // DQ (4/2/2007): Added list as separate IR node to support mixing of lists
-  // and data members in IR nodes in ROSETTA.
-  TemplateParameterList.setFunctionSource("SOURCE_TEMPLATE_PARAMETER_LIST",
-                                          "../Grammar/Support.code");
-  TemplateArgumentList.setFunctionSource("SOURCE_TEMPLATE_ARGUMENT_LIST",
-                                         "../Grammar/Support.code");
-
-  // tps (08/13/2007): Added specific code to graph entities
   Graph.setFunctionSource("SOURCE_GRAPH", "../Grammar/Support.code");
   GraphNode.setFunctionSource("SOURCE_GRAPHNODE", "../Grammar/Support.code");
   GraphEdge.setFunctionSource("SOURCE_GRAPHEDGE", "../Grammar/Support.code");
 
-  DirectedGraphEdge.setFunctionSource("SOURCE_DIRECTED_GRAPH_EDGE",
-                                      "../Grammar/Support.code");
-
-  // DQ (11/19/2007): Added support for Fortran namelist statement
   NameGroup.setFunctionSource("SOURCE_NAME_GROUP", "../Grammar/Support.code");
 
-  DimensionObject.setFunctionSource("SOURCE_DIMENSION_OBJECT",
-                                    "../Grammar/Support.code");
-
-  // DQ (11/20/2007): Added support for Fortran data statement
   DataStatementGroup.setFunctionSource("SOURCE_DATA_STATEMENT_GROUP",
                                        "../Grammar/Support.code");
-  DataStatementObject.setFunctionSource("SOURCE_DATA_STATEMENT_OBJECT",
-                                        "../Grammar/Support.code");
   DataStatementValue.setFunctionSource("SOURCE_DATA_STATEMENT_VALUE",
                                        "../Grammar/Support.code");
 
-  FormatItem.setFunctionSource("SOURCE_FORMAT_ITEM", "../Grammar/Support.code");
   FormatItemList.setFunctionSource("SOURCE_FORMAT_ITEM_LIST",
                                    "../Grammar/Support.code");
-
-  // TV (05/03/2010): OpenCL Access Mode Support
 
   OpenclAccessModeModifier.setFunctionSource(
       "SOURCE_OPENCL_ACCESS_MODE_MODIFIER", "../Grammar/Support.code");

@@ -49,7 +49,6 @@ case "$mode" in
       flex \
       g++ \
       gdb \
-      ghostscript \
       git \
       graphviz \
       lld-"${llvm_version}" \
@@ -59,7 +58,6 @@ case "$mode" in
       libflang-"${llvm_version}"-dev \
       libhpdf-dev \
       libomp-"${llvm_version}"-dev \
-      libtool \
       llvm-"${llvm_version}" \
       llvm-"${llvm_version}"-dev \
       mold \

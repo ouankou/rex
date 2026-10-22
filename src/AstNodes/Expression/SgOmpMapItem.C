@@ -1,24 +1,5 @@
+#include "AstNodes/Expression/OpenMPModifierValidation.h"
 #include "sage3basic.h"
-
-namespace {
-
-bool validPolicy(const SgOmpMapDistDataPolicy *policy) {
-  if (policy == nullptr) {
-    return false;
-  }
-  switch (policy->get_policy()) {
-  case SgOmpClause::e_omp_map_dist_data_duplicate:
-    return policy->get_expression() == nullptr;
-  case SgOmpClause::e_omp_map_dist_data_block:
-  case SgOmpClause::e_omp_map_dist_data_cyclic:
-    return policy->get_expression() == nullptr ||
-           policy->get_expression()->get_parent() == policy;
-  default:
-    return false;
-  }
-}
-
-} // namespace
 
 SgType *SgOmpMapItem::get_type() const {
   fprintf(stderr,
@@ -30,7 +11,9 @@ SgType *SgOmpMapItem::get_type() const {
 int SgOmpMapItem::replace_expression(SgExpression *old_expression,
                                      SgExpression *new_expression) {
   if (old_expression == nullptr || new_expression == nullptr ||
-      get_expression() == nullptr || get_expression()->get_parent() != this) {
+      get_expression() == nullptr || get_expression()->get_parent() != this ||
+      isSgOmpMapItem(get_expression()) != nullptr ||
+      isSgOmpMapDistDataPolicy(get_expression()) != nullptr) {
     fprintf(stderr,
             "REX_AST_INVARIANT[openmp-map-item-replacement]: map item or "
             "replacement is invalid\n");
@@ -55,9 +38,11 @@ int SgOmpMapItem::replace_expression(SgExpression *old_expression,
   }
 
   SgOmpMapDistDataPolicyPtrList &policies = get_policies();
+  SgOmpMapDistDataPolicy *old_policy = isSgOmpMapDistDataPolicy(old_expression);
+  ROSE_ASSERT(std::count(policies.begin(), policies.end(), old_policy) <= 1);
   for (SgOmpMapDistDataPolicy *&policy : policies) {
     if (policy == nullptr || policy->get_parent() != this ||
-        !validPolicy(policy)) {
+        !Rose::OpenMP::Detail::validMapDistDataPolicyPayload(policy)) {
       fprintf(stderr,
               "REX_AST_INVARIANT[openmp-map-item-replacement]: map item has "
               "a malformed or incorrectly owned policy\n");
@@ -72,7 +57,7 @@ int SgOmpMapItem::replace_expression(SgExpression *old_expression,
     SgOmpMapDistDataPolicy *replacement =
         isSgOmpMapDistDataPolicy(new_expression);
     if (replacement == nullptr || replacement->get_parent() != nullptr ||
-        !validPolicy(replacement)) {
+        !Rose::OpenMP::Detail::validMapDistDataPolicyPayload(replacement)) {
       fprintf(stderr, "REX_AST_INVARIANT[openmp-map-item-replacement]: policy "
                       "replacement is not a valid unowned policy\n");
       ROSE_ABORT();
