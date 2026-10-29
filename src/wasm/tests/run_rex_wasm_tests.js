@@ -11,8 +11,8 @@ const cases = [
     filename : "driver_resource_contract.c",
     source : `#include <stddef.h>
 
-#if !defined(__clang_major__) || __clang_major__ != 22
-#error "REX WASM must use the configured LLVM 22 in-process frontend"
+#if !defined(__clang_major__) || __clang_major__ != 23
+#error "REX WASM must use the configured LLVM 23 in-process frontend"
 #endif
 
 int main(void) {

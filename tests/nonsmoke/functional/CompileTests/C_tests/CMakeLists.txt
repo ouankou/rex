@@ -1216,6 +1216,15 @@ endif()
 if(_rex_c_tests_processor MATCHES "^(aarch64|arm64|riscv64|loongarch64|loong64)$")
   # Clang rejects volatile va_list on these targets.
   list(APPEND C_TESTCODES_NEGATIVE test2015_106.c)
+  set(_volatile_va_list_type "void *volatile")
+  if(_rex_c_tests_processor MATCHES "^(aarch64|arm64)$")
+    set(_volatile_va_list_type "volatile __builtin_va_list")
+  endif()
+  set(_volatile_va_list_diagnostic
+    "error: binding reference of type '__builtin_va_list' to value of type 'volatile va_list' (aka '${_volatile_va_list_type}') drops 'volatile' qualifier")
+  rex_register_clang_frontend_negative_diagnostic(
+    "${_volatile_va_list_diagnostic}"
+    C_tests/test2015_106.c)
 endif()
 list(REMOVE_ITEM C_TESTCODES ${C_TESTCODES_NEGATIVE})
 
@@ -1248,13 +1257,9 @@ set_tests_properties(
 
 foreach(file_to_test ${C_TESTCODES_NEGATIVE})
   if(file_to_test STREQUAL "test2015_106.c")
-    set(_volatile_va_list_type "void *volatile")
-    if(_rex_c_tests_processor MATCHES "^(aarch64|arm64)$")
-      set(_volatile_va_list_type "volatile __builtin_va_list")
-    endif()
     compile_exact_negative_test(
       ${file_to_test} "C_tests"
-      "test2015_106.c:13:25: error: binding reference of type '__builtin_va_list' to value of type 'volatile va_list' (aka '${_volatile_va_list_type}') drops 'volatile' qualifier")
+      "test2015_106.c:13:25: ${_volatile_va_list_diagnostic}")
   elseif(file_to_test STREQUAL "test2017_02.c")
     compile_exact_negative_test(
       ${file_to_test} "C_tests"

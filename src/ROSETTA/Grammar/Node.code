@@ -41,6 +41,7 @@ HEADER_NODE_PREDECLARATION_START
 #include "ROSE_DEPRECATED.h"
 
 
+#include <memory>
 #include <unordered_map>
 
 #include <unordered_set>
@@ -542,6 +543,10 @@ private:
 public:
   // STL map type
   typedef std::map<const SgNode *, SgNode *> copiedNodeMapType;
+  using copiedTypeReplacementMapType =
+      std::unordered_map<const SgNode *, SgNode *>;
+  using copiedTypeReplacementSnapshot =
+      std::shared_ptr<const copiedTypeReplacementMapType>;
   using copiedPreprocessingMapType =
       std::map<const PreprocessingInfo *, PreprocessingInfo *>;
   typedef std::set<const SgNode *> originalNodeSetType;
@@ -583,6 +588,18 @@ private:
   // without scanning the entire transaction for each copied node.
   originalNodeMapType originalNodeMap;
   void removeOriginalNodePair(const SgNode *original, const SgNode *copy);
+
+  // The pair mutators also index the two subsets that type materialization
+  // seeds from, so a materialization never rescans every copied node (which
+  // made whole-file copies quadratic).  The type index is copy-on-write: a
+  // materialization holds an immutable snapshot of it, and a mutation made
+  // while a snapshot is alive detaches the index first.
+  std::shared_ptr<copiedTypeReplacementMapType> copiedTypeReplacements =
+      std::make_shared<copiedTypeReplacementMapType>();
+  std::unordered_set<const SgNode *> copiedFortranSourceNames;
+  copiedTypeReplacementMapType &writableCopiedTypeReplacements();
+  void indexCopiedNodePair(const SgNode *key, SgNode *value);
+  void unindexCopiedNodePair(const SgNode *key);
   enum class ReferenceTargetKind { ExactNode, PlannedScope };
   using ReferenceBinding = std::function<void(SgNode *, ReferenceTargetKind)>;
   std::map<const SgNode *, std::vector<ReferenceBinding>> pendingReferences;
@@ -684,6 +701,16 @@ public:
     ROSE_ASSERT(copiedPreprocessingMap.emplace(original, copy).second);
   }
   const originalNodeSetType &get_originalNodesForCopy(const SgNode *copy) const;
+  //! Immutable snapshot of every non-identity type pair in the copied-node
+  //! map; later pairs are not visible through it.
+  copiedTypeReplacementSnapshot snapshotCopiedTypeReplacements() const {
+    return copiedTypeReplacements;
+  }
+  //! Copied SgInitializedName sources that carry Fortran source-type syntax.
+  const std::unordered_set<const SgNode *> &
+  get_copiedFortranSourceNames() const {
+    return copiedFortranSourceNames;
+  }
   supersededNodeSetType &get_supersededNodeCopies() {
     return supersededNodeCopies;
   }
@@ -698,6 +725,8 @@ public:
     copiedNodeMap.clear();
     copiedPreprocessingMap.clear();
     originalNodeMap.clear();
+    copiedTypeReplacements = std::make_shared<copiedTypeReplacementMapType>();
+    copiedFortranSourceNames.clear();
     pendingReferences.clear();
     supersededNodeCopies.clear();
     activeFixupNodePairs.clear();
@@ -1507,10 +1536,41 @@ std::string $CLASSNAME::unparseToCompleteString() {
   return globalUnparseToString(this, &info);
 }
 
+SgCopyHelp::copiedTypeReplacementMapType &
+SgCopyHelp::writableCopiedTypeReplacements() {
+  if (copiedTypeReplacements.use_count() != 1) {
+    copiedTypeReplacements =
+        std::make_shared<copiedTypeReplacementMapType>(*copiedTypeReplacements);
+  }
+  return *copiedTypeReplacements;
+}
+
+void SgCopyHelp::indexCopiedNodePair(const SgNode *key, SgNode *value) {
+  unindexCopiedNodePair(key);
+  if (key == value) {
+    return;
+  }
+  if (isSgType(key) != nullptr) {
+    ROSE_ASSERT(isSgType(value) != nullptr);
+    writableCopiedTypeReplacements().emplace(key, value);
+  } else if (const auto *name = isSgInitializedName(key);
+             name != nullptr && name->get_fortran_source_type() != nullptr) {
+    copiedFortranSourceNames.insert(name);
+  }
+}
+
+void SgCopyHelp::unindexCopiedNodePair(const SgNode *key) {
+  if (copiedTypeReplacements->count(key) != 0) {
+    writableCopiedTypeReplacements().erase(key);
+  }
+  copiedFortranSourceNames.erase(key);
+}
+
 void SgCopyHelp::insertCopiedNodePair(const SgNode *key, SgNode *value) {
   if (copiedNodeMap.emplace(key, value).second) {
     const bool inserted = originalNodeMap[value].insert(key).second;
     ROSE_ASSERT(inserted);
+    indexCopiedNodePair(key, value);
     const SgNode *sourceOwner = key->get_parent();
     const auto owner = copiedNodeMap.find(sourceOwner);
     const bool pendingParameterScope =
@@ -1652,6 +1712,7 @@ void SgCopyHelp::assignCopiedNodePair(const SgNode *key, SgNode *value) {
     existing->second = value;
     const bool inserted = originalNodeMap[value].insert(key).second;
     ROSE_ASSERT(inserted);
+    indexCopiedNodePair(key, value);
   }
 }
 
@@ -1662,6 +1723,7 @@ size_t SgCopyHelp::eraseCopiedNodePair(const SgNode *key) {
   }
   removeOriginalNodePair(key, existing->second);
   copiedNodeMap.erase(existing);
+  unindexCopiedNodePair(key);
   return 1;
 }
 

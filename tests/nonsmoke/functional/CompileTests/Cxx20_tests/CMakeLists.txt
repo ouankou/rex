@@ -145,7 +145,7 @@ set(CXX20_NEGATIVE_TESTCODES
   test2020_56.C
   test2020_59.C
   test2020_66.C
-  # Clang 22 rejects the original as an ambiguous call in C++20 mode.
+  # Clang 23 rejects the original as an ambiguous call in C++20 mode.
   test2020_93.C
 )
 set(CXX20_POSITIVE_TESTCODES ${CXX20_TESTCODES})

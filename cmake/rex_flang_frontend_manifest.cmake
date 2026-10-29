@@ -1,4 +1,4 @@
-# Required installed artifacts for the LLVM 22 Flang parsing, semantic analysis
+# Required installed artifacts for the LLVM 23 Flang parsing, semantic analysis
 # and expression-evaluation frontend. FIR/MLIR lowering is outside this inventory.
 # Shared by normal configuration and the build script's CMake preflight.
 set(REX_FLANG_FRONTEND_LIBRARIES
@@ -28,5 +28,13 @@ set(REX_FLANG_FRONTEND_HEADERS
   flang/Support/LangOptions.h
   flang/Support/OpenMP-features.h
   flang/Support/default-kinds.h
-  flang/omp_lib.h
+)
+
+# Files the frontend requires in the Flang driver's target-specific intrinsic
+# module directory, <resource-dir>/finclude/flang/<triple>.
+set(REX_FLANG_INTRINSIC_FILES
+  __fortran_builtins.mod
+  iso_c_binding.mod
+  omp_lib.h
+  omp_lib.mod
 )

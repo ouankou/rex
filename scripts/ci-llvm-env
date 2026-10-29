@@ -9,9 +9,9 @@ if (( $# > 1 )); then
   return 2
 fi
 
-llvm_version="${1:-${LLVM_VERSION:-22}}"
-if [[ "${llvm_version}" != "22" ]]; then
-  echo "ci-llvm-env: REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'" >&2
+llvm_version="${1:-${LLVM_VERSION:-23}}"
+if [[ "${llvm_version}" != "23" ]]; then
+  echo "ci-llvm-env: REX is pinned to LLVM/Clang major 23; requested '${llvm_version}'" >&2
   return 2
 fi
 llvm_root="${LLVM_ROOT:-/usr/lib/llvm-${llvm_version}}"
@@ -26,17 +26,17 @@ if [ ! -d "${llvm_root}" ]; then
 fi
 if [[ ! -s "${llvm_root}/lib/cmake/llvm/LLVMConfig.cmake" ]] ||
    [[ ! -s "${llvm_root}/lib/cmake/clang/ClangConfig.cmake" ]] ||
-   [[ ! -s "${llvm_root}/lib/clang/22/include/stddef.h" ]] ||
-   [[ ! -s "${llvm_root}/lib/clang/22/include/omp.h" ]] ||
+   [[ ! -s "${llvm_root}/lib/clang/23/include/stddef.h" ]] ||
+   [[ ! -s "${llvm_root}/lib/clang/23/include/omp.h" ]] ||
    [[ ! -x "${llvm_root}/bin/llvm-config" ]]; then
-  echo "ci-llvm-env: ${llvm_root} is not an exact LLVM 22 installation" >&2
+  echo "ci-llvm-env: ${llvm_root} is not an exact LLVM 23 installation" >&2
   return 2
 fi
 llvm_config_version="$("${llvm_root}/bin/llvm-config" --version)" || {
   echo "ci-llvm-env: cannot query LLVM version from ${llvm_root}" >&2
   return 2
 }
-if [[ ! "${llvm_config_version}" =~ ^22[.][0-9]+[.][0-9]+[A-Za-z0-9.+-]*$ ]]; then
+if [[ ! "${llvm_config_version}" =~ ^23[.][0-9]+[.][0-9]+[A-Za-z0-9.+-]*$ ]]; then
   echo "ci-llvm-env: ${llvm_root} reports unsupported LLVM version '${llvm_config_version}'" >&2
   return 2
 fi
@@ -49,4 +49,4 @@ export Clang_ROOT="${llvm_root}"
 export LLVM_DIR="${llvm_root}/lib/cmake/llvm"
 export Clang_DIR="${llvm_root}/lib/cmake/clang"
 export LLVM_NATIVE_TOOL_DIR="${llvm_root}/bin"
-export REX_WASM_OMP_INCLUDE_DIR="${llvm_root}/lib/clang/22/include"
+export REX_WASM_OMP_INCLUDE_DIR="${llvm_root}/lib/clang/23/include"

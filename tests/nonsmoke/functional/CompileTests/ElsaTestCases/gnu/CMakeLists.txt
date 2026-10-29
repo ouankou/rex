@@ -17,7 +17,7 @@ set(ELSATEST_GNU_GNU89_C_TESTCODES
   c0001.c)
 
 set(ELSATEST_GNU_NEGATIVE_TESTCODES
-  # Clang 22 rejects these historical GNU extension/error specimens in their
+  # Clang 23 rejects these historical GNU extension/error specimens in their
   # configured language modes. Keep them registered as negative coverage.
   bugs/gb0002.c
   bugs/gb0003.cc

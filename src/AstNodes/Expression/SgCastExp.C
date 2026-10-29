@@ -206,7 +206,7 @@ void SgCastExp::validate_semantic_conversion() const {
             "REX_AST_INVARIANT[checked-cast]: __builtin_bit_cast surface\n");
     fprintf(stderr,
             "REX_AST_DETAIL[checked-cast]: __builtin_bit_cast surface "
-            "has conversion=%d outside LLVM 22's exact dependent/concrete "
+            "has conversion=%d outside LLVM 23's exact dependent/concrete "
             "bit-cast states\n",
             static_cast<int>(get_semantic_conversion_kind()));
     ROSE_ABORT();

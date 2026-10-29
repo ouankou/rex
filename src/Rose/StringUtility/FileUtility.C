@@ -117,7 +117,7 @@ FileWithLineNumbers readFileWithPos(const std::string &fileName) {
 
 namespace {
 std::string lineDirective(const std::string &filename, std::int64_t line) {
-  // EXT-CLANG-FILE-MACRO-CR: LLVM22 maps CR to LF in __FILE__, even with
+  // EXT-CLANG-FILE-MACRO-CR: LLVM23 maps CR to LF in __FILE__, even with
   // escaped #line filenames. See docs/codebase-audit/external-exceptions.md.
   std::string directive =
       "#line " + numberToString(line) + " \"" + cEscape(filename) + "\"";

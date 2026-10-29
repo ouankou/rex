@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LLVM_VERSION: "22"
+  LLVM_VERSION: "23"
   REX_WASM_ARTIFACT: rex-wasm-dist
   DOCS_SITE_ARTIFACT: docs-site
   PAGES_SITE_DIR: pages-site
@@ -62,7 +62,8 @@ jobs:
         if [[ "${{ matrix.suite }}" == core ]]; then
           selector=(--include-regex "$core_tests")
         else
-          selector=(--manifest tests/fragile/unparser_hardening_fast.txt)
+          selector=(--manifest tests/fragile/unparser_hardening_fast.txt
+            --include-regex '^C_tests_test2015_14[12]_c$')
         fi
         python3 scripts/run_ctest_name_set.py \
           --test-dir build \

@@ -19,7 +19,9 @@ Memcheck report for `MemoryChecker.30924.log`.
 ## Invalid positive specimens
 
 Stock LLVM 22.1.8 independently rejects these unchanged specimens with exit 1
-under `flang -fsyntax-only`. REX reports the same source diagnostics. Making
+under `flang -fsyntax-only`; rechecked 2026-10-27 with stock Flang 23.1.5
+(`flang-23 -fsyntax-only -fcoarray`), which reports the identical rows,
+columns and messages. REX reports the same source diagnostics. Making
 REX accept them would weaken the frontend. Implemented contract: retain the
 specimens and CTest names, require exit 1 and the exact source diagnostics, and
 require no generated source/object. A crash, wrong diagnostic, success, or

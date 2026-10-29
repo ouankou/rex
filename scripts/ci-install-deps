@@ -13,7 +13,7 @@ if (( $# < 1 || $# > 2 )); then
 fi
 
 mode="$1"
-llvm_version="${2:-${LLVM_VERSION:-22}}"
+llvm_version="${2:-${LLVM_VERSION:-23}}"
 
 add_llvm_apt_repo() {
   wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key \
@@ -27,8 +27,8 @@ install_packages() {
   sudo apt-get install -y "$@"
 }
 
-if [ "${llvm_version}" != "22" ]; then
-  die "REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'"
+if [ "${llvm_version}" != "23" ]; then
+  die "REX is pinned to LLVM/Clang major 23; requested '${llvm_version}'"
 fi
 case "$mode" in
   native|docs|wasm) ;;
@@ -61,6 +61,7 @@ case "$mode" in
       llvm-"${llvm_version}" \
       llvm-"${llvm_version}"-dev \
       mold \
+      ninja-build \
       openjdk-25-jdk \
       pkg-config \
       valgrind

@@ -7,8 +7,6 @@
 #ifndef REX_FLANG_OMP_LIB_PATH
 #error "REX_FLANG_OMP_LIB_PATH must identify the exact Flang omp_lib.h input"
 #endif
-#define REX_STRINGIFY_IMPL(value) #value
-#define REX_STRINGIFY(value) REX_STRINGIFY_IMPL(value)
 
 namespace {
 
@@ -67,8 +65,7 @@ SgBasicBlock *findProgramBody(SgProject *project) {
 
 void verifyRuntimeInclude(SgProject *project) {
   ROSE_ASSERT(project != nullptr);
-  const std::string expectedPath =
-      normalizePath(REX_STRINGIFY(REX_FLANG_OMP_LIB_PATH));
+  const std::string expectedPath = normalizePath(REX_FLANG_OMP_LIB_PATH);
 
   SgSourceFile *sourceFile = nullptr;
   for (SgFile *file : project->get_fileList()) {

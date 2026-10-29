@@ -31,7 +31,7 @@ sys.exit(99)
     git.chmod(0o755)
     calls = root / "calls.jsonl"
     env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", NUM_JOBS="1",
-               LLVM_REQUIRED_MAJOR="22", LLVM_CONFIG=str(root / "missing-llvm"),
+               LLVM_REQUIRED_MAJOR="23", LLVM_CONFIG=str(root / "missing-llvm"),
                REX_GIT_CALLS=str(calls))
     for status, status_exit, update_exit, needs_update in (
         (" abc parent", 0, 0, False),

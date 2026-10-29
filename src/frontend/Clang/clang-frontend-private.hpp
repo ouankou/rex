@@ -605,6 +605,22 @@ clangTemplateParameterSpelling(const clang::NamedDecl *parameter) {
   return parameter->getNameAsString();
 }
 
+// Clang's getTemplateInstantiationPattern() returns the exact pattern
+// redeclaration a specialization was instantiated from, which need not be the
+// definition.  Consumers of definition-owned pattern state (bodies, parameter
+// declarations, members, inline-ness) fetch the definition explicitly, as
+// Clang's own callers do; an undefined pattern remains its exact redeclaration.
+template <typename Decl>
+inline Decl *templateInstantiationPatternDefinition(Decl *pattern) {
+  if (pattern == nullptr) {
+    return nullptr;
+  }
+  if (Decl *definition = pattern->getDefinition()) {
+    return definition;
+  }
+  return pattern;
+}
+
 inline bool
 isInstantiatedConversionOperatorDecl(const clang::CXXConversionDecl *decl) {
   return decl != nullptr &&
@@ -3733,8 +3749,10 @@ protected:
   // or semantic provenance may call the generic Clang base visitors for
   // attributes and modifiers only.  During that bounded call, VisitDecl must
   // validate the producer's provenance instead of overwriting it from a
-  // pattern/reused Clang range.
-  SgNode *p_declaration_with_finalized_provenance = nullptr;
+  // pattern/reused Clang range.  The base visitors can translate other
+  // declarations (for example a record named by an alignas operand) whose
+  // producers make their own bounded calls, so the state is per declaration.
+  std::unordered_set<SgNode *> p_declarations_with_finalized_provenance;
   // Track class definitions already populated to avoid duplicate member
   // insertion during on-demand/re-entrant translation.
   std::set<const SgClassDefinition *> p_record_definitions_populated;
@@ -4706,6 +4724,12 @@ public:
   virtual SgNode *Traverse(const clang::Type *type);
   virtual bool TraverseForDeclContext(clang::DeclContext *decl_context);
   virtual SgNode *TraverseOnDemand(clang::Decl *decl);
+  // Translates the owner of a member requested by exact identity.  Owner
+  // population is the sole producer of class members, so this owner is a
+  // population root: record-population deferral established by an enclosing
+  // scope, type, or template-argument lookup applies to the records that
+  // lookup reaches, not to an owner whose complete member sequence is required.
+  SgNode *TraverseMemberIdentityOwner(clang::RecordDecl *owner);
 
   /* Visit methods */
   virtual bool VisitDecl(clang::Decl *decl, SgNode **node);

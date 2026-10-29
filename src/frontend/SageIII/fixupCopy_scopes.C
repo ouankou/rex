@@ -1748,9 +1748,44 @@ bool isTypeReverseOwnershipField(const SgName &field) {
 
 bool hasNonidentityMappedOwner(const SgNode *node, SgCopyHelp &help);
 
+// Original-to-copy type identities visible to one materialization: the
+// transaction's published type pairs as of its start (an immutable snapshot)
+// plus the identities the materialization itself establishes.
+class ExactTypeReplacementTable {
+  SgCopyHelp::copiedTypeReplacementSnapshot published_;
+  std::unordered_map<const SgNode *, SgNode *> &established_;
+
+public:
+  ExactTypeReplacementTable(
+      SgCopyHelp::copiedTypeReplacementSnapshot published,
+      std::unordered_map<const SgNode *, SgNode *> &established)
+      : published_(std::move(published)), established_(established) {}
+
+  SgNode *find(const SgNode *source) const {
+    const auto established = established_.find(source);
+    if (established != established_.end())
+      return established->second;
+    if (published_ != nullptr) {
+      const auto published = published_->find(source);
+      if (published != published_->end())
+        return published->second;
+    }
+    return nullptr;
+  }
+
+  // Returns the identity now bound to source and whether this call bound it.
+  std::pair<SgNode *, bool> emplace(const SgNode *source, SgNode *copy) {
+    ASSERT_not_null(copy);
+    if (SgNode *existing = find(source))
+      return {existing, false};
+    established_.emplace(source, copy);
+    return {copy, true};
+  }
+};
+
 class ExactCopiedTypeGraphMaterializer {
   SgCopyHelp &help_;
-  std::unordered_map<const SgNode *, SgNode *> &replacements_;
+  ExactTypeReplacementTable replacements_;
   std::unordered_map<const SgType *, SgType *> provisionalCopySources_;
   std::set<const SgType *> active_;
   std::unordered_set<const SgType *> fortranSourceTypes_;
@@ -1823,6 +1858,15 @@ class ExactCopiedTypeGraphMaterializer {
           materializer_.help_.get_copiedNodeMap().find(edge);
       if (mapped != materializer_.help_.get_copiedNodeMap().end() &&
           mapped->second != edge) {
+        needsCopy = true;
+      } else if (materializer_.help_.isCopyingOriginal(edge)) {
+        // The edge's constructor is still running, so its distinct copy is
+        // not published yet.  A semantic cycle (for example a typedef whose
+        // base type names the typedef through a nonreal template argument)
+        // reaches this type first; sharing it would leave the copied graph
+        // pointing at the original.  Copy the type and let its reference bind
+        // to the copy when that constructor publishes it, as SgTreeCopy does
+        // for a typedef type whose declaration is being copied.
         needsCopy = true;
       }
       if (isSgExpression(edge) != nullptr && edge->get_parent() == source_) {
@@ -1903,20 +1947,16 @@ class ExactCopiedTypeGraphMaterializer {
   }
 
 public:
-  ExactCopiedTypeGraphMaterializer(
-      SgCopyHelp &help,
-      std::unordered_map<const SgNode *, SgNode *> &replacements,
-      bool copyOwnedSyntax = true)
-      : help_(help), replacements_(replacements),
+  ExactCopiedTypeGraphMaterializer(SgCopyHelp &help,
+                                   ExactTypeReplacementTable replacements,
+                                   bool copyOwnedSyntax = true)
+      : help_(help), replacements_(std::move(replacements)),
         copyOwnedSyntax_(copyOwnedSyntax) {
     CollectFortranSourceTypes collect(fortranSourceTypes_);
-    for (const auto &mapping : help_.get_copiedNodeMap()) {
-      if (mapping.first == mapping.second)
-        continue;
-      if (const auto *name = isSgInitializedName(mapping.first)) {
-        SgNode *syntax = name->get_fortran_source_type();
-        collect(syntax, SgName(), false);
-      }
+    for (const SgNode *source : help_.get_copiedFortranSourceNames()) {
+      SgNode *syntax = isSgInitializedName(source)->get_fortran_source_type();
+      ROSE_ASSERT(syntax != nullptr);
+      collect(syntax, SgName(), false);
     }
   }
 
@@ -2001,7 +2041,7 @@ public:
             ROSE_ASSERT(copy != nullptr && copy != source &&
                         copy->variantT() == source->variantT());
             const auto inserted = replacements_.emplace(source, copy);
-            ROSE_ASSERT(inserted.second || inserted.first->second == copy);
+            ROSE_ASSERT(inserted.second || inserted.first == copy);
           }
           break;
         }
@@ -2013,9 +2053,8 @@ public:
           isSgNonrealType(help_.copyOrLookupOwnedAst(projectionOwner));
       ROSE_ASSERT(copiedOwner != nullptr && copiedOwner != projectionOwner);
     }
-    const auto replacement = replacements_.find(source);
-    if (replacement != replacements_.end()) {
-      SgType *copy = isSgType(replacement->second);
+    if (SgNode *replacement = replacements_.find(source)) {
+      SgType *copy = isSgType(replacement);
       if (copy == NULL) {
         ROSE_ABORT();
       }
@@ -2181,13 +2220,13 @@ public:
       if (existingCopy != NULL) {
         provisionalCopySources_[existingCopy] = source;
         const auto alias = replacements_.emplace(existingCopy, source);
-        if (!alias.second && alias.first->second != source) {
+        if (!alias.second && alias.first != source) {
           fprintf(stderr,
                   "REX_COPY_INVARIANT[shared-type-alias]: source=%p/%s "
                   "incidental-copy=%p existing-replacement=%p\n",
                   static_cast<void *>(source), source->class_name().c_str(),
                   static_cast<void *>(existingCopy),
-                  static_cast<void *>(alias.first->second));
+                  static_cast<void *>(alias.first));
           ROSE_ABORT();
         }
         help_.assignCopiedNodePair(source, source);
@@ -3034,7 +3073,8 @@ void materializeExactCopiedNamedTypes(SgCopyHelp &help) {
 
   // Lexical type operands require their own copy even when the transaction
   // contains no named declaration family to seed the replacement map.
-  ExactCopiedTypeGraphMaterializer typeMaterializer(help, replacements);
+  ExactCopiedTypeGraphMaterializer typeMaterializer(
+      help, ExactTypeReplacementTable(nullptr, replacements));
   ExactCopiedTypeEdgeRewriter rewriter(typeMaterializer);
 
   // Parameter datatypes and defaults bind before their dependent children.
@@ -6025,16 +6065,14 @@ SgType *SageInterface::materializeTypeWithCopyMap(SgType *type,
                 copy->variantT() == type->variantT() &&
                 copy->has_source_prototype());
   }
-  std::unordered_map<const SgNode *, SgNode *> replacements;
-  for (const auto &mapping : help.get_copiedNodeMap()) {
-    if (isSgType(mapping.first) != nullptr) {
-      ROSE_ASSERT(isSgType(mapping.second) != nullptr);
-      if (mapping.first != mapping.second)
-        replacements.emplace(mapping.first, mapping.second);
-    }
-  }
-  ExactCopiedTypeGraphMaterializer materializer(help, replacements,
-                                                copyOwnedSyntax);
+  // Pairs published while the materializer runs are reconciled through the
+  // copied-node map, not through its start-of-call snapshot.
+  std::unordered_map<const SgNode *, SgNode *> established;
+  ExactCopiedTypeGraphMaterializer materializer(
+      help,
+      ExactTypeReplacementTable(help.snapshotCopiedTypeReplacements(),
+                                established),
+      copyOwnedSyntax);
   return materializer.materialize(type);
 }
 

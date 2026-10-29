@@ -46,6 +46,10 @@ and `ConvertExprToHLFIR.cpp:514` contain this same explicit unimplemented case.
 The deprecated no-HLFIR option therefore does not supply the missing lowering.
 No backend-selection workaround is installed. Stock source commit, exact source
 excerpts and native-tool guards are in `build-audit/pr-round717-*`.
+Rechecked 2026-10-29 with Debian Flang 23.1.5 on aarch64: the unchanged
+original-source control still exits1 at `rex_flang_include_main.f90:27` with
+`ConvertExprToHLFIR.cpp:530`, “not yet implemented: StaticDataObject::Pointer
+substring with kind > 1”.
 
 ## EXT-FLANG-COARRAY-LOCK — unsupported native lowering
 
@@ -58,6 +62,9 @@ option advances past the experimental-feature gate, then fails at line15:
 This independent original-source compilation exits1 without invoking REX.
 Commands, compiler version, diagnostics and source/binary guards are preserved in
 `build-audit/pr-round12-image-control-*`.
+Rechecked 2026-10-29 with Debian Flang 23.1.5 on aarch64: `-fcoarray`
+compilation of the unchanged specimen still exits1 at line15 with
+`flang/lib/Lower/Runtime.cpp:156`, “not yet implemented: coarray: LOCK runtime”.
 
 The user approved converting native compilation to an exact negative contract.
 The dedicated typed AST/unparse check and generic translation, graph and token
@@ -106,6 +113,9 @@ calls
 [Lexer::Stringify](https://github.com/llvm/llvm-project/blob/llvmorg-22.1.8/clang/lib/Lex/Lexer.cpp#L260),
 whose implementation explicitly maps CR and LF to the newline escape. This
 establishes a dependency normalization policy, not a REX escaping failure.
+Rechecked 2026-10-27 with Debian Clang 23.1.5 on aarch64: `clang-23 -E` still
+expands `__FILE__` after `#line 1 "x\ry.c"`, and for a physical filename
+containing CR, to a string containing the LF escape.
 
 The unchanged `build-audit/rex_line_directive_native_spelling.cpp` is the
 independent reproducer. Native spelling exits0; the separate command with
@@ -1238,12 +1248,12 @@ links no REX library and uses no suppression file.
   only when repeated parsing has bounded storage through a supported integration.
 - Last independently verified: 2026-09-05.
 
-The standalone diagnostic can be built against the installed LLVM 22 archives:
+The standalone diagnostic can be built against the installed LLVM 23 archives:
 
 ```sh
-clang++-22 -std=c++17 -I/usr/lib/llvm-22/include \
+clang++-23 -std=c++17 -I/usr/lib/llvm-23/include \
   tests/nonsmoke/unit/SageInterface/rex_flang_symbol_arena.cpp \
-  -L/usr/lib/llvm-22/lib -Wl,--start-group \
+  -L/usr/lib/llvm-23/lib -Wl,--start-group \
   -lFortranSemantics -lFortranEvaluate -lFortranParser -lFortranDecimal \
   -lFortranSupport -lFortranUtils -lclangBasic -Wl,--end-group \
   -lLLVM -lquadmath -o /tmp/rex_flang_symbol_arena
@@ -1251,6 +1261,7 @@ clang++-22 -std=c++17 -I/usr/lib/llvm-22/include \
 
 Run from a temporary working directory so generated `.mod` files remain outside
 the source tree, passing the absolute specimen path, a module search directory,
+Flang's intrinsic module directory (`$(flang-23 -print-resource-dir)/finclude/flang/$(flang-23 -print-target-triple)`),
 and repetition count. Use `valgrind --leak-check=full --show-leak-kinds=all
 --error-exitcode=99`; repeat with counts 1, 100, and 1,000.
 

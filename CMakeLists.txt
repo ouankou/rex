@@ -13,10 +13,10 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_BINARY_DIR)
     "inside its binary tree. Configure with a separate build directory.")
 endif()
 
-set(LLVM_REQUIRED_MAJOR "22" CACHE STRING "Exact LLVM/Clang major version required by REX")
-if(NOT LLVM_REQUIRED_MAJOR STREQUAL "22")
+set(LLVM_REQUIRED_MAJOR "23" CACHE STRING "Exact LLVM/Clang major version required by REX")
+if(NOT LLVM_REQUIRED_MAJOR STREQUAL "23")
   message(FATAL_ERROR
-    "REX is pinned to LLVM/Clang major 22; LLVM_REQUIRED_MAJOR='${LLVM_REQUIRED_MAJOR}' is unsupported.")
+    "REX is pinned to LLVM/Clang major 23; LLVM_REQUIRED_MAJOR='${LLVM_REQUIRED_MAJOR}' is unsupported.")
 endif()
 
 option(REX_ENABLE_WASM "Build the pure static browser WebAssembly REX demo" FALSE)
@@ -543,9 +543,11 @@ if(ENABLE-FORTRAN)
   endif()
 
   include("${CMAKE_SOURCE_DIR}/cmake/rex_flang_frontend_manifest.cmake")
-  if(NOT REX_FLANG_FRONTEND_LIBRARIES OR NOT REX_FLANG_FRONTEND_HEADERS)
+  if(NOT REX_FLANG_FRONTEND_LIBRARIES OR NOT REX_FLANG_FRONTEND_HEADERS OR
+     NOT REX_FLANG_INTRINSIC_FILES)
     message(FATAL_ERROR
-      "REX Flang frontend manifest must declare libraries and headers")
+      "REX Flang frontend manifest must declare libraries, headers, and "
+      "intrinsic module files")
   endif()
   set(FLANG_INCLUDE_DIRS "")
   foreach(_flang_include_candidate IN LISTS _flang_include_candidates)
@@ -566,14 +568,11 @@ if(ENABLE-FORTRAN)
   endforeach()
   if(NOT FLANG_INCLUDE_DIRS)
     message(FATAL_ERROR
-      "No single Flang include directory contains all required frontend and "
-      "intrinsic headers: ${_flang_include_candidates}")
+      "No single Flang include directory contains all required frontend "
+      "headers: ${_flang_include_candidates}")
   endif()
   set(FLANG_INCLUDE_DIRS "${FLANG_INCLUDE_DIRS}" CACHE INTERNAL
       "Flang include dirs" FORCE)
-  set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INCLUDE_DIRS}/flang")
-  set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INTRINSIC_INCLUDE_DIR}" CACHE INTERNAL
-      "Flang intrinsic module/header include dir" FORCE)
   unset(_flang_candidate_complete)
   unset(_flang_include_candidate)
   unset(_flang_include_candidates)
@@ -715,6 +714,56 @@ if(ENABLE-FORTRAN)
   unset(_rose_flang_compiler_real)
   unset(_rose_llvm_tools_real)
   message(STATUS "Using LLVM Flang backend: ${BACKEND_FORTRAN_COMPILER}")
+
+  # Flang installs omp_lib.h and its intrinsic modules in the target-specific
+  # resource directory <resource-dir>/finclude/flang/<triple>, which its driver
+  # passes through -fintrinsic-modules-path. Derive both components from the
+  # selected backend driver so the frontend parses against the same modules.
+  foreach(_rose_flang_query IN ITEMS resource-dir target-triple)
+    execute_process(
+      COMMAND "${BACKEND_FORTRAN_COMPILER}" "-print-${_rose_flang_query}"
+      RESULT_VARIABLE _rose_flang_query_status
+      OUTPUT_VARIABLE _rose_flang_query_output
+      ERROR_VARIABLE _rose_flang_query_error
+      OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(NOT _rose_flang_query_status EQUAL 0 OR
+       NOT _rose_flang_query_output OR
+       _rose_flang_query_output MATCHES "[\n]")
+      message(FATAL_ERROR
+        "The backend Flang compiler '${BACKEND_FORTRAN_COMPILER}' did not report "
+        "exactly one -print-${_rose_flang_query} value: "
+        "${_rose_flang_query_output}${_rose_flang_query_error}")
+    endif()
+    string(MAKE_C_IDENTIFIER "${_rose_flang_query}" _rose_flang_query_var)
+    set(_rose_flang_${_rose_flang_query_var} "${_rose_flang_query_output}")
+  endforeach()
+  if(NOT IS_ABSOLUTE "${_rose_flang_resource_dir}")
+    message(FATAL_ERROR
+      "The backend Flang compiler reported a non-absolute resource directory: "
+      "${_rose_flang_resource_dir}")
+  endif()
+  set(FLANG_INTRINSIC_INCLUDE_DIR
+      "${_rose_flang_resource_dir}/finclude/flang/${_rose_flang_target_triple}")
+  foreach(_rose_flang_intrinsic_file IN LISTS REX_FLANG_INTRINSIC_FILES)
+    if(NOT EXISTS "${FLANG_INTRINSIC_INCLUDE_DIR}/${_rose_flang_intrinsic_file}" OR
+       IS_DIRECTORY "${FLANG_INTRINSIC_INCLUDE_DIR}/${_rose_flang_intrinsic_file}")
+      message(FATAL_ERROR
+        "The Flang intrinsic module directory '${FLANG_INTRINSIC_INCLUDE_DIR}' "
+        "is missing required file ${_rose_flang_intrinsic_file}. Install the "
+        "complete flang-${LLVM_REQUIRED_MAJOR} package.")
+    endif()
+  endforeach()
+  set(FLANG_INTRINSIC_INCLUDE_DIR "${FLANG_INTRINSIC_INCLUDE_DIR}" CACHE INTERNAL
+      "Flang intrinsic module/header include dir" FORCE)
+  message(STATUS "Using Flang intrinsic modules: ${FLANG_INTRINSIC_INCLUDE_DIR}")
+  unset(_rose_flang_intrinsic_file)
+  unset(_rose_flang_query)
+  unset(_rose_flang_query_error)
+  unset(_rose_flang_query_output)
+  unset(_rose_flang_query_status)
+  unset(_rose_flang_query_var)
+  unset(_rose_flang_resource_dir)
+  unset(_rose_flang_target_triple)
 endif()
 
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/rex_linker.cmake")
@@ -1291,9 +1340,9 @@ if(REX_ENABLE_WASM)
   set(REX_WASM_CLANG_RESOURCE_INPUT "" CACHE PATH
     "Exact configured Clang resource directory for the REX WASM package")
   set(REX_WASM_NATIVE_LLVM_ROOT "" CACHE PATH
-    "Exact native LLVM installation supplying TableGen and the OpenMP resource header")
+    "Native LLVM installation supplying the OpenMP resource header")
   set(REX_WASM_OMP_INCLUDE_DIR "" CACHE PATH
-    "Exact LLVM 22 resource include directory containing omp.h for the REX WASM package")
+    "Exact LLVM 23 resource include directory containing omp.h for the REX WASM package")
   option(REX_WASM_PACKAGE_SYSROOT
     "Package the Emscripten sysroot headers into the REX WASM virtual filesystem" FALSE)
   set(REX_WASM_SYSROOT "${EMSCRIPTEN_SYSROOT}" CACHE PATH
@@ -1381,14 +1430,18 @@ if(REX_ENABLE_WASM)
       "from REX_WASM_NATIVE_LLVM_ROOT. Got '${_rose_wasm_omp_include_real}'; "
       "expected '${_rose_wasm_native_omp_include}'.")
   endif()
+  # omp.h is the OpenMP runtime API header of an LLVM release series; it is
+  # identical across that series' patch releases, so it must come from the same
+  # LLVM major as the WASM LLVM/Clang package.
   include(roseReadLlvmPackageVersion)
   rose_read_llvm_package_version("${_rose_wasm_native_llvm_root}"
     _rose_wasm_native_package_version)
-  if(NOT "${_rose_wasm_native_package_version}" STREQUAL
-     "${LLVM_PACKAGE_VERSION}")
+  string(REGEX MATCH "^[0-9]+" _rose_wasm_native_major
+    "${_rose_wasm_native_package_version}")
+  if(NOT "${_rose_wasm_native_major}" STREQUAL "${LLVM_VERSION_MAJOR}")
     message(FATAL_ERROR
-      "Native TableGen/OpenMP headers and the WASM LLVM/Clang package must have "
-      "the exact same version. Got native '${_rose_wasm_native_package_version}' "
+      "The native OpenMP header and the WASM LLVM/Clang package must come from "
+      "the same LLVM major. Got native '${_rose_wasm_native_package_version}' "
       "and WASM '${LLVM_PACKAGE_VERSION}'.")
   endif()
   if(REX_WASM_PACKAGE_SYSROOT AND
@@ -1414,6 +1467,7 @@ if(REX_ENABLE_WASM)
   unset(_rose_wasm_expected_resource_real)
   unset(_rose_wasm_native_llvm_root)
   unset(_rose_wasm_native_omp_include)
+  unset(_rose_wasm_native_major)
   unset(_rose_wasm_native_package_version)
   unset(_rose_wasm_omp_include_real)
   unset(_rose_wasm_resource_input_real)

@@ -8,9 +8,9 @@ fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-llvm_version="${LLVM_VERSION:-22}"
-if [[ "${llvm_version}" != "22" ]]; then
-  echo "error: REX is pinned to LLVM/Clang major 22; requested '${llvm_version}'" >&2
+llvm_version="${LLVM_VERSION:-23}"
+if [[ "${llvm_version}" != "23" ]]; then
+  echo "error: REX is pinned to LLVM/Clang major 23; requested '${llvm_version}'" >&2
   exit 2
 fi
 build_root="${REX_WASM_BUILD_ROOT:-${repo_root}/build/rex-wasm}"
@@ -171,28 +171,6 @@ require_executable() {
   fi
 }
 
-require_exact_llvm_tool() {
-  local tool="$1"
-  local expected_version="$2"
-  local output
-  local version
-  if [[ ! -x "${tool}" ]]; then
-    echo "error: required LLVM tool is not executable: ${tool}" >&2
-    exit 2
-  fi
-  if ! output="$("${tool}" --version 2>&1)"; then
-    echo "error: cannot execute LLVM tool '${tool}': ${output}" >&2
-    exit 2
-  fi
-  version="$(printf '%s\n' "${output}" | \
-    sed -nE 's/.*version[[:space:]]+([0-9]+[.][0-9]+[.][0-9]+).*/\1/p' | \
-    head -n 1)"
-  if [[ "${version}" != "${expected_version}" ]]; then
-    echo "error: LLVM tool '${tool}' has version '${version:-unknown}'; exactly ${expected_version} is required by LLVM_SOURCE_DIR" >&2
-    exit 2
-  fi
-}
-
 github_repo_url() {
   local remote_url="$1"
   if [[ "${remote_url}" == https://github.com/* ]]; then
@@ -291,14 +269,14 @@ llvm_wasm_ready() {
     return 1
   fi
 
-  grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+22\)' \
+  grep -Eq '^[[:space:]]*set\(LLVM_VERSION_MAJOR[[:space:]]+23\)' \
     "${dir}/lib/cmake/llvm/LLVMConfig.cmake" || {
-      llvm_wasm_readiness_error="LLVMConfig.cmake is not exact LLVM 22"
+      llvm_wasm_readiness_error="LLVMConfig.cmake is not exact LLVM 23"
       return 1
     }
-  grep -Eq '^#define[[:space:]]+CLANG_VERSION_MAJOR[[:space:]]+22$' \
+  grep -Eq '^#define[[:space:]]+CLANG_VERSION_MAJOR[[:space:]]+23$' \
     "${dir}/tools/clang/include/clang/Basic/Version.inc" || {
-      llvm_wasm_readiness_error="Clang Version.inc is not exact Clang 22"
+      llvm_wasm_readiness_error="Clang Version.inc is not exact Clang 23"
       return 1
     }
 
@@ -310,6 +288,7 @@ llvm_wasm_ready() {
     "LLVM_DEFAULT_TARGET_TRIPLE=wasm32-unknown-emscripten" \
     "LLVM_HOST_TRIPLE=wasm32-unknown-emscripten" \
     "LLVM_BUILD_TOOLS=OFF" \
+    "LLVM_ENABLE_PIC=OFF" \
     "LLVM_ENABLE_PLUGINS=OFF" \
     "LLVM_INCLUDE_TESTS=OFF" \
     "LLVM_INCLUDE_EXAMPLES=OFF" \
@@ -421,7 +400,7 @@ if [[ "${needs_llvm_source_contract}" == "1" ]]; then
     "${llvm_source_version_file}" | head -n 1)"
   if [[ "${llvm_source_major}" != "${llvm_version}" ||
         -z "${llvm_source_minor}" || -z "${llvm_source_patch}" ]]; then
-    echo "error: LLVM_SOURCE_DIR has malformed or non-22 version metadata: ${LLVM_SOURCE_DIR}" >&2
+    echo "error: LLVM_SOURCE_DIR has malformed or non-23 version metadata: ${LLVM_SOURCE_DIR}" >&2
     exit 2
   fi
   llvm_source_version="${llvm_source_major}.${llvm_source_minor}.${llvm_source_patch}"
@@ -455,16 +434,10 @@ fi
 
 if [[ ( "${phase}" == "all" || "${phase}" == "llvm" ) &&
       ( -z "${LLVM_NATIVE_TOOL_DIR:-}" ||
-        ! -x "${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" ||
-        ! -x "${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" ) ]]; then
-  echo "error: set LLVM_NATIVE_TOOL_DIR to a native LLVM ${llvm_version} bin directory containing llvm-tblgen and clang-tblgen" >&2
+        ! -x "${LLVM_NATIVE_TOOL_DIR}/clang" ||
+        ! -x "${LLVM_NATIVE_TOOL_DIR}/clang++" ) ]]; then
+  echo "error: set LLVM_NATIVE_TOOL_DIR to a native LLVM ${llvm_version} bin directory containing the host clang and clang++" >&2
   exit 2
-fi
-if [[ "${phase}" == "all" || "${phase}" == "llvm" ]]; then
-  require_exact_llvm_tool "${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" \
-    "${llvm_source_version}"
-  require_exact_llvm_tool "${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" \
-    "${llvm_source_version}"
 fi
 
 needs_rex_config=0
@@ -480,7 +453,7 @@ if [[ "${needs_rex_config}" == "1" &&
         -z "${REX_WASM_OMP_INCLUDE_DIR:-}" ||
         "${REX_WASM_OMP_INCLUDE_DIR}" != /* ||
         ! -f "${REX_WASM_OMP_INCLUDE_DIR}/omp.h" ) ]]; then
-  echo "error: configure-rex requires an absolute LLVM_NATIVE_TOOL_DIR and its LLVM 22 resource include directory containing omp.h" >&2
+  echo "error: configure-rex requires an absolute LLVM_NATIVE_TOOL_DIR and its LLVM 23 resource include directory containing omp.h" >&2
   exit 2
 fi
 if [[ "${needs_rex_config}" == "1" ]]; then
@@ -556,15 +529,20 @@ build_llvm_wasm() {
   source_contract="${llvm_wasm_build_dir}/rex-wasm-llvm-source-contract.txt"
   rm -f "${source_contract}" "${llvm_wasm_readiness_stamp}"
   echo "==> Configuring wasm LLVM/Clang in ${llvm_wasm_build_dir}"
+  # The cross build compiles its own native TableGen tools from this exact
+  # source with the host clang, so the wasm LLVM never depends on the version
+  # of the installed toolchain.  The wasm build links statically; LLVM 23 sets
+  # CMP0164, which rejects the PIC-gated SHARED libraries (libLTO and friends)
+  # on Emscripten, so it builds non-PIC objects.
   emcmake cmake -S "${LLVM_SOURCE_DIR}" -B "${llvm_wasm_build_dir}" -G Ninja \
     -DCMAKE_BUILD_TYPE="${build_type}" \
     -DLLVM_ENABLE_PROJECTS=clang \
     -DLLVM_TARGETS_TO_BUILD=WebAssembly \
     -DLLVM_DEFAULT_TARGET_TRIPLE=wasm32-unknown-emscripten \
     -DLLVM_HOST_TRIPLE=wasm32-unknown-emscripten \
-    -DLLVM_TABLEGEN="${LLVM_NATIVE_TOOL_DIR}/llvm-tblgen" \
-    -DCLANG_TABLEGEN="${LLVM_NATIVE_TOOL_DIR}/clang-tblgen" \
+    -DCROSS_TOOLCHAIN_FLAGS_NATIVE="-DCMAKE_C_COMPILER=${LLVM_NATIVE_TOOL_DIR}/clang;-DCMAKE_CXX_COMPILER=${LLVM_NATIVE_TOOL_DIR}/clang++" \
     -DLLVM_BUILD_TOOLS=OFF \
+    -DLLVM_ENABLE_PIC=OFF \
     -DLLVM_ENABLE_PLUGINS=OFF \
     -DLLVM_INCLUDE_TESTS=OFF \
     -DLLVM_INCLUDE_EXAMPLES=OFF \

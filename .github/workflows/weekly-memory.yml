@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LLVM_VERSION: 22
+  LLVM_VERSION: 23
   # EXT-OPENMP-TOPOLOGY-IDS: docs/codebase-audit/external-exceptions.md.
   # Use libomp's documented Linux topology reader in every native CI profile.
   KMP_TOPOLOGY_METHOD: cpuinfo

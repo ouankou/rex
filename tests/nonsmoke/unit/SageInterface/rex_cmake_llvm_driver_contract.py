@@ -8,7 +8,7 @@ module = Path(sys.argv[1]).resolve()
 cmake = sys.argv[2]
 
 
-def executable(path, version="22.1.8", status=0):
+def executable(path, version="23.1.8", status=0):
     path.write_text(f"#!/bin/sh\nprintf '%s\\n' '{version}'\nexit {status}\n")
     path.chmod(0o755)
 
@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory(prefix="rex_llvm_driver_", dir=Path.cwd()) as t
                 for name in ("automatic", "explicit", "home")}
     for name, prefix in prefixes.items():
         (prefix / "bin").mkdir(parents=True)
-        executable(prefix / "bin/clang-22")
+        executable(prefix / "bin/clang-23")
         for package in ("LLVM", "Clang"):
             directory = prefix / "lib/cmake" / package.lower()
             directory.mkdir(parents=True)
@@ -54,7 +54,7 @@ set(ENV{{LLVM_HOME}} "{home}")
 {selection}
 set(saved_llvm_root "${{LLVM_ROOT}}")
 set(saved_clang_root "${{Clang_ROOT}}")
-rex_llvm_package_hints("{prefixes["automatic"] / "bin/clang-22"}" hint_paths)
+rex_llvm_package_hints("{prefixes["automatic"] / "bin/clang-23"}" hint_paths)
 if(NOT "${{LLVM_ROOT}}" STREQUAL "${{saved_llvm_root}}" OR
    NOT "${{Clang_ROOT}}" STREQUAL "${{saved_clang_root}}")
   message(FATAL_ERROR "Package inference overwrote explicit roots")
@@ -82,12 +82,12 @@ endif()
         tools = work / "LLVM tools"
         tools.mkdir(parents=True)
         name = "clang++" if case == "cxx_symlink" else "clang"
-        selected = tools / (name + "-22")
+        selected = tools / (name + "-23")
         error = None
         if case == "unversioned":
             selected = tools / name
         if case == "missing":
-            error = "has no clang 22 driver"
+            error = "has no clang 23 driver"
         elif case == "directory":
             selected.mkdir()
             executable(tools / name)
@@ -98,30 +98,30 @@ endif()
             selected.symlink_to(external)
             error = "resolves outside the loaded package"
         elif case == "cxx_symlink":
-            executable(tools / "clang-22")
-            selected.symlink_to(tools / "clang-22")
+            executable(tools / "clang-23")
+            selected.symlink_to(tools / "clang-23")
         else:
             version = {
                 "wrong_major": "21.1.0",
                 "no_version_fallback": "21.1.0",
-                "version_suffix": "22garbage",
-                "trailing_dot": "22.",
-                "empty_component": "22..1",
-                "extra_output": "22.1.8\nprobe error",
+                "version_suffix": "23garbage",
+                "trailing_dot": "23.",
+                "empty_component": "23..1",
+                "extra_output": "23.1.8\nprobe error",
                 "empty_version": "",
-                "major_only": "22",
-            }.get(case, "22.1.8")
+                "major_only": "23",
+            }.get(case, "23.1.8")
             executable(selected, version,
                        7 if case == "failed_probe" else 0)
             if case in ("wrong_major", "failed_probe", "no_version_fallback",
                         "version_suffix", "trailing_dot", "empty_component",
                         "extra_output", "empty_version"):
-                error = "must report Clang major 22"
+                error = "must report Clang major 23"
             if case == "no_version_fallback":
                 executable(tools / name)
             if case == "nonexecutable":
                 selected.chmod(0o644)
-                error = "must report Clang major 22"
+                error = "must report Clang major 23"
         tools_argument = "relative/tools" if case == "relative_tools" else str(tools)
         if case == "relative_tools":
             error = "absolute LLVM_TOOLS_BINARY_DIR"
@@ -129,7 +129,7 @@ endif()
         script.write_text(f'''
 include("{module}")
 set(LLVM_TOOLS_BINARY_DIR "{tools_argument}")
-set(CLANG_VERSION_MAJOR 22)
+set(CLANG_VERSION_MAJOR 23)
 set(driver "caller driver")
 set(major "caller major")
 rex_require_llvm_driver("{name}" actual)

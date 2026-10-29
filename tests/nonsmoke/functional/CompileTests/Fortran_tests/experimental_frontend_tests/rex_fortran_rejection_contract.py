@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 
-# Independently checked with stock LLVM 22; see legacy-test-contracts.md.
+# Independently checked with stock LLVM 23; see legacy-test-contracts.md.
 EXPECTED = {
     "R511-F2015-N2007.f90": [
         (7, 15, "expected end of statement"),

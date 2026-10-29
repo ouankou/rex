@@ -50,7 +50,7 @@ if [ -n "${REX_LLVM_PREFIX_STATE_FIXTURE-}" ] &&
   REX_PREFIX_FIXTURE="$(cat "$REX_LLVM_PREFIX_STATE_FIXTURE")"
 fi
 case "$1" in
-  --version) printf '%s\\n' "${REX_LLVM_VERSION_FIXTURE-22.1.8}" ;;
+  --version) printf '%s\\n' "${REX_LLVM_VERSION_FIXTURE-23.1.8}" ;;
   --prefix) printf '%s\\n' "$REX_PREFIX_FIXTURE" ;;
   --bindir) printf '%s\\n' "$REX_PREFIX_FIXTURE/bin" ;;
   --libdir) printf '%s\\n' "$REX_PREFIX_FIXTURE/lib" ;;
@@ -66,7 +66,7 @@ fi
         for tool in ("clang", "clang++", "flang"):
             kind = "flang" if tool == "flang" else "clang"
             executable(bindir / tool,
-                       f"#!/bin/bash\nprintf '%s\\n' '{kind} version 22.1.8'\n")
+                       f"#!/bin/bash\nprintf '%s\\n' '{kind} version 23.1.8'\n")
         for tool in ("llvm-ar", "llvm-ranlib"):
             executable(bindir / tool, "#!/bin/bash\nexit 0\n")
         executable(bindir / "cmake", '''#!/usr/bin/python3
@@ -113,7 +113,7 @@ with open(os.environ["REX_PREFIX_RECORD"], "a") as stream:
 
         if index == 0:
             invocation = ["bash", str(build_script), str(work / "install"), "Debug"]
-            for version in ("22garbage", "22..1", "22.1.8\nprobe error", ""):
+            for version in ("23garbage", "23..1", "23.1.8\nprobe error", ""):
                 rejected = subprocess.run(
                     invocation, cwd=work,
                     env=dict(env, REX_LLVM_VERSION_FIXTURE=version), text=True,
@@ -129,7 +129,7 @@ with open(os.environ["REX_PREFIX_RECORD"], "a") as stream:
                 assert len(record.read_text().splitlines()) == 3
             accepted = subprocess.run(
                 invocation, cwd=work,
-                env=dict(env, REX_LLVM_VERSION_FIXTURE="22.1.8git"), text=True,
+                env=dict(env, REX_LLVM_VERSION_FIXTURE="23.1.8git"), text=True,
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
             assert accepted.returncode == 0, accepted.stdout
             assert len(record.read_text().splitlines()) == 6
@@ -138,7 +138,7 @@ with open(os.environ["REX_PREFIX_RECORD"], "a") as stream:
             nested.parent.mkdir()
             external = root / "external-clang"
             for compiler in (nested, external):
-                executable(compiler, "#!/bin/sh\nprintf '%s\\n' 'clang version 22.1.8'\n")
+                executable(compiler, "#!/bin/sh\nprintf '%s\\n' 'clang version 23.1.8'\n")
                 rejected = subprocess.run(
                     invocation, cwd=work, env=dict(env, CC=str(compiler)), text=True,
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
@@ -191,13 +191,13 @@ with open(os.environ["REX_PREFIX_RECORD"], "a") as stream:
             assert f"-DLLVM_ROOT={prefix}" in commands[0], commands[0]
             assert f"-DCMAKE_C_COMPILER={bindir / 'clang'}" in commands[0], commands[0]
 
-            versioned = bindir / "llvm-config-22"
+            versioned = bindir / "llvm-config-23"
             versioned.symlink_to(bindir / "llvm-config")
             older = root / f"older {versioned} compiler" / "bin"
             older.mkdir(parents=True)
             executable(older / "llvm-config", r'''#!/bin/bash
 if [ "$1" = --version ]; then
-  printf '%s\n' 21.1.8
+  printf '%s\n' 22.1.8
 else
   exec "$REX_PREFIX_FIXTURE/bin/llvm-config" "$@"
 fi
@@ -226,11 +226,11 @@ fi
                                       stderr=subprocess.STDOUT)
             assert rejected.returncode != 0 and "libFortranSupport" in rejected.stdout, rejected.stdout
             backup.rename(library)
-        header = prefix / "include/flang/omp_lib.h"
+        header = prefix / "include/flang/Parser/parsing.h"
         header.unlink()
         header.mkdir()
         rejected = subprocess.run(command, text=True, stdout=subprocess.PIPE,
                                   stderr=subprocess.STDOUT)
-        assert rejected.returncode != 0 and "include/flang/omp_lib.h" in rejected.stdout, rejected.stdout
+        assert rejected.returncode != 0 and "include/flang/Parser/parsing.h" in rejected.stdout, rejected.stdout
         header.rmdir()
         header.touch()

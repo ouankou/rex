@@ -363,7 +363,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: call to 'f' is ambiguous]=]
   Cxx20_tests/test2020_93.C)
 
-# ELSA compatibility specimens that Clang 22 rejects in their registered
+# ELSA compatibility specimens that Clang 23 rejects in their registered
 # language modes.
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: no matching function for call to 'g']=]
@@ -468,7 +468,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: friends can only be classes or functions]=]
   ElsaTestCases/gnu/k0004.cc)
 
-# Exact Clang 22 contracts for the ELSA notCompilable corpus.  Legacy
+# Exact Clang 23 contracts for the ELSA notCompilable corpus.  Legacy
 # ELSA-only semantic probes are malformed Clang inputs and remain negative.
 rex_register_clang_frontend_negative_diagnostic(
   "error: '(unnamed struct at ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/ElsaTestCases/notCompilable/gnu/t0125.cc:9:43)' cannot be defined in a type specifier"

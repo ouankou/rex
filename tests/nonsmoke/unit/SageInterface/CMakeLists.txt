@@ -49,13 +49,21 @@ set_tests_properties(rex_complex_literal_runtime
 
 add_executable(rex_extended_floating_semantics rex_extended_floating_semantics.cpp)
 target_link_libraries(rex_extended_floating_semantics PRIVATE ROSE_DLL)
-add_test(NAME rex_extended_floating_runtime
-  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/rex_extended_floating_runtime.py
-    --translator $<TARGET_FILE:rex_extended_floating_semantics>
-    --cc ${CMAKE_C_COMPILER} --cxx ${CMAKE_CXX_COMPILER})
-set_tests_properties(rex_extended_floating_runtime
-  PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+# The runtime specimen uses __float128, a target extension that AArch64 Clang
+# rejects.  Run it only where the configured C compiler provides the type.
+include(CheckCSourceCompiles)
+check_c_source_compiles(
+  "__float128 rex_quad = 1.25Q; int main(void) { return rex_quad > 0 ? 0 : 1; }"
+  REX_UNIT_TESTS_HAS_FLOAT128)
+if(REX_UNIT_TESTS_HAS_FLOAT128)
+  add_test(NAME rex_extended_floating_runtime
+    COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_extended_floating_runtime.py
+      --translator $<TARGET_FILE:rex_extended_floating_semantics>
+      --cc ${CMAKE_C_COMPILER} --cxx ${CMAKE_CXX_COMPILER})
+  set_tests_properties(rex_extended_floating_runtime
+    PROPERTIES LABELS "rex;AST;frontend;sanitizer")
+endif()
 
 add_executable(rex_integer_wide_semantics rex_integer_wide_semantics.cpp)
 target_link_libraries(rex_integer_wide_semantics PRIVATE ROSE_DLL)

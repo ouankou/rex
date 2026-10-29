@@ -2,7 +2,7 @@
 #
 # REX Build Script with Clang Frontend
 # This script automates the build process for REX compiler
-# with the LLVM 22 Clang and Flang frontends enabled.
+# with the LLVM 23 Clang and Flang frontends enabled.
 #
 # Usage:
 #   ./build-rex.sh [install-prefix] [build-type]
@@ -46,9 +46,9 @@ case "$BUILD_TYPE" in
         exit 2
         ;;
 esac
-LLVM_REQUIRED_MAJOR="${LLVM_REQUIRED_MAJOR:-22}"
-if [ "$LLVM_REQUIRED_MAJOR" != "22" ]; then
-    echo -e "${RED}Error: REX is pinned to LLVM/Clang major 22; LLVM_REQUIRED_MAJOR='$LLVM_REQUIRED_MAJOR' is unsupported.${NC}" >&2
+LLVM_REQUIRED_MAJOR="${LLVM_REQUIRED_MAJOR:-23}"
+if [ "$LLVM_REQUIRED_MAJOR" != "23" ]; then
+    echo -e "${RED}Error: REX is pinned to LLVM/Clang major 23; LLVM_REQUIRED_MAJOR='$LLVM_REQUIRED_MAJOR' is unsupported.${NC}" >&2
     exit 1
 fi
 NUM_JOBS="${NUM_JOBS:-1}"

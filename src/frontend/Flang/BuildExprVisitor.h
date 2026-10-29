@@ -142,6 +142,7 @@ public:
   void Build(const Fortran::parser::Expr::ComplexConstructor &x);
   void Build(const Fortran::parser::Expr::Parentheses &x);
   void Build(const Fortran::parser::Expr::PercentLoc &x);
+  void Build(const Fortran::parser::ConditionalExpr &x);
 
   void Build(const Fortran::parser::FunctionReference &x);
   void Build(const Fortran::parser::ArrayConstructor &x);

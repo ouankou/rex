@@ -6,7 +6,7 @@
 /** @brief REX overview
  *
  * REX modernizes the ROSE compiler infrastructure for source-to-source
- * transformation and analysis. C and C++ use the Clang/LLVM 22 frontend;
+ * transformation and analysis. C and C++ use the Clang/LLVM 23 frontend;
  * Fortran uses the Flang frontend.
  *
  * - @ref ast_construction

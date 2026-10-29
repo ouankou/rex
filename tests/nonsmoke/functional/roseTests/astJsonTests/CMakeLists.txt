@@ -338,7 +338,7 @@ unset(_rex_decltype_dir)
 if(ENABLE-FORTRAN)
   set(_rex_type_roots_dir ${CMAKE_CURRENT_BINARY_DIR}/process-type-roots)
   file(MAKE_DIRECTORY ${_rex_type_roots_dir})
-  # Flang 22 rejects -fsanitize. REX's C++ driver receives the complete
+  # Flang 23 rejects -fsanitize. REX's C++ driver receives the complete
   # configured instrumentation; original/emitted Fortran use the configured
   # language compiler, as in the other Fortran round-trip contracts.
   add_test(NAME ASTJSON_rex_process_type_roots_original_compile

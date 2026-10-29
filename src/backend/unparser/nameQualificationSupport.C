@@ -1272,6 +1272,26 @@ std::optional<size_t> lookup_structural_statement_index(
               isSgDeclarationScopeList(const_cast<SgNode *>(candidate))) {
         SgDeclarationScope *declarationScope =
             isSgDeclarationScope(const_cast<SgNode *>(childBelowCandidate));
+        // qualificationUseSite positions a compiler-generated semantic
+        // declaration (for example a structured-binding holding variable) at
+        // the declaration scope that owns it, so the position can be the
+        // auxiliary declaration scope itself.
+        if (declarationScope != nullptr && statement == declarationScope) {
+          if (scope->get_auxiliary_declaration_scopes() != scopeList ||
+              declarationScope->get_parent() != scopeList ||
+              std::count(scopeList->get_scopes().begin(),
+                         scopeList->get_scopes().end(),
+                         declarationScope) != 1) {
+            fprintf(stderr,
+                    "REX_NAME_QUALIFICATION_INVARIANT[using-directive-order]: "
+                    "declaration scope=%p reaches scope=%p through malformed "
+                    "auxiliary declaration-scope owner=%p\n",
+                    static_cast<void *>(declarationScope),
+                    static_cast<void *>(scope), static_cast<void *>(scopeList));
+            ROSE_ABORT();
+          }
+          return std::nullopt;
+        }
         SgNode *declarationCandidate = statement;
         std::set<SgNode *> declarationPath;
         while (declarationCandidate != nullptr &&
@@ -1308,6 +1328,7 @@ std::optional<size_t> lookup_structural_statement_index(
         if (scope->get_auxiliary_declaration_scopes() != scopeList ||
             scopeList->get_parent() != scope || declarationScope == nullptr ||
             declarationScope->get_parent() != scopeList ||
+            declaration == nullptr ||
             declaration->get_scope() != declarationScope ||
             std::count(scopeList->get_scopes().begin(),
                        scopeList->get_scopes().end(), declarationScope) != 1 ||
@@ -1833,7 +1854,7 @@ bool is_exact_lexical_friend_class_source_surface(
        (defining->get_firstNondefiningDeclaration() == canonical &&
         defining->get_definingDeclaration() == defining &&
         defining->get_type() == canonicalType));
-  // Clang 22 has no semantic RecordDecl for unsupported dependent nested
+  // Clang 23 has no semantic RecordDecl for unsupported dependent nested
   // friends such as `template<class T> friend struct X<T>::Y`.  The frontend
   // therefore publishes one self-canonical lexical declaration whose exact
   // dependent target is retained by the structural source qualifier.  It is

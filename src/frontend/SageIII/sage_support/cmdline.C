@@ -208,7 +208,7 @@ namespace {
   fprintf(stderr,
           "REX_FRONTEND_INVARIANT[clang-language]: explicit -x language '%s' "
           "is unsupported; expected a supported C, C++, CUDA, or OpenCL "
-          "Clang 22 input type, or none\n",
+          "Clang 23 input type, or none\n",
           name.c_str());
   ROSE_ABORT();
 }
