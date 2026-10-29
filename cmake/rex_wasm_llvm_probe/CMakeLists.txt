@@ -2,9 +2,9 @@ cmake_minimum_required(VERSION 3.20)
 project(rex_wasm_llvm_probe LANGUAGES CXX)
 
 if(NOT DEFINED REX_EXPECTED_LLVM_VERSION OR
-   NOT REX_EXPECTED_LLVM_VERSION MATCHES "^22\\.[0-9]+\\.[0-9]+$")
+   NOT REX_EXPECTED_LLVM_VERSION MATCHES "^23\\.[0-9]+\\.[0-9]+$")
   message(FATAL_ERROR
-    "REX_EXPECTED_LLVM_VERSION must name the exact LLVM 22 source version")
+    "REX_EXPECTED_LLVM_VERSION must name the exact LLVM 23 source version")
 endif()
 
 find_package(LLVM REQUIRED CONFIG)

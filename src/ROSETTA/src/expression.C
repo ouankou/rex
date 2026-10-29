@@ -2522,7 +2522,7 @@ void Grammar::setUpExpressions() {
       "SgStringVal::string_literal_encoding_enum", "literal_encoding",
       "= SgStringVal::e_string_encoding_ordinary", NO_CONSTRUCTOR_PARAMETER,
       BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
-  // Clang 22 represents strings in unevaluated language contexts (for
+  // Clang 23 represents strings in unevaluated language contexts (for
   // example, static-assert diagnostic messages) as a distinct semantic kind
   // and may normalize away a non-ordinary source prefix.  literal_encoding
   // records the exact lexical prefix, while cxx_unevaluated independently

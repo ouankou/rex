@@ -8872,9 +8872,12 @@ bool SgInitializedName::is_valid_structured_binding(
         !owner->get_name().is_null() || type == nullptr || value != nullptr ||
         holding != nullptr)
       return false;
-    auto *reference_type = type->stripTypedefsAndModifiers();
-    return isSgReferenceType(reference_type) != nullptr ||
-           isSgRvalueReferenceType(reference_type) != nullptr;
+    // [dcl.struct.bind]p7 (CWG3135): a holding variable is an object of the
+    // tuple element type when its get<i> call is a prvalue, and otherwise a
+    // reference matching the call's value category.  Its declared type is the
+    // AST's record of that category; the initializer must match it up to
+    // references (is_valid_structured_binding_initializer).
+    return true;
   }
   if (owner == nullptr || !SgNode::isLiveNode(owner) || name.is_null() ||
       !owner->get_name().is_null() || type == nullptr ||
@@ -8896,10 +8899,7 @@ bool SgInitializedName::is_valid_structured_binding(
   if (!SgNode::isLiveNode(holding) || holding->get_type() == nullptr)
     return false;
   auto *reference = isSgVarRefExp(value);
-  auto *storage_type = holding->get_type()->stripTypedefsAndModifiers();
-  return (isSgReferenceType(storage_type) ||
-          isSgRvalueReferenceType(storage_type)) &&
-         reference != nullptr && reference->get_symbol() != nullptr &&
+  return reference != nullptr && reference->get_symbol() != nullptr &&
          reference->get_symbol()->get_declaration() == holding;
 }
 
@@ -13876,7 +13876,7 @@ enum statement_attribute_kind_enum {
   e_last_statement_attribute_kind
 };
 
-// Closed source spellings accepted by Clang 22 for statement attributes.
+// Closed source spellings accepted by Clang 23 for statement attributes.
 // The attribute kind and this enum together preserve the exact namespace
 // and syntax family without storing opaque source text.
 enum statement_attribute_spelling_enum {
@@ -13909,6 +13909,7 @@ enum loop_hint_option_enum {
   e_loop_hint_option_pipeline_initiation_interval,
   e_loop_hint_option_distribute,
   e_loop_hint_option_vectorize_predicate,
+  e_loop_hint_option_licm_disabled,
   e_last_loop_hint_option
 };
 

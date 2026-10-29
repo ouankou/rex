@@ -95,7 +95,7 @@ endif()
 add_executable(rex_flang_openmp_runtime_include_semantics
   rex_flang_openmp_runtime_include_semantics.cpp)
 target_compile_definitions(rex_flang_openmp_runtime_include_semantics PRIVATE
-  REX_FLANG_OMP_LIB_PATH=${FLANG_INTRINSIC_INCLUDE_DIR}/omp_lib.h)
+  "REX_FLANG_OMP_LIB_PATH=\"${FLANG_INTRINSIC_INCLUDE_DIR}/omp_lib.h\"")
 target_link_libraries(rex_flang_openmp_runtime_include_semantics
   ROSE_DLL ${link_with_libraries})
 

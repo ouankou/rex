@@ -1471,7 +1471,7 @@ enum cast_type_enum {
     explicit and implicit casts can select the same conversion.  Consumers must
     not reconstruct this value from operand and result types because several
     conversions have identical type shapes.  Every valid SgCastExp carries
-    exactly one value from this closed LLVM 22 vocabulary.
+    exactly one value from this closed LLVM 23 vocabulary.
  */
 enum semantic_conversion_kind_enum {
   e_semantic_conversion_unclassified = 0,

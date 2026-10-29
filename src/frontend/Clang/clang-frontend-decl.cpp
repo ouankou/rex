@@ -72,7 +72,8 @@ variableInlineKind(const clang::VarDecl &declaration,
   const auto specialization_kind = declaration.getTemplateSpecializationKind();
   const clang::VarDecl *semantic_pattern = &declaration;
   if (specialization_kind == clang::TSK_ExplicitInstantiationDeclaration) {
-    semantic_pattern = declaration.getTemplateInstantiationPattern();
+    semantic_pattern = templateInstantiationPatternDefinition(
+        declaration.getTemplateInstantiationPattern());
     ASSERT_not_null(semantic_pattern);
     ROSE_ASSERT(semantic_pattern != &declaration);
   }
@@ -729,7 +730,8 @@ clangFunctionTemplateInstantiationPattern(const clang::FunctionDecl *decl) {
     return nullptr;
   }
 
-  return decl->getTemplateInstantiationPattern();
+  return templateInstantiationPatternDefinition(
+      decl->getTemplateInstantiationPattern());
 }
 
 static clang::FunctionDecl *
@@ -1063,14 +1065,10 @@ bool declIsFromApplicationHeader(clang::Decl *decl, clang::CompilerInstance *ci,
       // those declarations would misrepresent Clang's semantic state.
       return false;
     }
-    if (auto ast_file = module->getASTFile()) {
-      std::string ast_path =
-          ast_file->getFileEntry().tryGetRealPathName().str();
-      if (ast_path.empty()) {
-        ast_path = ast_file->getName().str();
-      }
+    if (const clang::ModuleFileName *ast_file = module->getASTFileName()) {
       preprocessor_record->recordExternalOwnershipPath(
-          ast_path, "declIsFromApplicationHeader:imported-module-ast");
+          ast_file->str().str(),
+          "declIsFromApplicationHeader:imported-module-ast");
     } else {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[module-ownership]: imported "
@@ -1932,9 +1930,9 @@ static clang::SourceRange exactFunctionDeclarationSourceRange(
   const clang::DeclaratorDecl *declarator_decl =
       llvm::dyn_cast<clang::DeclaratorDecl>(function_decl);
   if (declarator_decl != nullptr &&
-      declarator_decl->getNumTemplateParameterLists() > 0) {
+      !declarator_decl->getTemplateParameterLists().empty()) {
     if (const clang::TemplateParameterList *outermost_written_template_params =
-            declarator_decl->getTemplateParameterList(0)) {
+            declarator_decl->getTemplateParameterLists().front()) {
       maybe_set_range_begin(
           outermost_written_template_params->getTemplateLoc());
     }
@@ -4258,10 +4256,9 @@ collectTemplateParameterLevelsFromDeclContext(
   if (const clang::DeclaratorDecl *declarator_decl =
           llvm::dyn_cast_or_null<clang::DeclaratorDecl>(decl)) {
     written_outer_template_levels =
-        declarator_decl->getNumTemplateParameterLists();
-    for (unsigned i = 0; i < written_outer_template_levels; ++i) {
-      const clang::TemplateParameterList *params =
-          declarator_decl->getTemplateParameterList(i);
+        declarator_decl->getTemplateParameterLists().size();
+    for (const clang::TemplateParameterList *params :
+         declarator_decl->getTemplateParameterLists()) {
       ASSERT_not_null(params);
       template_levels.push_back(params);
     }
@@ -4389,10 +4386,8 @@ static unsigned countWrittenExplicitTemplateSpecializationHeaders(
   }
 
   unsigned count = 0;
-  const unsigned header_count = decl->getNumTemplateParameterLists();
-  for (unsigned i = 0; i < header_count; ++i) {
-    const clang::TemplateParameterList *params =
-        decl->getTemplateParameterList(i);
+  for (const clang::TemplateParameterList *params :
+       decl->getTemplateParameterLists()) {
     if (params != nullptr && params->size() == 0) {
       ++count;
     }
@@ -5720,7 +5715,7 @@ preferredDeclSourceRange(clang::Decl *decl, SgNode *node,
   if (clang::ImportDecl *import_decl = llvm::dyn_cast<clang::ImportDecl>(decl);
       import_decl != nullptr && source_manager != nullptr && !range.isValid() &&
       range.getBegin().isValid()) {
-    // Clang 22 represents a source-written header-unit import with the exact
+    // Clang 23 represents a source-written header-unit import with the exact
     // `import` location but an invalid ImportDecl endpoint.  Recover the one
     // missing endpoint from the terminating token in the same physical file;
     // the declaration remains a lexical source surface rather than being
@@ -7148,6 +7143,7 @@ enum class ClangDeclarationSurfaceContract {
   e_requires_sage_surface,
   e_semantic_only_no_surface,
   e_container_with_indirect_surfaces,
+  e_specialization_owned_surface,
 };
 
 static ClangDeclarationSurfaceContract
@@ -7165,6 +7161,8 @@ clangDeclarationSurfaceContract(const clang::Decl *decl) {
     return ClangDeclarationSurfaceContract::e_semantic_only_no_surface;
   case clang::Decl::LinkageSpec:
     return ClangDeclarationSurfaceContract::e_container_with_indirect_surfaces;
+  case clang::Decl::ExplicitInstantiation:
+    return ClangDeclarationSurfaceContract::e_specialization_owned_surface;
   default:
     return ClangDeclarationSurfaceContract::e_requires_sage_surface;
   }
@@ -7391,6 +7389,44 @@ static void requireSemanticOnlyDeclarationContract(const clang::Decl *decl) {
     std::cerr << "REX_FRONTEND_INVARIANT[semantic-only-declaration]: Clang "
                  "ExternCContextDecl lacks its exact translation-unit owner "
                  "or claims a source surface"
+              << std::endl;
+    ROSE_ABORT();
+  }
+}
+
+// Clang records each source-written explicit instantiation as an
+// ExplicitInstantiationDecl in its lexical DeclContext.  The Sage
+// SgTemplateInstantiationDirectiveStatement is produced from the instantiated
+// specialization itself, so this record owns no independent Sage surface.
+static void requireSpecializationOwnedSurfaceContract(const clang::Decl *decl) {
+  const auto *instantiation =
+      llvm::dyn_cast_or_null<clang::ExplicitInstantiationDecl>(decl);
+  if (instantiation == nullptr ||
+      clangDeclarationSurfaceContract(decl) !=
+          ClangDeclarationSurfaceContract::e_specialization_owned_surface) {
+    std::cerr << "REX_FRONTEND_INVARIANT[explicit-instantiation-record]: "
+                 "declaration is not classified as a specialization-owned "
+                 "explicit instantiation record"
+              << std::endl;
+    ROSE_ABORT();
+  }
+  const clang::NamedDecl *specialization = instantiation->getSpecialization();
+  const clang::TemplateSpecializationKind kind =
+      instantiation->getTemplateSpecializationKind();
+  if (specialization == nullptr ||
+      !(llvm::isa<clang::CXXRecordDecl>(specialization) ||
+        llvm::isa<clang::FunctionDecl>(specialization) ||
+        llvm::isa<clang::VarDecl>(specialization)) ||
+      (kind != clang::TSK_ExplicitInstantiationDeclaration &&
+       kind != clang::TSK_ExplicitInstantiationDefinition) ||
+      instantiation->isExternTemplate() !=
+          (kind == clang::TSK_ExplicitInstantiationDeclaration) ||
+      !instantiation->getTemplateLoc().isValid() ||
+      !instantiation->getNameLoc().isValid()) {
+    std::cerr << "REX_FRONTEND_INVARIANT[explicit-instantiation-record]: Clang "
+                 "ExplicitInstantiationDecl lacks its exact class, function, "
+                 "or variable specialization, instantiation kind, or source "
+                 "anchors"
               << std::endl;
     ROSE_ABORT();
   }
@@ -9874,7 +9910,8 @@ SgInitializedName *ClangToSageTranslator::lookupActiveFunctionBodyParameter(
     const clang::FunctionDecl *active_pattern =
         active_function != nullptr ? ([&]() {
           const clang::FunctionDecl *pattern =
-              active_function->getTemplateInstantiationPattern(false);
+              templateInstantiationPatternDefinition(
+                  active_function->getTemplateInstantiationPattern(false));
           return pattern != nullptr ? pattern : active_function;
         })()
                                    : nullptr;
@@ -11523,18 +11560,16 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
 
     if (clang::DeclaratorDecl *declarator =
             llvm::dyn_cast<clang::DeclaratorDecl>(owner)) {
-      for (unsigned i = 0; i < declarator->getNumTemplateParameterLists();
-           ++i) {
-        clang::TemplateParameterList *list =
-            declarator->getTemplateParameterList(i);
+      for (clang::TemplateParameterList *list :
+           declarator->getTemplateParameterLists()) {
         if (contains(list)) {
           return list;
         }
       }
     }
     if (clang::TagDecl *tag = llvm::dyn_cast<clang::TagDecl>(owner)) {
-      for (unsigned i = 0; i < tag->getNumTemplateParameterLists(); ++i) {
-        clang::TemplateParameterList *list = tag->getTemplateParameterList(i);
+      for (clang::TemplateParameterList *list :
+           tag->getTemplateParameterLists()) {
         if (contains(list)) {
           return list;
         }
@@ -11755,10 +11790,9 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
                   if (clang::DeclaratorDecl *declarator =
                           llvm::dyn_cast<clang::DeclaratorDecl>(
                               templated_decl)) {
-                    for (unsigned i = 0;
-                         i < declarator->getNumTemplateParameterLists(); ++i) {
-                      register_parameter_list(
-                          declarator, declarator->getTemplateParameterList(i));
+                    for (clang::TemplateParameterList *list :
+                         declarator->getTemplateParameterLists()) {
+                      register_parameter_list(declarator, list);
                     }
                   }
                   if (clang::DeclContext *templated_context =
@@ -11777,18 +11811,16 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
                 }
                 if (clang::DeclaratorDecl *declarator =
                         llvm::dyn_cast<clang::DeclaratorDecl>(candidate)) {
-                  for (unsigned i = 0;
-                       i < declarator->getNumTemplateParameterLists(); ++i) {
-                    register_parameter_list(
-                        declarator, declarator->getTemplateParameterList(i));
+                  for (clang::TemplateParameterList *list :
+                       declarator->getTemplateParameterLists()) {
+                    register_parameter_list(declarator, list);
                   }
                 }
                 if (clang::TagDecl *tag =
                         llvm::dyn_cast<clang::TagDecl>(candidate)) {
-                  for (unsigned i = 0; i < tag->getNumTemplateParameterLists();
-                       ++i) {
-                    register_parameter_list(tag,
-                                            tag->getTemplateParameterList(i));
+                  for (clang::TemplateParameterList *list :
+                       tag->getTemplateParameterLists()) {
+                    register_parameter_list(tag, list);
                   }
                 }
               }
@@ -11837,10 +11869,8 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
       if (declarator == nullptr) {
         continue;
       }
-      for (unsigned i = 0; i < declarator->getNumTemplateParameterLists();
-           ++i) {
-        clang::TemplateParameterList *list =
-            declarator->getTemplateParameterList(i);
+      for (clang::TemplateParameterList *list :
+           declarator->getTemplateParameterLists()) {
         if (list == nullptr) {
           continue;
         }
@@ -12005,10 +12035,8 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
       if (tag == nullptr) {
         continue;
       }
-      for (unsigned list_index = 0;
-           list_index < tag->getNumTemplateParameterLists(); ++list_index) {
-        clang::TemplateParameterList *list =
-            tag->getTemplateParameterList(list_index);
+      for (clang::TemplateParameterList *list :
+           tag->getTemplateParameterLists()) {
         if (list == nullptr) {
           continue;
         }
@@ -12160,7 +12188,7 @@ SgDeclarationStatement *ClangToSageTranslator::resolveTemplateParameterOwner(
       std::cerr << "REX_FRONTEND_INVARIANT[template-parameter-owner]: "
                    "context-declarator="
                 << static_cast<void *>(declarator) << " template-list-count="
-                << declarator->getNumTemplateParameterLists()
+                << declarator->getTemplateParameterLists().size()
                 << " described-template="
                 << static_cast<void *>(declarator->getDescribedTemplate())
                 << " semantic-context="
@@ -22926,6 +22954,14 @@ void ClangToSageTranslator::materializeCapturedOpenMPReferencedEnumConstants(
   }
 }
 
+SgNode *
+ClangToSageTranslator::TraverseMemberIdentityOwner(clang::RecordDecl *owner) {
+  ASSERT_not_null(owner);
+  llvm::SaveAndRestore<unsigned> population_root(
+      p_defer_on_demand_cxx_record_population_depth, 0);
+  return TraverseOnDemand(owner);
+}
+
 SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
 
   if (decl == nullptr) {
@@ -22993,7 +23029,7 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
       // absent.  Populate the exact owner first, as for fields and member
       // function templates, so on-demand lookup can never manufacture a
       // lookup-order-dependent partial source class.
-      SgNode *translated_owner = TraverseOnDemand(owner);
+      SgNode *translated_owner = TraverseMemberIdentityOwner(owner);
       exact_template = p_decl_translation_map.find(class_template_decl);
       SgDeclarationStatement *owner_declaration =
           lookupSgDeclarationForClangDecl(owner, /*allow_on_demand=*/false);
@@ -23056,7 +23092,7 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
       // visited during that population can request the same field and create a
       // second declaration. Owner-first translation lets the class population
       // publish the field exactly once in its lexical member sequence.
-      SgNode *translated_owner = TraverseOnDemand(owner);
+      SgNode *translated_owner = TraverseMemberIdentityOwner(owner);
       exact_field = p_decl_translation_map.find(field_decl);
       auto exact_owner = p_decl_translation_map.find(owner);
       if (translated_owner == nullptr ||
@@ -23131,7 +23167,7 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
       // member typedef); translating that type before the class scope exists
       // recursively populates the class and creates a second declaration for
       // the same Clang VarDecl.
-      SgNode *translated_owner = TraverseOnDemand(owner);
+      SgNode *translated_owner = TraverseMemberIdentityOwner(owner);
       exact_variable = p_decl_translation_map.find(variable_decl);
       auto exact_owner = p_decl_translation_map.find(owner);
       if (translated_owner == nullptr ||
@@ -23236,7 +23272,7 @@ SgNode *ClangToSageTranslator::TraverseOnDemand(clang::Decl *decl) {
       // publishes every function template in declaration order. Ordinary
       // instantiated methods are not owner-produced and retain their
       // specialization producer below.
-      SgNode *translated_owner = TraverseOnDemand(owner);
+      SgNode *translated_owner = TraverseMemberIdentityOwner(owner);
       exact_function = p_decl_translation_map.find(decl);
       auto exact_templated_function =
           p_decl_translation_map.find(requested_function);
@@ -23563,8 +23599,9 @@ functionInstantiationPattern(const clang::FunctionDecl *function) {
   if (function == nullptr) {
     return nullptr;
   }
-  clang::FunctionDecl *pattern = const_cast<clang::FunctionDecl *>(function)
-                                     ->getTemplateInstantiationPattern(false);
+  clang::FunctionDecl *pattern = templateInstantiationPatternDefinition(
+      const_cast<clang::FunctionDecl *>(function)
+          ->getTemplateInstantiationPattern(false));
   return pattern != nullptr ? pattern : function;
 }
 
@@ -26076,6 +26113,9 @@ translate_decl:
     ret_status = VisitExportDecl((clang::ExportDecl *)decl, &result);
     ROSE_ASSERT(ret_status == false || result != nullptr);
     break;
+  case clang::Decl::ExplicitInstantiation:
+    requireSpecializationOwnedSurfaceContract(decl);
+    break;
   case clang::Decl::ExternCContext:
     ret_status =
         VisitExternCContextDecl((clang::ExternCContextDecl *)decl, &result);
@@ -26336,6 +26376,15 @@ translate_decl:
       std::cerr << "REX_FRONTEND_INVARIANT[semantic-only-declaration]: Clang "
                 << decl->getDeclKindName()
                 << " visitor did not return the exact no-surface result"
+                << std::endl;
+      ROSE_ABORT();
+    }
+  } else if (surface_contract ==
+             ClangDeclarationSurfaceContract::e_specialization_owned_surface) {
+    if (ret_status || result != nullptr) {
+      std::cerr << "REX_FRONTEND_INVARIANT[explicit-instantiation-record]: "
+                   "Clang ExplicitInstantiationDecl produced a direct Sage "
+                   "surface instead of its specialization-owned directive"
                 << std::endl;
       ROSE_ABORT();
     }
@@ -28422,6 +28471,11 @@ bool ClangToSageTranslator::TraverseForDeclContext(
       continue;
     }
     if (surface_contract ==
+        ClangDeclarationSurfaceContract::e_specialization_owned_surface) {
+      requireSpecializationOwnedSurfaceContract(decl);
+      continue;
+    }
+    if (surface_contract ==
         ClangDeclarationSurfaceContract::e_container_with_indirect_surfaces) {
       (void)requireDeclarationContainerContract(decl, p_compiler_instance,
                                                 p_sage_source_file,
@@ -29505,24 +29559,23 @@ bool ClangToSageTranslator::TraverseForDeclContext(
 namespace {
 
 class FinalizedDeclarationProvenanceGuard {
-  SgNode *&active_;
+  std::unordered_set<SgNode *> &active_;
   SgNode *declaration_;
 
 public:
-  FinalizedDeclarationProvenanceGuard(SgNode *&active, SgNode *declaration)
+  FinalizedDeclarationProvenanceGuard(std::unordered_set<SgNode *> &active,
+                                      SgNode *declaration)
       : active_(active), declaration_(declaration) {
-    if (active_ != nullptr || declaration_ == nullptr) {
+    if (declaration_ == nullptr || !active_.insert(declaration_).second) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[finalized-declaration-provenance]: "
-              "nested or null producer-finalized declaration\n");
+              "null or re-entered producer-finalized declaration\n");
       ROSE_ABORT();
     }
-    active_ = declaration_;
   }
 
   ~FinalizedDeclarationProvenanceGuard() {
-    ROSE_ASSERT(active_ == declaration_);
-    active_ = nullptr;
+    ROSE_ASSERT(active_.erase(declaration_) == 1);
   }
 };
 
@@ -29592,7 +29645,7 @@ bool ClangToSageTranslator::VisitDecl(clang::Decl *decl, SgNode **node) {
   if (!isSgGlobal(*node) && !isSgTemplateParameter(*node) &&
       namespace_statement == nullptr) {
     const bool producer_finalized_provenance =
-        *node == p_declaration_with_finalized_provenance;
+        p_declarations_with_finalized_provenance.count(*node) != 0;
     bool semantic_lambda_closure = false;
     if (clang::CXXRecordDecl *record =
             llvm::dyn_cast<clang::CXXRecordDecl>(decl)) {
@@ -30488,7 +30541,7 @@ bool ClangToSageTranslator::VisitEmptyDecl(clang::EmptyDecl *empty_decl,
 
   *node = empty_decl_stmt;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, empty_decl_stmt);
+      p_declarations_with_finalized_provenance, empty_decl_stmt);
   return VisitDecl(empty_decl, node);
 }
 
@@ -30899,13 +30952,12 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
     const clang::DeclaratorDecl *declarator_decl =
         llvm::dyn_cast<clang::DeclaratorDecl>(method_decl);
     if (declarator_decl == nullptr ||
-        declarator_decl->getNumTemplateParameterLists() == 0) {
+        declarator_decl->getTemplateParameterLists().empty()) {
       return nullptr;
     }
 
     if (friend_member_is_unsupported_dependent_qualified_decl(method_decl)) {
-      return declarator_decl->getTemplateParameterList(
-          declarator_decl->getNumTemplateParameterLists() - 1);
+      return declarator_decl->getTemplateParameterLists().back();
     }
 
     return nullptr;
@@ -33845,7 +33897,7 @@ bool ClangToSageTranslator::VisitFriendDecl(clang::FriendDecl *friend_decl,
 
   *node = sg_decl;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, sg_decl);
+      p_declarations_with_finalized_provenance, sg_decl);
   return VisitDecl(friend_decl, node);
 }
 
@@ -34097,7 +34149,7 @@ bool ClangToSageTranslator::VisitNamespaceAliasDecl(
   }
   *node = sgNamespaceAliasDeclStmt;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, sgNamespaceAliasDeclStmt);
+      p_declarations_with_finalized_provenance, sgNamespaceAliasDeclStmt);
   return VisitNamedDecl(namespace_alias_decl, node);
 }
 
@@ -35748,7 +35800,7 @@ bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
 
   *node = nrdecl;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, nrdecl);
+      p_declarations_with_finalized_provenance, nrdecl);
   return VisitNamedDecl(concept_decl, node);
 }
 
@@ -37247,13 +37299,13 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   const bool has_written_qualifier =
       static_cast<bool>(templated_decl->getQualifier());
   if (is_definition && has_written_qualifier) {
-    const unsigned written_template_header_count =
-        templated_decl->getNumTemplateParameterLists();
+    const llvm::ArrayRef<clang::TemplateParameterList *> written_headers =
+        templated_decl->getTemplateParameterLists();
+    const unsigned written_template_header_count = written_headers.size();
     if (written_template_header_count > 0) {
       unsigned outer_template_header_count = written_template_header_count;
       clang::TemplateParameterList *innermost_written_header =
-          templated_decl->getTemplateParameterList(
-              written_template_header_count - 1);
+          written_headers.back();
       if (innermost_written_header == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[class-template-outer-header]: "
@@ -37274,7 +37326,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
       for (unsigned header_index = 0;
            header_index < outer_template_header_count; ++header_index) {
         clang::TemplateParameterList *written_outer_params =
-            templated_decl->getTemplateParameterList(header_index);
+            written_headers[header_index];
         if (written_outer_params == nullptr) {
           fprintf(stderr,
                   "REX_FRONTEND_INVARIANT[class-template-outer-header]: "
@@ -38058,7 +38110,7 @@ SgTemplateClassDeclaration *ClangToSageTranslator::translateClassTemplateDecl(
   {
     SgNode *attribute_owner = result_decl;
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, result_decl);
+        p_declarations_with_finalized_provenance, result_decl);
     const bool attributes_translated =
         VisitDecl(templated_decl, &attribute_owner);
     ROSE_ASSERT(attributes_translated && attribute_owner == result_decl);
@@ -39038,12 +39090,12 @@ bool ClangToSageTranslator::VisitVarTemplateDecl(
   if (!semantic_var_template) {
     const clang::SourceRange declaration_range =
         templated_decl->getSourceRange();
-    const unsigned header_count =
-        templated_decl->getNumTemplateParameterLists();
+    const llvm::ArrayRef<clang::TemplateParameterList *> headers =
+        templated_decl->getTemplateParameterLists();
+    const unsigned header_count = headers.size();
     for (unsigned header_index = 0; header_index < header_count;
          ++header_index) {
-      clang::TemplateParameterList *header =
-          templated_decl->getTemplateParameterList(header_index);
+      clang::TemplateParameterList *header = headers[header_index];
       if (header == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[variable-template-header]: "
@@ -42966,7 +43018,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
         llvm::dyn_cast<clang::CXXRecordDecl>(record_decl);
     if (!isDefined || !semantic_outer_named_definition ||
         cxx_record == nullptr ||
-        cxx_record->getNumTemplateParameterLists() == 0) {
+        cxx_record->getTemplateParameterLists().empty()) {
       return;
     }
     if (!cxx_record->getQualifierLoc()) {
@@ -42989,10 +43041,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
         semantic_outer_headers = collectTemplateParameterLevelsFromDeclContext(
             cxx_record->getDeclContext());
     size_t written_parameterized_header_count = 0;
-    for (unsigned level = 0; level < cxx_record->getNumTemplateParameterLists();
-         ++level) {
+    for (unsigned level = 0;
+         level < cxx_record->getTemplateParameterLists().size(); ++level) {
       clang::TemplateParameterList *written_header =
-          cxx_record->getTemplateParameterList(level);
+          cxx_record->getTemplateParameterLists()[level];
       if (written_header == nullptr) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[source-spelled-record-header-owner]: "
@@ -43007,10 +43059,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     if (semantic_outer_headers.size() != written_parameterized_header_count) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[source-spelled-record-header-owner]: "
-              "out-of-line record=%s has %u written headers (%zu "
+              "out-of-line record=%s has %zu written headers (%zu "
               "parameterized) but %zu exact semantic owner headers\n",
               cxx_record->getQualifiedNameAsString().c_str(),
-              cxx_record->getNumTemplateParameterLists(),
+              cxx_record->getTemplateParameterLists().size(),
               written_parameterized_header_count,
               semantic_outer_headers.size());
       ROSE_ABORT();
@@ -43148,10 +43200,10 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
     }
 
     size_t semantic_header_index = 0;
-    for (unsigned level = 0; level < cxx_record->getNumTemplateParameterLists();
-         ++level) {
+    for (unsigned level = 0;
+         level < cxx_record->getTemplateParameterLists().size(); ++level) {
       clang::TemplateParameterList *clang_header =
-          cxx_record->getTemplateParameterList(level);
+          cxx_record->getTemplateParameterLists()[level];
       if (clang_header == nullptr) {
         std::cerr << "REX_FRONTEND_INVARIANT[source-spelled-record-header]: "
                      "out-of-line record "
@@ -43490,7 +43542,7 @@ bool ClangToSageTranslator::VisitRecordDecl(clang::RecordDecl *record_decl,
   bool visit_result = false;
   {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, *node);
+        p_declarations_with_finalized_provenance, *node);
     visit_result = VisitTagDecl(record_decl, node);
   }
 
@@ -44070,7 +44122,7 @@ void ClangToSageTranslator::publishSourceSpelledOuterClassTemplateHeaders(
     ROSE_ABORT();
   }
   const unsigned written_header_count =
-      record_decl->getNumTemplateParameterLists();
+      record_decl->getTemplateParameterLists().size();
   if (outer_header_count == 0 || outer_header_count > written_header_count) {
     fprintf(stderr,
             "REX_FRONTEND_INVARIANT[source-spelled-class-template-header]: "
@@ -44107,7 +44159,7 @@ void ClangToSageTranslator::publishSourceSpelledOuterClassTemplateHeaders(
   size_t semantic_header_index = 0;
   for (unsigned level = 0; level < outer_header_count; ++level) {
     clang::TemplateParameterList *written_header =
-        record_decl->getTemplateParameterList(level);
+        record_decl->getTemplateParameterLists()[level];
     if (written_header == nullptr) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[source-spelled-class-template-header]: "
@@ -45677,7 +45729,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
             class_tpl_spec_decl);
     ASSERT_not_null(class_tpl_spec_decl);
     const unsigned written_header_count =
-        class_tpl_spec_decl->getNumTemplateParameterLists();
+        class_tpl_spec_decl->getTemplateParameterLists().size();
     if (written_header_count == 0) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[explicit-specialization-header]: "
@@ -45686,7 +45738,7 @@ bool ClangToSageTranslator::VisitClassTemplateSpecializationDecl(
       ROSE_ABORT();
     }
     clang::TemplateParameterList *specialization_header =
-        class_tpl_spec_decl->getTemplateParameterList(written_header_count - 1);
+        class_tpl_spec_decl->getTemplateParameterLists().back();
     const unsigned specialization_parameter_count =
         specialization_header != nullptr ? specialization_header->size() : 0;
     if (specialization_header == nullptr ||
@@ -48275,7 +48327,7 @@ bool ClangToSageTranslator::VisitEnumDecl(clang::EnumDecl *enum_decl,
   bool visit_res = false;
   {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, sg_enum_decl);
+        p_declarations_with_finalized_provenance, sg_enum_decl);
     visit_res = VisitDecl(enum_decl, node);
   }
   if (visit_res) {
@@ -49499,7 +49551,7 @@ bool ClangToSageTranslator::VisitTypedefDecl(clang::TypedefDecl *typedef_decl,
   bool result = false;
   if (semantic_typedef) {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, sg_typedef_decl);
+        p_declarations_with_finalized_provenance, sg_typedef_decl);
     result = VisitTypedefNameDecl(typedef_decl, node);
   } else {
     result = VisitTypedefNameDecl(typedef_decl, node);
@@ -50226,7 +50278,7 @@ bool ClangToSageTranslator::VisitTypeAliasDecl(
   bool result = false;
   if (semantic_alias) {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, sg_typedef_decl);
+        p_declarations_with_finalized_provenance, sg_typedef_decl);
     result = VisitTypedefNameDecl(type_alias_decl, node);
   } else {
     result = VisitTypedefNameDecl(type_alias_decl, node);
@@ -50350,7 +50402,7 @@ bool ClangToSageTranslator::VisitUnresolvedUsingTypenameDecl(
     }
     *node = existing;
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, existing);
+        p_declarations_with_finalized_provenance, existing);
     return VisitTypeDecl(unresolved_using_type_name_decl, node);
   }
 
@@ -50434,7 +50486,7 @@ bool ClangToSageTranslator::VisitUnresolvedUsingTypenameDecl(
   p_decl_translation_map[unresolved_using_type_name_decl] = using_statement;
   *node = using_statement;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, using_statement);
+      p_declarations_with_finalized_provenance, using_statement);
   return VisitTypeDecl(unresolved_using_type_name_decl, node);
 }
 
@@ -51293,7 +51345,7 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
     diagnose_null_scope(using_stmt, "UsingDecl");
     *node = using_stmt;
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, using_stmt);
+        p_declarations_with_finalized_provenance, using_stmt);
     return VisitNamedDecl(using_decl, node);
   }
 
@@ -51357,7 +51409,7 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
         diagnose_null_scope(existing, "UsingDecl");
         *node = existing;
         FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-            p_declaration_with_finalized_provenance, existing);
+            p_declarations_with_finalized_provenance, existing);
         return VisitNamedDecl(using_decl, node);
       }
     }
@@ -51687,7 +51739,7 @@ bool ClangToSageTranslator::VisitUsingDecl(clang::UsingDecl *using_decl,
   *node = using_stmt;
 
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, using_stmt);
+      p_declarations_with_finalized_provenance, using_stmt);
   return VisitNamedDecl(using_decl, node);
 }
 
@@ -52041,7 +52093,7 @@ bool ClangToSageTranslator::VisitUsingDirectiveDecl(
   *node = using_dir_stmt;
 
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, using_dir_stmt);
+      p_declarations_with_finalized_provenance, using_dir_stmt);
   return VisitNamedDecl(using_directive_decl, node);
 }
 
@@ -52264,7 +52316,7 @@ bool ClangToSageTranslator::VisitUsingPackDecl(
 
   *node = primary_stmt;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, primary_stmt);
+      p_declarations_with_finalized_provenance, primary_stmt);
   return VisitNamedDecl(using_pack_decl, node);
 }
 
@@ -52431,7 +52483,7 @@ bool ClangToSageTranslator::VisitUsingShadowDecl(
 
   *node = using_stmt;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, using_stmt);
+      p_declarations_with_finalized_provenance, using_stmt);
   return VisitNamedDecl(using_shadow_decl, node);
 }
 
@@ -52473,7 +52525,7 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
                                                 binding_scope);
   sg_var_decl->set_isAssociatedWithDeclarationList(true);
 
-  // LLVM22's BindingDecl duration query omits storage specifiers. Preserve
+  // LLVM23's BindingDecl duration query omits storage specifiers. Preserve
   // the decomposition's exact storage on its semantic aliases.
   if (decomposition->getStorageClass() == clang::SC_Static)
     sg_var_decl->get_declarationModifier().get_storageModifier().setStatic();
@@ -52570,7 +52622,7 @@ bool ClangToSageTranslator::VisitBindingDecl(clang::BindingDecl *binding_decl,
   validate_semantic_provenance(var_def, true,
                                "VisitBindingDecl:semantic-definition");
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, sg_var_decl);
+      p_declarations_with_finalized_provenance, sg_var_decl);
   return VisitValueDecl(binding_decl, node);
 }
 
@@ -54866,7 +54918,7 @@ bool ClangToSageTranslator::VisitFieldDecl(clang::FieldDecl *field_decl,
   *node = var_decl;
   if (source_less_semantic_field || semantic_auxiliary_field) {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, var_decl);
+        p_declarations_with_finalized_provenance, var_decl);
     return VisitDeclaratorDecl(field_decl, node);
   }
   return VisitDeclaratorDecl(field_decl, node);
@@ -58188,7 +58240,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     }
 
     const unsigned written_template_levels =
-        declarator_decl->getNumTemplateParameterLists();
+        declarator_decl->getTemplateParameterLists().size();
     if (written_template_levels == 0) {
       return false;
     }
@@ -58289,8 +58341,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           resolve_method_owner_scope(method_parent_record->getCanonicalDecl());
     }
     if (expected_method_owner_scope == nullptr) {
-      expected_method_owner_scope = resolve_method_owner_scope(
-          method_parent_record->getTemplateInstantiationPattern());
+      expected_method_owner_scope =
+          resolve_method_owner_scope(templateInstantiationPatternDefinition(
+              method_parent_record->getTemplateInstantiationPattern()));
     }
   }
   SgScopeStatement *expected_hidden_friend_owner_scope = nullptr;
@@ -60184,7 +60237,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (declarator_decl == nullptr) {
       return 0;
     }
-    return declarator_decl->getNumTemplateParameterLists();
+    return declarator_decl->getTemplateParameterLists().size();
   };
   auto declarator_template_parameter_list =
       [&](const clang::DeclaratorDecl *declarator_decl,
@@ -60192,7 +60245,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
     if (declarator_decl == nullptr) {
       return nullptr;
     }
-    return declarator_decl->getTemplateParameterList(index);
+    return declarator_decl->getTemplateParameterLists()[index];
   };
 
   auto current_written_outer_template_parameters =
@@ -61641,7 +61694,8 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       return true;
     }
     if (record != nullptr) {
-      if (check_record(record->getTemplateInstantiationPattern())) {
+      if (check_record(templateInstantiationPatternDefinition(
+              record->getTemplateInstantiationPattern()))) {
         return true;
       }
       if (clang::ClassTemplateDecl *templ =
@@ -71909,7 +71963,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
           ROSE_ASSERT(opaque->getSourceExpr() == nullptr &&
                       !opaque->isUnique());
           ROSE_ASSERT(param->get_initializer() == nullptr);
-          // LLVM 22 deduction guides use opaque defaults only as availability
+          // LLVM 23 deduction guides use opaque defaults only as availability
           // markers; the corresponding constructors own the actual values.
           param->set_deduction_guide_default_available(true);
           continue;
@@ -73385,7 +73439,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
   bool visit_res = false;
   {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, sg_function_decl);
+        p_declarations_with_finalized_provenance, sg_function_decl);
     visit_res = VisitDeclaratorDecl(function_decl, node) && res;
   }
   // Semantic function families must have been classified by their builders.
@@ -75751,9 +75805,21 @@ bool ClangToSageTranslator::VisitCXXConstructorDecl(
           SgExpression *initExpr = translate_ctor_initializer_args(clang_init);
           SgInitializer *sgCtorInitializer = isSgInitializer(initExpr);
           if (auto *default_use = isSgCxxDefaultInitExp(initExpr)) {
+            // A default member initializer belongs to the physical field.  An
+            // injected anonymous member's initializer targets the
+            // IndirectFieldDecl, whose chain ends at that physical field
+            // inside the anonymous record.
+            SgInitializedName *default_owner = field_target;
+            if (clang_ctor_initializer->isIndirectMemberInitializer()) {
+              default_owner = exactInitializedNameFromTranslatedVariableNode(
+                  lookupExactSgDeclarationForClangDecl(
+                      clang_ctor_initializer->getAnyMember(),
+                      /*allow_on_demand=*/true));
+              ASSERT_not_null(default_owner);
+            }
             ROSE_ASSERT(default_use->get_source_kind() ==
                             SgCxxDefaultInitExp::e_member &&
-                        default_use->get_source_declaration() == field_target);
+                        default_use->get_source_declaration() == default_owner);
             sgCtorInitializer =
                 SageBuilder::buildAssignInitializer_nfi(default_use, fieldType);
           }
@@ -76109,7 +76175,7 @@ void ClangToSageTranslator::constructDestructorEpilogue(
     steps.push_back(std::move(step));
   };
   if (!record->isUnion()) {
-    // LLVM 22's field iterator declares reference=void, which libc++ rejects
+    // LLVM 23's field iterator declares reference=void, which libc++ rejects
     // in the vector range constructor.
     std::vector<clang::FieldDecl *> fields;
     for (auto *field : record->fields())
@@ -76655,13 +76721,13 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       var_decl->getInitStyle();
 
   const unsigned semantic_template_header_count =
-      var_decl->getNumTemplateParameterLists();
+      var_decl->getTemplateParameterLists().size();
   std::vector<clang::TemplateParameterList *> written_template_headers;
   written_template_headers.reserve(semantic_template_header_count);
   for (unsigned header_index = 0; header_index < semantic_template_header_count;
        ++header_index) {
     clang::TemplateParameterList *clang_header =
-        var_decl->getTemplateParameterList(header_index);
+        var_decl->getTemplateParameterLists()[header_index];
     if (clang_header == nullptr) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[variable-template-header]: "
@@ -79527,7 +79593,7 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
     validate_semantic_provenance(
         var_def, false, "VisitVarDecl:range-for-semantic-variable-definition");
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, sg_var_decl);
+        p_declarations_with_finalized_provenance, sg_var_decl);
     visit_res = VisitDeclaratorDecl(var_decl, node);
   } else {
     visit_res = VisitDeclaratorDecl(var_decl, node);
@@ -79684,7 +79750,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
       if (check_record(record_ctx->getCanonicalDecl())) {
         return true;
       }
-      if (check_record(record_ctx->getTemplateInstantiationPattern())) {
+      if (check_record(templateInstantiationPatternDefinition(
+              record_ctx->getTemplateInstantiationPattern()))) {
         return true;
       }
       if (clang::ClassTemplateDecl *templ =
@@ -79708,7 +79775,8 @@ bool ClangToSageTranslator::VisitVarDecl(clang::VarDecl *var_decl,
         if (check_record(parent_record) ||
             check_record(parent_record->getDefinition()) ||
             check_record(parent_record->getCanonicalDecl()) ||
-            check_record(parent_record->getTemplateInstantiationPattern())) {
+            check_record(templateInstantiationPatternDefinition(
+                parent_record->getTemplateInstantiationPattern()))) {
           return true;
         }
         if (clang::ClassTemplateDecl *templ =
@@ -80207,6 +80275,9 @@ void ClangToSageTranslator::constructStructuredBindingPattern(
     ROSE_ABORT();
   }
 
+  // DecompositionDecl::getRSquareLoc() is not used: LLVM 23 template
+  // instantiation records the pattern declaration's end location there, not
+  // its ']'.  The matching expanded token is exact for every decomposition.
   size_t right_square_index = p_expanded_tokens.size();
   unsigned int square_depth = 0;
   for (size_t index = left_square_index; index < p_expanded_tokens.size();
@@ -81012,7 +81083,7 @@ bool ClangToSageTranslator::VisitParmVarDecl(clang::ParmVarDecl *param_var_decl,
   *node = param_init_name;
   if (build_semantic_parameter) {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, param_init_name);
+        p_declarations_with_finalized_provenance, param_init_name);
     return VisitDeclaratorDecl(param_var_decl, node);
   }
   return VisitDeclaratorDecl(param_var_decl, node);
@@ -81519,7 +81590,7 @@ bool ClangToSageTranslator::VisitVarTemplateSpecializationDecl(
   bool visit_res = false;
   {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, var_decl);
+        p_declarations_with_finalized_provenance, var_decl);
     visit_res = VisitDeclaratorDecl(var_template_specialization_decl,
                                     &visited_declaration);
   }
@@ -81973,7 +82044,7 @@ bool ClangToSageTranslator::VisitVarTemplatePartialSpecializationDecl(
 
   *node = var_decl;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, var_decl);
+      p_declarations_with_finalized_provenance, var_decl);
   return VisitDeclaratorDecl(var_template_partial_specialization_decl, node);
 }
 
@@ -82319,7 +82390,7 @@ bool ClangToSageTranslator::VisitEnumConstantDecl(
   bool visit_res = false;
   if (semantic_enum_constant) {
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, init_name);
+        p_declarations_with_finalized_provenance, init_name);
     visit_res = VisitValueDecl(enum_constant_decl, node);
   } else {
     visit_res = VisitValueDecl(enum_constant_decl, node);
@@ -82407,7 +82478,7 @@ bool ClangToSageTranslator::VisitIndirectFieldDecl(
     }
     *node = injected_decl;
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, injected_decl);
+        p_declarations_with_finalized_provenance, injected_decl);
     return VisitValueDecl(indirect_field_decl, node);
   }
 
@@ -82491,7 +82562,7 @@ bool ClangToSageTranslator::VisitIndirectFieldDecl(
   p_decl_translation_map[indirect_field_decl] = injected_decl;
   *node = injected_decl;
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, injected_decl);
+      p_declarations_with_finalized_provenance, injected_decl);
   return VisitValueDecl(indirect_field_decl, node);
 }
 
@@ -82605,7 +82676,7 @@ bool ClangToSageTranslator::VisitUnresolvedUsingValueDecl(
     }
     *node = existing;
     FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-        p_declaration_with_finalized_provenance, existing);
+        p_declarations_with_finalized_provenance, existing);
     return VisitValueDecl(unresolved_using_value_decl, node);
   }
 
@@ -82741,7 +82812,7 @@ bool ClangToSageTranslator::VisitUnresolvedUsingValueDecl(
       p_decl_translation_map[unresolved_using_value_decl] = existing;
       *node = existing;
       FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-          p_declaration_with_finalized_provenance, existing);
+          p_declarations_with_finalized_provenance, existing);
       return VisitValueDecl(unresolved_using_value_decl, node);
     }
   }
@@ -82803,7 +82874,7 @@ bool ClangToSageTranslator::VisitUnresolvedUsingValueDecl(
   *node = using_stmt;
 
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, using_stmt);
+      p_declarations_with_finalized_provenance, using_stmt);
   return VisitValueDecl(unresolved_using_value_decl, node);
 }
 
@@ -83006,7 +83077,7 @@ bool ClangToSageTranslator::VisitStaticAssertDecl(
   }
 
   FinalizedDeclarationProvenanceGuard finalized_provenance_guard(
-      p_declaration_with_finalized_provenance, *node);
+      p_declarations_with_finalized_provenance, *node);
   return VisitDecl(pragma_static_assert_decl, node);
 }
 

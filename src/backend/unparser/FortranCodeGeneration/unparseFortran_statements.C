@@ -756,8 +756,11 @@ void FortranCodeGeneration_locatedNode::unparseEntryStatement(
   unparseFunctionArgs(entryStatement, info);
   curprint(")");
 
-  // Unparse the result(<name>) suffix if present
-  if (entryStatement->get_result_name() != nullptr) {
+  // Unparse the result(<name>) suffix if present.  A result named after the
+  // entry is the implicit result; RESULT may not repeat the entry name.
+  if (entryStatement->get_result_name() != nullptr &&
+      entryStatement->get_name() !=
+          entryStatement->get_result_name()->get_name()) {
     curprint(" result(");
     curprint(entryStatement->get_result_name()->get_name());
     curprint(")");

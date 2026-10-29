@@ -123,12 +123,6 @@ public:
     }
   }
 
-  void finish() override {
-    if (delegate_ != nullptr) {
-      delegate_->finish();
-    }
-  }
-
   void clear() override {
     clang::DiagnosticConsumer::clear();
     if (delegate_ != nullptr) {
@@ -1749,7 +1743,8 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
   // files in FrontendOptions::ModuleFiles do not.
   for (const std::string &module_file : fe_opts.ModuleFiles) {
     clang::serialization::ModuleFile *loaded_module = nullptr;
-    if (!compiler_instance->loadModuleFile(module_file, loaded_module)) {
+    if (!compiler_instance->loadModuleFile(
+            clang::ModuleFileName::makeExplicit(module_file), loaded_module)) {
       llvm::errs() << "REX_FRONTEND_INVARIANT[clang-module-file]: cannot load "
                       "exact frontend module file '"
                    << module_file << "'\n";
@@ -6480,12 +6475,9 @@ void SagePreprocessorRecord::recordImportedModuleOwnership(
     }
   }
 
-  if (auto ast_file = imported_module->getASTFile()) {
-    std::string path = ast_file->getFileEntry().tryGetRealPathName().str();
-    if (path.empty()) {
-      path = ast_file->getName().str();
-    }
-    recordExternalOwnershipPath(path, context);
+  if (const clang::ModuleFileName *ast_file =
+          imported_module->getASTFileName()) {
+    recordExternalOwnershipPath(ast_file->str().str(), context);
   }
   if (imported_module->isHeaderUnit()) {
     const std::string header_path =

@@ -30,7 +30,7 @@ set(_f2018_tests
   R1123-F2018.f90
 )
 
-# Preserve these imported specimens as exact rejection tests: stock LLVM 22
+# Preserve these imported specimens as exact rejection tests: stock LLVM 23
 # rejects their syntax/types. See docs/codebase-audit/legacy-test-contracts.md.
 set(_f2018_rejection_tests
   R511-F2015-N2007.f90
@@ -245,7 +245,7 @@ foreach(specimen IN LISTS _frontend_tests)
   _experimental_add_frontend_test(experimental_frontend ${specimen})
 endforeach()
 
-# LLVM 22's multi-image code generation requires -fcoarray. This grammar
+# LLVM 23's multi-image code generation requires -fcoarray. This grammar
 # specimen has external procedures and no PRIF runtime; verify object emission.
 # ASTJSON_rex_fortran_form_team_codegen separately verifies that FORM TEAM is
 # preserved through frontend construction, copying, JSON, and generated code.

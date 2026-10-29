@@ -3,7 +3,7 @@ FROM ${BASE_IMAGE}
 
 LABEL org.opencontainers.image.source="https://github.com/ouankou/rex"
 
-ENV LLVM_VERSION=22
+ENV LLVM_VERSION=23
 ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt-get update \
@@ -33,6 +33,7 @@ RUN apt-get update \
       llvm-${LLVM_VERSION} \
       llvm-${LLVM_VERSION}-dev \
       mold \
+      ninja-build \
       openjdk-25-jdk-headless \
       pkg-config \
     && rm -rf /var/lib/apt/lists/*

@@ -7,7 +7,7 @@ Upstream ROSE is read-only evidence for REX. Agents may fetch, inspect logs, sho
 ## Support target (REX)
 - Platform: Linux only (non-Linux platforms dropped).
 - Languages/features: C/C++, Fortran, OpenMP, OpenACC, OpenCL, CUDA.
-- Frontend: Clang/LLVM for C/C++ (LLVM 22); Fortran via Flang.
+- Frontend: Clang/LLVM for C/C++ (LLVM 23); Fortran via Flang.
 - Hard dropped: PHP, JavaScript, Python, Ada, Jovial, EDG, OFP/old Fortran parser, Java/ECJ, UPC, X10, Csharp, Matlab, YAML/mini-yaml, binary analysis, Sawyer, CodeThorn, Rosebud source tree, legacy autotools/Tup paths, dropped OpenMP designs, `src/3rdPartyLibraries`, and other legacy frontends/tools.
 - Rosebud: do not restore `src/Rosebud`. If an upstream Rosebud commit contains an idea useful to existing REX ROSETTA code, port only that retained-scope logic manually.
 - Legacy array test suites are dropped from CompileTests and CompilerOptionsTests inventories.

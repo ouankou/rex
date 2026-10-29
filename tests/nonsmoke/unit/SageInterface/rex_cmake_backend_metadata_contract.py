@@ -17,7 +17,7 @@ native_compilers = (
 
 with tempfile.TemporaryDirectory(prefix="rex-cmake-metadata-") as temp:
     root = Path(temp)
-    compiler = root / 'toolchain with "quotes"' / "clang-22"
+    compiler = root / 'toolchain with "quotes"' / "clang-23"
     compiler.parent.mkdir()
     metadata_path = root / 'metadata with "quotes" and \\ slash??=value'
     metadata_path.mkdir()
@@ -33,7 +33,7 @@ foreach(language C CXX Fortran)
   set(CMAKE_${{language}}_COMPILER [=[{compiler}]=])
   set(CMAKE_${{language}}_COMPILER_LOADED TRUE)
   set(CMAKE_${{language}}_COMPILER_ID Clang)
-  set(CMAKE_${{language}}_COMPILER_VERSION 22.1.7)
+  set(CMAKE_${{language}}_COMPILER_VERSION 23.1.7)
 endforeach()
 set(ENABLE-FORTRAN ON)
 foreach(field ROSE_TOP_BINARY_DIR ROSE_TOP_SRC_DIR
@@ -48,9 +48,9 @@ set(CMAKE_Fortran_COMPILER_ARG1 "-ffree-form")
 '''
     verify = '''
 foreach(language C CXX FORTRAN)
-  if(NOT BACKEND_${language}_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "22" OR
+  if(NOT BACKEND_${language}_COMPILER_MAJOR_VERSION_NUMBER STREQUAL "23" OR
      NOT BACKEND_${language}_COMPILER_MINOR_VERSION_NUMBER STREQUAL "1" OR
-     NOT BACKEND_${language}_COMPILER_NAME_WITHOUT_PATH STREQUAL "clang-22")
+     NOT BACKEND_${language}_COMPILER_NAME_WITHOUT_PATH STREQUAL "clang-23")
     message(FATAL_ERROR "Incorrect published metadata for ${language}")
   endif()
 endforeach()
@@ -88,7 +88,7 @@ endif()
          "must identify the configured"),
         ("missing_identity", 'unset(CMAKE_CXX_COMPILER_ID)', "enabled, identified"),
         ("missing_version", 'unset(CMAKE_CXX_COMPILER_VERSION)', "complete numeric"),
-        ("malformed_version", 'set(CMAKE_Fortran_COMPILER_VERSION "banner 22.1.7")',
+        ("malformed_version", 'set(CMAKE_Fortran_COMPILER_VERSION "banner 23.1.7")',
          "complete numeric"),
     ]
     for name, override, error in cases:

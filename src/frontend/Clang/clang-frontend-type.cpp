@@ -759,7 +759,8 @@ const clang::NamedDecl *resolveTemplateParameterFromDeclContext(
 
       llvm::SmallPtrSet<const clang::FunctionDecl *, 2> patterns;
       if (const clang::FunctionDecl *pattern =
-              function->getTemplateInstantiationPattern()) {
+              templateInstantiationPatternDefinition(
+                  function->getTemplateInstantiationPattern())) {
         patterns.insert(pattern);
       }
       if (const auto *method = llvm::dyn_cast<clang::CXXMethodDecl>(function)) {

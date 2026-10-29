@@ -23,7 +23,7 @@ list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
   rex_fortran_openmp_exact_semantic_handoff.f90)
 
 # These are unparser-only lexical fixtures for continued OpenMP directives.
-# Flang 22 cannot generate code for OpenMPUtilityConstruct, and REX does not
+# Flang 23 cannot generate code for the OpenMP ERROR directive, and REX does not
 # implement Fortran target offload.  Dedicated continuation-contract tests in
 # CompileTests/OpenMP_tests/fortran check their complete parse/unparse paths and
 # fail hard on any mismatch.
@@ -31,6 +31,18 @@ list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
   rex_fortran_openmp_directive_string_continuation.f90
   rex_fortran_openmp_fixed_directive_continuation.f
   rex_fortran_openmp_free_directive_continuation.f90)
+# exampleA281f.f is the OpenMP Examples default(none) specimen (A.28.1f).  It
+# annotates `!$OMP DO FIRSTPRIVATE(Y)` inside `PARALLEL DEFAULT(NONE)` as valid,
+# and Flang 22 compiled it.  Flang 23 rewrote OpenMP data-sharing resolution and
+# rejects the unchanged original: "The DEFAULT(NONE) clause requires that 'y'
+# must be listed in a data-sharing attribute clause".  REX parses and lowers the
+# specimen, but the semantic comparison has no compilable native oracle.  The
+# native negative test below requires that exact Flang 23 rejection; unexpected
+# native success fails it and signals that this specimen should return to the
+# lowering semantic suite.
+list(REMOVE_ITEM OMP_FORTRAN_ALL_CASES
+  exampleA281f.f)
+
 set(_omp_fortran_lowering_output_dir
   ${CMAKE_CURRENT_BINARY_DIR}/test-output)
 file(MAKE_DIRECTORY ${_omp_fortran_lowering_output_dir})
@@ -63,29 +75,6 @@ if(ENABLE-FORTRAN)
 
   if(FLANG_INTRINSIC_INCLUDE_DIR AND EXISTS "${FLANG_INTRINSIC_INCLUDE_DIR}/omp_lib.h")
     set(_omp_fortran_omp_include "${FLANG_INTRINSIC_INCLUDE_DIR}")
-  endif()
-  if(NOT _omp_fortran_omp_include)
-    foreach(_flang_include_dir IN LISTS FLANG_INCLUDE_DIRS)
-      if(EXISTS "${_flang_include_dir}/flang/omp_lib.h")
-        set(_omp_fortran_omp_include "${_flang_include_dir}/flang")
-        break()
-      endif()
-    endforeach()
-    unset(_flang_include_dir)
-  endif()
-  if(ROSE_LLVM_OPENMP_RUNTIME_DIR)
-    get_filename_component(_llvm_runtime_prefix
-      "${ROSE_LLVM_OPENMP_RUNTIME_DIR}/.." ABSOLUTE)
-    if(EXISTS "${_llvm_runtime_prefix}/include/flang/omp_lib.h")
-      set(_omp_fortran_omp_include "${_llvm_runtime_prefix}/include/flang")
-    endif()
-  endif()
-  if(NOT _omp_fortran_omp_include AND _omp_fortran_compiler)
-    get_filename_component(_flang_bin_dir "${_omp_fortran_compiler}" DIRECTORY)
-    get_filename_component(_flang_prefix "${_flang_bin_dir}/.." ABSOLUTE)
-    if(EXISTS "${_flang_prefix}/include/flang/omp_lib.h")
-      set(_omp_fortran_omp_include "${_flang_prefix}/include/flang")
-    endif()
   endif()
   if(NOT _omp_fortran_omp_include)
     list(APPEND _omp_fortran_missing_reqs
@@ -236,6 +225,46 @@ if(ENABLE-FORTRAN)
     omp_lowering_fortran_negative_unsupported_declarative 360)
   set_property(
     TEST omp_lowering_fortran_negative_unsupported_declarative
+    APPEND PROPERTY LABELS
+    "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_NEGATIVE;OMPLOWERING_FORTRAN")
+
+  # Expected failure: Flang 23 rejects the OpenMP Examples default(none)
+  # specimen that Flang 22 compiled (see the exclusion above).  Compile the
+  # unchanged original exactly as the semantic oracle is compiled and require
+  # Flang's exit status 1 with the one exact DEFAULT(NONE) diagnostic.
+  set(_omp_a281f_workdir
+    ${_omp_fortran_lowering_output_dir}/native-negative/exampleA281f_f)
+  file(MAKE_DIRECTORY ${_omp_a281f_workdir})
+  add_test(
+    NAME omp_lowering_fortran_native_negative_exampleA281f_f
+    WORKING_DIRECTORY ${_omp_a281f_workdir}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      ulimit -c 0
+      compiler=$1
+      source=$2
+      omp_include=$3
+      log=exampleA281f.native.log
+      set +e
+      "$compiler" -fopenmp=libiomp5 -O0 -g "-I$omp_include" -c "$source" \
+        -o exampleA281f.native.o >"$log" 2>&1
+      status=$?
+      set -e
+      cat "$log"
+      test "$status" -eq 1
+      expected="$source:18:7: error: The DEFAULT(NONE) clause requires that 'y' must be listed in a data-sharing attribute clause"
+      test "$(grep -Fxc -- "$expected" "$log")" -eq 1
+      test "$(grep -c ': error: ' "$log")" -eq 1
+      test ! -e exampleA281f.native.o
+    ]=]
+      dummy
+      ${_omp_fortran_compiler}
+      ${_omp_fortran_dir}/exampleA281f.f
+      ${_omp_fortran_omp_include})
+  _omp_set_test_timeout(
+    omp_lowering_fortran_native_negative_exampleA281f_f 360)
+  set_property(
+    TEST omp_lowering_fortran_native_negative_exampleA281f_f
     APPEND PROPERTY LABELS
     "${OMP_LOWERING_FORTRAN_LABELS};OMPLOWERING_NEGATIVE;OMPLOWERING_FORTRAN")
 endif()

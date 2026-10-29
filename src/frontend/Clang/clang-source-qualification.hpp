@@ -354,7 +354,7 @@ inline SourceQualification sourceQualificationFromNestedNameSpecifierLoc(
     }
 
     if (!source_owns_delimiter && !source_macro_owns_delimiter) {
-      // LLVM 22's namespace NestedNameSpecifierLoc can end at the namespace
+      // LLVM 23's namespace NestedNameSpecifierLoc can end at the namespace
       // identifier while the following '::' remains the exact delimiter for
       // that semantic component.  Consume only that mandatory token and reject
       // every other source shape.

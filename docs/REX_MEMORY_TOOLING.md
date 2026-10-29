@@ -31,7 +31,7 @@ cmake --build build -j"$(nproc)"
 ```
 
 ### Sanitizer build
-Sanitizers require `libclang-cpp` (LLVM 22). Use `Debug` to keep `ROSE_ASSERT` active during memory checks. If `ROSE_SANITIZERS` is empty, the build defaults to `address;leak`.
+Sanitizers require `libclang-cpp` (LLVM 23). Use `Debug` to keep `ROSE_ASSERT` active during memory checks. If `ROSE_SANITIZERS` is empty, the build defaults to `address;leak`.
 ```bash
 cmake -S . -B build-sanitizer -DCMAKE_BUILD_TYPE=Debug \
   -DENABLE-SANITIZER=ON -DROSE_SANITIZERS="address;leak;undefined"
@@ -73,7 +73,7 @@ Use `ctest -N -R "<regex>"` to list tests before running memcheck.
 For the whole-codebase audit, the external-issue policy and evidence register are
 in [codebase-audit/README.md](codebase-audit/README.md#external-behavior-policy)
 and [codebase-audit/external-exceptions.md](codebase-audit/external-exceptions.md).
-Use stock LLVM 22 by default. First correct REX integration through supported
+Use stock LLVM 23 by default. First correct REX integration through supported
 APIs and ownership. Narrow external-report suppressions require origin and
 correctness evidence, an inline register reference, and explicit recheck/removal
 conditions. Neither external ownership nor an existing suppression justifies

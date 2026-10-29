@@ -17,16 +17,16 @@ mkdir -p "$fixture_root/docs" "$fixture_root/src" "$fixture_root/build" \
   "$fixture_root/output" "$fixture_root/overlay" \
   "$fixture_root/src/c++/include" "$fixture_root/toolchain/include/c++/v1" \
   "$fixture_root/toolchain/bin" \
-  "$fixture_root/lib/llvm-22/include/c++/v1" \
-  "$fixture_root/lib/llvm-22/lib/clang/22/include" \
+  "$fixture_root/lib/llvm-23/include/c++/v1" \
+  "$fixture_root/lib/llvm-23/lib/clang/23/include" \
   "$fixture_root/usr/include" \
   "$fixture_root/configured-sysroot/usr/include/c++/v1" \
   "$fixture_root/configured-sysroot/usr/include" \
-  "$fixture_root/configured-resource/lib/clang/22/include"
+  "$fixture_root/configured-resource/lib/clang/23/include"
 
-selected_compiler="$fixture_root/toolchain/bin/clang++-22"
+selected_compiler="$fixture_root/toolchain/bin/clang++-23"
 
-cat > "$fixture_root/toolchain/bin/fake-clang++-22" <<EOF
+cat > "$fixture_root/toolchain/bin/fake-clang++-23" <<EOF
 #!/bin/sh
 saw_sysroot=false
 saw_target=false
@@ -64,15 +64,15 @@ case " \$* " in
       cat >&2 <<PATHS
 #include <...> search starts here:
  $fixture_root/configured-sysroot/usr/include/c++/v1
- $fixture_root/configured-resource/lib/clang/22/include
+ $fixture_root/configured-resource/lib/clang/23/include
  $fixture_root/configured-sysroot/usr/include
 End of search list.
 PATHS
     else
       cat >&2 <<PATHS
 #include <...> search starts here:
- $fixture_root/lib/llvm-22/include/c++/v1
- $fixture_root/lib/llvm-22/lib/clang/22/include
+ $fixture_root/lib/llvm-23/include/c++/v1
+ $fixture_root/lib/llvm-23/lib/clang/23/include
  $fixture_root/usr/include
 End of search list.
 PATHS
@@ -82,14 +82,14 @@ PATHS
     if [ "\$configured" = true ]; then
       cat >&2 <<PATHS
 #include <...> search starts here:
- $fixture_root/configured-resource/lib/clang/22/include
+ $fixture_root/configured-resource/lib/clang/23/include
  $fixture_root/configured-sysroot/usr/include
 End of search list.
 PATHS
     else
       cat >&2 <<PATHS
 #include <...> search starts here:
- $fixture_root/lib/llvm-22/lib/clang/22/include
+ $fixture_root/lib/llvm-23/lib/clang/23/include
  $fixture_root/usr/include
 End of search list.
 PATHS
@@ -101,14 +101,14 @@ PATHS
     ;;
 esac
 EOF
-chmod +x "$fixture_root/toolchain/bin/fake-clang++-22"
+chmod +x "$fixture_root/toolchain/bin/fake-clang++-23"
 
 include_classification="$($python "$generator" \
   --print-compiler-include-paths \
-  "$fixture_root/toolchain/bin/fake-clang++-22")"
+  "$fixture_root/toolchain/bin/fake-clang++-23")"
 expected_include_classification="libc:$fixture_root/usr/include
-stdlib:$fixture_root/lib/llvm-22/include/c++/v1
-system:$fixture_root/lib/llvm-22/lib/clang/22/include"
+stdlib:$fixture_root/lib/llvm-23/include/c++/v1
+system:$fixture_root/lib/llvm-23/lib/clang/23/include"
 if [ "$include_classification" != "$expected_include_classification" ]; then
   echo "LLVM-hosted libc++ include classification is not exact" >&2
   printf 'expected:\n%s\nactual:\n%s\n' \
@@ -121,18 +121,18 @@ cat > "$fixture_root/build/toolchain_probe_commands.json" <<EOF
   {
     "directory": "$fixture_root/src",
     "file": "$fixture_root/src/public.cpp",
-    "arguments": ["$fixture_root/toolchain/bin/fake-clang++-22", "--sysroot=$fixture_root/configured-sysroot", "-target", "rex-docs-target", "-stdlib=libc++", "--gcc-install-dir=$fixture_root/configured-gcc-install", "--gcc-triple=rex-docs-gcc", "-c", "$fixture_root/src/public.cpp"]
+    "arguments": ["$fixture_root/toolchain/bin/fake-clang++-23", "--sysroot=$fixture_root/configured-sysroot", "-target", "rex-docs-target", "-stdlib=libc++", "--gcc-install-dir=$fixture_root/configured-gcc-install", "--gcc-triple=rex-docs-gcc", "-c", "$fixture_root/src/public.cpp"]
   }
 ]
 EOF
 
 configured_include_classification="$($python "$generator" \
   --print-compiler-include-paths \
-  "$fixture_root/toolchain/bin/fake-clang++-22" \
+  "$fixture_root/toolchain/bin/fake-clang++-23" \
   --compile-db "$fixture_root/build/toolchain_probe_commands.json")"
 expected_configured_include_classification="libc:$fixture_root/configured-sysroot/usr/include
 stdlib:$fixture_root/configured-sysroot/usr/include/c++/v1
-system:$fixture_root/configured-resource/lib/clang/22/include"
+system:$fixture_root/configured-resource/lib/clang/23/include"
 if [ "$configured_include_classification" != \
      "$expected_configured_include_classification" ]; then
   echo "documentation include classification ignored compile-command toolchain flags" >&2
@@ -215,7 +215,7 @@ if [ "$detected_compiler" != "$selected_compiler" ]; then
 fi
 
 cat >> "$fixture_root/build/CMakeCache.txt" <<EOF
-CMAKE_CXX_COMPILER:FILEPATH=$fixture_root/toolchain/bin/different-clang++-22
+CMAKE_CXX_COMPILER:FILEPATH=$fixture_root/toolchain/bin/different-clang++-23
 EOF
 if "$python" "$generator" \
   --print-cmake-cxx-compiler "$fixture_root/build/compile_commands.json" \
@@ -225,7 +225,7 @@ if "$python" "$generator" \
   exit 1
 fi
 if ! grep -Fxq \
-  "CMake cache/generated C++ compiler state mismatch: $fixture_root/toolchain/bin/different-clang++-22 != $selected_compiler" \
+  "CMake cache/generated C++ compiler state mismatch: $fixture_root/toolchain/bin/different-clang++-23 != $selected_compiler" \
   "$fixture_root/mismatched-compiler-stderr"; then
   echo "mismatched CMake compiler state did not produce the hard diagnostic" >&2
   cat "$fixture_root/mismatched-compiler-stderr" >&2

@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  LLVM_VERSION: 22
+  LLVM_VERSION: 23
   DOCS_SITE_ARTIFACT: docs-site
   DOCS_BUILD_OUTPUT_DIR: _site
   REX_WASM_ARTIFACT: rex-wasm-dist

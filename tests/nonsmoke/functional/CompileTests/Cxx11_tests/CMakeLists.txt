@@ -961,10 +961,11 @@ if(NOT REX_CXX11_TESTS_HOST_IS_X86)
 endif()
 
 set(CXX11_TESTCODES_SKIP_FINAL_COMPILE
-  # Clang 22 code generation crashes on the original sources because the VLA
-  # bound uses an undefined constexpr constructor. Keep exercising the REX
-  # frontend/unparser path, but do not require a backend object compile that
-  # the upstream compiler cannot perform for the source itself.
+  # Clang 23 code generation does not terminate on the original sources: it
+  # never finishes emitting the VLA bound, which uses an undefined constexpr
+  # constructor. Keep exercising the REX frontend/unparser path, but do not
+  # require a backend object compile that the upstream compiler cannot perform
+  # for the source itself.
   test2019_41.C
   test2019_42.C
 )
@@ -996,7 +997,7 @@ assert_cxx11_specimens_exist(CXX11_TESTCODES)
 assert_cxx11_specimens_exist(CXX11_TESTCODES_CXX03)
 
 set(CXX11_NEGATIVE_TESTCODES
-  # Clang 22 rejects these originals in C++11 mode before REX can build a
+  # Clang 23 rejects these originals in C++11 mode before REX can build a
   # valid Sage tree. Keep them as explicit negative frontend coverage.
   rose-1973.C
   test2012_07.C

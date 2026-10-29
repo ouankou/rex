@@ -33,6 +33,9 @@ set(CXX_TESTCODES
   rex_frontend_using_terminal_provenance.cpp
   rex_frontend_lazy_bounded_system_header_fields.cpp
   rex_frontend_lazy_system_header_fields.cpp
+  rex_frontend_anonymous_union_default_member_initializer.cpp
+  rex_frontend_initializer_list_bound_array_temporary.cpp
+  rex_frontend_structured_binding_holding_categories.cpp
   rex_frontend_local_class_template_constructor_field_identity.cpp
   rex_frontend_standard_template_specialization_transaction.cpp
   rex_frontend_static_member_publication.cpp
@@ -3149,6 +3152,20 @@ set(CXX_TESTCODES_X86_ONLY
 )
 if(NOT REX_CXX_TESTS_HOST_IS_X86)
   list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_X86_ONLY})
+endif()
+
+# __float128 is a target extension (for example x86-64), not a portable type;
+# AArch64 Clang rejects it.  Register its literal-identity specimen only when
+# the configured C++ compiler provides the type.
+include(CheckCXXSourceCompiles)
+check_cxx_source_compiles(
+  "__float128 rex_quad = 1.25Q; int main() { return rex_quad > 0 ? 0 : 1; }"
+  REX_CXX_TESTS_HAS_FLOAT128)
+set(CXX_TESTCODES_FLOAT128_ONLY
+  rex_unparser_extended_float_identity.cpp
+)
+if(NOT REX_CXX_TESTS_HAS_FLOAT128)
+  list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_FLOAT128_ONLY})
 endif()
 
 list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_GNUXX03})
@@ -6728,6 +6745,21 @@ rex_add_cxx_unparse_check_test(
 )
 
 rex_add_cxx_unparse_check_test(
+  "rex_frontend_anonymous_union_default_member_initializer"
+  "grep -E 'unsigned[[:space:]]+char[[:space:]]+byte0[[:space:]]*=[[:space:]]*7[[:space:]]*;' rose_rex_frontend_anonymous_union_default_member_initializer.cpp && grep -E 'short[[:space:]]+tag[[:space:]]*=[[:space:]]*3[[:space:]]*;' rose_rex_frontend_anonymous_union_default_member_initializer.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 rose_rex_frontend_anonymous_union_default_member_initializer.cpp -o rex_frontend_anonymous_union_default_member_initializer && ./rex_frontend_anonymous_union_default_member_initializer"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_frontend_initializer_list_bound_array_temporary"
+  "grep -E 'rex_sum[[:space:]]*[(][[:space:]]*[{][[:space:]]*1[[:space:]]*,[[:space:]]*2[[:space:]]*,[[:space:]]*3[[:space:]]*[}][[:space:]]*[)]' rose_rex_frontend_initializer_list_bound_array_temporary.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 rose_rex_frontend_initializer_list_bound_array_temporary.cpp -o rex_frontend_initializer_list_bound_array_temporary && ./rex_frontend_initializer_list_bound_array_temporary"
+)
+
+rex_add_cxx_unparse_check_test(
+  "rex_frontend_structured_binding_holding_categories"
+  "grep -E 'auto[[:space:]]*&[[:space:]]*\\[[[:space:]]*lvalue_text[[:space:]]*,[[:space:]]*lvalue_number[[:space:]]*\\]' rose_rex_frontend_structured_binding_holding_categories.cpp && grep -E 'auto[[:space:]]*\\[[[:space:]]*prvalue_text[[:space:]]*,[[:space:]]*prvalue_number[[:space:]]*\\]' rose_rex_frontend_structured_binding_holding_categories.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 rose_rex_frontend_structured_binding_holding_categories.cpp -o rex_frontend_structured_binding_holding_categories && ./rex_frontend_structured_binding_holding_categories"
+)
+
+rex_add_cxx_unparse_check_test(
   "rex_frontend_static_member_publication"
   "grep -E 'RexStaticMemberOwner::MemberType[[:space:]]+RexStaticMemberOwner::member' rose_rex_frontend_static_member_publication.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_frontend_static_member_publication.cpp"
 )
@@ -6737,10 +6769,12 @@ rex_add_cxx_unparse_check_test(
   "grep -E 'template[[:space:]]*<[^>]*DefinitionLeft[^>]*DefinitionRight' rose_rex_frontend_template_redeclaration_parameter_spelling.cpp && grep -E 'void[[:space:]]+rex_exchange[[:space:]]*[(][[:space:]]*DefinitionLeft' rose_rex_frontend_template_redeclaration_parameter_spelling.cpp && grep -E 'template[[:space:]]*<[^>]*RedeclarationLeft[^>]*RedeclarationRight' rose_rex_frontend_template_redeclaration_parameter_spelling.cpp && grep -E 'void[[:space:]]+rex_exchange[[:space:]]*[(][[:space:]]*RedeclarationLeft' rose_rex_frontend_template_redeclaration_parameter_spelling.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_frontend_template_redeclaration_parameter_spelling.cpp"
 )
 
-rex_add_cxx_unparse_check_test(
-  "rex_unparser_extended_float_identity"
-  "grep -F '1.5f16' rose_rex_unparser_extended_float_identity.cpp && grep -F '1.25Q' rose_rex_unparser_extended_float_identity.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_unparser_extended_float_identity.cpp"
-)
+if(REX_CXX_TESTS_HAS_FLOAT128)
+  rex_add_cxx_unparse_check_test(
+    "rex_unparser_extended_float_identity"
+    "grep -F '1.5f16' rose_rex_unparser_extended_float_identity.cpp && grep -F '1.25Q' rose_rex_unparser_extended_float_identity.cpp && ${CMAKE_CXX_COMPILER} -std=gnu++17 -c rose_rex_unparser_extended_float_identity.cpp"
+  )
+endif()
 
 # Issue 160/#268: Keep the instantiated entity in the template's semantic
 # namespace while emitting each explicit-instantiation directive in its exact

@@ -3,7 +3,7 @@
 ## Project Overview
 REX is a modernization and cleanup effort of the ROSE compiler infrastructure. It is an open-source compiler infrastructure to build source-to-source program transformation and analysis tools for large-scale applications (C, C++, Fortran, OpenMP, etc.).
 
-**Key Differentiator:** REX exclusively uses the Clang/LLVM frontend (specifically LLVM 22) for C/C++ analysis, moving away from the legacy frontend.
+**Key Differentiator:** REX exclusively uses the Clang/LLVM frontend (specifically LLVM 23) for C/C++ analysis, moving away from the legacy frontend.
 
 ## Directory Structure
 *   **`src/`**: Core compiler source code.
@@ -19,7 +19,7 @@ REX is a modernization and cleanup effort of the ROSE compiler infrastructure. I
 
 ## Build & Installation
 **Primary Build Method:** CMake (via `build-rex.sh`)
-**Strict Requirement:** LLVM/Clang 22 must be installed and findable (`llvm-config`).
+**Strict Requirement:** LLVM/Clang 23 must be installed and findable (`llvm-config`).
 
 ### Quick Start (Preferred)
 ```bash
@@ -57,7 +57,7 @@ cmake --install .
 *   **Test Integrity:** **NEVER** modify tests or the test framework to mask failures. Fix the compiler, not the test.
 *   **Assertions & Error Handling:** Do not remove or soften hard assertions (`ROSE_ASSERT`) unless they are clearly proven to be design errors or temporary placeholders. When an error occurs, expose it hard and as early as possible; do not use fallbacks that silently carry the error.
 *   **Build System:** **IGNORE** `Makefile.am` and `configure.ac` unless explicitly checking for legacy compatibility. Focus entirely on `CMakeLists.txt` and `build-rex.sh`.
-*   **Clang Version:** The project is pinned to LLVM/Clang 22. Do not attempt to fix build errors by downgrading; fix the code to match the modern API.
+*   **Clang Version:** The project is pinned to LLVM/Clang 23. Do not attempt to fix build errors by downgrading; fix the code to match the modern API.
 *   **ROSE Upstream Sync:** For any ROSE/LLNL upstream sync task, use the repo-local skill at `.codex/skills/rose-upstream-sync/SKILL.md`. Upstream ROSE is a read-only source: fetch/log/show/diff only; never push, open PRs/issues/comments, request reviews, or mention upstream maintainers. Never restore abandoned REX components such as EDG, OFP/old Fortran parser, binary analysis, Sawyer, CodeThorn, Ada, Jovial, Java/ECJ, PHP, JavaScript, Python, UPC, X10, Csharp, Matlab, legacy autotools/Tup paths, or dropped OpenMP designs.
 *   **Documentation:** Refer to `AGENTS.md` for the most up-to-date specific instructions for this cleanup branch.
 

@@ -602,6 +602,19 @@ list(REMOVE_ITEM F90_TESTCODES
   inputUsingDefinesOnCommandline.F90
   invalid_fortran_error.f90)
 
+# REAL(KIND=10) is the x87 80-bit extended type; Flang does not enable it on
+# targets such as AArch64.  The translation/graph/token matrix compiles the
+# emitted source natively, so it runs only where Flang provides the kind.  The
+# FORTRANTEST_rex_flang_real_literal_kinds_valid frontend contract still runs
+# on every target.
+include(CheckFortranSourceCompiles)
+check_fortran_source_compiles(
+  "program rex_real10\n  real(kind=10) :: x\n  x = 2.5_10\nend program\n"
+  REX_FORTRAN_TESTS_HAS_REAL10 SRC_EXT f90)
+if(NOT REX_FORTRAN_TESTS_HAS_REAL10)
+  list(REMOVE_ITEM F90_TESTCODES rex_flang_real_literal_kinds.f90)
+endif()
+
 # Keep the semantic-regression specimens explicit even though the legacy
 # compile matrix still discovers the larger imported corpus with a glob.
 set(_rex_flang_intrinsic_module_shadow_input
@@ -1234,7 +1247,7 @@ foreach(F90_test ${F90_TESTCODES})
   endif()
 endforeach()
 
-# Flang22 has no LOCK/UNLOCK lowering even with -fcoarray. Preserve all positive
+# Flang23 has no LOCK/UNLOCK lowering even with -fcoarray. Preserve all positive
 # frontend/graph/token checks above and require the exact native rejection below.
 # https://github.com/ouankou/rex/issues/864 tracks restoring native compilation;
 # unexpected native success must fail this negative and prompt that restoration.

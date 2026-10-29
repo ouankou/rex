@@ -1,6 +1,6 @@
 # REX (ROSE Compiler Modernization)
 
-REX is a modernization of the ROSE compiler infrastructure that uses a Clang/LLVM frontend (LLVM 22) for C/C++ analysis.
+REX is a modernization of the ROSE compiler infrastructure that uses a Clang/LLVM frontend (LLVM 23) for C/C++ analysis.
 
 ## Platform support
 
@@ -31,7 +31,7 @@ ctest --test-dir build -j1 --output-on-failure
 
 ## Sanitizers and Valgrind memcheck
 
-Use separate build directories for normal, sanitizer, and Valgrind builds. Sanitizer builds require `libclang-cpp` (LLVM 22). Use `Debug` for sanitizer and memcheck builds so `ROSE_ASSERT` stays enabled.
+Use separate build directories for normal, sanitizer, and Valgrind builds. Sanitizer builds require `libclang-cpp` (LLVM 23). Use `Debug` for sanitizer and memcheck builds so `ROSE_ASSERT` stays enabled.
 
 Sanitizers (ASan/LSan/UBSan):
 ```bash

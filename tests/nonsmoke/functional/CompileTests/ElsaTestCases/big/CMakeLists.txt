@@ -29,7 +29,7 @@ set(ELSATEST_BIG_GNU89_C_TESTCODES
   c/t0021.c
 )
 set(ELSATEST_BIG_NEGATIVE_TESTCODES
-  # These originals are rejected by Clang 22 in the same language mode that the
+  # These originals are rejected by Clang 23 in the same language mode that the
   # big ELSA sweep uses. Keep them visible as expected negative coverage.
   c/dC0024.c
   c/dC0025.c

@@ -164,7 +164,7 @@ add_rex_cmdline_death_test(
 )
 
 set(_rex_unsupported_x_diagnostic
-  "REX_FRONTEND_INVARIANT[clang-language]: explicit -x language 'objective-c' is unsupported; expected a supported C, C++, CUDA, or OpenCL Clang 22 input type, or none"
+  "REX_FRONTEND_INVARIANT[clang-language]: explicit -x language 'objective-c' is unsupported; expected a supported C, C++, CUDA, or OpenCL Clang 23 input type, or none"
 )
 add_rex_cmdline_death_test(
   compiler_options_gnu_x_unsupported_split

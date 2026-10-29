@@ -61,7 +61,7 @@ ignore legacy Makefile.am and configure.ac as directed by the root instructions.
 
 ## External behavior policy
 
-Use stock LLVM 22 by default. Carrying or upstreaming a dependency fork is not a
+Use stock LLVM 23 by default. Carrying or upstreaming a dependency fork is not a
 requirement. Apply this decision order:
 
 1. Fix REX misuse, initialization, ownership, lifetime, or API usage directly.
@@ -109,7 +109,7 @@ task-owned storage, including build products, snapshots, caches, temporary
 containers and toolchain images. Do not accumulate numbered build trees or
 archives of superseded builds.
 
-The resumed audit uses one existing LLVM 22 image and one container with a
+The resumed audit uses one LLVM 23 image and one container with a
 read-only root filesystem. All builds, temporary compiler files, installed
 consumers and detailed logs reside in a loop-mounted ext4 filesystem backed by
 `build-audit/workspace.ext4`, whose fixed maximum size is 180,000,000,000 bytes.

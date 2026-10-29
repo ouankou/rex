@@ -33,8 +33,6 @@ C_tests_test2012_30_c
 C_tests_test2012_78_c
 C_tests_test2012_93_c
 C_tests_test2013_113_c
-C_tests_test2015_141_c
-C_tests_test2015_142_c
 C_tests_test2015_81_c
 C_tests_test2018_41_c
 C_tests_test2018_43_c

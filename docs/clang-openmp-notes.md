@@ -3,7 +3,7 @@
 ### Context
 - Target input: `tests/nonsmoke/functional/input_codes/axpy_omp.c`.
 - Goal: compile the source with `./build/bin/rose-compiler` while ensuring generated code (`rose_axpy_omp.c`) preserves OpenMP pragmas and is accepted by stock `clang`.
-- Environment: Clang/LLVM 22 frontend in ROSE (“rex”).
+- Environment: Clang/LLVM 23 frontend in ROSE (“rex”).
 
 ### Findings & Fixes
 - **Clang builtin redeclarations**: local prototypes for `__builtin_va_start/__builtin_va_end/__builtin_alloca` conflicted with Clang headers. Added `__has_builtin` guards and adjusted signatures to match Clang’s runtime expectations.

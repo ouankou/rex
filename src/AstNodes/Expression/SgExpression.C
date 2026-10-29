@@ -95,6 +95,12 @@ bool SgExpression::is_valid_temporary_materialization(
 bool SgExpression::is_valid_bound_temporary_destructor(
     SgType *type, SgMemberFunctionDeclaration *destructor) {
   auto *object = Rose::AST::selectedDestructorClass(destructor);
+  // A bound array temporary (for example the backing array of a
+  // std::initializer_list) is destroyed element by element with the element
+  // class's destructor.
+  while (auto *array = isSgArrayType(
+             type != nullptr ? type->stripTypedefsAndModifiers() : nullptr))
+    type = array->get_base_type();
   return object != nullptr && type != nullptr &&
          Rose::AST::resolvedClassType(type) == object;
 }

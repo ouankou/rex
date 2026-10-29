@@ -6700,6 +6700,8 @@ void Unparse_ExprStmt::unparseAttributedStatement(SgStatement *stmt,
       return "distribute";
     case Attribute::e_loop_hint_option_vectorize_predicate:
       return "vectorize_predicate";
+    case Attribute::e_loop_hint_option_licm_disabled:
+      return "licm";
     default:
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[statement-loop-hint]: invalid option=%d\n",

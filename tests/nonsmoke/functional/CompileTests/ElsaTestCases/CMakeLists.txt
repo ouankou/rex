@@ -22,7 +22,7 @@ set(_elsa_output_dir ${CMAKE_CURRENT_BINARY_DIR}/rose_output)
 file(MAKE_DIRECTORY ${_elsa_output_dir})
 
 set(ELSA_TESTCODES_NEGATIVE
-  # Clang 22 rejects these original ELSA specimens in GNU++03 mode. Keep them
+  # Clang 23 rejects these original ELSA specimens in GNU++03 mode. Keep them
   # registered as hard negative frontend coverage instead of continuing past
   # diagnostics and compiling a partial AST.
   d0064.cc

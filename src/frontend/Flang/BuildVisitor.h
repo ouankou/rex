@@ -359,6 +359,7 @@ public:
   void Build(Fortran::parser::IntrinsicStmt &);
   void Build(Fortran::parser::InterfaceBlock &);
   void Build(Fortran::parser::EnumDef &);
+  void Build(Fortran::parser::EnumerationTypeDef &);
   void Build(Fortran::parser::DerivedTypeDef &);
   void Build(Fortran::parser::DimensionStmt &);
   void Build(Fortran::parser::NamelistStmt &);
@@ -368,12 +369,10 @@ public:
   void Build(Fortran::parser::OmpEndDirective &);
   void Build(Fortran::parser::OmpBeginSectionsDirective &);
   void Build(Fortran::parser::OmpEndSectionsDirective &);
-  void Build(Fortran::parser::OmpBeginLoopDirective &);
-  void Build(Fortran::parser::OmpEndLoopDirective &);
   void Build(Fortran::parser::OpenMPInvalidDirective &);
   void Build(Fortran::parser::OpenMPMisplacedEndDirective &);
-  void Before(Fortran::parser::OpenMPDeclareSimdConstruct &);
-  void Post(Fortran::parser::OpenMPDeclareSimdConstruct &);
+  void Before(Fortran::parser::OmpDeclareSimdDirective &);
+  void Post(Fortran::parser::OmpDeclareSimdDirective &);
   void Before(Fortran::parser::OmpDeclareVariantDirective &);
   void Post(Fortran::parser::OmpDeclareVariantDirective &);
   void Build(Fortran::parser::AccBeginBlockDirective &);

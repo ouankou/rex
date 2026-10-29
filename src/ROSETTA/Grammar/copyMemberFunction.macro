@@ -18,6 +18,11 @@ $DEPENDENCY_COPY
 
      if (const SgTypedefDeclaration* source = isSgTypedefDeclaration(this))
         SageInterface::materializeTypeWithCopyMap(source->get_base_type(), help, true);
+  // The cloned promotion type is a semantic type edge; publish its exact
+  // identity before the generic member copy can clone a canonical type.
+     if (const SgEnumDeclaration* source = isSgEnumDeclaration(this))
+        if (SgType* type = source->get_promotion_type())
+           SageInterface::materializeTypeWithCopyMap(type, help, true);
      if (const SgBaseClass* source = isSgBaseClass(this))
         {
         if (SgType* type = source->get_source_type())

@@ -252,7 +252,7 @@ clang::SourceRange expressionSourceRange(const clang::Expr &expression,
       // Clang removes the written outer array declarator from the TypeLoc.
       end = allocation->getEndLoc();
     } else {
-      // LLVM22 ActOnCXXNew stores Declarator::getEndLoc(), which is invalid
+      // LLVM23 ActOnCXXNew stores Declarator::getEndLoc(), which is invalid
       // for `new decltype(array)`. The retained TypeLoc owns its exact end.
       end = type_info->getTypeLoc().getEndLoc();
     }
@@ -6412,6 +6412,8 @@ bool ClangToSageTranslator::VisitAttributedStmt(
       return SageAttribute::e_loop_hint_option_distribute;
     case clang::LoopHintAttr::VectorizePredicate:
       return SageAttribute::e_loop_hint_option_vectorize_predicate;
+    case clang::LoopHintAttr::LICMDisabled:
+      return SageAttribute::e_loop_hint_option_licm_disabled;
     }
     std::cerr << "REX_FRONTEND_INVARIANT[statement-loop-hint]: unsupported "
                  "Clang loop option="
@@ -9332,7 +9334,7 @@ ClangToSageTranslator::translateClangCastKind(clang::CastKind kind) const {
   }
   fprintf(stderr,
           "REX_FRONTEND_INVARIANT[semantic-conversion-kind]: unsupported "
-          "LLVM 22 CastKind=%d\n",
+          "LLVM 23 CastKind=%d\n",
           static_cast<int>(kind));
   ROSE_ABORT();
 }
@@ -11641,7 +11643,7 @@ bool ClangToSageTranslator::VisitCXXNewExpr(clang::CXXNewExpr *cxx_new_expr,
         const clang::IntegerLiteral *inferred_size =
             llvm::dyn_cast<clang::IntegerLiteral>(size_expr);
         clang::Token size_token;
-        // LLVM 22 anchors inferred sizes at the TypeLoc end but records no
+        // LLVM 23 anchors inferred sizes at the TypeLoc end but records no
         // source-role flag. Preserve that role from exact tokens in the AST.
         const bool written_literal =
             inferred_size != nullptr &&
@@ -12211,7 +12213,7 @@ bool ClangToSageTranslator::VisitCXXPseudoDestructorExpr(
   SgExpression *destructor_reference = nullptr;
   SgType *callee_type = nullptr;
   if (type_info != nullptr) {
-    // LLVM 22 can give the destructor identifier trivial TypeLocs containing
+    // LLVM 23 can give the destructor identifier trivial TypeLocs containing
     // its lookup qualifier. That qualifier is written before '~', not after it.
     SgType *destroyed_type =
         llvm::isa<clang::TypedefType>(type_info->getType().getTypePtr())

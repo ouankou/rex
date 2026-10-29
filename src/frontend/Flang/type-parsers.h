@@ -16,7 +16,7 @@
 
 namespace Fortran::parser {
 
-// LLVM 22's program entry parses REX's provenance-preserving OpenMP projection
+// LLVM 23's program entry parses REX's provenance-preserving OpenMP projection
 // directly, without replacing the original cooked stream owned by Parsing.
 template <typename A> struct Parser {
   using resultType = A;

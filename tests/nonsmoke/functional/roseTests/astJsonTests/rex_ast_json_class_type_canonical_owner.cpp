@@ -115,15 +115,15 @@ void verifyCanonicalClassTypes(SgNode *root) {
       holding->validate_structured_binding();
       ROSE_ASSERT(holding->get_structured_binding_alias() == alias);
       values = holding->get_initializer();
-      bool saw_temporary_owner = false;
+      // CWG3135: a prvalue get<i> initializer creates a holding object of the
+      // tuple element type instead of a reference to a lifetime-extended
+      // temporary.
+      SgType *holding_type = holding->get_type()->stripTypedefsAndModifiers();
+      ROSE_ASSERT(isSgReferenceType(holding_type) == nullptr &&
+                  isSgRvalueReferenceType(holding_type) == nullptr);
       for (auto *child : NodeQuery::querySubTree(values, V_SgExpression))
-        if (auto *temporary = isSgExpression(child);
-            temporary->has_semantic_wrapper(
-                SgExpression::e_materialized_temporary)) {
-          ROSE_ASSERT(temporary->get_materialized_lifetime_owner() == holding);
-          saw_temporary_owner = true;
-        }
-      ROSE_ASSERT(saw_temporary_owner);
+        ROSE_ASSERT(!isSgExpression(child)->has_semantic_wrapper(
+            SgExpression::e_materialized_temporary));
     }
     const auto references =
         NodeQuery::querySubTree(values, V_SgCxxDecompositionRefExp);
