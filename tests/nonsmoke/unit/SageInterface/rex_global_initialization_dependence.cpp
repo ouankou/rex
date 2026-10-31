@@ -1134,6 +1134,13 @@ void requireTrackingNodeLifetimes(SgProject *project) {
 }
 
 bool requireDependenceTokenBoundaries() {
+  // Separate records can contribute independent attributes to one node.
+  std::istringstream nodeRecords("node : [ first ] ; node : [ second ] ;");
+  AstUtilInterface::DependenceTable nodeTable(false);
+  nodeTable.CollectFromFile(nodeRecords);
+  ROSE_ASSERT(nodeTable.get_nodeInfo("node") ==
+              (std::vector<std::string>{"first", "second"}));
+
   const std::vector<std::string> operator_names = {
       "operator[]",        "operator()",      "operator new",
       "operator new[]",    "operator delete", "operator delete[]",
