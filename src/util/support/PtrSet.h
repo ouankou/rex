@@ -79,6 +79,7 @@ public:
   class iterator : public Iterator {
   public:
     iterator(const Iterator &that) : Iterator(that) {}
+    iterator(const iterator &) = default;
     bool operator==(const iterator &that) const {
       return Iterator::operator==(that);
     }

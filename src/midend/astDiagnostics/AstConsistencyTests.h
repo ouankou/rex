@@ -269,6 +269,10 @@ public:
   TestForProperLanguageAndSymbolTableCaseSensitivity_InheritedAttribute(
       const TestForProperLanguageAndSymbolTableCaseSensitivity_InheritedAttribute
           &X);
+  TestForProperLanguageAndSymbolTableCaseSensitivity_InheritedAttribute &
+  operator=(
+      const TestForProperLanguageAndSymbolTableCaseSensitivity_InheritedAttribute
+          &) = default;
 };
 
 class TestForProperLanguageAndSymbolTableCaseSensitivity

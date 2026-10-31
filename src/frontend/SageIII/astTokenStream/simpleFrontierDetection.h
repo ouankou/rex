@@ -30,6 +30,9 @@ public:
 
   SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute(
       const SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute &X);
+  SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute &operator=(
+      const SimpleFrontierDetectionForTokenStreamMapping_InheritedAttribute &) =
+      default;
 };
 
 class SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute {
@@ -49,6 +52,9 @@ public:
   SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute(
       const SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute
           &X);
+  SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute &operator=(
+      const SimpleFrontierDetectionForTokenStreamMapping_SynthesizedAttribute
+          &) = default;
 };
 
 class SimpleFrontierDetectionForTokenStreamMapping

@@ -30,6 +30,7 @@ struct MostRecentScope {
   MostRecentScope(void) : loop_(0), switch_(0) {}
   MostRecentScope(const MostRecentScope &x)
       : loop_(x.loop_), switch_(x.switch_) {}
+  MostRecentScope &operator=(const MostRecentScope &) = default;
 
   // Constructor that simultaneously initializes and updates
   MostRecentScope(const MostRecentScope &x, const SgStatement *s)

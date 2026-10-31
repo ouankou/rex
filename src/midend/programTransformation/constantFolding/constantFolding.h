@@ -22,6 +22,8 @@ public:
 
   ConstantFoldingInheritedAttribute(const ConstantFoldingInheritedAttribute &) =
       default;
+  ConstantFoldingInheritedAttribute &
+  operator=(const ConstantFoldingInheritedAttribute &) = default;
 };
 
 class ConstantFoldingSynthesizedAttribute {
@@ -76,6 +78,8 @@ public:
   ConstantUnFoldingSynthesizedAttribute(
       const ConstantUnFoldingSynthesizedAttribute &X)
       : newExp(X.newExp) {};
+  ConstantUnFoldingSynthesizedAttribute &
+  operator=(const ConstantUnFoldingSynthesizedAttribute &) = default;
 };
 
 class ConstantUnFoldingTraversal
