@@ -13,8 +13,10 @@ fences would be literal text).
 
 `scripts/prepare-reference.py` creates category navigation, adds compact first
 signatures to function tables, sets plain page titles, and resolves inline HTML
-links to MkDocs' directory URLs. Members literally named `index` use
-`index-symbol/` to avoid overwriting their owning class/namespace page. There is no AsciiDoc or format-conversion stage.
+source links when renaming pages; Zensical handles directory URLs. Members
+literally named `index` use `index-symbol/` to avoid overwriting their owning
+class/namespace page. API leaves and code blocks use native search exclusions.
+There is no AsciiDoc or format-conversion stage.
 When upgrading MrDocs, compare this small template set with its upstream example
 and run real generation plus the final-site link/anchor checks.
 

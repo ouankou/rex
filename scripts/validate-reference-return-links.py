@@ -12,7 +12,7 @@ from pathlib import Path
 
 # Only generated synopsis blocks, not user-provided documentation examples.
 _CODE_BLOCK = re.compile(
-    r'<pre><code class="source-code cpp">(.*?)</code></pre>',
+    r'<pre\b[^>]*><code class="source-code cpp">(.*?)</code></pre>',
     re.DOTALL | re.MULTILINE,
 )
 _TOKEN = re.compile(r"[A-Za-z_]\w*|::|[^\s]")
