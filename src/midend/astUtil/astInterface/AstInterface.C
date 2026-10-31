@@ -2834,7 +2834,9 @@ bool AstInterface::IsAddressOfOp(const AstNodePtr &_s, AstNodePtr *ref) {
 }
 
 bool AstInterface::IsMemoryAllocation(const AstNodePtr &s, AstNodeType *exptype,
-                                      AstNodePtr *init) {
+                                      AstNodePtr *init, AstNodeList *dest) {
+  if (dest != nullptr)
+    dest->clear();
   AstNodePtrImpl s1 = stripExactValueIdentityConversions(
       s.get_ptr(), "AstInterface::IsMemoryAllocation", false);
   AstNodePtr f;
@@ -2871,6 +2873,8 @@ bool AstInterface::IsMemoryAllocation(const AstNodePtr &s, AstNodeType *exptype,
     if (init != 0) {
       *init = is_new->get_constructor_args();
     }
+    if (dest != nullptr && is_new->get_placement_args() != nullptr)
+      *dest = GetChildrenList(is_new->get_placement_args());
     return true;
   }
   return false;

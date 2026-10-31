@@ -28,6 +28,16 @@ add_executable(rex_side_effect_callable_channels
 target_link_libraries(rex_side_effect_callable_channels
   ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_allocation_argument_effects rex_allocation_argument_effects.C)
+target_link_libraries(rex_allocation_argument_effects
+  ROSE_DLL ${link_with_libraries})
+add_test(NAME rex_allocation_argument_effects
+  WORKING_DIRECTORY ${_program_analysis_output_dir}
+  COMMAND $<TARGET_FILE:rex_allocation_argument_effects> -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_allocation_argument_effects_input.C)
+set_tests_properties(rex_allocation_argument_effects
+  PROPERTIES LABELS "rex;sideEffect;astInterface")
+
 add_executable(PtrAnalTest PtrAnalTest.C)
 target_link_libraries(PtrAnalTest ROSE_DLL ${link_with_libraries})
 

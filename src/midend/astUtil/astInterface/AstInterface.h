@@ -428,7 +428,7 @@ public:
   static bool IsMemoryAccess(const AstNodePtr &s, AstNodeList *subrefs = 0);
   static bool IsMemoryAllocation(const AstNodePtr &s,
                                  AstNodeType *allocType = 0,
-                                 AstNodePtr *init = 0);
+                                 AstNodePtr *init = 0, AstNodeList *dest = 0);
   static bool IsMemoryFree(const AstNodePtr &s, AstNodeType *freedType = 0,
                            AstNodePtr *freedVariable = 0);
   static bool IsExpression(const AstNodePtr &s, AstNodeType *exptype = 0,
