@@ -3,6 +3,54 @@
 These changes are part of an unaccepted audit batch until the full required
 validation matrix passes. No supported language behavior is intentionally removed.
 
+C++ class population no longer resolves special-member exception specifications.
+[except.spec] evaluates one only when the program needs it; forcing evaluation
+instantiated ill-formed default member initializers and rejected valid programs,
+such as libstdc++ hash tables over REX's own `hash_Name`. Clang resolves every
+needed specification; the rest stay `e_exception_unevaluated` or
+`e_exception_uninstantiated` in declared exception signatures and AST JSON.
+`HasNoThrowAssign`, `HasNoThrowCopy` and `HasNoThrowConstructor` answer from
+evaluated guarantees: a throwing eligible member decides false, and a query that
+depends on an unevaluated one fails with
+`REX_AST_INVARIANT[unevaluated-exception-specification]`. Declaring implicit
+members fails at once if it raises a Clang diagnostic. This supersedes the class
+population part of AUD-2255.
+
+A C function's type is Clang's callable prototype. An old-style definition
+(C11 6.9.1p7) keeps each parameter object's declared type, while its function
+type takes the promoted one, so `int f(c) char c; {}` has type `int (int)`. When
+no earlier declaration exists, the semantic nondefining declaration synthesized
+for such a definition declares that callable identity: parameters whose
+callable type differs carry the callable type.
+
+`SgNode::SourceStateConstruction` keeps its contract but no longer inserts every
+constructed node, including `SgName` and modifier values, into a `std::set` per
+active scope. Each scope opens a construction epoch and `SgNode` records the
+epoch current at its birth in `p_constructionEpoch`, which copies never inherit.
+The adjacent flag fields keep `SgNode` at its previous size. `SgTypeTable(int)`
+sizes the global type table; scope type tables, which hold no entries, use the
+ordinary symbol-table size instead of 1001 buckets each. AST JSON schema251 is
+unchanged; rebuild consumers against the generated header.
+
+Generated node classes replace the per-slot `PoolFreeNode` list (`next_node`,
+`pool_free_nodes`) with `free_slots`, a stack of slot numbers
+(`pool_index * pool_size + slot_index`) whose last entry is allocated next.
+`SgNode::PoolEntry` records `pool_index`, so `operator delete` finds a node's
+pool through `SgNode::findPoolEntry` instead of scanning its class's pools.
+`SgNode::clearMemoryPool` frees this bookkeeping with the pools.
+
+`SgNamespaceDefinitionStatement` link setters are hand-written and, like the
+destructor, advance `get_reopening_chain_revision()`. The Clang frontend indexes
+each reopening chain's source fragments by opening order and rebuilds an index
+only when that revision changes; it audits every current index at the end of
+translation. Two fragments of one namespace with overlapping expanded-token
+intervals now fail with `REX_FRONTEND_INVARIANT[namespace-fragment-selection]`.
+
+AST JSON checkpoint writes stream to their files, and the round trip releases
+each text, parsed document and signature once the next stage has consumed it.
+Parsed objects store interned keys in a sorted member vector instead of
+`std::map`. Output bytes and schema251 are unchanged.
+
 Schema251 requires `is_braced_initialized` and
 `using_assignment_copy_constructor_syntax` on initialized names, including external
 encodings. Readers validate both booleans before construction to preserve direct

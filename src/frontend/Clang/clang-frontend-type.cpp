@@ -1283,11 +1283,21 @@ SgFunctionType *ClangToSageTranslator::buildFunctionTypeForClangProto(
       has_ellipses ==
       (!param_type_list->get_arguments().empty() &&
        isSgTypeEllipse(param_type_list->get_arguments().back()) != nullptr));
-  const auto *exception_type = source != nullptr
+  // A canonical dependent noexcept specification keeps the operand of the
+  // first declaration that produced the canonical type, so it can name another
+  // template's parameters.  This prototype's own operand has the same profile
+  // and names the parameters of the declaration being translated.
+  const auto *canonical_proto_type =
+      proto_type->getCanonicalTypeInternal()->getAs<clang::FunctionProtoType>();
+  ASSERT_not_null(canonical_proto_type);
+  const bool dependent_noexcept =
+      canonical_proto_type->getExceptionSpecType() ==
+      clang::EST_DependentNoexcept;
+  ROSE_ASSERT(!dependent_noexcept || proto_type->getExceptionSpecType() ==
+                                         clang::EST_DependentNoexcept);
+  const auto *exception_type = source != nullptr || dependent_noexcept
                                    ? proto_type
-                                   : proto_type->getCanonicalTypeInternal()
-                                         ->getAs<clang::FunctionProtoType>();
-  ASSERT_not_null(exception_type);
+                                   : canonical_proto_type;
   SgFunctionType *semantic_signature = nullptr;
   if (source != nullptr) {
     semantic_signature = isSgFunctionType(
@@ -3523,6 +3533,21 @@ ClangToSageTranslator::buildTypeFromTypeLocImpl(const clang::TypeLoc &type_loc,
   if (auto function_proto_loc = type_loc.getAs<clang::FunctionProtoTypeLoc>()) {
     const clang::FunctionProtoType *function_proto_type =
         function_proto_loc.getTypePtr();
+    // A function type that a declarator attribute rewrote (for example
+    // noreturn applied to a pointer to a typedef'd function type) has a
+    // synthesized TypeLoc with no written parameter declarations.  It spells
+    // no prototype at this position and denotes its semantic type.
+    unsigned written_parameter_count = 0;
+    for (unsigned i = 0; i < function_proto_type->getNumParams(); ++i) {
+      if (function_proto_loc.getParam(i) != nullptr)
+        ++written_parameter_count;
+    }
+    if (function_proto_type->getNumParams() != 0 &&
+        written_parameter_count == 0) {
+      return requireExactType(buildTypeFromQualifiedType(type_loc.getType()),
+                              "function-prototype-synthesized-type-loc",
+                              function_proto_type);
+    }
     auto param_type_list = std::make_unique<SgFunctionParameterTypeList>();
     auto *parameter_scope = new SgFunctionParameterScope();
     setSynthesizedFileInfo(parameter_scope);
@@ -4268,8 +4293,9 @@ ClangToSageTranslator::buildTypeFromTypeLocImpl(const clang::TypeLoc &type_loc,
             return nullptr;
           }
 
-          auto build_named_type =
-              [&](const clang::NamedDecl *decl) -> SgType * {
+          // The source-spelled class operand records the exact declaration it
+          // names, so it can be matched against the semantic class type.
+          auto build_named_type = [&](clang::NamedDecl *decl) -> SgType * {
             if (decl == nullptr) {
               return nullptr;
             }
@@ -4277,9 +4303,12 @@ ClangToSageTranslator::buildTypeFromTypeLocImpl(const clang::TypeLoc &type_loc,
             if (name_str.empty()) {
               return nullptr;
             }
+            SgDeclarationStatement *identity =
+                resolveNonrealTemplateDeclarationTarget(
+                    decl, "member-pointer-qualifier-name");
             return build_nonreal_type_from_nested_name_specifier_loc(
-                prefix_loc, resolve_scope(), SgName(name_str), nullptr, nullptr,
-                nullptr);
+                prefix_loc, resolve_scope(), SgName(name_str), nullptr,
+                identity, nullptr);
           };
 
           if (auto tag_loc = qualifier_type_loc.getAs<clang::TagTypeLoc>()) {

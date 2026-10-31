@@ -18,6 +18,7 @@ struct SgNode {
     unsigned char *live;
     int variant;
     void (*reset)();
+    size_t pool_index;
   };
   template <class T> struct PoolResetter {
     static void reset() {}
@@ -26,18 +27,30 @@ struct SgNode {
     static std::vector<PoolEntry> entries;
     return entries;
   }
+  static const PoolEntry *findPoolEntry(const unsigned char *ptr) {
+    const std::vector<PoolEntry> &pools = allPools();
+    const std::uintptr_t address = reinterpret_cast<std::uintptr_t>(ptr);
+    size_t lo = 0, hi = pools.size();
+    while (lo < hi) {
+      const size_t mid = lo + (hi - lo) / 2;
+      const std::uintptr_t base =
+          reinterpret_cast<std::uintptr_t>(pools[mid].base);
+      if (address < base)
+        hi = mid;
+      else if (address >= base + pools[mid].size)
+        lo = mid + 1;
+      else
+        return &pools[mid];
+    }
+    return nullptr;
+  }
 };
 struct RexPoolProbe {
   virtual ~RexPoolProbe() = default;
   unsigned char payload[56];
-  struct PoolFreeNode {
-    size_t pool_index, slot_index;
-    PoolFreeNode *next;
-  };
   static const unsigned pool_size;
-  static PoolFreeNode *next_node;
   static std::vector<unsigned char *> pools;
-  static std::vector<std::vector<PoolFreeNode>> pool_free_nodes;
+  static std::vector<unsigned> free_slots;
   static std::vector<std::vector<unsigned char>> pool_live_flags;
   static void *operator new(size_t);
   static void operator delete(void *, size_t);
@@ -66,6 +79,11 @@ int main() {
 #endif
     }
     allocations.clear();
+    // Nine probes fill three pools of four; the second pass reuses them, and
+    // every slot is free again after each pass.
+    assert(RexPoolProbe::pools.size() == 3);
+    assert(RexPoolProbe::free_slots.size() ==
+           RexPoolProbe::pools.size() * RexPoolProbe::pool_size);
   }
   void *oversized = RexPoolProbe::operator new(sizeof(RexPoolProbe) + 16);
   RexPoolProbe::operator delete(oversized, sizeof(RexPoolProbe) + 16);

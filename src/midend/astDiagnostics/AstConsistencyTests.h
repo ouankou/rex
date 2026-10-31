@@ -196,7 +196,14 @@ public:
    traverses the whole AST using the memory pool traversal.
  */
 class TestChildPointersInMemoryPool : public ROSE_VisitTraversal {
-  std::unordered_map<SgNode *, std::unordered_set<SgNode *>> childMap;
+  struct ParentEdge {
+    SgNode *parent;
+    SgNode *child;
+    size_t order;
+  };
+  std::vector<ParentEdge> edges;
+
+  static void reportMissingChild(SgNode *node, SgNode *parent);
 
 public:
   virtual ~TestChildPointersInMemoryPool() {};

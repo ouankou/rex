@@ -5588,7 +5588,16 @@ void Unparse_ExprStmt::unparseMFuncDeclStmt(SgStatement *stmt,
         }
         SgConstructorInitializer *ctor_initializer =
             isSgConstructorInitializer(initializer);
-        bool output_parenthesis = ctor_initializer == nullptr;
+        // A braced initializer list is itself the mem-initializer's
+        // delimited form (`member{...}`).
+        SgAggregateInitializer *braced_initializer =
+            isSgAggregateInitializer(initializer);
+        const bool braced_member_initializer =
+            braced_initializer != nullptr &&
+            braced_initializer->get_source_form() ==
+                SgAggregateInitializer::e_aggregate_initializer_source_braced;
+        bool output_parenthesis =
+            ctor_initializer == nullptr && !braced_member_initializer;
 
         if (output_parenthesis)
           curprint(string("("));

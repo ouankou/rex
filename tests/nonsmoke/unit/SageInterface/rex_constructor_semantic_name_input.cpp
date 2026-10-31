@@ -19,6 +19,11 @@ struct RexThrowingSpecialMembers {
 
 struct RexImplicitNoThrowSpecialMembers : RexNoThrowSpecialMembers {};
 
+// Nothing in the program needs these implicit exception specifications, so
+// Clang never evaluates them ([except.spec]) and the AST cannot answer whether
+// they are nothrow.
+struct RexUnneededNoThrowSpecialMembers : RexNoThrowSpecialMembers {};
+
 struct RexOverrideNoThrowSpecialMembers : RexThrowingSpecialMembers {
   RexOverrideNoThrowSpecialMembers() noexcept {}
   RexOverrideNoThrowSpecialMembers(
@@ -36,6 +41,12 @@ static_assert(!__has_nothrow_constructor(RexThrowingSpecialMembers),
               "throwing");
 static_assert(!__has_nothrow_copy(RexThrowingSpecialMembers), "throwing");
 static_assert(!__has_nothrow_assign(RexThrowingSpecialMembers), "throwing");
+static_assert(__has_nothrow_constructor(RexImplicitNoThrowSpecialMembers),
+              "implicit members inherit the base guarantee");
+static_assert(__has_nothrow_copy(RexImplicitNoThrowSpecialMembers),
+              "implicit members inherit the base guarantee");
+static_assert(__has_nothrow_assign(RexImplicitNoThrowSpecialMembers),
+              "implicit members inherit the base guarantee");
 static_assert(__has_nothrow_constructor(RexOverrideNoThrowSpecialMembers),
               "derived declaration controls its exception guarantee");
 static_assert(__has_nothrow_copy(RexOverrideNoThrowSpecialMembers), "noexcept");

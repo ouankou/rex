@@ -1936,28 +1936,36 @@ ClassHierarchyWrapper &cachedTypeTraitClassHierarchy(SgClassDefinition *owner) {
   return *cache.hierarchy;
 }
 
-bool specialMemberCannotThrow(SgMemberFunctionDeclaration *member) {
+enum class ExceptionGuarantee { cannot_throw, can_throw, unevaluated };
+
+ExceptionGuarantee
+specialMemberExceptionGuarantee(SgMemberFunctionDeclaration *member) {
   const auto &properties = member->get_functionModifier();
   if (properties.isGnuAttributeNoThrow())
-    return true;
+    return ExceptionGuarantee::cannot_throw;
   auto *type = member->get_declared_exception_signature();
   if (type == nullptr) {
     ROSE_ASSERT(member->get_type() != nullptr &&
                 member->get_type()->get_exception_specification_kind() ==
                     SgFunctionType::e_exception_none);
-    return false;
+    return ExceptionGuarantee::can_throw;
   }
   switch (type->get_exception_specification_kind()) {
   case SgFunctionType::e_exception_dynamic_none:
   case SgFunctionType::e_exception_nothrow:
   case SgFunctionType::e_exception_noexcept:
   case SgFunctionType::e_exception_noexcept_true:
-    return true;
+    return ExceptionGuarantee::cannot_throw;
   case SgFunctionType::e_exception_none:
   case SgFunctionType::e_exception_dynamic:
   case SgFunctionType::e_exception_ms_any:
   case SgFunctionType::e_exception_noexcept_false:
-    return false;
+    return ExceptionGuarantee::can_throw;
+  // The translated program never needed this specification, so the compiler
+  // never evaluated it ([except.spec]).
+  case SgFunctionType::e_exception_unevaluated:
+  case SgFunctionType::e_exception_uninstantiated:
+    return ExceptionGuarantee::unevaluated;
   default:
     ROSE_ABORT();
   }
@@ -1967,6 +1975,7 @@ bool classSpecialMemberCannotThrow(
     SgType *type, SgFunctionModifier::copy_move_kind_enum kind) {
   auto *definition = completeClassDefinitionForType(type);
   bool found = false, eligible = false;
+  SgMemberFunctionDeclaration *unevaluated = nullptr;
   for (const auto *declarations : classMemberDeclarationLists(definition)) {
     if (declarations == nullptr)
       continue;
@@ -1987,11 +1996,27 @@ bool classSpecialMemberCannotThrow(
       if (properties.isIneligibleSpecialMember())
         continue;
       eligible = true;
-      if (!specialMemberCannotThrow(member))
+      switch (specialMemberExceptionGuarantee(member)) {
+      case ExceptionGuarantee::cannot_throw:
+        break;
+      case ExceptionGuarantee::can_throw:
         return false;
+      case ExceptionGuarantee::unevaluated:
+        if (unevaluated == nullptr)
+          unevaluated = member;
+        break;
+      }
     }
   }
   ROSE_ASSERT(found || kind == SgFunctionModifier::e_copy_move_none);
+  if (unevaluated != nullptr) {
+    std::cerr << "REX_AST_INVARIANT[unevaluated-exception-specification]: "
+              << unevaluated->get_qualified_name().getString()
+              << " has an exception specification the translated program "
+                 "never needed, so its nothrow guarantee is unknown"
+              << std::endl;
+    ROSE_ABORT();
+  }
   return eligible;
 }
 } // namespace

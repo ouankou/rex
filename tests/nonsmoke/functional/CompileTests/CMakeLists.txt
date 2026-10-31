@@ -214,19 +214,19 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: tentative definition has type 'struct timezone' that is never completed]=]
   C_tests/test2012_31.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: void function 'foobar' should not return a value]=]
+  [=[error: void function 'foobar' should not return a value [-Wreturn-mismatch]]=]
   C_tests/test2012_138.c
   C_tests/test2015_93.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: incompatible pointer types initializing 'int **' with an expression of type 'int[2][2]']=]
+  [=[error: incompatible pointer types initializing 'int **' with an expression of type 'int[2][2]' [-Wincompatible-pointer-types]]=]
   C_tests/test2013_50.c
   C_tests/test2013_51.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: type specifier missing, defaults to 'int'; ISO C99 and later do not support implicit int]=]
+  [=[error: type specifier missing, defaults to 'int'; ISO C99 and later do not support implicit int [-Wimplicit-int]]=]
   C_tests/test2014_03.c
   C_tests/zpagccp.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: incompatible pointer types assigning to 'struct failure_callback_t *' from 'void (*)(int) __attribute__((noreturn))']=]
+  [=[error: incompatible pointer types assigning to 'struct failure_callback_t *' from 'void (*)(int) __attribute__((noreturn))' [-Wincompatible-pointer-types]]=]
   C_tests/test2014_18.c)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: unknown type name 'gint16']=]
@@ -238,7 +238,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: expected ')']=]
   C_tests/test2014_90.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: incompatible pointer types passing 'struct interface ***' to parameter of type 'struct interface **'; remove &]=]
+  [=[error: incompatible pointer types passing 'struct interface ***' to parameter of type 'struct interface **'; remove & [-Wincompatible-pointer-types]]=]
   C_tests/test2015_42.c)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: used type 'void *(struct numeric_resolv *)' where arithmetic or pointer type is required]=]
@@ -247,7 +247,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: initializer element is not a compile-time constant]=]
   C_tests/test2015_87.c)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: incompatible integer to pointer conversion initializing 'int *' with an expression of type 'const int']=]
+  [=[error: incompatible integer to pointer conversion initializing 'int *' with an expression of type 'const int' [-Wint-conversion]]=]
   C_tests/test2016_21.c)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: cannot redeclare builtin function '__builtin_classify_type']=]
@@ -296,6 +296,9 @@ rex_register_clang_frontend_negative_diagnostic(
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: use of class template 'Interval' requires template arguments]=]
   Cxx_tests/test2014_63.C)
+rex_register_clang_frontend_negative_diagnostic(
+  [=[error: requested alignment is not a power of 2]=]
+  Cxx_tests/test2013_71.C)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: no member named '_M_off' in 'fpos<_StateT>']=]
   Cxx_tests/test2016_85.C)
@@ -447,7 +450,7 @@ rex_register_clang_frontend_negative_diagnostic(
   [=[error: call to '__builtin_alloca' is ambiguous]=]
   ElsaTestCases/gnu/d0089.cc)
 rex_register_clang_frontend_negative_diagnostic(
-  [=[error: void function 'parport_pc_write_data' should not return a value]=]
+  [=[error: void function 'parport_pc_write_data' should not return a value [-Wreturn-mismatch]]=]
   ElsaTestCases/gnu/dC0005.c)
 rex_register_clang_frontend_negative_diagnostic(
   [=[error: array has incomplete element type 'struct board_info']=]
@@ -552,7 +555,7 @@ rex_register_clang_frontend_negative_diagnostic(
   ElsaTestCases/notCompilable/std/3.4.5.cc
 )
 rex_register_clang_frontend_negative_diagnostic(
-  [==[error: call to undeclared function 'MD5_Transform'; ISO C99 and later do not support implicit function declarations]==]
+  [==[error: call to undeclared function 'MD5_Transform'; ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]]==]
   ElsaTestCases/notCompilable/gnu/d0096.c
 )
 rex_register_clang_frontend_negative_diagnostic(
@@ -804,7 +807,7 @@ rex_register_clang_frontend_negative_diagnostic(
   ElsaTestCases/notCompilable/k0044.cc
 )
 rex_register_clang_frontend_negative_diagnostic(
-  [==[error: void function 'f' should not return a value]==]
+  [==[error: void function 'f' should not return a value [-Wreturn-mismatch]]==]
   ElsaTestCases/notCompilable/k0053.cc
   ElsaTestCases/notCompilable/t0258.cc
 )

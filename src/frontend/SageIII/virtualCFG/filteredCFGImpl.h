@@ -123,33 +123,49 @@ void printNodePlusEdges(std::ostream &o, NodeT n);
 
 /* Internal template function handles the details*/
 template <typename NodeT, typename EdgeT, bool Debug>
-void CfgToDotImpl<NodeT, EdgeT, Debug>::processNodes(NodeT n) {
-  ROSE_ASSERT(n.getNode());
-  std::pair<typename std::multimap<SgNode *, NodeT>::const_iterator,
-            typename std::multimap<SgNode *, NodeT>::const_iterator>
-      ip = exploredNodes.equal_range(n.getNode());
+void CfgToDotImpl<NodeT, EdgeT, Debug>::processNodes(NodeT start) {
+  // Nodes are printed depth first, each one's successors and then its
+  // predecessors, with the pending neighbors on an explicit stack: a path
+  // through a CFG can be far longer than the call stack can hold.
+  std::vector<std::pair<std::vector<NodeT>, size_t>> pending;
+  auto visit = [&](const NodeT &n) {
+    ROSE_ASSERT(n.getNode());
+    std::pair<typename std::multimap<SgNode *, NodeT>::const_iterator,
+              typename std::multimap<SgNode *, NodeT>::const_iterator>
+        ip = exploredNodes.equal_range(n.getNode());
 
-  for (typename std::multimap<SgNode *, NodeT>::const_iterator i = ip.first;
-       i != ip.second; ++i) {
-    if (i->second == n) {
-      return;
+    for (typename std::multimap<SgNode *, NodeT>::const_iterator i = ip.first;
+         i != ip.second; ++i) {
+      if (i->second == n) {
+        return;
+      }
     }
-  }
 
-  exploredNodes.insert(std::make_pair(n.getNode(), n));
+    exploredNodes.insert(std::make_pair(n.getNode(), n));
 
-  printNodePlusEdges<NodeT, EdgeT, Debug>(o, n);
+    printNodePlusEdges<NodeT, EdgeT, Debug>(o, n);
 
-  std::vector<EdgeT> outEdges = n.outEdges();
-  for (unsigned int i = 0; i < outEdges.size(); ++i) {
-    ROSE_ASSERT(outEdges[i].source() == n);
-    processNodes(outEdges[i].target());
-  }
+    std::vector<NodeT> neighbors;
+    for (const EdgeT &edge : n.outEdges()) {
+      ROSE_ASSERT(edge.source() == n);
+      neighbors.push_back(edge.target());
+    }
+    for (const EdgeT &edge : n.inEdges()) {
+      ROSE_ASSERT(edge.target() == n);
+      neighbors.push_back(edge.source());
+    }
+    pending.emplace_back(std::move(neighbors), 0);
+  };
 
-  std::vector<EdgeT> inEdges = n.inEdges();
-  for (unsigned int i = 0; i < inEdges.size(); ++i) {
-    ROSE_ASSERT(inEdges[i].target() == n);
-    processNodes(inEdges[i].source());
+  visit(start);
+  while (!pending.empty()) {
+    auto &[neighbors, next] = pending.back();
+    if (next == neighbors.size()) {
+      pending.pop_back();
+      continue;
+    }
+    const NodeT neighbor = neighbors[next++];
+    visit(neighbor);
   }
 }
 

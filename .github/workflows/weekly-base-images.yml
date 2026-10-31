@@ -4,6 +4,8 @@ on:
   schedule:
     - cron: "0 0 * * 3"
   workflow_dispatch:
+  # Image builds call this workflow when no base exists for their definition.
+  workflow_call:
 
 concurrency:
   group: weekly-base-images-${{ github.ref }}
@@ -46,6 +48,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Resolve base definition
+        id: definition
+        run: echo "identity=$(ci/docker/base-definition.sh)" >> "$GITHUB_OUTPUT"
+
       - name: Build base image
         uses: docker/build-push-action@v7
         with:
@@ -56,7 +62,8 @@ jobs:
           push: ${{ !env.ACT }}
           load: ${{ env.ACT != '' }}
           provenance: false
-          tags: ${{ env.ACT && format('{0}:base-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:base-{1}-{2}', env.IMAGE_REPO, github.sha, matrix.arch) }}
+          labels: org.opencontainers.image.revision=${{ github.sha }}
+          tags: ${{ env.ACT && format('{0}:base-{1}-local', env.LOCAL_IMAGE_REPO, matrix.arch) || format('{0}:base-{1}-{2}', env.IMAGE_REPO, steps.definition.outputs.identity, matrix.arch) }}
           build-args: BASE_IMAGE=${{ matrix.arch == 'loong64' && 'ghcr.io/loong64/debian:sid' || 'debian:sid' }}
 
   publish:
@@ -67,6 +74,10 @@ jobs:
       packages: write
 
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
       - if: ${{ !env.ACT }}
         uses: docker/setup-buildx-action@v4
 
@@ -81,10 +92,11 @@ jobs:
       - name: Publish manifest
         if: ${{ !env.ACT }}
         run: |
+          definition="$(ci/docker/base-definition.sh)"
           docker buildx imagetools create \
             -t "${IMAGE_REPO}:base" \
-            -t "${IMAGE_REPO}:base-${GITHUB_SHA}" \
-            "${IMAGE_REPO}:base-${GITHUB_SHA}-amd64" \
-            "${IMAGE_REPO}:base-${GITHUB_SHA}-arm64" \
-            "${IMAGE_REPO}:base-${GITHUB_SHA}-riscv64" \
-            "${IMAGE_REPO}:base-${GITHUB_SHA}-loong64"
+            -t "${IMAGE_REPO}:base-${definition}" \
+            "${IMAGE_REPO}:base-${definition}-amd64" \
+            "${IMAGE_REPO}:base-${definition}-arm64" \
+            "${IMAGE_REPO}:base-${definition}-riscv64" \
+            "${IMAGE_REPO}:base-${definition}-loong64"

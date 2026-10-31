@@ -2580,8 +2580,22 @@ void ClangToSageTranslator::prepareOpenMPAttributePragmas() {
       ++cursor;
     };
     while (position < limit) {
-      if (using_omp || (name(position, "omp") &&
-                        kind(position + 1, clang::tok::coloncolon))) {
+      // OpenMP's attribute syntax is omp::directive and omp::sequence.  Any
+      // other omp:: name is an ordinary unknown attribute that Clang ignores,
+      // so it is skipped like other attributes; omp::decl is OpenMP syntax
+      // that this scanner does not represent and must not silently drop.
+      const bool omp_namespace =
+          name(position, "omp") && kind(position + 1, clang::tok::coloncolon);
+      const size_t attribute_name =
+          omp_namespace && !using_omp ? position + 2 : position;
+      if ((using_omp || omp_namespace) && name(attribute_name, "decl")) {
+        std::cerr << "REX_FRONTEND_INVARIANT[openmp-attribute]: "
+                     "omp::decl attribute syntax has no REX representation"
+                  << std::endl;
+        ROSE_ABORT();
+      }
+      if ((using_omp || omp_namespace) && (name(attribute_name, "directive") ||
+                                           name(attribute_name, "sequence"))) {
         parse(position, 0);
       } else {
         unsigned parentheses = 0;
@@ -9654,13 +9668,19 @@ bool ClangToSageTranslator::VisitImplicitCastExpr(
     const clang::PointerType *clang_pointer =
         llvm::dyn_cast_or_null<clang::PointerType>(clang_target_type);
     SgType *source_type = expr->get_type();
-    SgType *source_value_type = source_type != nullptr
-                                    ? source_type->stripTypedefsAndModifiers()
-                                    : nullptr;
-    if (SgReferenceType *reference = isSgReferenceType(source_value_type)) {
+    SgType *stripped_source_type =
+        source_type != nullptr ? source_type->stripTypedefsAndModifiers()
+                               : nullptr;
+    // Keep a typedef that names the function itself: its base is one
+    // declaration's source-spelled prototype, which no pointer can target.
+    SgType *source_value_type =
+        source_type != nullptr
+            ? source_type->stripType(SgType::STRIP_MODIFIER_TYPE)
+            : nullptr;
+    if (SgReferenceType *reference = isSgReferenceType(stripped_source_type)) {
       source_value_type = reference->get_base_type();
     } else if (SgRvalueReferenceType *reference =
-                   isSgRvalueReferenceType(source_value_type)) {
+                   isSgRvalueReferenceType(stripped_source_type)) {
       source_value_type = reference->get_base_type();
     }
     SgFunctionType *source_function =
@@ -13859,8 +13879,11 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
   }
   translated_init = prepareExpressionForAttachment(translated_init);
 
+  // A translated initializer (for example a nested braced list) already owns
+  // the member initializer's source range; only a wrapper built here takes it.
   SgInitializer *member_init = isSgInitializer(translated_init);
-  if (member_init == nullptr) {
+  const bool member_init_built_here = member_init == nullptr;
+  if (member_init_built_here) {
     if (SgExprListExp *member_list = isSgExprListExp(translated_init)) {
       member_init = SageBuilder::buildAggregateInitializer_nfi(
           member_list, destination_type,
@@ -13877,7 +13900,9 @@ bool ClangToSageTranslator::VisitDesignatedInitExpr(
               << std::endl;
     ROSE_ABORT();
   }
-  applySourceRange(member_init, init_expr->getSourceRange());
+  if (member_init_built_here) {
+    applySourceRange(member_init, init_expr->getSourceRange());
+  }
 
   SgExprListExp *designator_list = SageBuilder::buildExprListExp_nfi();
   const unsigned designator_count = designated_init_expr->size();
@@ -17442,19 +17467,36 @@ bool ClangToSageTranslator::VisitCXXParenListInitExpr(
 
 bool ClangToSageTranslator::VisitPredefinedExpr(
     clang::PredefinedExpr *predefined_expr, SgNode **node) {
-  SgFunctionDefinition *func_def = nullptr;
-  std::list<SgScopeStatement *>::reverse_iterator it =
-      SageBuilder::ScopeStack.rbegin();
-  while (it != SageBuilder::ScopeStack.rend() && func_def == nullptr) {
-    func_def = isSgFunctionDefinition(*it);
-    it++;
-  }
+  // A predefined identifier names the function whose body is being
+  // translated, including a constructor's ctor-initializer.  The ordinary
+  // scope stack does not identify it: a ctor-initializer is translated after
+  // the body scope closes, and a local class can expose an enclosing function.
+  const FunctionBodyTranslationOwner *owner =
+      p_function_body_translation_owner_stack.empty()
+          ? nullptr
+          : &p_function_body_translation_owner_stack.back();
+  SgFunctionDefinition *func_def =
+      owner != nullptr ? isSgFunctionDefinition(owner->sage_owner) : nullptr;
   if (func_def == nullptr || func_def->get_symbol_table() == nullptr) {
     std::cerr << "REX_FRONTEND_INVARIANT[predefined-identifier-owner]: "
                  "Clang PredefinedExpr has no exact active function "
                  "definition and symbol table"
               << std::endl;
     ROSE_ABORT();
+  }
+  if (const clang::StringLiteral *function_name =
+          predefined_expr->getFunctionName()) {
+    if (function_name->getString() !=
+        clang::PredefinedExpr::ComputeName(predefined_expr->getIdentKind(),
+                                           owner->clang_declaration)) {
+      std::cerr << "REX_FRONTEND_INVARIANT[predefined-identifier-owner]: "
+                   "Clang PredefinedExpr value '"
+                << function_name->getString().str()
+                << "' does not name the active function-body owner "
+                << owner->clang_declaration->getQualifiedNameAsString()
+                << std::endl;
+      ROSE_ABORT();
+    }
   }
 
   SgName name;

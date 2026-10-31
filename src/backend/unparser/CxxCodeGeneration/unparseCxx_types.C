@@ -3262,6 +3262,11 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
   }
   ROSE_ASSERT(ninfo_for_type.SkipClassDefinition() ==
               ninfo_for_type.SkipEnumDefinition());
+  // The second part completes the same declarator (array bounds, a function
+  // parameter list and any trailing return type, which carries the
+  // declarator's base type), so it keeps the first part's reference node and
+  // qualification.
+  SgUnparse_Info second_part_info(ninfo_for_type);
 
   unp->u_type->unparseType(referenceNodeType, ninfo_for_type);
 
@@ -3276,9 +3281,10 @@ void Unparse_Type::outputType(T *referenceNode, SgType *referenceNodeType,
     curprint(tmp_name.str());
   }
 
-  newInfo.set_isTypeSecondPart();
+  second_part_info.unset_isTypeFirstPart();
+  second_part_info.set_isTypeSecondPart();
 
-  unp->u_type->unparseType(referenceNodeType, newInfo);
+  unp->u_type->unparseType(referenceNodeType, second_part_info);
 }
 
 template <>

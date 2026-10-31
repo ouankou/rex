@@ -539,12 +539,25 @@ int main(int argc, char **argv) {
   const bool reject_array_source =
       reject_anonymous_array_source || reject_unnamed_array_reference ||
       reject_unnamed_array_source || reject_unnamed_array_loop;
-  if (reject_array_source) {
+  const bool query_unneeded_exception_specification =
+      argc > 1 &&
+      std::strcmp(argv[1], "--query-unneeded-exception-specification") == 0;
+  if (reject_array_source || query_unneeded_exception_specification) {
     std::memmove(argv + 1, argv + 2, (argc - 1) * sizeof(argv[0]));
     --argc;
   }
   SgProject *project = frontend(argc, argv);
   ROSE_ASSERT(project != nullptr);
+  if (query_unneeded_exception_specification) {
+    auto *file = isSgSourceFile(&project->get_file(0));
+    ROSE_ASSERT(file != nullptr);
+    SgClassSymbol *record = file->get_globalScope()->lookup_class_symbol(
+        "RexUnneededNoThrowSpecialMembers");
+    ROSE_ASSERT(record != nullptr && record->get_declaration() != nullptr);
+    (void)SageInterface::HasNoThrowConstructor(
+        record->get_declaration()->get_type());
+    return 1;
+  }
   if (reject_array_source) {
     for (SgNode *node :
          NodeQuery::querySubTree(project, V_SgCxxArrayInitLoop)) {

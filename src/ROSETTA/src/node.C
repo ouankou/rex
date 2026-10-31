@@ -491,12 +491,18 @@ void Grammar::setUpNodes() {
   Node.setDataPrototype("bool", "isModified", "= false",
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE, COPY_DATA);
-  Node.setDataPrototype("uint64_t", "lastMutationSequence", "= 0",
-                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
-                        NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   Node.setDataPrototype("bool", "containsTransformation", "= false",
                         NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                         NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  Node.setDataPrototype("uint64_t", "lastMutationSequence", "= 0",
+                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+
+  // The source-state construction epoch current when this node was born. A
+  // copy is born at its own construction, so the epoch is never copied.
+  Node.setDataPrototype("uint64_t", "constructionEpoch", "= 0",
+                        NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
+                        NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
 
   // Checkpoint numbering belongs to this node's lifetime. Copies acquire their
   // own numbering; recycling a memory-pool address must not inherit an old ID.

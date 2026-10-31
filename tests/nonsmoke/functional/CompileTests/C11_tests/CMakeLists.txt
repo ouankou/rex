@@ -56,7 +56,7 @@ foreach(file_to_test ${C11_NEGATIVE_TESTCODES})
     set(_expected_diagnostic "error: expected ';' after struct")
   elseif(file_to_test STREQUAL "test2014_17.c")
     set(_expected_diagnostic
-      "error: call to undeclared library function 'aligned_alloc' with type 'void *(__size_t, __size_t)' (aka 'void *(unsigned long, unsigned long)'); ISO C99 and later do not support implicit function declarations")
+      "error: call to undeclared library function 'aligned_alloc' with type 'void *(__size_t, __size_t)' (aka 'void *(unsigned long, unsigned long)'); ISO C99 and later do not support implicit function declarations [-Wimplicit-function-declaration]")
   elseif(file_to_test STREQUAL "test2014_19.c")
     set(_expected_diagnostic
       "error: 'atomic' attribute cannot be applied to a declaration")

@@ -8,8 +8,8 @@ import subprocess
 import tempfile
 
 
-def run(command, expected=0):
-    result = subprocess.run(command, text=True, capture_output=True)
+def run(command, expected=0, env=None):
+    result = subprocess.run(command, text=True, capture_output=True, env=env)
     assert (result.returncode == 0) == (expected == 0), (
         command, result.returncode, result.stdout, result.stderr)
     return result.stdout + result.stderr
@@ -105,8 +105,14 @@ endif()
         assert "REX_LINKER must be" in output
         run([*configure, "-DREX_LINKER=auto", "-DREX_TEST_C_SANITIZERS=ON"])
         run([args.cmake, "--build", str(build), "--parallel", "1"])
+        # The sanitizer runtimes must link and load with the selected linker.
+        # Leak checking at exit is outside that contract, and its thread
+        # suspension needs ptrace, which user-mode emulation cannot provide.
+        options = os.environ.get("ASAN_OPTIONS")
+        sanitized = dict(os.environ, ASAN_OPTIONS=(
+            options + ":" if options else "") + "detect_leaks=0")
         for executable in ("rex_linker_c", "rex_linker_cxx", *(["rex_linker_fortran"] if args.fc else [])):
-            run([str(build / executable)])
+            run([str(build / executable)], env=sanitized)
         configure += ["-UREX_TEST_C_SANITIZERS"]
         configure += ["-DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY"]
         run([*configure, "-DREX_LINKER=system"])

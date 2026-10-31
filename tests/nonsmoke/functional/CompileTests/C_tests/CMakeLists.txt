@@ -51,6 +51,7 @@ set(C_TESTCODES
   rex_frontend_expression_tag_ownership.c
   rex_frontend_if_asm_source_provenance.c
   rex_frontend_inline_tag_ownership.c
+  rex_frontend_old_style_promoted_parameters.c
   rex_frontend_promoted_anonymous_member_provenance.c
   rex_frontend_source_written_builtin_spelling.c
   rex_frontend_statement_expression_scope.c

@@ -1251,6 +1251,13 @@ add_ast_json_checkpoint_test(
   ${ROSE_CXX_FLAGS})
 
 add_ast_json_checkpoint_test(
+  all_omp_construction_rex_ast_json_delayed_exception_specification_cpp
+  all
+  rex_ast_json_delayed_exception_specification.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
+
+add_ast_json_checkpoint_test(
   all_omp_construction_rex_ast_json_type_owned_new_expression_cpp
   all
   rex_ast_json_type_owned_new_expression.cpp

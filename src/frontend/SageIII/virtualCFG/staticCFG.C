@@ -173,21 +173,36 @@ std::vector<SgDirectedGraphEdge *> CFG::getInEdges(SgGraphNode *node) {
   return std::vector<SgDirectedGraphEdge *>(edges.begin(), edges.end());
 }
 
-void CFG::processNodes(std::ostream &o, SgGraphNode *n,
+void CFG::processNodes(std::ostream &o, SgGraphNode *start,
                        std::set<SgGraphNode *> &explored) {
-  if (explored.count(n) > 0)
-    return;
-  explored.insert(n);
+  // Nodes are printed depth first, each one's successors and then its
+  // predecessors, with the pending neighbors on an explicit stack: a path
+  // through a CFG can be far longer than the call stack can hold.
+  std::vector<std::pair<std::vector<SgGraphNode *>, size_t>> pending;
+  auto visit = [&](SgGraphNode *n) {
+    if (!explored.insert(n).second)
+      return;
 
-  printNodePlusEdges(o, n);
+    printNodePlusEdges(o, n);
 
-  std::set<SgDirectedGraphEdge *> out_edges = graph_->computeEdgeSetOut(n);
-  for (SgDirectedGraphEdge *e : out_edges)
-    processNodes(o, e->get_to(), explored);
+    std::vector<SgGraphNode *> neighbors;
+    for (SgDirectedGraphEdge *e : graph_->computeEdgeSetOut(n))
+      neighbors.push_back(e->get_to());
+    for (SgDirectedGraphEdge *e : graph_->computeEdgeSetIn(n))
+      neighbors.push_back(e->get_from());
+    pending.emplace_back(std::move(neighbors), 0);
+  };
 
-  std::set<SgDirectedGraphEdge *> in_edges = graph_->computeEdgeSetIn(n);
-  for (SgDirectedGraphEdge *e : in_edges)
-    processNodes(o, e->get_from(), explored);
+  visit(start);
+  while (!pending.empty()) {
+    auto &[neighbors, next] = pending.back();
+    if (next == neighbors.size()) {
+      pending.pop_back();
+      continue;
+    }
+    SgGraphNode *neighbor = neighbors[next++];
+    visit(neighbor);
+  }
 }
 
 void CFG::printNodePlusEdges(std::ostream &o, SgGraphNode *node) {

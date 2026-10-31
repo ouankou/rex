@@ -25,13 +25,9 @@ HEADER_START
      public:
           static const unsigned pool_size;
           static std::vector<unsigned char *> pools;
-          struct PoolFreeNode {
-            size_t pool_index;
-            size_t slot_index;
-            PoolFreeNode* next;
-          };
-          static PoolFreeNode * next_node;
-          static std::vector<std::vector<PoolFreeNode>> pool_free_nodes;
+          //! Free slots, each numbered pool_index * pool_size + slot_index.
+          //! The last entry is allocated next.
+          static std::vector<unsigned> free_slots;
           static std::vector<std::vector<unsigned char>> pool_live_flags;
 
 

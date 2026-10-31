@@ -8,7 +8,10 @@ target_link_libraries(testStaticCFG ROSE_DLL ${link_with_libraries} )
 add_executable(testInterproceduralCFG testInterproceduralCFG.C)
 target_link_libraries(testInterproceduralCFG ROSE_DLL ${link_with_libraries} )
 
-set(TESTCODE_INCLUDES "")
+# The C++ specimens use the native Cxx_tests classification, so they compile
+# with the same include environment as compile_test (ROSE_INCLUDE_FLAGS); some
+# specimens include ROSE headers.
+set(TESTCODE_INCLUDES ${ROSE_INCLUDE_FLAGS})
 
 set(ROSE_FLAGS  -w -rose:verbose 0 )
 set(ROSE_TEST_CFG_OUTPUT_DIR ${CMAKE_CURRENT_BINARY_DIR}/rose_cfg_output)

@@ -5947,7 +5947,14 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
       const bool source_trailing_comment =
           statement_has_source_extent &&
           is_trailing_comment_after_node(*i, statement, whereToUnparse);
+      // A fixed-form comment is a column-one lexical record, so even a source
+      // trailing comment starts its own line in fixed-form output.
+      const bool fixed_form_fortran_output =
+          unp->currentFile != nullptr && unp->currentFile->get_Fortran_only() &&
+          unp->currentFile->get_outputFormat() ==
+              SgFile::e_fixed_form_output_format;
       const bool keep_comment_on_current_line =
+          !fixed_form_fortran_output &&
           is_preprocessing_comment_directive((*i)->getTypeOfDirective()) &&
           (source_trailing_comment ||
            preprocessing_infos_share_source_line(

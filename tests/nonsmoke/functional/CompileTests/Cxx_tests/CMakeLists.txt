@@ -1,5 +1,6 @@
 set(CXX_TESTCODES
   rex_frontend_template_operator_selected_symbol.cpp
+  rex_frontend_unneeded_exception_specification.cpp
   rex_unparser_frontier_child_identity.cpp
   rex_frontend_static_assert_typed_message.cpp
   rex_frontend_scalar_value_init.cpp
@@ -3155,14 +3156,15 @@ if(NOT REX_CXX_TESTS_HOST_IS_X86)
 endif()
 
 # __float128 is a target extension (for example x86-64), not a portable type;
-# AArch64 Clang rejects it.  Register its literal-identity specimen only when
-# the configured C++ compiler provides the type.
+# AArch64 Clang rejects it.  Register its specimens only when the configured
+# C++ compiler provides the type.
 include(CheckCXXSourceCompiles)
 check_cxx_source_compiles(
   "__float128 rex_quad = 1.25Q; int main() { return rex_quad > 0 ? 0 : 1; }"
   REX_CXX_TESTS_HAS_FLOAT128)
 set(CXX_TESTCODES_FLOAT128_ONLY
   rex_unparser_extended_float_identity.cpp
+  test2017_12.C
 )
 if(NOT REX_CXX_TESTS_HAS_FLOAT128)
   list(REMOVE_ITEM CXX_TESTCODES ${CXX_TESTCODES_FLOAT128_ONLY})
@@ -3208,6 +3210,9 @@ set(CXX_TESTCODES_NEGATIVE
   # parsing used to hide this malformed source until instantiation.
   test2016_85.C
   test2017_08.C
+  # GNU treats __attribute__((aligned(0))) as no alignment; Clang rejects a
+  # zero alignment as not a power of two.
+  test2013_71.C
 )
 
 function(cxx_exact_negative_diagnostic input_file output_variable)
@@ -3247,6 +3252,9 @@ function(cxx_exact_negative_diagnostic input_file output_variable)
   elseif(input_file STREQUAL "test2017_08.C")
     set(_diagnostic
       "test2017_08.C:25951:24: error: '_M_value' is a private member of 'std::complex<double>'")
+  elseif(input_file STREQUAL "test2013_71.C")
+    set(_diagnostic
+      "test2013_71.C:47:42: error: requested alignment is not a power of 2")
   else()
     message(FATAL_ERROR
       "No exact frontend-negative diagnostic is registered for ${input_file}")

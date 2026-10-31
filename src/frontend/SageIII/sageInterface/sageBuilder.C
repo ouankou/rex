@@ -9040,9 +9040,21 @@ actualFunction *SageBuilder::buildNondefiningFunctionDeclaration_T(
     requireFunctionDeclarationSpecialMemberKind(
         functionDeclaration, ownership.getSpecialMemberKind(),
         "buildNondefiningFunctionDeclaration_T:canonical");
-    ROSE_ASSERT(ownership.getFunctionType() == nullptr ||
-                ownership.getFunctionType() == functionDeclaration->get_type());
-    func_type = functionDeclaration->get_type();
+    // A C prototype can refine an earlier unprototyped declaration of the same
+    // function (C11 6.2.7p3), as a defining declaration can; that declaration
+    // carries its refined type.
+    SgFunctionType *requested_type = ownership.getFunctionType();
+    const bool prototype_refinement =
+        requested_type != nullptr &&
+        requested_type != functionDeclaration->get_type() &&
+        !isMemberFunction &&
+        SageInterface::isFunctionPrototypeRefinement(
+            functionDeclaration->get_type(), requested_type);
+    ROSE_ASSERT(requested_type == nullptr ||
+                requested_type == functionDeclaration->get_type() ||
+                prototype_refinement);
+    func_type =
+        prototype_refinement ? requested_type : functionDeclaration->get_type();
     ROSE_ASSERT(func_type != NULL);
 
     const auto constexpr_specifier = functionConstexprSpecifierForConstruction(

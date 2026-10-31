@@ -228,6 +228,12 @@ private:
   // SgPointerMemberType).
   SgStatement *explictlySpecifiedCurrentStatement;
 
+  // The scope that emits the type whose spelling this nested traversal
+  // analyzes.  It equals explictlySpecifiedCurrentScope except for an owned
+  // class definition, whose members qualify relative to the class while the
+  // definition itself is emitted by the enclosing type use.
+  SgScopeStatement *explicitTypeEmissionScope;
+
   // The root of an explicitly contextualized nested traversal.  Expression
   // and type roots normally inherit the caller's emission statement, but a
   // statement expression below that root introduces real source statements
@@ -301,10 +307,10 @@ public:
                                    SgNode *traversalRoot);
 
   // Nested type expressions need an explicit emission scope and statement.
-  void generateNestedTraversalWithExplicitScope(SgNode *node,
-                                                SgScopeStatement *currentScope,
-                                                SgStatement *currentStatement,
-                                                SgNode *referenceNode = NULL);
+  void generateNestedTraversalWithExplicitScope(
+      SgNode *node, SgScopeStatement *currentScope,
+      SgStatement *currentStatement, SgNode *referenceNode = NULL,
+      SgScopeStatement *typeEmissionScope = nullptr);
 
   // Evaluates how much name qualification is required (typically 0 (no
   // qualification), but sometimes the depth of the nesting of scopes plus 1

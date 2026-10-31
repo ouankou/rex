@@ -1899,9 +1899,17 @@ Calling `getOrCreateStdNamespace()` before parsing did not resolve the failure;
 that trial was removed. Evidence: `build-audit/host-compiler-ctest-continue.log`
 and `build-audit/host-gnu-namespace-ctest.log`.
 
-In GNU C++ mode, frontend initialization creates a visible implicit `NamespaceDecl` and
-registers it in Sema's lookup and standard-namespace cache before parsing. This
-implements GNU lookup using typed compiler state, without a source preinclude.
+In GNU C++ mode, frontend initialization defines `std` through Sema's
+namespace-definition action before parsing, then marks the declaration implicit.
+That makes it the first real `std` definition: visible to lookup, cached as the
+standard namespace and known to typo correction. This implements GNU lookup
+using typed compiler state, without a source preinclude.
+
+Rechecked 2026-10-29: the earlier hand-built declaration skipped Sema's
+known-namespace registration, so a later `namespace std` was only an extension
+and typo correction lost its `std::` suggestions. The unchanged
+`ElsaTestCases/notCompilable/gnu/g0023.cc` then omitted Clang's
+`did you mean 'std::bad_alloc'?`.
 AUD-967 corrects its accidental application to strict ISO C++: the construction
 now requires Clang's typed `LangOptions::GNUMode`. The unchanged strict rejection,
 inherited GNU alias and tuple/vector controls pass in

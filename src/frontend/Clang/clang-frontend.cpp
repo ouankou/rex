@@ -1807,19 +1807,32 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
     sema.ActOnStartOfTranslationUnit();
 
     if (compiler_instance->getLangOpts().CPlusPlus &&
-        compiler_instance->getLangOpts().GNUMode &&
-        sema.getStdNamespace() == nullptr) {
+        compiler_instance->getLangOpts().GNUMode) {
       // GNU C++ exposes std before any header declares it. Clang's default
       // implicit namespace is hidden from ordinary lookup (EXT-GNU-STD in
-      // docs/codebase-audit/external-exceptions.md).
-      clang::NamespaceDecl *standard_namespace = clang::NamespaceDecl::Create(
-          sema.Context, sema.Context.getTranslationUnitDecl(), false,
-          clang::SourceLocation(), clang::SourceLocation(),
+      // docs/codebase-audit/external-exceptions.md). Define it through Sema's
+      // namespace-definition action, as Parser::ParseNamespace does, so it is
+      // the first real std definition: visible to lookup, cached as the std
+      // namespace and known to typo correction.
+      clang::Parser::ParseScope namespace_scope(&parser,
+                                                clang::Scope::DeclScope);
+      clang::UsingDirectiveDecl *implicit_using_directive = nullptr;
+      clang::Decl *standard_namespace = sema.ActOnStartNamespaceDef(
+          sema.getCurScope(), clang::SourceLocation(), clang::SourceLocation(),
+          clang::SourceLocation(),
           &compiler_instance->getPreprocessor().getIdentifierTable().get("std"),
-          nullptr, false);
+          clang::SourceLocation(), clang::ParsedAttributesView::none(),
+          implicit_using_directive, /*IsNested=*/false);
+      namespace_scope.Exit();
+      sema.ActOnFinishNamespaceDef(standard_namespace, clang::SourceLocation());
       standard_namespace->setImplicit(true);
-      sema.StdNamespace = standard_namespace;
-      sema.PushOnScopeChains(standard_namespace, sema.getCurScope());
+      if (implicit_using_directive != nullptr ||
+          sema.getStdNamespace() != standard_namespace) {
+        llvm::errs() << "REX_FRONTEND_INVARIANT[gnu-std-namespace]: Sema did "
+                        "not define the GNU std namespace as the translation "
+                        "unit's std namespace\n";
+        ROSE_ABORT();
+      }
     }
 
     clang::Parser::DeclGroupPtrTy top_level_decl;
@@ -7579,7 +7592,6 @@ void SagePreprocessorRecord::SourceRangeSkipped(
   (void)EndifLoc;
   ROSE_ASSERT(p_source_manager != nullptr && p_preprocessor != nullptr);
   ROSE_ASSERT(Range.isValid());
-  compactRemovedRecordedDirectives();
 
   const clang::LangOptions &lang_opts = p_preprocessor->getLangOpts();
   clang::SourceLocation begin = Range.getBegin();
@@ -7618,39 +7630,32 @@ void SagePreprocessorRecord::SourceRangeSkipped(
   // Prune entries owned by the inactive body, but keep structural
   // conditionals as separate attachments so token ordering preserves
   // `#elif`/`#else`/`#endif` instead of collapsing them into one
-  // skipped blob.
+  // skipped blob.  The physical offset index holds exactly the live entries,
+  // so only those inside the inactive body are visited; removed entries leave
+  // the record list at its next compaction.
+  std::vector<std::pair<unsigned, RecordedDirectiveRef>> inactive_records;
+  if (const auto file_records =
+          p_preprocessor_records_by_file_offset.find(file_id.getHashValue());
+      file_records != p_preprocessor_records_by_file_offset.end()) {
+    for (auto offset_records = file_records->second.lower_bound(begin_offset);
+         offset_records != file_records->second.end() &&
+         offset_records->first < end_offset;
+         ++offset_records) {
+      for (const RecordedDirectiveRef &record : offset_records->second)
+        inactive_records.emplace_back(offset_records->first, record);
+    }
+  }
   std::vector<std::pair<unsigned, unsigned>> preserved_spans;
-  for (auto it = p_preprocessor_record_list.begin();
-       it != p_preprocessor_record_list.end();) {
-    Sg_File_Info *existing_info = it->first;
-    PreprocessingInfo *existing_pp = it->second;
-    if (existing_info == nullptr || existing_pp == nullptr ||
-        p_removed_preprocessor_records.find(existing_pp) !=
-            p_removed_preprocessor_records.end()) {
-      ++it;
+  for (const auto &[existing_offset, record] : inactive_records) {
+    if (isStructuralConditionalDirective(
+            record.preprocessing_info->getTypeOfDirective())) {
+      unsigned span_end = lineDirectiveEndOffset(p_source_manager, file_id,
+                                                 existing_offset, lang_opts);
+      preserved_spans.emplace_back(existing_offset,
+                                   std::min(span_end, end_offset));
       continue;
     }
-    auto position_it = p_preprocessor_record_positions.find(existing_pp);
-    if (position_it == p_preprocessor_record_positions.end() ||
-        position_it->second.file_id != file_id) {
-      ++it;
-      continue;
-    }
-    const unsigned existing_offset = position_it->second.file_offset;
-    if (begin_offset <= existing_offset && existing_offset < end_offset) {
-      if (isStructuralConditionalDirective(existing_pp->getTypeOfDirective())) {
-        unsigned span_end = lineDirectiveEndOffset(p_source_manager, file_id,
-                                                   existing_offset, lang_opts);
-        preserved_spans.emplace_back(existing_offset,
-                                     std::min(span_end, end_offset));
-        ++it;
-        continue;
-      }
-      releaseRecordedDirective(*it);
-      it = p_preprocessor_record_list.erase(it);
-      continue;
-    }
-    ++it;
+    markRecordedDirectiveRemoved(record.file_info, record.preprocessing_info);
   }
 
   std::sort(preserved_spans.begin(), preserved_spans.end());
