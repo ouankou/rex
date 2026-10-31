@@ -65,6 +65,8 @@ public:
   DetectMacroOrIncludeFileExpansionsInheritedAttribute();
   DetectMacroOrIncludeFileExpansionsInheritedAttribute(
       const DetectMacroOrIncludeFileExpansionsInheritedAttribute &X);
+  DetectMacroOrIncludeFileExpansionsInheritedAttribute &operator=(
+      const DetectMacroOrIncludeFileExpansionsInheritedAttribute &) = default;
 };
 
 class DetectMacroOrIncludeFileExpansionsSynthesizedAttribute {
@@ -77,6 +79,8 @@ public:
   DetectMacroOrIncludeFileExpansionsSynthesizedAttribute(SgNode *n);
   DetectMacroOrIncludeFileExpansionsSynthesizedAttribute(
       const DetectMacroOrIncludeFileExpansionsSynthesizedAttribute &X);
+  DetectMacroOrIncludeFileExpansionsSynthesizedAttribute &operator=(
+      const DetectMacroOrIncludeFileExpansionsSynthesizedAttribute &) = default;
 };
 
 class DetectMacroOrIncludeFileExpansions

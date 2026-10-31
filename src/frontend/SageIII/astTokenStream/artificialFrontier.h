@@ -18,6 +18,8 @@ public:
 
   ArtificialFrontier_InheritedAttribute(
       const ArtificialFrontier_InheritedAttribute &X);
+  ArtificialFrontier_InheritedAttribute &
+  operator=(const ArtificialFrontier_InheritedAttribute &) = default;
 };
 
 class ArtificialFrontier_SynthesizedAttribute {
@@ -29,6 +31,8 @@ public:
 
   ArtificialFrontier_SynthesizedAttribute(
       const ArtificialFrontier_SynthesizedAttribute &X);
+  ArtificialFrontier_SynthesizedAttribute &
+  operator=(const ArtificialFrontier_SynthesizedAttribute &) = default;
 };
 
 class ArtificialFrontierTraversal

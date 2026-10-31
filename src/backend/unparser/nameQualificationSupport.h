@@ -87,6 +87,8 @@ public:
   NameQualificationSynthesizedAttribute(SgNode *astNode);
   NameQualificationSynthesizedAttribute(
       const NameQualificationSynthesizedAttribute &X);
+  NameQualificationSynthesizedAttribute &
+  operator=(const NameQualificationSynthesizedAttribute &) = default;
 };
 
 class NameQualificationTraversal : public AstTopDownBottomUpProcessing<

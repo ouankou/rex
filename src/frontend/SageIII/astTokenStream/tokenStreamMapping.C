@@ -1484,6 +1484,7 @@ public:
       bool processed, SubtreeRole role = SubtreeRole::Lexical);
 
   InheritedAttribute(const InheritedAttribute &X);
+  InheritedAttribute &operator=(const InheritedAttribute &) = default;
 };
 
 InheritedAttribute::InheritedAttribute(
