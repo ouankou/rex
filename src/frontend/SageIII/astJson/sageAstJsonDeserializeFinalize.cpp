@@ -14607,8 +14607,18 @@ static bool constructFunctionDeclaration(
                                         signature_symbols, signature_types);
   const uint64_t first_id =
       singleEdgeTarget(record, "firstNondefiningDeclaration");
-  if (first_id != 0 && first_id != record.id)
+  if (first_id != 0 && first_id != record.id) {
+    // A redeclaration can share a canonical signature expression whose name
+    // references belong to the first declaration's parameters. Construct that
+    // owner and its bindings before traversing the shared expression; an
+    // unordered dependency set can otherwise visit the use before its owner.
+    if (!constructSignatureDependency(
+            ast, bindings, nodes, first_id, false, false, construction_fields,
+            constructed_signature_symbol_bases, visiting, delayed_declarations,
+            construction))
+      return false;
     signature_dependencies.insert(first_id);
+  }
   const uint64_t definition_id = singleEdgeTarget(record, "definition");
   const uint64_t epilogue_id =
       definition_id != 0
