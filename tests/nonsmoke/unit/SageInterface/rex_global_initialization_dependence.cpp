@@ -1134,6 +1134,19 @@ void requireTrackingNodeLifetimes(SgProject *project) {
 }
 
 bool requireDependenceTokenBoundaries() {
+  std::istringstream filteredRecords(
+      "keep : [ read ] input ; blocked : [ read ] input ; "
+      "keep : [ read ] blocked ; keep : [ ignored ] input ; "
+      "other_blocked : [ read ] input ;");
+  AstUtilInterface::SelectDependences filtered;
+  filtered.add_selection("blocked", "blocked", "ignored");
+  filtered.add_selection("other_blocked");
+  filtered.CollectFromFile(filteredRecords);
+  ROSE_ASSERT(filtered.get_result().size() == 1);
+  ROSE_ASSERT(filtered.get_result().front().first_entry() == "keep");
+  ROSE_ASSERT(filtered.get_result().front().second_entry() == "input");
+  ROSE_ASSERT(filtered.get_result().front().type_entry() == "read");
+
   // Separate records can contribute independent attributes to one node.
   std::istringstream nodeRecords("node : [ first ] ; node : [ second ] ;");
   AstUtilInterface::DependenceTable nodeTable(false);
