@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare native MrDocs Markdown for MkDocs (navigation and pretty URLs)."""
+"""Prepare native MrDocs Markdown for Zensical (navigation and search metadata)."""
 import argparse
 import html
 import json
@@ -8,10 +8,10 @@ import re
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
-import yaml
+import tomllib
 
 HREF = re.compile(r'href="([^"]+)"')
-SIGNATURE = re.compile(r'<pre><code\b[^>]*>(.*?)</code></pre>', re.S)
+SIGNATURE = re.compile(r'<pre\b[^>]*><code\b[^>]*>(.*?)</code></pre>', re.S)
 
 
 def plain(text):
@@ -28,7 +28,7 @@ def prepare(reference, nav_config):
         raise ValueError('MrDocs must generate index.md and symbol pages')
 
     # MrDocs can emit Class.md and Class/index.md for a member named index.
-    # MkDocs would silently write both to Class/index.html; preserve both pages.
+    # Directory URLs would write both to Class/index.html; preserve both pages.
     output_names = {
         name: posixpath.join(posixpath.dirname(name), 'index-symbol.md')
         if name != 'index.md' and posixpath.basename(name) == 'index.md' else name
@@ -38,7 +38,11 @@ def prepare(reference, nav_config):
         raise ValueError('generated symbol filename collides with index-symbol.md')
 
     # Keep the existing category landing pages, without a second MrDocs pass.
-    nav = [next(iter(item.items())) for item in yaml.safe_load(nav_config.read_text())['nav']]
+    config = tomllib.loads(nav_config.read_text())['project']
+    api_nav = next(item['API'] for item in config['nav'] if 'API' in item)
+    nav = [(title, target.removeprefix('reference/'))
+           for item in api_nav for title, target in item.items()
+           if target.startswith('reference/sections/')]
     categories = {title for title, target in nav if target.startswith('sections/')}
     sections = {title: [] for title in categories}
     namespace = ''
@@ -85,22 +89,27 @@ def prepare(reference, nav_config):
             lines.append(line)
         pages[name] = '\n'.join(lines) + '\n'
 
+    urls = sorted(page_url(name) for name in output_names.values())
+    parents = {url for url, following in zip(urls, urls[1:]) if following.startswith(url)}
     for name, text in pages.items():
-        def pretty_link(match):
+        def source_link(match):
             url = urlsplit(html.unescape(match[1]))
             if url.scheme or url.netloc or not url.path.endswith('.md'):
                 return match[0]
             target = posixpath.normpath(posixpath.join(posixpath.dirname(name), url.path))
             if target not in pages:
                 raise ValueError(f'{name}: missing MrDocs target {target}')
-            relative = posixpath.relpath(page_url(output_names[target]) or '.', page_url(output_names[name]) or '.') + '/'
+            relative = posixpath.relpath(output_names[target], posixpath.dirname(output_names[name]) or '.')
             return 'href="' + html.escape(urlunsplit(('', '', relative, url.query, url.fragment)), quote=True) + '"'
-        text = HREF.sub(pretty_link, text)
+        text = HREF.sub(source_link, text)
         heading = re.search(r'^# (.+)$', text, re.M)
         title = plain(heading[1]) if heading else Path(name).stem
         path = reference / output_names[name]
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text('---\ntitle: ' + json.dumps(title) + '\n---\n\n' + text)
+        metadata = 'title: ' + json.dumps(title) + '\n'
+        if name != 'index.md' and not name.startswith('sections/') and page_url(output_names[name]) not in parents:
+            metadata += 'search:\n  exclude: true\n'
+        path.write_text('---\n' + metadata + '---\n\n' + text)
         if output_names[name] != name:
             (reference / name).unlink()
     print(f'Prepared {len(pages)} Markdown reference pages')
@@ -109,6 +118,6 @@ def prepare(reference, nav_config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--reference-dir', type=Path, required=True)
-    parser.add_argument('--nav-config', type=Path, default=Path(__file__).resolve().parent.parent / 'mkdocs-reference.yml')
+    parser.add_argument('--nav-config', type=Path, default=Path(__file__).resolve().parent.parent / 'zensical.toml')
     args = parser.parse_args()
     prepare(args.reference_dir, args.nav_config)

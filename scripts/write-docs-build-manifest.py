@@ -1,3 +1,5 @@
+import argparse
+import importlib.metadata
 import json
 import os
 import subprocess
@@ -14,24 +16,15 @@ def _run(cmd: list[str], *, multiline: bool = False) -> str:
         return ""
 
 
-def on_post_build(config):
-    site_dir = Path(config["site_dir"]).resolve()
+def write_manifest(repo_root, site_dir):
     out = site_dir / "docs-build-manifest.json"
 
     git_commit = ""
-    repo_root = Path(config["config_file_path"]).resolve().parent
     if (repo_root / ".git").exists():
         git_commit = _run(["git", "-C", str(repo_root), "rev-parse", "HEAD"])
 
     mrdocs_bin = os.environ.get("MRDOCS_BIN", "")
     mrdocs_version = _run([mrdocs_bin, "--version"], multiline=True) if mrdocs_bin else ""
-    mkdocs_version = ""
-    try:
-        import mkdocs  # type: ignore
-
-        mkdocs_version = f"mkdocs {mkdocs.__version__}"
-    except (ImportError, AttributeError):
-        mkdocs_version = _run(["mkdocs", "--version"])
 
     clang_version = _run(["clang++", "--version"])
     python_version = f"Python {sys.version.split()[0]}"
@@ -40,11 +33,19 @@ def on_post_build(config):
         "generated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
         "git_commit": git_commit,
         "mrdocs_version": mrdocs_version,
-        "mkdocs_version": mkdocs_version,
+        "zensical_version": importlib.metadata.version("zensical"),
         "python_version": python_version,
         "clang_version": clang_version,
-        "jobs": int(os.environ.get("DOCS_JOBS", "32")),
+        "jobs": int(os.environ.get("DOCS_JOBS", "2")),
     }
 
     site_dir.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Record the documentation build provenance.")
+    parser.add_argument("--root", type=Path, required=True)
+    parser.add_argument("--site-dir", type=Path, required=True)
+    args = parser.parse_args()
+    write_manifest(args.root.resolve(), args.site_dir.resolve())

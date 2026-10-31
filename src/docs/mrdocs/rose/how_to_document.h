@@ -195,7 +195,7 @@
  * To generate REX's documentation locally, run:
  *
  * - `scripts/generate-api-documentation` (MrDocs only)
- * - `scripts/build-docs` (MrDocs + MkDocs site)
+ * - `scripts/build-docs` (MrDocs + Zensical site)
  *
  * @section doc_next Next steps
  *

@@ -25,21 +25,17 @@ def _normalize_label(text: str, *, html_markup: bool = False) -> str:
     return text
 
 
-def _to_url(target: str, section_slug: str = "") -> str:
+def _to_url(target: str) -> str:
     parts = urlsplit(html.unescape(target.strip()))
     if parts.scheme or parts.netloc:
         return ""
-    # Markdown links resolve from the source file; raw HTML links have already
-    # been prepared relative to MkDocs' sections/<name>/ output directory.
-    markdown_target = parts.path.endswith(".md")
-    base = "sections" if markdown_target else f"sections/{section_slug}"
-    path = posixpath.normpath(posixpath.join(base, parts.path))
+    # Both Markdown and HTML links remain relative to the category source page.
+    if not parts.path.endswith(".md"):
+        return ""
+    path = posixpath.normpath(posixpath.join("sections", parts.path))
     if path == ".." or path.startswith("../") or path.startswith("/"):
         return ""
-    if markdown_target:
-        path = path[:-3]
-    elif not parts.path.endswith("/"):
-        return ""
+    path = path[:-3]
     if path in ("index", "."):
         path = ""
     elif path.endswith("/index"):
@@ -69,7 +65,7 @@ def main() -> int:
             label = _normalize_label(m.group(1) or m.group(4), html_markup=m.group(4) is not None)
             if not target or not label:
                 continue
-            url = _to_url(target, section.stem)
+            url = _to_url(target)
             if not url:
                 continue
             key = (label, url)

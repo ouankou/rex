@@ -1,7 +1,7 @@
 REX developer documentation
 
 The Markdown pages in this directory and the generated API reference are
-published with MkDocs. MrDocs reads its configuration from docs/mrdocs.yml;
+published with Zensical. MrDocs reads its configuration from docs/mrdocs.yml;
 API documentation comments and grouping definitions live in src/docs/mrdocs.
 
 Run scripts/build-docs to set up the documentation environment and build the

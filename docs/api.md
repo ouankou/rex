@@ -18,7 +18,7 @@ MRDOCS_OUTPUT_DIR=build/docs-scratch/docs/reference \
   bash scripts/generate-api-documentation
 ```
 
-Or build the full docs site (API reference + MkDocs) with:
+Or build the full docs site (API reference + Zensical) with:
 
 ```bash
 # Keeps all docs output under build/docs-scratch.

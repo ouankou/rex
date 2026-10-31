@@ -49,15 +49,11 @@ ctest --test-dir build-valgrind -T memcheck -R "<regex>" -j1 --output-on-failure
 
 ## Docs
 
-REX uses MrDocs for API documentation and MkDocs Material for the site.
-Use the helper script below to set up a Python venv, fetch the latest MrDocs,
-and build the site.
+REX uses MrDocs for API documentation and Zensical for the site.
+Use the helper script to set up a Python venv, fetch MrDocs, and build the site.
 
 ```bash
-# Ensure a build tree exists with compile_commands.json
-./build-rex.sh $HOME/rex-install RelWithDebInfo
-
-# Build the docs site (API reference + MkDocs)
+# Build the docs site (API reference + Zensical)
 scripts/build-docs
 ```
 
