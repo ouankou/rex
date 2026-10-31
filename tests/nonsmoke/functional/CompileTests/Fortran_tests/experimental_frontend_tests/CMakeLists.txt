@@ -31,7 +31,7 @@ set(_f2018_tests
 )
 
 # Preserve these imported specimens as exact rejection tests: stock LLVM 23
-# rejects their syntax/types. See docs/codebase-audit/legacy-test-contracts.md.
+# rejects their syntax/types. See https://github.com/ouankou/rex/issues/885.
 set(_f2018_rejection_tests
   R511-F2015-N2007.f90
   R1164-F2018.f90

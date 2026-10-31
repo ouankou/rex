@@ -12,5 +12,6 @@ tree, use:
   DOCS_SCRATCH_DIR=build/docs-scratch scripts/build-docs
 
 See docs/build.md for compiler build instructions and docs/api.md for the
-API documentation workflow. The codebase-audit and upstream-sync directories
-contain audit evidence and historical synchronization records.
+API documentation workflow. Historical audit records are archived in
+https://github.com/ouankou/rex/issues/885. The upstream-sync directory retains
+historical synchronization records.

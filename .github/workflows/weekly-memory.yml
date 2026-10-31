@@ -13,7 +13,7 @@ concurrency:
 
 env:
   LLVM_VERSION: 23
-  # EXT-OPENMP-TOPOLOGY-IDS: docs/codebase-audit/external-exceptions.md.
+  # EXT-OPENMP-TOPOLOGY-IDS: https://github.com/ouankou/rex/issues/885.
   # Use libomp's documented Linux topology reader in every native CI profile.
   KMP_TOPOLOGY_METHOD: cpuinfo
 
@@ -102,7 +102,7 @@ jobs:
     - name: Install dependencies
       run: |
         scripts/ci-install-deps native "${{ env.LLVM_VERSION }}"
-        # EXT-VALGRIND-MULTICALL-ENV: docs/codebase-audit/external-exceptions.md.
+        # EXT-VALGRIND-MULTICALL-ENV: https://github.com/ouankou/rex/issues/885.
         # Older uutils env rejects Valgrind's synthetic interpreter argv[0].
         # Use Ubuntu's GNU alternative; CMake checks traced env dispatch
         # before enabling the MemCheck scripts.
@@ -116,7 +116,7 @@ jobs:
       # EXT-GREP-PATTERN-ARRAY / EXT-MAWK-BUILTIN-ARENA /
       # EXT-COREUTILS-MKTEMP-FILENAMES / EXT-BASH-TERMINAL-COMMAND /
       # EXT-GIT-INIT-CHDIR-LIST:
-      # docs/codebase-audit/external-exceptions.md.
+      # https://github.com/ouankou/rex/issues/885.
       run: |
         # Ubuntu's signed debug archive provides persistent package companions.
         # Pin them to installed utility versions; a mismatch is a setup failure.

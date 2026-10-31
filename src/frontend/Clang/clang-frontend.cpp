@@ -1810,7 +1810,7 @@ int clang_main(int argc, char **argv, SgSourceFile &sageFile,
         compiler_instance->getLangOpts().GNUMode) {
       // GNU C++ exposes std before any header declares it. Clang's default
       // implicit namespace is hidden from ordinary lookup (EXT-GNU-STD in
-      // docs/codebase-audit/external-exceptions.md). Define it through Sema's
+      // https://github.com/ouankou/rex/issues/885). Define it through Sema's
       // namespace-definition action, as Parser::ParseNamespace does, so it is
       // the first real std definition: visible to lookup, cached as the std
       // namespace and known to typo correction.

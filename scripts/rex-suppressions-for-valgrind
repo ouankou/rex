@@ -1,8 +1,8 @@
-# AUD-186 / EXT-UTILITY-LIFETIMES: docs/codebase-audit/external-exceptions.md.
+# AUD-186 / EXT-UTILITY-LIFETIMES: https://github.com/ouankou/rex/issues/885.
 # Do not suppress allocations solely by executable basename. A caller-owned leaking
 # program remains a failing control even when named bash, grep, or another tool.
 # EXT-CLANG-PACKAGED-DEFINEDNESS / AUD-137:
-# docs/codebase-audit/external-exceptions.md. Do not restore library-wide,
+# https://github.com/ouankou/rex/issues/885. Do not restore library-wide,
 # parser-wide, or instantiation-boundary masks: an undefined caller allocation
 # consumed inside two libclang frames must remain observable. The external
 # boundary contract checks this with the configured suppressions.
@@ -11,7 +11,7 @@
 # reaches HasFlexibleArrayMember through an instantiated record field.
 # Limit this condition to the three adjacent stock-Clang instantiation frames.
 # The real Sema caller-owned undefined-flag control remains an error at the
-# same branch. See docs/codebase-audit/external-exceptions.md.
+# same branch. See https://github.com/ouankou/rex/issues/885.
 {
    rex_clang22_instantiated_record_field_condition
    Memcheck:Cond
@@ -25,7 +25,7 @@
 # definedness in Valgrind despite not carrying into HasFlexibleArrayMember.
 # Only the independently reproduced global/parameter declarator paths qualify.
 # Disassembly and actual Sema caller-owned controls are documented in
-# docs/codebase-audit/external-exceptions.md. No caller field is annotated.
+# https://github.com/ouankou/rex/issues/885. No caller field is annotated.
 {
    rex_clang22_record_array_global_condition
    Memcheck:Cond
@@ -47,7 +47,7 @@
 # EXT-CLANG-FUNCTION-PROTO-COMPARE: the packaged constructor compares the
 # complete bitfield word to 2^48. Lower padding bits cannot affect this
 # parameter-count test. Exact package/disassembly, standalone controls and
-# caller-owned negative controls: docs/codebase-audit/external-exceptions.md.
+# caller-owned negative controls: https://github.com/ouankou/rex/issues/885.
 {
    rex_upstream_clang22_function_proto_uninit_cond_c1
    Memcheck:Cond
@@ -64,12 +64,12 @@
    obj:*/libclang-cpp.so.*
 }
 
-# EXT-FLANG-SYMBOL-ARENA: docs/codebase-audit/external-exceptions.md
+# EXT-FLANG-SYMBOL-ARENA: https://github.com/ouankou/rex/issues/885
 # Removed the nine semantic possible-leak exceptions: repeated standalone
 # parsing demonstrates growing retained symbol storage, not a bounded cache.
 # Keep reports visible until a supported lifetime integration is established.
 
-# EXT-FLANG-INACTIVE-DATAREF: docs/codebase-audit/external-exceptions.md
+# EXT-FLANG-INACTIVE-DATAREF: https://github.com/ouankou/rex/issues/885
 # Debian LLVM/Flang 22.1.8, x86_64, Valgrind 3.27.1. The packaged optional
 # overload speculates a read of an inactive variant tag, then selects nullptr
 # using the initialized optional engagement flag. Source and assembly checked
@@ -99,7 +99,7 @@
 # EXT-FLANG-INACTIVE-DATAREF / AUD-273: association analysis constructs this
 # local optional in stock Flang. Its disengaged variant tag is speculatively
 # read before the initialized engagement flag selects nullptr. Exact source,
-# instruction and caller-boundary evidence: docs/codebase-audit/external-exceptions.md.
+# instruction and caller-boundary evidence: https://github.com/ouankou/rex/issues/885.
 {
   llvm22_flang_inactive_dataref_association_rank
   Memcheck:Cond
@@ -120,7 +120,7 @@
 # EXT-FLANG-INACTIVE-DATAREF: the standalone array-intrinsic reproducer and
 # matching packaged instructions verify this exact interface-checking path.
 # Only the inactive optional-tag condition is covered; memory leaks and reads
-# in the callers remain visible. See docs/codebase-audit/external-exceptions.md.
+# in the callers remain visible. See https://github.com/ouankou/rex/issues/885.
 {
   llvm22_flang_inactive_dataref_explicit_interface
   Memcheck:Cond
@@ -129,7 +129,7 @@
   fun:_ZN7Fortran9semantics14CheckArgumentsERKNS_8evaluate15characteristics9ProcedureERSt6vectorISt8optionalINS1_14ActualArgumentEESaIS9_EERNS0_16SemanticsContextERKNS0_5ScopeEbbPKNS1_17SpecificIntrinsicE
 }
 
-# EXT-GREP-PATTERN-ARRAY: docs/codebase-audit/external-exceptions.md.
+# EXT-GREP-PATTERN-ARRAY: https://github.com/ouankou/rex/issues/885.
 # GNU grep 3.12 retains patterns as an interior pointer into its pattern array.
 # Require every allocation frame and the owning executable; debug symbols are
 # required. Never replace an unavailable frame with an allocator-wide mask.
@@ -145,7 +145,7 @@
    obj:*/grep
 }
 
-# EXT-GREP-DFA-STATE-TABLES: docs/codebase-audit/external-exceptions.md.
+# EXT-GREP-DFA-STATE-TABLES: https://github.com/ouankou/rex/issues/885.
 # GNU grep owns its transition tables through d->trans = allocation + 2.
 # These exact single-byte DFA paths retain possible leak reports at exit;
 # dfafree releases the tables and the original allocation. Preserve other
@@ -273,7 +273,7 @@
    obj:*/grep
 }
 
-# EXT-MAWK-BUILTIN-ARENA: docs/codebase-audit/external-exceptions.md.
+# EXT-MAWK-BUILTIN-ARENA: https://github.com/ouankou/rex/issues/885.
 # The builtin-variable initialization allocates one pooled chunk whose live
 # subobjects retain interior pointers. This is not a general zmalloc exception.
 {
@@ -288,7 +288,7 @@
    obj:*/mawk
 }
 
-# EXT-COREUTILS-MKTEMP-FILENAMES: docs/codebase-audit/external-exceptions.md.
+# EXT-COREUTILS-MKTEMP-FILENAMES: https://github.com/ouankou/rex/issues/885.
 # GNU mktemp retains its template and diagnostic copy until process exit.
 # Both exact allocation paths require mktemp as their immediate caller.
 {
@@ -333,7 +333,7 @@
    obj:*/gnumktemp
 }
 
-# EXT-BASH-TERMINAL-COMMAND: docs/codebase-audit/external-exceptions.md.
+# EXT-BASH-TERMINAL-COMMAND: https://github.com/ouankou/rex/issues/885.
 # Bash 5.3's reader_loop clears current_command on EXITBLTIN/EXITPROG before
 # dispose_command. The terminal command and its parser-owned children survive
 # until process exit; one/10,000-iteration controls retain identical storage,
@@ -580,7 +580,7 @@
    obj:*/bash
 }
 
-# EXT-GIT-INIT-CHDIR-LIST: docs/codebase-audit/external-exceptions.md.
+# EXT-GIT-INIT-CHDIR-LIST: https://github.com/ouankou/rex/issues/885.
 # chdir_notify_register always owns its fixed-size entry through the static
 # interior-pointer callback list. Caller-provided payloads are not allocated here.
 {

@@ -1,5 +1,5 @@
 // Standalone reproducer for EXT-CLANG-PACKAGED-DEFINEDNESS in
-// docs/codebase-audit/external-exceptions.md. Link only Clang/LLVM, without
+// https://github.com/ouankou/rex/issues/885. Link only Clang/LLVM, without
 // REX. The unresolved reports are diagnostic evidence, not accepted exceptions.
 #include <clang/AST/RecursiveASTVisitor.h>
 #include <clang/Tooling/Tooling.h>

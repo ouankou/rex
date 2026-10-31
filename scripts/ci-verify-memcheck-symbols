@@ -37,7 +37,7 @@ def main():
     # EXT-GREP-PATTERN-ARRAY / EXT-MAWK-BUILTIN-ARENA /
     # EXT-COREUTILS-MKTEMP-FILENAMES / EXT-BASH-TERMINAL-COMMAND /
     # EXT-GIT-INIT-CHDIR-LIST:
-    # docs/codebase-audit/external-exceptions.md.
+    # https://github.com/ouankou/rex/issues/885.
     # apt installs signed, version-matched packages. Verify their ELF identity
     # before relying on symbol-specific Memcheck rules; missing or mismatched
     # companions fail the job before tests start.

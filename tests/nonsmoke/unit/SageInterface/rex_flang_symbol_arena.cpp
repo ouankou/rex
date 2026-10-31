@@ -1,5 +1,5 @@
 // EXT-FLANG-SYMBOL-ARENA: standalone LLVM 23 diagnostic, not a REX test target.
-// See docs/codebase-audit/external-exceptions.md for build/run instructions.
+// See https://github.com/ouankou/rex/issues/885 for build/run instructions.
 // Each iteration destroys its parser and semantic context before the next one.
 #include <flang/Parser/parsing.h>
 #include <flang/Semantics/semantics.h>
