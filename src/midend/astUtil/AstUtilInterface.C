@@ -432,10 +432,13 @@ std::string AstUtilInterface::GetVariableSignature(const AstNodePtr &variable) {
     AstInterfaceImpl astImpl(variable.get_ptr());
     AstInterface fa(&astImpl);
     if (fa.get_fileInfo(variable, &filename, &lineno)) {
-      std::stringstream loc;
-      loc << "Line:" << lineno;
-      DependenceEntry e(sig, filename, "", loc.str());
-      dict_table->SaveDependence(e);
+      dict_table->SaveDependence(
+          DependenceEntry(sig, filename, "line", std::to_string(lineno)));
+      AstNodeType type;
+      if (AstInterface::IsExpression(variable, &type) &&
+          type.get_ptr() != nullptr)
+        dict_table->SaveDependence(DependenceEntry(
+            sig, filename, "type", AstInterface::GetTypeName(type)));
     }
   }
   return sig;

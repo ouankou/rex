@@ -1202,6 +1202,42 @@ bool requireDependenceTokenBoundaries() {
   return false;
 }
 
+void requireSignatureDictionaryMetadata(SgProject *project) {
+  SgVarRefExp *reference = nullptr;
+  RoseAst tree(project);
+  for (auto node = tree.begin(); node != tree.end(); ++node)
+    if (auto *candidate = isSgVarRefExp(*node))
+      if (candidate->get_symbol()->get_name() == "source") {
+        reference = candidate;
+        break;
+      }
+  ROSE_ASSERT(reference != nullptr);
+  AstInterfaceImpl implementation(reference);
+  AstInterface ast(&implementation);
+  std::string filename;
+  int line = -1;
+  ROSE_ASSERT(ast.get_fileInfo(reference, &filename, &line));
+  AstUtilInterface::SetSaveVariableDictionary(true);
+  const std::string signature =
+      AstUtilInterface::GetVariableSignature(reference);
+  AstUtilInterface::SetSaveVariableDictionary(false);
+  std::ostringstream output;
+  AstUtilInterface::OutputSignatureDictionary(output);
+  std::istringstream input(output.str());
+  AstUtilInterface::SelectDependences metadata;
+  metadata.CollectFromFile(input);
+  ROSE_ASSERT(metadata.get_result().size() == 2);
+  bool sawLine = false, sawType = false;
+  for (const auto &entry : metadata.get_result()) {
+    ROSE_ASSERT(entry.first_entry() == signature);
+    ROSE_ASSERT(entry.second_entry() == filename);
+    sawLine |= entry.type_entry() == "line" &&
+               entry.attr_entry() == std::to_string(line);
+    sawType |= entry.type_entry() == "type" && entry.attr_entry() == "int";
+  }
+  ROSE_ASSERT(sawLine && sawType);
+}
+
 bool requireInitializationInput(const std::string &dependences,
                                 const std::string &target,
                                 const std::string &input) {
@@ -1366,6 +1402,7 @@ int main(int argc, char **argv) {
     return 1;
 
   SgProject *project = frontend(argc, argv);
+  requireSignatureDictionaryMetadata(project);
   requireSliceReuseBindingIdentity(project);
   requireSpatialReuseBindingIdentity(project);
   requireSpatialReuseTargetLayout(project);
