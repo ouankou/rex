@@ -610,7 +610,7 @@ if(ENABLE-FORTRAN)
     message(FATAL_ERROR
       "Cannot inspect the selected FortranEvaluate library's system dependencies because CMake did not identify an nm tool")
   endif()
-  # EXT-FLANG-FRONTEND-EXPORTS: docs/codebase-audit/external-exceptions.md.
+  # EXT-FLANG-FRONTEND-EXPORTS: https://github.com/ouankou/rex/issues/885.
   # Flang's exports require unrelated MLIR targets. Inspect the selected
   # Evaluate archive: its sinq reference identifies the configured libquadmath
   # dependency. Recheck this boundary when LLVM's package exports change.

@@ -1,5 +1,5 @@
 /* EXT-CLANG-FUNCTION-PROTO-COMPARE: standalone diagnostic, not a REX test
- * target. See docs/codebase-audit/external-exceptions.md for controls and
+ * target. See https://github.com/ouankou/rex/issues/885 for controls and
  * interpretation.
  */
 #if !defined(__x86_64__)

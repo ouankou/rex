@@ -1,4 +1,4 @@
-! EXT-FLANG-INACTIVE-DATAREF: docs/codebase-audit/external-exceptions.md
+! EXT-FLANG-INACTIVE-DATAREF: https://github.com/ouankou/rex/issues/885
 ! Also reproduces independently with flang -fc1 -fsyntax-only under Memcheck.
 subroutine rex_evaluate(lhs, rhs, result)
   real, intent(in) :: lhs, rhs

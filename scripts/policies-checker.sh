@@ -13,14 +13,14 @@ demangle () {
     s="$(printf '%s\n' "$s" |sed 's/\([A-Z]\)/ \1/g')" # de-CamelCase
     s="${s# }" # remove leading space from de-CamelCase if necessary
     # EXT-COREUTILS-TR-SETS: use Bash's ASCII conversion directly; GNU tr
-    # reports terminal allocations (docs/codebase-audit/external-exceptions.md).
+    # reports terminal allocations (https://github.com/ouankou/rex/issues/885).
     local LC_ALL=C
     s="${s,,}"
     printf '%s\n' "$s"
 }
 
 # EXT-BASH-TERMINAL-COMMAND: return through Bash's normal function cleanup
-# before the process exits (docs/codebase-audit/external-exceptions.md).
+# before the process exits (https://github.com/ouankou/rex/issues/885).
 check_policies () {
     # Find the directory containing the scripts that enforce individual policies
     local mydir="${0%/*}"

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# EXT-PERL-INTERPRETER-CLEANUP: docs/codebase-audit/external-exceptions.md.
+# EXT-PERL-INTERPRETER-CLEANUP: https://github.com/ouankou/rex/issues/885.
 # Use Perl's documented full teardown for RTH/policy interpreters and their
 # children. Releasing the arenas keeps their allocations visible to Memcheck
 # without process-wide Perl leak suppressions.
@@ -126,7 +126,7 @@ run_checked_command() {
   # EXT-VALGRIND-REPORT-ARTIFACTS: an instrumented abort may leave a core
   # beside its log destination. Retain diagnostic artifacts and preserve the
   # command's failure status; only the FIFO itself belongs to stream cleanup.
-  # See docs/codebase-audit/external-exceptions.md.
+  # See https://github.com/ouankou/rex/issues/885.
   (
     shopt -s nullglob dotglob
     artifacts=("${report_directory}"/*)

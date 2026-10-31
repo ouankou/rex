@@ -1,7 +1,7 @@
 // Manual diagnostic for EXT-CLANG-RECORD-ARRAY-FLAG. The negative control
 // passes caller-owned undefined type storage to the actual public Clang API.
 // It must remain an error under the complete Memcheck policy. See
-// docs/codebase-audit/external-exceptions.md for commands and interpretation.
+// https://github.com/ouankou/rex/issues/885 for commands and interpretation.
 #include <clang/AST/Expr.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>

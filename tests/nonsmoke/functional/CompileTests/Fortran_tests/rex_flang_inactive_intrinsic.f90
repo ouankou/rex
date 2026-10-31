@@ -1,4 +1,4 @@
-! EXT-FLANG-INACTIVE-DATAREF: docs/codebase-audit/external-exceptions.md
+! EXT-FLANG-INACTIVE-DATAREF: https://github.com/ouankou/rex/issues/885
 ! Independent flang -fc1 reproduction of inactive optional storage.
 program rex_flang_inactive_intrinsic
   integer, parameter :: real_kind = kind(1.0)

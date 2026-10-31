@@ -1,5 +1,5 @@
 /* Diagnostic reproducer for EXT-CLANG-PACKAGED-DEFINEDNESS.
- * See docs/codebase-audit/external-exceptions.md for commands and
+ * See https://github.com/ouankou/rex/issues/885 for commands and
  * interpretation. The x86 byte increment reproduces a Valgrind definedness
  * precision loss; argument "or" selects an equivalent update, and "negative"
  * leaves the checked bit undefined. This is a tool diagnostic, not a suppressed

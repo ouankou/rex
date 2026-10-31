@@ -18,7 +18,7 @@ public:
 
   FloatingValue();
   // Import storage without an FP load/store; see EXT-VALGRIND-X87-EMULATION
-  // in docs/codebase-audit/external-exceptions.md.
+  // in https://github.com/ouankou/rex/issues/885.
   FloatingValue(const long double &value);
   static FloatingValue fromBits(Format format, Words words);
   static Format nativeFormat();

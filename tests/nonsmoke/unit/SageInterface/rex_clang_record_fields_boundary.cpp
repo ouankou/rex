@@ -1,7 +1,7 @@
 // Manual diagnostic for EXT-CLANG-RECORD-FIELD-FLAG. The negative control
 // supplies an undefined caller-owned flag to the real Sema::ActOnFields API.
 // It must remain visible under the complete policy; no production AST is
-// annotated. See docs/codebase-audit/external-exceptions.md.
+// annotated. See https://github.com/ouankou/rex/issues/885.
 #include <clang/AST/Decl.h>
 #include <clang/Frontend/CompilerInstance.h>
 #include <clang/Frontend/FrontendActions.h>

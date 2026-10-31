@@ -71,8 +71,8 @@ Use `ctest -N -R "<regex>"` to list tests before running memcheck.
 ## LSan and external runtime allocations
 
 For the whole-codebase audit, the external-issue policy and evidence register are
-in [codebase-audit/README.md](codebase-audit/README.md#external-behavior-policy)
-and [codebase-audit/external-exceptions.md](codebase-audit/external-exceptions.md).
+in [audit issue #885](https://github.com/ouankou/rex/issues/885) and its attached
+`external-exceptions.md` register.
 Use stock LLVM 23 by default. First correct REX integration through supported
 APIs and ownership. Narrow external-report suppressions require origin and
 correctness evidence, an inline register reference, and explicit recheck/removal
@@ -128,7 +128,7 @@ before an exec that produces no final summary. Collection failures also fail
 the test. CTest can otherwise exit zero despite recording memory defects.
 `rex_ctest_valgrind_wrapper_contract` exercises these boundaries, concurrent
 children, and preservation of the command's own failure status. See
-[AUD-038 evidence](codebase-audit/nightly-outliner-timeout.md#validation-record).
+[AUD-038 evidence](https://github.com/ouankou/rex/issues/885) (`nightly-outliner-timeout.md`).
 
 CTest's `PASS_REGULAR_EXPRESSION` can override even the wrapper's nonzero exit.
 The configured post-Memcheck hook therefore checks the completed dashboard's

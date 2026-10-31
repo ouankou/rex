@@ -22,7 +22,7 @@ if(ROSE_VALGRIND_REQUESTED)
   find_program(REX_TEST_PYTHON_EXECUTABLE NAMES python3 REQUIRED)
   set(ROSE_REAL_VALGRIND "${VALGRIND_BINARY}")
   set(ROSE_CTEST_MEMCHECK_RTH_TIMEOUT_SCALE ${ROSE_CTEST_RTH_TIMEOUT_SCALE})
-  # EXT-VALGRIND-MULTICALL-ENV: see docs/codebase-audit/external-exceptions.md.
+  # EXT-VALGRIND-MULTICALL-ENV: see https://github.com/ouankou/rex/issues/885.
   if(NOT EXISTS "/usr/bin/env")
     message(FATAL_ERROR
       "CTest MemCheck requires the absolute shebang interpreter /usr/bin/env.")
@@ -90,7 +90,7 @@ if(ROSE_VALGRIND_REQUESTED)
       list(APPEND _rose_memcheck_trace_children_skip "${_rose_compiler_real}")
     endif()
   endforeach()
-  # EXT-VALGRIND-NESTED-LAUNCHER (docs/codebase-audit/external-exceptions.md):
+  # EXT-VALGRIND-NESTED-LAUNCHER (https://github.com/ouankou/rex/issues/885):
   # a test may run its own Memcheck contracts. The exact configured
   # Valgrind launcher starts its own instrumentation; tracing that launcher
   # inside another Valgrind can fail before the inner checker maps its runtime.

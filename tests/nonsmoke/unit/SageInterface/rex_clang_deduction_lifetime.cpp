@@ -1,4 +1,4 @@
-// EXT-CLANG-DEDUCTION-LEAK: docs/codebase-audit/external-exceptions.md
+// EXT-CLANG-DEDUCTION-LEAK: https://github.com/ouankou/rex/issues/885
 // Standalone Clang lifetime probe; intentionally does not link REX.
 #include <clang/Frontend/ASTUnit.h>
 #include <clang/Tooling/Tooling.h>
