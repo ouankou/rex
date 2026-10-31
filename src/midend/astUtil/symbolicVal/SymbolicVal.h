@@ -133,6 +133,7 @@ public:
   SymbolicVar() : varname(""), scope(AST_NULL), exp_(AST_NULL) {}
   SymbolicVar(const SymbolicVar &that)
       : varname(that.varname), scope(that.scope), exp_(that.exp_) {}
+  SymbolicVar &operator=(const SymbolicVar &) = default;
   ~SymbolicVar() {}
   virtual std::string toString() const;
   virtual void Dump() const { std::cerr << varname; }

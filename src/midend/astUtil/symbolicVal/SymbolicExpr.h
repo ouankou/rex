@@ -21,6 +21,7 @@ public:
   SymbolicTerm(int t1, int t2) : time1(t1), time2(t2) {}
   SymbolicTerm() : time1(0), time2(1) {}
   ~SymbolicTerm() {}
+  SymbolicTerm(const SymbolicTerm &) = default;
   SymbolicTerm &operator=(const SymbolicTerm &that) {
     time1 = that.time1;
     time2 = that.time2;
