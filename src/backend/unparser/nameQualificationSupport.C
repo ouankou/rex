@@ -7804,9 +7804,21 @@ int NameQualificationTraversal::nameQualificationDepth(
                   lookupTemplateArgumentList, visibleAliasCausalNodes);
           SgDeclarationStatement *imported_declaration =
               declaration_for_symbol(imported_symbol);
+          const SgTypedefDeclaration *importedTypedef =
+              isSgTypedefDeclaration(imported_declaration);
+          const SgTypedefDeclaration *targetTypedef =
+              isSgTypedefDeclaration(target_declaration);
+          // Distinct typedef declarations of the same type do not make C++
+          // type lookup ambiguous. Compare the denoted types before asking
+          // whether a genuinely conflicting declaration precedes this use.
+          const bool sameAliasedType =
+              importedTypedef != nullptr && targetTypedef != nullptr &&
+              SageInterface::isEquivalentType(importedTypedef->get_base_type(),
+                                              targetTypedef->get_base_type());
           if (imported_declaration == nullptr ||
               canonical_name_declaration(imported_declaration) ==
-                  target_first_declaration) {
+                  target_first_declaration ||
+              sameAliasedType) {
             continue;
           }
 
