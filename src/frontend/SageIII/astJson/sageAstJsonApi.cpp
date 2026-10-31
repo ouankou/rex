@@ -128,55 +128,65 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
   SgFileList *project_files = isSgFileList(file->get_parent());
   ROSE_ASSERT(project_files != nullptr &&
               project_files->get_parent() == project);
+  // A checkpoint document is as large as the AST it describes, so each text,
+  // record and signature below lives only until the next stage has consumed
+  // it.
   NodeMap original_nodes;
   // Source files can share imported declarations and canonical types. Snapshot
   // and replace their complete graph in one transaction so no surviving input
   // can retain a semantic edge into a detached checkpoint file.
-  const std::string original_json =
-      buildJson(file, checkpoint, file, project_files, &original_nodes);
-  writeFile(path, original_json);
+  writeFile(path, [&](std::ostream &out) {
+    writeJson(out, file, checkpoint, file, project_files, &original_nodes);
+  });
 
-  const std::string parsed_json = readFile(path);
   AstFileRecord ast;
-  try {
-    ast = parseAstFileJson(parsed_json, checkpointName(checkpoint));
-  } catch (const std::exception &e) {
-    const std::filesystem::path read_error_path =
-        path.parent_path() / (path.stem().string() + ".read-parse-error" +
-                              path.extension().string());
-    writeFile(read_error_path, parsed_json);
-    throw std::runtime_error("AST JSON parse failed for checkpoint " +
-                             std::string(checkpointName(checkpoint)) +
-                             "; wrote parsed JSON to " +
-                             read_error_path.string() + ": " + e.what());
+  {
+    const std::string parsed_json = readFile(path);
+    try {
+      ast = parseAstFileJson(parsed_json, checkpointName(checkpoint));
+    } catch (const std::exception &e) {
+      const std::filesystem::path read_error_path =
+          path.parent_path() / (path.stem().string() + ".read-parse-error" +
+                                path.extension().string());
+      writeFile(read_error_path, parsed_json);
+      throw std::runtime_error("AST JSON parse failed for checkpoint " +
+                               std::string(checkpointName(checkpoint)) +
+                               "; wrote parsed JSON to " +
+                               read_error_path.string() + ": " + e.what());
+    }
   }
 
   NodeMap restored_nodes;
   SgNode::SourceStateConstruction construction;
   SgSourceFile *copy = reconstructSourceFile(ast, file, &restored_nodes);
+  const uint64_t root_id = ast.root_id;
+  const uint64_t project_files_id = ast.project_files_id;
 
   if (options.compareCanonicalRoundTrip) {
-    const std::string copied_json =
-        buildJson(copy, checkpoint, copy,
-                  nodeByIdAs<SgFileList>(restored_nodes, ast.project_files_id));
-    AstFileRecord copied_ast;
-    try {
-      copied_ast = parseAstFileJson(copied_json, checkpointName(checkpoint));
-    } catch (const std::exception &e) {
-      const std::filesystem::path copied_parse_error_path =
-          path.parent_path() /
-          (path.stem().string() + ".reconstructed-parse-error" +
-           path.extension().string());
-      writeFile(copied_parse_error_path, copied_json);
-      throw std::runtime_error(
-          "AST JSON reconstructed parse failed for checkpoint " +
-          std::string(checkpointName(checkpoint)) +
-          "; wrote reconstructed JSON to " + copied_parse_error_path.string() +
-          ": " + e.what());
-    }
     const std::string original_signature = semanticSignature(ast);
-    const std::string copied_signature = semanticSignature(copied_ast);
-    if (original_signature != copied_signature) {
+    ast = AstFileRecord();
+    SgFileList *copied_files =
+        nodeByIdAs<SgFileList>(restored_nodes, project_files_id);
+    AstFileRecord copied_ast;
+    {
+      const std::string copied_json =
+          buildJson(copy, checkpoint, copy, copied_files);
+      try {
+        copied_ast = parseAstFileJson(copied_json, checkpointName(checkpoint));
+      } catch (const std::exception &e) {
+        const std::filesystem::path copied_parse_error_path =
+            path.parent_path() /
+            (path.stem().string() + ".reconstructed-parse-error" +
+             path.extension().string());
+        writeFile(copied_parse_error_path, copied_json);
+        throw std::runtime_error(
+            "AST JSON reconstructed parse failed for checkpoint " +
+            std::string(checkpointName(checkpoint)) +
+            "; wrote reconstructed JSON to " +
+            copied_parse_error_path.string() + ": " + e.what());
+      }
+    }
+    if (!semanticSignatureEquals(copied_ast, original_signature)) {
       const std::filesystem::path copied_path =
           path.parent_path() /
           (path.stem().string() + ".reconstructed" + path.extension().string());
@@ -185,9 +195,13 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
       const std::filesystem::path copied_signature_path =
           path.parent_path() /
           (path.stem().string() + ".reconstructed.signature.txt");
-      writeFile(copied_path, copied_json);
+      writeFile(copied_path, [&](std::ostream &out) {
+        writeJson(out, copy, checkpoint, copy, copied_files);
+      });
       writeFile(signature_path, original_signature);
-      writeFile(copied_signature_path, copied_signature);
+      writeFile(copied_signature_path, [&](std::ostream &out) {
+        writeSemanticSignature(out, copied_ast);
+      });
       throw std::runtime_error("AST JSON round-trip mismatch for checkpoint " +
                                std::string(checkpointName(checkpoint)) +
                                "; wrote reconstructed JSON to " +
@@ -195,7 +209,8 @@ SgSourceFile *roundTripSourceFile(SgSourceFile *file, Checkpoint checkpoint,
     }
   }
 
-  replaceProjectFiles(project, ast, original_nodes, restored_nodes);
+  replaceProjectFiles(project, root_id, project_files_id, original_nodes,
+                      restored_nodes);
   return copy;
 }
 
@@ -203,14 +218,17 @@ void writeProjectJson(SgProject *project, const std::string &path,
                       const Options &options) {
   ROSE_ASSERT(project != nullptr);
   (void)options;
-  writeFile(path, buildJson(project, Checkpoint::PreOmpConstruction, nullptr));
+  writeFile(path, [&](std::ostream &out) {
+    writeJson(out, project, Checkpoint::PreOmpConstruction, nullptr);
+  });
 }
 
 void writeSourceFileJson(SgSourceFile *file, Checkpoint checkpoint,
                          const std::string &path, const Options &options) {
   ROSE_ASSERT(file != nullptr);
   (void)options;
-  writeFile(path, buildJson(file, checkpoint, file));
+  writeFile(path,
+            [&](std::ostream &out) { writeJson(out, file, checkpoint, file); });
 }
 
 std::string canonicalSubtreeSignature(SgNode *root) {

@@ -2933,15 +2933,20 @@ void Grammar::setUpStatements() {
       NO_COPY_DATA);
 
   // DQ (7/23/2011): Pointers to previous and next matching namespace
-  // definitions (C++ namespaces are reintrant).
+  // definitions (C++ namespaces are reintrant).  The hand-written setters
+  // advance the reopening-chain revision.
   NamespaceDefinitionStatement.setDataPrototype(
       "SgNamespaceDefinitionStatement*", "previousNamespaceDefinition",
-      "= NULL", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      "= NULL", NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE, COPY_REFERENCE);
   NamespaceDefinitionStatement.setDataPrototype(
       "SgNamespaceDefinitionStatement*", "nextNamespaceDefinition", "= NULL",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
       COPY_REFERENCE);
+  // A destroyed definition leaves every chain it belonged to, and its address
+  // may be reused by an unrelated chain.
+  NamespaceDefinitionStatement.setDestructorPrologue(
+      "advanceReopeningChainRevision();");
 
   // DQ (5/16/2013): This is where we put the union of all of the symbols for
   // all of the namespace definitions that are logically the same namespace, but

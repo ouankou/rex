@@ -180,7 +180,10 @@ set(ROSE_FLAGS)
 
 set(TESTCODE_DIR ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/Cxx_tests)
 
-set(TESTCODE_INCLUDES -I${TESTCODE_DIR})
+# The specimens use the native Cxx_tests classification, so they compile with
+# the same include environment as compile_test (ROSE_INCLUDE_FLAGS); some
+# specimens include ROSE headers.
+set(TESTCODE_INCLUDES -I${TESTCODE_DIR} ${ROSE_INCLUDE_FLAGS})
 
 set(CXX_TESTCODES_TO_UNPARSE ${CXX_TESTCODES})
 list(APPEND CXX_TESTCODES_TO_UNPARSE test2003_24.C test2004_82.C)

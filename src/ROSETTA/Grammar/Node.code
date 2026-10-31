@@ -841,6 +841,9 @@ public:
 // Reconstruct source state without treating constructor bindings as user
 // edits. Only nodes born inside this scope participate; mutations of existing
 // nodes still record edits, and all bindings invalidate structural caches.
+// Each scope opens a new construction epoch and every node records the epoch
+// current at its birth, so a node was born inside the active scopes exactly
+// when its epoch is at least the outermost active scope's epoch.
 class SourceStateConstruction {
 public:
   SourceStateConstruction();
@@ -851,10 +854,10 @@ public:
 private:
   friend class SgNode;
   static SourceStateConstruction *&current();
-  static void recordNode(const SgNode *node);
+  static std::atomic<uint64_t> &latestEpoch();
   static bool contains(const SgNode *node);
   SourceStateConstruction *previous;
-  std::set<const SgNode *> nodes;
+  uint64_t outermostEpoch;
 };
 
 bool isUnderConstruction() const;
@@ -1131,14 +1134,16 @@ struct PoolEntry {
   unsigned char *live_flags;
   VariantT variant;
   void (*reset)();
+  //! Index of this pool among the pools of its class.
+  size_t pool_index;
 };
 
 template <typename NodeT> struct PoolResetter {
   static void reset() {
-    NodeT::pools.clear();
-    NodeT::pool_free_nodes.clear();
-    NodeT::pool_live_flags.clear();
-    NodeT::next_node = nullptr;
+    // The released pools' bookkeeping is freed along with them.
+    decltype(NodeT::pools)().swap(NodeT::pools);
+    decltype(NodeT::free_slots)().swap(NodeT::free_slots);
+    decltype(NodeT::pool_live_flags)().swap(NodeT::pool_live_flags);
   }
 };
 
@@ -1282,9 +1287,10 @@ void SgNode::set_globalFunctionTypeTable(
 
 SgTypeTable *SgNode::get_globalTypeTable() {
   // DQ (1/31/2006): If there is no global function type symbol table then build
-  // one
+  // one.  It holds every canonical type of the program, so size it for that
+  // role; scope type tables use the ordinary symbol table size.
   if (p_globalTypeTable == nullptr) {
-    p_globalTypeTable = new SgTypeTable();
+    p_globalTypeTable = new SgTypeTable(1001);
   }
 
   ASSERT_not_null(p_globalTypeTable);
@@ -1379,7 +1385,8 @@ void SgNode::set_attributeMechanism(AstAttributeMechanism * /*a*/) {
 }
 
 void SgNode::post_construction_initialization() {
-  SourceStateConstruction::recordNode(this);
+  p_constructionEpoch =
+      SourceStateConstruction::latestEpoch().load(std::memory_order_relaxed);
 }
 
 SgNode::SourceStateConstruction *&SgNode::SourceStateConstruction::current() {
@@ -1387,8 +1394,16 @@ SgNode::SourceStateConstruction *&SgNode::SourceStateConstruction::current() {
   return scope;
 }
 
+std::atomic<uint64_t> &SgNode::SourceStateConstruction::latestEpoch() {
+  static std::atomic<uint64_t> epoch(0);
+  return epoch;
+}
+
 SgNode::SourceStateConstruction::SourceStateConstruction()
     : previous(current()) {
+  const uint64_t epoch =
+      latestEpoch().fetch_add(1, std::memory_order_relaxed) + 1;
+  outermostEpoch = previous != nullptr ? previous->outermostEpoch : epoch;
   current() = this;
 }
 
@@ -1397,16 +1412,9 @@ SgNode::SourceStateConstruction::~SourceStateConstruction() {
   current() = previous;
 }
 
-void SgNode::SourceStateConstruction::recordNode(const SgNode *node) {
-  for (auto *scope = current(); scope != nullptr; scope = scope->previous)
-    scope->nodes.insert(node);
-}
-
 bool SgNode::SourceStateConstruction::contains(const SgNode *node) {
-  for (auto *scope = current(); scope != nullptr; scope = scope->previous)
-    if (scope->nodes.count(node) != 0)
-      return true;
-  return false;
+  const SourceStateConstruction *scope = current();
+  return scope != nullptr && node->p_constructionEpoch >= scope->outermostEpoch;
 }
 
 namespace {

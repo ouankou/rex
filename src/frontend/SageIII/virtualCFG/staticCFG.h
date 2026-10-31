@@ -142,40 +142,49 @@ protected:
 };
 
 template <class NodeT, class EdgeT>
-void CFG::buildCFG(NodeT n, std::set<NodeT> &explored) {
+void CFG::buildCFG(NodeT start, std::set<NodeT> &explored) {
+  // Nodes are visited depth first, each one's successors and then its
+  // predecessors, but the pending neighbors live on an explicit stack: a path
+  // through a CFG can be far longer than the call stack can hold.
+  std::vector<std::pair<std::vector<NodeT>, size_t>> pending;
+  auto visit = [&](const NodeT &n) {
+    ROSE_ASSERT(n.getNode());
+    if (!explored.insert(n).second)
+      return;
 
-  ROSE_ASSERT(n.getNode());
+    auto *from = getOrCreateGraphNode(CFGNode(n.getNode(), n.getIndex()));
+    if (auto *function = isSgFunctionDefinition(n.getNode())) {
+      if (n.getIndex() == 0)
+        entry_ = from;
+      else if (n.getIndex() == function->cfgIndexForEnd())
+        exit_ = from;
+    }
 
-  if (explored.count(n) > 0)
-    return;
-  explored.insert(n);
+    std::vector<NodeT> neighbors;
+    for (const EdgeT &edge : n.outEdges()) {
+      ROSE_ASSERT(edge.source() == n);
+      if constexpr (std::is_same_v<EdgeT, CFGEdge>)
+        addEdge(CFGPath(edge));
+      else
+        addEdge(edge.getPath());
+      neighbors.push_back(edge.target());
+    }
+    for (const EdgeT &edge : n.inEdges()) {
+      ROSE_ASSERT(edge.target() == n);
+      neighbors.push_back(edge.source());
+    }
+    pending.emplace_back(std::move(neighbors), 0);
+  };
 
-  auto *from = getOrCreateGraphNode(CFGNode(n.getNode(), n.getIndex()));
-  if (auto *function = isSgFunctionDefinition(n.getNode())) {
-    if (n.getIndex() == 0)
-      entry_ = from;
-    else if (n.getIndex() == function->cfgIndexForEnd())
-      exit_ = from;
-  }
-
-  std::vector<EdgeT> outEdges = n.outEdges();
-
-  for (const EdgeT &edge : outEdges) {
-    ROSE_ASSERT(edge.source() == n);
-    if constexpr (std::is_same_v<EdgeT, CFGEdge>)
-      addEdge(CFGPath(edge));
-    else
-      addEdge(edge.getPath());
-  }
-
-  for (const EdgeT &edge : outEdges) {
-    buildCFG<NodeT, EdgeT>(edge.target(), explored);
-  }
-
-  std::vector<EdgeT> inEdges = n.inEdges();
-  for (const EdgeT &edge : inEdges) {
-    ROSE_ASSERT(edge.target() == n);
-    buildCFG<NodeT, EdgeT>(edge.source(), explored);
+  visit(start);
+  while (!pending.empty()) {
+    auto &[neighbors, next] = pending.back();
+    if (next == neighbors.size()) {
+      pending.pop_back();
+      continue;
+    }
+    const NodeT neighbor = neighbors[next++];
+    visit(neighbor);
   }
 }
 

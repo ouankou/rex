@@ -36697,6 +36697,39 @@ bool cxxArrayTypeMatches(const SgType *element, const SgType *target,
 }
 } // namespace
 
+// [dcl.fct]p5 adjusts a parameter by the type its declaration names, however
+// that type is spelled.  Resolve ordinary alias spellings, including a
+// qualified or using-declared typedef name represented as a nonreal source
+// type, before applying the array and function adjustments.
+static const SgType *cxxParameterDeclaredType(const SgType *type,
+                                              SgConstVolatileModifier &cv) {
+  std::set<const SgType *> visited;
+  while (true) {
+    type = peelCxxTypeCv(type, cv, true);
+    ROSE_ASSERT(visited.insert(type).second);
+    const auto *nonreal = isSgNonrealType(type);
+    if (nonreal == nullptr)
+      return type;
+    if (const SgType *aliased = nonreal->get_aliased_type()) {
+      type = aliased;
+      continue;
+    }
+    const auto *declaration = isSgNonrealDecl(nonreal->get_declaration());
+    SgDeclarationStatement *target =
+        declaration != nullptr ? declaration->get_templateDeclaration()
+                               : nullptr;
+    if (const auto *usingDeclaration = isSgUsingDeclarationStatement(target))
+      target = usingDeclaration->get_declaration();
+    const auto *alias = isSgTypedefDeclaration(target);
+    if (declaration == nullptr || !declaration->get_tpl_args().empty() ||
+        alias == nullptr || isSgTemplateTypedefDeclaration(alias) != nullptr ||
+        isSgTemplateInstantiationTypedefDeclaration(alias) != nullptr ||
+        alias->get_base_type() == nullptr)
+      return type;
+    type = alias->get_base_type();
+  }
+}
+
 bool SageInterface::cxxParameterTypeMatchesSemanticType(
     const SgType *source, const SgType *semantic) {
   if (source == nullptr || semantic == nullptr)
@@ -36704,7 +36737,7 @@ bool SageInterface::cxxParameterTypeMatchesSemanticType(
   if (cxxSourceTypeMatchesSemanticType(source, semantic))
     return true;
   SgConstVolatileModifier source_cv, semantic_cv;
-  const auto *declared = peelCxxTypeCv(source, source_cv, true);
+  const auto *declared = cxxParameterDeclaredType(source, source_cv);
   SgConstVolatileModifier object_cv;
   const auto *adjusted = peelCxxTypeCv(semantic, object_cv, true);
   if (isSgArrayType(declared) == nullptr &&
@@ -36810,14 +36843,52 @@ bool SageInterface::cxxSourceTypeMatchesSemanticType(const SgType *source,
            cxxSourceTypeMatchesSemanticType(sourcePointer->get_base_type(),
                                             semanticPointer->get_base_type());
   }
+  // [dcl.ref]p6: a reference to a reference formed through a typedef or
+  // decltype collapses (an lvalue reference wins), and cv-qualifiers applied to
+  // the referenced reference are ignored.
+  auto referencedReference = [](const SgType *base,
+                                bool &lvalue) -> const SgType * {
+    SgConstVolatileModifier ignored;
+    const SgType *referenced = peelCxxTypeCv(base, ignored);
+    if (const auto *reference = isSgReferenceType(referenced)) {
+      lvalue = true;
+      return reference->get_base_type();
+    }
+    if (const auto *reference = isSgRvalueReferenceType(referenced)) {
+      lvalue = false;
+      return reference->get_base_type();
+    }
+    return nullptr;
+  };
   if (const SgReferenceType *sourceReference = isSgReferenceType(source)) {
     const SgReferenceType *semanticReference = isSgReferenceType(semantic);
+    bool inner_lvalue = false;
+    if (const SgType *referent =
+            referencedReference(sourceReference->get_base_type(), inner_lvalue))
+      return semanticReference != nullptr &&
+             cxxSourceTypeMatchesSemanticType(
+                 referent, semanticReference->get_base_type());
     return semanticReference != nullptr &&
            cxxSourceTypeMatchesSemanticType(sourceReference->get_base_type(),
                                             semanticReference->get_base_type());
   }
   if (const SgRvalueReferenceType *sourceReference =
           isSgRvalueReferenceType(source)) {
+    bool inner_lvalue = false;
+    if (const SgType *referent = referencedReference(
+            sourceReference->get_base_type(), inner_lvalue)) {
+      if (inner_lvalue) {
+        const SgReferenceType *semanticReference = isSgReferenceType(semantic);
+        return semanticReference != nullptr &&
+               cxxSourceTypeMatchesSemanticType(
+                   referent, semanticReference->get_base_type());
+      }
+      const SgRvalueReferenceType *semanticReference =
+          isSgRvalueReferenceType(semantic);
+      return semanticReference != nullptr &&
+             cxxSourceTypeMatchesSemanticType(
+                 referent, semanticReference->get_base_type());
+    }
     const SgRvalueReferenceType *semanticReference =
         isSgRvalueReferenceType(semantic);
     return semanticReference != nullptr &&

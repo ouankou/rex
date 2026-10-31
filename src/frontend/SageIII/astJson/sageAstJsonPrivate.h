@@ -18,6 +18,7 @@
 #include <functional>
 #include <initializer_list>
 #include <iomanip>
+#include <iterator>
 #include <limits>
 #include <list>
 #include <map>
@@ -57,6 +58,145 @@ extern std::unordered_map<SgSourceFile *, std::vector<SgClassDeclaration *>>
 extern const SgNode *currentTypeSerializationNode;
 extern bool serializingTypeOwnedExpression;
 
+struct JsonValue;
+struct JsonMember;
+
+// Object keys come from a small vocabulary, so each spelling is stored once
+// and every member refers to it.  Each spelling also knows its rank among all
+// spellings in lexicographic order; a new spelling shifts the ranks after it
+// but never reorders existing ones, so members ordered by rank stay ordered
+// exactly as std::map orders their spellings.
+class JsonKey {
+public:
+  explicit JsonKey(const std::string &text);
+
+  operator const std::string &() const { return spelling_->text; }
+  const std::string &str() const { return spelling_->text; }
+  size_t rank() const { return spelling_->rank; }
+
+  friend bool operator==(const JsonKey &lhs, const JsonKey &rhs) {
+    return lhs.spelling_ == rhs.spelling_;
+  }
+  friend bool operator!=(const JsonKey &lhs, const JsonKey &rhs) {
+    return lhs.spelling_ != rhs.spelling_;
+  }
+  friend bool operator==(const JsonKey &lhs, const std::string &rhs) {
+    return lhs.str() == rhs;
+  }
+  friend bool operator==(const std::string &lhs, const JsonKey &rhs) {
+    return lhs == rhs.str();
+  }
+  friend bool operator!=(const JsonKey &lhs, const std::string &rhs) {
+    return lhs.str() != rhs;
+  }
+  friend bool operator!=(const std::string &lhs, const JsonKey &rhs) {
+    return lhs != rhs.str();
+  }
+  friend bool operator==(const JsonKey &lhs, const char *rhs) {
+    return lhs.str() == rhs;
+  }
+  friend bool operator!=(const JsonKey &lhs, const char *rhs) {
+    return lhs.str() != rhs;
+  }
+  friend std::ostream &operator<<(std::ostream &out, const JsonKey &key) {
+    return out << key.str();
+  }
+
+  struct Spelling {
+    std::string text;
+    size_t rank;
+  };
+
+private:
+  const Spelling *spelling_;
+};
+
+// The members of a JSON object, ordered by key like std::map.  Each member
+// has its own allocation, owned by the object, so references to it survive
+// the insertion and removal of other members.
+class JsonObject {
+  using Storage = std::vector<JsonMember *>;
+
+public:
+  template <typename Member, typename Base> class Iterator {
+  public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using value_type = std::remove_const_t<Member>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = Member *;
+    using reference = Member &;
+
+    Iterator() = default;
+    explicit Iterator(Base base) : base_(base) {}
+    template <
+        typename OtherMember, typename OtherBase,
+        typename = std::enable_if_t<std::is_convertible_v<OtherBase, Base> &&
+                                    !std::is_same_v<OtherBase, Base>>>
+    Iterator(const Iterator<OtherMember, OtherBase> &other)
+        : base_(other.base()) {}
+
+    reference operator*() const { return **base_; }
+    pointer operator->() const { return *base_; }
+    Iterator &operator++() {
+      ++base_;
+      return *this;
+    }
+    Iterator operator++(int) { return Iterator(base_++); }
+    Iterator &operator--() {
+      --base_;
+      return *this;
+    }
+    Iterator operator--(int) { return Iterator(base_--); }
+    friend bool operator==(const Iterator &lhs, const Iterator &rhs) {
+      return lhs.base_ == rhs.base_;
+    }
+    friend bool operator!=(const Iterator &lhs, const Iterator &rhs) {
+      return lhs.base_ != rhs.base_;
+    }
+    Base base() const { return base_; }
+
+  private:
+    Base base_{};
+  };
+
+  using iterator = Iterator<JsonMember, Storage::iterator>;
+  using const_iterator = Iterator<const JsonMember, Storage::const_iterator>;
+
+  JsonObject() = default;
+  JsonObject(
+      std::initializer_list<std::pair<const std::string, JsonValue>> members);
+  JsonObject(const JsonObject &other);
+  JsonObject(JsonObject &&other) noexcept;
+  JsonObject &operator=(const JsonObject &other);
+  JsonObject &operator=(JsonObject &&other) noexcept;
+  ~JsonObject();
+
+  size_t size() const { return members_.size(); }
+  bool empty() const { return members_.empty(); }
+  iterator begin() { return iterator(members_.begin()); }
+  iterator end() { return iterator(members_.end()); }
+  const_iterator begin() const { return const_iterator(members_.begin()); }
+  const_iterator end() const { return const_iterator(members_.end()); }
+
+  iterator find(const std::string &key);
+  const_iterator find(const std::string &key) const;
+  size_t count(const std::string &key) const { return find(key) != end(); }
+  JsonValue &at(const std::string &key);
+  const JsonValue &at(const std::string &key) const;
+  JsonValue &operator[](const std::string &key);
+  std::pair<iterator, bool> emplace(const std::string &key, JsonValue value);
+  std::pair<iterator, bool> insert_or_assign(const std::string &key,
+                                             JsonValue value);
+  size_t erase(const std::string &key);
+  void clear();
+
+private:
+  Storage::const_iterator lowerBound(const std::string &key) const;
+  Storage::iterator lowerBound(const JsonKey &key);
+
+  Storage members_;
+};
+
 struct JsonValue {
   enum class Kind { Null, Bool, Number, String, Array, Object };
 
@@ -64,7 +204,7 @@ struct JsonValue {
   bool bool_value = false;
   std::string text;
   std::vector<JsonValue> array;
-  std::map<std::string, JsonValue> object;
+  JsonObject object;
 
   static JsonValue null() { return JsonValue(); }
 
@@ -96,54 +236,22 @@ struct JsonValue {
     return result;
   }
 
-  static JsonValue objectValue(std::map<std::string, JsonValue> value) {
+  static JsonValue objectValue(JsonObject value) {
     JsonValue result;
     result.kind = Kind::Object;
     result.object = std::move(value);
     return result;
   }
 
-  bool exactlyEquals(const JsonValue &other) const {
-    if (kind != other.kind || bool_value != other.bool_value ||
-        text != other.text || array.size() != other.array.size() ||
-        object.size() != other.object.size()) {
-      return false;
-    }
-    for (size_t index = 0; index < array.size(); ++index) {
-      if (!array[index].exactlyEquals(other.array[index])) {
-        return false;
-      }
-    }
-    auto this_field = object.begin();
-    auto other_field = other.object.begin();
-    for (; this_field != object.end(); ++this_field, ++other_field) {
-      if (this_field->first != other_field->first ||
-          !this_field->second.exactlyEquals(other_field->second)) {
-        return false;
-      }
-    }
-    return true;
+  bool exactlyEquals(const JsonValue &other) const;
+
+  const JsonValue &at(const std::string &key) const;
+
+  JsonValue &at(const std::string &key) {
+    return const_cast<JsonValue &>(std::as_const(*this).at(key));
   }
 
-  const JsonValue &at(const std::string &key) const {
-    if (kind != Kind::Object) {
-      throw std::runtime_error(
-          "AST JSON value is not an object while reading " + key);
-    }
-    auto found = object.find(key);
-    if (found == object.end()) {
-      throw std::runtime_error("AST JSON object is missing key: " + key);
-    }
-    return found->second;
-  }
-
-  const JsonValue *find(const std::string &key) const {
-    if (kind != Kind::Object) {
-      return nullptr;
-    }
-    auto found = object.find(key);
-    return found == object.end() ? nullptr : &found->second;
-  }
+  const JsonValue *find(const std::string &key) const;
 
   std::string asString() const {
     if (kind != Kind::String) {
@@ -214,6 +322,178 @@ struct JsonValue {
 
   bool requiredBool(const std::string &key) const { return at(key).asBool(); }
 };
+
+struct JsonMember {
+  JsonKey first;
+  JsonValue second;
+};
+
+inline bool JsonValue::exactlyEquals(const JsonValue &other) const {
+  if (kind != other.kind || bool_value != other.bool_value ||
+      text != other.text || array.size() != other.array.size() ||
+      object.size() != other.object.size()) {
+    return false;
+  }
+  for (size_t index = 0; index < array.size(); ++index) {
+    if (!array[index].exactlyEquals(other.array[index])) {
+      return false;
+    }
+  }
+  auto this_field = object.begin();
+  auto other_field = other.object.begin();
+  for (; this_field != object.end(); ++this_field, ++other_field) {
+    if (this_field->first != other_field->first ||
+        !this_field->second.exactlyEquals(other_field->second)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+inline const JsonValue &JsonValue::at(const std::string &key) const {
+  if (kind != Kind::Object) {
+    throw std::runtime_error("AST JSON value is not an object while reading " +
+                             key);
+  }
+  auto found = object.find(key);
+  if (found == object.end()) {
+    throw std::runtime_error("AST JSON object is missing key: " + key);
+  }
+  return found->second;
+}
+
+inline const JsonValue *JsonValue::find(const std::string &key) const {
+  if (kind != Kind::Object) {
+    return nullptr;
+  }
+  auto found = object.find(key);
+  return found == object.end() ? nullptr : &found->second;
+}
+
+// As with std::map, the first occurrence of a key wins.
+inline JsonObject::JsonObject(
+    std::initializer_list<std::pair<const std::string, JsonValue>> members) {
+  for (const auto &member : members)
+    emplace(member.first, member.second);
+}
+
+inline JsonObject::JsonObject(const JsonObject &other) {
+  members_.reserve(other.members_.size());
+  try {
+    for (const JsonMember *member : other.members_)
+      members_.push_back(new JsonMember(*member));
+  } catch (...) {
+    clear();
+    throw;
+  }
+}
+
+inline JsonObject &JsonObject::operator=(const JsonObject &other) {
+  if (this != &other) {
+    JsonObject copy(other);
+    members_.swap(copy.members_);
+  }
+  return *this;
+}
+
+inline JsonObject::JsonObject(JsonObject &&other) noexcept
+    : members_(std::move(other.members_)) {
+  other.members_.clear();
+}
+
+inline JsonObject &JsonObject::operator=(JsonObject &&other) noexcept {
+  if (this != &other) {
+    clear();
+    members_.swap(other.members_);
+  }
+  return *this;
+}
+
+inline JsonObject::~JsonObject() { clear(); }
+
+inline void JsonObject::clear() {
+  for (JsonMember *member : members_)
+    delete member;
+  members_.clear();
+}
+
+inline JsonObject::Storage::const_iterator
+JsonObject::lowerBound(const std::string &key) const {
+  return std::lower_bound(
+      members_.begin(), members_.end(), key,
+      [](const JsonMember *member, const std::string &probe) {
+        return member->first.str() < probe;
+      });
+}
+
+inline JsonObject::Storage::iterator
+JsonObject::lowerBound(const JsonKey &key) {
+  const size_t rank = key.rank();
+  return std::lower_bound(members_.begin(), members_.end(), rank,
+                          [](const JsonMember *member, size_t probe) {
+                            return member->first.rank() < probe;
+                          });
+}
+
+inline JsonObject::iterator JsonObject::find(const std::string &key) {
+  return iterator(members_.begin() +
+                  (std::as_const(*this).find(key).base() - members_.cbegin()));
+}
+
+inline JsonObject::const_iterator
+JsonObject::find(const std::string &key) const {
+  const auto found = lowerBound(key);
+  return const_iterator(found != members_.end() && (*found)->first == key
+                            ? found
+                            : members_.end());
+}
+
+inline JsonValue &JsonObject::at(const std::string &key) {
+  const auto found = find(key);
+  if (found == end())
+    throw std::out_of_range("AST JSON object has no member " + key);
+  return found->second;
+}
+
+inline const JsonValue &JsonObject::at(const std::string &key) const {
+  const auto found = find(key);
+  if (found == end())
+    throw std::out_of_range("AST JSON object has no member " + key);
+  return found->second;
+}
+
+inline JsonValue &JsonObject::operator[](const std::string &key) {
+  return emplace(key, JsonValue()).first->second;
+}
+
+inline std::pair<JsonObject::iterator, bool>
+JsonObject::emplace(const std::string &key, JsonValue value) {
+  const JsonKey interned(key);
+  const auto position = lowerBound(interned);
+  if (position != members_.end() && (*position)->first == interned)
+    return {iterator(position), false};
+  auto member =
+      std::make_unique<JsonMember>(JsonMember{interned, std::move(value)});
+  const auto inserted = members_.insert(position, member.get());
+  member.release();
+  return {iterator(inserted), true};
+}
+
+inline std::pair<JsonObject::iterator, bool>
+JsonObject::insert_or_assign(const std::string &key, JsonValue value) {
+  auto inserted = emplace(key, JsonValue());
+  inserted.first->second = std::move(value);
+  return inserted;
+}
+
+inline size_t JsonObject::erase(const std::string &key) {
+  const auto found = find(key);
+  if (found == end())
+    return 0;
+  delete *found.base();
+  members_.erase(found.base());
+  return 1;
+}
 
 std::string rawTargetAbiJson(const SgSourceFile::target_abi_info &abi);
 SgSourceFile::target_abi_info targetAbiFromJson(const JsonValue &json);
@@ -1639,21 +1919,34 @@ rawNodeProperties(SgNode *node,
 void writeNodeJson(std::ostream &out, SgNode *node,
                    const std::unordered_map<const SgNode *, uint64_t> &ids,
                    bool comma);
+void writeJson(std::ostream &out, SgNode *root, Checkpoint checkpoint,
+               SgSourceFile *file, SgFileList *project_files = nullptr,
+               NodeMap *serialized_nodes = nullptr);
 std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
                       SgFileList *project_files = nullptr,
                       NodeMap *serialized_nodes = nullptr);
 
+// Collects a writer's output in one string.  Unlike std::ostringstream::str(),
+// it does not copy the text, so a checkpoint-sized document exists once.
+std::string writeToString(const std::function<void(std::ostream &)> &write);
+
 std::filesystem::path temporaryWritePath(const std::filesystem::path &path);
+void writeFile(const std::filesystem::path &path,
+               const std::function<void(std::ostream &)> &write);
 void writeFile(const std::filesystem::path &path, const std::string &content);
 std::string readFile(const std::filesystem::path &path);
 AstFileRecord parseAstFileJson(const std::string &json,
                                const std::string &expected_checkpoint);
+void writeSemanticSignature(std::ostream &out, const AstFileRecord &ast);
 std::string semanticSignature(const AstFileRecord &ast);
+bool semanticSignatureEquals(const AstFileRecord &ast,
+                             const std::string &signature);
 std::filesystem::path checkpointPath(SgSourceFile *file, Checkpoint checkpoint,
                                      const Options &options);
 void replaceFileInProject(SgSourceFile *old_file, SgSourceFile *new_file);
-void replaceProjectFiles(SgProject *project, const AstFileRecord &ast,
-                         const NodeMap &original, const NodeMap &restored);
+void replaceProjectFiles(SgProject *project, uint64_t root_id,
+                         uint64_t project_files_id, const NodeMap &original,
+                         const NodeMap &restored);
 SgProject *owningProject(SgSourceFile *file);
 std::vector<std::string> commandLineFromJson(const JsonValue &properties);
 void restoreFileIdMapFromMetadata(const JsonValue &metadata);

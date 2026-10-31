@@ -130,12 +130,17 @@ void SgCastExp::validate_semantic_conversion() const {
   if (get_semantic_conversion_kind() ==
       e_semantic_conversion_FunctionToPointerDecay) {
     SgType *source = operand->get_type();
-    SgType *decayed_source =
+    SgType *stripped_source =
         source != nullptr ? source->stripTypedefsAndModifiers() : nullptr;
-    if (SgReferenceType *reference = isSgReferenceType(decayed_source)) {
+    // The decayed pointer targets the function as the operand names it,
+    // including a typedef that names the function type itself.
+    SgType *decayed_source =
+        source != nullptr ? source->stripType(SgType::STRIP_MODIFIER_TYPE)
+                          : nullptr;
+    if (SgReferenceType *reference = isSgReferenceType(stripped_source)) {
       decayed_source = reference->get_base_type();
     } else if (SgRvalueReferenceType *reference =
-                   isSgRvalueReferenceType(decayed_source)) {
+                   isSgRvalueReferenceType(stripped_source)) {
       decayed_source = reference->get_base_type();
     }
     SgPointerType *result =

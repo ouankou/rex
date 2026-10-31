@@ -13703,7 +13703,45 @@ void DeclAttachmentSession::retire(DeclarationList *declarations) {
   p_membership_indices.erase(declarations);
 }
 
+namespace {
+std::vector<DeclAttachmentSession::NamespaceFragment>
+collectNamespaceFragments(DeclAttachmentSession &attachment_session,
+                          SgNamespaceDefinitionStatement *chain,
+                          SgGlobal *global);
+} // namespace
+
+DeclAttachmentSession::NamespaceFragmentIndex &
+DeclAttachmentSession::namespaceFragmentIndex(
+    SgNamespaceDefinitionStatement *chain, SgGlobal *global) {
+  requireDeclAttachmentPointer(chain, "namespace-fragment-index", "chain");
+  requireDeclAttachmentPointer(global, "namespace-fragment-index", "global");
+  return p_namespace_fragment_indices[{chain, global}];
+}
+
 void DeclAttachmentSession::validateAll() {
+  // A namespace fragment index is used only while no reopening chain has
+  // changed.  Every index still current must equal the fragments its chain
+  // yields now, so a mutation the chain revision does not cover fails here.
+  // This runs before the membership audit because collecting fragments can
+  // index more declaration lists.
+  const std::uint64_t chain_revision =
+      SgNamespaceDefinitionStatement::get_reopening_chain_revision();
+  for (const auto &[key, index] : p_namespace_fragment_indices) {
+    if (index.chain_revision != chain_revision) {
+      continue;
+    }
+    if (collectNamespaceFragments(*this, key.chain, key.global) !=
+        index.fragments) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-final-audit]: "
+              "namespace chain=%p global=%p has a stale fragment index at "
+              "chain revision=%llu\n",
+              static_cast<void *>(key.chain), static_cast<void *>(key.global),
+              static_cast<unsigned long long>(chain_revision));
+      ROSE_ABORT();
+    }
+  }
+
   for (auto &entry : p_membership_indices) {
     DeclarationList *declarations = entry.first;
     MembershipIndex &stored = entry.second;
@@ -13792,6 +13830,7 @@ void DeclAttachmentSession::validateAll() {
 void DeclAttachmentSession::clear() {
   p_membership_indices.clear();
   p_source_line_indices.clear();
+  p_namespace_fragment_indices.clear();
 }
 
 namespace {
@@ -14166,21 +14205,31 @@ bool is_declaration_scope_context(const clang::DeclContext *context) {
          context->isFunctionOrMethod();
 }
 
+// A construct scope owns its statement list through its body block, so it has
+// no list until that body is published (for example while its condition, which
+// can declare a tag type, is still being translated).
 bool scope_supports_statement_list(const SgScopeStatement *scope) {
   if (scope == nullptr) {
     return false;
   }
   switch (scope->variantT()) {
   case V_SgBasicBlock:
-  case V_SgCatchOptionStmt:
-  case V_SgDoWhileStmt:
+    return true;
   case V_SgForStatement:
+    return isSgForStatement(scope)->get_loop_body() != nullptr;
+  case V_SgCatchOptionStmt:
+    return isSgCatchOptionStmt(scope)->get_body() != nullptr;
+  case V_SgDoWhileStmt:
+    return isSgDoWhileStmt(scope)->get_body() != nullptr;
   case V_SgTemplateFunctionDefinition:
   case V_SgFunctionDefinition:
+    return isSgFunctionDefinition(scope)->get_body() != nullptr;
   case V_SgSwitchStatement:
+    return isSgSwitchStatement(scope)->get_body() != nullptr;
   case V_SgWhileStmt:
+    return isSgWhileStmt(scope)->get_body() != nullptr;
   case V_SgFortranDo:
-    return true;
+    return isSgFortranDo(scope)->get_body() != nullptr;
   default:
     return false;
   }
@@ -18524,6 +18573,144 @@ is_source_backed_namespace_fragment(DeclAttachmentSession &attachment_session,
          has_real_source_file_info(closing->get_startOfConstruct());
 }
 
+// The source-spelled fragments of one reopening chain within one translation
+// unit, ordered by opening.  Each fragment's typed provenance is proven here,
+// once per chain revision, and the fragments of one logical namespace must be
+// lexically disjoint.
+std::vector<DeclAttachmentSession::NamespaceFragment>
+collectNamespaceFragments(DeclAttachmentSession &attachment_session,
+                          SgNamespaceDefinitionStatement *chain,
+                          SgGlobal *global) {
+  std::vector<DeclAttachmentSession::NamespaceFragment> fragments;
+  for (SgNamespaceDefinitionStatement *current = chain; current != nullptr;
+       current = current->get_nextNamespaceDefinition()) {
+    SgNamespaceDeclarationStatement *current_decl =
+        current->get_namespaceDeclaration();
+    if (current_decl == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "namespace chain rooted at declaration=%p contains a "
+              "definition=%p without its declaration\n",
+              static_cast<void *>(chain->get_namespaceDeclaration()),
+              static_cast<void *>(current));
+      ROSE_ABORT();
+    }
+
+    current_decl->validate_source_fragments();
+    if (!current_decl->has_source_fragments()) {
+      continue;
+    }
+    const SgNamespaceSourceFragment *opening =
+        current_decl->get_opening_source_fragment();
+    const SgNamespaceSourceFragment *closing =
+        current_decl->get_closing_source_fragment();
+    if (opening->get_source_form() ==
+        SgNamespaceSourceFragment::
+            e_namespace_source_fragment_canonical_generated) {
+      if (closing->get_source_form() !=
+              SgNamespaceSourceFragment::
+                  e_namespace_source_fragment_canonical_generated ||
+          current_decl->get_translation_unit_source_order().has_value()) {
+        fprintf(stderr,
+                "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+                "canonical namespace declaration=%p has a mixed source-form "
+                "or physical source order\n",
+                static_cast<void *>(current_decl));
+        ROSE_ABORT();
+      }
+      continue;
+    }
+    if (!is_source_backed_namespace_fragment(attachment_session, current)) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "source-spelled namespace declaration=%p does not own one "
+              "exact lexical source fragment\n",
+              static_cast<void *>(current_decl));
+      ROSE_ABORT();
+    }
+    SgGlobal *current_global = SageInterface::getGlobalScope(current_decl);
+    if (current_global == nullptr) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "source namespace declaration=%p has no exact translation-unit "
+              "global owner\n",
+              static_cast<void *>(current_decl));
+      ROSE_ABORT();
+    }
+    if (current_global != global) {
+      continue;
+    }
+    const std::optional<unsigned int> current_order =
+        current_decl->get_translation_unit_source_order();
+    const Sg_File_Info *current_start =
+        current_decl->get_first_opening_source_fragment()
+            ->get_startOfConstruct();
+    const Sg_File_Info *current_close = closing->get_endOfConstruct();
+    if (!current_order.has_value() || *current_order == 0 ||
+        current_start == nullptr || current_close == nullptr ||
+        current_start->get_source_sequence_number() != *current_order) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "source namespace declaration=%p order=%u occurrence=%u lacks "
+              "one exact immutable opening identity\n",
+              static_cast<void *>(current_decl), current_order.value_or(0),
+              current_start != nullptr
+                  ? current_start->get_source_sequence_number()
+                  : 0);
+      ROSE_ABORT();
+    }
+    const unsigned int current_closing_order =
+        current_close->get_source_sequence_number();
+    if (current_closing_order <= *current_order) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "source namespace declaration=%p interval=[%u,%u] has no "
+              "strictly ordered opening/closing identity\n",
+              static_cast<void *>(current_decl), *current_order,
+              current_closing_order);
+      ROSE_ABORT();
+    }
+    fragments.push_back({*current_order, current_closing_order, current});
+  }
+
+  std::sort(fragments.begin(), fragments.end(),
+            [](const DeclAttachmentSession::NamespaceFragment &lhs,
+               const DeclAttachmentSession::NamespaceFragment &rhs) {
+              return lhs.opening < rhs.opening;
+            });
+  for (std::size_t i = 1; i < fragments.size(); ++i) {
+    const DeclAttachmentSession::NamespaceFragment &previous = fragments[i - 1];
+    const DeclAttachmentSession::NamespaceFragment &next = fragments[i];
+    if (previous.opening == next.opening) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "namespace=%s has more than one source fragment with "
+              "expanded-token order=%u\n",
+              next.definition->get_namespaceDeclaration()
+                  ->get_name()
+                  .getString()
+                  .c_str(),
+              next.opening);
+      ROSE_ABORT();
+    }
+    if (previous.closing >= next.opening) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+              "namespace=%s fragments=%p/%p have overlapping expanded-token "
+              "intervals=[%u,%u] and [%u,%u]\n",
+              next.definition->get_namespaceDeclaration()
+                  ->get_name()
+                  .getString()
+                  .c_str(),
+              static_cast<void *>(previous.definition),
+              static_cast<void *>(next.definition), previous.opening,
+              previous.closing, next.opening, next.closing);
+      ROSE_ABORT();
+    }
+  }
+  return fragments;
+}
+
 enum class NamespaceFragmentSelectionSourceState {
   exact_structural_owner,
   pending_exact_lexical_owner
@@ -18566,8 +18753,7 @@ static SgNamespaceDefinitionStatement *selectNamespaceFragmentBySourceOrder(
                 : "<null>");
     ROSE_ABORT();
   }
-  const std::optional<unsigned int> declaration_order =
-      declaration_provenance.source_order;
+  const unsigned int declaration_order = declaration_provenance.source_order;
 
   SgNamespaceDeclarationStatement *seed_decl =
       namespace_scope->get_namespaceDeclaration();
@@ -18673,134 +18859,42 @@ static SgNamespaceDefinitionStatement *selectNamespaceFragmentBySourceOrder(
     ROSE_ABORT();
   }
 
+  DeclAttachmentSession::NamespaceFragmentIndex &index =
+      attachment_session.namespaceFragmentIndex(chain, selection_global);
+  const std::uint64_t chain_revision =
+      SgNamespaceDefinitionStatement::get_reopening_chain_revision();
+  if (index.chain_revision != chain_revision) {
+    index.fragments =
+        collectNamespaceFragments(attachment_session, chain, selection_global);
+    index.chain_revision = chain_revision;
+  }
+  const std::vector<DeclAttachmentSession::NamespaceFragment> &fragments =
+      index.fragments;
+
+  // The fragments are disjoint and ordered by opening, so only the last one
+  // that opens before the declaration can contain it.
   SgNamespaceDefinitionStatement *selected = nullptr;
-  unsigned int selected_order = 0;
-  unsigned int selected_closing_order = 0;
-  std::unordered_set<unsigned int> observed_source_orders;
-  std::vector<std::pair<unsigned int, unsigned int>> observed_intervals;
-
-  for (SgNamespaceDefinitionStatement *current = chain; current != nullptr;
-       current = current->get_nextNamespaceDefinition()) {
-    SgNamespaceDeclarationStatement *current_decl =
-        current->get_namespaceDeclaration();
-    if (current_decl == nullptr) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "namespace chain rooted at declaration=%p contains a "
-              "definition=%p without its declaration\n",
-              static_cast<void *>(first_nondef), static_cast<void *>(current));
-      ROSE_ABORT();
-    }
-
-    current_decl->validate_source_fragments();
-    if (!current_decl->has_source_fragments()) {
-      continue;
-    }
-    const SgNamespaceSourceFragment *opening =
-        current_decl->get_opening_source_fragment();
-    const SgNamespaceSourceFragment *closing =
-        current_decl->get_closing_source_fragment();
-    if (opening->get_source_form() ==
-        SgNamespaceSourceFragment::
-            e_namespace_source_fragment_canonical_generated) {
-      if (closing->get_source_form() !=
-              SgNamespaceSourceFragment::
-                  e_namespace_source_fragment_canonical_generated ||
-          current_decl->get_translation_unit_source_order().has_value()) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-                "canonical namespace declaration=%p has a mixed source-form "
-                "or physical source order\n",
-                static_cast<void *>(current_decl));
-        ROSE_ABORT();
-      }
-      continue;
-    }
-    if (!is_source_backed_namespace_fragment(attachment_session, current)) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "source-spelled namespace declaration=%p does not own one "
-              "exact lexical source fragment\n",
-              static_cast<void *>(current_decl));
-      ROSE_ABORT();
-    }
-    SgGlobal *current_global = SageInterface::getGlobalScope(current_decl);
-    if (current_global == nullptr) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "source namespace declaration=%p has no exact translation-unit "
-              "global owner\n",
-              static_cast<void *>(current_decl));
-      ROSE_ABORT();
-    }
-    if (current_global != selection_global) {
-      continue;
-    }
-    const std::optional<unsigned int> current_order =
-        current_decl->get_translation_unit_source_order();
-    const Sg_File_Info *current_start =
-        current_decl->get_first_opening_source_fragment()
-            ->get_startOfConstruct();
-    const Sg_File_Info *current_close = closing->get_endOfConstruct();
-    if (!current_order.has_value() || *current_order == 0 ||
-        current_start == nullptr || current_close == nullptr ||
-        current_start->get_source_sequence_number() != *current_order) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "source namespace declaration=%p order=%u occurrence=%u lacks "
-              "one exact immutable opening identity\n",
-              static_cast<void *>(current_decl), current_order.value_or(0),
-              current_start != nullptr
-                  ? current_start->get_source_sequence_number()
-                  : 0);
-      ROSE_ABORT();
-    }
-    const unsigned int current_closing_order =
-        current_close->get_source_sequence_number();
-    if (current_closing_order <= *current_order) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "source namespace declaration=%p interval=[%u,%u] has no "
-              "strictly ordered opening/closing identity\n",
-              static_cast<void *>(current_decl), *current_order,
-              current_closing_order);
-      ROSE_ABORT();
-    }
-    observed_intervals.emplace_back(*current_order, current_closing_order);
-    if (!observed_source_orders.insert(*current_order).second) {
-      fprintf(stderr,
-              "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-              "namespace=%s has more than one source fragment with "
-              "expanded-token order=%u\n",
-              seed_decl->get_name().getString().c_str(), *current_order);
-      ROSE_ABORT();
-    }
-    if (*current_order == *declaration_order) {
+  const auto following = std::upper_bound(
+      fragments.begin(), fragments.end(), declaration_order,
+      [](unsigned int order,
+         const DeclAttachmentSession::NamespaceFragment &fragment) {
+        return order < fragment.opening;
+      });
+  if (following != fragments.begin()) {
+    const DeclAttachmentSession::NamespaceFragment &candidate =
+        *std::prev(following);
+    if (candidate.opening == declaration_order) {
       fprintf(stderr,
               "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
               "declaration=%p type=%s and namespace fragment=%p share "
               "ambiguous expanded-token order=%u\n",
               static_cast<void *>(declaration),
-              declaration->class_name().c_str(), static_cast<void *>(current),
-              *declaration_order);
+              declaration->class_name().c_str(),
+              static_cast<void *>(candidate.definition), declaration_order);
       ROSE_ABORT();
     }
-    if (*current_order < *declaration_order &&
-        *declaration_order < current_closing_order) {
-      if (selected != nullptr) {
-        fprintf(stderr,
-                "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
-                "declaration=%p type=%s source-order=%u belongs to both "
-                "namespace intervals=[%u,%u] and [%u,%u]\n",
-                static_cast<void *>(declaration),
-                declaration->class_name().c_str(), *declaration_order,
-                selected_order, selected_closing_order, *current_order,
-                current_closing_order);
-        ROSE_ABORT();
-      }
-      selected = current;
-      selected_order = *current_order;
-      selected_closing_order = current_closing_order;
+    if (declaration_order < candidate.closing) {
+      selected = candidate.definition;
     }
   }
 
@@ -18816,7 +18910,7 @@ static SgNamespaceDefinitionStatement *selectNamespaceFragmentBySourceOrder(
         "parent=%p/%s scope=%p/%s has no unique namespace fragment "
         "whose expanded-token interval contains it; seed=%p namespace=%s\n",
         static_cast<void *>(declaration), declaration->class_name().c_str(),
-        SageInterface::get_name(declaration).c_str(), *declaration_order,
+        SageInterface::get_name(declaration).c_str(), declaration_order,
         declaration_info != nullptr ? declaration_info->get_line() : -1,
         declaration_info != nullptr ? declaration_info->get_col() : -1,
         declaration_info != nullptr ? declaration_info->get_file_id() : -1,
@@ -18841,10 +18935,21 @@ static SgNamespaceDefinitionStatement *selectNamespaceFragmentBySourceOrder(
             : "<null>",
         static_cast<void *>(namespace_scope),
         seed_decl->get_name().getString().c_str());
-    for (const auto &interval : observed_intervals) {
-      fprintf(stderr, "  namespace-interval=[%u,%u]\n", interval.first,
-              interval.second);
+    for (const DeclAttachmentSession::NamespaceFragment &fragment : fragments) {
+      fprintf(stderr, "  namespace-interval=[%u,%u]\n", fragment.opening,
+              fragment.closing);
     }
+    ROSE_ABORT();
+  }
+  // The selected fragment becomes the declaration's lexical owner, so its own
+  // publication is proven at every use; the other fragments only bound the
+  // search and were proven when the index was collected.
+  if (!is_source_backed_namespace_fragment(attachment_session, selected)) {
+    fprintf(stderr,
+            "REX_FRONTEND_INVARIANT[namespace-fragment-selection]: "
+            "source-spelled namespace declaration=%p does not own one "
+            "exact lexical source fragment\n",
+            static_cast<void *>(selected->get_namespaceDeclaration()));
     ROSE_ABORT();
   }
   return selected;
@@ -19550,28 +19655,21 @@ void ClangToSageTranslator::populateClassDefinition(
   if (auto *record = llvm::dyn_cast<clang::CXXRecordDecl>(record_decl)) {
     ASSERT_not_null(p_compiler_instance);
     ROSE_ASSERT(p_compiler_instance->hasSema());
+    // Implicit special members are declared by the class definition itself.
+    // Their exception specifications are different: [except.spec] evaluates
+    // them only when the program needs them, and evaluating one that is not
+    // needed can instantiate ill-formed default member initializers.  Clang
+    // has already resolved every needed specification; the rest stay delayed.
+    auto &diagnostics = p_compiler_instance->getDiagnostics();
+    const unsigned errors_before = diagnostics.getNumErrors();
     p_compiler_instance->getSema().ForceDeclarationOfImplicitMembers(record);
-    if (!record->isDependentContext()) {
-      for (auto *method : record->methods()) {
-        if (method->isIneligibleOrNotSelected() ||
-            method->getDescribedFunctionTemplate() != nullptr ||
-            (!llvm::isa<clang::CXXConstructorDecl, clang::CXXDestructorDecl>(
-                 method) &&
-             !method->isCopyAssignmentOperator() &&
-             !method->isMoveAssignmentOperator()))
-          continue;
-        const auto *prototype =
-            method->getType()->getAs<clang::FunctionProtoType>();
-        ROSE_ASSERT(prototype != nullptr);
-        if (clang::isUnresolvedExceptionSpec(
-                prototype->getExceptionSpecType())) {
-          prototype = p_compiler_instance->getSema().ResolveExceptionSpec(
-              method->getLocation(), prototype);
-          ROSE_ASSERT(prototype != nullptr &&
-                      !clang::isUnresolvedExceptionSpec(
-                          prototype->getExceptionSpecType()));
-        }
-      }
+    if (diagnostics.getNumErrors() != errors_before) {
+      fprintf(stderr,
+              "REX_FRONTEND_INVARIANT[implicit-member-declaration]: "
+              "declaring the implicit members of record=%s raised Clang "
+              "diagnostics the parsed program did not\n",
+              record->getQualifiedNameAsString().c_str());
+      ROSE_ABORT();
     }
   }
   // Class population is the exact producer boundary for bases and members.
@@ -19842,8 +19940,34 @@ void ClangToSageTranslator::populateClassDefinition(
     }();
 
     if (semantic_instantiation_member) {
-      if (wrapper_mismatch || !missing_visible_source ||
-          declaration_has_exact_source_surface_ownership(mapped_decl)) {
+      // A written explicit instantiation maps the Clang member to its
+      // directive-owned source declaration.  The instantiated class owns the
+      // member's semantic identity: that declaration's first nondefining
+      // declaration.
+      SgFunctionDeclaration *semantic_member = mapped_decl;
+      if (auto *directive = isSgTemplateInstantiationDirectiveStatement(
+              mapped_decl->get_parent())) {
+        const clang::TemplateSpecializationKind kind =
+            function_decl->getTemplateSpecializationKind();
+        semantic_member = isSgFunctionDeclaration(
+            mapped_decl->get_firstNondefiningDeclaration());
+        if (directive->get_declaration() != mapped_decl ||
+            (kind != clang::TSK_ExplicitInstantiationDefinition &&
+             kind != clang::TSK_ExplicitInstantiationDeclaration) ||
+            semantic_member == nullptr || semantic_member == mapped_decl) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[semantic-instantiation-member]: "
+                  "Clang member=%s maps to directive=%p declaration=%p "
+                  "without one exact explicit-instantiation semantic "
+                  "identity=%p\n",
+                  function_decl->getQualifiedNameAsString().c_str(),
+                  static_cast<void *>(directive),
+                  static_cast<void *>(mapped_decl),
+                  static_cast<void *>(semantic_member));
+          ROSE_ABORT();
+        }
+      } else if (wrapper_mismatch || !missing_visible_source ||
+                 declaration_has_exact_source_surface_ownership(mapped_decl)) {
         fprintf(stderr,
                 "REX_FRONTEND_INVARIANT[semantic-instantiation-member]: "
                 "Clang member=%p/%s name=%s maps to %p/%s instead of one "
@@ -19855,11 +19979,11 @@ void ClangToSageTranslator::populateClassDefinition(
         ROSE_ABORT();
       }
 
-      std::set<SgFunctionDeclaration *> semantic_chain{mapped_decl};
+      std::set<SgFunctionDeclaration *> semantic_chain{semantic_member};
       semantic_chain.insert(isSgFunctionDeclaration(
-          mapped_decl->get_firstNondefiningDeclaration()));
+          semantic_member->get_firstNondefiningDeclaration()));
       semantic_chain.insert(
-          isSgFunctionDeclaration(mapped_decl->get_definingDeclaration()));
+          isSgFunctionDeclaration(semantic_member->get_definingDeclaration()));
       semantic_chain.erase(nullptr);
       for (SgFunctionDeclaration *candidate : semantic_chain) {
         SgScopeStatement *owner = validate_exact_auxiliary_owner(
@@ -25136,6 +25260,35 @@ SgNode *ClangToSageTranslator::lookupCachedTranslationForTraverse(
     if (function_decl->doesThisDeclarationHaveABody()) {
       SgFunctionDeclaration *mapped_function =
           isSgFunctionDeclaration(mapped_node);
+      // A written explicit instantiation maps the Clang function to its
+      // directive-owned source declaration.  The instantiation's semantic
+      // identity, which owns its definition, is that declaration's first
+      // nondefining declaration.
+      if (auto *directive = mapped_function != nullptr
+                                ? isSgTemplateInstantiationDirectiveStatement(
+                                      mapped_function->get_parent())
+                                : nullptr) {
+        const clang::TemplateSpecializationKind kind =
+            function_decl->getTemplateSpecializationKind();
+        auto *semantic_function = isSgFunctionDeclaration(
+            mapped_function->get_firstNondefiningDeclaration());
+        if (directive->get_declaration() != mapped_function ||
+            (kind != clang::TSK_ExplicitInstantiationDefinition &&
+             kind != clang::TSK_ExplicitInstantiationDeclaration) ||
+            semantic_function == nullptr ||
+            semantic_function == mapped_function) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[function-cache-definition]: Clang "
+                  "definition=%s maps to directive=%p declaration=%p without "
+                  "one exact explicit-instantiation semantic identity=%p\n",
+                  getDeclNameSafe(function_decl).c_str(),
+                  static_cast<void *>(directive),
+                  static_cast<void *>(mapped_function),
+                  static_cast<void *>(semantic_function));
+          ROSE_ABORT();
+        }
+        mapped_function = semantic_function;
+      }
       SgFunctionDeclaration *mapped_defining =
           mapped_function != nullptr
               ? isSgFunctionDeclaration(
@@ -35710,6 +35863,31 @@ bool ClangToSageTranslator::VisitConceptDecl(clang::ConceptDecl *concept_decl,
     auto sg_params = translateTemplateParameterList(params, nrdecl);
     nrdecl->get_tpl_params() = *sg_params;
     finalize_attached_template_parameters(nrdecl);
+    // The constraint is part of the concept declaration: its parameter uses,
+    // including canonical ones in semantic types, resolve to these exact
+    // parameter surfaces before the concept itself is published.  The
+    // parameters are already attached to the concept, so the frame names that
+    // owner and, like every attached owner, no construction scope.
+    struct ConceptParameterSurfaceGuard {
+      std::vector<TemplateParameterSurfaceFrame> &stack;
+      const size_t expected_size;
+      ~ConceptParameterSurfaceGuard() {
+        if (stack.size() != expected_size) {
+          fprintf(stderr,
+                  "REX_FRONTEND_INVARIANT[concept-template-parameter-"
+                  "surface]: active surface stack changed from its exact "
+                  "transaction size (expected=%zu actual=%zu)\n",
+                  expected_size, stack.size());
+          ROSE_ABORT();
+        }
+        stack.pop_back();
+      }
+    };
+    p_template_parameter_surface_stack.push_back(
+        {params, &nrdecl->get_tpl_params(), nrdecl});
+    ConceptParameterSurfaceGuard concept_parameter_surface_guard{
+        p_template_parameter_surface_stack,
+        p_template_parameter_surface_stack.size()};
     SgExpression *sg_constraint =
         translateConstraintExpression(constraint_expr);
     nrdecl->set_conceptConstraint(sg_constraint);
@@ -63477,19 +63655,45 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       }
       if (funcProtoType != nullptr) {
         // Callable identity excludes runtime VLA bounds; parameter objects keep
-        // them.
+        // them.  A C parameter object also keeps its declared type when the
+        // function's type is a composite that differs from it (an old-style
+        // definition, C11 6.9.1p7, or a declarator composed with an earlier
+        // prototype, C11 6.2.7p3); the callable identity is Clang's prototype.
+        clang::ASTContext &ast_context = p_compiler_instance->getASTContext();
+        // Clang does not unique the decayed [*] array type, so a redeclaration
+        // reuses its predecessor's exact equivalent callable parameter type.
+        SgFunctionType *previous_type = nullptr;
+        if (clang::FunctionDecl *previous = function_decl->getPreviousDecl()) {
+          auto *previous_declaration = isSgFunctionDeclaration(
+              lookupExactSgDeclarationForClangDecl(previous, false));
+          previous_type = previous_declaration != nullptr
+                              ? previous_declaration->get_type()
+                              : nullptr;
+        }
         for (unsigned index = 0; index < prototype_num_params; ++index) {
           clang::QualType parameter_type = funcProtoType->getParamType(index);
           clang::QualType canonical_type =
               p_compiler_instance->getASTContext().getCanonicalParamType(
                   parameter_type);
-          if (canonical_type !=
-              parameter_type.getCanonicalType().getUnqualifiedType())
-            arguments->replace_argument(
-                index,
-                buildSemanticTypeFromQualifiedType(
-                    canonical_type,
-                    "translateFunctionDeclCommon:canonical-parameter-type"));
+          const bool variable_bound_adjusted =
+              canonical_type !=
+              parameter_type.getCanonicalType().getUnqualifiedType();
+          const bool parameter_object_type_differs =
+              index < function_decl->getNumParams() &&
+              ast_context.getCanonicalParamType(
+                  function_decl->getParamDecl(index)->getType()) !=
+                  canonical_type;
+          if (!parameter_object_type_differs && !variable_bound_adjusted)
+            continue;
+          SgType *callable_type = buildSemanticTypeFromQualifiedType(
+              canonical_type,
+              "translateFunctionDeclCommon:canonical-parameter-type");
+          if (variable_bound_adjusted && previous_type != nullptr &&
+              index < previous_type->get_arguments().size() &&
+              SageInterface::isEquivalentType(
+                  callable_type, previous_type->get_arguments()[index]))
+            callable_type = previous_type->get_arguments()[index];
+          arguments->replace_argument(index, callable_type);
         }
         return buildFunctionTypeForClangProto(ret_type, std::move(arguments),
                                               funcProtoType);
@@ -66656,41 +66860,9 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
       {
         ScopedTranslationCacheRebuild rebuild_translation_cache(
             p_rebuild_translation_cache_depth, rebuild_body_translation_cache);
-        struct FunctionBodyTranslationOwnerGuard {
-          std::vector<FunctionBodyTranslationOwner> &stack;
-          const clang::FunctionDecl *clang_owner;
-          SgScopeStatement *sage_owner;
-
-          FunctionBodyTranslationOwnerGuard(
-              std::vector<FunctionBodyTranslationOwner> &owner_stack,
-              const clang::FunctionDecl *body_clang_owner,
-              SgScopeStatement *body_sage_owner)
-              : stack(owner_stack), clang_owner(body_clang_owner),
-                sage_owner(body_sage_owner) {
-            if (clang_owner == nullptr || sage_owner == nullptr) {
-              fprintf(stderr,
-                      "REX_FRONTEND_INVARIANT[function-body-owner-stack]: "
-                      "body translation has no exact Clang/Sage function "
-                      "owner\n");
-              ROSE_ABORT();
-            }
-            stack.push_back({clang_owner, sage_owner});
-          }
-
-          ~FunctionBodyTranslationOwnerGuard() {
-            if (stack.empty() ||
-                stack.back().clang_declaration != clang_owner ||
-                stack.back().sage_owner != sage_owner) {
-              fprintf(stderr,
-                      "REX_FRONTEND_INVARIANT[function-body-owner-stack]: "
-                      "body translation owner stack changed before scope "
-                      "exit\n");
-              ROSE_ABORT();
-            }
-            stack.pop_back();
-          }
-        } function_body_owner_guard(p_function_body_translation_owner_stack,
-                                    body_decl, function_definition);
+        FunctionBodyTranslationOwnerScope function_body_owner_guard(
+            p_function_body_translation_owner_stack, body_decl,
+            function_definition);
         struct FunctionBodyProvenanceRoleGuard {
           unsigned &depth;
           const unsigned suspended_depth;
@@ -67938,7 +68110,7 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
         for (auto *parameter : source_param_list_syntax->get_args())
           parameter->set_scope(source_declarator_scope);
         auto *canonical_type = semantic_canonical->get_type();
-        const SageBuilder::function_declaration_ownership source_ownership =
+        SageBuilder::function_declaration_ownership source_ownership =
             withSpecialMemberIdentity(
                 function_decl,
                 SageBuilder::function_declaration_ownership::
@@ -67950,6 +68122,24 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
                                                      source_return_type,
                                                      source_param_list_syntax),
                     source_param_list_syntax);
+        // The directive declares the specialization without spelling its
+        // exception specification.  Like every declaration of the
+        // specialization, it carries that specification, unwritten; since
+        // C++17 the specification is also part of the function type.
+        {
+          FunctionParameterConstructionGuard parameter_construction_guard(
+              p_function_parameter_construction_stack, function_decl,
+              exact_parameter_owner, /*semantic=*/true,
+              is_explicit_instantiation);
+          auto &parameters = p_function_parameter_construction_stack.back();
+          parameters.declaration_scope = source_declarator_scope;
+          parameters.parameter_list = source_param_list;
+          source_ownership = in_function_signature_context([&]() {
+            return prepareFunctionDeclarationExceptionOwnership(
+                source_ownership, function_decl, canonical_type,
+                /*is_written=*/false, /*semantic=*/true);
+          });
+        }
 
         SgFunctionDeclaration *source_decl = nullptr;
         SgTemplateArgumentPtrList source_arguments =
@@ -69802,6 +69992,21 @@ bool ClangToSageTranslator::translateFunctionDeclCommon(
             imported_definition_has_no_prior_declaration
                 ? param_list
                 : clone_semantic_param_list(param_list);
+        // An old-style definition provides no prototype (C11 6.9.1p7): its
+        // callable identity takes the promoted parameter types while its
+        // parameter objects keep their declared types.  The semantic
+        // declaration it implies declares that callable identity.
+        if (is_old_style_c_definition && first_param_list != param_list) {
+          const SgTypePtrList &callable =
+              prepared_function_type->get_arguments();
+          SgInitializedNamePtrList &parameters = first_param_list->get_args();
+          ROSE_ASSERT(parameters.size() == callable.size());
+          for (size_t index = 0; index < parameters.size(); ++index) {
+            if (SageBuilder::functionParameterTypeFromDeclaredType(
+                    parameters[index]->get_type()) != callable[index])
+              parameters[index]->set_type(callable[index]);
+          }
+        }
 
         if (expect_member) {
           first_nondef_for_builder =
@@ -75731,6 +75936,20 @@ bool ClangToSageTranslator::VisitCXXConstructorDecl(
             }
             applySourceRange(arguments, clang::SourceRange(left, right));
           };
+
+      // C++ [dcl.fct.def.general]: a ctor-initializer is part of the
+      // constructor's function-body, so its expressions are translated with
+      // the constructor as the active function-body owner.
+      std::optional<FunctionBodyTranslationOwnerScope>
+          ctor_initializer_body_owner;
+      if (SgFunctionDefinition *constructor_definition =
+              cxxCtorInitializerOwner != nullptr
+                  ? cxxCtorInitializerOwner->get_definition()
+                  : nullptr) {
+        ctor_initializer_body_owner.emplace(
+            p_function_body_translation_owner_stack, cxx_constructor_decl,
+            constructor_definition);
+      }
 
       clang::CXXConstructorDecl::init_iterator initializer;
       unsigned cnt = 0;

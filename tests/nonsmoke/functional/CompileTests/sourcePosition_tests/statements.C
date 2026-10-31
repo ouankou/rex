@@ -435,6 +435,7 @@ nodeColor( SgExpression* expression )
                case V_SgSizeOfOp:
                case V_SgStatementExpression:
                case V_SgThisExp:
+               case V_SgTypeExpression:
                case V_SgTypeIdOp:
                case V_SgVarArgCopyOp:
                case V_SgVarArgEndOp:
@@ -559,13 +560,34 @@ visitorTraversal::visit(SgNode* n)
      if (outputExpression == true)
         {
           AttachedPreprocessingInfoType* comments = expression->getAttachedPreprocessingInfo();
-          if (comments != NULL)
+          SgAssignInitializer* includeInitializer =
+              isSgAssignInitializer(expression);
+          if (comments != NULL && includeInitializer == NULL)
+             {
+            // A directive between the operands of one expression has no
+            // statement boundary: it is attached before the operand that
+            // follows it in the same file.
+               Sg_File_Info* expressionStart =
+                   expression->get_startOfConstruct();
+               ROSE_ASSERT(expressionStart != NULL);
+               for (PreprocessingInfo* info : *comments)
+                  {
+                    ROSE_ASSERT(info != NULL);
+                    ROSE_ASSERT(info->getRelativePosition() ==
+                                PreprocessingInfo::before);
+                    Sg_File_Info* position = info->get_file_info();
+                    ROSE_ASSERT(position != NULL);
+                    ROSE_ASSERT(position->isSameFile(*expressionStart));
+                    ROSE_ASSERT(position->get_line() <
+                                expressionStart->get_line());
+                  }
+             }
+          else if (comments != NULL)
              {
             // An include-expanded scalar initializer has no source expression
             // in the owner file.  Its assignment initializer is the exact
             // typed owner of the include boundary.
-               SgAssignInitializer* initializer =
-                   isSgAssignInitializer(expression);
+               SgAssignInitializer* initializer = includeInitializer;
                ROSE_ASSERT(initializer != NULL);
                ROSE_ASSERT(
                    initializer->get_source_form() ==

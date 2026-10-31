@@ -430,8 +430,9 @@ void writeMetadataJson(std::ostream &out, SgSourceFile *file,
   out << "},\n";
 }
 
-std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
-                      SgFileList *project_files, NodeMap *serialized_nodes) {
+void writeJson(std::ostream &out, SgNode *root, Checkpoint checkpoint,
+               SgSourceFile *file, SgFileList *project_files,
+               NodeMap *serialized_nodes) {
   ROSE_ASSERT(root != nullptr);
 
   CollectionBoundaryGuard boundary(
@@ -478,7 +479,6 @@ std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
     });
   }
 
-  std::ostringstream out;
   out << "{\n";
   writeStringField(out, 2, "format", kFormat);
   writeIntegerField(out, 2, "schema_version", kSchemaVersion);
@@ -503,7 +503,13 @@ std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
                                 const_cast<SgNode *>(entry.first));
     }
   }
-  return out.str();
+}
+
+std::string buildJson(SgNode *root, Checkpoint checkpoint, SgSourceFile *file,
+                      SgFileList *project_files, NodeMap *serialized_nodes) {
+  return writeToString([&](std::ostream &out) {
+    writeJson(out, root, checkpoint, file, project_files, serialized_nodes);
+  });
 }
 
 } // namespace AstJson

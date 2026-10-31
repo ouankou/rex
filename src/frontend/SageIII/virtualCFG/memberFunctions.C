@@ -583,6 +583,9 @@ bool SgStatement::cfgIsIndexInteresting(unsigned int idx) const {
       isSgStatementFunctionStatement(this) != nullptr) {
     return idx == 0;
   }
+  if (isSgArithmeticIfStatement(this) != nullptr) {
+    return idx == 1;
+  }
   return idx == this->cfgIndexForEnd();
 }
 
@@ -649,8 +652,17 @@ unsigned int SgStatement::cfgFindChildIndex(SgNode *n) {
     ROSE_ASSERT(n == statement->get_statement());
     return 0;
   }
-  // Default -- overridden in some cases
-  return this->get_childIndex(n);
+  // Default -- overridden in some cases.  A Fortran statement label is the
+  // first traversal successor of its labeled statement but never an evaluated
+  // child, so CFG child positions exclude it.
+  SgLabelRefExp *const label = this->get_numeric_label();
+  ROSE_ASSERT(n != nullptr && n != label);
+  const unsigned int index = this->get_childIndex(n);
+  if (label == nullptr) {
+    return index;
+  }
+  ROSE_ASSERT(index > 0 && this->get_childIndex(label) == 0);
+  return index - 1;
 }
 
 unsigned int SgStatement::cfgFindNextChildIndex(SgNode *n) {
@@ -4102,7 +4114,10 @@ SgAttributeSpecificationStatement::cfgInEdges(unsigned int idx) {
   return result;
 }
 
-unsigned int SgArithmeticIfStatement::cfgIndexForEnd() const { return 1; }
+// Index 1 dispatches to the three label targets.  Control never falls through
+// an arithmetic IF, so its end (like a goto's) is a distinct, unreachable node
+// that the enclosing block's sequential in-edge can name consistently.
+unsigned int SgArithmeticIfStatement::cfgIndexForEnd() const { return 2; }
 
 std::vector<CFGEdge> SgArithmeticIfStatement::cfgOutEdges(unsigned int idx) {
   std::vector<CFGEdge> result;
@@ -4120,6 +4135,8 @@ std::vector<CFGEdge> SgArithmeticIfStatement::cfgOutEdges(unsigned int idx) {
              getCFGTargetOfFortranLabelRef(this->get_greater_label()), result);
     break;
   }
+  case 2:
+    break;
   default:
     ROSE_ASSERT(!"Bad index for SgArithmeticIfStatement");
   }
@@ -4135,6 +4152,8 @@ std::vector<CFGEdge> SgArithmeticIfStatement::cfgInEdges(unsigned int idx) {
     break;
   case 1:
     makeEdge(this->get_conditional()->cfgForEnd(), CFGNode(this, idx), result);
+    break;
+  case 2:
     break;
   default:
     ROSE_ASSERT(!"Bad index for SgArithmeticIfStatement");

@@ -85,6 +85,9 @@ function(elsa_not_compilable_test input_file label)
   if(_source_path MATCHES "\\.c$")
     list(FILTER _rose_flags EXCLUDE REGEX "^-std=.*")
   endif()
+  if(input_file IN_LIST ELSATEST_NOTCOMPILABLE_X86_TARGET_TESTCODES)
+    list(APPEND _rose_flags -target x86_64-unknown-linux-gnu)
+  endif()
 
   if(input_file IN_LIST ELSATEST_NOTCOMPILABLE_EXPECT_PASS_TESTCODES)
     # These accepted ELSA specimens encode their semantic lookup result in an

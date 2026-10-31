@@ -659,8 +659,13 @@ struct ExactDeclarationUseSite {
   bool emitted = false;
 };
 
-ExactDeclarationUseSite
-require_exact_declaration_use_site(SgDeclarationStatement *declaration);
+// typeEmissionContext is the scope and statement that emit a type whose
+// spelling contains the declaration (for example a tag defined in a sizeof
+// operand inside an array bound).  Such an owner is reached through a shared
+// type, so it has no structural enclosing scope of its own.
+ExactDeclarationUseSite require_exact_declaration_use_site(
+    SgDeclarationStatement *declaration,
+    const ExactDeclarationUseSite *typeEmissionContext = nullptr);
 
 static bool
 hasExactWrittenAuxiliarySource(SgDeclarationStatement *declaration) {
@@ -2820,7 +2825,8 @@ void require_declaration_semantic_scope(SgDeclarationStatement *declaration,
 
 ExactDeclarationUseSite require_expression_owned_type_definition_use_site(
     SgDeclarationStatement *declaration, SgExpression *owner, SgType *type,
-    SgDeclarationStatement *typedDeclaration, const char *ownerKind) {
+    SgDeclarationStatement *typedDeclaration, const char *ownerKind,
+    const ExactDeclarationUseSite *typeEmissionContext) {
   ASSERT_not_null(declaration);
   ASSERT_not_null(owner);
   ASSERT_not_null(ownerKind);
@@ -2835,9 +2841,29 @@ ExactDeclarationUseSite require_expression_owned_type_definition_use_site(
                ? candidate->get_firstNondefiningDeclaration()
                : candidate;
   };
+  // An owner reached through a type has no structural enclosing scope; the
+  // traversal that emits that type supplies its lexical scope and statement.
+  bool ownedByType = false;
+  for (SgNode *current = owner; current != nullptr;
+       current = current->get_parent()) {
+    if (isSgStatement(current) != nullptr) {
+      break;
+    }
+    if (isSgType(current) != nullptr) {
+      ownedByType = true;
+      break;
+    }
+  }
   SgScopeStatement *semanticScope = declaration->get_scope();
-  SgScopeStatement *lexicalScope = SageInterface::getEnclosingScope(owner);
-  SgStatement *statement = SageInterface::getEnclosingStatement(owner);
+  SgScopeStatement *lexicalScope =
+      ownedByType ? (typeEmissionContext != nullptr ? typeEmissionContext->scope
+                                                    : nullptr)
+                  : SageInterface::getEnclosingScope(owner);
+  SgStatement *statement =
+      ownedByType
+          ? (typeEmissionContext != nullptr ? typeEmissionContext->statement
+                                            : nullptr)
+          : SageInterface::getEnclosingStatement(owner);
   Sg_File_Info *declarationInfo = declaration->get_file_info();
   Sg_File_Info *ownerInfo = owner->get_file_info();
   Sg_File_Info *statementInfo =
@@ -2879,8 +2905,9 @@ ExactDeclarationUseSite require_expression_owned_type_definition_use_site(
   return {semanticScope, statement, true};
 }
 
-ExactDeclarationUseSite
-require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
+ExactDeclarationUseSite require_exact_declaration_use_site(
+    SgDeclarationStatement *declaration,
+    const ExactDeclarationUseSite *typeEmissionContext) {
   ASSERT_not_null(declaration);
 
   if (SgScopeStatement *scope = isSgScopeStatement(declaration->get_parent())) {
@@ -2989,8 +3016,8 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
                 declaration->class_name().c_str(), static_cast<void *>(scope));
         ROSE_ABORT();
       }
-      ExactDeclarationUseSite ownerSite =
-          require_exact_declaration_use_site(declaratorOwner);
+      ExactDeclarationUseSite ownerSite = require_exact_declaration_use_site(
+          declaratorOwner, typeEmissionContext);
       if (ownerSite.scope == nullptr || ownerSite.statement == nullptr ||
           !ownerSite.emitted ||
           !SageInterface::isAncestor(declaratorOwner, declaration)) {
@@ -3029,7 +3056,9 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       owningClass = isSgClassDeclaration(classDefinition->get_declaration());
     }
     if (owningClass != nullptr) {
-      emitted = require_exact_declaration_use_site(owningClass).emitted;
+      emitted =
+          require_exact_declaration_use_site(owningClass, typeEmissionContext)
+              .emitted;
     }
     return {scope, declaration, emitted};
   }
@@ -3088,7 +3117,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       ROSE_ABORT();
     }
     ExactDeclarationUseSite ownerSite =
-        require_exact_declaration_use_site(owner);
+        require_exact_declaration_use_site(owner, typeEmissionContext);
     return {ownerSite.scope, owner, false};
   }
 
@@ -3187,8 +3216,8 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
               declaration->class_name().c_str());
       ROSE_ABORT();
     }
-    ExactDeclarationUseSite interfaceSite =
-        require_exact_declaration_use_site(interfaceStatement);
+    ExactDeclarationUseSite interfaceSite = require_exact_declaration_use_site(
+        interfaceStatement, typeEmissionContext);
     if (auto *procedure = isSgProcedureHeaderStatement(declaration);
         procedure != nullptr &&
         procedure->get_fortran_procedure_source_form() ==
@@ -3227,7 +3256,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       ROSE_ABORT();
     }
     ExactDeclarationUseSite groupOwner =
-        require_exact_declaration_use_site(group);
+        require_exact_declaration_use_site(group, typeEmissionContext);
     return {groupOwner.scope, group, groupOwner.emitted};
   }
 
@@ -3338,7 +3367,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       ROSE_ABORT();
     }
     ExactDeclarationUseSite directiveOwner =
-        require_exact_declaration_use_site(directive);
+        require_exact_declaration_use_site(directive, typeEmissionContext);
     return {directiveOwner.scope, directive, directiveOwner.emitted};
   }
 
@@ -3372,7 +3401,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
         ROSE_ABORT();
       }
       ExactDeclarationUseSite functionSite =
-          require_exact_declaration_use_site(function);
+          require_exact_declaration_use_site(function, typeEmissionContext);
       return {functionSite.scope, functionSite.statement, functionSite.emitted};
     }
 
@@ -3410,7 +3439,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
         ROSE_ABORT();
       }
       ExactDeclarationUseSite functionSite =
-          require_exact_declaration_use_site(member);
+          require_exact_declaration_use_site(member, typeEmissionContext);
       return {functionSite.scope, functionSite.statement, functionSite.emitted};
     }
 
@@ -3488,7 +3517,7 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       ROSE_ABORT();
     }
     ExactDeclarationUseSite ownerSite =
-        require_exact_declaration_use_site(owner);
+        require_exact_declaration_use_site(owner, typeEmissionContext);
     return {ownerSite.scope, owner, ownerSite.emitted};
   }
 
@@ -3578,26 +3607,29 @@ require_exact_declaration_use_site(SgDeclarationStatement *declaration) {
       ROSE_ABORT();
     }
     ExactDeclarationUseSite ownerSite =
-        require_exact_declaration_use_site(owner);
+        require_exact_declaration_use_site(owner, typeEmissionContext);
     return {ownerSite.scope, owner, ownerSite.emitted};
   }
 
   if (SgCastExp *owner = isSgCastExp(declaration->get_parent())) {
     return require_expression_owned_type_definition_use_site(
         declaration, owner, owner->get_type(),
-        owner->get_type_defining_declaration(), "SgCastExp");
+        owner->get_type_defining_declaration(), "SgCastExp",
+        typeEmissionContext);
   }
 
   if (SgSizeOfOp *owner = isSgSizeOfOp(declaration->get_parent())) {
     return require_expression_owned_type_definition_use_site(
         declaration, owner, owner->get_operand_type(),
-        owner->get_type_defining_declaration(), "SgSizeOfOp");
+        owner->get_type_defining_declaration(), "SgSizeOfOp",
+        typeEmissionContext);
   }
 
   if (SgAlignOfOp *owner = isSgAlignOfOp(declaration->get_parent())) {
     return require_expression_owned_type_definition_use_site(
         declaration, owner, owner->get_operand_type(),
-        owner->get_type_defining_declaration(), "SgAlignOfOp");
+        owner->get_type_defining_declaration(), "SgAlignOfOp",
+        typeEmissionContext);
   }
 
   if (SgForInitStatement *forInit =
@@ -5707,7 +5739,8 @@ void generateNameQualificationSupport(
 
 void NameQualificationTraversal::generateNestedTraversalWithExplicitScope(
     SgNode *node, SgScopeStatement *input_currentScope,
-    SgStatement *input_currentStatement, SgNode *input_referenceNode) {
+    SgStatement *input_currentStatement, SgNode *input_referenceNode,
+    SgScopeStatement *typeEmissionScope) {
   ASSERT_not_null(node);
   ASSERT_not_null(input_currentScope);
   ASSERT_not_null(input_currentStatement);
@@ -5734,6 +5767,8 @@ void NameQualificationTraversal::generateNestedTraversalWithExplicitScope(
   t.explictlySpecifiedCurrentScope = input_currentScope;
 
   t.explictlySpecifiedCurrentStatement = input_currentStatement;
+  t.explicitTypeEmissionScope =
+      typeEmissionScope != nullptr ? typeEmissionScope : input_currentScope;
   t.explicitTraversalRoot = node;
 
   NameQualificationInheritedAttribute ih;
@@ -5819,6 +5854,7 @@ NameQualificationTraversal::NameQualificationTraversal(
 
   explictlySpecifiedCurrentScope = NULL;
   explictlySpecifiedCurrentStatement = NULL;
+  explicitTypeEmissionScope = nullptr;
   explicitTraversalRoot = NULL;
 
   suppressNameQualificationAcrossWholeTranslationUnit = false;
@@ -6251,6 +6287,7 @@ void NameQualificationTraversal::setExplicitTraversalContext(
   ASSERT_not_null(traversalRoot);
   explictlySpecifiedCurrentScope = currentScope;
   explictlySpecifiedCurrentStatement = currentStatement;
+  explicitTypeEmissionScope = currentScope;
   explicitTraversalRoot = traversalRoot;
 }
 
@@ -9942,6 +9979,33 @@ void NameQualificationTraversal::traverseType(SgType *type,
     }
   };
 
+  // A dynamic exception specification is part of a function type's spelling:
+  // the type unparser emits it wherever the type is written, with each
+  // exception type as its own qualification reference node.  Record those
+  // types under the statement that emits this type, as a function
+  // declaration's declared exception signature is recorded.
+  auto traverseExceptionSpecificationTypes = [&](SgFunctionType *functionType) {
+    ASSERT_not_null(functionType);
+    for (SgType *exceptionType :
+         functionType->get_exception_specification_types()) {
+      ASSERT_not_null(exceptionType);
+      if (SgDeclarationStatement *declaration =
+              getDeclarationAssociatedWithType(exceptionType)) {
+        int length = 0;
+        bool global = false, elaboration = false;
+        const std::string qualifier = setNameQualificationSupport(
+            exceptionType, traverseNonrealDeclForCorrectScope(declaration),
+            nameQualificationDepth(declaration, currentScope,
+                                   positionStatement),
+            length, global, elaboration);
+        recordTypeQualification(exceptionType, qualifier, length, global,
+                                elaboration, positionStatement);
+      }
+      traverseType(exceptionType, exceptionType, currentScope,
+                   positionStatement);
+    }
+  };
+
   auto qualifyFunctionReturnUse = [&](SgType *returnType) {
     ASSERT_not_null(returnType);
     SgType *declaratorBase = functionArgumentDeclaratorBase(returnType);
@@ -9994,6 +10058,7 @@ void NameQualificationTraversal::traverseType(SgType *type,
       traverseType(returnType, nodeReferenceToType, currentScope,
                    positionStatement);
       traverseFunctionArgumentTypes(memberFunctionType);
+      traverseExceptionSpecificationTypes(memberFunctionType);
     }
     return;
   }
@@ -10006,6 +10071,7 @@ void NameQualificationTraversal::traverseType(SgType *type,
     traverseType(returnType, nodeReferenceToType, currentScope,
                  positionStatement);
     traverseFunctionArgumentTypes(memberFunctionType);
+    traverseExceptionSpecificationTypes(memberFunctionType);
     return;
   }
   if (SgFunctionType *functionType = isSgFunctionType(strippedType)) {
@@ -10015,6 +10081,7 @@ void NameQualificationTraversal::traverseType(SgType *type,
     traverseType(returnType, nodeReferenceToType, currentScope,
                  positionStatement);
     traverseFunctionArgumentTypes(functionType);
+    traverseExceptionSpecificationTypes(functionType);
     return;
   }
 
@@ -13104,6 +13171,14 @@ NameQualificationInheritedAttribute
 NameQualificationTraversal::evaluateInheritedAttribute(
     SgNode *n, NameQualificationInheritedAttribute inheritedAttribute) {
   ASSERT_not_null(n);
+  // A nested traversal of a type's spelling (an array bound, a decltype or
+  // typeof operand) carries the scope and statement that emit that type.
+  const ExactDeclarationUseSite explicitTypeEmissionContext{
+      explicitTypeEmissionScope, explictlySpecifiedCurrentStatement, true};
+  const ExactDeclarationUseSite *typeEmissionContext =
+      explictlySpecifiedCurrentStatement != nullptr
+          ? &explicitTypeEmissionContext
+          : nullptr;
   // Source-written qualifiers are typed AST payloads. Import them into this
   // traversal's working maps at the exact visited node, so no producer or
   // unparser state survives beyond this invocation.
@@ -13196,7 +13271,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     if (exactClassDefinition) {
       generateNestedTraversalWithExplicitScope(classDefinition, classDefinition,
                                                emissionStatement,
-                                               classDeclaration);
+                                               classDeclaration, emissionScope);
     } else {
       generateNestedTraversalWithExplicitScope(
           enumDeclaration, emissionScope, emissionStatement, enumDeclaration);
@@ -13515,8 +13590,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
   // references to SgMemberFunctionDeclaration...
   SgClassDeclaration *classDeclaration = isSgClassDeclaration(n);
   if (classDeclaration != nullptr) {
-    const ExactDeclarationUseSite useSite =
-        require_exact_declaration_use_site(classDeclaration);
+    const ExactDeclarationUseSite useSite = require_exact_declaration_use_site(
+        classDeclaration, typeEmissionContext);
     const Sg_File_Info *start = classDeclaration->get_startOfConstruct();
     const bool explicitSourceDeclaration =
         classDeclaration == explicitTraversalRoot && start != nullptr &&
@@ -13536,7 +13611,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             declarator->get_baseTypeDefiningDeclaration() == classDeclaration;
         if (exactNondefiningEdge != exactDefiningEdge) {
           const ExactDeclarationUseSite declaratorSite =
-              require_exact_declaration_use_site(declarator);
+              require_exact_declaration_use_site(declarator,
+                                                 typeEmissionContext);
           const auto hasExactStructuralPathToEmissionOwner = [&]() {
             SgNode *child = declarator;
             while (child != declaratorSite.statement) {
@@ -14400,7 +14476,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
   ExactDeclarationUseSite functionUseSite;
   bool functionHasEmittedSurface = false;
   if (functionDeclaration != nullptr) {
-    functionUseSite = require_exact_declaration_use_site(functionDeclaration);
+    functionUseSite = require_exact_declaration_use_site(functionDeclaration,
+                                                         typeEmissionContext);
     functionHasEmittedSurface = functionUseSite.emitted;
     if (functionHasEmittedSurface) {
       if (auto *signature =
@@ -14554,7 +14631,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                                                          currentScope);
         const ExactDeclarationUseSite directSourceSite =
             sourceGroup == nullptr
-                ? require_exact_declaration_use_site(functionDeclaration)
+                ? require_exact_declaration_use_site(functionDeclaration,
+                                                     typeEmissionContext)
                 : ExactDeclarationUseSite{};
         const bool blockScopedDirectFunction =
             sourceGroup == nullptr &&
@@ -15258,7 +15336,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
               functionDeclaration, currentScope, currentStatement);
         }
         ExactDeclarationUseSite declarationUseSite =
-            require_exact_declaration_use_site(functionDeclaration);
+            require_exact_declaration_use_site(functionDeclaration,
+                                               typeEmissionContext);
         const bool cImplicitPrecedesLaterSource =
             validate_exact_c_implicit_function_binding(
                 functionRefExp, functionDeclaration, declarationUseSite,
@@ -15517,7 +15596,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     const int amountOfNameQualificationRequired = nameQualificationDepth(
         functionDeclaration, currentScope, currentStatement);
     const ExactDeclarationUseSite declarationUseSite =
-        require_exact_declaration_use_site(functionDeclaration);
+        require_exact_declaration_use_site(functionDeclaration,
+                                           typeEmissionContext);
     if (declarationUseSite.emitted) {
       validateDeclarationPublishedBeforeQualification(functionDeclaration);
     } else {
@@ -16932,7 +17012,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       }
     } else {
       const ExactDeclarationUseSite useSite =
-          require_exact_declaration_use_site(enumDeclaration);
+          require_exact_declaration_use_site(enumDeclaration,
+                                             typeEmissionContext);
       currentScope = useSite.scope;
       if (currentScope == NULL) {
         fprintf(stderr,
@@ -17038,7 +17119,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         // publishing the declaration identity.
         {
           const ExactDeclarationUseSite useSite =
-              require_exact_declaration_use_site(declaration);
+              require_exact_declaration_use_site(declaration,
+                                                 typeEmissionContext);
           if (useSite.scope != scopeOfDeclaration ||
               useSite.statement != declaration) {
             fprintf(stderr,
@@ -17072,7 +17154,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         // contract until their producers define a separate typed role.
         if (isSgNonrealDecl(declaration) != nullptr) {
           const ExactDeclarationUseSite useSite =
-              require_exact_declaration_use_site(declaration);
+              require_exact_declaration_use_site(declaration,
+                                                 typeEmissionContext);
           if (useSite.scope != scopeOfDeclaration ||
               useSite.statement != declaration || useSite.emitted) {
             fprintf(stderr,
@@ -17118,8 +17201,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       // take this path.
       if (isSgStatementFunctionStatement(parent) != nullptr ||
           isSgInterfaceBody(parent) != nullptr) {
-        ExactDeclarationUseSite useSite =
-            require_exact_declaration_use_site(declaration);
+        ExactDeclarationUseSite useSite = require_exact_declaration_use_site(
+            declaration, typeEmissionContext);
         scopeOfDeclaration = useSite.scope;
         acceptableDeclarationScope = useSite.emitted;
       }
@@ -17131,8 +17214,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         // from an arbitrary typedef/function/parameter-list parent both lost
         // that ownership information and, because it never marked the scope
         // acceptable, silently omitted the declaration from referencedNameSet.
-        ExactDeclarationUseSite useSite =
-            require_exact_declaration_use_site(declaration);
+        ExactDeclarationUseSite useSite = require_exact_declaration_use_site(
+            declaration, typeEmissionContext);
         scopeOfDeclaration = useSite.scope;
         acceptableDeclarationScope = useSite.emitted;
       }
@@ -17202,7 +17285,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     }
 
     const ExactDeclarationUseSite semanticSite =
-        require_exact_declaration_use_site(structuralDeclaration);
+        require_exact_declaration_use_site(structuralDeclaration,
+                                           typeEmissionContext);
     if (semanticSite.emitted) {
       fprintf(stderr,
               "REX_UNPARSE_INVARIANT[semantic-qualification-path]: "

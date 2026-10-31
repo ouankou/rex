@@ -2480,11 +2480,27 @@ virtual void fixupCopy_references(SgNode *copy,
 size_t namespaceIndex() const;
 size_t numberOfNamespaceDefinitions() const;
 
+SgNamespaceDefinitionStatement *get_previousNamespaceDefinition() const;
+void set_previousNamespaceDefinition(
+    SgNamespaceDefinitionStatement *previousNamespaceDefinition);
+SgNamespaceDefinitionStatement *get_nextNamespaceDefinition() const;
+void set_nextNamespaceDefinition(
+    SgNamespaceDefinitionStatement *nextNamespaceDefinition);
+
+//! Changes whenever any reopening chain gains, loses, or reorders a
+//! definition, or a definition is destroyed.  Indexes derived from the chains
+//! are current only while this value is unchanged.
+static uint64_t get_reopening_chain_revision();
+
 protected:
 virtual bool replace_child(SgStatement *, SgStatement *,
                            bool extractListFromBasicBlock = false) override;
 virtual bool insert_child(SgStatement *, SgStatement *, bool inFront = true,
                           bool extractListFromBasicBlock = false) override;
+
+private:
+static std::atomic<uint64_t> &reopeningChainRevision();
+static void advanceReopeningChainRevision();
 
 HEADER_LIST_DECLARATIONS
 
@@ -11723,6 +11739,44 @@ void SgNamespaceDefinitionStatement::post_construction_initialization() {
   }
   set_parent(p_namespaceDeclaration);
   p_namespaceDeclaration->set_definition(this);
+}
+
+SgNamespaceDefinitionStatement *
+SgNamespaceDefinitionStatement::get_previousNamespaceDefinition() const {
+  return p_previousNamespaceDefinition;
+}
+
+void SgNamespaceDefinitionStatement::set_previousNamespaceDefinition(
+    SgNamespaceDefinitionStatement *previousNamespaceDefinition) {
+  p_previousNamespaceDefinition = previousNamespaceDefinition;
+  advanceReopeningChainRevision();
+  markAsModified();
+}
+
+SgNamespaceDefinitionStatement *
+SgNamespaceDefinitionStatement::get_nextNamespaceDefinition() const {
+  return p_nextNamespaceDefinition;
+}
+
+void SgNamespaceDefinitionStatement::set_nextNamespaceDefinition(
+    SgNamespaceDefinitionStatement *nextNamespaceDefinition) {
+  p_nextNamespaceDefinition = nextNamespaceDefinition;
+  advanceReopeningChainRevision();
+  markAsModified();
+}
+
+std::atomic<uint64_t> &
+SgNamespaceDefinitionStatement::reopeningChainRevision() {
+  static std::atomic<uint64_t> revision(0);
+  return revision;
+}
+
+void SgNamespaceDefinitionStatement::advanceReopeningChainRevision() {
+  reopeningChainRevision().fetch_add(1, std::memory_order_relaxed);
+}
+
+uint64_t SgNamespaceDefinitionStatement::get_reopening_chain_revision() {
+  return reopeningChainRevision().load(std::memory_order_relaxed);
 }
 
 size_t SgNamespaceDefinitionStatement::namespaceIndex() const {

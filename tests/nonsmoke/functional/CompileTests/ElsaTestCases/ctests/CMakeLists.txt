@@ -40,7 +40,7 @@ function(elsa_c_compile_test input_file)
       "error: second parameter of 'main' (argument array) must be of type 'char **'")
   elseif(input_file STREQUAL "t0010.c")
     set(_expected_diagnostic
-      "error: incompatible pointer to integer conversion returning 'void *' from a function with result type 'unsigned long'")
+      "error: incompatible pointer to integer conversion returning 'void *' from a function with result type 'unsigned long' [-Wint-conversion]")
   elseif(input_file STREQUAL "t0026.c")
     set(_expected_diagnostic "error: conflicting types for 'foo'")
   else()

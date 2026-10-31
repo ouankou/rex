@@ -117,6 +117,49 @@ SgType *SgNewExp::get_type() const {
   return p_expression_type;
 }
 
+namespace {
+// [expr.new]p2: a placeholder in a new-type-id is deduced from the
+// initializer.  The written declarator around it must match the deduced
+// allocated type; the placeholder itself stands for the deduced component.
+bool containsNewTypePlaceholder(SgType *type) {
+  while (type != nullptr) {
+    if (isSgAutoType(type) != nullptr)
+      return true;
+    if (auto *modifier = isSgModifierType(type))
+      type = modifier->get_base_type();
+    else if (auto *pointer = isSgPointerType(type))
+      type = pointer->get_base_type();
+    else
+      return false;
+  }
+  return false;
+}
+
+bool newTypePlaceholderMatchesDeduced(SgType *specified, SgType *deduced) {
+  if (specified == nullptr || deduced == nullptr)
+    return false;
+  if (isSgAutoType(specified) != nullptr)
+    return true;
+  if (auto *modifier = isSgModifierType(specified)) {
+    auto *deduced_modifier = isSgModifierType(deduced);
+    return deduced_modifier != nullptr &&
+           modifier->get_typeModifier() ==
+               deduced_modifier->get_typeModifier() &&
+           newTypePlaceholderMatchesDeduced(modifier->get_base_type(),
+                                            deduced_modifier->get_base_type());
+  }
+  if (auto *pointer = isSgPointerType(specified)) {
+    auto *deduced_pointer = isSgPointerType(deduced);
+    return isSgPointerMemberType(pointer) == nullptr &&
+           deduced_pointer != nullptr &&
+           isSgPointerMemberType(deduced_pointer) == nullptr &&
+           newTypePlaceholderMatchesDeduced(pointer->get_base_type(),
+                                            deduced_pointer->get_base_type());
+  }
+  return false;
+}
+} // namespace
+
 bool SgNewExp::specifiedTypeMatchesResult(
     SgType *specified, SgPointerType *result,
     array_bound_source_form_enum source_form) {
@@ -125,6 +168,9 @@ bool SgNewExp::specifiedTypeMatchesResult(
       result->get_base_type()->get_ptr_to() != result ||
       source_form < e_no_array_bound || source_form > e_type_array_bound)
     return false;
+  if (containsNewTypePlaceholder(specified))
+    return source_form == e_no_array_bound &&
+           newTypePlaceholderMatchesDeduced(specified, result->get_base_type());
   SgType *semantic = result->get_base_type();
   SgType *source = specified;
   if (source_form == e_no_array_bound || source_form == e_type_array_bound) {

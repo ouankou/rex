@@ -3564,6 +3564,43 @@ protected:
   };
   std::vector<FunctionBodyTranslationOwner>
       p_function_body_translation_owner_stack;
+  // Publishes one exact function-body owner for the lifetime of a body
+  // translation, including a constructor's ctor-initializer.
+  class FunctionBodyTranslationOwnerScope {
+  public:
+    FunctionBodyTranslationOwnerScope(
+        std::vector<FunctionBodyTranslationOwner> &owner_stack,
+        const clang::FunctionDecl *clang_owner, SgScopeStatement *sage_owner)
+        : stack_(owner_stack), clang_owner_(clang_owner),
+          sage_owner_(sage_owner) {
+      if (clang_owner_ == nullptr || sage_owner_ == nullptr) {
+        fprintf(stderr, "REX_FRONTEND_INVARIANT[function-body-owner-stack]: "
+                        "body translation has no exact Clang/Sage function "
+                        "owner\n");
+        ROSE_ABORT();
+      }
+      stack_.push_back({clang_owner_, sage_owner_});
+    }
+    FunctionBodyTranslationOwnerScope(
+        const FunctionBodyTranslationOwnerScope &) = delete;
+    FunctionBodyTranslationOwnerScope &
+    operator=(const FunctionBodyTranslationOwnerScope &) = delete;
+    ~FunctionBodyTranslationOwnerScope() {
+      if (stack_.empty() || stack_.back().clang_declaration != clang_owner_ ||
+          stack_.back().sage_owner != sage_owner_) {
+        fprintf(stderr, "REX_FRONTEND_INVARIANT[function-body-owner-stack]: "
+                        "body translation owner stack changed before scope "
+                        "exit\n");
+        ROSE_ABORT();
+      }
+      stack_.pop_back();
+    }
+
+  private:
+    std::vector<FunctionBodyTranslationOwner> &stack_;
+    const clang::FunctionDecl *clang_owner_;
+    SgScopeStatement *sage_owner_;
+  };
   // A deduced function return type can name a lambda closure whose expression
   // is owned by that function body.  The type is required while the signature
   // is still under construction, before the defining function builder creates

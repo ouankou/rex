@@ -186,13 +186,27 @@ exactQualificationUseSiteForEmission(const SgNode *node,
   }
 
   // Expressions are exclusively owned syntax nodes unless their statement
-  // owner is explicitly semantic-only.  Other qualification reference nodes
-  // (base-class edges, template arguments, function-type positions, and
-  // initialized names) are emitted by the statement carried in the unparse
-  // context rather than by their structural support-node parent.
+  // owner is explicitly semantic-only, or they are reached through a type (a
+  // decltype or typeof operand): types are shared, so the statement reached
+  // through a type's parent does not emit this use.  Other qualification
+  // reference nodes (base-class edges, template arguments, function-type
+  // positions, and initialized names) are emitted by the statement carried in
+  // the unparse context rather than by their structural support-node parent.
+  auto ownedByType = [](const SgNode *candidate) {
+    for (const SgNode *current = candidate; current != nullptr;
+         current = current->get_parent()) {
+      if (isSgStatement(const_cast<SgNode *>(current)) != nullptr) {
+        return false;
+      }
+      if (isSgType(const_cast<SgNode *>(current)) != nullptr) {
+        return true;
+      }
+    }
+    return false;
+  };
   if (isSgExpression(const_cast<SgNode *>(node)) != nullptr &&
       structuralStatement != nullptr &&
-      !isSemanticOnlyDeclaration(structuralStatement)) {
+      !isSemanticOnlyDeclaration(structuralStatement) && !ownedByType(node)) {
     return structuralStatement;
   }
 

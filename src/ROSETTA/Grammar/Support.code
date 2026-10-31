@@ -2166,6 +2166,7 @@ HEADER_FORMAT_ITEM_LIST_END
 
 HEADER_TYPE_TABLE_START
 $CLASSNAME();
+explicit $CLASSNAME(int symbolTableSize);
 void insert_type(const SgName &, SgType *);
 
 SgType *lookup_type(const SgName &);
@@ -15211,7 +15212,14 @@ SOURCE_OPENCL_ACCESS_MODE_MODIFIER_END
 SOURCE_TYPE_TABLE_START
 
 SgTypeTable::SgTypeTable() {
-  p_type_table = new SgSymbolTable(1001);
+  p_type_table = new SgSymbolTable();
+  ROSE_ASSERT(p_type_table != NULL);
+
+  p_type_table->set_parent(this);
+}
+
+SgTypeTable::SgTypeTable(int symbolTableSize) {
+  p_type_table = new SgSymbolTable(symbolTableSize);
   ROSE_ASSERT(p_type_table != NULL);
 
   p_type_table->set_parent(this);

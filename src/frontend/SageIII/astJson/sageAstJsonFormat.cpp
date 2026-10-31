@@ -6,6 +6,42 @@ namespace AstJson {
 const char *const kFormat = "rex-sage-ast-json";
 const int kSchemaVersion = 251;
 
+namespace {
+
+struct JsonKeyVocabulary {
+  std::unordered_map<std::string, std::unique_ptr<JsonKey::Spelling>> spellings;
+  std::vector<JsonKey::Spelling *> ordered;
+};
+
+JsonKeyVocabulary &jsonKeyVocabulary() {
+  // Spellings are never released: members anywhere may refer to them.
+  static auto *vocabulary = new JsonKeyVocabulary();
+  return *vocabulary;
+}
+
+} // namespace
+
+JsonKey::JsonKey(const std::string &text) {
+  JsonKeyVocabulary &vocabulary = jsonKeyVocabulary();
+  const auto found = vocabulary.spellings.find(text);
+  if (found != vocabulary.spellings.end()) {
+    spelling_ = found->second.get();
+    return;
+  }
+  auto spelling = std::make_unique<Spelling>(Spelling{text, 0});
+  Spelling *added = spelling.get();
+  vocabulary.spellings.emplace(text, std::move(spelling));
+  auto position =
+      std::lower_bound(vocabulary.ordered.begin(), vocabulary.ordered.end(),
+                       added, [](const Spelling *lhs, const Spelling *rhs) {
+                         return lhs->text < rhs->text;
+                       });
+  position = vocabulary.ordered.insert(position, added);
+  for (; position != vocabulary.ordered.end(); ++position)
+    (*position)->rank = position - vocabulary.ordered.begin();
+  spelling_ = added;
+}
+
 void appendCanonicalJson(std::ostream &out, const JsonValue &value) {
   switch (value.kind) {
   case JsonValue::Kind::Null:
@@ -894,7 +930,7 @@ private:
 
   JsonValue parseObject() {
     require('{');
-    std::map<std::string, JsonValue> object;
+    JsonObject object;
     skipWhitespace();
     if (consume('}')) {
       return JsonValue::objectValue(std::move(object));
@@ -1185,50 +1221,52 @@ std::string trim(const std::string &input) {
 }
 
 std::string jsonString(const std::string &input) {
-  std::ostringstream out;
-  out << '"';
+  std::string out;
+  out.reserve(input.size() + 2);
+  out += '"';
   for (unsigned char c : input) {
     switch (c) {
     case '"':
-      out << "\\\"";
+      out += "\\\"";
       break;
     case '\\':
-      out << "\\\\";
+      out += "\\\\";
       break;
     case '\b':
-      out << "\\b";
+      out += "\\b";
       break;
     case '\f':
-      out << "\\f";
+      out += "\\f";
       break;
     case '\n':
-      out << "\\n";
+      out += "\\n";
       break;
     case '\r':
-      out << "\\r";
+      out += "\\r";
       break;
     case '\t':
-      out << "\\t";
+      out += "\\t";
       break;
     default:
       if (c < 0x20) {
-        out << "\\u";
         const char *digits = "0123456789abcdef";
-        out << '0' << '0' << digits[(c >> 4) & 0xf] << digits[c & 0xf];
+        out += "\\u00";
+        out += digits[(c >> 4) & 0xf];
+        out += digits[c & 0xf];
       } else {
-        out << static_cast<char>(c);
+        out += static_cast<char>(c);
       }
       break;
     }
   }
-  out << '"';
-  return out.str();
+  out += '"';
+  return out;
 }
 
 void indent(std::ostream &out, int level) {
-  for (int i = 0; i < level; ++i) {
-    out << ' ';
-  }
+  static const std::string spaces(64, ' ');
+  for (; level > 0; level -= static_cast<int>(spaces.size()))
+    out.write(spaces.data(), std::min<int>(level, spaces.size()));
 }
 
 void writeStringField(std::ostream &out, int level, const char *name,

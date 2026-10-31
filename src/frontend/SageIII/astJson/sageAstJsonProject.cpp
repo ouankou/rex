@@ -15,7 +15,74 @@ std::filesystem::path temporaryWritePath(const std::filesystem::path &path) {
   return path.parent_path() / name.str();
 }
 
-void writeFile(const std::filesystem::path &path, const std::string &content) {
+namespace {
+
+class StringOutputBuffer : public std::streambuf {
+public:
+  explicit StringOutputBuffer(std::string &text) : text_(text) {}
+
+protected:
+  int_type overflow(int_type c) override {
+    if (!traits_type::eq_int_type(c, traits_type::eof()))
+      text_.push_back(traits_type::to_char_type(c));
+    return traits_type::not_eof(c);
+  }
+
+  std::streamsize xsputn(const char *s, std::streamsize n) override {
+    text_.append(s, static_cast<size_t>(n));
+    return n;
+  }
+
+private:
+  std::string &text_;
+};
+
+// Compares a writer's output with an expected text as it is produced.
+class ComparingOutputBuffer : public std::streambuf {
+public:
+  explicit ComparingOutputBuffer(const std::string &expected)
+      : expected_(expected) {}
+
+  bool matchesCompletely() const {
+    return matches_ && position_ == expected_.size();
+  }
+
+protected:
+  int_type overflow(int_type c) override {
+    if (!traits_type::eq_int_type(c, traits_type::eof())) {
+      const char byte = traits_type::to_char_type(c);
+      xsputn(&byte, 1);
+    }
+    return traits_type::not_eof(c);
+  }
+
+  std::streamsize xsputn(const char *s, std::streamsize n) override {
+    const size_t count = static_cast<size_t>(n);
+    if (matches_ && (count > expected_.size() - position_ ||
+                     expected_.compare(position_, count, s, count) != 0))
+      matches_ = false;
+    position_ += count;
+    return n;
+  }
+
+private:
+  const std::string &expected_;
+  size_t position_ = 0;
+  bool matches_ = true;
+};
+
+} // namespace
+
+std::string writeToString(const std::function<void(std::ostream &)> &write) {
+  std::string text;
+  StringOutputBuffer buffer(text);
+  std::ostream out(&buffer);
+  write(out);
+  return text;
+}
+
+void writeFile(const std::filesystem::path &path,
+               const std::function<void(std::ostream &)> &write) {
   if (!path.parent_path().empty()) {
     std::filesystem::create_directories(path.parent_path());
   }
@@ -25,7 +92,13 @@ void writeFile(const std::filesystem::path &path, const std::string &content) {
     throw std::runtime_error("failed to open AST JSON file for writing: " +
                              temporary_path.string());
   }
-  out << content;
+  try {
+    write(out);
+  } catch (...) {
+    out.close();
+    std::filesystem::remove(temporary_path);
+    throw;
+  }
   if (!out) {
     throw std::runtime_error("failed to write AST JSON file: " +
                              temporary_path.string());
@@ -44,22 +117,35 @@ void writeFile(const std::filesystem::path &path, const std::string &content) {
   }
 }
 
+void writeFile(const std::filesystem::path &path, const std::string &content) {
+  writeFile(path, [&](std::ostream &out) { out << content; });
+}
+
 std::string readFile(const std::filesystem::path &path) {
-  std::ifstream in(path);
+  std::ifstream in(path, std::ios::binary);
   if (!in) {
     throw std::runtime_error("failed to read AST JSON file: " + path.string());
   }
-  std::ostringstream out;
-  out << in.rdbuf();
-  if (!in.eof() && in.fail()) {
+  in.seekg(0, std::ios::end);
+  const std::streamoff size = in.tellg();
+  in.seekg(0, std::ios::beg);
+  if (size < 0 || !in) {
     throw std::runtime_error("failed while reading AST JSON file: " +
                              path.string());
   }
-  return out.str();
+  std::string content(static_cast<size_t>(size), '\0');
+  in.read(content.data(), size);
+  if (in.gcount() != size || in.peek() != std::ifstream::traits_type::eof()) {
+    throw std::runtime_error("failed while reading AST JSON file: " +
+                             path.string());
+  }
+  return content;
 }
 
 AstFileRecord parseAstFileJson(const std::string &json,
                                const std::string &expected_checkpoint) {
+  // Each node's subtrees move into its record and the rest of the node's JSON
+  // is released, so the document is never held twice.
   JsonValue root = parseJson(json);
   if (root.at("format").asString() != kFormat) {
     throw std::runtime_error("AST JSON format marker is invalid");
@@ -80,18 +166,18 @@ AstFileRecord parseAstFileJson(const std::string &json,
   }
   result.project_files_id = static_cast<uint64_t>(project_files_id);
   result.root_kind = root.at("root_kind").asString();
-  result.metadata = root.at("metadata");
+  result.metadata = std::move(root.at("metadata"));
   result.checkpoint = result.metadata.at("checkpoint").asString();
   if (result.checkpoint != expected_checkpoint) {
     throw std::runtime_error("AST JSON checkpoint name does not match request");
   }
 
-  const JsonValue &nodes = root.at("nodes");
+  JsonValue &nodes = root.at("nodes");
   if (nodes.kind != JsonValue::Kind::Array) {
     throw std::runtime_error("AST JSON nodes field is not an array");
   }
   result.nodes.reserve(nodes.array.size());
-  for (const JsonValue &node_value : nodes.array) {
+  for (JsonValue &node_value : nodes.array) {
     NodeRecord record;
     const int64_t node_id = node_value.requiredInt("id");
     if (node_id <= 0) {
@@ -105,11 +191,11 @@ AstFileRecord parseAstFileJson(const std::string &json,
     record.variant = static_cast<VariantT>(variant);
     if (roseGlobalVariantNameList[record.variant] != record.kind)
       throw std::runtime_error("AST JSON node kind and variant disagree");
-    record.flags = node_value.at("flags");
+    record.flags = std::move(node_value.at("flags"));
     // Validate every record, including delayed nodes, before AST allocation.
     validateConstructionFlags(record);
-    record.location = node_value.at("location");
-    record.properties = node_value.at("properties");
+    record.location = std::move(node_value.at("location"));
+    record.properties = std::move(node_value.at("properties"));
     record.preprocessing = record.properties.at("preprocessing");
     (void)record.location.at("start").requiredBool("present");
     (void)record.location.at("end").requiredBool("present");
@@ -130,6 +216,7 @@ AstFileRecord parseAstFileJson(const std::string &json,
       edge.target = static_cast<uint64_t>(target);
       record.edges.push_back(std::move(edge));
     }
+    node_value = JsonValue();
 
     if (!result.index_by_id.emplace(record.id, result.nodes.size()).second) {
       throw std::runtime_error("AST JSON contains duplicate node id " +
@@ -222,8 +309,7 @@ void appendComparableObject(
   appendCanonicalJson(out, value);
 }
 
-std::string semanticSignature(const AstFileRecord &ast) {
-  std::ostringstream out;
+void writeSemanticSignature(std::ostream &out, const AstFileRecord &ast) {
   out << "format=" << kFormat << '\n';
   out << "schema=" << kSchemaVersion << '\n';
   out << "checkpoint=" << ast.checkpoint << '\n';
@@ -267,7 +353,19 @@ std::string semanticSignature(const AstFileRecord &ast) {
     }
     out << "]\n";
   }
-  return out.str();
+}
+
+std::string semanticSignature(const AstFileRecord &ast) {
+  return writeToString(
+      [&](std::ostream &out) { writeSemanticSignature(out, ast); });
+}
+
+bool semanticSignatureEquals(const AstFileRecord &ast,
+                             const std::string &signature) {
+  ComparingOutputBuffer buffer(signature);
+  std::ostream out(&buffer);
+  writeSemanticSignature(out, ast);
+  return buffer.matchesCompletely();
 }
 
 std::filesystem::path checkpointPath(SgSourceFile *file, Checkpoint checkpoint,
@@ -294,11 +392,12 @@ SgProject *owningProject(SgSourceFile *file) {
   return isSgProject(file_list->get_parent());
 }
 
-void replaceProjectFiles(SgProject *project, const AstFileRecord &ast,
-                         const NodeMap &original, const NodeMap &restored) {
-  ROSE_ASSERT(project != nullptr && ast.project_files_id != 0);
-  auto *old_list = nodeByIdAs<SgFileList>(original, ast.project_files_id);
-  auto *new_list = nodeByIdAs<SgFileList>(restored, ast.project_files_id);
+void replaceProjectFiles(SgProject *project, uint64_t root_id,
+                         uint64_t project_files_id, const NodeMap &original,
+                         const NodeMap &restored) {
+  ROSE_ASSERT(project != nullptr && project_files_id != 0);
+  auto *old_list = nodeByIdAs<SgFileList>(original, project_files_id);
+  auto *new_list = nodeByIdAs<SgFileList>(restored, project_files_id);
   ROSE_ASSERT(old_list != new_list && old_list->get_parent() == project);
   SgFilePtrList &files = project->get_fileList();
   SgFilePtrList &replacements = new_list->get_listOfFiles();
@@ -378,7 +477,7 @@ void replaceProjectFiles(SgProject *project, const AstFileRecord &ast,
     ROSE_ASSERT(identities.at(files[index]) == replacements[index]);
     ROSE_ASSERT(replacements[index]->get_parent() == new_list);
   }
-  ROSE_ASSERT(isSgSourceFile(nodeById(restored, ast.root_id)) != nullptr);
+  ROSE_ASSERT(isSgSourceFile(nodeById(restored, root_id)) != nullptr);
   class ProjectReferences : public SgSimpleProcessing,
                             public SimpleReferenceToPointerHandler {
     const std::unordered_map<SgNode *, SgNode *> &identities_;
@@ -427,7 +526,7 @@ void replaceProjectFiles(SgProject *project, const AstFileRecord &ast,
     replacements[index] = original_file;
     original_file->set_parent(new_list);
   }
-  attachJsonNodeId(old_list, ast.project_files_id);
+  attachJsonNodeId(old_list, project_files_id);
   SageInterface::deleteAST(retired_roots,
                            SageInterface::DeleteAstMode::kRequireIsolated);
 }

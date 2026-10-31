@@ -2,11 +2,16 @@
 #define ROSE_CLANG_DECL_ATTACHMENT_SESSION_HPP
 
 #include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <optional>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
 
 class SgDeclarationStatement;
+class SgGlobal;
+class SgNamespaceDefinitionStatement;
 class SgNode;
 class SgScopeStatement;
 class Sg_File_Info;
@@ -51,6 +56,29 @@ public:
   lookupDeclarationsOnSameSourceLine(DeclarationList *declarations,
                                      const Sg_File_Info *location);
 
+  //! One source-spelled namespace fragment: the expanded-token occurrences of
+  //! its opening and its closing brace.
+  struct NamespaceFragment {
+    unsigned int opening = 0;
+    unsigned int closing = 0;
+    SgNamespaceDefinitionStatement *definition = nullptr;
+
+    bool operator==(const NamespaceFragment &other) const {
+      return opening == other.opening && closing == other.closing &&
+             definition == other.definition;
+    }
+  };
+  //! The source-spelled fragments of one reopening chain within one
+  //! translation unit, ordered by opening.  They are current only while the
+  //! chain revision they were collected at is unchanged.
+  struct NamespaceFragmentIndex {
+    std::optional<std::uint64_t> chain_revision;
+    std::vector<NamespaceFragment> fragments;
+  };
+  NamespaceFragmentIndex &
+  namespaceFragmentIndex(SgNamespaceDefinitionStatement *chain,
+                         SgGlobal *global);
+
 private:
   struct MembershipIndex {
     SgNode *structural_owner = nullptr;
@@ -92,6 +120,29 @@ private:
   };
 
   std::unordered_map<DeclarationList *, SourceLineIndex> p_source_line_indices;
+
+  struct NamespaceChainKey {
+    SgNamespaceDefinitionStatement *chain = nullptr;
+    SgGlobal *global = nullptr;
+
+    bool operator==(const NamespaceChainKey &other) const {
+      return chain == other.chain && global == other.global;
+    }
+  };
+
+  struct NamespaceChainKeyHash {
+    std::size_t operator()(const NamespaceChainKey &key) const {
+      std::size_t seed =
+          std::hash<SgNamespaceDefinitionStatement *>()(key.chain);
+      seed ^= std::hash<SgGlobal *>()(key.global) + 0x9e3779b9 + (seed << 6) +
+              (seed >> 2);
+      return seed;
+    }
+  };
+
+  std::unordered_map<NamespaceChainKey, NamespaceFragmentIndex,
+                     NamespaceChainKeyHash>
+      p_namespace_fragment_indices;
 
   static void rebuild(MembershipIndex &index, DeclarationList *declarations,
                       SgNode *structural_owner,

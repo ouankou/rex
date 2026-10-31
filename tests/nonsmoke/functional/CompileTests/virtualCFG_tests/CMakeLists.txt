@@ -10,8 +10,10 @@ add_executable(rex_virtual_cfg_declaration_group
 target_link_libraries(rex_virtual_cfg_declaration_group
   ROSE_DLL ${link_with_libraries})
 
-set(TESTCODE_INCLUDES
-  -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
+# The C++ specimens use the native Cxx_tests classification, so they compile
+# with the same include environment as compile_test (ROSE_INCLUDE_FLAGS); some
+# specimens include ROSE headers.
+set(TESTCODE_INCLUDES ${ROSE_INCLUDE_FLAGS})
 
 set(ROSE_FLAGS -rose:verbose 0)
 

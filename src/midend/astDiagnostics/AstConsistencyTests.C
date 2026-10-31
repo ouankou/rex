@@ -5582,8 +5582,52 @@ void TestParentPointersInMemoryPool::visit(SgNode *node) {
 
 void TestChildPointersInMemoryPool::test() {
   TestChildPointersInMemoryPool t;
-  t.childMap.reserve(numberOfNodes());
+  t.edges.reserve(numberOfNodes());
   t.traverseMemoryPool();
+
+  // Each parent's child pointers are collected once, for all of its children
+  // together, and released before the next parent's are collected.
+  std::vector<ParentEdge> &edges = t.edges;
+  std::sort(edges.begin(), edges.end(),
+            [](const ParentEdge &lhs, const ParentEdge &rhs) {
+              if (lhs.parent != rhs.parent)
+                return std::less<SgNode *>()(lhs.parent, rhs.parent);
+              return lhs.order < rhs.order;
+            });
+  std::vector<ParentEdge> missing;
+  std::unordered_set<SgNode *> children;
+  for (size_t begin = 0; begin < edges.size();) {
+    SgNode *parent = edges[begin].parent;
+    size_t end = begin;
+    while (end < edges.size() && edges[end].parent == parent)
+      ++end;
+
+#if ROSE_USE_VALGRIND
+    if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(parent, sizeof(SgNode))) {
+      fprintf(stderr, "Parent %p of child %p (a %s) has been deleted.\n",
+              parent, edges[begin].child,
+              edges[begin].child->class_name().c_str());
+    }
+#endif
+
+    children.clear();
+    children.reserve(parent->get_numberOfTraversalSuccessors() + 8);
+    ChildPointerCollector collector(children);
+    parent->processDataMemberReferenceToPointers(&collector);
+    for (size_t index = begin; index < end; ++index) {
+      if (children.find(edges[index].child) == children.end())
+        missing.push_back(edges[index]);
+    }
+    begin = end;
+  }
+
+  // Missing children are reported in memory-pool order.
+  std::sort(missing.begin(), missing.end(),
+            [](const ParentEdge &lhs, const ParentEdge &rhs) {
+              return lhs.order < rhs.order;
+            });
+  for (const ParentEdge &edge : missing)
+    reportMissingChild(edge.child, edge.parent);
 }
 
 void TestChildPointersInMemoryPool::visit(SgNode *node) {
@@ -5597,224 +5641,202 @@ void TestChildPointersInMemoryPool::visit(SgNode *node) {
 
   if (parent != NULL) {
     ROSE_ASSERT(SgNode::isLiveNode(parent));
-    bool nodeFound = false;
+    edges.push_back({parent, node, edges.size()});
+  }
+}
 
-    auto it = childMap.find(parent);
+void TestChildPointersInMemoryPool::reportMissingChild(SgNode *node,
+                                                       SgNode *parent) {
 
-    if (it != childMap.end()) {
-      nodeFound = it->second.find(node) != it->second.end();
+  switch (node->variantT()) {
+  case V_SgTemplateInstantiationDecl:
+  case V_SgClassDeclaration:
+  case V_SgDerivedTypeStatement: {
+    // Ignore this case, there a lots of cases where non-defining
+    // declarations are built and they are assigned parents where they are
+    // not children.
+    break;
+  }
+
+  case V_SgTemplateDeclaration: {
+    // Ignore this case, at least numerous non-defining declarations will
+    // fail to appear in the parent' child list.
+    break;
+  }
+
+  case V_SgFunctionTypeTable: {
+    // Ignore this case, the pointer to the SgFunctionTypeTable is a static
+    // data member and not returned by the returnDataMemberPointers()
+    // function on the parent (SgNode).
+    break;
+  }
+
+  case V_SgTypedefDeclaration: {
+    SgTypedefDeclaration *typedefDeclaration = isSgTypedefDeclaration(node);
+    SgTemplateArgument *templateArgument = isSgTemplateArgument(parent);
+    ROSE_ASSERT(templateArgument != NULL);
+    SgTypedefType *typedefType = isSgTypedefType(templateArgument->get_type());
+    ROSE_ASSERT(typedefType != NULL);
+    ROSE_ASSERT(typedefType->get_declaration() == typedefDeclaration);
+    break;
+  }
+
+  case V_SgInitializedName: {
+    SgInitializedName *initializedName = isSgInitializedName(node);
+    if (initializedName->get_is_predefined_identifier()) {
+      ROSE_ASSERT(isSgFunctionDefinition(parent) != NULL);
     } else {
-      it = childMap.emplace(parent, std::unordered_set<SgNode *>()).first;
-
-#if ROSE_USE_VALGRIND
-      if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(parent, sizeof(SgNode))) {
-        fprintf(stderr, "Parent %p of child %p (a %s) has been deleted.\n",
-                parent, node, node->class_name().c_str());
-      }
-#endif
-
-      it->second.reserve(parent->get_numberOfTraversalSuccessors() + 8);
-      ChildPointerCollector collector(it->second);
-      parent->processDataMemberReferenceToPointers(&collector);
-      nodeFound = it->second.find(node) != it->second.end();
-    }
-
-    if (nodeFound == false) {
-
-      switch (node->variantT()) {
-      case V_SgTemplateInstantiationDecl:
-      case V_SgClassDeclaration:
-      case V_SgDerivedTypeStatement: {
-        // Ignore this case, there a lots of cases where non-defining
-        // declarations are built and they are assigned parents where they are
-        // not children.
-        break;
-      }
-
-      case V_SgTemplateDeclaration: {
-        // Ignore this case, at least numerous non-defining declarations will
-        // fail to appear in the parent' child list.
-        break;
-      }
-
-      case V_SgFunctionTypeTable: {
-        // Ignore this case, the pointer to the SgFunctionTypeTable is a static
-        // data member and not returned by the returnDataMemberPointers()
-        // function on the parent (SgNode).
-        break;
-      }
-
-      case V_SgTypedefDeclaration: {
-        SgTypedefDeclaration *typedefDeclaration = isSgTypedefDeclaration(node);
-        SgTemplateArgument *templateArgument = isSgTemplateArgument(parent);
-        ROSE_ASSERT(templateArgument != NULL);
-        SgTypedefType *typedefType =
-            isSgTypedefType(templateArgument->get_type());
-        ROSE_ASSERT(typedefType != NULL);
-        ROSE_ASSERT(typedefType->get_declaration() == typedefDeclaration);
-        break;
-      }
-
-      case V_SgInitializedName: {
-        SgInitializedName *initializedName = isSgInitializedName(node);
-        if (initializedName->get_is_predefined_identifier()) {
-          ROSE_ASSERT(isSgFunctionDefinition(parent) != NULL);
-        } else {
-          MLOG_KEY_C(
-              "astDiagnostics",
-              "TestChildPointersInMemoryPool::visit(): Node is not in "
-              "parent's child list, node: %p = %s = %s parent: %p = %s \n",
-              node, node->class_name().c_str(),
-              SageInterface::get_name(node).c_str(), parent,
-              parent->class_name().c_str());
-        }
-        break;
-      }
-
-      case V_SgVariableSymbol: {
-        SgVariableSymbol *variableSymbol = isSgVariableSymbol(node);
-        SgInitializedName *initializedName = variableSymbol->get_declaration();
-        if (initializedName == NULL ||
-            !initializedName->get_is_predefined_identifier()) {
-          MLOG_KEY_C(
-              "astDiagnostics",
-              "TestChildPointersInMemoryPool::visit(). SgVariableSymbol is not "
-              "in parent's child list, node: %p = %s = %s parent: %p = %s \n",
-              node, node->class_name().c_str(),
-              SageInterface::get_name(node).c_str(), parent,
-              parent->class_name().c_str());
-        }
-        break;
-      }
-
-      case V_SgClassSymbol: {
-        SgClassSymbol *classSymbol = isSgClassSymbol(node);
-        SgClassDeclaration *classDeclaration = classSymbol->get_declaration();
-
-        // DQ (3/3/2007): This is always a case we want to warn about!
-        printf("SgClassSymbol is not in parent's child list, node: %p = %s = "
-               "%s parent: %p = %s = %s \n",
-               node, node->class_name().c_str(),
-               SageInterface::get_name(node).c_str(), parent,
-               parent->class_name().c_str(),
-               SageInterface::get_name(parent).c_str());
-        classDeclaration->get_file_info()->display(
-            "case V_SgClassSymbol: location: debug");
-        break;
-      }
-
-      case V_SgFunctionSymbol: {
-        SgFunctionSymbol *functionSymbol = isSgFunctionSymbol(node);
-        SgFunctionDeclaration *functionDeclaration =
-            functionSymbol->get_declaration();
-
-        // DQ (3/3/2007): This is always a case we want to warn about!
-        printf("SgFunctionSymbol is not in parent's child list, node: %p = %s "
-               "= %s parent: %p = %s = %s \n",
-               node, node->class_name().c_str(),
-               SageInterface::get_name(node).c_str(), parent,
-               parent->class_name().c_str(),
-               SageInterface::get_name(parent).c_str());
-        functionDeclaration->get_file_info()->display(
-            "case V_SgFunctionSymbol: location: debug");
-        break;
-      }
-
-      case V_SgStorageModifier: {
-        SgStorageModifier *storageModifier = isSgStorageModifier(node);
-        SgInitializedName *initializedName =
-            isSgInitializedName(storageModifier->get_parent());
-        if (initializedName != NULL) {
-          printf("SgStorageModifier is not in parent's child list, "
-                 "SgInitializedName: %p = %s = %s parent: %p = %s = %s \n",
-                 storageModifier, storageModifier->class_name().c_str(),
-                 SageInterface::get_name(storageModifier).c_str(),
-                 initializedName, initializedName->class_name().c_str(),
-                 SageInterface::get_name(initializedName).c_str());
-          SgNode *parent1 = initializedName->get_parent();
-          printf("parent1 IR node = %p = %s \n", parent1,
-                 parent1->class_name().c_str());
-          SgNode *parent2 = parent1->get_parent();
-          printf("parent2 IR node = %p = %s \n", parent2,
-                 parent2->class_name().c_str());
-          SgNode *parent3 = parent2->get_parent();
-          printf("parent3 IR node = %p = %s \n", parent3,
-                 parent3->class_name().c_str());
-          SgNode *parent4 = parent3->get_parent();
-          printf("parent4 IR node = %p = %s \n", parent4,
-                 parent4->class_name().c_str());
-          initializedName->get_file_info()->display(
-              "case V_SgStorageModifier: location: debug");
-        } else {
-          // DQ (3/3/2007): This is always a case we want to warn about!
-          printf("SgStorageModifier is not in parent's child list, node: %p = "
-                 "%s = %s parent: %p = %s \n",
+      MLOG_KEY_C("astDiagnostics",
+                 "TestChildPointersInMemoryPool::visit(): Node is not in "
+                 "parent's child list, node: %p = %s = %s parent: %p = %s \n",
                  node, node->class_name().c_str(),
                  SageInterface::get_name(node).c_str(), parent,
                  parent->class_name().c_str());
-        }
-        break;
+    }
+    break;
+  }
+
+  case V_SgVariableSymbol: {
+    SgVariableSymbol *variableSymbol = isSgVariableSymbol(node);
+    SgInitializedName *initializedName = variableSymbol->get_declaration();
+    if (initializedName == NULL ||
+        !initializedName->get_is_predefined_identifier()) {
+      MLOG_KEY_C(
+          "astDiagnostics",
+          "TestChildPointersInMemoryPool::visit(). SgVariableSymbol is not "
+          "in parent's child list, node: %p = %s = %s parent: %p = %s \n",
+          node, node->class_name().c_str(),
+          SageInterface::get_name(node).c_str(), parent,
+          parent->class_name().c_str());
+    }
+    break;
+  }
+
+  case V_SgClassSymbol: {
+    SgClassSymbol *classSymbol = isSgClassSymbol(node);
+    SgClassDeclaration *classDeclaration = classSymbol->get_declaration();
+
+    // DQ (3/3/2007): This is always a case we want to warn about!
+    printf("SgClassSymbol is not in parent's child list, node: %p = %s = "
+           "%s parent: %p = %s = %s \n",
+           node, node->class_name().c_str(),
+           SageInterface::get_name(node).c_str(), parent,
+           parent->class_name().c_str(),
+           SageInterface::get_name(parent).c_str());
+    classDeclaration->get_file_info()->display(
+        "case V_SgClassSymbol: location: debug");
+    break;
+  }
+
+  case V_SgFunctionSymbol: {
+    SgFunctionSymbol *functionSymbol = isSgFunctionSymbol(node);
+    SgFunctionDeclaration *functionDeclaration =
+        functionSymbol->get_declaration();
+
+    // DQ (3/3/2007): This is always a case we want to warn about!
+    printf("SgFunctionSymbol is not in parent's child list, node: %p = %s "
+           "= %s parent: %p = %s = %s \n",
+           node, node->class_name().c_str(),
+           SageInterface::get_name(node).c_str(), parent,
+           parent->class_name().c_str(),
+           SageInterface::get_name(parent).c_str());
+    functionDeclaration->get_file_info()->display(
+        "case V_SgFunctionSymbol: location: debug");
+    break;
+  }
+
+  case V_SgStorageModifier: {
+    SgStorageModifier *storageModifier = isSgStorageModifier(node);
+    SgInitializedName *initializedName =
+        isSgInitializedName(storageModifier->get_parent());
+    if (initializedName != NULL) {
+      printf("SgStorageModifier is not in parent's child list, "
+             "SgInitializedName: %p = %s = %s parent: %p = %s = %s \n",
+             storageModifier, storageModifier->class_name().c_str(),
+             SageInterface::get_name(storageModifier).c_str(), initializedName,
+             initializedName->class_name().c_str(),
+             SageInterface::get_name(initializedName).c_str());
+      SgNode *parent1 = initializedName->get_parent();
+      printf("parent1 IR node = %p = %s \n", parent1,
+             parent1->class_name().c_str());
+      SgNode *parent2 = parent1->get_parent();
+      printf("parent2 IR node = %p = %s \n", parent2,
+             parent2->class_name().c_str());
+      SgNode *parent3 = parent2->get_parent();
+      printf("parent3 IR node = %p = %s \n", parent3,
+             parent3->class_name().c_str());
+      SgNode *parent4 = parent3->get_parent();
+      printf("parent4 IR node = %p = %s \n", parent4,
+             parent4->class_name().c_str());
+      initializedName->get_file_info()->display(
+          "case V_SgStorageModifier: location: debug");
+    } else {
+      // DQ (3/3/2007): This is always a case we want to warn about!
+      printf("SgStorageModifier is not in parent's child list, node: %p = "
+             "%s = %s parent: %p = %s \n",
+             node, node->class_name().c_str(),
+             SageInterface::get_name(node).c_str(), parent,
+             parent->class_name().c_str());
+    }
+    break;
+  }
+
+    // DQ (6/13/2007): Added case to avoid warnings where Sg_File_Info
+    // objects are used in comments and cpp directives.
+  case V_Sg_File_Info: {
+    Sg_File_Info *fileInfo = isSg_File_Info(node);
+    SgNode *parent = fileInfo->get_parent();
+    if (!fileInfo->isCommentOrDirective())
+      ROSE_ASSERT(parent != NULL);
+    break;
+  }
+
+  default:
+    break;
+  }
+
+  // Additional information!
+  if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL + 1) {
+    // DQ (1/22/2008): Detect the case where node is a Sg_File_Info IR nodes
+    // (which should not have a valid get_file_info() pointer)
+    Sg_File_Info *fileInfo = isSg_File_Info(node);
+    if (node->get_file_info() == NULL) {
+      // DQ (5/17/2008): It is OK for a SgSymbol to have a NULL fileInfo
+      // pointer DQ (1/22/2008): Ignore that the get_file_info() for a
+      // Sg_File_Info IR node is NULL if (fileInfo == NULL && isSgType(node)
+      // == NULL )
+      if (fileInfo == NULL &&
+          (isSgType(node) == NULL && isSgSymbol(node) == NULL))
+        printf("Warning: node->get_file_info() is NULL on node = %p = %s \n",
+               node, node->class_name().c_str());
+    } else {
+      // node->get_file_info()->display("node location: debug");
+      ROSE_ASSERT(fileInfo == NULL);
+    }
+
+    if (parent != NULL) {
+      if (parent->get_file_info() == NULL) {
+        // DQ (5/17/2008): It is OK for a SgSymbol to have a parent which is
+        // a symbol table without a valid fileInfo pointer DQ (1/22/2008):
+        // Ignore SgType IR nodes (since they never have a valid
+        // get_file_info()) if (isSgType(parent) == NULL )
+        if (isSgType(parent) == NULL && isSgSymbolTable(parent) == NULL)
+          printf("Warning: parent->get_file_info() is NULL on node = %p = "
+                 "%s \n",
+                 parent, parent->class_name().c_str());
+      } else {
+        // parent->get_file_info()->display("parent location: debug");
       }
-
-        // DQ (6/13/2007): Added case to avoid warnings where Sg_File_Info
-        // objects are used in comments and cpp directives.
-      case V_Sg_File_Info: {
-        Sg_File_Info *fileInfo = isSg_File_Info(node);
-        SgNode *parent = fileInfo->get_parent();
-        if (!fileInfo->isCommentOrDirective())
-          ROSE_ASSERT(parent != NULL);
-        break;
-      }
-
-      default:
-        break;
-      }
-
-      // Additional information!
-      if (SgProject::get_verbose() >= DIAGNOSTICS_VERBOSE_LEVEL + 1) {
-        // DQ (1/22/2008): Detect the case where node is a Sg_File_Info IR nodes
-        // (which should not have a valid get_file_info() pointer)
-        Sg_File_Info *fileInfo = isSg_File_Info(node);
-        if (node->get_file_info() == NULL) {
-          // DQ (5/17/2008): It is OK for a SgSymbol to have a NULL fileInfo
-          // pointer DQ (1/22/2008): Ignore that the get_file_info() for a
-          // Sg_File_Info IR node is NULL if (fileInfo == NULL && isSgType(node)
-          // == NULL )
-          if (fileInfo == NULL &&
-              (isSgType(node) == NULL && isSgSymbol(node) == NULL))
-            printf(
-                "Warning: node->get_file_info() is NULL on node = %p = %s \n",
-                node, node->class_name().c_str());
-        } else {
-          // node->get_file_info()->display("node location: debug");
-          ROSE_ASSERT(fileInfo == NULL);
-        }
-
-        if (parent != NULL) {
-          if (parent->get_file_info() == NULL) {
-            // DQ (5/17/2008): It is OK for a SgSymbol to have a parent which is
-            // a symbol table without a valid fileInfo pointer DQ (1/22/2008):
-            // Ignore SgType IR nodes (since they never have a valid
-            // get_file_info()) if (isSgType(parent) == NULL )
-            if (isSgType(parent) == NULL && isSgSymbolTable(parent) == NULL)
-              printf("Warning: parent->get_file_info() is NULL on node = %p = "
-                     "%s \n",
-                     parent, parent->class_name().c_str());
-          } else {
-            // parent->get_file_info()->display("parent location: debug");
-          }
-        } else {
-          printf("Warning: parent of node->get_file_info() is NULL on node = "
-                 "%p = %s \n",
-                 node, node->class_name().c_str());
-        }
-      }
-
-      // DQ (9/14/2006): This causes the
-      // ROSE/tests/nonsmoke/functional/roseTests/astMergeTests/testMerge.C test
-      // to fail! cout << node->unparseToString() << endl; cout << endl;
+    } else {
+      printf("Warning: parent of node->get_file_info() is NULL on node = "
+             "%p = %s \n",
+             node, node->class_name().c_str());
     }
   }
+
+  // DQ (9/14/2006): This causes the
+  // ROSE/tests/nonsmoke/functional/roseTests/astMergeTests/testMerge.C test
+  // to fail! cout << node->unparseToString() << endl; cout << endl;
 }
 
 void TestFirstNondefiningDeclarationsForForwardMarking::test() {

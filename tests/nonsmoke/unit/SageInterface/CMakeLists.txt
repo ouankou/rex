@@ -451,6 +451,29 @@ add_test(NAME rex_constructor_semantic_name_cxx20
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp c++20)
 set_tests_properties(rex_constructor_semantic_name_cxx20
   PROPERTIES LABELS "rex;AST;sanitizer")
+# A nothrow query about an implicit special member whose exception
+# specification the program never needed has no answer in the AST.
+set(_unneeded_exception_test
+  rex_constructor_unneeded_exception_specification_is_rejected)
+add_test(NAME ${_unneeded_exception_test}
+  COMMAND ${BASH_EXECUTABLE} -c [=[
+ulimit -c 0 || exit
+log=$1
+diagnostic=$2
+shift 2
+"$@" >"$log" 2>&1
+status=$?
+test "$status" -eq 134 &&
+  test "$(grep -Fxc -- "$diagnostic" "$log")" -eq 1
+]=]
+    dummy ${_unneeded_exception_test}.log
+    "REX_AST_INVARIANT[unevaluated-exception-specification]: ::RexUnneededNoThrowSpecialMembers::RexUnneededNoThrowSpecialMembers has an exception specification the translated program never needed, so its nothrow guarantee is unknown"
+    $<TARGET_FILE:rex_constructor_semantic_name>
+    --query-unneeded-exception-specification -std=c++17 -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_constructor_semantic_name_input.cpp)
+set_tests_properties(${_unneeded_exception_test}
+  PROPERTIES LABELS "rex;AST;sanitizer;death")
+unset(_unneeded_exception_test)
 
 foreach(_array_rejection IN ITEMS anonymous_array_source unnamed_array_reference
     unnamed_array_source unnamed_array_loop)
