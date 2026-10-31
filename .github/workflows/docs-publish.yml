@@ -57,7 +57,7 @@ jobs:
           export CC="clang-${{ env.LLVM_VERSION }}"
           export CXX="clang++-${{ env.LLVM_VERSION }}"
           export DOCS_ANTLR4_EXECUTABLE="${GITHUB_WORKSPACE}/.tools/antlr4/antlr4"
-          export DOCS_JOBS=32
+          export DOCS_JOBS=2
           bash scripts/ci-docs-build
 
       - name: Upload docs site artifact
@@ -79,6 +79,7 @@ jobs:
     name: Deploy Full Static Site
     runs-on: ubuntu-26.04
     needs: [build, rex-wasm]
+    if: github.ref == 'refs/heads/main'
     permissions:
       actions: read
       contents: read

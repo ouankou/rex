@@ -57,7 +57,7 @@ to their recorded inputs; interrupted runs and green tests that do not exercise
 the claimed behavior are not acceptance.
 
 Resource accounting and active job details are in
-`build-audit/RESOURCE_STOP.json`. Follow [AGENTS.md](../../AGENTS.md): one serial
+`build-audit/RESOURCE_STOP.json`. Follow [AGENTS.md](https://github.com/ouankou/rex/blob/main/AGENTS.md): one serial
 job in the existing bounded container, collective RAM below 48,000,000,000 bytes
 and disk below 200,000,000,000 bytes. Do not repeat full gates while known blockers
 remain.

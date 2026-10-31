@@ -55,6 +55,14 @@ jobs:
         export FC="flang-${{ env.LLVM_VERSION }}"
         ./build-rex.sh "$GITHUB_WORKSPACE/rex_install" Debug
 
+    - name: Validate Markdown documentation
+      if: matrix.suite == 'core' && github.event_name == 'pull_request'
+      run: |
+        source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
+        export DOCS_JOBS=2
+        export MRDOCS_CONCURRENCY=2
+        bash scripts/ci-docs-build
+
     - name: Run CI tests
       run: |
         source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
