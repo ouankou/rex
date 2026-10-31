@@ -318,7 +318,13 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
     }
 
     AstNodePtr runtimeBody, runtimeCondition;
-    if (fa.IsIfWithKnownRuntimeBranch(s, &runtimeBody, &runtimeCondition)) {
+    if (auto *statement = isSgExprStatement(s.get_ptr())) {
+      // Query APIs also accept statement wrappers; collect each event from
+      // the contained expression so its arguments remain traversable.
+      operator()(fa, statement->get_expression());
+      Skip(s);
+    } else if (fa.IsIfWithKnownRuntimeBranch(s, &runtimeBody,
+                                             &runtimeCondition)) {
       if (runtimeCondition != AST_NULL)
         operator()(fa, runtimeCondition);
       if (runtimeBody != AST_NULL)
@@ -344,6 +350,16 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
       cast->validate_semantic_conversion();
       evaluateLocationOperands(cast->get_operand(), evaluate);
       Skip(s);
+    } else if ((isSgNewExp(s.get_ptr()) || isSgFunctionCallExp(s.get_ptr())) &&
+               AstInterface::IsMemoryAllocation(s)) {
+      // Record the allocation at its expression, then visit its arguments.
+      // Casts and expression statements may also satisfy the query API but
+      // do not introduce another allocation event.
+      AppendMemoryAllocate(fa, s.get_ptr());
+    } else if ((isSgDeleteExp(s.get_ptr()) ||
+                isSgFunctionCallExp(s.get_ptr())) &&
+               AstInterface::IsMemoryFree(s, 0, &lhs)) {
+      AppendMemoryFree(fa, lhs.get_ptr());
     } else if (fa.IsUnaryOp(s, &opr, &lhs) && opr != AstInterface::UOP_DEREF) {
       switch (opr) {
       case AstInterface::UOP_ADDR:
@@ -395,12 +411,6 @@ bool StmtInfoCollect ::ProcessTree(AstInterface &fa,
         if (pa != args.end())
           ++pa;
       }
-      Skip(s);
-    } else if (AstInterface::IsMemoryAllocation(s)) {
-      AppendMemoryAllocate(fa, s.get_ptr());
-      Skip(s);
-    } else if (AstInterface::IsMemoryFree(s, 0, &lhs)) {
-      AppendMemoryFree(fa, lhs.get_ptr());
       Skip(s);
     } else if (fa.IsFunctionCall(s)) {
       DebugLocalInfoCollect([&s]() {
@@ -710,7 +720,11 @@ void StmtSideEffectCollect::AppendFuncCall(AstInterface &fa,
 void StmtSideEffectCollect::AppendMemoryAllocate(AstInterface & /* fa */,
                                                  const AstNodePtr &s) {
   AstNodePtr init;
-  if (allocate_collect != 0 && AstInterface::IsMemoryAllocation(s, 0, &init)) {
+  if (allocate_collect != nullptr &&
+      AstInterface::IsMemoryAllocation(s, 0, &init)) {
+    // Placement arguments are evaluated values, not assignment targets.
+    // Consumers can inspect them through IsMemoryAllocation's optional list;
+    // the allocation callback represents the storage construction itself.
     (*allocate_collect)(s, init);
   }
 }
