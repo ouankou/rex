@@ -82,16 +82,18 @@ private:
 protected:
   virtual void save_dependence(const DependenceEntry &e) {
     if ((tag_first_.empty() ||
-         tag_first_.find(e.first_entry()) != tag_first_.end()) &&
+         tag_first_.find(e.first_entry()) == tag_first_.end()) &&
         (tag_second_.empty() ||
-         tag_second_.find(e.second_entry()) != tag_second_.end()) &&
+         tag_second_.find(e.second_entry()) == tag_second_.end()) &&
         (tag_type_.empty() ||
-         tag_type_.find(e.type_entry()) != tag_type_.end())) {
+         tag_type_.find(e.type_entry()) == tag_type_.end())) {
       result.push_back(e);
     }
   }
 
 public:
+  // Exclude entries matching any of the supplied column values. Empty values
+  // leave that column unrestricted; successive calls add more exclusions.
   void add_selection(const std::string &_tag_first,
                      const std::string &_tag_second = "",
                      const std::string &_tag_type = "") {
