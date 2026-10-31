@@ -32,6 +32,8 @@ public:
   ConstantFoldingSynthesizedAttribute(
       const ConstantFoldingSynthesizedAttribute &X)
       : newValueExp(X.newValueExp) {};
+  ConstantFoldingSynthesizedAttribute &
+  operator=(const ConstantFoldingSynthesizedAttribute &) = default;
 };
 
 class ConstantFoldingTraversal
