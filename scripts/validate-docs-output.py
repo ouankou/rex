@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 
-_DECLARED_RE = re.compile(r"Declared in `&lt;([^`]+)&gt;`")
+_DECLARED_RE = re.compile(r"Declared in (?:`([^`]+)`|<code[^>]*>(.*?)</code>)", re.DOTALL)
 _DASH_TRANSLATION = str.maketrans({
     "\u2010": "-",
     "\u2011": "-",
@@ -48,12 +48,15 @@ def main() -> int:
     missing = []
     checked = 0
 
-    for path in sorted(reference_dir.rglob("*.adoc")):
+    for path in sorted(reference_dir.rglob("*.md")):
         text = path.read_text(encoding="utf-8")
         m = _DECLARED_RE.search(text)
         if not m:
             continue
-        declared = html.unescape(m.group(1)).strip().replace("\\", "/")
+        declared = m.group(1) or m.group(2)
+        declared = re.sub(r"<[^>]+>", "", declared) if m.group(2) else declared
+        declared = re.sub(r"\[([^]]+)\]\([^)]+\)", r"\1", declared)
+        declared = html.unescape(declared).strip().strip("<>").replace("\\", "/")
         declared = declared.translate(_DASH_TRANSLATION)
         checked += 1
 
@@ -96,10 +99,14 @@ def main() -> int:
         if not abs_path.exists():
             missing.append((path, f"{declared} -> {rel}"))
 
+    if not checked:
+        print("no declared-in paths found in Markdown reference pages", file=sys.stderr)
+        return 1
+
     if bad:
         print("invalid declared-in paths:", file=sys.stderr)
         for doc, declared in bad[:200]:
-            print(f"- {doc.relative_to(root)} -> {declared}", file=sys.stderr)
+            print(f"- {doc} -> {declared}", file=sys.stderr)
         if len(bad) > 200:
             print(f"... and {len(bad) - 200} more", file=sys.stderr)
         return 1
@@ -107,7 +114,7 @@ def main() -> int:
     if missing:
         print("declared-in paths not found on disk:", file=sys.stderr)
         for doc, declared in missing[:200]:
-            print(f"- {doc.relative_to(root)} -> {declared}", file=sys.stderr)
+            print(f"- {doc} -> {declared}", file=sys.stderr)
         if len(missing) > 200:
             print(f"... and {len(missing) - 200} more", file=sys.stderr)
         return 1

@@ -6,10 +6,10 @@ import time
 from pathlib import Path
 
 
-def _run(cmd: list[str]) -> str:
+def _run(cmd: list[str], *, multiline: bool = False) -> str:
     try:
         out = subprocess.check_output(cmd, stderr=subprocess.DEVNULL, text=True)
-        return out.splitlines()[0].strip()
+        return out.strip() if multiline else out.splitlines()[0].strip()
     except (subprocess.CalledProcessError, FileNotFoundError):
         return ""
 
@@ -24,7 +24,7 @@ def on_post_build(config):
         git_commit = _run(["git", "-C", str(repo_root), "rev-parse", "HEAD"])
 
     mrdocs_bin = os.environ.get("MRDOCS_BIN", "")
-    mrdocs_version = _run([mrdocs_bin, "--version"]) if mrdocs_bin else ""
+    mrdocs_version = _run([mrdocs_bin, "--version"], multiline=True) if mrdocs_bin else ""
     mkdocs_version = ""
     try:
         import mkdocs  # type: ignore

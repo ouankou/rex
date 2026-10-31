@@ -2,9 +2,7 @@
   const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
 
   const isTwoColNameDescTable = (table) => {
-    const cols = table.querySelectorAll("colgroup col")
-    if (cols.length !== 2) return false
-    const headerRow = table.querySelector("tbody > tr")
+    const headerRow = table.querySelector("thead > tr")
     if (!headerRow) return false
     const cells = headerRow.querySelectorAll("td, th")
     if (cells.length !== 2) return false
@@ -15,9 +13,9 @@
 
   const computeNameColCh = (table) => {
     const rows = Array.from(table.querySelectorAll("tbody > tr"))
-    if (rows.length <= 1) return null
+    if (rows.length === 0) return null
     let maxLen = 0
-    for (const row of rows.slice(1)) {
+    for (const row of rows) {
       const cell = row.querySelector("td:first-child, th:first-child")
       if (!cell) continue
       const code = cell.querySelector("code")
@@ -32,7 +30,7 @@
   }
 
   const apply = () => {
-    const tables = document.querySelectorAll(".md-typeset__table table.tableblock")
+    const tables = document.querySelectorAll(".md-typeset__table table")
     for (const table of tables) {
       if (!isTwoColNameDescTable(table)) continue
       const ch = computeNameColCh(table)

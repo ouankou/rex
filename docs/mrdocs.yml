@@ -16,10 +16,11 @@ exclude-patterns:
   - "*/.git/*"
   - "src/util/nlohmann/*"
 exclude-symbols:
-  # Clang types occur in a small number of REX implementation-facing APIs.
+  # Clang/LLVM types occur in a small number of REX implementation-facing APIs.
   # Keep those type names in the owning REX signatures, but do not publish
   # dependency pages for declarations outside this project's source tree.
   - "clang::*"
+  - "llvm::*"
 file-patterns:
   - '*.h'
   - '*.hh'
@@ -30,10 +31,14 @@ file-patterns:
   - '*.ipp'
   - '*.tpp'
   - '*.tcc'
-generator: adoc
+addons-supplemental:
+  - mrdocs-addons
+generator: md
 output: reference
 multipage: true
 inherit-base-members: never
+# Retain inherited project friends without copying dependency declarations.
+inherit-hidden-friends: reference
 auto-function-metadata: true
 extract-private: true
 # Use the runner toolchain's C and C++ headers. The generated include overlay

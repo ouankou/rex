@@ -2,38 +2,34 @@
   overflow-x: auto;
 }
 
-.md-typeset .md-typeset__table table.tableblock {
+.md-typeset .md-typeset__table table {
   display: table !important;
   overflow: visible !important;
   width: 100%;
 }
 
-.md-typeset .md-typeset__table table.tableblock.ref-two-col {
+.md-typeset .md-typeset__table table.ref-two-col {
   table-layout: fixed !important;
 }
 
-.md-typeset .md-typeset__table table.tableblock colgroup col {
-  width: auto !important;
-}
-
-.md-typeset .md-typeset__table table.tableblock.ref-two-col colgroup col:first-child {
+.md-typeset .md-typeset__table table.ref-two-col th:first-child {
   width: var(--ref-name-col, 18ch) !important;
 }
 
-.md-typeset .md-typeset__table table.tableblock td:first-child,
-.md-typeset .md-typeset__table table.tableblock th:first-child {
+.md-typeset .md-typeset__table table td:first-child,
+.md-typeset .md-typeset__table table th:first-child {
   overflow-wrap: break-word;
   word-break: normal;
 }
 
-.md-typeset .md-typeset__table table.tableblock td:last-child,
-.md-typeset .md-typeset__table table.tableblock th:last-child {
+.md-typeset .md-typeset__table table td:last-child,
+.md-typeset .md-typeset__table table th:last-child {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
 
-.md-typeset .md-typeset__table table.tableblock td:first-child code,
-.md-typeset .md-typeset__table table.tableblock th:first-child code {
+.md-typeset .md-typeset__table table td:first-child code,
+.md-typeset .md-typeset__table table th:first-child code {
   white-space: normal;
 }
 
