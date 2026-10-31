@@ -755,6 +755,13 @@ add_test(
 set_tests_properties(rex_docs_cpp_compilation_db_contract
   PROPERTIES LABELS "rex;build-system;CI;docs")
 
+add_test(
+  NAME rex_docs_markdown_contract
+  COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_docs_markdown_contract.py)
+set_tests_properties(rex_docs_markdown_contract
+  PROPERTIES LABELS "rex;build-system;CI;docs")
+
 if(UNIX)
   # Deliberately terminate CTest while a child is running. Memory runs exclude
   # intentional process-termination controls through the existing death policy.

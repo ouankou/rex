@@ -7,10 +7,10 @@ This site documents the REX source tree for developers: build notes and a genera
 | What | Where |
 | --- | --- |
 | Find an API by name | [API Quick Lookup](api-lookup.md) |
-| Browse API by category | [API Reference Index](reference/index.adoc) |
-| Browse namespaces | [Namespaces](reference/sections/namespaces.adoc) |
-| Browse types | [Types](reference/sections/types.adoc) |
-| Browse functions | [Functions](reference/sections/functions.adoc) |
+| Browse API by category | [API Reference Index](reference/index.md) |
+| Browse namespaces | [Namespaces](reference/sections/namespaces.md) |
+| Browse types | [Types](reference/sections/types.md) |
+| Browse functions | [Functions](reference/sections/functions.md) |
 
 ## Build Metadata
 

@@ -69,7 +69,6 @@ case "$mode" in
   docs)
     install_packages \
       antlr4 \
-      asciidoctor \
       bison \
       build-essential \
       clang-"${llvm_version}" \

@@ -2,19 +2,20 @@ site_name: REX API Reference
 site_dir: _site/reference
 docs_dir: docs/reference
 nav:
-  - API Index: index.adoc
-  - Namespaces: sections/namespaces.adoc
-  - Types: sections/types.adoc
-  - Enums: sections/enums.adoc
-  - Functions: sections/functions.adoc
-  - Variables: sections/variables.adoc
-  - Using Declarations: sections/using-declarations.adoc
-  - Using Namespace Directives: sections/using-namespace-directives.adoc
+  - API Index: index.md
+  - Namespaces: sections/namespaces.md
+  - Types: sections/types.md
+  - Type Aliases: sections/type-aliases.md
+  - Enums: sections/enums.md
+  - Functions: sections/functions.md
+  - Variables: sections/variables.md
+  - Using Declarations: sections/using-declarations.md
+  - Using Namespace Directives: sections/using-namespace-directives.md
 
 not_in_nav: |
-  **/*.adoc
-  !/index.adoc
-  !/sections/*.adoc
+  **/*.md
+  !/index.md
+  !/sections/*.md
 
 theme:
   name: material
@@ -28,5 +29,8 @@ hooks:
 plugins:
   - material/search:
       separator: "[\\s\\-_:]+"
-  - asciidoctor_backend:
-      max_workers: 32
+
+markdown_extensions:
+  - tables
+  - toc:
+      permalink: true

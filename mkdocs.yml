@@ -24,14 +24,11 @@ markdown_extensions:
 
 hooks:
   - docs/mkdocs-search-exclude.py
-  - docs/mkdocs-reference-titles.py
   - docs/mkdocs-build-manifest.py
 
 plugins:
   - material/search:
       separator: "[\\s\\-_:]+"
-  - asciidoctor_backend:
-      max_workers: 32
 
 extra_css:
   - stylesheets/reference.css
@@ -39,10 +36,13 @@ extra_css:
 extra_javascript:
   - javascripts/reference-table-sizing.js
 
+exclude_docs: |
+  mrdocs-addons/**
+
 not_in_nav: |
-  reference/**/*.adoc
-  !reference/index.adoc
-  !reference/sections/*.adoc
+  reference/**/*.md
+  !reference/index.md
+  !reference/sections/*.md
 
 nav:
   - Home: index.md
@@ -54,11 +54,12 @@ nav:
   - API:
       - Overview: api.md
       - Quick Lookup: api-lookup.md
-      - Reference Index: reference/index.adoc
-      - Namespaces: reference/sections/namespaces.adoc
-      - Types: reference/sections/types.adoc
-      - Enums: reference/sections/enums.adoc
-      - Functions: reference/sections/functions.adoc
-      - Variables: reference/sections/variables.adoc
-      - Using Declarations: reference/sections/using-declarations.adoc
-      - Using Namespace Directives: reference/sections/using-namespace-directives.adoc
+      - Reference Index: reference/index.md
+      - Namespaces: reference/sections/namespaces.md
+      - Types: reference/sections/types.md
+      - Type Aliases: reference/sections/type-aliases.md
+      - Enums: reference/sections/enums.md
+      - Functions: reference/sections/functions.md
+      - Variables: reference/sections/variables.md
+      - Using Declarations: reference/sections/using-declarations.md
+      - Using Namespace Directives: reference/sections/using-namespace-directives.md

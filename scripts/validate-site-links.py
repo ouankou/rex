@@ -3,7 +3,7 @@ import argparse
 import sys
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import unquote, urlsplit
 import posixpath
 
 
@@ -11,9 +11,12 @@ class _LinkParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
+        self.anchors: set[str] = set()
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         for k, v in attrs:
+            if v is not None and (k == "id" or (tag == "a" and k == "name")):
+                self.anchors.add(v)
             if k in {"href", "src"} and v:
                 self.links.append(v)
 
@@ -29,9 +32,8 @@ def _page_url_dir(site_root: Path, html_file: Path) -> str:
 
 
 def _is_external(url: str) -> bool:
-    if url.startswith(("//", "http:", "https:", "mailto:", "tel:", "data:", "javascript:")):
-        return True
-    return False
+    parsed = urlsplit(url)
+    return bool(parsed.scheme or parsed.netloc)
 
 
 def _normalize_path(path: str) -> str:
@@ -58,36 +60,42 @@ def main() -> int:
         print(f"site dir not found: {site_dir}", file=sys.stderr)
         return 2
 
-    existing: set[str] = set()
+    existing: dict[str, Path] = {}
+    documents: dict[Path, _LinkParser] = {}
     for p in site_dir.rglob("*"):
         if not p.is_file():
             continue
         rel = "/" + p.relative_to(site_dir).as_posix()
-        existing.add(rel)
+        existing[rel] = p
         if rel.endswith("/index.html"):
-            existing.add(rel[: -len("index.html")])
+            existing[rel[: -len("index.html")]] = p
         if rel == "/index.html":
-            existing.add("/")
+            existing["/"] = p
+
+        if p.suffix == ".html":
+            parser = _LinkParser()
+            parser.feed(p.read_text(encoding="utf-8"))
+            documents[p] = parser
+
+    if not documents:
+        print("no HTML pages found in site", file=sys.stderr)
+        return 1
 
     bad: list[tuple[str, str, str]] = []
     checked = 0
 
-    for html in sorted(site_dir.rglob("*.html")):
-        text = html.read_text(encoding="utf-8")
-        parser = _LinkParser()
-        parser.feed(text)
+    for html, parser in sorted(documents.items()):
         base_dir = _page_url_dir(site_dir, html)
 
         for raw in parser.links:
-            if not raw or raw.startswith("#") or _is_external(raw):
+            if not raw or _is_external(raw):
                 continue
 
             parsed = urlsplit(raw)
-            if not parsed.path:
-                continue
-
-            path = parsed.path
-            if path.startswith("/"):
+            path = unquote(parsed.path)
+            if not path:
+                resolved = "/" + html.relative_to(site_dir).as_posix()
+            elif path.startswith("/"):
                 resolved = _normalize_path(path)
             else:
                 resolved = _normalize_path(posixpath.join(base_dir, path))
@@ -97,10 +105,13 @@ def main() -> int:
             if not resolved.endswith("/"):
                 candidates.append(resolved + "/")
 
-            if any(c in existing for c in candidates):
+            target = next((existing[c] for c in candidates if c in existing), None)
+            if target is None:
+                bad.append((html.relative_to(site_dir).as_posix(), raw, resolved))
                 continue
-
-            bad.append((html.relative_to(site_dir).as_posix(), raw, resolved))
+            fragment = unquote(parsed.fragment)
+            if fragment and target in documents and fragment not in documents[target].anchors:
+                bad.append((html.relative_to(site_dir).as_posix(), raw, f"{resolved}#{fragment} (missing anchor)"))
 
     if bad:
         print(f"dead links found: {len(bad)} (checked {checked})", file=sys.stderr)

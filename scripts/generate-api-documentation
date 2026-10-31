@@ -17,7 +17,7 @@ help() {
     echo "        $arg0 [MRDOCS_CONFIG]"
     echo
     echo "Description"
-    echo "        This command runs MrDocs to generate HTML API documentation."
+    echo "        This command runs MrDocs to generate Markdown API documentation."
     echo "        The optional argument, MRDOCS_CONFIG, is the path to a mrdocs.yml"
     echo "        configuration file. If not provided, docs/mrdocs.yml is used."
     echo
@@ -227,84 +227,6 @@ PY
     else
         echo "$(cd "$(dirname "$config")" && pwd)/$value"
     fi
-}
-
-####################################################################################################################################
-generate-reference-sections() {
-    local out_dir="$1"
-    local nav_config="$2"
-    "$PYTHON_BIN" - "$out_dir" "$nav_config" <<'PY'
-from pathlib import Path
-import shutil
-import sys
-
-try:
-    import yaml
-except ImportError:
-    print("generate-api-documentation: error: PyYAML is required to parse mkdocs-reference.yml", file=sys.stderr)
-    raise SystemExit(1)
-
-out_dir = Path(sys.argv[1]).resolve()
-nav_config = Path(sys.argv[2]).resolve()
-index_path = out_dir / "index.adoc"
-if not index_path.is_file():
-    raise SystemExit(f"reference index not found: {index_path}")
-if not nav_config.is_file():
-    raise SystemExit(f"mkdocs reference config not found: {nav_config}")
-
-nav_data = yaml.safe_load(nav_config.read_text(encoding="utf-8")) or {}
-nav_items = nav_data.get("nav")
-if not isinstance(nav_items, list):
-    raise SystemExit(f"mkdocs nav list not found in {nav_config}")
-
-targets = []
-seen = set()
-for item in nav_items:
-    if not isinstance(item, dict) or len(item) != 1:
-        continue
-    title, path = next(iter(item.items()))
-    if not isinstance(title, str) or not isinstance(path, str):
-        continue
-    if not path.startswith("sections/") or not path.endswith(".adoc"):
-        continue
-    slug = path[len("sections/") : -len(".adoc")]
-    if not slug or "/" in slug or slug in seen:
-        continue
-    seen.add(slug)
-    targets.append((title, slug))
-
-if not targets:
-    raise SystemExit(f"no section entries found in mkdocs nav: {nav_config}")
-
-lines = index_path.read_text(encoding="utf-8").splitlines()
-sections = {}
-current_lines = None
-for line in lines:
-    if line.startswith("== "):
-        current_title = line[3:].strip()
-        current_lines = sections.setdefault(current_title, [])
-    elif current_lines is not None:
-        current_lines.append(line)
-
-sections_dir = out_dir / "sections"
-if sections_dir.exists():
-    if sections_dir.is_dir():
-        shutil.rmtree(sections_dir)
-    else:
-        raise SystemExit(f"expected directory at {sections_dir}")
-sections_dir.mkdir(parents=True)
-
-header_template = "= {title}\n:relfileprefix: ../../\n:mrdocs:\n\n"
-
-for title, slug in targets:
-    content = sections.get(title)
-    if content is None:
-        raise SystemExit(f"missing section '{title}' in {index_path}")
-    while content and not content[0].strip():
-        content = content[1:]
-    text = header_template.format(title=title) + "\n".join(content).rstrip() + "\n"
-    (sections_dir / f"{slug}.adoc").write_text(text, encoding="utf-8")
-PY
 }
 
 ####################################################################################################################################
@@ -618,11 +540,12 @@ if [ -n "${MRDOCS_OUTPUT_DIR-}" ]; then
 fi
 
 "$MRDOCS_CMD" --config "$CONFIG" --compilation-database "$docs_db" \
+    --concurrency "${MRDOCS_CONCURRENCY:-2}" \
     "${output_args[@]}" \
     "${stdlib_args[@]}" \
     "${libc_args[@]}"
 if [ -n "$output_dir" ]; then
-    generate-reference-sections "$output_dir" "$(rose-source)/mkdocs-reference.yml"
+    "$PYTHON_BIN" "$(rose-source)/scripts/prepare-reference.py" --reference-dir "$output_dir"
 fi
 if [ -n "${MRDOCS_KEEP_TMP-}" ]; then
     echo "Keeping temporary documentation directory at $docs_dir"

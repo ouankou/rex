@@ -16,7 +16,7 @@ def on_files(files, config):
         is_doc = False
         if hasattr(entry, "is_documentation_page") and callable(entry.is_documentation_page):
             is_doc = entry.is_documentation_page()
-        if not is_doc and not src_path.endswith((".md", ".adoc")):
+        if not is_doc and not src_path.endswith((".md",)):
             continue
         url = getattr(entry, "url", None)
         if url is None:
@@ -41,7 +41,7 @@ def on_files(files, config):
 
 def _should_keep_leaf(page):
     src_path = getattr(page.file, "src_path", "")
-    if src_path == "reference/index.adoc":
+    if src_path == "reference/index.md":
         return True
     if src_path.startswith("reference/sections/"):
         return True
