@@ -14,7 +14,7 @@ namespace {
 std::string wrap_string(const std::string &s) {
   std::string new_string;
   unsigned wrap = 10;
-  unsigned maxwrap = 20;
+  unsigned maxwrap = 200;
   unsigned index = 0;
   for (auto c : s) {
     ++index;
@@ -523,6 +523,7 @@ public:
                 cluster_map[n] = cluster;
                 clusters[cluster].insert(n);
               }
+              clusters[con.first].clear();
             }
           }
         }
@@ -604,7 +605,8 @@ void DependenceTable ::OutputDependencesInGUI(std::ostream &output) {
 void DependenceTable::save_node_attributes(
     const std::string &sig, const std::vector<std::string> &attributes) {
   InsertNode(sig);
-  get_nodeInfo(sig) = attributes;
+  auto &info = get_nodeInfo(sig);
+  info.insert(info.end(), attributes.begin(), attributes.end());
 }
 
 void DependenceTable::save_dependence(const DependenceEntry &e) {
