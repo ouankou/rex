@@ -1251,6 +1251,13 @@ add_ast_json_checkpoint_test(
   ${ROSE_CXX_FLAGS})
 
 add_ast_json_checkpoint_test(
+  all_omp_construction_rex_ast_json_redecl_signature_ownership_cpp
+  all
+  rex_ast_json_redecl_signature_ownership.cpp
+  OMPTEST
+  ${ROSE_CXX_FLAGS})
+
+add_ast_json_checkpoint_test(
   all_omp_construction_rex_ast_json_delayed_exception_specification_cpp
   all
   rex_ast_json_delayed_exception_specification.cpp
