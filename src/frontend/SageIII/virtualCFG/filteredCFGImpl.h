@@ -1,6 +1,7 @@
 #include "Rose/StringUtility/Escape.h"
 
 #include "filteredCFG.h"
+#include "unparseQualificationSession.h"
 
 #include <functional>
 #include <map>
@@ -124,6 +125,9 @@ void printNodePlusEdges(std::ostream &o, NodeT n);
 /* Internal template function handles the details*/
 template <typename NodeT, typename EdgeT, bool Debug>
 void CfgToDotImpl<NodeT, EdgeT, Debug>::processNodes(NodeT start) {
+  // Edge labels unparse case-label expressions.  The graph is printed from an
+  // unchanging AST, so one qualification session serves every label.
+  UnparseQualificationSession qualificationSession;
   // Nodes are printed depth first, each one's successors and then its
   // predecessors, with the pending neighbors on an explicit stack: a path
   // through a CFG can be far longer than the call stack can hold.

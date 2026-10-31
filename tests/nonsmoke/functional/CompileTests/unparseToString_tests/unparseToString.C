@@ -341,5 +341,8 @@ int main(int argc, char **argv) {
     return 1;
   }
 
+  // The traversal only unparses, so one qualification session serves every
+  // request instead of recomputing each file's qualification per request.
+  UnparseQualificationSession qualificationSession;
   t1.traverse(p, preorder);
 }

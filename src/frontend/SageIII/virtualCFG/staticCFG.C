@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 
 #include "staticCFG.h"
+#include "unparseQualificationSession.h"
 
 namespace StaticCFG {
 
@@ -70,6 +71,9 @@ void CFG::addEdge(const CFGPath &path) {
 }
 
 void CFG::cfgToDot(SgNode *node, const std::string &file_name) {
+  // Edge labels unparse case-label expressions.  The graph is printed from an
+  // unchanging AST, so one qualification session serves every label.
+  UnparseQualificationSession qualificationSession;
   std::ofstream ofile(file_name.c_str(), std::ios::out);
   ofile << "digraph defaultName {\n";
   std::set<SgGraphNode *> explored;

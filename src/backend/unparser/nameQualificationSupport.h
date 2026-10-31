@@ -1,4 +1,6 @@
 #include "AstProcessing.h"
+#include "nameQualificationState.h"
+#include "name_qualification_support.h"
 
 #include <map>
 
@@ -14,7 +16,6 @@
 
 #include <vector>
 
-class NameQualificationContext;
 
 std::string globalUnparseToString(const SgNode *node, SgUnparse_Info *info,
                                   NameQualificationContext *nameQualifications);
@@ -26,6 +27,7 @@ std::string globalUnparseToString(const SgTemplateParameterPtrList *parameters,
                                   NameQualificationContext *nameQualifications);
 
 class NameQualificationUsingDirectiveOrderCache;
+class NameQualificationFileAnalysis;
 
 bool templateClassMatchesPattern(const SgTemplateClassDeclaration *declaration,
                                  const SgTemplateClassDeclaration *pattern);
@@ -107,21 +109,40 @@ private:
   //   (referenced names don't count if they don't specify a scope (location)).
   // * So we need a function to gather all the name in a class.
 
+  // Indexes shared by a traversal and every nested traversal it starts.
+  struct SharedIndexes {
+    SharedIndexes(NameQualificationSetType &referencedNames,
+                  NameQualificationMapType &names,
+                  NameQualificationMapType &types,
+                  NameQualificationMapOfMapsType &typeUses,
+                  const NameQualificationSetType *baseReferencedNames = nullptr,
+                  const NameQualificationMapType *baseNames = nullptr,
+                  const NameQualificationMapType *baseTypes = nullptr,
+                  const NameQualificationMapOfMapsType *baseTypeUses = nullptr)
+        : referencedNames(referencedNames, baseReferencedNames),
+          names(names, baseNames), types(types, baseTypes),
+          typeUses(typeUses, baseTypeUses) {}
+    NameQualificationNodeSet referencedNames;
+    NameQualificationNodeStrings names;
+    NameQualificationNodeStrings types;
+    NameQualificationUseSiteStrings typeUses;
+  };
+  std::shared_ptr<SharedIndexes> indexes;
+
   // Data
   // DQ (6/21/2011): since this is used recursively we can't have this be a new
   // set each time. Build the local set to use to record when declaration that
-  // might required qualified references have been seen. std::set<SgNode*> &
-  // referencedNameSet;
-  NameQualificationSetType &referencedNameSet;
+  // might required qualified references have been seen.
+  NameQualificationNodeSet &referencedNameSet;
 
   // Traversal-local compatibility indexes used while the qualification
   // algorithm is running. Exact use-site records live in nameQualifications;
   // these maps are never process-global unparser state.
-  NameQualificationMapType &qualifiedNameMapForNames;
-  NameQualificationMapType &qualifiedNameMapForTypes;
+  NameQualificationNodeStrings &qualifiedNameMapForNames;
+  NameQualificationNodeStrings &qualifiedNameMapForTypes;
 
   // Traversal-local index for qualification of nested type components.
-  NameQualificationMapOfMapsType &qualifiedNameMapForMapsOfTypes;
+  NameQualificationUseSiteStrings &qualifiedNameMapForMapsOfTypes;
 
   std::shared_ptr<NameQualificationUsingDirectiveOrderCache>
       usingDirectiveOrderCache;
@@ -132,6 +153,11 @@ private:
 
     ScopedVisibilityNodeSet()
         : nodes_(std::make_shared<SgUnorderedNodeSet>()) {}
+    // Share a committed set; this view's own inserts are rolled back.
+    explicit ScopedVisibilityNodeSet(std::shared_ptr<SgUnorderedNodeSet> nodes)
+        : nodes_(std::move(nodes)) {
+      ROSE_ASSERT(nodes_ != nullptr);
+    }
     ScopedVisibilityNodeSet(const ScopedVisibilityNodeSet &other)
         : nodes_(other.nodes_) {
       ROSE_ASSERT(nodes_ != nullptr);
@@ -158,6 +184,12 @@ private:
         inserted_here_.push_back(node);
       }
       return inserted;
+    }
+
+    // Make this view's inserts permanent and return the shared set.
+    std::shared_ptr<SgUnorderedNodeSet> commit() {
+      inserted_here_.clear();
+      return nodes_;
     }
 
   private:
@@ -275,12 +307,23 @@ private:
 
   std::set<TemplateArgumentListEvaluationKey>
       activeTemplateArgumentListEvaluations;
-  std::set<TemplateArgumentListEvaluationKey>
+  NameQualificationEvaluationSet<TemplateArgumentListEvaluationKey>
       completedTemplateArgumentListEvaluations;
   std::set<TemplateDeclarationEvaluationKey>
       activeTemplateDeclarationEvaluations;
-  std::set<TemplateDeclarationEvaluationKey>
+  NameQualificationEvaluationSet<TemplateDeclarationEvaluationKey>
       completedTemplateDeclarationEvaluations;
+
+  NameQualificationTraversal(
+      std::shared_ptr<SharedIndexes> input_indexes,
+      NameQualificationContext &input_nameQualifications);
+  // Continue from a completed file walk.  Additions go to input_indexes and
+  // input_nameQualifications, which extend the analysis without modifying it.
+  NameQualificationTraversal(
+      const NameQualificationFileAnalysis &analysis,
+      std::shared_ptr<SharedIndexes> input_indexes,
+      NameQualificationContext &input_nameQualifications);
+  friend class NameQualificationFileAnalysis;
 
 public:
   NameQualificationTraversal(
@@ -302,6 +345,14 @@ protected:
 
 public:
   void prepareSourcePublicationPrefix(SgStatement *useSite);
+
+  // A standalone type is a semantic edge, not a structural successor of the
+  // walked source, so it is analyzed after the walk with the walk's state.
+  void
+  applyExplicitSemanticTypeUse(SgType *explicitSemanticTypeUse,
+                               SgNode *explicitReferenceNode,
+                               SgStatement *explicitEmissionStatement,
+                               SgDeclarationStatement *explicitTypeDefinition);
   void setExplicitTraversalContext(SgScopeStatement *currentScope,
                                    SgStatement *currentStatement,
                                    SgNode *traversalRoot);
@@ -500,16 +551,6 @@ public:
       SgNonrealDecl *declaration, SgScopeStatement *currentScope,
       SgStatement *positionStatement);
 
-  // DQ (5/28/2011): Added support to set the global qualified name map.
-  const NameQualificationMapType &get_qualifiedNameMapForNames() const;
-  const NameQualificationMapType &get_qualifiedNameMapForTypes() const;
-  // DQ (3/13/2019): Adding support for name qualification to support multiple
-  // types that may be asociated with a single type used as a function return
-  // type (for example, always a template type containing multiple template
-  // arguments that require additional name qualification).
-  const NameQualificationMapOfMapsType &
-  get_qualifiedNameMapForMapsOfTypes() const;
-
   void traverseType(SgType *type, SgNode *nodeReferenceToType,
                     SgScopeStatement *currentScope,
                     SgStatement *positionStatement);
@@ -554,3 +595,52 @@ public:
 
   void set_suppressNameQualificationAcrossWholeTranslationUnit(bool value);
 };
+
+// The completed name-qualification walk of one source file, frozen so that
+// later requests on the unchanged file reuse it.  Requests rooted at the file
+// read its records directly.  A standalone type use continues from the frozen
+// end-of-walk state in a traversal whose additions extend the caller's
+// records and never the analysis.
+class NameQualificationFileAnalysis {
+public:
+  explicit NameQualificationFileAnalysis(SgSourceFile *file);
+  NameQualificationFileAnalysis(const NameQualificationFileAnalysis &) = delete;
+  NameQualificationFileAnalysis &
+  operator=(const NameQualificationFileAnalysis &) = delete;
+
+  SgSourceFile *file() const { return file_; }
+  const NameQualificationContext &records() const { return records_; }
+
+  //! Analyze a standalone type use into records, which must extend
+  //! records().
+  void applyExplicitSemanticTypeUse(
+      NameQualificationContext &records, SgType *explicitSemanticTypeUse,
+      SgNode *explicitReferenceNode, SgStatement *explicitEmissionStatement,
+      SgDeclarationStatement *explicitTypeDefinition) const;
+
+private:
+  friend class NameQualificationTraversal;
+
+  SgSourceFile *file_;
+  NameQualificationContext records_;
+  NameQualificationTraversal::NameQualificationSetType referencedNames_;
+  NameQualificationTraversal::NameQualificationMapType names_;
+  NameQualificationTraversal::NameQualificationMapType types_;
+  NameQualificationTraversal::NameQualificationMapOfMapsType typeUses_;
+  std::set<NameQualificationTraversal::TemplateArgumentListEvaluationKey>
+      completedTemplateArgumentListEvaluations_;
+  std::set<NameQualificationTraversal::TemplateDeclarationEvaluationKey>
+      completedTemplateDeclarationEvaluations_;
+  std::shared_ptr<SgUnorderedNodeSet> visibleAliasCausalNodes_;
+  NameQualificationTraversal::BaseClassSetMap privateBaseClassSets_;
+  NameQualificationTraversal::BaseClassSetMap inaccessibleClassSets_;
+  std::shared_ptr<NameQualificationUsingDirectiveOrderCache>
+      usingDirectiveOrderCache_;
+};
+
+// Resolve the one project that a qualification request's root, emission
+// statement and reference node belong to; disagreement is a hard error.
+SgProject *
+resolveNameQualificationProject(SgNode *node,
+                                SgStatement *explicitEmissionStatement,
+                                SgNode *explicitReferenceNode);

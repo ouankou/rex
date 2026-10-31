@@ -22,6 +22,7 @@ add_library (unparser OBJECT
   CxxCodeGeneration/helpers.C
   unparser.C
   nameQualificationSupport.C
+  unparseQualificationSession.C
   IncludedFilesUnparser.C
   formatSupport/unparseFormatHelp.C
   formatSupport/unparse_format.C
@@ -36,7 +37,9 @@ target_include_directories(unparser PRIVATE ${LLVM_INCLUDE_DIRS})
 
 install(FILES
   IncludedFilesUnparser.h
+  nameQualificationState.h
   nameQualificationSupport.h
   UnparserDelegate.h
+  unparseQualificationSession.h
   unparser.h
   DESTINATION ${INCLUDE_INSTALL_DIR})

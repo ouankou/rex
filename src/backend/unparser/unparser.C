@@ -1,6 +1,7 @@
 #include "sage3basic.h"
 
 #include "nameQualificationSupport.h"
+#include "unparseQualificationSession.h"
 
 #include "FortranLineWrapSupport.h"
 #include "unparser.h"
@@ -3622,6 +3623,8 @@ string globalUnparseToString(const SgNode *astNode,
   string returnString;
   NameQualificationContext localNameQualifications;
   NameQualificationContext *nameQualifications = nullptr;
+  const NameQualificationFileAnalysis *sessionAnalysis = nullptr;
+  std::optional<NameQualificationContext> sessionNameQualifications;
   // Name qualification must consume the emission statement selected and
   // cross-validated by the invocation boundary.  Re-reading only the optional
   // caller field here loses the declaration-derived use site of detached named
@@ -3750,12 +3753,44 @@ string globalUnparseToString(const SgNode *astNode,
                     isSgType(const_cast<SgNode *>(astNode)),
                     *inputUnparseInfoPointer)
               : nullptr;
-      generateNameQualificationSupport(
-          qualificationRoot, referencedNameSet, localNameQualifications,
-          /*useInputFileTraversalOptimization=*/
-          false, qualification_emission_statement, explicit_reference_node,
-          isSgType(const_cast<SgNode *>(astNode)), inline_type_definition);
-      nameQualifications = &localNameQualifications;
+      SgType *explicit_semantic_type_use =
+          isSgType(const_cast<SgNode *>(astNode));
+      auto computePerCall = [&]() {
+        generateNameQualificationSupport(
+            qualificationRoot, referencedNameSet, localNameQualifications,
+            /*useInputFileTraversalOptimization=*/
+            false, qualification_emission_statement, explicit_reference_node,
+            explicit_semantic_type_use, inline_type_definition);
+      };
+      // A file-rooted request walks the whole file with no per-call context,
+      // so an open qualification session serves it from that file's one
+      // walk.  Only a standalone type use adds per-call records.
+      SgSourceFile *qualificationFile = isSgSourceFile(qualificationRoot);
+      sessionAnalysis =
+          qualificationFile != nullptr
+              ? UnparseQualificationSession::analysisFor(qualificationFile)
+              : nullptr;
+      if (sessionAnalysis != nullptr) {
+        resolveNameQualificationProject(qualificationRoot,
+                                        qualification_emission_statement,
+                                        explicit_reference_node);
+        sessionNameQualifications.emplace(&sessionAnalysis->records());
+        if (explicit_semantic_type_use != nullptr) {
+          sessionAnalysis->applyExplicitSemanticTypeUse(
+              *sessionNameQualifications, explicit_semantic_type_use,
+              explicit_reference_node, qualification_emission_statement,
+              inline_type_definition);
+        }
+        if (UnparseQualificationSession::checkingEnabled()) {
+          computePerCall();
+          sessionNameQualifications->requireSameRecords(
+              localNameQualifications);
+        }
+        nameQualifications = &*sessionNameQualifications;
+      } else {
+        computePerCall();
+        nameQualifications = &localNameQualifications;
+      }
     }
   }
 
@@ -3768,6 +3803,25 @@ string globalUnparseToString(const SgNode *astNode,
     returnString = globalUnparseToString_OpenMPSafe(
         astNode, NULL, NULL, inputUnparseInfoPointer, nameQualifications,
         nullptr, &invocationContext);
+  }
+
+  // Equal records determine equal output.  A caller's SgUnparse_Info carries
+  // state the first unparse changed, so only a default context is replayed.
+  if (sessionAnalysis != nullptr &&
+      UnparseQualificationSession::checkingEnabled() &&
+      inputUnparseInfoPointer == nullptr) {
+    const std::string perCall = globalUnparseToString_OpenMPSafe(
+        astNode, NULL, NULL, nullptr, &localNameQualifications, nullptr,
+        &invocationContext);
+    if (perCall != returnString) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[qualification-session-divergence]: "
+              "input=%p/%s session output differs from per-call output\n"
+              "session:\n%s\nper-call:\n%s\n",
+              static_cast<const void *>(astNode), astNode->class_name().c_str(),
+              returnString.c_str(), perCall.c_str());
+      ROSE_ABORT();
+    }
   }
 
   return returnString;

@@ -159,6 +159,11 @@ add_executable(rex_unparser_invocation_context_contract
 target_link_libraries(rex_unparser_invocation_context_contract
   ROSE_DLL ${link_with_libraries})
 
+add_executable(rex_unparser_qualification_session_contract
+  rex_unparser_qualification_session_contract.C)
+target_link_libraries(rex_unparser_qualification_session_contract
+  ROSE_DLL ${link_with_libraries})
+
 add_executable(rex_unparser_included_files_contract
   rex_unparser_included_files_contract.C)
 target_link_libraries(rex_unparser_included_files_contract
@@ -208,6 +213,34 @@ foreach(file_to_test ${CXX_TESTCODES_TO_UNPARSE})
   rex_lock_test_for_input(ua_${file_to_test} ${file_to_test})
 
   set_tests_properties(ua_${file_to_test} PROPERTIES DEPENDS ut_${file_to_test} LABELS UNPARSETOSTRING)
+endforeach()
+
+# Unparse every name-qualification specimen fragment by fragment in a
+# qualification session, checking every reused result against the per-call
+# result.  testNameQalTypeElab_21.C is a frontend rejection specimen.
+set(_qualification_check_dir
+  ${CMAKE_SOURCE_DIR}/tests/nonsmoke/functional/CompileTests/nameQualificationAndTypeElaboration_tests)
+foreach(_qualification_check_index RANGE 1 40)
+  if(_qualification_check_index EQUAL 21)
+    continue()
+  endif()
+  if(_qualification_check_index LESS 10)
+    set(_qualification_check_index "0${_qualification_check_index}")
+  endif()
+  set(_qualification_check_file
+    testNameQalTypeElab_${_qualification_check_index}.C)
+  set(_qualification_check_test
+    rex_unparser_qualification_check_${_qualification_check_file})
+  add_test(
+    NAME ${_qualification_check_test}
+    COMMAND unparseToString --all -w -rose:verbose 0
+            -I${_qualification_check_dir}
+            -c ${_qualification_check_dir}/${_qualification_check_file})
+  set_tests_properties(${_qualification_check_test} PROPERTIES
+    LABELS "rex;UNPARSER;UNPARSETOSTRING"
+    ENVIRONMENT "REX_UNPARSE_QUALIFICATION_CHECK=1")
+  rex_lock_test_for_input(${_qualification_check_test}
+    ${_qualification_check_file})
 endforeach()
 
 foreach(_semantic_rejection IN ITEMS
@@ -2325,6 +2358,66 @@ set_tests_properties(rex_unparser_invocation_context_contract
   PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING")
 rex_lock_test_for_input(rex_unparser_invocation_context_contract
   rex_unparser_invocation_context.cpp)
+
+# A qualification session reuses one name-qualification walk per file.  Its
+# results must equal the per-call results in any request order, and any AST
+# modification while it is open is rejected.
+set(_qualification_session_source
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_unparser_qualification_session.cpp)
+foreach(_qualification_session_mode IN ITEMS equivalence nesting)
+  add_test(
+    NAME rex_unparser_qualification_session_${_qualification_session_mode}
+    COMMAND $<TARGET_FILE:rex_unparser_qualification_session_contract>
+      ${_qualification_session_mode} ${_qualification_session_source})
+  set_tests_properties(
+    rex_unparser_qualification_session_${_qualification_session_mode}
+    PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING")
+  rex_lock_test_for_input(
+    rex_unparser_qualification_session_${_qualification_session_mode}
+    rex_unparser_qualification_session.cpp)
+endforeach()
+add_test(
+  NAME rex_unparser_qualification_session_checked
+  COMMAND $<TARGET_FILE:rex_unparser_qualification_session_contract>
+    equivalence ${_qualification_session_source})
+set_tests_properties(rex_unparser_qualification_session_checked
+  PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING"
+             ENVIRONMENT "REX_UNPARSE_QUALIFICATION_CHECK=1")
+rex_lock_test_for_input(rex_unparser_qualification_session_checked
+  rex_unparser_qualification_session.cpp)
+add_test(
+  NAME rex_unparser_info_untracked_state
+  COMMAND $<TARGET_FILE:rex_unparser_qualification_session_contract>
+    untracked-info ${_qualification_session_source})
+set_tests_properties(rex_unparser_info_untracked_state
+  PROPERTIES LABELS "rex;UNPARSER;UNPARSETOSTRING")
+rex_lock_test_for_input(rex_unparser_info_untracked_state
+  rex_unparser_qualification_session.cpp)
+add_test(
+  NAME rex_unparser_qualification_session_mutation_is_rejected
+  COMMAND
+    sh -c
+    "ulimit -c 0; set +e; \"$1\" mutation \"$2\" >rex_unparser_qualification_session_mutation.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[qualification-session-mutation\\]: qualification request observed AST modification sequence=[0-9]+ after the session opened at sequence=[0-9]+; the AST must not change while a qualification session is open$' rex_unparser_qualification_session_mutation.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_unparser_qualification_session_contract>
+    ${_qualification_session_source})
+set_tests_properties(rex_unparser_qualification_session_mutation_is_rejected
+  PROPERTIES LABELS "rex;UNPARSER;death")
+rex_lock_test_for_input(
+  rex_unparser_qualification_session_mutation_is_rejected
+  rex_unparser_qualification_session.cpp)
+add_test(
+  NAME rex_unparser_qualification_check_option_is_rejected
+  COMMAND
+    sh -c
+    "ulimit -c 0; set +e; REX_UNPARSE_QUALIFICATION_CHECK=yes \"$1\" equivalence \"$2\" >rex_unparser_qualification_check_option.log 2>&1; status=$?; set -e; test $status -eq 134; test \"\$(grep -Ec '^REX_UNPARSE_INVARIANT\\[qualification-check-option\\]: REX_UNPARSE_QUALIFICATION_CHECK=.yes. must be unset or 1$' rex_unparser_qualification_check_option.log)\" -eq 1"
+    dummy
+    $<TARGET_FILE:rex_unparser_qualification_session_contract>
+    ${_qualification_session_source})
+set_tests_properties(rex_unparser_qualification_check_option_is_rejected
+  PROPERTIES LABELS "rex;UNPARSER;death")
+rex_lock_test_for_input(rex_unparser_qualification_check_option_is_rejected
+  rex_unparser_qualification_session.cpp)
 
 set(_invocation_context_modes
   detached-context-sensitive

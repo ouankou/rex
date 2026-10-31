@@ -253,6 +253,12 @@ exactQualificationUseSiteForEmission(const SgNode *node,
 //    No, this works,
 //       but might not generate the minimum length qualified name.
 
+NameQualificationContext::NameQualificationContext(
+    const NameQualificationContext *input_base)
+    : base(input_base) {
+  ASSERT_not_null(base);
+}
+
 void NameQualificationContext::clear() {
   qualifications.clear();
   nameChannelQualifications.clear();
@@ -260,23 +266,107 @@ void NameQualificationContext::clear() {
   pointerMemberBaseQualifications.clear();
 }
 
+const NameQualificationResult *
+NameQualificationContext::find(ChannelMember channel, const Key &key) const {
+  auto own = (this->*channel).find(key);
+  if (own != (this->*channel).end()) {
+    return &own->second;
+  }
+  return base != nullptr ? base->find(channel, key) : nullptr;
+}
+
+template <typename Visit>
+void NameQualificationContext::forEachRecord(ChannelMember channel,
+                                             Visit &&visit) const {
+  if (base != nullptr) {
+    base->forEachRecord(channel, visit);
+  }
+  for (const auto &entry : this->*channel) {
+    visit(entry.first, entry.second);
+  }
+}
+
+namespace {
+bool sameQualification(const NameQualificationResult &lhs,
+                       const NameQualificationResult &rhs) {
+  return lhs.qualifier == rhs.qualifier && lhs.length == rhs.length &&
+         lhs.global == rhs.global && lhs.typeElaboration == rhs.typeElaboration;
+}
+} // namespace
+
+void NameQualificationContext::requireSameChannel(
+    ChannelMember channel, const char *channelName,
+    const NameQualificationContext &expected) const {
+  size_t expectedCount = 0;
+  expected.forEachRecord(channel, [&](const Key &key,
+                                      const NameQualificationResult &result) {
+    ++expectedCount;
+    const NameQualificationResult *actual = find(channel, key);
+    if (actual == nullptr || !sameQualification(*actual, result)) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[qualification-session-divergence]: %s "
+              "channel node=%p/%s use-site=%p/%s expected=(qualifier='%s',"
+              "length=%d,global=%d,elaboration=%d) actual=%s(qualifier='%s',"
+              "length=%d,global=%d,elaboration=%d)\n",
+              channelName, static_cast<const void *>(key.first),
+              key.first->class_name().c_str(),
+              static_cast<const void *>(key.second),
+              key.second->class_name().c_str(), result.qualifier.c_str(),
+              result.length, result.global ? 1 : 0,
+              result.typeElaboration ? 1 : 0,
+              actual == nullptr ? "missing" : "",
+              actual != nullptr ? actual->qualifier.c_str() : "",
+              actual != nullptr ? actual->length : 0,
+              actual != nullptr && actual->global ? 1 : 0,
+              actual != nullptr && actual->typeElaboration ? 1 : 0);
+      ROSE_ABORT();
+    }
+  });
+  size_t actualCount = 0;
+  forEachRecord(channel, [&](const Key &key, const NameQualificationResult &) {
+    ++actualCount;
+    if (expected.find(channel, key) == nullptr) {
+      fprintf(stderr,
+              "REX_UNPARSE_INVARIANT[qualification-session-divergence]: %s "
+              "channel node=%p/%s use-site=%p/%s is recorded only by the "
+              "reused analysis\n",
+              channelName, static_cast<const void *>(key.first),
+              key.first->class_name().c_str(),
+              static_cast<const void *>(key.second),
+              key.second->class_name().c_str());
+      ROSE_ABORT();
+    }
+  });
+  // A key recorded in both layers would be counted twice above.
+  ROSE_ASSERT(actualCount == expectedCount);
+}
+
+void NameQualificationContext::requireSameRecords(
+    const NameQualificationContext &expected) const {
+  requireSameChannel(&NameQualificationContext::qualifications, "generic",
+                     expected);
+  requireSameChannel(&NameQualificationContext::nameChannelQualifications,
+                     "name", expected);
+  requireSameChannel(&NameQualificationContext::typeChannelQualifications,
+                     "type", expected);
+  requireSameChannel(&NameQualificationContext::pointerMemberBaseQualifications,
+                     "pointer-member-base", expected);
+}
+
 void NameQualificationContext::recordChannel(
-    std::map<Key, NameQualificationResult> &channel, const char *channelName,
-    const SgNode *node, const SgStatement *useSiteStatement,
+    ChannelMember channel, const char *channelName, const SgNode *node,
+    const SgStatement *useSiteStatement,
     const NameQualificationResult &result) {
   ASSERT_not_null(channelName);
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
   const Key key(node, useSiteStatement);
-  auto existing = channel.find(key);
-  if (existing == channel.end()) {
-    channel.emplace(key, result);
+  const NameQualificationResult *existing = find(channel, key);
+  if (existing == nullptr) {
+    (this->*channel).emplace(key, result);
     return;
   }
-  if (existing->second.qualifier != result.qualifier ||
-      existing->second.length != result.length ||
-      existing->second.global != result.global ||
-      existing->second.typeElaboration != result.typeElaboration) {
+  if (!sameQualification(*existing, result)) {
     fprintf(
         stderr,
         "REX_UNPARSE_INVARIANT[contextual-name-qualification]: %s "
@@ -285,10 +375,9 @@ void NameQualificationContext::recordChannel(
         "new=(qualifier='%s',length=%d,global=%d,elaboration=%d)\n",
         channelName, static_cast<const void *>(node),
         node->class_name().c_str(), static_cast<const void *>(useSiteStatement),
-        useSiteStatement->class_name().c_str(),
-        existing->second.qualifier.c_str(), existing->second.length,
-        existing->second.global ? 1 : 0,
-        existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+        useSiteStatement->class_name().c_str(), existing->qualifier.c_str(),
+        existing->length, existing->global ? 1 : 0,
+        existing->typeElaboration ? 1 : 0, result.qualifier.c_str(),
         result.length, result.global ? 1 : 0, result.typeElaboration ? 1 : 0);
     if (const SgVarRefExp *reference =
             isSgVarRefExp(const_cast<SgNode *>(node))) {
@@ -334,14 +423,14 @@ void NameQualificationContext::recordChannel(
 }
 
 NameQualificationResult NameQualificationContext::lookupChannel(
-    const std::map<Key, NameQualificationResult> &channel,
-    const char *channelName, const SgNode *node,
+    ChannelMember channel, const char *channelName, const SgNode *node,
     const SgStatement *useSiteStatement) const {
   ASSERT_not_null(channelName);
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
-  auto result = channel.find(Key(node, useSiteStatement));
-  if (result == channel.end()) {
+  const NameQualificationResult *result =
+      find(channel, Key(node, useSiteStatement));
+  if (result == nullptr) {
     const SgNode *parent = node->get_parent();
     const SgInitializedName *initializedName =
         isSgInitializedName(const_cast<SgNode *>(node));
@@ -401,79 +490,80 @@ NameQualificationResult NameQualificationContext::lookupChannel(
                   ->class_name()
                   .c_str()
             : "<null>");
-    for (const auto &entry : channel) {
-      if (entry.first.first == node) {
-        fprintf(stderr, " %p/%s(parent=%p/%s)",
-                static_cast<const void *>(entry.first.second),
-                entry.first.second->class_name().c_str(),
-                static_cast<const void *>(entry.first.second->get_parent()),
-                entry.first.second->get_parent() != nullptr
-                    ? entry.first.second->get_parent()->class_name().c_str()
-                    : "<null>");
-      }
-    }
+    forEachRecord(
+        channel, [&](const Key &key, const NameQualificationResult &) {
+          if (key.first == node) {
+            fprintf(stderr, " %p/%s(parent=%p/%s)",
+                    static_cast<const void *>(key.second),
+                    key.second->class_name().c_str(),
+                    static_cast<const void *>(key.second->get_parent()),
+                    key.second->get_parent() != nullptr
+                        ? key.second->get_parent()->class_name().c_str()
+                        : "<null>");
+          }
+        });
     fprintf(stderr, "\n");
     ROSE_ABORT();
   }
-  return result->second;
+  return *result;
 }
 
 void NameQualificationContext::recordName(
     const SgNode *node, const SgStatement *useSiteStatement,
     const NameQualificationResult &result) {
-  recordChannel(nameChannelQualifications, "name", node, useSiteStatement,
-                result);
+  recordChannel(&NameQualificationContext::nameChannelQualifications, "name",
+                node, useSiteStatement, result);
 }
 
 NameQualificationResult NameQualificationContext::lookupName(
     const SgNode *node, const SgStatement *useSiteStatement) const {
-  return lookupChannel(nameChannelQualifications, "name", node,
-                       useSiteStatement);
+  return lookupChannel(&NameQualificationContext::nameChannelQualifications,
+                       "name", node, useSiteStatement);
 }
 
 void NameQualificationContext::recordType(
     const SgNode *node, const SgStatement *useSiteStatement,
     const NameQualificationResult &result) {
-  recordChannel(typeChannelQualifications, "type", node, useSiteStatement,
-                result);
+  recordChannel(&NameQualificationContext::typeChannelQualifications, "type",
+                node, useSiteStatement, result);
 }
 
 NameQualificationResult NameQualificationContext::lookupType(
     const SgNode *node, const SgStatement *useSiteStatement) const {
-  return lookupChannel(typeChannelQualifications, "type", node,
-                       useSiteStatement);
+  return lookupChannel(&NameQualificationContext::typeChannelQualifications,
+                       "type", node, useSiteStatement);
 }
 
 bool NameQualificationContext::containsName(
     const SgNode *node, const SgStatement *useSiteStatement) const {
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
-  return nameChannelQualifications.find(Key(node, useSiteStatement)) !=
-         nameChannelQualifications.end();
+  return find(&NameQualificationContext::nameChannelQualifications,
+              Key(node, useSiteStatement)) != nullptr;
 }
 
 bool NameQualificationContext::containsType(
     const SgNode *node, const SgStatement *useSiteStatement) const {
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
-  return typeChannelQualifications.find(Key(node, useSiteStatement)) !=
-         typeChannelQualifications.end();
+  return find(&NameQualificationContext::typeChannelQualifications,
+              Key(node, useSiteStatement)) != nullptr;
 }
 
 bool NameQualificationContext::containsPointerMemberBase(
     const SgNode *node, const SgStatement *useSiteStatement) const {
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
-  return pointerMemberBaseQualifications.find(Key(node, useSiteStatement)) !=
-         pointerMemberBaseQualifications.end();
+  return find(&NameQualificationContext::pointerMemberBaseQualifications,
+              Key(node, useSiteStatement)) != nullptr;
 }
 
 bool NameQualificationContext::contains(
     const SgNode *node, const SgStatement *useSiteStatement) const {
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
-  return qualifications.find(Key(node, useSiteStatement)) !=
-         qualifications.end();
+  return find(&NameQualificationContext::qualifications,
+              Key(node, useSiteStatement)) != nullptr;
 }
 
 void NameQualificationContext::record(const SgNode *node,
@@ -482,16 +572,14 @@ void NameQualificationContext::record(const SgNode *node,
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
   const Key key(node, useSiteStatement);
-  auto existing = qualifications.find(key);
-  if (existing == qualifications.end()) {
+  const NameQualificationResult *existing =
+      find(&NameQualificationContext::qualifications, key);
+  if (existing == nullptr) {
     qualifications.emplace(key, result);
     return;
   }
 
-  if (existing->second.qualifier != result.qualifier ||
-      existing->second.length != result.length ||
-      existing->second.global != result.global ||
-      existing->second.typeElaboration != result.typeElaboration) {
+  if (!sameQualification(*existing, result)) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[contextual-name-qualification]: "
             "node=%p(%s) use=%p(%s) has conflicting records "
@@ -499,10 +587,9 @@ void NameQualificationContext::record(const SgNode *node,
             "new={qualifier='%s',length=%d,global=%d,elaboration=%d}\n",
             static_cast<const void *>(node), node->class_name().c_str(),
             static_cast<const void *>(useSiteStatement),
-            useSiteStatement->class_name().c_str(),
-            existing->second.qualifier.c_str(), existing->second.length,
-            existing->second.global ? 1 : 0,
-            existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+            useSiteStatement->class_name().c_str(), existing->qualifier.c_str(),
+            existing->length, existing->global ? 1 : 0,
+            existing->typeElaboration ? 1 : 0, result.qualifier.c_str(),
             result.length, result.global ? 1 : 0,
             result.typeElaboration ? 1 : 0);
     ROSE_ABORT();
@@ -515,8 +602,9 @@ NameQualificationContext::lookup(const SgNode *node,
   ASSERT_not_null(node);
   ASSERT_not_null(useSiteStatement);
   const Key key(node, useSiteStatement);
-  auto result = qualifications.find(key);
-  if (result == qualifications.end()) {
+  const NameQualificationResult *result =
+      find(&NameQualificationContext::qualifications, key);
+  if (result == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[required-name-qualification]: required "
             "contextual qualification is missing\n");
@@ -532,18 +620,19 @@ NameQualificationContext::lookup(const SgNode *node,
                 : "<null>",
             static_cast<const void *>(useSiteStatement),
             useSiteStatement->class_name().c_str());
-    for (const auto &entry : qualifications) {
-      if (entry.first.first == node) {
-        fprintf(stderr, " %p(%s,name=%s)",
-                static_cast<const void *>(entry.first.second),
-                entry.first.second != nullptr
-                    ? entry.first.second->class_name().c_str()
-                    : "<null>",
-                entry.first.second != nullptr
-                    ? SageInterface::get_name(entry.first.second).c_str()
-                    : "<null>");
-      }
-    }
+    forEachRecord(&NameQualificationContext::qualifications,
+                  [&](const Key &key, const NameQualificationResult &) {
+                    if (key.first == node) {
+                      fprintf(stderr, " %p(%s,name=%s)",
+                              static_cast<const void *>(key.second),
+                              key.second != nullptr
+                                  ? key.second->class_name().c_str()
+                                  : "<null>",
+                              key.second != nullptr
+                                  ? SageInterface::get_name(key.second).c_str()
+                                  : "<null>");
+                    }
+                  });
     fprintf(stderr, "\n");
     SgTemplateArgument *argument =
         isSgTemplateArgument(const_cast<SgNode *>(node));
@@ -671,7 +760,7 @@ NameQualificationContext::lookup(const SgNode *node,
     ROSE_ABORT();
   }
 
-  return result->second;
+  return *result;
 }
 
 void NameQualificationContext::recordPointerMemberBase(
@@ -681,16 +770,14 @@ void NameQualificationContext::recordPointerMemberBase(
   ASSERT_not_null(isSgPointerMemberType(const_cast<SgNode *>(node)));
   ASSERT_not_null(useSiteStatement);
   const Key key(node, useSiteStatement);
-  auto existing = pointerMemberBaseQualifications.find(key);
-  if (existing == pointerMemberBaseQualifications.end()) {
+  const NameQualificationResult *existing =
+      find(&NameQualificationContext::pointerMemberBaseQualifications, key);
+  if (existing == nullptr) {
     pointerMemberBaseQualifications.emplace(key, result);
     return;
   }
 
-  if (existing->second.qualifier != result.qualifier ||
-      existing->second.length != result.length ||
-      existing->second.global != result.global ||
-      existing->second.typeElaboration != result.typeElaboration) {
+  if (!sameQualification(*existing, result)) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[contextual-pointer-member-base-"
             "qualification]: node=%p(%s) use=%p(%s) has conflicting "
@@ -698,10 +785,9 @@ void NameQualificationContext::recordPointerMemberBase(
             "new={qualifier='%s',length=%d,global=%d,elaboration=%d}\n",
             static_cast<const void *>(node), node->class_name().c_str(),
             static_cast<const void *>(useSiteStatement),
-            useSiteStatement->class_name().c_str(),
-            existing->second.qualifier.c_str(), existing->second.length,
-            existing->second.global ? 1 : 0,
-            existing->second.typeElaboration ? 1 : 0, result.qualifier.c_str(),
+            useSiteStatement->class_name().c_str(), existing->qualifier.c_str(),
+            existing->length, existing->global ? 1 : 0,
+            existing->typeElaboration ? 1 : 0, result.qualifier.c_str(),
             result.length, result.global ? 1 : 0,
             result.typeElaboration ? 1 : 0);
     ROSE_ABORT();
@@ -714,8 +800,9 @@ NameQualificationResult NameQualificationContext::lookupPointerMemberBase(
   ASSERT_not_null(isSgPointerMemberType(const_cast<SgNode *>(node)));
   ASSERT_not_null(useSiteStatement);
   const Key key(node, useSiteStatement);
-  auto result = pointerMemberBaseQualifications.find(key);
-  if (result == pointerMemberBaseQualifications.end()) {
+  const NameQualificationResult *result =
+      find(&NameQualificationContext::pointerMemberBaseQualifications, key);
+  if (result == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[contextual-pointer-member-base-"
             "qualification]: node=%p(%s) parent=%p parent-type=%s "
@@ -728,17 +815,18 @@ NameQualificationResult NameQualificationContext::lookupPointerMemberBase(
                 : "<null>",
             static_cast<const void *>(useSiteStatement),
             useSiteStatement->class_name().c_str());
-    for (const auto &entry : pointerMemberBaseQualifications) {
-      if (entry.first.first == node) {
-        fprintf(stderr, " %p(%s)",
-                static_cast<const void *>(entry.first.second),
-                entry.first.second->class_name().c_str());
-      }
-    }
+    forEachRecord(&NameQualificationContext::pointerMemberBaseQualifications,
+                  [&](const Key &key, const NameQualificationResult &) {
+                    if (key.first == node) {
+                      fprintf(stderr, " %p(%s)",
+                              static_cast<const void *>(key.second),
+                              key.second->class_name().c_str());
+                    }
+                  });
     fprintf(stderr, "\n");
     ROSE_ABORT();
   }
-  return result->second;
+  return *result;
 }
 
 NameQualificationResult Unparser_Nameq::lookup_qualification(
