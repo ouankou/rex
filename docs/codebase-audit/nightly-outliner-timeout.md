@@ -198,7 +198,7 @@ specimen; both versions exit 1. Raw evidence is in
 `nightly-traversal-memcheck/baseline-function{,2}/`,
 `baseline-seq7b-function{,2}/`, and the four shard reports
 `MemoryChecker.{32858,32859,33395,33396}.log`. This is the already documented
-[EXT-FLANG-INACTIVE-DATAREF](external-exceptions.md#ext-flang-inactive-dataref--verified-report-exception),
+[EXT-FLANG-INACTIVE-DATAREF](external-exceptions.md#ext-flang-inactive-dataref-verified-report-exception),
 whose narrow audited exceptions are absent from this frozen baseline
 configuration. The shard remains a failed run; the report is not counted as
 a clean Memcheck result or a new outliner regression. The audit image also
