@@ -491,26 +491,24 @@ bool apply_source_qualification_payload(const SgNode *node, const char *channel,
   return true;
 }
 
-void seed_source_qualification(
-    SgNode *node,
-    NameQualificationTraversal::NameQualificationMapType &nameQualifiers,
-    NameQualificationTraversal::NameQualificationMapType &typeQualifiers) {
+void seed_source_qualification(SgNode *node,
+                               NameQualificationNodeStrings &nameQualifiers,
+                               NameQualificationNodeStrings &typeQualifiers) {
   ASSERT_not_null(node);
-  auto seed =
-      [node](const char *channel, bool present, bool global,
-             const SgStringList &tokens,
-             NameQualificationTraversal::NameQualificationMapType &qualifiers) {
-        const std::string qualifier = validate_source_qualification_payload(
-            node, channel, present, global, tokens);
-        if (!present) {
-          return;
-        }
-        const auto inserted = qualifiers.emplace(node, qualifier);
-        if (!inserted.second) {
-          require_consistent_qualification(channel, node,
-                                           inserted.first->second, qualifier);
-        }
-      };
+  auto seed = [node](const char *channel, bool present, bool global,
+                     const SgStringList &tokens,
+                     NameQualificationNodeStrings &qualifiers) {
+    const std::string qualifier = validate_source_qualification_payload(
+        node, channel, present, global, tokens);
+    if (!present) {
+      return;
+    }
+    const auto inserted = qualifiers.emplace(node, qualifier);
+    if (!inserted.second) {
+      require_consistent_qualification(channel, node, *inserted.first,
+                                       qualifier);
+    }
+  };
 
   if (SgDeclarationStatement *declaration = isSgDeclarationStatement(node)) {
     seed("source-name", declaration->get_source_name_qualification_present(),
@@ -5445,38 +5443,10 @@ traverseNonrealDeclForCorrectScope(SgDeclarationStatement *declaration);
 // Main calling function to support name qualification support
 // ***********************************************************
 
-// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*>&
-// referencedNameSet )
-void generateNameQualificationSupport(
-    SgNode *node, SgUnorderedNodeSet &referencedNameSet,
-    NameQualificationContext &nameQualifications,
-    bool useInputFileTraversalOptimization,
-    SgStatement *explicitEmissionStatement, SgNode *explicitReferenceNode,
-    SgType *explicitSemanticTypeUse,
-    SgDeclarationStatement *explicitTypeDefinition) {
-  TimingPerformance timer("Name qualification support:");
-  ROSE_ASSERT(explicitTypeDefinition == nullptr ||
-              explicitSemanticTypeUse != nullptr);
-
-  // These maps are invocation-owned working state. Producer-owned source
-  // qualifier spellings must enter the session context explicitly; copying
-  // process-global AST maps would preserve the same cross-unparse aliasing and
-  // stale-state bugs that the contextual representation is designed to remove.
-  NameQualificationTraversal::NameQualificationMapType localNames;
-  NameQualificationTraversal::NameQualificationMapType localTypes;
-  NameQualificationTraversal::NameQualificationMapOfMapsType localTypeUses;
-
-  NameQualificationTraversal t(localNames, localTypes, localTypeUses,
-                               referencedNameSet, nameQualifications);
-
-  NameQualificationInheritedAttribute ih;
-  // A source-file traversal can be selected to preserve lexical declaration
-  // order for a standalone semantic type use.  The selected reference identity
-  // must survive that root substitution; otherwise the traversal sees the
-  // source file but has no way to publish the requested expression-type
-  // channel.
-  ih.set_referenceNode(explicitReferenceNode);
-
+SgProject *
+resolveNameQualificationProject(SgNode *node,
+                                SgStatement *explicitEmissionStatement,
+                                SgNode *explicitReferenceNode) {
   // Detached semantic roots such as shared type nodes have no structural
   // project of their own. Resolve every available exact context and require
   // the candidates to agree instead of selecting the first one that works.
@@ -5511,6 +5481,43 @@ void generateNameQualificationSupport(
             node->class_name().c_str());
     ROSE_ABORT();
   }
+  return project;
+}
+
+// void generateNameQualificationSupport( SgNode* node, std::set<SgNode*>&
+// referencedNameSet )
+void generateNameQualificationSupport(
+    SgNode *node, SgUnorderedNodeSet &referencedNameSet,
+    NameQualificationContext &nameQualifications,
+    bool useInputFileTraversalOptimization,
+    SgStatement *explicitEmissionStatement, SgNode *explicitReferenceNode,
+    SgType *explicitSemanticTypeUse,
+    SgDeclarationStatement *explicitTypeDefinition) {
+  TimingPerformance timer("Name qualification support:");
+  ROSE_ASSERT(explicitTypeDefinition == nullptr ||
+              explicitSemanticTypeUse != nullptr);
+
+  // These maps are invocation-owned working state. Producer-owned source
+  // qualifier spellings must enter the session context explicitly; copying
+  // process-global AST maps would preserve the same cross-unparse aliasing and
+  // stale-state bugs that the contextual representation is designed to remove.
+  NameQualificationTraversal::NameQualificationMapType localNames;
+  NameQualificationTraversal::NameQualificationMapType localTypes;
+  NameQualificationTraversal::NameQualificationMapOfMapsType localTypeUses;
+
+  NameQualificationTraversal t(localNames, localTypes, localTypeUses,
+                               referencedNameSet, nameQualifications);
+
+  NameQualificationInheritedAttribute ih;
+  // A source-file traversal can be selected to preserve lexical declaration
+  // order for a standalone semantic type use.  The selected reference identity
+  // must survive that root substitution; otherwise the traversal sees the
+  // source file but has no way to publish the requested expression-type
+  // channel.
+  ih.set_referenceNode(explicitReferenceNode);
+
+  SgProject *project = resolveNameQualificationProject(
+      node, explicitEmissionStatement, explicitReferenceNode);
 
   if (explicitEmissionStatement != nullptr && isSgFile(node) == nullptr &&
       isSgProject(node) == nullptr) {
@@ -5571,17 +5578,28 @@ void generateNameQualificationSupport(
     t.traverse(node, ih);
   }
 
+  t.applyExplicitSemanticTypeUse(explicitSemanticTypeUse, explicitReferenceNode,
+                                 explicitEmissionStatement,
+                                 explicitTypeDefinition);
+}
+
+void NameQualificationTraversal::applyExplicitSemanticTypeUse(
+    SgType *explicitSemanticTypeUse, SgNode *explicitReferenceNode,
+    SgStatement *explicitEmissionStatement,
+    SgDeclarationStatement *explicitTypeDefinition) {
+  ROSE_ASSERT(explicitTypeDefinition == nullptr ||
+              explicitSemanticTypeUse != nullptr);
   // A standalone type is a semantic edge, not a structural source successor.
-  // The source traversal above establishes the exact declaration/alias prefix,
+  // The completed source walk establishes the exact declaration/alias prefix,
   // but it can also deliberately omit the selected reference when that
   // reference belongs to a non-output header surface.  Analyze the requested
-  // type use explicitly with the same traversal state instead of assuming the
-  // file walk happened to visit it.
+  // type use explicitly with the walk's state instead of assuming the walk
+  // happened to visit it.
   if (explicitTypeDefinition != nullptr) {
     SgScopeStatement *scope = explicitTypeDefinition->get_scope();
     ASSERT_not_null(scope);
-    t.generateNestedTraversalWithExplicitScope(explicitTypeDefinition, scope,
-                                               explicitTypeDefinition);
+    generateNestedTraversalWithExplicitScope(explicitTypeDefinition, scope,
+                                             explicitTypeDefinition);
   }
 
   if (explicitSemanticTypeUse != nullptr) {
@@ -5609,10 +5627,10 @@ void generateNameQualificationSupport(
     if (!nameQualifications.containsType(explicitReferenceNode,
                                          explicitEmissionStatement)) {
       SgDeclarationStatement *declaration =
-          t.getDeclarationAssociatedWithType(explicitSemanticTypeUse);
+          getDeclarationAssociatedWithType(explicitSemanticTypeUse);
       if (SgExpression *expression = isSgExpression(explicitReferenceNode)) {
         if (declaration != nullptr) {
-          const int requiredQualification = t.nameQualificationDepth(
+          const int requiredQualification = nameQualificationDepth(
               declaration, useScope, explicitEmissionStatement);
           int qualificationLength = 0;
           bool globalQualification = false;
@@ -5622,7 +5640,7 @@ void generateNameQualificationSupport(
                   explicitSemanticTypeUse)) {
             SgScopeStatement *declarationScope =
                 traverseNonrealDeclForCorrectScope(declaration);
-            qualifier = t.setNameQualificationSupport(
+            qualifier = setNameQualificationSupport(
                 explicitReferenceNode, declarationScope, requiredQualification,
                 qualificationLength, globalQualification, typeElaboration);
           }
@@ -5638,11 +5656,11 @@ void generateNameQualificationSupport(
       } else if (SgInitializedName *initializedName =
                      isSgInitializedName(explicitReferenceNode)) {
         if (declaration != nullptr) {
-          const int requiredQualification = t.nameQualificationDepth(
+          const int requiredQualification = nameQualificationDepth(
               declaration, useScope, explicitEmissionStatement);
-          t.setNameQualificationOnType(initializedName, explicitSemanticTypeUse,
-                                       declaration, requiredQualification,
-                                       false, explicitEmissionStatement);
+          setNameQualificationOnType(initializedName, explicitSemanticTypeUse,
+                                     declaration, requiredQualification, false,
+                                     explicitEmissionStatement);
         } else {
           nameQualifications.recordType(
               initializedName, explicitEmissionStatement,
@@ -5652,10 +5670,10 @@ void generateNameQualificationSupport(
       } else if (SgTypedefDeclaration *typedefDeclaration =
                      isSgTypedefDeclaration(explicitReferenceNode)) {
         if (declaration != nullptr) {
-          const int requiredQualification = t.nameQualificationDepth(
+          const int requiredQualification = nameQualificationDepth(
               declaration, useScope, explicitEmissionStatement);
-          t.setNameQualificationOnBaseType(typedefDeclaration, declaration,
-                                           requiredQualification);
+          setNameQualificationOnBaseType(typedefDeclaration, declaration,
+                                         requiredQualification);
         } else {
           nameQualifications.recordType(
               typedefDeclaration, explicitEmissionStatement,
@@ -5678,11 +5696,11 @@ void generateNameQualificationSupport(
           ROSE_ABORT();
         }
         if (declaration != nullptr) {
-          const int requiredQualification = t.nameQualificationDepth(
+          const int requiredQualification = nameQualificationDepth(
               declaration, useScope, explicitEmissionStatement);
-          t.setNameQualification(templateArgument, declaration,
-                                 requiredQualification,
-                                 explicitEmissionStatement);
+          setNameQualification(templateArgument, declaration,
+                               requiredQualification,
+                               explicitEmissionStatement);
         } else {
           nameQualifications.recordType(
               templateArgument, explicitEmissionStatement,
@@ -5703,7 +5721,7 @@ void generateNameQualificationSupport(
                   explicitSemanticTypeUse->class_name().c_str());
           ROSE_ABORT();
         }
-        const int requiredQualification = t.nameQualificationDepth(
+        const int requiredQualification = nameQualificationDepth(
             declaration, useScope, explicitEmissionStatement);
         int qualificationLength = 0;
         bool globalQualification = false;
@@ -5713,7 +5731,7 @@ void generateNameQualificationSupport(
                 explicitSemanticTypeUse)) {
           SgScopeStatement *declarationScope =
               traverseNonrealDeclForCorrectScope(declaration);
-          qualifier = t.setNameQualificationSupport(
+          qualifier = setNameQualificationSupport(
               explicitReferenceNode, declarationScope, requiredQualification,
               qualificationLength, globalQualification, typeElaboration);
         }
@@ -5732,8 +5750,8 @@ void generateNameQualificationSupport(
         ROSE_ABORT();
       }
     }
-    t.traverseType(explicitSemanticTypeUse, explicitReferenceNode, useScope,
-                   explicitEmissionStatement);
+    traverseType(explicitSemanticTypeUse, explicitReferenceNode, useScope,
+                 explicitEmissionStatement);
   }
 }
 
@@ -5745,10 +5763,7 @@ void NameQualificationTraversal::generateNestedTraversalWithExplicitScope(
   ASSERT_not_null(input_currentScope);
   ASSERT_not_null(input_currentStatement);
 
-  NameQualificationTraversal t(
-      this->qualifiedNameMapForNames, this->qualifiedNameMapForTypes,
-      this->qualifiedNameMapForMapsOfTypes, this->referencedNameSet,
-      this->nameQualifications);
+  NameQualificationTraversal t(indexes, this->nameQualifications);
 
   // A nested traversal is a continuation of the same lexical use site.  It
   // must inherit every lookup constraint accumulated before that use site;
@@ -5843,10 +5858,21 @@ NameQualificationTraversal::NameQualificationTraversal(
     NameQualificationMapOfMapsType &input_qualifiedNameMapForMapsOfTypes,
     NameQualificationSetType &input_referencedNameSet,
     NameQualificationContext &input_nameQualifications)
-    : referencedNameSet(input_referencedNameSet),
-      qualifiedNameMapForNames(input_qualifiedNameMapForNames),
-      qualifiedNameMapForTypes(input_qualifiedNameMapForTypes),
-      qualifiedNameMapForMapsOfTypes(input_qualifiedNameMapForMapsOfTypes),
+    : NameQualificationTraversal(
+          std::make_shared<SharedIndexes>(input_referencedNameSet,
+                                          input_qualifiedNameMapForNames,
+                                          input_qualifiedNameMapForTypes,
+                                          input_qualifiedNameMapForMapsOfTypes),
+          input_nameQualifications) {}
+
+NameQualificationTraversal::NameQualificationTraversal(
+    std::shared_ptr<SharedIndexes> input_indexes,
+    NameQualificationContext &input_nameQualifications)
+    : indexes(std::move(input_indexes)),
+      referencedNameSet(indexes->referencedNames),
+      qualifiedNameMapForNames(indexes->names),
+      qualifiedNameMapForTypes(indexes->types),
+      qualifiedNameMapForMapsOfTypes(indexes->typeUses),
       usingDirectiveOrderCache(
           std::make_shared<NameQualificationUsingDirectiveOrderCache>()),
       nameQualifications(input_nameQualifications) {
@@ -5866,7 +5892,87 @@ NameQualificationTraversal::NameQualificationTraversal(
   set_useDefaultIndexBasedTraversal(false);
 }
 
+NameQualificationTraversal::NameQualificationTraversal(
+    const NameQualificationFileAnalysis &analysis,
+    std::shared_ptr<SharedIndexes> input_indexes,
+    NameQualificationContext &input_nameQualifications)
+    : NameQualificationTraversal(std::move(input_indexes),
+                                 input_nameQualifications) {
+  // The walk's end state, as nested traversals inherit it: completed template
+  // evaluations and alias visibility are shared, the accessibility sets are
+  // copied, and nothing is active or explicitly contextualized.
+  completedTemplateArgumentListEvaluations.inherit(
+      &analysis.completedTemplateArgumentListEvaluations_);
+  completedTemplateDeclarationEvaluations.inherit(
+      &analysis.completedTemplateDeclarationEvaluations_);
+  visibleAliasCausalNodes =
+      ScopedVisibilityNodeSet(analysis.visibleAliasCausalNodes_);
+  usingDirectiveOrderCache = analysis.usingDirectiveOrderCache_;
+  privateBaseClassSets = analysis.privateBaseClassSets_;
+  inaccessibleClassSets = analysis.inaccessibleClassSets_;
+}
+
 NameQualificationTraversal::~NameQualificationTraversal() = default;
+
+NameQualificationFileAnalysis::NameQualificationFileAnalysis(SgSourceFile *file)
+    : file_(file) {
+  ASSERT_not_null(file);
+  NameQualificationTraversal t(names_, types_, typeUses_, referencedNames_,
+                               records_);
+  NameQualificationInheritedAttribute ih;
+  t.traverse(file, ih);
+
+  // Freeze the end-of-walk state that a later standalone type use reads.
+  // Everything scoped to the walk must have closed; anything still open would
+  // make that use depend on where the walk stopped.
+  if (!t.activeTemplateArgumentListEvaluations.empty() ||
+      !t.activeTemplateDeclarationEvaluations.empty() ||
+      !t.namespaceAliasDeclarationMap.empty() ||
+      t.sourcePublicationOwner != nullptr ||
+      t.sourcePublicationUseSite != nullptr ||
+      t.explictlySpecifiedCurrentScope != nullptr ||
+      t.explictlySpecifiedCurrentStatement != nullptr ||
+      t.explicitTypeEmissionScope != nullptr ||
+      t.explicitTraversalRoot != nullptr ||
+      t.suppressNameQualificationAcrossWholeTranslationUnit) {
+    fprintf(stderr,
+            "REX_NAME_QUALIFICATION_INVARIANT[file-analysis-snapshot]: "
+            "file=%p walk left active evaluations=%zu/%zu aliases=%zu or "
+            "explicit traversal context set\n",
+            static_cast<void *>(file),
+            t.activeTemplateArgumentListEvaluations.size(),
+            t.activeTemplateDeclarationEvaluations.size(),
+            t.namespaceAliasDeclarationMap.size());
+    ROSE_ABORT();
+  }
+  completedTemplateArgumentListEvaluations_ =
+      std::move(t.completedTemplateArgumentListEvaluations.own());
+  completedTemplateDeclarationEvaluations_ =
+      std::move(t.completedTemplateDeclarationEvaluations.own());
+  visibleAliasCausalNodes_ = t.visibleAliasCausalNodes.commit();
+  privateBaseClassSets_ = std::move(t.privateBaseClassSets);
+  inaccessibleClassSets_ = std::move(t.inaccessibleClassSets);
+  usingDirectiveOrderCache_ = t.usingDirectiveOrderCache;
+}
+
+void NameQualificationFileAnalysis::applyExplicitSemanticTypeUse(
+    NameQualificationContext &records, SgType *explicitSemanticTypeUse,
+    SgNode *explicitReferenceNode, SgStatement *explicitEmissionStatement,
+    SgDeclarationStatement *explicitTypeDefinition) const {
+  NameQualificationTraversal::NameQualificationSetType referencedNames;
+  NameQualificationTraversal::NameQualificationMapType names;
+  NameQualificationTraversal::NameQualificationMapType types;
+  NameQualificationTraversal::NameQualificationMapOfMapsType typeUses;
+  NameQualificationTraversal t(
+      *this,
+      std::make_shared<NameQualificationTraversal::SharedIndexes>(
+          referencedNames, names, types, typeUses, &referencedNames_, &names_,
+          &types_, &typeUses_),
+      records);
+  t.applyExplicitSemanticTypeUse(explicitSemanticTypeUse, explicitReferenceNode,
+                                 explicitEmissionStatement,
+                                 explicitTypeDefinition);
+}
 
 void NameQualificationTraversal::prepareSourcePublicationPrefix(
     SgStatement *useSite) {
@@ -6291,21 +6397,6 @@ void NameQualificationTraversal::setExplicitTraversalContext(
   explicitTraversalRoot = traversalRoot;
 }
 
-const NameQualificationTraversal::NameQualificationMapType &
-NameQualificationTraversal::get_qualifiedNameMapForNames() const {
-  return qualifiedNameMapForNames;
-}
-
-const NameQualificationTraversal::NameQualificationMapType &
-NameQualificationTraversal::get_qualifiedNameMapForTypes() const {
-  return qualifiedNameMapForTypes;
-}
-
-const NameQualificationTraversal::NameQualificationMapOfMapsType &
-NameQualificationTraversal::get_qualifiedNameMapForMapsOfTypes() const {
-  return qualifiedNameMapForMapsOfTypes;
-}
-
 int numberOfSymbolsWithName(
     const SgName &name, SgScopeStatement *scope,
     const SgUnorderedNodeSet &visible_alias_causal_nodes) {
@@ -6685,8 +6776,7 @@ void NameQualificationTraversal::evaluateTemplateInstantiationDeclaration(
 
   TemplateDeclarationEvaluationKey evaluationKey = {
       declaration, qualificationScope, positionStatement};
-  if (completedTemplateDeclarationEvaluations.find(evaluationKey) !=
-      completedTemplateDeclarationEvaluations.end()) {
+  if (completedTemplateDeclarationEvaluations.contains(evaluationKey)) {
     return;
   }
   if (!activeTemplateDeclarationEvaluations.insert(evaluationKey).second) {
@@ -7882,9 +7972,8 @@ int NameQualificationTraversal::nameQualificationDepth(
                     : declaration;
             ASSERT_not_null(declarationToSearchForInReferencedNameSet);
             bool skipNameQualification = false;
-            if (referencedNameSet.find(
-                    declarationToSearchForInReferencedNameSet) ==
-                referencedNameSet.end()) {
+            if (!referencedNameSet.contains(
+                    declarationToSearchForInReferencedNameSet)) {
               skipNameQualification = true;
             }
 
@@ -9097,8 +9186,7 @@ void NameQualificationTraversal::
 
   TemplateArgumentListEvaluationKey evaluationKey = {
       &templateArgumentList, effectiveScope, positionStatement};
-  if (completedTemplateArgumentListEvaluations.find(evaluationKey) !=
-      completedTemplateArgumentListEvaluations.end()) {
+  if (completedTemplateArgumentListEvaluations.contains(evaluationKey)) {
     return;
   }
   if (!activeTemplateArgumentListEvaluations.insert(evaluationKey).second) {
@@ -9318,16 +9406,12 @@ void NameQualificationTraversal::
     // Every argument gets an exact contextual record, including builtin,
     // value, and pack arguments whose own spelling needs no qualifier.  The
     // emitter must never infer "no qualification" from a missing entry.
-    NameQualificationMapType &argumentContexts =
-        qualifiedNameMapForMapsOfTypes[templateArgument];
     NameQualificationResult exactResult = {
         "", 0, false,
         templateArgument->get_type_elaboration_required_for_type() ||
             templateArgument->get_type_elaboration_required()};
-    auto persisted = argumentContexts.find(positionStatement);
-    if (persisted == argumentContexts.end()) {
-      persisted = argumentContexts.emplace(positionStatement, "").first;
-    }
+    qualifiedNameMapForMapsOfTypes.emplace(templateArgument, positionStatement,
+                                           "");
     if (!nameQualifications.contains(templateArgument, positionStatement)) {
       nameQualifications.record(templateArgument, positionStatement,
                                 exactResult);
@@ -10330,7 +10414,7 @@ void NameQualificationTraversal::
       canonicalInstantiationPrimary == publishedDeclaration &&
       has_exact_semantic_location(publishedDeclaration);
 
-  if (referencedNameSet.find(publishedDeclaration) == referencedNameSet.end() &&
+  if (!referencedNameSet.contains(publishedDeclaration) &&
       !exactSourceFunctionPublication && !exactSourceClassTemplatePublication) {
     Sg_File_Info *source = declaration->get_file_info();
     fprintf(
@@ -10423,7 +10507,7 @@ void NameQualificationTraversal::
   // contract.
   if (instantiation == nullptr || primary == nullptr ||
       canonicalPrimary == nullptr ||
-      referencedNameSet.find(canonicalPrimary) != referencedNameSet.end()) {
+      referencedNameSet.contains(canonicalPrimary)) {
     validateDeclarationPublishedBeforeQualification(declaration);
     return;
   }
@@ -10631,8 +10715,7 @@ void NameQualificationTraversal::
 
   SgDeclarationStatement *canonical =
       canonical_type_declaration_identity(declaration);
-  if (canonical != nullptr &&
-      referencedNameSet.find(canonical) != referencedNameSet.end()) {
+  if (canonical != nullptr && referencedNameSet.contains(canonical)) {
     if (SgTemplateInstantiationDecl *instantiation =
             isSgTemplateInstantiationDecl(declaration)) {
       SgTemplateInstantiationDecl *canonicalInstantiation =
@@ -11073,8 +11156,7 @@ void NameQualificationTraversal::
   Sg_File_Info *useInfo = initializedName->get_file_info();
   Sg_File_Info *statementInfo = currentStatement->get_file_info();
   const bool canonicalUnpublished =
-      canonical != nullptr &&
-      referencedNameSet.find(canonical) == referencedNameSet.end();
+      canonical != nullptr && !referencedNameSet.contains(canonical);
   const bool exactTypeEdge =
       type_graph_references_exact_declaration(type, declaration);
   const bool exactUseSource =
@@ -11431,7 +11513,7 @@ void NameQualificationTraversal::
     const bool exactTemplateIdentity =
         canonicalInstantiation != nullptr && primaryTemplate != nullptr &&
         canonicalPrimary != nullptr &&
-        (referencedNameSet.find(canonicalPrimary) != referencedNameSet.end() ||
+        (referencedNameSet.contains(canonicalPrimary) ||
          exactActivePrimaryDefinition || exactPriorPrimaryDefinition ||
          exactFrontendInputPrimaryDefinition ||
          exactSemanticPrimaryDefinition || exactSemanticForwardPrimary) &&
@@ -13334,12 +13416,11 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           ROSE_ABORT();
         }
 
-        auto existing = qualifiedNameMapForTypes.find(function);
-        if (existing == qualifiedNameMapForTypes.end()) {
+        const std::string *existing = qualifiedNameMapForTypes.find(function);
+        if (existing == nullptr) {
           qualifiedNameMapForTypes.emplace(function, std::string());
         } else {
-          require_consistent_qualification("types", function, existing->second,
-                                           "");
+          require_consistent_qualification("types", function, *existing, "");
         }
         const bool preserve_written_type_elaboration =
             function->get_type_elaboration_required_for_return_type();
@@ -13673,8 +13754,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           require_explicit_member_class_specialization_pattern_identity(
               classDeclaration, useSite.scope);
       if (publishedSpecializationPattern != nullptr &&
-          referencedNameSet.find(publishedSpecializationPattern) ==
-              referencedNameSet.end()) {
+          !referencedNameSet.contains(publishedSpecializationPattern)) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[explicit-member-class-"
                 "specialization-publication]: specialization=%p/%s "
@@ -14456,8 +14536,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         ROSE_ABORT();
       }
 
-      if (referencedNameSet.find(publishedDeclaration) !=
-          referencedNameSet.end()) {
+      if (referencedNameSet.contains(publishedDeclaration)) {
         publishedDeclaration = nullptr;
       }
 
@@ -14594,8 +14673,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           ASSERT_not_null(declarationForReferencedNameSet);
 
           bool requires_global_qualification =
-              (referencedNameSet.find(declarationForReferencedNameSet) !=
-               referencedNameSet.end());
+              (referencedNameSet.contains(declarationForReferencedNameSet));
           if (isSgGlobal(currentScope) == NULL) {
             requires_global_qualification = true;
           }
@@ -15044,9 +15122,10 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     }
 
     if (declaration_has_exact_emitted_surface(usingDeclaration)) {
-      auto exact = qualifiedNameMapForNames.find(usingDeclaration);
-      if (exact == qualifiedNameMapForNames.end() || exact->second.size() < 2 ||
-          exact->second.compare(exact->second.size() - 2, 2, "::") != 0) {
+      const std::string *exact =
+          qualifiedNameMapForNames.find(usingDeclaration);
+      if (exact == nullptr || exact->size() < 2 ||
+          exact->compare(exact->size() - 2, 2, "::") != 0) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[using-declaration-qualifier]: "
                 "source using-declaration=%p has no exact producer-owned "
@@ -15055,7 +15134,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
         ROSE_ABORT();
       }
 
-      const bool exact_global = exact->second.compare(0, 2, "::") == 0;
+      const bool exact_global = exact->compare(0, 2, "::") == 0;
       const SgStringList &source_tokens =
           usingDeclaration->get_source_name_qualification_tokens();
       const std::string source_qualifier =
@@ -15066,7 +15145,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
               source_tokens);
       const int source_qualification_length =
           static_cast<int>(source_tokens.size());
-      if (source_qualifier != exact->second ||
+      if (source_qualifier != *exact ||
           usingDeclaration->get_source_name_global_qualification() !=
               exact_global ||
           usingDeclaration->get_global_qualification_required() !=
@@ -15079,7 +15158,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
             "source using-declaration=%p qualifier='%s' payload='%s' "
             "tokens=%d length=%d global=%d required-global=%d has "
             "inconsistent exact state\n",
-            static_cast<void *>(usingDeclaration), exact->second.c_str(),
+            static_cast<void *>(usingDeclaration), exact->c_str(),
             source_qualifier.c_str(), static_cast<int>(source_tokens.size()),
             usingDeclaration->get_name_qualification_length(),
             usingDeclaration->get_source_name_global_qualification() ? 1 : 0,
@@ -15178,8 +15257,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       declstmt = nrdecl->get_templateDeclaration();
     }
 
-    if (qualifiedNameMapForNames.find(nrRefExp) ==
-        qualifiedNameMapForNames.end()) {
+    if (qualifiedNameMapForNames.find(nrRefExp) == nullptr) {
       // This also evaluates the declaration's template argument qualifiers.
       int amountOfNameQualificationRequired =
           nameQualificationDepth(declstmt, currentScope, currentStatement);
@@ -15403,8 +15481,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
                 functionDeclaration->get_firstNondefiningDeclaration();
             const bool declarationAlreadyPublished =
                 publishedDeclaration != nullptr &&
-                referencedNameSet.find(publishedDeclaration) !=
-                    referencedNameSet.end();
+                referencedNameSet.contains(publishedDeclaration);
             bool completeClassHiddenFriendVisibility = false;
             if (!declarationAlreadyPublished &&
                 functionDeclaration->get_declarationModifier().isFriend()) {
@@ -16229,8 +16306,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       const auto inserted =
           qualifiedNameMapForNames.emplace(varRefExp, exactExplicitQualifier);
       if (!inserted.second) {
-        require_consistent_qualification(
-            "names", varRefExp, inserted.first->second, exactExplicitQualifier);
+        require_consistent_qualification("names", varRefExp, *inserted.first,
+                                         exactExplicitQualifier);
       }
       recordNameQualification(varRefExp, exactExplicitQualifier,
                               exactExplicitQualifierLength, exactExplicitGlobal,
@@ -16308,8 +16385,8 @@ NameQualificationTraversal::evaluateInheritedAttribute(
       }
       const auto inserted = qualifiedNameMapForNames.emplace(varRefExp, "");
       if (!inserted.second) {
-        require_consistent_qualification("names", varRefExp,
-                                         inserted.first->second, "");
+        require_consistent_qualification("names", varRefExp, *inserted.first,
+                                         "");
       }
       recordNameQualification(varRefExp, "", 0, false, false, currentStatement);
       hasExactNameQualification = true;
@@ -16465,13 +16542,12 @@ NameQualificationTraversal::evaluateInheritedAttribute(
               amountOfNameQualificationRequired, outputNameQualificationLength,
               outputGlobalQualification, outputTypeElaboration);
 
-          NameQualificationMapType::iterator existing =
+          const std::string *existing =
               qualifiedNameMapForNames.find(varRefExp);
-          if (existing == qualifiedNameMapForNames.end()) {
-            qualifiedNameMapForNames.insert(
-                std::pair<SgNode *, std::string>(varRefExp, qualifier));
+          if (existing == nullptr) {
+            qualifiedNameMapForNames.emplace(varRefExp, qualifier);
           } else {
-            ROSE_ASSERT(existing->second == qualifier);
+            ROSE_ASSERT(*existing == qualifier);
           }
           recordNameQualification(varRefExp, qualifier,
                                   outputNameQualificationLength,
@@ -16986,8 +17062,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
           SgDeclarationStatement *declarationForReferencedNameSet =
               enumDeclaration->get_firstNondefiningDeclaration();
           ASSERT_not_null(declarationForReferencedNameSet);
-          if (referencedNameSet.find(declarationForReferencedNameSet) !=
-              referencedNameSet.end()) {
+          if (referencedNameSet.contains(declarationForReferencedNameSet)) {
             int amountOfNameQualificationRequired = nameQualificationDepth(
                 enumDeclaration, currentScope, enumDeclaration);
             setNameQualification(enumDeclaration,
@@ -17222,8 +17297,7 @@ NameQualificationTraversal::evaluateInheritedAttribute(
     }
     ASSERT_not_null(declarationForReferencedNameSet);
     if (acceptableDeclarationScope == true &&
-        referencedNameSet.find(declarationForReferencedNameSet) ==
-            referencedNameSet.end()) {
+        !referencedNameSet.contains(declarationForReferencedNameSet)) {
       referencedNameSet.insert(declarationForReferencedNameSet);
     }
 
@@ -17761,19 +17835,15 @@ void NameQualificationTraversal::setNameQualification(
     // I recall.
     ROSE_ASSERT(outputTypeEvaluation == false);
 
-    if (qualifiedNameMapForNames.find(varRefExp) ==
-        qualifiedNameMapForNames.end()) {
-      qualifiedNameMapForNames.insert(
-          std::pair<SgNode *, std::string>(varRefExp, qualifier));
+    if (qualifiedNameMapForNames.find(varRefExp) == nullptr) {
+      qualifiedNameMapForNames.emplace(varRefExp, qualifier);
     } else {
       // DQ (6/20/2011): We see this case in test2011_87.C.
       // If it already existes then overwrite the existing information.
-      NameQualificationMapType::iterator i =
-          qualifiedNameMapForNames.find(varRefExp);
-      ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+      const std::string *i = qualifiedNameMapForNames.find(varRefExp);
+      ROSE_ASSERT(i != nullptr);
 
-      require_consistent_qualification("names", varRefExp, i->second,
-                                       qualifier);
+      require_consistent_qualification("names", varRefExp, *i, qualifier);
     }
   } else {
     qualifier.clear();
@@ -17916,19 +17986,15 @@ void NameQualificationTraversal::setFunctionReferenceNameQualification(
     }
   }
 
-  if (qualifiedNameMapForNames.find(functionRefExp) ==
-      qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(functionRefExp, qualifier));
+  if (qualifiedNameMapForNames.find(functionRefExp) == nullptr) {
+    qualifiedNameMapForNames.emplace(functionRefExp, qualifier);
 
   } else {
     // If it already existes then overwrite the existing information.
-    NameQualificationMapType::iterator i =
-        qualifiedNameMapForNames.find(functionRefExp);
-    ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+    const std::string *i = qualifiedNameMapForNames.find(functionRefExp);
+    ROSE_ASSERT(i != nullptr);
 
-    require_consistent_qualification("names", functionRefExp, i->second,
-                                     qualifier);
+    require_consistent_qualification("names", functionRefExp, *i, qualifier);
   }
   recordNameQualification(functionRefExp, qualifier,
                           outputNameQualificationLength,
@@ -17965,18 +18031,14 @@ void NameQualificationTraversal::setNameQualification(
   }
   ROSE_ASSERT(outputTypeEvaluation == false);
 
-  if (qualifiedNameMapForNames.find(functionRefExp) ==
-      qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(functionRefExp, qualifier));
+  if (qualifiedNameMapForNames.find(functionRefExp) == nullptr) {
+    qualifiedNameMapForNames.emplace(functionRefExp, qualifier);
   } else {
     // If it already existes then overwrite the existing information.
-    NameQualificationMapType::iterator i =
-        qualifiedNameMapForNames.find(functionRefExp);
-    ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+    const std::string *i = qualifiedNameMapForNames.find(functionRefExp);
+    ROSE_ASSERT(i != nullptr);
 
-    require_consistent_qualification("names", functionRefExp, i->second,
-                                     qualifier);
+    require_consistent_qualification("names", functionRefExp, *i, qualifier);
   }
   recordNameQualification(functionRefExp, qualifier,
                           outputNameQualificationLength,
@@ -18007,17 +18069,15 @@ void NameQualificationTraversal::setNameQualification(
 
   ROSE_ASSERT(outputTypeEvaluation == false);
 
-  if (qualifiedNameMapForNames.find(pseudoDestructorRefExp) ==
-      qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(pseudoDestructorRefExp, qualifier));
+  if (qualifiedNameMapForNames.find(pseudoDestructorRefExp) == nullptr) {
+    qualifiedNameMapForNames.emplace(pseudoDestructorRefExp, qualifier);
   } else {
     // If it already existes then overwrite the existing information.
-    NameQualificationMapType::iterator i =
+    const std::string *i =
         qualifiedNameMapForNames.find(pseudoDestructorRefExp);
-    ROSE_ASSERT(i != qualifiedNameMapForNames.end());
+    ROSE_ASSERT(i != nullptr);
 
-    require_consistent_qualification("names", pseudoDestructorRefExp, i->second,
+    require_consistent_qualification("names", pseudoDestructorRefExp, *i,
                                      qualifier);
   }
   recordNameQualification(pseudoDestructorRefExp, qualifier,
@@ -18358,8 +18418,8 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(functionDeclaration, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", functionDeclaration,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", functionDeclaration, *name_entry,
+                                     qualifier);
   recordNameQualification(
       functionDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, functionDeclaration);
@@ -18431,8 +18491,8 @@ void NameQualificationTraversal::setNameQualificationReturnType(
   auto [type_entry, type_inserted] =
       qualifiedNameMapForTypes.emplace(functionDeclaration, qualifier);
   if (!type_inserted)
-    require_consistent_qualification("types", functionDeclaration,
-                                     type_entry->second, qualifier);
+    require_consistent_qualification("types", functionDeclaration, *type_entry,
+                                     qualifier);
   recordTypeQualification(
       functionDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, effectiveTypeElaboration,
@@ -18466,8 +18526,8 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(usingDeclaration, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", usingDeclaration,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", usingDeclaration, *name_entry,
+                                     qualifier);
   recordNameQualification(
       usingDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, usingDeclaration);
@@ -18496,16 +18556,15 @@ void NameQualificationTraversal::setNameQualification(
 
   ROSE_ASSERT(outputTypeEvaluation == false);
 
-  auto existing = qualifiedNameMapForNames.find(usingDeclaration);
-  if (existing == qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(usingDeclaration, qualifier));
-  } else if (existing->second != qualifier) {
+  const std::string *existing = qualifiedNameMapForNames.find(usingDeclaration);
+  if (existing == nullptr) {
+    qualifiedNameMapForNames.emplace(usingDeclaration, qualifier);
+  } else if (*existing != qualifier) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[name-qualification-publication]: "
             "using-declaration=%p has conflicting qualifiers old='%s' "
             "new='%s'\n",
-            static_cast<void *>(usingDeclaration), existing->second.c_str(),
+            static_cast<void *>(usingDeclaration), existing->c_str(),
             qualifier.c_str());
     ROSE_ABORT();
   }
@@ -18538,12 +18597,10 @@ void NameQualificationTraversal::setNameQualification(
 
   ROSE_ASSERT(outputTypeEvaluation == false);
 
-  if (qualifiedNameMapForNames.find(usingDirective) ==
-      qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(usingDirective, qualifier));
+  if (qualifiedNameMapForNames.find(usingDirective) == nullptr) {
+    qualifiedNameMapForNames.emplace(usingDirective, qualifier);
   } else {
-    ROSE_ASSERT(qualifiedNameMapForNames[usingDirective] == qualifier);
+    ROSE_ASSERT(*qualifiedNameMapForNames.find(usingDirective) == qualifier);
   }
   recordNameQualification(
       usingDirective, qualifier, outputNameQualificationLength,
@@ -18576,10 +18633,8 @@ void NameQualificationTraversal::setNameQualification(
 
   ROSE_ASSERT(outputTypeEvaluation == false);
 
-  if (qualifiedNameMapForNames.find(namespaceAliasDeclaration) ==
-      qualifiedNameMapForNames.end()) {
-    qualifiedNameMapForNames.insert(
-        std::pair<SgNode *, std::string>(namespaceAliasDeclaration, qualifier));
+  if (qualifiedNameMapForNames.find(namespaceAliasDeclaration) == nullptr) {
+    qualifiedNameMapForNames.emplace(namespaceAliasDeclaration, qualifier);
   } else {
     MLOG_WARN_C(MLOG_UNPARSER,
                 "Error: name in qualifiedNameMapForNames already exists... \n");
@@ -18793,8 +18848,8 @@ void NameQualificationTraversal::setNameQualificationOnType(
   auto [type_entry, type_inserted] =
       qualifiedNameMapForTypes.emplace(initializedName, qualifier);
   if (!type_inserted)
-    require_consistent_qualification("types", initializedName,
-                                     type_entry->second, qualifier);
+    require_consistent_qualification("types", initializedName, *type_entry,
+                                     qualifier);
   recordTypeQualification(
       initializedName, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, explicitUseSite);
@@ -18858,8 +18913,8 @@ void NameQualificationTraversal::setNameQualificationOnName(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(initializedName, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", initializedName,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", initializedName, *name_entry,
+                                     qualifier);
   recordNameQualification(initializedName, qualifier,
                           outputNameQualificationLength,
                           outputGlobalQualification, outputTypeEvaluation);
@@ -18892,8 +18947,8 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(variableDeclaration, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", variableDeclaration,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", variableDeclaration, *name_entry,
+                                     qualifier);
   recordNameQualification(
       variableDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, variableDeclaration);
@@ -18962,8 +19017,8 @@ void NameQualificationTraversal::setNameQualificationOnBaseType(
   auto [type_entry, type_inserted] =
       qualifiedNameMapForTypes.emplace(typedefDeclaration, qualifier);
   if (!type_inserted)
-    require_consistent_qualification("types", typedefDeclaration,
-                                     type_entry->second, qualifier);
+    require_consistent_qualification("types", typedefDeclaration, *type_entry,
+                                     qualifier);
   recordTypeQualification(
       typedefDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, effectiveTypeElaboration, typedefDeclaration);
@@ -19101,16 +19156,9 @@ void NameQualificationTraversal::setNameQualification(
   const NameQualificationResult result = {
       qualifier, outputNameQualificationLength, outputGlobalQualification,
       outputTypeEvaluation};
-  NameQualificationMapType &contextualQualifiers =
-      qualifiedNameMapForMapsOfTypes[templateArgument];
-  NameQualificationMapType::iterator contextual =
-      contextualQualifiers.find(useSiteStatement);
-  if (contextual == contextualQualifiers.end()) {
-    contextualQualifiers.insert(
-        std::pair<SgNode *, std::string>(useSiteStatement, qualifier));
-  } else {
-    ROSE_ASSERT(contextual->second == qualifier);
-  }
+  const auto contextual = qualifiedNameMapForMapsOfTypes.emplace(
+      templateArgument, useSiteStatement, qualifier);
+  ROSE_ASSERT(contextual.second || *contextual.first == qualifier);
   nameQualifications.record(templateArgument, useSiteStatement, result);
   nameQualifications.recordType(templateArgument, useSiteStatement, result);
 }
@@ -19168,13 +19216,10 @@ void NameQualificationTraversal::setNameQualification(
   // do for shared template arguments; a flat expression key cannot represent
   // that contract.
   SgStatement *useSiteStatement = qualificationUseSite(exp);
-  NameQualificationMapType &contextualQualifiers =
-      qualifiedNameMapForMapsOfTypes[exp];
-  auto existing = contextualQualifiers.find(useSiteStatement);
-  if (existing == contextualQualifiers.end()) {
-    contextualQualifiers.emplace(useSiteStatement, qualifier);
-  } else {
-    require_consistent_qualification("contextual-types", exp, existing->second,
+  const auto contextual =
+      qualifiedNameMapForMapsOfTypes.emplace(exp, useSiteStatement, qualifier);
+  if (!contextual.second) {
+    require_consistent_qualification("contextual-types", exp, *contextual.first,
                                      qualifier);
   }
   recordTypeQualification(exp, qualifier, outputNameQualificationLength,
@@ -19208,8 +19253,7 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(exp, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", exp, name_entry->second,
-                                     qualifier);
+    require_consistent_qualification("names", exp, *name_entry, qualifier);
   recordNameQualification(exp, qualifier, outputNameQualificationLength,
                           outputGlobalQualification, outputTypeEvaluation);
 }
@@ -19232,8 +19276,7 @@ void NameQualificationTraversal::setNameQualification(
   auto [type_entry, type_inserted] =
       qualifiedNameMapForTypes.emplace(exp, qualifier);
   if (!type_inserted)
-    require_consistent_qualification("types", exp, type_entry->second,
-                                     qualifier);
+    require_consistent_qualification("types", exp, *type_entry, qualifier);
   recordTypeQualification(exp, qualifier, outputNameQualificationLength,
                           outputGlobalQualification, outputTypeEvaluation);
 }
@@ -19265,8 +19308,8 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(classDeclaration, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", classDeclaration,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", classDeclaration, *name_entry,
+                                     qualifier);
   recordNameQualification(
       classDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, classDeclaration);
@@ -19308,8 +19351,8 @@ void NameQualificationTraversal::setNameQualification(
   auto [name_entry, name_inserted] =
       qualifiedNameMapForNames.emplace(enumDeclaration, qualifier);
   if (!name_inserted)
-    require_consistent_qualification("names", enumDeclaration,
-                                     name_entry->second, qualifier);
+    require_consistent_qualification("names", enumDeclaration, *name_entry,
+                                     qualifier);
   recordNameQualification(
       enumDeclaration, qualifier, outputNameQualificationLength,
       outputGlobalQualification, outputTypeEvaluation, enumDeclaration);

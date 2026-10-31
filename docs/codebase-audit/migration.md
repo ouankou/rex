@@ -3,6 +3,23 @@
 These changes are part of an unaccepted audit batch until the full required
 validation matrix passes. No supported language behavior is intentionally removed.
 
+`UnparseQualificationSession` (unparseQualificationSession.h, included by
+unparser.h) is an RAII scope in which the AST does not change. While one is
+open, every `unparseToString()` request that walks a whole source file reuses
+one name-qualification walk of that file instead of repeating it per request;
+a standalone type use continues from the frozen end-of-walk state and adds only
+its own records. Outside a session, behavior is unchanged. Closing a session,
+or using it after any typed AST modification, fails with
+`REX_UNPARSE_INVARIANT[qualification-session-mutation]`.
+`REX_UNPARSE_QUALIFICATION_CHECK=1` recomputes every reused result per request
+and requires identical records and output. CFG DOT output and the
+unparseToString test driver open sessions. `SgUnparse_Info` setters no longer
+advance `SgNode::get_globalAstModificationSequence()`, since unparser
+configuration is not program AST, and destroying an `SgSourceFile` or
+`SgProject` advances it. `NameQualificationContext` is non-copyable and can
+extend a read-only base context. The unused
+`NameQualificationTraversal::get_qualifiedNameMapFor*()` accessors are removed.
+
 C++ class population no longer resolves special-member exception specifications.
 [except.spec] evaluates one only when the program needs it; forcing evaluation
 instantiated ill-formed default member initializers and rejected valid programs,

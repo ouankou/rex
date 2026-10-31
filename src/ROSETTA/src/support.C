@@ -271,6 +271,9 @@ void Grammar::setUpSupport() {
   Options.setFunctionPrototype("HEADER_OPTIONS", "../Grammar/Support.code");
   Unparse_Info.setFunctionPrototype("HEADER_UNPARSE_INFO",
                                     "../Grammar/Support.code");
+  // SgUnparse_Info is unparser configuration, not program AST.  Its setters do
+  // not advance the AST modification sequence, so unparsing never looks like
+  // an AST edit to caches and sessions keyed by that sequence.
 
   Unparse_Info.setDataPrototype("SgBitVector", "unparse_attribute", "",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
@@ -278,7 +281,7 @@ void Grammar::setUpSupport() {
   // Space for access_attr_enum tag
   Unparse_Info.setDataPrototype(
       "int", "access_attribute", "= 0", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
   Unparse_Info.setDataPrototype("int", "nested_expression", "= 0",
                                 NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                                 NO_TRAVERSAL, NO_DELETE);
@@ -288,14 +291,14 @@ void Grammar::setUpSupport() {
   // Keep ptr to the declaration statement
   Unparse_Info.setDataPrototype("SgDeclarationStatement*", "declstatement_ptr",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
   // Preserve the exact statement where a shared template argument is emitted.
   // Contextual qualification is keyed by this use site, not by the shared
   // SgTemplateArgument alone.
   Unparse_Info.setDataPrototype(
       "SgStatement*", "template_argument_qualification_context", "= nullptr",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
   // All copies made during one unparser traversal share this state, while
@@ -319,12 +322,12 @@ void Grammar::setUpSupport() {
   // function.
   Unparse_Info.setDataPrototype("SgFunctionCallExp*", "current_function_call",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
   Unparse_Info.setDataPrototype("SgScopeStatement*", "current_scope",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
   // DQ (5/21/2011): Added information required for new name qualification
@@ -333,53 +336,53 @@ void Grammar::setUpSupport() {
   // requires qualiticcation.
   Unparse_Info.setDataPrototype("SgNode*", "reference_node_for_qualification",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
   Unparse_Info.setDataPrototype(
       "int", "name_qualification_length", "= 0", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   Unparse_Info.setDataPrototype(
       "bool", "type_elaboration_required", "= false", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
+      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE);
 
   Unparse_Info.setDataPrototype("bool", "global_qualification_required",
                                 "= false", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
   Unparse_Info.setDataPrototype(
       "int", "nestingLevel", "= 0", NO_CONSTRUCTOR_PARAMETER,
-      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+      BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   // Explicit language selection supports unparsing before a node has a file
   // ancestor, including template arguments during construction.
   Unparse_Info.setDataPrototype(
       "SgFile::languageOption_enum", "language", "= SgFile::e_default_language",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-      COPY_DATA);
+      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE, COPY_DATA);
 
   Unparse_Info.setDataPrototype("SgSourceFile*", "current_source_file",
                                 "= nullptr", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
   // A materialized header can have multiple semantic AST expansions in one
   // translation unit. Header emission selects one exact frontend-published
   // lexical occurrence and carries it through copied unparse contexts.
   Unparse_Info.setDataPrototype(
       "unsigned int", "current_physical_file_occurrence_id", "= 0",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
-      COPY_DATA);
+      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_DELETE, COPY_DATA);
 
   Unparse_Info.setDataPrototype(
       "bool", "use_generated_name_for_template_arguments", "= false",
-      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+      NO_CONSTRUCTOR_PARAMETER, BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
 
   Unparse_Info.setDataPrototype("bool", "context_for_added_parentheses",
                                 "= false", NO_CONSTRUCTOR_PARAMETER,
-                                BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
+                                BUILD_FLAG_ACCESS_FUNCTIONS, NO_TRAVERSAL,
                                 NO_DELETE);
 
   BaseClass.setFunctionPrototype("HEADER_BASECLASS", "../Grammar/Support.code");
@@ -552,6 +555,10 @@ void Grammar::setUpSupport() {
       NO_ACCESS_FUNCTIONS, NO_TRAVERSAL, DEF_DELETE, NO_COPY_DATA);
   SourceFile.setMemberDestructor("tokenSubsequenceMap",
                                  "release_tokenSubsequenceMap();");
+  // Destroying a file is an AST modification.  State keyed by file identity,
+  // such as an open qualification session, must observe it before the
+  // address can be reused.
+  SourceFile.setDestructorPrologue("markAsModified();");
 
   // Exact target ABI type returned by sizeof/alignof.  Clang publishes this
   // from ASTContext::getSizeType(); transformations must obtain it from their
@@ -1128,6 +1135,8 @@ void Grammar::setUpSupport() {
                            NO_CONSTRUCTOR_PARAMETER, NO_ACCESS_FUNCTIONS,
                            NO_TRAVERSAL, NO_DELETE, NO_COPY_DATA);
   Project.setMemberDestructor("callGraphState", "release_callGraphState();");
+  // Destroying a project is an AST modification, like destroying a file.
+  Project.setDestructorPrologue("markAsModified();");
 
   Project.setDataPrototype("SgFileList*", "fileList_ptr", "= nullptr",
                            NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,

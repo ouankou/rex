@@ -26,6 +26,8 @@
 
 #include "UnparserDelegate.h"
 
+#include "unparseQualificationSession.h"
+
 class Unparser_Nameq;
 class Unparse_Debug;
 class Unparse_MOD_SAGE;

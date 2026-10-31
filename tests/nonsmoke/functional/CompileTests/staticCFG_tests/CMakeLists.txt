@@ -416,3 +416,23 @@ add_test(
     -I${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests ${TESTCODE_INCLUDES}
     -c ${CMAKE_CURRENT_SOURCE_DIR}/../Cxx_tests/test2005_42.C)
 set_tests_properties(testInterproceduralCFG_Cxx_test2005_42 PROPERTIES LABELS STATICCFGTEST)
+
+# Edge labels print case labels through unparseToString inside a
+# qualification session; check every reused result against the per-call one.
+foreach(_cfg_check_input IN ITEMS
+    unparseToString_tests/rex_unparser_qualification_session.cpp
+    Cxx_tests/test2013_52.C
+    Cxx_tests/test2017_90.C)
+  get_filename_component(_cfg_check_file "${_cfg_check_input}" NAME)
+  get_filename_component(_cfg_check_name "${_cfg_check_input}" NAME_WE)
+  set(_cfg_check_test rex_static_cfg_qualification_check_${_cfg_check_name})
+  add_test(
+    NAME ${_cfg_check_test}
+    COMMAND testStaticCFG ${ROSE_FLAGS} -std=c++17
+      -c ${CMAKE_CURRENT_SOURCE_DIR}/../${_cfg_check_input})
+  set_tests_properties(${_cfg_check_test} PROPERTIES
+    LABELS "rex;STATICCFGTEST"
+    ENVIRONMENT
+      "ROSE_TEST_OUTPUT_DIR=${ROSE_TEST_CFG_OUTPUT_DIR};REX_UNPARSE_QUALIFICATION_CHECK=1")
+  rex_lock_test_for_input(${_cfg_check_test} ${_cfg_check_file})
+endforeach()

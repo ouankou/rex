@@ -35,25 +35,47 @@ SgStatement *
 exactQualificationUseSiteForEmission(const SgNode *node,
                                      SgStatement *emissionStatement);
 
+// Contextual qualification records keyed by (reference node, emission
+// statement).  A context can extend a completed base context, such as a file
+// analysis reused by a qualification session: lookups see both, while new
+// records go only to the extending context and must agree with the base.
 class NameQualificationContext {
 private:
   using Key = std::pair<const SgNode *, const SgStatement *>;
-  std::map<Key, NameQualificationResult> qualifications;
-  std::map<Key, NameQualificationResult> nameChannelQualifications;
-  std::map<Key, NameQualificationResult> typeChannelQualifications;
-  std::map<Key, NameQualificationResult> pointerMemberBaseQualifications;
+  using Channel = std::map<Key, NameQualificationResult>;
+  using ChannelMember = Channel NameQualificationContext::*;
 
-  void recordChannel(std::map<Key, NameQualificationResult> &channel,
-                     const char *channelName, const SgNode *node,
-                     const SgStatement *useSiteStatement,
+  const NameQualificationContext *base = nullptr;
+  Channel qualifications;
+  Channel nameChannelQualifications;
+  Channel typeChannelQualifications;
+  Channel pointerMemberBaseQualifications;
+
+  const NameQualificationResult *find(ChannelMember channel,
+                                      const Key &key) const;
+  template <typename Visit>
+  void forEachRecord(ChannelMember channel, Visit &&visit) const;
+  void recordChannel(ChannelMember channel, const char *channelName,
+                     const SgNode *node, const SgStatement *useSiteStatement,
                      const NameQualificationResult &result);
   NameQualificationResult
-  lookupChannel(const std::map<Key, NameQualificationResult> &channel,
-                const char *channelName, const SgNode *node,
-                const SgStatement *useSiteStatement) const;
+  lookupChannel(ChannelMember channel, const char *channelName,
+                const SgNode *node, const SgStatement *useSiteStatement) const;
+  void requireSameChannel(ChannelMember channel, const char *channelName,
+                          const NameQualificationContext &expected) const;
 
 public:
+  NameQualificationContext() = default;
+  //! Extend the records of base, which this context never modifies.
+  explicit NameQualificationContext(const NameQualificationContext *base);
+  NameQualificationContext(const NameQualificationContext &) = delete;
+  NameQualificationContext &
+  operator=(const NameQualificationContext &) = delete;
+
+  //! Remove the records this context added; a base is unaffected.
   void clear();
+  //! Abort unless this context holds exactly the records of expected.
+  void requireSameRecords(const NameQualificationContext &expected) const;
   bool contains(const SgNode *node, const SgStatement *useSiteStatement) const;
   bool containsName(const SgNode *node,
                     const SgStatement *useSiteStatement) const;
