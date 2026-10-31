@@ -205,7 +205,7 @@ class MarkdownContract(unittest.TestCase):
         sections.mkdir()
         (sections / "types.md").write_text(
             '| [`Node<T>`](../Node.md#overload) | description |\n'
-            '| <a href="../../Scope/Node/"><code>Scope::Node</code></a> | |\n'
+            '| <a href="../Scope/Node.md"><code>Scope::Node</code></a> | |\n'
             '| [MrDocs](https://www.mrdocs.com) | |\n'
         )
         output = self.root / "symbols.json"
@@ -235,7 +235,6 @@ class MarkdownContract(unittest.TestCase):
                 result = self.run_script("validate-site-links.py", "--site-dir", site)
                 self.assertEqual(result.returncode == 0, success, result.stderr)
 
-    @unittest.skipUnless(importlib.util.find_spec("yaml"), "PyYAML is needed for reference preparation")
     def test_reference_preparation(self):
         (self.reference / "index.md").write_text(
             '# Reference\n\n## Types\n\n| Name | Description |\n| --- | --- |\n'
@@ -245,23 +244,24 @@ class MarkdownContract(unittest.TestCase):
         (self.reference / "Node.md").write_text('# Node&amp;View\n')
         (self.reference / "get.md").write_text(
             '# get\n\n<pre><code><a href="./Node.md">Node</a>*\nget();</code></pre>\n')
-        nav = self.root / "nav.yml"
-        nav.write_text('nav:\n  - Types: sections/types.md\n  - Functions: sections/functions.md\n')
+        nav = self.root / "nav.toml"
+        nav.write_text('[project]\nnav = [{ API = [{ Types = "reference/sections/types.md" }, { Functions = "reference/sections/functions.md" }] }]\n')
         result = self.run_script("prepare-reference.py", "--reference-dir", self.reference,
                                  "--nav-config", nav)
         self.assertEqual(result.returncode, 0, result.stderr)
         types = (self.reference / "sections" / "types.md").read_text()
         functions = (self.reference / "sections" / "functions.md").read_text()
         self.assertIn('title: "Types"', types)
-        self.assertIn('href="../../Node/"', types)
+        self.assertIn('href="../Node.md"', types)
         self.assertNotIn('Footer', types)
         self.assertIn('ref-signature', functions)
         self.assertIn('Node&#42; get();', functions)
-        self.assertIn('href="../../get/"', functions)
+        self.assertIn('href="../get.md"', functions)
         self.assertIn('title: "Node&View"', (self.reference / "Node.md").read_text())
-        self.assertIn('href="../Node/"', (self.reference / "get.md").read_text())
+        self.assertIn('href="Node.md"', (self.reference / "get.md").read_text())
+        self.assertIn('search:\n  exclude: true', (self.reference / 'get.md').read_text())
+        self.assertNotIn('exclude: true', types)
 
-    @unittest.skipUnless(importlib.util.find_spec("yaml"), "PyYAML is needed for reference preparation")
     def test_index_suffix_is_not_a_directory_index(self):
         spec = importlib.util.spec_from_file_location("prepare_reference", SCRIPTS / "prepare-reference.py")
         prepare_reference = importlib.util.module_from_spec(spec)
@@ -274,7 +274,6 @@ class MarkdownContract(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual(prepare_reference.page_url(source), expected)
 
-    @unittest.skipUnless(importlib.util.find_spec("yaml"), "PyYAML is needed for reference preparation")
     def test_preparation_rejects_output_collisions(self):
         (self.reference / "index.md").write_text("# Reference\n")
         (self.reference / "Node").mkdir()
@@ -315,7 +314,7 @@ class MarkdownContract(unittest.TestCase):
                                ("Docs/Coordinate.md", "typedef"), ("Docs/Direction.md", "enum")):
             self.assertIn(f'data-mrdocs-kind="{kind}"', (self.reference / filename).read_text())
         imported = (self.reference / "Docs/imported_points.md").read_text()
-        self.assertIn('href="../Point/">Point</a>', imported)
+        self.assertIn('href="Point.md">Point</a>', imported)
         self.assertFalse((self.reference / "llvm/APSInt.md").exists())
         self.assertIn("operator&#124;", (self.reference / "Docs/NamedPoint.md").read_text())
         for page in self.reference.rglob("*.md"):
@@ -323,12 +322,12 @@ class MarkdownContract(unittest.TestCase):
         self.assertTrue((self.reference / "Docs/Point/index-symbol.md").is_file())
         self.assertFalse((self.reference / "Docs/Point/index.md").exists())
         nested = (self.reference / "Docs/nested_points.md").read_text()
-        self.assertIn('href="../Holder/">Holder</a>', nested)
-        self.assertIn('href="../Point/">Point</a>', nested)
+        self.assertIn('href="Holder.md">Holder</a>', nested)
+        self.assertIn('href="Point.md">Point</a>', nested)
         self.assertNotIn('>Container</a>', nested)
         point = (self.reference / "Docs/Point.md").read_text()
-        self.assertIn('href="index-symbol/"', point)
-        self.assertIn('href="get_index/"', point)
+        self.assertIn('href="Point/index-symbol.md"', point)
+        self.assertIn('href="Point/get_index.md"', point)
         functions = (self.reference / "sections/functions.md").read_text()
         self.assertIn("## Docs", functions)
         self.assertIn("operator&#124;", functions)
@@ -380,6 +379,62 @@ class MarkdownContract(unittest.TestCase):
                 args += ["--root", self.root]
             result = self.run_script(script, *args)
             self.assertEqual(result.returncode, 0, result.stderr)
+
+        if importlib.util.find_spec("zensical"):
+            site = self.build_site()
+            point_html = (site / "Docs/Point/index.html").read_text()
+            self.assertIn('operator&#91;&#93;(int i)', point_html)
+            self.assertIn('data-search-exclude', point)
+
+    def build_site(self):
+        config = self.root / "zensical.toml"
+        config.write_text(
+            '[project]\nsite_name = "Fixture"\ndocs_dir = "reference"\nsite_dir = "site"\n'
+            '[project.theme]\nvariant = "classic"\n[project.markdown_extensions]\ntables = {}\n')
+        stale = self.root / "site/obsolete.html"
+        stale.parent.mkdir(exist_ok=True)
+        stale.write_text("Obsolete output")
+        result = subprocess.run([sys.executable, "-m", "zensical", "build", "--clean", "-f", str(config)],
+                                capture_output=True, text=True, cwd=self.root)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(stale.exists())
+        site = self.root / "site"
+        result = self.run_script("write-docs-build-manifest.py", "--root", SCRIPTS.parent,
+                                 "--site-dir", site)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        result = self.run_script("validate-site-links.py", "--site-dir", site)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return site
+
+    @unittest.skipUnless(importlib.util.find_spec("zensical"), "install docs requirements for site coverage")
+    def test_zensical_site(self):
+        (self.reference / "index.md").write_text(
+            '# Reference\n\n[Build details](docs-build-manifest.json)\n\n'
+            '## Types\n\n| Name | Description |\n| --- | --- |\n'
+            '| <a href="Node.md">Node</a> | A node |\n')
+        (self.reference / "Node.md").write_text(
+            '# Node\n\n<a href="Node/index.md#member">Member</a>\n'
+            '<pre data-search-exclude><code>UNSEARCHABLESENTINEL</code></pre>\n')
+        (self.reference / "Node").mkdir()
+        (self.reference / "Node/index.md").write_text(
+            '# index\n\n<a id="member"></a><a href="../Node.md">Node</a>\n')
+        result = self.run_script("prepare-reference.py", "--reference-dir", self.reference)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        (self.reference / "guide.md").write_text("# User guide\n\nSEARCHABLEGUIDE\n")
+        site = self.build_site()
+        self.assertTrue((site / "Node/index-symbol/index.html").is_file())
+        self.assertIn('href="../Node/index-symbol/#member"', (site / "Node/index.html").read_text())
+        search = json.loads((site / "search.json").read_text())
+        locations = {item["location"] for item in search["items"]}
+        self.assertIn("Node/", locations)
+        self.assertIn("guide/", locations)
+        self.assertIn("SEARCHABLEGUIDE", json.dumps(search))
+        self.assertNotIn("Node/index-symbol/", locations)
+        self.assertNotIn("UNSEARCHABLESENTINEL", json.dumps(search))
+        manifest = json.loads((site / "docs-build-manifest.json").read_text())
+        self.assertEqual(manifest["git_commit"], subprocess.check_output(
+            ["git", "-C", str(SCRIPTS.parent), "rev-parse", "HEAD"], text=True).strip())
+        self.assertTrue(manifest["zensical_version"])
 
     def test_empty_output_never_passes(self):
         sections = self.reference / "sections"
