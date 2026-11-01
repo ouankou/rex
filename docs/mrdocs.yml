@@ -39,6 +39,8 @@ multipage: true
 inherit-base-members: never
 # Retain inherited project friends without copying dependency declarations.
 inherit-hidden-friends: reference
+# Global AST casts would otherwise repeat on every derived class.
+auto-relates: false
 auto-function-metadata: true
 extract-private: true
 # Use the runner toolchain's C and C++ headers. The generated include overlay

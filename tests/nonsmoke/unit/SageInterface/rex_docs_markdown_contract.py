@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Focused Markdown documentation checks; run directly with Python 3."""
+import html
+from html.parser import HTMLParser
 import importlib.util
 import json
 import os
@@ -12,6 +14,15 @@ import unittest
 
 
 SCRIPTS = Path(__file__).resolve().parents[4] / "scripts"
+
+
+class Links(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs = []
+
+    def handle_starttag(self, tag, attrs):
+        self.hrefs.extend(value for name, value in attrs if name == "href")
 
 
 class MarkdownContract(unittest.TestCase):
@@ -200,22 +211,62 @@ class MarkdownContract(unittest.TestCase):
         result = self.run_script("validate-reference-return-links.py", "--reference-dir", self.reference)
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    @unittest.skipUnless(shutil.which("node"), "install Node.js for lookup interaction coverage")
+    def test_lookup_interactions(self):
+        result = subprocess.run(["node", str(Path(__file__).with_name("rex_docs_lookup.js"))],
+                                capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_symbol_urls_and_labels(self):
-        sections = self.reference / "sections"
-        sections.mkdir()
-        (sections / "types.md").write_text(
-            '| [`Node<T>`](../Node.md#overload) | description |\n'
-            '| <a href="../Scope/Node.md"><code>Scope::Node</code></a> | |\n'
-            '| [MrDocs](https://www.mrdocs.com) | |\n'
-        )
+        (self.reference / "Scope").mkdir()
+        for filename, title, kind in (
+            ("Node.md", "Node<T>", "record"),
+            ("Scope/Node.md", "Scope::Node", "record"),
+            ("Scope/get-01.md", "Scope::get", "function"),
+            ("Scope/index-symbol.md", "Scope::index", "function"),
+        ):
+            self.write_symbol(self.reference / filename,
+                              '---\ntitle: ' + json.dumps(title) + '\n---\n', kind)
+        (self.reference / "index.md").write_text("# Reference\n")
         output = self.root / "symbols.json"
-        result = self.run_script("generate-api-symbol-index.py", sections, output)
+        result = self.run_script("generate-api-symbol-index.py", self.reference, output)
         self.assertEqual(result.returncode, 0, result.stderr)
         symbols = json.loads(output.read_text())["symbols"]
         self.assertEqual(symbols, [
-            {"name": "Node<T>", "url": "reference/Node/#overload", "kind": "types"},
-            {"name": "Scope::Node", "url": "reference/Scope/Node/", "kind": "types"},
+            {"name": "Node<T>", "url": "reference/Node/", "kind": "record"},
+            {"name": "Scope::get", "url": "reference/Scope/get-01/", "kind": "function"},
+            {"name": "Scope::index", "url": "reference/Scope/index-symbol/", "kind": "function"},
+            {"name": "Scope::Node", "url": "reference/Scope/Node/", "kind": "record"},
         ])
+
+    def test_site_mount_path(self):
+        site = self.root / "site"
+        site.mkdir()
+        (site / "index.html").write_text('<h1 id="top">Docs</h1>')
+        (site / "assets").mkdir()
+        (site / "assets/main.css").write_text("body {}")
+        page = site / "404.html"
+        for target, success in (("/docs/assets/main.css", True),
+                                ("assets/main.css", True),
+                                ("/docs/#top", True),
+                                ("/docs/missing.css", False),
+                                ("/assets/main.css", False),
+                                ("/docs/#missing", False)):
+            with self.subTest(target=target):
+                page.write_text(f'<a href="{target}">Link</a>')
+                result = self.run_script("validate-site-links.py", "--site-dir", site,
+                                         "--base-path", "/docs/")
+                self.assertEqual(result.returncode == 0, success, result.stderr)
+
+    def test_site_payload_limit(self):
+        site = self.root / "site"
+        site.mkdir()
+        (site / "index.html").write_text("<h1>Site</h1>")
+        with (site / "asset.bin").open("wb") as stream:
+            stream.truncate(1_000_000_001)  # Sparse: no gigabyte allocation.
+        result = self.run_script("validate-site-links.py", "--site-dir", site)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("GitHub Pages 1 GB limit", result.stderr)
 
     def test_site_fragment_anchors(self):
         site = self.root / "site"
@@ -274,6 +325,30 @@ class MarkdownContract(unittest.TestCase):
             with self.subTest(source=source):
                 self.assertEqual(prepare_reference.page_url(source), expected)
 
+    def test_source_links_only_point_to_committed_files(self):
+        subprocess.run(["git", "init", "-q", str(self.root)], check=True)
+        subprocess.run(["git", "-C", str(self.root), "add", "src/Node.h"], check=True)
+        env = dict(os.environ, GIT_AUTHOR_NAME="ouankou", GIT_AUTHOR_EMAIL="anjia@ouankou.com",
+                   GIT_COMMITTER_NAME="ouankou", GIT_COMMITTER_EMAIL="anjia@ouankou.com")
+        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "Fixture"], check=True, env=env)
+        revision = subprocess.check_output(["git", "-C", str(self.root), "rev-parse", "HEAD"], text=True).strip()
+        (self.root / "build").mkdir()
+        (self.root / "build/Generated.h").touch()
+        subprocess.run(["git", "-C", str(self.root), "add", "build/Generated.h"], check=True)
+        subprocess.run(["git", "-C", str(self.root), "commit", "-qm", "Later revision"], check=True, env=env)
+        (self.reference / "index.md").write_text("# Reference\n")
+        source_url = "https://example.org/source/"
+        for name, source in (("Node", "src/Node.h"), ("Generated", "build/Generated.h")):
+            (self.reference / f"{name}.md").write_text(
+                f'# {name}\n\nDeclared in <code>&lt;<a href="{source_url}{source}#L1">{source}</a>&gt;</code>\n')
+        result = self.run_script("prepare-reference.py", "--reference-dir", self.reference,
+                                 "--source-url", source_url, "--source-root", self.root, "--source-revision", revision)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(f'href="{source_url}src/Node.h#L1"', (self.reference / "Node.md").read_text())
+        generated = (self.reference / "Generated.md").read_text()
+        self.assertNotIn(source_url, generated)
+        self.assertIn('build/Generated.h&gt;</code> (not stored in Git)', generated)
+
     def test_preparation_rejects_output_collisions(self):
         (self.reference / "index.md").write_text("# Reference\n")
         (self.reference / "Node").mkdir()
@@ -303,9 +378,10 @@ class MarkdownContract(unittest.TestCase):
         import yaml
         policy = yaml.safe_load((SCRIPTS.parent / "docs/mrdocs.yml").read_text())
         with config.open("a") as stream:
-            for key in ("inherit-base-members", "inherit-hidden-friends", "exclude-symbols"):
+            for key in ("inherit-base-members", "inherit-hidden-friends", "exclude-symbols", "auto-relates"):
                 stream.write(f"{key}: {json.dumps(policy[key])}\n")
-        result = subprocess.run([os.environ["MRDOCS_BIN"], "--config", str(config)],
+        result = subprocess.run([os.environ["MRDOCS_BIN"], "--config", str(config),
+                                 "--base-url", "https://example.org/source/"],
                                 capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         result = self.run_script("prepare-reference.py", "--reference-dir", self.reference)
@@ -313,6 +389,20 @@ class MarkdownContract(unittest.TestCase):
         for filename, kind in (("Docs/vector.md", "using"), ("Docs/Point.md", "record"),
                                ("Docs/Coordinate.md", "typedef"), ("Docs/Direction.md", "enum")):
             self.assertIn(f'data-mrdocs-kind="{kind}"', (self.reference / filename).read_text())
+        heading = (self.reference / "HeadingNode.md").read_text()
+        self.assertIn('</ul>\n\n#### <code>HeadingNode::parent</code>\n\nThis paragraph', heading)
+        self.assertIn('1. First requirement.\n\n1. Second requirement.', heading)
+        overloads = list((self.reference / "Docs").glob("make_point-*.md"))
+        self.assertEqual(len(overloads), 3)
+        for overload in overloads:
+            text = overload.read_text()
+            if 'data-mrdocs-kind="function"' in text:
+                self.assertIn('All overloads of Docs::make_point</a>', text)
+        result = self.run_script("generate-api-symbol-index.py", self.reference, self.root / "symbols.json")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        symbols = json.loads((self.root / "symbols.json").read_text())["symbols"]
+        self.assertTrue(any(item["url"] == "reference/Docs/Point/index-symbol/" for item in symbols))
+        self.assertEqual(sum(item["name"] == "Docs::make_point" for item in symbols), 3)
         imported = (self.reference / "Docs/imported_points.md").read_text()
         self.assertIn('href="Point.md">Point</a>', imported)
         self.assertFalse((self.reference / "llvm/APSInt.md").exists())
@@ -326,6 +416,7 @@ class MarkdownContract(unittest.TestCase):
         self.assertIn('href="Point.md">Point</a>', nested)
         self.assertNotIn('>Container</a>', nested)
         point = (self.reference / "Docs/Point.md").read_text()
+        self.assertIn('href="https://example.org/source/src/fixture.cpp#L', point)
         self.assertIn('href="Point/index-symbol.md"', point)
         self.assertIn('href="Point/get_index.md"', point)
         functions = (self.reference / "sections/functions.md").read_text()
@@ -339,7 +430,6 @@ class MarkdownContract(unittest.TestCase):
         self.assertIn("| **T** | Stored type. |", holder)
         if importlib.util.find_spec("markdown"):
             import markdown
-            from html.parser import HTMLParser
 
             class Tables(HTMLParser):
                 def __init__(self):
@@ -362,10 +452,16 @@ class MarkdownContract(unittest.TestCase):
                         self.rows[-1].append(self.cell)
                         self.cell = None
 
-            point_html = markdown.markdown(point, extensions=["tables"])
+            rendered_heading = markdown.markdown(heading, extensions=["tables", "md_in_html"])
+            self.assertIn('<strong>bold</strong>', rendered_heading)
+            self.assertIn('<h4><code>HeadingNode::parent</code></h4>', rendered_heading)
+            point_html = markdown.markdown(point, extensions=["tables", "md_in_html"])
             self.assertNotIn('href="int i"', point_html)
-            self.assertIn('operator&#91;&#93;(int i)', point_html)
+            self.assertIn('operator[](int i)', html.unescape(point_html))
+            self.assertIn('<h2>Friends</h2>', point_html)
             self.assertIn('<h2>Non-Member Functions</h2>', point_html)
+            self.assertIn('related_point.md', point)
+            self.assertNotIn('make_point-', point)
             self.assertIn('<h2>Derived Classes</h2>', point_html)
             tables = Tables()
             rendered = markdown.markdown(holder, extensions=["tables", "admonition"])
@@ -383,14 +479,15 @@ class MarkdownContract(unittest.TestCase):
         if importlib.util.find_spec("zensical"):
             site = self.build_site()
             point_html = (site / "Docs/Point/index.html").read_text()
-            self.assertIn('operator&#91;&#93;(int i)', point_html)
+            self.assertIn('operator[](int i)', html.unescape(point_html))
             self.assertIn('data-search-exclude', point)
 
     def build_site(self):
         config = self.root / "zensical.toml"
         config.write_text(
             '[project]\nsite_name = "Fixture"\ndocs_dir = "reference"\nsite_dir = "site"\n'
-            '[project.theme]\nvariant = "classic"\n[project.markdown_extensions]\ntables = {}\n')
+            '[project.theme]\nvariant = "classic"\n[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
+            '[project.plugins.minify]\nminify_html = true\n')
         stale = self.root / "site/obsolete.html"
         stale.parent.mkdir(exist_ok=True)
         stale.write_text("Obsolete output")
@@ -423,7 +520,9 @@ class MarkdownContract(unittest.TestCase):
         (self.reference / "guide.md").write_text("# User guide\n\nSEARCHABLEGUIDE\n")
         site = self.build_site()
         self.assertTrue((site / "Node/index-symbol/index.html").is_file())
-        self.assertIn('href="../Node/index-symbol/#member"', (site / "Node/index.html").read_text())
+        links = Links()
+        links.feed((site / "Node/index.html").read_text())
+        self.assertIn('../Node/index-symbol/#member', links.hrefs)
         search = json.loads((site / "search.json").read_text())
         locations = {item["location"] for item in search["items"]}
         self.assertIn("Node/", locations)
@@ -442,7 +541,7 @@ class MarkdownContract(unittest.TestCase):
         for name, args in (
             ("validate-docs-output.py", ("--root", self.root, "--reference-dir", self.reference)),
             ("validate-reference-return-links.py", ("--reference-dir", self.reference)),
-            ("generate-api-symbol-index.py", (sections, self.root / "symbols.json")),
+            ("generate-api-symbol-index.py", (self.reference, self.root / "symbols.json")),
         ):
             with self.subTest(script=name):
                 self.assertNotEqual(self.run_script(name, *args).returncode, 0)

@@ -26,6 +26,7 @@ class AstSimpleProcessing;
  * **Data members**
  *
  * #### `SgAggregateInitializer::p_initializers`
+ *
  * This points to a SgExprListExp (list of expressions).
  *
  */
@@ -43,10 +44,12 @@ class SgAggregateInitializer;
  * **Data members**
  *
  * #### `SgExpressionPtrList SgAsmStmt::p_operands`
+ *
  * The input and output operands, represented by SgAsmOp expressions.
  * The assembly template is stored separately in p_assemblyCode.
  *
  * #### `SgAsmStmt::AsmRegisterNameList SgAsmStmt::p_clobberRegisterList`
+ *
  * This is the clobber list (list of registers where side-effects happen).
  * This is a list of exact target-register strings supplied by the frontend.
  * Exact strings preserve register width, aliases, and non-x86 target names.
@@ -65,9 +68,11 @@ class SgAsmStmt;
  * **Data members**
  *
  * #### `SgAssignInitializer::p_operand_i`
+ *
  * This points to the internal SgExpression (right-hand-side expression).
  *
  * #### `SgAssignInitializer::p_expression_type`
+ *
  * This points to the SgType of the rhs expression.
  *
  */
@@ -83,6 +88,7 @@ class SgAssignInitializer;
  * **Data members**
  *
  * #### `SgBasicBlock::p_statements`
+ *
  * This pointer an STL list of pointers to SgStatement objects.
  *
  */
@@ -98,18 +104,21 @@ class SgBasicBlock;
  * **Data members**
  *
  * #### `SgExpression* SgBinaryOp::p_lhs_operand_i`
+ *
  * This is the operand associated with the lhs of the binary operator.
  * Every binary operator is applied to two operands, this
  * variable stores the lhs operand to which the binary operator is applied
  * (with the rhs).
  *
  * #### `SgExpression* SgBinaryOp::p_rhs_operand_i`
+ *
  * This is the operand associated with the rhs of the binary operator.
  * Every binary operator is applied to two operands, this
  * variable stores the rhs operand to which the binary operator is applied
  * (with the lhs).
  *
  * #### `SgBinaryOp::p_expression_type`
+ *
  * The semantic result type of the operator.
  *
  */
@@ -123,6 +132,7 @@ class SgBinaryOp;
  * **Data members**
  *
  * #### `SgBoolValExp::p_value`
+ *
  * The boolean literal's value.
  *
  */
@@ -162,6 +172,7 @@ class SgBreakStmt;
  * **Data members**
  *
  * #### `SgCallExpression::p_function`
+ *
  * This pointer points to the expression being assembled with argments for be a
  * function call.
  * Note that this is not always a SgFunctionRefExp or a SgMemberFunctionRefExp
@@ -174,14 +185,17 @@ class SgBreakStmt;
  * src/midend/astDiagnostics/AstConsistencyTests.C for details).
  *
  * #### `SgCallExpression::p_args`
+ *
  * This is a pointer to a SgExprListExp (list of function arguments)
  *
  * #### `SgCallExpression::p_expression_type`
+ *
  * This is the type of the return value of the function.
  *
  * **Member functions**
  *
  * #### `SgCallExpression::get_type()`
+ *
  * Returns the exact semantic result type stored by the producer. Missing,
  * placeholder, and callable types are rejected.
  *
@@ -197,6 +211,7 @@ class SgCallExpression;
  * **Data members**
  *
  * #### `SgCaseOptionStmt::p_key_range_end`
+ *
  * This pointer points to the last constant in the range when a gnu range
  * case label is used.
  * - Internal: We can't represent the range a ... b as an expression in C or C++
@@ -204,25 +219,30 @@ class SgCallExpression;
  * used as a case label. The p_key is the start of the range.
  *
  * #### `SgCaseOptionStmt::p_body`
+ *
  * This pointer points to a SgStatement object.
  *
  * **Member functions**
  *
  * #### `SgCaseOptionStmt::get_key() const`
+ *
  * Returns the case label expression.
  * - Internal: This should always be a valid pointer.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgCaseOptionStmt::set_key(SgExpression* key)`
+ *
  * Sets the case label expression.
  * - Return: Returns void.
  *
  * #### `SgCaseOptionStmt::get_body() const`
+ *
  * Returns pointer to a SgStatement object.
  * - Internal: This should always be a valid pointer.
  * - Return: Returns pointer to SgStatement.
  *
  * #### `SgCaseOptionStmt::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Return: Returns void.
  */
@@ -237,6 +257,7 @@ class SgCaseOptionStmt;
  * **Member functions**
  *
  * #### `SgCastExp::get_operand ()`
+ *
  * Returns the target of the cast.
  * This functions returns an SgExpression pointer representing the expression
  * being casted.
@@ -254,45 +275,55 @@ class SgCastExp;
  * **Data members**
  *
  * #### `SgCatchOptionStmt::p_condition`
+ *
  * This pointer to a SgVariableDeclaration.
  *
  * #### `SgCatchOptionStmt::p_body`
+ *
  * This pointer to a SgStatement used to hold the statements to be executed
  * when the exception is caught.
  *
  * #### `SgCatchOptionStmt::p_trystmt`
+ *
  * This pointer to a SgTryStmt (a declaration) that is associated with this
  * catch option.
  *
  * **Member functions**
  *
  * #### `SgCatchOptionStmt::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgCatchOptionStmt.
  *
  * #### `SgCatchOptionStmt::get_condition() const`
+ *
  * Access function for p_condition.
  * - Return: Returns a pointer to a SgVariableDeclaration.
  *
  * #### `SgCatchOptionStmt::set_condition(SgVariableDeclaration* condition)`
+ *
  * Access function for p_condition.
  * - Param `condition`: SgVariableDeclaration pointer
  * - Return: Returns void.
  *
  * #### `SgCatchOptionStmt::get_body() const`
+ *
  * Access function for p_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgCatchOptionStmt::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Param `body`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgCatchOptionStmt::get_trystmt() const`
+ *
  * Access function for p_trystmt.
  * - Return: Returns a pointer to a SgTryStmt.
  *
  * #### `SgCatchOptionStmt::set_trystmt(SgTryStmt* trystmt)`
+ *
  * Access function for p_trystmt.
  * - Param `trystmt`: SgTryStmt pointer
  * - Return: Returns void.
@@ -309,15 +340,18 @@ class SgCatchOptionStmt;
  * **Data members**
  *
  * #### `SgCatchStatementSeq::p_catch_statement_seq`
+ *
  * This is an STL list of pointers to SgStatement objects.
  *
  * **Member functions**
  *
  * #### `SgCatchStatementSeq::get_catch_statement_seq() const`
+ *
  * Access function for p_catch_statement_seq.
  * - Return: Returns const reference to SgStatementPtrList.
  *
  * #### `SgCatchStatementSeq::get_catch_statement_seq()`
+ *
  * Access function for p_catch_statement_seq.
  * - Return: Returns non-const reference to SgStatementPtrList.
  */
@@ -333,17 +367,21 @@ class SgCatchStatementSeq;
  * **Data members**
  *
  * #### `SgClassDeclaration::p_name`
+ *
  * This is the name of the class or instantiated class template
  * - Internal: The value held is not shared within the Sage III AST.
  *
  * #### `SgClassDeclaration::p_class_type`
+ *
  * Enum value classifying this as a class,struct,or union.
  * - Internal: The enum type is also defined in this class.
  *
  * #### `SgClassDeclaration::p_type`
+ *
  * This is the type used in the declaration (SgClassType).
  *
  * #### `SgClassDeclaration::p_definition`
+ *
  * This is the class definition (alway a valid pointer, except for explicitly
  * marked forward declarations). When this is a defining or nondefining
  * declartion the p_definition pointer is always valid.  However, as a separate
@@ -353,6 +391,7 @@ class SgCatchStatementSeq;
  * declaration and may not be the same as that pointed to by the "this" pointer.
  *
  * #### `SgClassDeclaration::p_from_template`
+ *
  * This records if the class declaration is associated with a template.
  * This boolean value is set to true if this is a non-template class nested
  * in a templated class.  We have an explicit IR node for template classes, but
@@ -366,6 +405,7 @@ class SgCatchStatementSeq;
  * **Member functions**
  *
  * #### `SgClassDeclaration::SgClassDeclaration ( Sg_File_Info* startOfConstruct
+ *
  * = NULL,` SgName name = SgdefaultName, int class_type = 0, SgClassType
  * *type=NULL, SgClassDefinition *definition=NULL) This is the only constructor.
  * This constructor builds the SgClassDeclaration base class. but has some
@@ -396,40 +436,49 @@ class SgClassDeclaration;
  * **Data members**
  *
  * #### `SgClassDefinition::p_members`
+ *
  * This the list of member declarations in the class.
  *
  * #### `SgClassDefinition::p_inheritances`
+ *
  * This the list of base classes specificed in the class definition.
  * - Internal: The order of base classes can be important.
  *
  * **Member functions**
  *
  * #### `SgClassDefinition::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgClassDefinition.
  *
  * #### `SgClassDefinition::get_members()`
+ *
  * Returns a list to the data member declarations.
  * - Return: Returns an STL list by reference.
  *
  * #### `SgClassDefinition::get_members() const`
+ *
  * Returns a const list to the data member declarations.
  * - Return: Returns a const STL list by reference.
  *
  * #### `SgClassDefinition::get_inheritances()`
+ *
  * Returns a list to the base classes.
  * - Return: Returns an STL list by reference.
  *
  * #### `SgClassDefinition::get_inheritances() const`
+ *
  * Returns a const list to the base classes.
  * - Return: Returns a const STL list by reference.
  *
  * #### `SgClassDefinition::get_qualified_name() const`
+ *
  * Returns SgName (a string) representing the name of the current scope.
  * See discussion of qualified names in the documentation.
  * - Return: Returns SgName (a string).
  *
  * #### `SgClassDefinition::get_declaration()`
+ *
  * returns the class declaration associated with this class decinition.
  * - Return: Returns SgClassDeclaration pointer.
  */
@@ -448,15 +497,18 @@ class SgClassDefinition;
  * **Data members**
  *
  * #### `SgClassNameRefExp::p_symbol`
+ *
  * This pointer points to a SgClassSymbol.
  *
  * **Member functions**
  *
  * #### `SgClassNameRefExp::get_symbol() const`
+ *
  * Returns pointer to SgSymbol.
  * - Return: Returns pointer to SgSymbol.
  *
  * #### `SgClassNameRefExp::set_symbol(SgSymbol* symbol)`
+ *
  * Access function for p_symbol.
  * - Return: Returns void.
  */
@@ -480,11 +532,13 @@ class SgClassNameRefExp;
  * **Member functions**
  *
  * #### `SgClassSymbol::get_name() const`
+ *
  * Access function for getting name from declarations or types internally.
  * - Internal: This is a virtual function.
  * - Return: Returns SgName.
  *
  * #### `SgClassSymbol::get_type() const`
+ *
  * This function returns the type associated with the named entity.
  * - Internal: This is a virtual function.
  * - Return: Returns SgType*.
@@ -504,51 +558,63 @@ class SgClinkageStartStatement;
  * **Data members**
  *
  * #### `SgConditionalExp::p_conditional_exp`
+ *
  * This pointer points to a SgExpression object.
  *
  * #### `SgConditionalExp::p_true_exp`
+ *
  * This pointer points to a SgExpression object.
  *
  * #### `SgConditionalExp::p_false_exp`
+ *
  * This pointer points to a SgExpression object.
  *
  * #### `SgConditionalExp::p_expression_type`
+ *
  * This pointer points to a SgType object.
  *
  * **Member functions**
  *
  * #### `SgConditionalExp::get_conditional_exp() const`
+ *
  * Access function for p_conditional_exp.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgConditionalExp::set_conditional_exp(SgExpression* conditional_exp)`
+ *
  * Access function for p_conditional_exp.
  * - Param `conditional_exp`: is the conditional test expression
  * - Return: Returns void.
  *
  * #### `SgConditionalExp::get_true_exp() const`
+ *
  * Access function for p_true_exp.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgConditionalExp::set_true_exp(SgExpression* true_exp)`
+ *
  * Access function for p_true_exp.
  * - Param `true_exp`: expression to evaluate if test is true.
  * - Return: Returns void.
  *
  * #### `SgConditionalExp::get_false_exp() const`
+ *
  * Access function for p_false_exp.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgConditionalExp::set_false_exp(SgExpression* false_exp)`
+ *
  * Access function for p_false_exp.
  * - Param `false_exp`: expression to evaluate if test is false.
  * - Return: Returns void.
  *
  * #### `SgConditionalExp::get_expression_type() const`
+ *
  * Access function for p_expression_type.
  * - Return: Returns pointer to SgType.
  *
  * #### `SgConditionalExp::set_expression_type(SgType* expression_type)`
+ *
  * Access function for p_expression_type.
  * Both the p_true_exp and p_false_exp must have the same type.
  * - Param `expression_type`: type of result.
@@ -570,6 +636,7 @@ class SgConditionalExp;
  * **Data members**
  *
  * #### `SgConstructorInitializer::p_declaration`
+ *
  * This points to the associated member function declaration (a constructor).
  * Note that this pointer can be NULL if no such constructor is defined (e.g.
  * compiler generated default constructor).
@@ -580,33 +647,39 @@ class SgConditionalExp;
  * have no NULL pointes within the AST.
  *
  * #### `SgConstructorInitializer::p_args`
+ *
  * This points to the argument list of the associated constructor call.
  * - Internal: Note that this pointer is always a valid pointer, even if the
  * constructor and class declaration pointers are NULL.  This list can also be
  * empty, but the poitner to the list is always valid.
  *
  * #### `SgConstructorInitializer::p_expression_type`
+ *
  * This points to the associated type for this constructor.
  * - Internal: This pointer should always be valid,
  * "p_associated_class_unknown" is true iff "p_expression_type" is not a
  * SgClassType.
  *
  * #### `SgConstructorInitializer::p_need_name`
+ *
  * This bool value controls the output of the class name.
  * This might be somewhat redundant with the explicit vs. implement
  * representation in the source code (recorded in another flag of the
  * SgExpression base class).
  *
  * #### `SgConstructorInitializer::p_need_qualifier`
+ *
  * This bool value controls the output of the class names qualifier.
  * - Internal: The qualifier is currently always output. This variable is not
  * used.
  *
  * #### `SgConstructorInitializer::p_need_parenthesis_after_name`
+ *
  * This bool value controls the output of "()" after the class name.
  * The controls the output at "class X x;" or "class X x();".
  *
  * #### `SgConstructorInitializer::p_associated_class_unknown`
+ *
  * This bool value indicates when p_declaration should be a valid pointer.
  * If true, then p_declaration is NULL, else if false, then p_declaration should
  * be a valid pointer.
@@ -616,20 +689,24 @@ class SgConditionalExp;
  * **Member functions**
  *
  * #### `SgConstructorInitializer::get_need_name() const`
+ *
  * returns bool value if name is required in code generation then return true.
  * - Return: Returns bool value.
  *
  * #### `SgConstructorInitializer::set_need_name (bool required)`
+ *
  * This function allows the p_need_name flag to be set (used internally).
  * - Param `required`: - sets value of internal p_need_name flag.
  * - Return: Returns void.
  *
  * #### `SgConstructorInitializer::set_expression_type (SgType* type)`
+ *
  * Access function for p_expression_type.
  * - Param `required`: - sets value of internal p_expression_type.
  * - Return: Returns void.
  *
  * #### `SgConstructorInitializer::get_expression_type() const`
+ *
  * Access function for p_expression_type, returns pointer to SgType associated
  * with constructor. This is usually a SgClassType, but it can also be a
  * primative type (typically in association with a new operator).
@@ -663,11 +740,13 @@ class SgContinueStmt;
  * **Data members**
  *
  * #### `SgCtorInitializerList::p_ctors`
+ *
  * This is an STL list of pointers to SgInitializedName objects.
  *
  * **Member functions**
  *
  * #### `SgCtorInitializerList::get_ctors()`
+ *
  * Returns STL list of pointers to SgInitializedName objects.
  * - Return: Returns SgInitializedNamePtrList (STL list) by reference.
  */
@@ -682,17 +761,21 @@ class SgCtorInitializerList;
  * **Data members**
  *
  * #### `SgBitVector    SgDeclarationModifier::p_modifierVector`
+ *
  * Bit vector permitting specification of flags for friend, typedef, export,
  * throw.
  *
  * #### `SgTypeModifier    SgDeclarationModifier::p_typeModifier`
+ *
  * Modifier for type information.
  *
  * #### `SgAccessModifier    SgDeclarationModifier::p_accessModifier`
+ *
  * Modifier for access information (only set for declarations in class and
  * struct definitions)
  *
  * #### `SgStorageModifier    SgDeclarationModifier::p_storageModifier`
+ *
  * Modified for storage information.
  *
  */
@@ -721,24 +804,36 @@ class SgDeclarationModifier;
  * the IR and this is a problem for applications which must generate unique
  * names for C++ constructs.  Specific to functions names:
  * - We have:
- * -# get_name()
- * -# get_qualified_name()
- * -# get_mangled_name()
+ *
+ * 1. get_name()
+ *
+ * 1. get_qualified_name()
+ *
+ * 1. get_mangled_name()
  * - While we need (on ALL SgDeclarationStatement IR nodes):
- * -# get_name()
- * -# get_qualified_name()
- * -# get_mangled_name()
- * -# get_qualified_mangled_name()
+ *
+ * 1. get_name()
+ *
+ * 1. get_qualified_name()
+ *
+ * 1. get_mangled_name()
+ *
+ * 1. get_qualified_mangled_name()
  * - It has been suggested that we eliminate get_qualified_mangled_name() and
  * have get_mangled_name() return a mangled qualified name.  Thus the semantics
  * of get_mangled_name() would be changed to generate a mangled qualified name.
  * The purpose of get_mangled_name is to generate a unique name for all
  * declarations. Note that some declarations should not return a unique name:
- * -# SgAsmStmt
- * -# SgCtorInitializerList
- * -# SgFunctionParameterList
- * -# SgUsingDeclarationStatement
- * -# SgVariableDefinition \\
+ *
+ * 1. SgAsmStmt
+ *
+ * 1. SgCtorInitializerList
+ *
+ * 1. SgFunctionParameterList
+ *
+ * 1. SgUsingDeclarationStatement
+ *
+ * 1. SgVariableDefinition \\
  * It may be that this should be the same as for the SgVariableDeclaration.
  * - Related to the above problem we wish to provide a definition under which
  * all declarations (SgDeclarationStatement IR nodes) can be defined to be
@@ -815,6 +910,7 @@ class SgDeclarationModifier;
  * **Data members**
  *
  * #### `SgDeclarationStatement::p_definingDeclaration`
+ *
  * This pointer is valid only if a defining declaration exists, and stores the
  * defining declaration where the declaration was defined. It is important to
  * note that this is the only defining declaration as opposed to the
@@ -824,6 +920,7 @@ class SgDeclarationModifier;
  * though this data member in each defining and non-defining declaration).
  *
  * #### `SgDeclarationStatement::p_firstNondefiningDeclaration`
+ *
  * This pointer is valid if there is a non-defining declaration, and stores the
  * first non-defining declaration where a declaration was made explicitly (as in
  * forward declaration) or implicitly as in the case of a few IR nodes (e.g.
@@ -838,6 +935,7 @@ class SgDeclarationModifier;
  * (SgDeclarationStatements).
  *
  * #### `SgDeclarationStatement::p_linkage`
+ *
  * This string stores the value "C", "C++", or "fortran" to define the external
  * linkage for generating linkable names.
  * The only values that make sense here are "C", "C++" is the assumed default
@@ -845,6 +943,7 @@ class SgDeclarationModifier;
  * specific (may be rejected by some backend vendor compilers).
  *
  * #### `SgDeclarationStatement::p_declarationModifier`
+ *
  * This is the mechanism to handle declaration modifiers.
  * See Stroustrup 3rd edition, Appendix A, for details of how modifiers are
  * represented in ROSE.
@@ -854,10 +953,12 @@ class SgDeclarationModifier;
  * object (returned by reference) directly to get/set its values.
  *
  * #### `SgDeclarationStatement::p_nameOnly`
+ *
  * When set on a variable declaration, `get_next` does not traverse its
  * base-type declaration links.
  *
  * #### `SgDeclarationStatement::p_forward`
+ *
  * This marks a declaration as being an explicit forward declaration.
  * All non-defining declaations are marked as forward declarations, while
  * a defining declaration is NOT a marked as a forward declaration.
@@ -865,6 +966,7 @@ class SgDeclarationModifier;
  * declarations to know when something is a forward declaration!
  *
  * #### `SgDeclarationStatement::p_externBrace`
+ *
  * This marks that the declaration appeared with "extern".
  * Note that I think this is also set even if it appears between "extern {" and
  * "}". It might be that this is a way to specify the first "extern {", but I
@@ -882,6 +984,7 @@ class SgDeclarationModifier;
  * is either "C", "C++", or "fortran".
  *
  * #### `SgDeclarationStatement::p_skipElaborateType`
+ *
  * This marks "type elaboration" which is the use of the keyword "class" before
  * variables of type class.
  * This is not often required, but is routinely output by the unparser to be
@@ -893,6 +996,7 @@ class SgDeclarationModifier;
  * accurate.
  *
  * #### `SgDeclarationStatement::p_need_name_qualifier`
+ *
  * This marks a declaration are requiring qualification in its output in the
  * unparser.
  * - Deprecated: This is now redundant with the hidden list analysis done to
@@ -905,47 +1009,57 @@ class SgDeclarationModifier;
  * **Member functions**
  *
  * #### `SgDeclarationStatement::get_declarationModifier()`
+ *
  * Returns SgDeclarationModifier object by reference (so that it can be set).
  * - Return: Returns SgDeclarationModifier by reference.
  *
  * #### `SgDeclarationStatement::isForward() const`
+ *
  * Returns boolean value indicating if this is a forward declaration.
  * - Return: Returns bool.
  *
  * #### `SgDeclarationStatement::setForward()`
+ *
  * Marks a declaration as a forward declaration.
  * - Return: Returns void.
  *
  * #### `SgDeclarationStatement::unsetForward()`
+ *
  * Marks a forward declaration as a non-forward declaration.
  * - Return: Returns void.
  *
  * #### `SgDeclarationStatement::get_definingDeclaration() const`
+ *
  * This is an access function for the
  * SgDeclarationStatement::p_definingDeclaration data member (see that
  * variable's documentation for details).
  *
  * #### `SgDeclarationStatement::set_definingDeclaration(
+ *
  * SgDeclarationStatement* definingDeclaration )` This is an access function for
  * the SgDeclarationStatement::p_definingDeclaration data member (see that
  * variable's documentation for details).
  *
  * #### `SgDeclarationStatement::get_firstNondefiningDeclaration() const`
+ *
  * This is an access function for the
  * SgDeclarationStatement::p_firstNondefiningDeclaration data member (see that
  * variable's documentation for details).
  *
  * #### `SgDeclarationStatement::set_firstNondefiningDeclaration(
+ *
  * SgDeclarationStatement* firstNondefiningDeclaration )` This is an access
  * function for the SgDeclarationStatement::p_firstNondefiningDeclaration data
  * member (see that variable's documentation for details).
  *
  * #### `SgDeclarationStatement::get_symbol_from_symbol_table() const`
+ *
  * **FOR** **INTERNAL** **USE** Get the associated symbol from the symbol table
  * in the stored scope. Users should use the
  * SgDeclarationStatement::search_for_symbol_from_symbol_table() instead.
  *
  * #### `SgDeclarationStatement::search_for_symbol_from_symbol_table() const`
+ *
  * User interface for retrieving the associated symbol from the declaration.
  * - Return: Returns SgSymbol pointer.
  *
@@ -962,16 +1076,19 @@ class SgDeclarationStatement;
  * **Data members**
  *
  * #### `SgDefaultOptionStmt::p_body`
+ *
  * This pointer points to SgStatement holding the statements executed for the
  * default case of a switch statement.
  *
  * **Member functions**
  *
  * #### `SgDefaultOptionStmt::get_body() const`
+ *
  * Returns pointer to SgStatement.
  * - Return: Returns pointer to SgStatement.
  *
  * #### `SgDefaultOptionStmt::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Return: Returns void.
  */
@@ -988,13 +1105,16 @@ class SgDefaultOptionStmt;
  * **Data members**
  *
  * #### `SgDeleteExp::p_variable`
+ *
  * This pointer points to the variable being deleted.
  *
  * #### `SgDeleteExp::p_is_array`
+ *
  * This bool value is true only if the delete operator is called on an array
  * (array delete).
  *
  * #### `SgDeleteExp::p_need_global_specifier`
+ *
  * This delete operator needs to be output with "::".
  * - Todo: Check if this bool data member is used and/or required.
  * - Internal: Not clear if this is required since Sage III should have the
@@ -1005,28 +1125,34 @@ class SgDefaultOptionStmt;
  * **Member functions**
  *
  * #### `SgDeleteExp::get_variable() const`
+ *
  * Access function for p_variable.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgDeleteExp::set_variable(SgExpression* variable)`
+ *
  * Access function for p_variable.
  * - Param `variable`: is the variable to be deleted.
  * - Return: Returns void.
  *
  * #### `SgDeleteExp::get_is_array() const`
+ *
  * Access function for p_is_array.
  * - Return: Returns bool.
  *
  * #### `SgDeleteExp::set_is_array(short is_array)`
+ *
  * Access function for p_is_array.
  * - Param `is_array`: flag to record use of array delete.
  * - Return: Returns void.
  *
  * #### `SgDeleteExp::get_need_global_specifier() const`
+ *
  * Access function for p_need_global_specifier.
  * - Return: Returns bool.
  *
  * #### `SgDeleteExp::set_need_global_specifier(short
+ *
  * need_global_specifier)` Access function for p_need_global_specifier.
  * - Param `need_global_specifier`: flag to record use of array delete.
  * - Return: Returns void.
@@ -1061,32 +1187,39 @@ class SgDirectory;
  * **Data members**
  *
  * #### `SgDoWhileStmt::p_condition`
+ *
  * This pointer a SgStatement, the conditional expression in the loop construct.
  *
  * #### `SgDoWhileStmt::p_body`
+ *
  * This pointer a SgStatement, and holds the statements in the body of the
  * loop.
  *
  * **Member functions**
  *
  * #### `SgDoWhileStmt::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgDoWhileStmt.
  *
  * #### `SgDoWhileStmt::get_body() const`
+ *
  * Access function for p_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgDoWhileStmt::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Param `body`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgDoWhileStmt::get_condition() const`
+ *
  * Access function for p_condition.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgDoWhileStmt::set_condition(SgStatement* condition)`
+ *
  * Access function for p_condition.
  * - Param `condition`: SgStatement pointer
  * - Return: Returns void.
@@ -1101,6 +1234,7 @@ class SgDoWhileStmt;
  * **Data members**
  *
  * #### `SgDoubleVal::p_value`
+ *
  * This value holds the double represented in the source code.
  *
  */
@@ -1114,18 +1248,23 @@ class SgDoubleVal;
  * **Data members**
  *
  * #### `SgEnumDeclaration::p_name`
+ *
  * Name of enum type (empty if not named).
  *
  * #### `SgEnumDeclaration::p_embedded`
+ *
  * Boolean value true if embedded in a typedef declaration (might not be used).
  *
  * #### `SgEnumDeclaration::p_type`
+ *
  * SgEnumType generated by this enum declaration.
  *
  * #### `SgEnumDeclaration::p_enumerators`
+ *
  * STL list of pointers to SgInitializedName object (used for enum variables).
  *
  * #### `SgEnumDeclaration::p_scope`
+ *
  * Scope of enum declaration.
  * Note that the scope of the enum must be stored explicitly since it can be
  * declared in a namespace and defined outside the namespace (note that forward
@@ -1134,42 +1273,52 @@ class SgDoubleVal;
  * **Member functions**
  *
  * #### `SgEnumDeclaration::get_name() const`
+ *
  * Access function for p_name.
  * - Return: Returns SgName by value.
  *
  * #### `SgEnumDeclaration::set_name(SgName name)`
+ *
  * Access function for p_name.
  * - Return: Returns void.
  *
  * #### `SgEnumDeclaration::get_embedded() const`
+ *
  * Access function for p_embedded.
  * - Return: Returns bool by value.
  *
  * #### `SgEnumDeclaration::set_embedded(bool embedded)`
+ *
  * Access function for p_embedded.
  * - Return: Returns void.
  *
  * #### `SgEnumDeclaration::get_type() const`
+ *
  * Access function for p_type.
  * - Return: Returns pointer to SgType.
  *
  * #### `SgEnumDeclaration::set_type(SgType* type)`
+ *
  * Access function for p_type.
  * - Return: Returns void.
  *
  * #### `SgEnumDeclaration::get_enumerators() const`
+ *
  * Access function for p_enumerators.
  * - Return: Returns a const reference to SgInitializedNamePtrList.
  *
  * #### `SgEnumDeclaration::get_enumerators()`
+ *
  * Access function for p_enumerators.
  * - Return: Returns reference to SgInitializedNamePtrList.
  *
  * #### `SgEnumDeclaration::get_scope() const`
+ *
  * Access function for p_scope.
  * - Return: Returns pointer to SgScopeStatement.
  *
  * #### `SgEnumDeclaration::set_scope(SgScopeStatment* scope)`
+ *
  * Access function for p_scope.
  * - Return: Returns void.
  */
@@ -1232,6 +1381,7 @@ class SgExprStatement;
  * **Data members**
  *
  * #### `SgExpression::p_lvalue`
+ *
  * This boolean variable marks the current expression as a
  * left hand side value (lvalue).
  * - Deprecated: This computation of this value is innacurate.  It identifies
@@ -1240,6 +1390,7 @@ class SgExprStatement;
  * lvalues, despite not being assigned to (section 3.10).
  *
  * #### `SgExpression::p_need_paren`
+ *
  * This boolean value marks the current expression as requiring parenthises.
  * This boolean value marks the current expression as requiring parenthises (the
  * information comes from the frontend's interpretation of the requirement and
@@ -1251,6 +1402,7 @@ class SgExprStatement;
  * **Member functions**
  *
  * #### `SgExpression::get_need_paren (void) const`
+ *
  * returns bool value if front-end considers parenthesis to be required.
  * This function returns a boolean value which is true if parenthesis are
  * required for the proper eveluation of the current expression.  The frontend
@@ -1264,6 +1416,7 @@ class SgExprStatement;
  * expression).
  *
  * #### `SgExpression::set_need_paren (bool need_paren)`
+ *
  * This function allows the p_need_paren flag to be set (used internally).
  * This function is mostly used internally but would required for the
  * construction of specific expression trees where the operator precedence would
@@ -1274,6 +1427,7 @@ class SgExprStatement;
  * - Return: Returns void.
  *
  * #### `SgExpression::get_lvalue (void) const`
+ *
  * Returns a bool value if the current expression is assigned to.
  * - Deprecated: The computation of this value is innacurate in terms of the
  * lvalue as defined by the standard.  It identifies expressions which have been
@@ -1283,6 +1437,7 @@ class SgExprStatement;
  * - Return: Returns true if the current expression is assigned to.
  *
  * #### `SgExpression::set_lvalue (bool lvalue)`
+ *
  * This function allows the p_lvalue flag to be set (used internally).
  * This function is mostly used internally but would required for the
  * construction of specific expression trees. In general it is set by the
@@ -1293,6 +1448,7 @@ class SgExprStatement;
  * - Return: Returns void.
  *
  * #### `SgExpression::isDefinable (void) const`
+ *
  * For Fortran.  When called from a node of any other language, behavior is
  * undefined (see SageInterface::is_Fortran_language). Returns a bool value
  * which is true if the current expression is "almost definable". "Almost
@@ -1305,6 +1461,7 @@ class SgExprStatement;
  * - Return: Returns true if the current expression is almost definable.
  *
  * #### `SgExpression::isUsedAsDefinable (void) const`
+ *
  * For Fortran.  When called from a node of any other language, behavior is
  * undefined (see SageInterface::is_Fortran_language). Returns a bool value
  * which is true if the current expression is used as a definable value.  That
@@ -1313,12 +1470,14 @@ class SgExprStatement;
  * value.
  *
  * #### `SgExpression::isLValue (void) const`
+ *
  * For C and C++. When called from a node of any other language, behavior is
  * undefined (see SageInterface::is_C*_language). Returns a bool value which is
  * true if the current expression is an lvalue, as defined by the C++ standard.
  * - Return: Returns true if the current expression is an lvalue.
  *
  * #### `SgExpression::isUsedAsLValue (void) const`
+ *
  * For C and C++. When called from a node of any other language, behavior is
  * undefined (see SageInterface::is_C*_language). Returns a bool value which is
  * true if the current expression is used as an lvalue.  That is, it is an
@@ -1326,6 +1485,7 @@ class SgExprStatement;
  * - Return: Returns true if the current expression is used as an lvalue.
  *
  * #### `SgExpression::isChildUsedAsLValue (SGExpression) const`
+ *
  * For C and C++. When called from a node of any other language, behavior is
  * undefined (see SageInterface::is_C*_language). Returns a bool value which is
  * true if the specified expression is used as an lvalue.  That is, it is an
@@ -1334,6 +1494,7 @@ class SgExprStatement;
  * - Return: Returns true if the specified expression is used as an lvalue.
  *
  * #### `SgExpression::get_type() const`
+ *
  * Get the type associated with this expression.
  * This function is the correct user function to call to get the
  * type (note that get_expression_type() is for internal use only).
@@ -1349,6 +1510,7 @@ class SgExpression;
  * **Data members**
  *
  * #### `ROSEAttributesListContainerPtr
+ *
  * SgFile::p_preprocessorDirectivesAndCommentsList` This is the container of
  * comments and preprocessor control statements that was extracted from the file
  * and which has been woven back into the AST (using heuristics). This
@@ -1359,11 +1521,13 @@ class SgExpression;
  * the code generation phase.
  *
  * #### `SgFile::p_originalCommandLineArgumentList`
+ *
  * Copy of original argc and argv command line passed to ROSE translator
  * (converted to STL list of strings).
  * - Internal: This is a deep copy.
  *
  * #### `SgFile::p_file_info`
+ *
  * This object permits the file name map mechanism to be used on SgFile objects.
  * This Sg_File_Info object encapsulates the file id mechanism which maps file
  * ids (integers) to filenames (strings). This permist us to save significant
@@ -1378,9 +1542,11 @@ class SgExpression;
  * **Member functions**
  *
  * #### `list<string> SgFile::get_originalCommandLineArgumentList() const`
+ *
  * Returns a list of strings representing the original command-line.
  *
  * #### `SgFile::set_originalCommandLineArgumentList( list<string>
+ *
  * originalCommandLineArgumentList )` Sets the list of strings representing the
  * original command-line.
  */
@@ -1408,12 +1574,17 @@ class SgFile;
  * The IR node may be part of a compiler generated IR nodes (or subtree, in
  * which case all IR nodes in the subtree are marked as compiler generated).
  * Compiler generated IR nodes include:
- * -# implicit casts
- * -# instantiated templates (not explicitly specialized)
- * -# non-explicit return statements in **main** function.
- * -# (... complete this list) \n
+ *
+ * 1. implicit casts
+ *
+ * 1. instantiated templates (not explicitly specialized)
+ *
+ * 1. non-explicit return statements in **main** function.
+ *
+ * 1. (... complete this list) \n
  * - e_output_in_code_generation \n
- * -# Used to explicitly makr any compiler generated IR nodes for output (forces
+ *
+ * 1. Used to explicitly makr any compiler generated IR nodes for output (forces
  * template instaiations to be output in the generated source if transformed).
  * - e_shared \n
  * Marks IR nodes as shared (set by AST merge mechanism).  Note that SgTypes and
@@ -1437,21 +1608,31 @@ class SgFile;
  * - Todo: Should there be a simpler way to copy a SgFileInfo object than:
  * "new Sg_File_Info(*fileInfo);" or "fileInfo->copy();"; likely not!
  * - Todo: Define the subset of IR nodes which would all have:
- * -# Sg_File_Info
- * -# AstAttributeMechanism
- * -# SgNode (parent pointer) \n
+ *
+ * 1. Sg_File_Info
+ *
+ * 1. AstAttributeMechanism
+ *
+ * 1. SgNode (parent pointer) \n
  * This will make the documentation more intuative.  The argument supporting
  * this is that we operate on those IR nodes that correspond to the visual
  * representation of the source code (so we can exclude SgSymbols, and SgTypes).
  * Having the same subset of IR nodes permits a simpler documentation of the API
  * and intuition as to where it applies.  A likely subset would be:
- * -# SgLocatedNodes
- * -# SgFile
- * -# SgDirectory (questionable)
- * -# SgInitializedName
- * -# SgBaseClass
- * -# SgTemplateArgument
- * -# SgTemplateParameter
+ *
+ * 1. SgLocatedNodes
+ *
+ * 1. SgFile
+ *
+ * 1. SgDirectory (questionable)
+ *
+ * 1. SgInitializedName
+ *
+ * 1. SgBaseClass
+ *
+ * 1. SgTemplateArgument
+ *
+ * 1. SgTemplateParameter
  * - Todo: Consider putting the endOfConstruct information into the single
  * Sg_File_Info object. Currently the SgLocatedNode stores two Sg_File_Info
  * objects, one for the beginning and the end of each construct.  This would
@@ -1471,6 +1652,7 @@ class SgFile;
  * **Data members**
  *
  * #### `Sg_File_Info::p_file_id`
+ *
  * This is a key that maps integers to file names, it prevents redundent storage
  * of filename strings. This is part of a mechanism to reduce the memory
  * requirements of the IR (to support whole program analysis in ROSE).  The
@@ -1484,6 +1666,7 @@ class SgFile;
  * cases).
  *
  * #### `Sg_File_Info::p_line`
+ *
  * This is the line number of the location of the source code for this IR node.
  * This information is useful in the heuristics of attaching comments to IR
  * nodes (SgStatement and SgExpression IR nodes). The value of this variable is
@@ -1495,6 +1678,7 @@ class SgFile;
  * short int: 20 bits, 1000K = 1,048,576 lines per file).
  *
  * #### `Sg_File_Info::p_col`
+ *
  * This is the column number of the location of the source code for this IR
  * node. This information is useful in the heuristics of attaching comments to
  * IR nodes (SgStatement and SgExpression IR nodes). The value of this variable
@@ -1504,6 +1688,7 @@ class SgFile;
  * short int: 16 bits, 64K = 65536 charaters per line).
  *
  * #### `Sg_File_Info::p_classificationBitField`
+ *
  * This is mechanism for classification of the IR node.
  * IR nodes use this mechanism to classify themselves as either part of a
  * transformation or compiler generated (other enum values of
@@ -1512,6 +1697,7 @@ class SgFile;
  * unsigned char: 8 bits, 64K = 65536 charaters per line).
  *
  * #### `Sg_File_Info::p_fileIDsToUnparse`
+ *
  * This set contains a list of all file ids for which the accompanying IR node
  * should be unparsed. This is part of the AST Merge mechanism. This set
  * contains a list of file ids. During unparsing, if we encounter a node with
@@ -1521,14 +1707,17 @@ class SgFile;
  * shared
  *
  * #### `std::map< int, std::string > Sg_File_Info::p_fileidtoname_map`
+ *
  * This is a static STL map of file id (integers) to file names (strings).
  *
  * #### `std::map< std::string, int > Sg_File_Info::p_nametofileid_map`
+ *
  * This is a static STL map of file names (strings) to file id (integers).
  *
  * **Member functions**
  *
  * #### `Sg_File_Info::Sg_File_Info()`
+ *
  * This is the less useful default constructor.
  * This constructor builds the Sg_File_Info base class.
  * - Internal: This constructor should be deprecated since we don't want it to
@@ -1539,12 +1728,14 @@ class SgFile;
  * Example:create an Sg_File_Info object
  *
  * #### `Sg_File_Info::Sg_File_Info ( const char *filename, int line=0, int
+ *
  * col=0 )` This is the more useful constructor. This constructor builds the
  * Sg_File_Info base class.
  * - See also:
  * Example:create an Sg_File_Info object
  *
  * #### `Sg_File_Info::Sg_File_Info(const Sg_File_Info & X)`
+ *
  * This the copy constructor (deep copy made).
  * - Internal: This constructor does a deep copy of all data in the Sg_File_Info
  * object.
@@ -1552,37 +1743,46 @@ class SgFile;
  * Example:create an Sg_File_Info object
  *
  * #### `Sg_File_Info::set_line ( int line )`
+ *
  * Sets the line number associated with the source file.
  *
  * #### `Sg_File_Info::get_filename () const`
+ *
  * Returns the classified filename as a C string. Transformation positions
  * report "transformation"; compiler-generated positions outside the frontend
  * report "compilerGenerated".
  *
  * #### `Sg_File_Info::get_line () const`
+ *
  * Returns the line number of the associated code for this IR node.
  * - Return: Returns integer.
  *
  * #### `Sg_File_Info::get_col () const`
+ *
  * Returns the column number of the associated code for this IR node.
  * - Return: Returns integer
  *
  * #### `Sg_File_Info::get_raw_filename () const`
+ *
  * Returns the filename mapped from the stored file ID without classification.
  *
  * #### `Sg_File_Info::get_raw_line () const`
+ *
  * Returns the line number of the associated code for this IR node.
  * - Return: Returns integer.
  *
  * #### `Sg_File_Info::get_raw_col () const`
+ *
  * Returns the column number of the associated code for this IR node.
  * - Return: Returns
  *
  * #### `Sg_File_Info::generateDefaultFileInfo()`
+ *
  * Static function to return new Sg_File_Info object set to default values.
  * - Return: Returns pointer to Sg_File_Info.
  *
  * #### `Sg_File_Info::generateDefaultFileInfoForTransformationNode()`
+ *
  * Static function to return new Sg_File_Info object set to default values
  * appropriate for transformations.
  * This function calls setOutputInCodeGeneration() and sets the file_id to be
@@ -1590,6 +1790,7 @@ class SgFile;
  * - Return: Returns pointer to Sg_File_Info.
  *
  * #### `Sg_File_Info::generateFileInfoForTransformationNode( int file_id )`
+ *
  * Static function to return new Sg_File_Info object set to default values
  * appropriate for transformations that are not in the source file. Static
  * function which allows specification of transformation with assignement to a
@@ -1602,6 +1803,7 @@ class SgFile;
  * - Return: Returns pointer to Sg_File_Info.
  *
  * #### `Sg_File_Info::generateFileInfoForTransformationNode( string filename )`
+ *
  * Static function to return new Sg_File_Info object set to default values
  * appropriate for transformations that are not in the source file. Function
  * similar to previous function, but takes a filename to support new files that
@@ -1609,11 +1811,13 @@ class SgFile;
  * - Return: Returns pointer to Sg_File_Info.
  *
  * #### `Sg_File_Info::generateDefaultFileInfoForCompilerGeneratedNode()`
+ *
  * Static function to return new Sg_File_Info object set to default values
  * appropriate for compiler generated code.
  * - Return: Returns pointer to Sg_File_Info.
  *
  * #### `Sg_File_Info::hasPositionInSource() const`
+ *
  * Abstracts query as to if an IR node maps back to the source code (evolving
  * set of reasons whey this can be false). There are several reasons why an IR
  * node might NOT have a mapping back to the source code:
@@ -1625,16 +1829,19 @@ class SgFile;
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::isTransformation() const`
+ *
  * Returns true only if part of a transformation.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::isCompilerGenerated() const`
+ *
  * Returns true only if compiler generated (either by the front-end or by ROSE).
  * Source provenance and output eligibility have separate typed flags; being
  * compiler generated does not by itself require emission by the unparser.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::isOutputInCodeGeneration() const`
+ *
  * Returns true only if required to be unparsed in generated code.
  * - Internal: Templates instatiated by ROSE are marked as compiler generated,
  * but only those instatiated templates that are used in the source file are
@@ -1645,6 +1852,7 @@ class SgFile;
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::isShared() const`
+ *
  * Returns true only if shared internally (either by the front-end or by ROSE).
  * - Internal: This is a new classification supporting the AST merge mechanism.
  * Currently numerous types of IR nodes that are shared (SgType, SgSymbol, many
@@ -1653,41 +1861,50 @@ class SgFile;
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::unsetTransformation()`
+ *
  * If the IR node is a transformation it marks it false (zeros transformation
  * marker bit internally).
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::setTransformation()`
+ *
  * Marks an IR node to be a transformation if it is not one already.
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::unsetCompilerGenerated()`
+ *
  * Unmarks IR node as compiler generated.
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::setCompilerGenerated()`
+ *
  * Marks IR node as compiler generated.
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::unsetOutputInCodeGeneration()`
+ *
  * Unmarks IR node as compiler generated but required in the generated source
  * (e.g. requied templates).
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::setOutputInCodeGeneration()`
+ *
  * Marks IR node as compiler generated but required in the generated source
  * (e.g. requied templates).
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::unsetShared()`
+ *
  * Unmarks IR node as shared.
  * - Return: Returns void.
  *
  * #### `Sg_File_Info::setShared()`
+ *
  * Marks IR node as shared.
  * - Return: Returns void.
  *
  * #### `bool Sg_File_Info::ok()`
+ *
  * Checks internal consistancy of data.
  * Checks file ID, line, and column, with explicit allowances for generated,
  * transformed, or unavailable source positions.
@@ -1696,35 +1913,42 @@ class SgFile;
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::display( const string label )`
+ *
  * This function outputs the internal data to stdout, for debugging.
  * - Return: Returns void.
  *
  * #### `bool Sg_File_Info::operator== ( const Sg_File_Info & X, const
+ *
  * Sg_File_Info & Y )` This relational operator tests two Sg_File_Info objects
  * for equal position information.
  * - Return: Returns bool.
  *
  * #### `bool Sg_File_Info::operator!= ( const Sg_File_Info & X, const
+ *
  * Sg_File_Info & Y )` This relational operator tests two Sg_File_Info objects
  * for unequal position information.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::operator> ( const Sg_File_Info & X, const Sg_File_Info &
+ *
  * Y )` This relational operator tests two Sg_File_Info objects for X being
  * after Y in the same file.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::operator< ( const Sg_File_Info & X, const Sg_File_Info &
+ *
  * Y )` This relational operator tests two Sg_File_Info objects for X being
  * before Y in the same file.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::operator>= ( const Sg_File_Info & X, const Sg_File_Info &
+ *
  * Y )` This relational operator tests two Sg_File_Info objects for X being at
  * the same position or after Y in the same file.
  * - Return: Returns bool.
  *
  * #### `Sg_File_Info::operator<= ( const Sg_File_Info & X, const Sg_File_Info &
+ *
  * Y )` This relational operator tests two Sg_File_Info objects for X being at
  * the same position or before Y in the same file.
  * - Return: Returns bool.
@@ -1739,6 +1963,7 @@ class Sg_File_Info;
  * **Data members**
  *
  * #### `SgFloatVal::p_value`
+ *
  * This value holds the float represented in the source code.
  *
  */
@@ -1769,15 +1994,18 @@ class SgFloatVal;
  * **Data members**
  *
  * #### `SgForInitStatement::p_init_stmt`
+ *
  * This pointer points to list of initializers in a SgForStatement.
  *
  * **Member functions**
  *
  * #### `SgForInitStatement::get_init_stmt() const`
+ *
  * Returns const reference to a SgStatementPtrList (typedef to a STL list).
  * - Return: Returns const reference to STL list.
  *
  * #### `SgForInitStatement::get_init_stmt()`
+ *
  * Returns non-const reference to a SgStatementPtrList (typedef to a STL list).
  * - Return: Returns non-const reference to STL list.
  */
@@ -1788,17 +2016,21 @@ class SgForInitStatement;
  * **Data members**
  *
  * #### `SgForStatement::p_for_init_stmt`
+ *
  * This pointer a SgForInitStatement (a list of pointers to statements
  * (SgStatement objects) ).
  * - Note: I think this is a poor name for this variable.
  *
  * #### `SgForStatement::p_test`
+ *
  * The condition statement, which can be an expression statement or declaration.
  *
  * #### `SgForStatement::p_increment`
+ *
  * The increment expression.
  *
  * #### `SgForStatement::p_loop_body`
+ *
  * This pointer a SgStatement, and holds the statements in the body of the
  * loop.
  * - Note: I think this is a poor name for this variable (should be "body" to
@@ -1808,27 +2040,33 @@ class SgForInitStatement;
  * **Member functions**
  *
  * #### `SgForStatement::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgForStatement.
  *
  * #### `SgForStatement::get_for_init_stmt() const`
+ *
  * Access function for p_for_init_stmt.
  * - Return: Returns a pointer to a SgForInitStatement.
  *
  * #### `SgForStatement::set_for_init_stmt(SgForInitStatement* for_init_stmt)`
+ *
  * Access function for p_for_init_stmt.
  * - Param `for_init_stmt`: SgForInitStatement pointer
  * - Return: Returns void.
  *
  * #### `SgForStatement::get_test_expr() const`
+ *
  * Returns the expression held by an expression-statement test.
  * - Return: Returns a pointer to a SgExpression.
  *
  * #### `SgForStatement::get_loop_body() const`
+ *
  * Access function for p_loop_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgForStatement::set_loop_body(SgStatement* loop_body)`
+ *
  * Access function for p_loop_body.
  * - Param `loop_body`: SgStatement pointer
  * - Return: Returns void.
@@ -1862,16 +2100,19 @@ class SgFunctionCallExp;
  * **Data members**
  *
  * #### `SgFunctionParameterList::p_args`
+ *
  * STL list of pointers to SgInitializedName object (used for function parameter
  * declarations).
  *
  * **Member functions**
  *
  * #### `SgFunctionParameterList::get_args() const`
+ *
  * Access function for p_args.
  * - Return: Returns a const reference to SgInitializedNamePtrList.
  *
  * #### `SgFunctionParameterList::get_args()`
+ *
  * Access function for p_args.
  * - Return: Returns reference to SgInitializedNamePtrList.
  */
@@ -1900,10 +2141,12 @@ class SgFunctionParameterList;
  * **Data members**
  *
  * #### `SgFunctionRefExp::p_lvalue`
+ *
  * This boolean variable marks the current expression as a
  * left hand side value (lvalue).
  *
  * #### `SgFunctionRefExp::p_need_paren`
+ *
  * This boolean value marks the current expression as requiring parenthises.
  * This boolean value marks the current expression as requiring parenthises (the
  * information comes from the frontend's interpretation of the requirement and
@@ -1915,6 +2158,7 @@ class SgFunctionParameterList;
  * **Member functions**
  *
  * #### `SgFunctionRefExp::get_type() const`
+ *
  * Returns the exact type associated with the referenced symbol.
  *
  */
@@ -1930,12 +2174,15 @@ class SgFunctionRefExp;
  * **Data members**
  *
  * #### `SgFunctionType::p_argument_list`
+ *
  * This points to the SgTypes used in the function's parameter list.
  *
  * #### `SgFunctionType::p_return_type`
+ *
  * This points to the SgType of the current function type's return type.
  *
  * #### `SgFunctionType::p_has_ellipses`
+ *
  * This boolean variable is true if the function use the "..." type
  * (support for variable number of parameters).
  *
@@ -1956,11 +2203,13 @@ class SgFunctionType;
  * **Member functions**
  *
  * #### `SgFunctionTypeSymbol::get_name() const`
+ *
  * Access function for getting name from declarations or types internally.
  * - Internal: This is a virtual function.
  * - Return: Returns SgName.
  *
  * #### `SgFunctionTypeSymbol::get_type() const`
+ *
  * This function returns the type associated with the named entity.
  * - Internal: This is a virtual function.
  * - Return: Returns SgType*.
@@ -1985,6 +2234,7 @@ class SgFunctionTypeTable;
  * **Data members**
  *
  * #### `SgGlobal::p_declarations`
+ *
  * This is an STL list of SgDeclarationStatement objects.
  * - Internal: The name is perhaps all too similar to p_declaration (which
  * exists on many IR nodes).
@@ -1992,19 +2242,23 @@ class SgFunctionTypeTable;
  * **Member functions**
  *
  * #### `SgGlobal::get_qualified_name() const`
+ *
  * Returns SgName (a string) representing the name of the current scope (empty
  * string). See discussion of mangled names in the documentation.
  * - Return: Returns SgName (a string).
  *
  * #### `SgGlobal::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgGlobal.
  *
  * #### `SgGlobal::get_declarations()`
+ *
  * Returns a list to the global scope declarations.
  * - Return: Returns an STL list by reference.
  *
  * #### `SgGlobal::get_declarations() const`
+ *
  * Returns a const list to the global scope declarations.
  * - Return: Returns a const STL list by reference.
  */
@@ -2018,6 +2272,7 @@ class SgGlobal;
  * **Data members**
  *
  * #### `SgGotoStatement::p_label`
+ *
  * This pointer points to the SgLabelStatement where control flow will be
  * transfered during execution.
  * - Internal: This is always a valid pointer.
@@ -2025,11 +2280,13 @@ class SgGlobal;
  * **Member functions**
  *
  * #### `SgGotoStatement::get_label() const`
+ *
  * Returns pointer to SgLabelStatement where control flow will be transfered
  * during execution.
  * - Return: Returns pointer to SgLabelStatement.
  *
  * #### `SgGotoStatement::set_label(SgLabelStatement* label)`
+ *
  * Access function for p_label.
  * - Return: Returns void.
  */
@@ -2046,108 +2303,130 @@ class SgGotoStatement;
  * **Data members**
  *
  * #### `SgIfStmt::p_conditional`
+ *
  * This pointer a SgStatement.
  *
  * #### `SgIfStmt::p_true_body`
+ *
  * This pointer a SgStatement, and holds the statements in the "true" body of
  * if statement.
  *
  * #### `SgIfStmt::p_false_body`
+ *
  * This pointer a SgStatement, and holds the statements in the "false" body of
  * if statement.
  *
  * **Member functions**
  *
  * #### `SgIfStmt::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgIfStmt.
  *
  * #### `SgIfStmt::get_conditional() const`
+ *
  * Access function for p_conditional.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgIfStmt::set_conditional(SgStatement* conditional)`
+ *
  * Access function for p_conditional.
  * - Param `conditional`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_true_body() const`
+ *
  * Access function for p_true_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgIfStmt::set_true_body(SgStatement* true_body)`
+ *
  * Access function for p_true_body.
  * - Param `true_body`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_false_body() const`
+ *
  * Access function for p_false_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgIfStmt::set_false_body(SgStatement* false_body)`
+ *
  * Access function for p_false_body.
  * - Param `false_body`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgIfStmt::set_else_numeric_label(SgLabelRefExp* label)`
+ *
  * Access function for p_else_numeric_label (Fortran only).
  * - Param `lable`: used for end of if statement (Fortran only).
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_else_numeric_label()`
+ *
  * Access function for p_else_numeric_label (Fortran only).
  * - Param `lable`: used for end of if statement (Fortran only).
  * - Return: Returns SgLabelRefExp pointer.
  *
  * #### `SgIfStmt::set_end_numeric_label(SgLabelRefExp* label)`
+ *
  * Access function for p_end_numeric_label (Fortran only).
  * - Param `lable`: used for end of if statement (Fortran only).
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_end_numeric_label()`
+ *
  * Access function for p_end_numeric_label (Fortran only).
  * - Param `lable`: used for end of if statement (Fortran only).
  * - Return: Returns SgLabelRefExp pointer.
  *
  * #### `SgIfStmt::set_string_label(std::string label)`
+ *
  * Access function for p_string_label (Fortran only; string required to addess
  * generality of Fortran numeric and named labels).
  * - Param `label`: used for Fortran only.
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_string_label()`
+ *
  * Access function for p_string_label (Fortran only; string required to addess
  * generality of Fortran numeric and named labels).
  * - Return: Returns std::string.
  *
  * #### `SgIfStmt::get_has_end_statement()`
+ *
  * Fortran specific function to indicate if the Fortran "if" statement has an
  * "end" construct (C/C++ useage always returns false).
  * - Return: Returns bool.
  *
  * #### `SgIfStmt::set_has_end_statement(bool value)`
+ *
  * Fortran specific function to indicate if the Fortran "if" statement has an
  * "end" construct (C/C++ useage always returns false).
  * - Param `value`: to use in setting associated (Fortran specific) data member.
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_use_then_keyword()`
+ *
  * Fortran specific function to indicate if the Fortran "if" statement uses the
  * "then" construct (C/C++ useage always returns false).
  * - Return: Returns bool.
  *
  * #### `SgIfStmt::set_use_then_keyword(bool value)`
+ *
  * Fortran specific function to indicate if the Fortran "if" statement uses the
  * "then" construct (C/C++ useage always returns false).
  * - Param `value`: to use in setting associated (Fortran specific) data member.
  * - Return: Returns void.
  *
  * #### `SgIfStmt::get_is_else_if_statement()`
+ *
  * Fortran-specific function to indicate "else if" form of "if"
  * construct (C/C++ useage always returns false).
  * - Return: Returns bool.
  *
  * #### `SgIfStmt::set_is_else_if_statement(bool value)`
+ *
  * Fortran-specific function to indicate "else if" form of "if"
  * construct (C/C++ useage always returns false).
  * - Param `value`: to use in setting associated (Fortran specific) data member.
@@ -2177,12 +2456,14 @@ class SgIfStmt;
  * **Data members**
  *
  * #### `SgInitializedName::p_fileInfo`
+ *
  * This pointer is always valid and stores the source position of the start a
  * name. This is an Sg_File_Info object which represents the source position of
  * the starting of the name represented by the SgInitializedName object
  * (variable name, function name, etc.).
  *
  * #### `SgInitializedName::p_name`
+ *
  * The variable that is declared in this declaration
  * This is a SgName object which represents the variable that is being declared
  * in this SgInitializedName object. For example, if there is a "int x"
@@ -2190,6 +2471,7 @@ class SgIfStmt;
  * SgInitializedName::p_name as a SgName object.
  *
  * #### `SgInitializedName::p_typeptr`
+ *
  * Pointer to a type object that has been associated with
  * SgInitializedName::p_name This is a pointer that points to an SgType object
  * that represents the type the variable SgInitializedName::p_name declared in
@@ -2200,6 +2482,7 @@ class SgIfStmt;
  * SgInitializedName::p_name.
  *
  * #### `SgInitializedName::p_initptr`
+ *
  * Pointer to an initializer for the variable.
  * In the case that the declaration contains an initializer for the variable,
  * for example "int x=5" or "int x=y" (in these cases the intializers for the
@@ -2208,6 +2491,7 @@ class SgIfStmt;
  * object that the SgInitializedName::p_name variable is initialized with.
  *
  * #### `SgInitializedName::p_prev_decl_item`
+ *
  * Pointer to the initial uses of this variable previous to its redeclaration
  * declaration.
  * **Dan's** **intuitive** **explanation**
@@ -2224,6 +2508,7 @@ class SgIfStmt;
  * };")
  *
  * #### `SgInitializedName::p_declptr`
+ *
  * Pointer to the declaration object where this SgInitializedName object belongs
  * to.
  * **Alin's** **intuitive** **explanation**
@@ -2235,6 +2520,7 @@ class SgIfStmt;
  * the statement (actually the declaration - SgDeclaration) that contains it.
  *
  * #### `SgInitializedName::p_storageModifier`
+ *
  * This is the storage modifier (static, auto, register, mutable, asm, etc.).
  * This is the storage modifier (static, auto, register, mutable, asm, etc.),
  * see complete list in source code for more details.  This is an implementation
@@ -2244,11 +2530,13 @@ class SgIfStmt;
  * is filed of the SgDeclarationModifier).
  *
  * #### `SgInitializedName::p_scope`
+ *
  * This pointer is always valid and stores the current scope of the variable.
  * This is the current scope of the variable (required because variables can be
  * defined separately from their declaration).  See test2004_133.C (approx).
  *
  * #### `SgInitializedName::p_preinitialization`
+ *
  * This data member stores an enum value.
  * This value is set based on an enum value to indicate the type of use of the
  * initialized name (valid values are: virtual base class, non-virtual base,
@@ -2257,19 +2545,23 @@ class SgIfStmt;
  * with the SgStorageModifier information.
  *
  * #### `SgInitializedName::p_register_name_string`
+ *
  * Exact target spelling of a GNU variable asm label. The spelling is not
  * normalized through an architecture-specific register enum.
  *
  * **Member functions**
  *
  * #### `SgInitializedName::get_storageModifier()`
+ *
  * returns a reference to the storage modifier
  *
  * #### `SgInitializedName::post_construction_initialization ()`
+ *
  * Allocates a new storage modifier and sets the storage modifier to default
  * values
  *
  * #### `SgNode * SgInitializedName::copy (const SgCopyHelp &help) const`
+ *
  * It clones the current SgInitializedName object recursively or not, depending
  * on the argument
  * - Param `help`: - If this argument is of type SgTreeCopy, then the
@@ -2279,15 +2571,18 @@ class SgIfStmt;
  * - Return: a pointer to the new clone.
  *
  * #### `SgDeclarationStatement* SgInitializedName::get_declaration() const`
+ *
  * Returns the nearest declaration reached through the parent chain.
  * - Return: Pointer to SgDeclarationStatement
  *
  * #### `SgInitializedName::get_symbol_from_symbol_table() const`
+ *
  * **FOR** **INTERNAL** **USE** Get the associated symbol from the symbol table
  * in the stored scope. Users should use the
  * SgInitializedName::search_for_symbol_from_symbol_table() instead.
  *
  * #### `SgInitializedName::search_for_symbol_from_symbol_table() const`
+ *
  * User interface for retrieving the associated symbol. It searches through the
  * possible chain of prev_decl_item.
  */
@@ -2307,6 +2602,7 @@ class SgInitializedName;
  * **Data members**
  *
  * #### `SgInitializer::p_is_explicit_cast`
+ *
  * This boolean variable marks the initializer ans part of an explicit or
  * implicit cast.  It is used for all of the different types of initalizers.
  * - Internal: This may now be duplicate information with the compiler generated
@@ -2315,10 +2611,12 @@ class SgInitializedName;
  * **Member functions**
  *
  * #### `SgInitializer::get_is_explicit_cast (void) const`
+ *
  * returns bool value if front-end considers this cast as explicit.
  * - Return: Returns bool value.
  *
  * #### `SgInitializer::set_is_explicit_cast (bool explicit_cast)`
+ *
  * This function allows the p_is_explicit_cast flag to be set (used internally).
  * - Param `explicit_cast`: - sets value of internal p_is_explicit_cast flag
  * (true if explicit).
@@ -2336,15 +2634,18 @@ class SgInitializer;
  * **Data members**
  *
  * #### `SgLabelStatement::p_label`
+ *
  * This a SgName object which stores the name of the label.
  *
  * **Member functions**
  *
  * #### `SgLabelStatement::get_label() const`
+ *
  * Returns SgName by value.
  * - Return: Returns SgName.
  *
  * #### `SgLabelStatement::set_label(SgName label)`
+ *
  * Access function for p_label.
  * - Return: Returns void.
  */
@@ -2375,12 +2676,18 @@ class SgLabelStatement;
  * - Todo: Consider name change of "SgLocatedNode" to "SgSourceNode".
  * - Todo: Consider moving some of the IR nodes currently in SgSupport to this
  * IR node. IR nodes that might be moved would include:
- * -# SgFile
- * -# SgDirectory (questionable)
- * -# SgInitializedName
- * -# SgBaseClass
- * -# SgTemplateArgument
- * -# SgTemplateParameter
+ *
+ * 1. SgFile
+ *
+ * 1. SgDirectory (questionable)
+ *
+ * 1. SgInitializedName
+ *
+ * 1. SgBaseClass
+ *
+ * 1. SgTemplateArgument
+ *
+ * 1. SgTemplateParameter
  * - Internal: This is a base class for all expressions and statements.
  * - See also:
  * Example of using a SgLocatedNode object
@@ -2388,23 +2695,28 @@ class SgLabelStatement;
  * **Data members**
  *
  * #### `SgLocatedNode::p_startOfConstruct`
+ *
  * This pointer is always valid and stores the source position of the start of
  * the current construct.
  *
  * #### `SgLocatedNode::p_endOfConstruct`
+ *
  * This pointer is always valid and stores the source position of the end of the
  * current construct.
  *
  * #### `SgLocatedNode::p_attachedPreprocessingInfoPtr`
+ *
  * Holds comments and/or preprocessor directives located before or after the
  * current statement of expression.
  *
  * **Member functions**
  *
  * #### `SgLocatedNode::SgLocatedNode (const SgLocatedNode &X)`
+ *
  * Copy constructor (made private to prevent being called by accident).
  *
  * #### `SgLocatedNode::getFileName()`
+ *
  * Access function for "get_file_info()->get_filename()".
  * This function is just a simpler access function which retrives the
  * filename from the Sg_File_Info object at the current IR node.  This
@@ -2417,6 +2729,7 @@ class SgLabelStatement;
  * function then we should have it return a string instead of char*.
  *
  * #### `SgLocatedNode::addToAttachedPreprocessingInfo (PreprocessingInfo
+ *
  * *prepInfoPtr,` PreprocessingInfo::RelativePositionType
  * locationInList=PreprocessingInfo::after) This function adds comment or CPP
  * directives to the current IR node.
@@ -2429,10 +2742,12 @@ class SgLabelStatement;
  * - Return: Returns void.
  *
  * #### `SgLocatedNode::getAttachedPreprocessingInfo (void)`
+ *
  * Returns the attached comment and preprocessing-directive container by
  * reference to its pointer.
  *
  * #### `SgLocatedNode::set_startOfConstruct (Sg_File_Info *startOfConstruct)`
+ *
  * This function sets the current source location position of the start
  * of the current construct.
  * - Param `startOfConstruct`: - Pointer to Sg_File_Info object containing
@@ -2440,6 +2755,7 @@ class SgLabelStatement;
  * - Return: Returns void.
  *
  * #### `SgLocatedNode::set_endOfConstruct (Sg_File_Info *endOfConstruct)`
+ *
  * This function sets the current source location position of the end
  * of the current construct.
  * - Param `endOfConstruct`: - Pointer to Sg_File_Info object containing source
@@ -2457,6 +2773,7 @@ class SgLocatedNode;
  * **Data members**
  *
  * #### `SgLongDoubleVal::p_value`
+ *
  * This value holds the double represented in the source code.
  *
  */
@@ -2476,6 +2793,7 @@ class SgLongDoubleVal;
  * **Data members**
  *
  * #### `SgMemberFunctionDeclaration::p_CtorInitializerList`
+ *
  * This is the constructor preinitialization list (used only for the constructor
  * definitions).
  * - Internal: This data member might make more sense in the
@@ -2485,6 +2803,7 @@ class SgLongDoubleVal;
  * **Member functions**
  *
  * #### `SgMemberFunctionDeclaration::get_CtorInitializerList() const`
+ *
  * Access function for p_CtorInitializerList.
  * - Return: Returns pointer to SgCtorInitializerList.
  *
@@ -2506,21 +2825,25 @@ class SgMemberFunctionDeclaration;
  * **Data members**
  *
  * #### `SgMemberFunctionRefExp::p_symbol_i`
+ *
  * This is the SgMemberFunctionSymbol.
  * This binds the function reference to the member function declaration.
  * Note that all SgSymbol objects are shared (just like SgType objects)
  *
  * #### `SgMemberFunctionRefExp::p_virtual_call`
+ *
  * This boolean value marks if the function reference is a virtual function.
  *
  * The semantic function type is obtained from the exact member symbol.
  *
  * #### `SgMemberFunctionRefExp::p_need_qualifier`
+ *
  * This boolean value marks if name qualification is required.
  *
  * **Member functions**
  *
  * #### `SgMemberFunctionRefExp::get_type() const`
+ *
  * Returns the exact type associated with the referenced symbol.
  *
  */
@@ -2568,22 +2891,27 @@ class SgName;
  * **Data members**
  *
  * #### `SgNamespaceAliasDeclarationStatement::p_name`
+ *
  * This the name of the new namespace alias (usually a shorter name).
  *
  * #### `SgNamespaceAliasDeclarationStatement::p_namespaceDeclaration`
+ *
  * This the namespace to which the alis references.
  *
  * **Member functions**
  *
  * #### `SgNamespaceAliasDeclarationStatement::get_name() const`
+ *
  * Access function for p_name.
  * - Return: Returns SgName.
  *
  * #### `SgNamespaceAliasDeclarationStatement::set_name(SgName name)`
+ *
  * Access function for p_name.
  * - Return: Returns void.
  *
  * #### `SgNamespaceAliasDeclarationStatement::get_namespaceDeclaration() const`
+ *
  * Access function for p_namespaceDeclaration.
  * - Return: Returns SgNamespaceDeclarationStatement.
  *
@@ -2621,32 +2949,39 @@ class SgNamespaceAliasDeclarationStatement;
  * **Data members**
  *
  * #### `SgNamespaceDeclarationStatement::p_name`
+ *
  * This the name of the new namespace alias (usually a shorter name).
  *
  * #### `SgNamespaceDeclarationStatement::p_definition`
+ *
  * This pointer points to the SgNamespaceDefinitionStatement, which holds the
  * declarations within the namespace.
  *
  * #### `SgNamespaceDeclarationStatement::p_isUnnamedNamespace`
+ *
  * Records special case of an unnamed namespace.
  * - Internal: Marking the IR nodes as unnamed is better than just having an
  * empty string for p_name.  This provides a reasonable mechanism to implement
  * error checking internally.
  *
  * #### `SgNamespaceDeclarationStatement::p_scope`
+ *
  * This a pointer to the scope of the first declaration for the namespace.
  *
  * **Member functions**
  *
  * #### `SgNamespaceDeclarationStatement::get_name() const`
+ *
  * Access function for p_name.
  * - Return: Returns SgName.
  *
  * #### `SgNamespaceDeclarationStatement::set_name(SgName name)`
+ *
  * Access function for p_name.
  * - Return: Returns void.
  *
  * #### `SgNamespaceDeclarationStatement::get_definition() const`
+ *
  * Returns pointer to SgNamespaceDefinitionStatement.
  * - Return: Returns pointer to SgNamespaceDefinitionStatement.
  *
@@ -2656,10 +2991,12 @@ class SgNamespaceAliasDeclarationStatement;
  * - Return: Returns void.
  *
  * #### `SgNamespaceDeclarationStatement::get_isUnnamedNamespace() const`
+ *
  * Access function for p_isUnnamedNamespace.
  * - Return: Returns SgName.
  *
  * #### `SgNamespaceDeclarationStatement::set_isUnnamedNamespace(bool
+ *
  * isUnnamedNamespace)` Access function for p_isUnnamedNamespace.
  * - Return: Returns void.
  */
@@ -2680,11 +3017,13 @@ class SgNamespaceDeclarationStatement;
  * **Data members**
  *
  * #### `SgNamespaceDefinitionStatement::p_declarations`
+ *
  * This is an STL list of SgDeclarationStatement objects.
  * - Internal: The name is perhaps all to similar to p_declaration (which exists
  * on many IR nodes).
  *
  * #### `SgNamespaceDefinitionStatement::p_namespaceDeclaration`
+ *
  * This is a pointer to the SgNamespaceDeclarationStatement.
  * - Internal: The name would have been p_declaration, except that such a name
  * is too close to p_declarations.  These naming details might be fixed later.
@@ -2692,11 +3031,13 @@ class SgNamespaceDeclarationStatement;
  * **Member functions**
  *
  * #### `SgNamespaceDefinitionStatement::get_qualified_name() const`
+ *
  * Returns SgName (a string) representing the name of the current scope.
  * See discussion of mangled names in the documentation.
  * - Return: Returns SgName (a string).
  *
  * #### `SgNamespaceDefinitionStatement::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgNamespaceDefinitionStatement.
  */
@@ -2725,19 +3066,23 @@ class SgNamespaceDefinitionStatement;
  * **Member functions**
  *
  * #### `SgNamespaceSymbol::get_name() const`
+ *
  * Access function for getting name stored internally (not the one in the
  * declaration).
  * - Return: Returns SgName.
  *
  * #### `SgNamespaceSymbol::get_type() const`
+ *
  * This function returns the type associated with the named entity.
  * - Return: Returns SgType*.
  *
  * #### `SgNamespaceSymbol::get_declaration() const`
+ *
  * Access function for getting the declaration of the original namespace.
  * - Return: Returns SgNamespaceDeclarationStatement.
  *
  * #### `SgNamespaceSymbol::set_declaration(SgNamespaceDeclarationStatement
+ *
  * *declaration)` Access function for setting the declaration stored internally.
  * - Return: Returns SgNamespaceDeclarationStatement.
  *
@@ -2762,9 +3107,11 @@ class SgNamespaceSymbol;
  * **Data members**
  *
  * #### `SgNewExp::p_specified_type`
+ *
  * This pointer points to the type of the variable being allocated.
  *
  * #### `SgNewExp::p_placement_args`
+ *
  * This is a pointer to the memory allocation placement arguments for the new
  * operator.
  * An example would be "class X{}; void* p; X* item2 = new (p) X();".  Placement
@@ -2774,28 +3121,33 @@ class SgNamespaceSymbol;
  * constructor, and builtin arguments (these are rarely used in C++).
  *
  * #### `SgNewExp::p_constructor_args`
+ *
  * This is a pointer to the constructor initializer (which holds its constructor
  * arguments) for the new operator.
  * - Todo: Provide some examples to detail the difference between placement,
  * constructor, and builtin arguments.
  *
  * #### `SgNewExp::p_builtin_args`
+ *
  * This is a pointer to the builtin arguments for the new operator (typically
  * the "this" pointer where specified optionally).
  * - Todo: Provide some examples to detail the difference between placement,
  * constructor, and builtin arguments.
  *
  * #### `SgNewExp::p_need_global_specifier`
+ *
  * This new operator needs to be output with "::".
  * - Internal: This should be a bool instead of a short.
  *
  * **Member functions**
  *
  * #### `SgNewExp::get_need_global_specifier() const`
+ *
  * Access function for p_need_global_specifier.
  * - Return: Returns bool.
  *
  * #### `SgNewExp::set_need_global_specifier(short
+ *
  * need_global_specifier)` Access function for p_need_global_specifier.
  * - Param `need_global_specifier`: flag to record use of array delete.
  * - Return: Returns void.
@@ -2807,10 +3159,14 @@ class SgNewExp;
  *
  * This class is used as a base class for all IR nodes in Sage III.
  * - Note: AST attributes should not be used for the following IR nodes:
- * -# SgName
- * -# SgModifier (and all derived modifier IR nodes)
- * -# SgUnparse_Info
- * -# SgSymbolTable
+ *
+ * 1. SgName
+ *
+ * 1. SgModifier (and all derived modifier IR nodes)
+ *
+ * 1. SgUnparse_Info
+ *
+ * 1. SgSymbolTable
  * - Internal: Need to remove unused error() and variant() functions.
  * - Todo: Consider eliminating the set_freepointer() function since only the
  * internal memory allocation mechanisms should use it (and they are forced to
@@ -2827,6 +3183,7 @@ class SgNewExp;
  * **Data members**
  *
  * #### `SgNode::p_parent`
+ *
  * This is the pointer to the parent IR node in the AST.
  * Owning AST edges have reciprocal parent links when the producer publishes
  * the node. Semantic references to shared types and declarations are distinct
@@ -2834,6 +3191,7 @@ class SgNewExp;
  * to their symbol tables.
  *
  * #### `SgNode::p_freepointer`
+ *
  * This is the pointer to the chain of previously freed objects.
  * - Internal: This is part of the support for memory pools within ROSE.  The
  * freepointer is only manipulated by the delete operator which constructs a
@@ -2844,6 +3202,7 @@ class SgNewExp;
  * ignored.
  *
  * #### `SgNode::p_isModified`
+ *
  * Records if IR node has been modified (data members reset).
  * This is part of an internal mechanism that records if IR nodes have
  * been modified, either by a transformation or a access function to set
@@ -2856,15 +3215,18 @@ class SgNewExp;
  * - Internal: true if IR node has been modified, else false.
  *
  * #### `SgNode::p_globalFunctionTypeTable`
+ *
  * Pointer to symbol table specific to function types.
  * - Internal: Always a valid pointer.
  *
  * #### `SgNode::p_globalMangledNameMap`
+ *
  * Cache of mangled names to avoid regeneration of previously build mangled
  * names or parts of mangled names.  This is a performance optimization.
  * - Internal: This cache should be cleared automatically where required.
  *
  * #### `SgNode::p_shortMangledNameCache`
+ *
  * STL map used as a cache to shorten generated mangled names.
  * This is mostly a space optimization ofr mangled names of templates.
  * - Internal: This cache should be cleared before regenerating mangled names.
@@ -2872,6 +3234,7 @@ class SgNewExp;
  * **Member functions**
  *
  * #### `SgNode::copy(const SgCopyHelp & help ) const`
+ *
  * This function clones the current IR node object recursively or not, depending
  * on the argument This function performs a copy based on the specification of
  * the input parameter. The input parameter is used to determin which data
@@ -2886,6 +3249,7 @@ class SgNewExp;
  * policy. AstPostProcessing does not repair missing ownership in a copy.
  *
  * #### `SgNode::SgNode()`
+ *
  * This is the constructor
  * This constructor builds a SgNode, always used as a base class.
  * All Sage III IR nodes are derived from this class.
@@ -2893,6 +3257,7 @@ class SgNewExp;
  * Example:create an SgNode object
  *
  * #### `SgNode::sage_class_name() const`
+ *
  * generates string representing the class name: (e.g. for SgNode returns
  * "SgNode"). This function is useful for debugging and error reporting.  It
  * returns the name of the IR node.
@@ -2900,12 +3265,14 @@ class SgNewExp;
  * - Return: a char* pointer to a C style string.
  *
  * #### `string SgNode::class_name() const`
+ *
  * generates string representing the class name: (e.g. for SgNode returns
  * "SgNode"). This function is useful for debugging and error reporting.  It
  * returns the name of the IR node.
  * - Return: a C++ string object.
  *
  * #### `SgNode::variant() const`
+ *
  * Older version function returns enum value "NODE"
  * This function is an older version of the variant function.
  * This function is useful for debugging and error reporting.  It
@@ -2915,6 +3282,7 @@ class SgNewExp;
  * names and are being removed.
  *
  * #### `SgNode::variantT() const`
+ *
  * returns enum value "V_SgNode"
  * This function is useful for debugging and error reporting.  It
  * returns the name of the IR node.
@@ -2926,17 +3294,20 @@ class SgNewExp;
  * - Return: an enum value (type: VariantT).
  *
  * #### `SgNode::get_isModified() const`
+ *
  * **FOR** **INTERNAL** **USE** All nodes in the AST contain a isModified flag.
  * This flag can be set but this is typically an internal function used to track
  * the updates to AST.
  * - Return: Returns bool; true if IR node has been modified.
  *
  * #### `SgNode::set_isModified(bool isModified)`
+ *
  * Acess function for isModified flag.
  * This flag records if the current IR node has been modified. It is set to
  * false after and ROSE front-end processing.
  *
  * #### `SgNode::set_parent (SgNode *parent)`
+ *
  * Sets parent node for any IR node.
  * The parent node in the AST can be set but this is typically
  * an internal function used to build the AST.
@@ -2945,6 +3316,7 @@ class SgNewExp;
  * - Return: returns void.
  *
  * #### `SgNode::get_parent() const`
+ *
  * Access function for parent node in AST.
  * Returns the structural owner established during construction. Shared
  * semantic references do not change the referenced node's parent. Semantic
@@ -2952,6 +3324,7 @@ class SgNewExp;
  * - Return: Returns pointer to SgNode
  *
  * #### `SgNode::unparseToString( SgUnparse_Info* info )`
+ *
  * This function unparses the AST node (source code only, excluding comments and
  * white space)
  * - Param `info`: is optional (used only to specify code generation options).
@@ -2967,6 +3340,7 @@ class SgNewExp;
  * - Return: Returns std::string
  *
  * #### `SgNode::unparseToCompleteString()`
+ *
  * This function unparses the AST node (including comments and white space)
  * This function is a complement to the unparseToString() function and includes
  * any associated comments and preprocessor control directives.  Because C
@@ -2977,6 +3351,7 @@ class SgNewExp;
  * - Return: Returns std::string
  *
  * #### `SgNode::get_traversalSuccessorContainer()`
+ *
  * **FOR** **INTERNAL** **USE** within ROSE traverals mechanism only.
  * This function builds and returns a copy of ordered container
  * holding pointers to children of this node in a traversal. It is
@@ -2993,6 +3368,7 @@ class SgNewExp;
  * - Return: Returns ordered STL Container of pointers to children nodes in AST.
  *
  * #### `SgNode::get_traversalSuccessorNamesContainer()`
+ *
  * **FOR** **INTERNAL** **USE** within ROSE traverals mechanism only.
  * This function builds and returns a copy of ordered container
  * holding strings used to name data members that are traversed in the IR
@@ -3016,6 +3392,7 @@ class SgNewExp;
  * children nodes in AST.
  *
  * #### `SgNode::roseRTI ()`
+ *
  * **FOR** **INTERNAL** **USE** Access to Runtime Type Information (RTI) for
  * this IR nodes. This function provides runtime type information for accessing
  * the structure of the current node.  It is useful for generating code which
@@ -3071,64 +3448,78 @@ class SgPragmaDeclaration;
  * **Data members**
  *
  * #### `SgProject::p_fileList_ptr`
+ *
  * Points to the SgFileList holding the project's files.
  *
  * #### `SgProject::p_verbose`
+ *
  * This is the level of verbosity assumed to apply to the whole project (all AST
  * processing).
  * - Internal: This is a static variable, which might make it difficult to
  * multiple SgProject IR nodes to coexist within the same problem.
  *
  * #### `SgProject::p_originalCommandLineArgumentList`
+ *
  * Copy of original argc and argv command line passed to ROSE translator
  * (converted to STL list of strings).
  * - Internal: This is a deep copy.
  *
  * #### `SgProject::p_frontendErrorCode`
+ *
  * Error status from frontend processing; successful processing returns zero.
  *
  * #### `SgProject::p_backendErrorCode`
+ *
  * Error code returnd from processing of generated source code using vendor
  * compiler. This value should be passed back out of the main() function by the
  * user translator (for support of makefile processing).
  * - Internal: This error code is returned by the ROSE backend() function.
  *
  * #### `SgProject::p_outputFileName`
+ *
  * Filename specific using "-o" option on command line.
  * Set as part of normal command line processing within ROSE.
  * - Internal: This is set to a default value of "a.out" if "-o" is not
  * specified.
  *
  * #### `SgProject::p_sourceFileNameList`
+ *
  * List of all source file names specified on the command line.
  * - Internal: This can be an empty list (if none are specified). This should be
  * updated by the AST Merge mechanism.
  *
  * #### `SgProject::p_objectFileNameList`
+ *
  * List of all object files specified on the command line.
  * - Internal: This can be an empty list (if none are specified).
  *
  * #### `SgProject::p_libraryFileList`
+ *
  * List of all libraries specified on command line.
  * List all libraries specified using ".a" or ".so" syntax.
  * - Internal: Required to assemble link lines for backend vendor compiler.
  *
  * #### `SgProject::p_librarySpecifierList`
+ *
  * List of libraries specified using "-lxxx" syntax.
  * - Internal: Required to assemble link lines for backend vendor compiler.
  *
  * #### `SgProject::p_libraryDirectorySpecifierList`
+ *
  * List of directories specified with "-L" option on command line
  * - Internal:
  *
  * #### `SgProject::p_includeDirectorySpecifierList`
+ *
  * List of directories specified with "-I" option on command line
  * - Internal:
  *
  * #### `SgProject::p_compileOnly`
+ *
  * This is true when "-c" requests compilation without linking.
  *
  * #### `SgProject::p_openmp_linking`
+ *
  * This flag is used to indicate if OpenMP lowering is requested by the command
  * line so linking to ROSE's OpenMP runtime library is needed. This flag is set
  * to be false by default.
@@ -3145,13 +3536,16 @@ class SgPragmaDeclaration;
  * **Member functions**
  *
  * #### `list<string> SgProject::get_originalCommandLineArgumentList() const`
+ *
  * Returns a list of strings representing the original command-line.
  *
  * #### `SgProject::set_originalCommandLineArgumentList( list<string>
+ *
  * originalCommandLineArgumentList )` Sets the list of strings representing the
  * original command-line.
  *
  * #### `bool SgProject::get_C99_only (void) const`
+ *
  * This controls the c99 mode in the frontend.
  */
 class SgProject;
@@ -3166,6 +3560,7 @@ class SgProject;
  * **Data members**
  *
  * #### `SgRefExp::p_type_name`
+ *
  * This a SgType, but I forget its significance.
  *
  */
@@ -3198,6 +3593,7 @@ class SgScopeOp;
  * **Data members**
  *
  * #### `SgScopeStatement::p_symbol_table`
+ *
  * This pointer is always valid and stores the symbl table.
  * - Internal: The symbol table implementation was changed in fall of 2004, by
  * Alin. It is not simple and leverages STL and provides more features.
@@ -3205,36 +3601,44 @@ class SgScopeOp;
  * **Member functions**
  *
  * #### `SgScopeStatement::get_symbol_table()`
+ *
  * Returns a pointer to the locally strored SgSymbolTable.
  * - Return: Returns a pointer.
  *
  * #### `SgScopeStatement::set_symbol_table(SgSymbolTable *symbolTable)`
+ *
  * Sets the pointer to the locally strored SgSymbolTable.
  * - Return: Returns void.
  *
  * #### `SgScopeStatement::get_qualified_name() const`
+ *
  * Returns SgName (a string) representing the name of the current scope.
  * See discussion of mangled names in the documentation.
  * - Return: Returns SgName (a string).
  *
  * #### `SgScopeStatement::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgScopeStatement.
  *
  * #### `SgScopeStatement::insert_symbol(const SgName & name, SgSymbol *symbol)`
+ *
  * Puts a SgSymbol object into the local symbol table.
  * - Return: Returns void.
  *
  * #### `SgScopeStatement::lookup_symbol(const SgName & name)`
+ *
  * returns boolean value if symbol exists.
  * - Return: Returns SgSymbol pointer.
  *
  * #### `SgScopeStatement::containsOnlyDeclarations()`
+ *
  * boolean member function to distinquish if getStatementList() or
  * getDeclarationList() is appropriate for the SgScopeStatment IR node.
  * - Return: bool.
  *
  * #### `SgScopeStatement::getDeclarationList()`
+ *
  * Gets reference to internal STL list of pointers to SgDeclarationStatement
  * objects (only defined for scopes containing declarations, see bool
  * containsOnlyDeclarations()). This function is useful for SgScopeStatement
@@ -3247,6 +3651,7 @@ class SgScopeOp;
  * - Return: STL list of pointers to SgDeclarationStatement objects.
  *
  * #### `SgScopeStatement::getStatementList()`
+ *
  * Gets reference to internal STL list of pointers to SgStatement objects
  * (only defined for scopes containing statements, see bool
  * containsOnlyDeclarations()). This function is useful for SgScopeStatement
@@ -3257,6 +3662,7 @@ class SgScopeOp;
  * - Return: STL list of pointers to SgStatement objects.
  *
  * #### `SgScopeStatement::generateStatementList()`
+ *
  * Builds list of pointers to SgStatement objects (useful for all
  * SgScopeStatement objects, independent of whether they contain lists of
  * SgDeclarationStatements or lists of SgStatements). This function is useful
@@ -3279,16 +3685,19 @@ class SgScopeStatement;
  * **Data members**
  *
  * #### `SgSizeOfOp::p_operand_expr`
+ *
  * This a pointer to the expression given to the sizeof operator.
  * This is the expression provided as an argument to the sizeof operator
  * (if it is an expression).
  *
  * #### `SgSizeOfOp::p_operand_type`
+ *
  * This a pointer to the SgType given to the sizeof operator.
  * This is the type provided as an argument to the sizeof operator
  * (if it is a type).
  *
  * #### `SgSizeOfOp::p_expression_type`
+ *
  * This a SgType, the type of the expression.
  *
  */
@@ -3314,6 +3723,7 @@ class SgSizeOfOp;
  * **Member functions**
  *
  * #### `SgStatement::get_scope() const`
+ *
  * Returns scope of current statement.
  * Returns the explicit semantic scope for declarations that store one, or the
  * scope defined by the owning AST structure for other statements. Producers
@@ -3322,6 +3732,7 @@ class SgSizeOfOp;
  * - Return: Returns valid pointer to SgScopeStatement.
  *
  * #### `SgStatement::replace_child (SgStatement *, SgStatement *, bool
+ *
  * extractListFromBasicBlock=false)` Private supporting function for low level
  * SageIII rewrite interface. This function implements special semantics for the
  * insertion of a collection of statements in a block.  If
@@ -3330,6 +3741,7 @@ class SgSizeOfOp;
  * - Return: Returns bool.
  *
  * #### `SgStatement::insert_child (SgStatement *, SgStatement *, bool
+ *
  * inFront=true, bool extractListFromBasicBlock=false)` Private supporting
  * function for low level SageIII rewrite interface. This function implements
  * special semantics for the insertion of a collection of statements in a block.
@@ -3338,6 +3750,7 @@ class SgSizeOfOp;
  * - Return: Returns bool.
  *
  * #### `SgStatement::get_symbol_from_symbol_table()`
+ *
  * Virtual function to obtain the SgSymbol from the scope's symbol table.
  * This function permits retrival of the associated SgSymbol, where it exists
  * for that IR node, where is is associated with this exact declaration. If no
@@ -3348,6 +3761,7 @@ class SgSizeOfOp;
  * - Return: Returns SgSymbol pointer.
  *
  * #### `SgStatement::isChildUsedAsLValue(SgExpression *)`
+ *
  * Virtual function to determine if the provided expression is used as an
  * l-value within the cotext of this statement.
  * - Return: True if the expression is used within this statement as an l-value.
@@ -3381,9 +3795,11 @@ class SgStatement;
  * **Data members**
  *
  * #### `SgStatementExpression::p_statement`
+ *
  * This a pointer to the SgStatement (usually a SgBasicBlock).
  *
  * #### `SgStatementExpression::p_expression_type`
+ *
  * This a SgType, the type of the expression.
  *
  */
@@ -3402,11 +3818,13 @@ class SgStatementExpression;
  * **Data members**
  *
  * #### `SgStorageModifier::storage_modifier_enum p_modifier`
+ *
  * enum value (can be set to only one of several values)
  *
  * **Member functions**
  *
  * #### `SgStorageModifier::isStatic () const`
+ *
  * Storage modifier is static (always false for the SgStorageModifier in the
  * SgInitializedName).
  * - Internal: Note that the isStatic() for variable declarations is stored in
@@ -3442,31 +3860,38 @@ class SgSupport;
  * **Data members**
  *
  * #### `SgSwitchStatement::p_item_selector`
+ *
  * The selector statement, which can be an expression statement or declaration.
  *
  * #### `SgSwitchStatement::p_body`
+ *
  * This pointer a SgStatement, and holds the cases in the body of the switch.
  *
  * **Member functions**
  *
  * #### `SgSwitchStatement::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgSwitchStatement.
  *
  * #### `SgSwitchStatement::get_item_selector() const`
+ *
  * Access function for p_item_selector_root.
  * - Return: Returns a pointer to a SgExpression.
  *
  * #### `SgSwitchStatement::set_item_selector(SgExpression* item_selector)`
+ *
  * Access function for p_item_selector.
  * - Param `for_init_stmt`: SgExpression pointer
  * - Return: Returns void.
  *
  * #### `SgSwitchStatement::get_body() const`
+ *
  * Access function for p_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgSwitchStatement::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Param `loop_body`: SgStatement pointer
  * - Return: Returns void.
@@ -3522,11 +3947,13 @@ class SgSwitchStatement;
  * **Member functions**
  *
  * #### `SgSymbol::get_name() const`
+ *
  * Access function for getting name from declarations or types internally.
  * - Internal: This is a virtual function.
  * - Return: Returns SgName.
  *
  * #### `SgSymbol::get_type() const`
+ *
  * This function returns the type associated with the named entity.
  * - Internal: This is a virtual function.
  * - Return: Returns SgType*.
@@ -3549,19 +3976,23 @@ class SgSymbol;
  * **Data members**
  *
  * #### `SgSymbolTable::p_iterator`
+ *
  * This iterator is used within some of the deprecated functions.
  * - Deprecated: I think this iterator should be removed.
  *
  * #### `SgSymbolTable::p_name`
+ *
  * This is the symbol name (mangled is required).
  *
  * #### `SgSymbolTable::p_no_name`
+ *
  * This is a flag to indicate that p_name is empty
  * Some symbols don't have a name.
  * - Todo: generate a list of instances where symbols don't have names.
  * (Namespaces don't have to have a name for example).
  *
  * #### `SgSymbolTable::p_table`
+ *
  * This is lower level symbol table implementation (using an STL hash_multimap)
  *
  */
@@ -3583,32 +4014,40 @@ class SgSymbolTable;
  * **Data members**
  *
  * #### `SgTemplateArgument::p_argumentType`
+ *
  * This is the type of the argument specificed to the template in the
  * instantiation of the template.
  * - Internal:
  *
  * #### `SgTemplateArgument::p_isArrayBoundUnknownType`
+ *
  * Template arguments can be used as array bounds, if so this this marks the
  * arguments use as such.
  *
  * #### `SgTemplateArgument::p_type`
+ *
  * This is the template argument's reference to a type (if it is a type).
  * This pointer is valid if the argumentType is "type_argument".
  *
  * #### `SgTemplateArgument::p_expression`
+ *
  * This is the template argument's reference to an expression (if it is an
  * expression). This pointer is valid if the argumentType is "nontype_argument".
  *
  * #### `SgTemplateArgument::p_templateDeclaration`
+ *
  * The exact semantic template declaration referenced by the argument.
  *
  * #### `SgTemplateArgument::p_explicitlySpecified`
+ *
  * This true only if for a function template the argument is explicit in the
  * source code (it need not always be.) For template<typename T> void foo(T t);
  * we could specify:
- * -# foo(1.0);
+ *
+ * 1. foo(1.0);
  * or:
- * -# foo<float>(1.0);
+ *
+ * 1. foo<float>(1.0);
  * only in the second case is the template argument explicit.  For all
  * instantiated member function templates the value is false.
  * - Internal:
@@ -3616,18 +4055,21 @@ class SgSymbolTable;
  * **Member functions**
  *
  * #### `SgTemplateArgument::SgTemplateArgument( SgType* arg, bool
+ *
  * isExplicitlySpecified)` Constructor used with types.
  * - Internal:
  * - See also:
  * Example:create an SgTemplateArgument object
  *
  * #### `SgTemplateArgument::SgTemplateArgument( SgExpression* arg, bool
+ *
  * isExplicitlySpecified)` Constructor used with expressions.
  * - Internal:
  * - See also:
  * Example:create an SgTemplateArgument object
  *
  * #### `SgTemplateArgument::SgTemplateArgument(const SgTemplateArgument & X)`
+ *
  * This the copy constructor (deep copy made).
  * - Internal: This constructor does a deep copy of all data in the
  * SgTemplateArgument object.
@@ -3635,44 +4077,54 @@ class SgSymbolTable;
  * Example:create an SgTemplateArgument object
  *
  * #### `SgTemplateArgument::set_argumentType (
+ *
  * SgTemplateArgument::template_argument_enum argumentType )` This function sets
  * argumentType.
  * - Return: Returns void.
  *
  * #### `SgTemplateArgument::template_argument_enum
+ *
  * SgTemplateArgument::get_argumentType () const` This function returns
  * argumentType.
  * - Return: Returns SgTemplateArgument::template_argument_enum.
  *
  * #### `SgTemplateArgument::set_isArrayBoundUnknownType ( bool
+ *
  * isArrayBoundUnknownType )` This function sets isArrayBoundUnknownType.
  * - Return: Returns void.
  *
  * #### `bool SgTemplateArgument::get_isArrayBoundUnknownType () const`
+ *
  * This function returns isArrayBoundUnknownType.
  * - Return: Returns bool.
  *
  * #### `set_type ( SgType *type )`
+ *
  * This function sets the argumentType.
  * - Return: Returns void.
  *
  * #### `SgType* SgTemplateArgument::get_type () const`
+ *
  * This function returns argumentType.
  * - Return: Returns SgType pointer.
  *
  * #### `set_expression ( SgExpression *exp )`
+ *
  * This function sets the argumentExpression.
  * - Return: Returns void.
  *
  * #### `SgExpression* SgTemplateArgument::get_expression () const`
+ *
  * This function returns argumentExpression.
  * - Return: Returns SgExpression pointer.
  *
  * #### `SgTemplateArgument::set_explicitlySpecified ( bool explicitlySpecified
+ *
  * )` This function sets explicitlySpecified.
  * - Return: Returns void.
  *
  * #### `bool SgTemplateArgument::get_explicitlySpecified () const`
+ *
  * This function returns explicitlySpecified.
  * - Return: Returns bool.
  */
@@ -3712,11 +4164,13 @@ class SgTemplateArgument;
  * **Data members**
  *
  * #### `SgTemplateDeclaration::p_name`
+ *
  * This is the name of the template
  * This is the name of the template (e.g. for "template<class T> class X;",
  * the name is "X".
  *
  * #### `SgTemplateDeclaration::p_template_kind`
+ *
  * This is the classification of the template declaration
  * This is the classification of the template declaration.
  * This template declaration is internally marked as being either a
@@ -3727,12 +4181,14 @@ class SgTemplateArgument;
  * - member data (e_template_m_data)
  *
  * #### `SgTemplateDeclaration::p_templateParameters`
+ *
  * This is the STL list of pointers template parameters (SgTemplateParameter
  * objects) This is the STL list of pointers to template parameters
  * (SgTemplateParameter objects) For example, for "template<class T> class X;",
  * the STL list would contain a SgTemplateParameter representing T.
  *
  * #### `SgTemplateDeclaration::p_scope`
+ *
  * This is the scope of the template declaration.
  * This is stored explicitly since name qualification can be used to
  * place some declarations in positions that are different from their
@@ -3741,18 +4197,22 @@ class SgTemplateArgument;
  * **Member functions**
  *
  * #### `SgTemplateDeclaration::get_name()`
+ *
  * Returns name of template declaration.
  * - Return: Returns SgName by value.
  *
  * #### `SgTemplateDeclaration::set_name(SgName name)`
+ *
  * Access function for p_name.
  * - Return: Returns void.
  *
  * #### `SgTemplateDeclaration::get_template_kind()`
+ *
  * Returns enum value (function, class, etc.)
  * - Return: Returns enum value
  *
  * #### `SgTemplateDeclaration::set_template_kind(SgName name)`
+ *
  * Access function for p_template_kind.
  * - Return: Returns void.
  */
@@ -3776,20 +4236,24 @@ class SgTemplateDeclaration;
  * **Data members**
  *
  * #### `SgTemplateInstantiationDecl::p_templateName`
+ *
  * This is the name of the templated class (excludes template arguments)
  * The frontend publishes the template's identifier and its typed argument list
  * during construction. Unparsing renders the arguments from their AST nodes.
  *
  * #### `SgTemplateInstantiationDecl::p_templateHeader`
+ *
  * This data field is not used (or is used internally).
  * I forget what this name includes.
  *
  * #### `SgTemplateInstantiationDecl::p_templateDeclaration`
+ *
  * This is the template declarations (SgTemplateDeclaration) from which this
  * template instantiation is constructed.  This can be NULL, as I recall, for
  * nested classes.
  *
  * #### `SgTemplateInstantiationDecl::p_templateArguments`
+ *
  * This is a pointer to a list of pointers to SgTemplateArgument objects (used
  * with the SgTemplateDeclaration to construct this instantiation). Not all
  * arguments are output in the generated code (see SgTemplateArgument for
@@ -3801,6 +4265,7 @@ class SgTemplateDeclaration;
  * **Member functions**
  *
  * #### `SgTemplateInstantiationDecl::SgTemplateInstantiationDecl (
+ *
  * Sg_File_Info* startOfConstruct = NULL,` SgName name = SgdefaultName, int
  * class_type = 0, SgClassType *type=NULL, SgClassDefinition *definition=NULL)
  * This is the only constructor.
@@ -3815,6 +4280,7 @@ class SgTemplateDeclaration;
  * Example:create an SgTemplateInstantiationDecl object
  *
  * #### `SgTemplateInstantiationDecl::get_templateName() const`
+ *
  * Returns name of class template, the name excludes template arguments.
  * For the template name with arguments, e.g. "class_template<int>" the user
  * should call get_name() (defined in the SgClassDeclaration base class).
@@ -3830,10 +4296,12 @@ class SgTemplateDeclaration;
  * - Return: returns SgName by value.
  *
  * #### `SgTemplateInstantiationDecl::set_templateName(SgName name)`
+ *
  * sets name of instantiated class template, name excludes template arguments.
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationDecl::get_templateDeclaration() const`
+ *
  * Returns pointer to SgTemplateDeclaration from which instantiation is
  * generated.
  * - Return: returns pointer to SgTemplateDeclaration.
@@ -3844,6 +4312,7 @@ class SgTemplateDeclaration;
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationDecl::get_templateArguments() const`
+ *
  * Returns the declaration's list of template arguments by reference.
  *
  */
@@ -3861,12 +4330,14 @@ class SgTemplateInstantiationDecl;
  * **Member functions**
  *
  * #### `SgTemplateInstantiationDefn::SgTemplateInstantiationDefn (`
+ *
  * Sg_File_Info* startOfConstruct = NULL, SgTemplateInstantiationDecl *decl =
  * NULL ) This is the constructor. This constructor builds the
  * SgTemplateInstantiationDefn base class.
  * - Param `startOfConstruct`: represents the position in the source code
  *
  * #### `SgTemplateInstantiationDefn::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgTemplateInstantiationDefn.
  */
@@ -3885,6 +4356,7 @@ class SgTemplateInstantiationDefn;
  * **Data members**
  *
  * #### `SgTemplateInstantiationDirectiveStatement::p_declaration`
+ *
  * This pointer points to associated template instantiation declaration meant to
  * be explicitly instantiated. Points to either (I think this is a complete
  * list):
@@ -3904,6 +4376,7 @@ class SgTemplateInstantiationDefn;
  * - Param `startOfConstruct`: represents the position in the source code
  *
  * #### `SgTemplateInstantiationDirectiveStatement::get_declaration() const`
+ *
  * Returns pointer to SgDeclarationStatement.
  * - Return: Returns pointer to SgDeclarationStatement.
  *
@@ -3926,15 +4399,18 @@ class SgTemplateInstantiationDirectiveStatement;
  * **Data members**
  *
  * #### `SgTemplateInstantiationFunctionDecl::p_templateName`
+ *
  * The frontend publishes the template's identifier and its typed argument list
  * during construction. Unparsing renders the arguments from their AST nodes.
  *
  * #### `SgTemplateInstantiationFunctionDecl::p_templateDeclaration`
+ *
  * This is the template declarations (SgTemplateDeclaration) from which this
  * template instantiation is constructed.  This can be NULL, as I recall, for
  * nested classes.
  *
  * #### `SgTemplateInstantiationFunctionDecl::p_templateArguments`
+ *
  * This is a pointer to a list of pointers to SgTemplateArgument objects (used
  * with the SgTemplateDeclaration to construct this instantiation). Not all
  * arguments are output in the generated code (see SgTemplateArgument for
@@ -3946,16 +4422,19 @@ class SgTemplateInstantiationDirectiveStatement;
  * **Member functions**
  *
  * #### `SgTemplateInstantiationFunctionDecl::get_templateName() const`
+ *
  * Returns name of instantiated function template, name excludes template
  * arguments.
  * - Return: returns SgName by value.
  *
  * #### `SgTemplateInstantiationFunctionDecl::set_templateName(SgName name)`
+ *
  * sets name of instantiated function template, name excludes template
  * arguments.
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationFunctionDecl::get_templateDeclaration() const`
+ *
  * Returns pointer to SgTemplateDeclaration from which instantiation is
  * generated.
  * - Return: returns pointer to SgTemplateDeclaration.
@@ -3966,6 +4445,7 @@ class SgTemplateInstantiationDirectiveStatement;
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationFunctionDecl::get_templateArguments() const`
+ *
  * Returns the declaration's list of template arguments by reference.
  *
  */
@@ -3982,15 +4462,18 @@ class SgTemplateInstantiationFunctionDecl;
  * **Data members**
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::p_templateName`
+ *
  * The frontend publishes the template's identifier and its typed argument list
  * during construction. Unparsing renders the arguments from their AST nodes.
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::p_templateDeclaration`
+ *
  * This is the template declarations (SgTemplateDeclaration) from which this
  * template instantiation is constructed.  This can be NULL, as I recall, for
  * nested classes.
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::p_templateArguments`
+ *
  * This is a pointer to a list of pointers to SgTemplateArgument objects (used
  * with the SgTemplateDeclaration to construct this instantiation). Not all
  * arguments are output in the generated code (see SgTemplateArgument for
@@ -4008,16 +4491,19 @@ class SgTemplateInstantiationFunctionDecl;
  * - Param `startOfConstruct`: represents the position in the source code
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::get_templateName() const`
+ *
  * Returns name of instantiated function template, name excludes template
  * arguments.
  * - Return: returns SgName by value.
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::set_templateName(SgName
+ *
  * name)` sets name of instantiated function template, name excludes template
  * arguments.
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::get_templateDeclaration()
+ *
  * const` Returns pointer to SgTemplateDeclaration from which instantiation is
  * generated.
  * - Return: returns pointer to SgTemplateDeclaration.
@@ -4028,6 +4514,7 @@ class SgTemplateInstantiationFunctionDecl;
  * - Return: returns void.
  *
  * #### `SgTemplateInstantiationMemberFunctionDecl::get_templateArguments()
+ *
  * const` Returns the declaration's list of template arguments by reference.
  *
  */
@@ -4046,6 +4533,7 @@ class SgTemplateInstantiationMemberFunctionDecl;
  * **Data members**
  *
  * #### `SgThisExp::p_class_symbol`
+ *
  * This is the symbol of the class to which the "this" operator is applied.
  *
  */
@@ -4064,28 +4552,34 @@ class SgThrowOp;
  * **Data members**
  *
  * #### `SgTryStmt::p_body`
+ *
  * This pointer points to a SgBasicBlock containing the statements to be execued
  * by the try block.
  *
  * #### `SgTryStmt::p_catch_statement_seq_root`
+ *
  * This pointer points to a SgCatchStatementSeq and connects the try statement
  * to the sequence of catch statements within the support of exception handling.
  *
  * **Member functions**
  *
  * #### `SgTryStmt::get_body() const`
+ *
  * Returns pointer to SgBasicBlock.
  * - Return: Returns pointer to SgBasicBlock.
  *
  * #### `SgTryStmt::set_body(SgBasicBlock* body)`
+ *
  * Access function for p_body.
  * - Return: Returns void.
  *
  * #### `SgTryStmt::get_catch_statement_seq_root() const`
+ *
  * Returns pointer to SgCatchStatementSeq.
  * - Return: Returns pointer to SgCatchStatementSeq.
  *
  * #### `SgTryStmt::set_catch_statement_seq_root(SgCatchStatementSeq*
+ *
  * catch_statement_seq_root)` Access function for p_catch_statement_seq_root.
  * - Return: Returns void.
  */
@@ -4096,16 +4590,20 @@ class SgTryStmt;
  * There are no uses of this IR node anywhere.  All SgType based IR nodes
  * are derived from this SgType class.
  * Discussion of get_base_type() and findBaseType():
- * -# fileBaseType() will recursively strip away all typedefs, reference,
+ *
+ * 1. fileBaseType() will recursively strip away all typedefs, reference,
  * pointers, arrays, and modifiers
- * -# get_base_type() is a member function on some IR nodes derived from SgType
+ *
+ * 1. get_base_type() is a member function on some IR nodes derived from SgType
  * and returns the non-recursively striped (immediate) type under the typedefs,
  * reference, pointers, arrays, modifiers, etc.
  * - Internal: This is a base class for all SgType objects.
  * - Todo: Several classes derived from SgType are not used and can be removed:
- * -# SgTypeUnknown (Used by SageInterface to specify references to undeclared
+ *
+ * 1. SgTypeUnknown (Used by SageInterface to specify references to undeclared
  * variables)
- * -# SgUnknownMemberFunctionType
+ *
+ * 1. SgUnknownMemberFunctionType
  * - Todo: Labels appear to be used as types in "foo(*,*)", see example from
  * Chris (LANL, 4/19/2007).
  * - See also:
@@ -4114,14 +4612,17 @@ class SgTryStmt;
  * **Data members**
  *
  * #### `SgReferenceType SgType::p_ref_to`
+ *
  * This holds the pointer to a SgReferenceType if this type is a reference to
  * another type.
  *
  * #### `SgPointerType SgType::p_ptr_to`
+ *
  * This holds the pointer to a SgPointerType if this type is a pointer to
  * another type.
  *
  * #### `SgReferenceType SgType::p_modifiers`
+ *
  * This points to any SgModifierNodes if this type contains type modifiers.
  *
  */
@@ -4182,15 +4683,18 @@ class SgTypeString;
  * **Data members**
  *
  * #### `SgName SgTypedefDeclaration::p_name`
+ *
  * This is the name of the newly defined type.
  * - Internal: This name carries no qualification.
  *
  * #### `SgType SgTypedefDeclaration::p_base_type`
+ *
  * This is the type being given a new name by the typedef declaration.
  * - Internal: This name can be private so using the base type directly can
  * cause access violations within generated code.
  *
  * #### `SgTypedefType SgTypedefDeclaration::p_type`
+ *
  * This is the resulting type defined by the typedef declaration.
  * This type can be used where any type can be use, declaration of variables,
  * etc.
@@ -4198,6 +4702,7 @@ class SgTypeString;
  * resulting type can have access restrictions.
  *
  * #### `SgDeclarationStatement SgTypedefDeclaration::p_declaration`
+ *
  * pointer to the declaration (typically a SgClassDeclaration).
  * A typedef such as "typedef struct {int __pos; int __state;} _G_fpos64_t;"
  * defines a class as part of its declaration.  p_declaration pointes to the
@@ -4205,12 +4710,14 @@ class SgTypeString;
  * - Internal: This is the class declaration in a typedef that defines a class.
  *
  * #### `bool
+ *
  * SgTypedefDeclaration::p_typedefBaseTypeContainsDefiningDeclaration` This flag
  * indicates that the typedef defines a structure typedefExample.C This example
  * show the definition of a struct within the typedef.
  * - Internal: I would like to give this a better name.
  *
  * #### `SgScopeStatement SgTypedefDeclaration::p_scope`
+ *
  * This is the scope of the typedef declaration.
  * - Internal: Comment on why we need to store the scope explicitly (resolves
  * name qualification issues).
@@ -4218,6 +4725,7 @@ class SgTypeString;
  * **Member functions**
  *
  * #### `SgTypedefDeclaration::get_scope() const`
+ *
  * Returns scope of current statement.
  * Returns the explicit semantic scope for declarations that store one, or the
  * scope defined by the owning AST structure for other statements. Producers
@@ -4237,14 +4745,17 @@ class SgTypedefDeclaration;
  * **Data members**
  *
  * #### `SgUnaryOp::p_operand_i`
+ *
  * This is the operand associated with the unary operator.
  * Every unary operator is applied to a single operand, this
  * variable stores the operand to which the unary operator is applied.
  *
  * #### `SgUnaryOp::p_expression_type`
+ *
  * The exact semantic result type established by the producer.
  *
  * #### `SgUnaryOp::p_mode`
+ *
  * This variable records the prefix vs. postfix semantics of the operator
  * since the syntax of "operator++" cannot readily do so.  This approach is
  * simpiler to interogate than the C++ syntax for distingishing prefix vs.
@@ -4253,6 +4764,7 @@ class SgTypedefDeclaration;
  * **Member functions**
  *
  * #### `SgUnaryOp::SgUnaryOp ( Sg_File_Info *startOfConstruct=NULL,
+ *
  * SgExpression *operand_i=NULL, SgType *expression_type=NULL)` This is the
  * constructor. This constructor builds the SgUnaryOp base class.
  * - Param `startOfConstruct`: represents the position in the source code
@@ -4263,11 +4775,13 @@ class SgTypedefDeclaration;
  * Example:create an SgUnaryOp object
  *
  * #### `SgUnaryOp::get_operand() const`
+ *
  * returns SgExpression pointer to the operand associated with this unary
  * operator.
  * - Return: Returns SgExpression pointer.
  *
  * #### `SgUnaryOp::set_operand (SgExpression* operand)`
+ *
  * This function allows the p_operand pointer to be set (used internally).
  * This function is mostly used internally and is only required to support
  * editing of existing SgUnaryOp objects.
@@ -4275,11 +4789,13 @@ class SgTypedefDeclaration;
  * - Return: Returns void.
  *
  * #### `SgUnaryOp::get_expression_type (void) const`
+ *
  * returns type of operator expression.
  * This function returns the type of the unary operator.
  * - Return: Returns type of operator expression.
  *
  * #### `SgUnaryOp::set_expression_type (SgType* expression_type)`
+ *
  * This function allows the p_expression_type pointer to be set (used
  * internally). This function is mostly used internally and is only required to
  * support editing of existing SgUnaryOp objects. In general it is not changed
@@ -4289,11 +4805,13 @@ class SgTypedefDeclaration;
  * - Return: Returns void.
  *
  * #### `SgUnaryOp::get_mode() const`
+ *
  * Get the prefix/postfix mode of the operator.
  * Get the prefix/postfix mode of the operator (if applicable to that operator).
  * - Return: Returns SgUnaryOp::Sgop_mode (enum for prefix,postfix values)
  *
  * #### `SgUnaryOp::set_mode ( SgUnaryOp::Sgop_mode mode )`
+ *
  * Set the mode (prefix/postfix) associated with this operator
  * This is an internal function, it sets up the prefix/postfix mode of the
  * unary operator.
@@ -4301,26 +4819,31 @@ class SgTypedefDeclaration;
  * - Return: Returns void
  *
  * #### `SgUnaryOp::length() const`
+ *
  * Returns the number of operands (1).
  * - Deprecated.
  * - Return: Returns int
  *
  * #### `SgUnaryOp::empty () const`
+ *
  * Returns false.
  * - Deprecated.
  * - Return: Returns bool
  *
  * #### `SgUnaryOp::get_next(int &n) const`
+ *
  * Returns the operand and increments n if n is zero; otherwise returns null.
  * - Deprecated.
  * - Return: Returns SgExpression pointer.
  *
  * #### `SgUnaryOp::get_operand_i() const`
+ *
  * returns SgExpression pointer to the operand associated with this unary
  * operator.
  * - Return: Returns SgExpression pointer.
  *
  * #### `SgUnaryOp::set_operand_i (SgExpression* operand)`
+ *
  * This function allows the p_operand_i pointer to be set (used internally).
  * This function is mostly used internally and is only required to support
  * editing of existing SgUnaryOp objects.
@@ -4340,6 +4863,7 @@ class SgUnaryOp;
  * **Data members**
  *
  * #### `SgUsingDeclarationStatement::p_declaration`
+ *
  * This pointer points to a SgDeclarationStatement whose declaration(s) are
  * available for use in the scope containing this using declaration.
  * - Internal: this is a valid pointer if the IR nodes specified using a
@@ -4347,12 +4871,14 @@ class SgUnaryOp;
  * p_initializedName are valid pointers.
  *
  * #### `SgUsingDeclarationStatement::p_initializedName`
+ *
  * This pointer points to a SgInitializedName whose declaration is
  * available for use in the scope containing this using declaration.
  *
  * **Member functions**
  *
  * #### `SgUsingDeclarationStatement::get_declaration() const`
+ *
  * Access function for p_declaration.
  * This is a valid pointer if the using declaration references
  * a declaration, else it is null and p_initializedName is a valid pointer.
@@ -4360,10 +4886,12 @@ class SgUnaryOp;
  * - Return: Returns pointer to SgDeclaration.
  *
  * #### `SgUsingDeclarationStatement::set_declaration(SgDeclarationStatement*
+ *
  * declaration)` Access function for p_declaration.
  * - Return: Returns void.
  *
  * #### `SgUsingDeclarationStatement::get_initializedName() const`
+ *
  * Access function for p_initializedName.
  * This is a valid pointer if the using declaration references
  * a variable name, else it is null and p_declaration is a valid pointer.
@@ -4371,6 +4899,7 @@ class SgUnaryOp;
  * - Return: Returns pointer to SgInitializedName.
  *
  * #### `SgUsingDeclarationStatement::set_initializedName(SgInitializedName*
+ *
  * initializedName)` Access function for p_initializedName.
  * - Return: Returns void.
  */
@@ -4385,11 +4914,13 @@ class SgUsingDeclarationStatement;
  * **Data members**
  *
  * #### `SgUsingDirectiveStatement::p_namespaceDeclaration`
+ *
  * This pointer points to namespace declaration being used.
  *
  * **Member functions**
  *
  * #### `SgUsingDirectiveStatement::get_namespaceDeclaration() const`
+ *
  * Access function for p_namespaceDeclaration.
  * - Return: Returns pointer to SgNamespaceDeclarationStatement.
  *
@@ -4422,10 +4953,12 @@ class SgValueExp;
  * **Data members**
  *
  * #### `SgVarRefExp::p_lvalue`
+ *
  * This boolean variable marks the current expression as a
  * left hand side value (lvalue).
  *
  * #### `SgVarRefExp::p_need_paren`
+ *
  * This boolean value marks the current expression as requiring parenthises.
  * This boolean value marks the current expression as requiring parenthises (the
  * information comes from the frontend's interpretation of the requirement and
@@ -4437,6 +4970,7 @@ class SgValueExp;
  * **Member functions**
  *
  * #### `SgVarRefExp::get_type() const`
+ *
  * Returns the exact type associated with the referenced symbol.
  *
  */
@@ -4465,6 +4999,7 @@ class SgVarRefExp;
  * **Data members**
  *
  * #### `SgVariableDeclaration::p_baseTypeDefiningDeclaration`
+ *
  * This is used to traverse type definitions within variable declarations.
  * In cases where a class or other named type is defined within (and as the
  * base type of) a variable declaration, the traversal code must be able to
@@ -4472,11 +5007,13 @@ class SgVarRefExp;
  * for this pointer when needed.
  *
  * #### `SgVariableDeclaration::p_variables`
+ *
  * This is an STL list of pointers to SgInitializedName objects.
  * Each variable is a SgInitializedName object, their can be a list of
  * then, so this list holds that collection of variables.
  *
  * #### `SgVariableDeclaration::p_specialization`
+ *
  * This is part of template support (variables of templated types).
  * This is most often set to SgDeclarationStatement::e_no_specialization, but
  * where templates are involved can be set to either
@@ -4486,14 +5023,17 @@ class SgVarRefExp;
  * **Member functions**
  *
  * #### `SgVariableDeclaration::get_variables() const`
+ *
  * Access function for p_variables.
  * - Return: Returns a const reference to SgInitializedNamePtrList.
  *
  * #### `SgVariableDeclaration::get_variables()`
+ *
  * Access function for p_variables.
  * - Return: Returns a non-const reference to SgInitializedNamePtrList.
  *
  * #### `SgVariableDeclaration::get_baseTypeDefiningDeclaration() const`
+ *
  * Returns the exact class or enum definition structurally owned by this
  * declaration, or null when the declaration only references its base type.
  *
@@ -4505,6 +5045,7 @@ class SgVarRefExp;
  * must be the base definition named by every declarator type.
  *
  * #### `SgVariableDeclaration::get_specialization() const`
+ *
  * Access function for p_specialization.
  * - Return: Returns value of type
  * SgDeclarationStatement::template_specialization_enum.
@@ -4535,9 +5076,11 @@ class SgVariableDeclaration;
  * **Data members**
  *
  * #### `SgVariableDefinition::p_vardefn`
+ *
  * This pointer points to associated SgInitializedName object (the variable).
  *
  * #### `SgVariableDefinition::p_bitfield`
+ *
  * This a pointer to a value specifies the bitwidth of the variable (used to
  * control memory layout/padding of data members in data structures). This is a
  * somewhat rare feature of C, and so C++. variables of some types can be
@@ -4547,18 +5090,22 @@ class SgVariableDeclaration;
  * **Member functions**
  *
  * #### `SgVariableDefinition::get_vardefn() const`
+ *
  * Access function for SgInitializedName stored in p_vardefn.
  * - Return: Returns pointer to SgInitializedName.
  *
  * #### `SgVariableDefinition::set_vardefn(SgInitializedName* expr)`
+ *
  * Access function for SgInitializedName in p_vardefn.
  * - Return: Returns void.
  *
  * #### `SgVariableDefinition::get_bitfield() const`
+ *
  * Access function for p_bitfield.
  * - Return: Returns pointer to SgExpression.
  *
  * #### `SgVariableDefinition::set_bitfield(SgExpression* bitfield)`
+ *
  * Access function for p_bitfield.
  * - Return: Returns void.
  */
@@ -4590,11 +5137,13 @@ class SgVariableDefinition;
  * **Member functions**
  *
  * #### `SgVariableSymbol::get_name() const`
+ *
  * Access function for getting name from declarations or types internally.
  * - Internal: This is a virtual function.
  * - Return: Returns SgName.
  *
  * #### `SgVariableSymbol::get_type() const`
+ *
  * This function returns the type associated with the named entity.
  * - Internal: This is a virtual function.
  * - Return: Returns SgType*.
@@ -4609,32 +5158,39 @@ class SgVariableSymbol;
  * **Data members**
  *
  * #### `SgWhileStmt::p_condition`
+ *
  * This pointer a SgStatement, the conditional expression in the loop construct.
  *
  * #### `SgWhileStmt::p_body`
+ *
  * This pointer a SgStatement, and holds the statements in the body of the
  * loop.
  *
  * **Member functions**
  *
  * #### `SgWhileStmt::copy(const SgCopyHelp & help)`
+ *
  * Makes a copy (deap of shallow depending on SgCopyHelp).
  * - Return: Returns pointer to copy of SgWhileStmt.
  *
  * #### `SgWhileStmt::get_body() const`
+ *
  * Access function for p_body.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgWhileStmt::set_body(SgStatement* body)`
+ *
  * Access function for p_body.
  * - Param `body`: SgStatement pointer
  * - Return: Returns void.
  *
  * #### `SgWhileStmt::get_condition() const`
+ *
  * Access function for p_condition.
  * - Return: Returns a pointer to a SgStatement.
  *
  * #### `SgWhileStmt::set_condition(SgStatement* condition)`
+ *
  * Access function for p_condition.
  * - Param `condition`: SgStatement pointer
  * - Return: Returns void.

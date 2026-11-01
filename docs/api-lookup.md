@@ -1,13 +1,16 @@
 # API Quick Lookup
 
-This page loads a compact symbol index and lets you jump directly to the generated reference page.
+Find symbols, members, and individual overloads in the generated reference.
+Search by a name or qualified name; you can also [browse by category](reference/index.md).
 
 <div class="api-lookup-controls">
-  <input id="api-lookup-q" type="search" class="api-lookup-input" placeholder="Search symbol name (e.g. SgToken, isSgToken, buildAst)" />
-  <span id="api-lookup-meta" class="api-lookup-meta"></span>
+  <label for="api-lookup-q">Symbol name</label>
+  <input id="api-lookup-q" type="search" class="api-lookup-input" placeholder="For example: SgNode or BuildAstTreeDepGraph" aria-describedby="api-lookup-meta" />
+  <span id="api-lookup-meta" class="api-lookup-meta" role="status" aria-live="polite">Loading symbol index…</span>
 </div>
 
 <div id="api-lookup-results"></div>
+<noscript>JavaScript is required for lookup. Use the category link above to browse without JavaScript.</noscript>
 
 <script>
 (() => {
@@ -50,11 +53,13 @@ This page loads a compact symbol index and lets you jump directly to the generat
         console.error("Skipping invalid symbol URL:", s?.url);
       }
     }
-    meta.textContent = state.loaded ? `${safeItems.length}/${total}` : "loading…";
+    meta.textContent = state.loaded
+      ? `${safeItems.length} matching symbols of ${total}; showing ${Math.min(safeItems.length, 200)}.`
+      : "Loading symbol index…";
     if (!state.loaded) return;
 
     if (!safeItems.length) {
-      results.innerHTML = "<p>No matches.</p>";
+      results.innerHTML = "<p>No matching symbols. Try a shorter name, or browse the reference by category.</p>";
       return;
     }
 
@@ -81,25 +86,26 @@ This page loads a compact symbol index and lets you jump directly to the generat
     const out = [];
     for (const s of state.symbols) {
       if (normalize(s.name).includes(needle)) out.push(s);
-      if (out.length >= 5000) break;
     }
     render(out, state.symbols.length);
   };
 
   q.addEventListener("input", filter);
 
-  fetch(symbolsUrl, { cache: "no-store" })
+  fetch(symbolsUrl)
     .then((r) => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
     .then((data) => {
-      state.symbols = Array.isArray(data?.symbols) ? data.symbols : [];
+      if (!Array.isArray(data?.symbols) || !data.symbols.length) {
+        throw new Error("Empty or invalid symbol index");
+      }
+      state.symbols = data.symbols;
       state.loaded = true;
-      render(state.symbols, state.symbols.length);
-      q.focus();
+      filter();
     })
     .catch((err) => {
-      state.loaded = true;
-      meta.textContent = "failed to load index";
-      results.innerHTML = `<p>Failed to load ${escapeHtml(symbolsUrl.pathname)}: ${escapeHtml(err.message)}</p>`;
+      meta.textContent = "Could not load the symbol index.";
+      results.innerHTML = `<p>Browse the <a href="${escapeHtml(new URL("reference/", siteRoot).pathname)}">reference index</a> instead.</p>`;
+      console.error("Could not load API symbol index:", err);
     });
 })();
 </script>

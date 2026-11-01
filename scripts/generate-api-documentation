@@ -539,13 +539,17 @@ if [ -n "${MRDOCS_OUTPUT_DIR-}" ]; then
     output_args=(--output "$output_dir")
 fi
 
+source_revision="$(git -C "$(rose-source)" rev-parse HEAD)"
+source_url="https://github.com/ouankou/rex/blob/$source_revision/"
+
 "$MRDOCS_CMD" --config "$CONFIG" --compilation-database "$docs_db" \
     --concurrency "${MRDOCS_CONCURRENCY:-2}" \
+    --base-url "$source_url" \
     "${output_args[@]}" \
     "${stdlib_args[@]}" \
     "${libc_args[@]}"
 if [ -n "$output_dir" ]; then
-    "$PYTHON_BIN" "$(rose-source)/scripts/prepare-reference.py" --reference-dir "$output_dir"
+    "$PYTHON_BIN" "$(rose-source)/scripts/prepare-reference.py" --reference-dir "$output_dir" --source-url "$source_url" --source-root "$(rose-source)" --source-revision "$source_revision"
 fi
 if [ -n "${MRDOCS_KEEP_TMP-}" ]; then
     echo "Keeping temporary documentation directory at $docs_dir"

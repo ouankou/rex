@@ -47,6 +47,9 @@ Point make_point();
 /// Create a point from an integer.
 /// @param x Initial coordinate.
 Point make_point(int x);
+/// Explicitly related functions remain discoverable without auto-relates.
+/// @relates Point
+Point related_point(Point const &point);
 /// Point alias.
 using Coordinate = Point;
 /// Coordinate direction.
@@ -58,3 +61,17 @@ inline Point origin;
 using namespace Docs;
 /// Expose the coordinate type.
 using Docs::Point;
+
+/** @brief Documentation with separate heading and list blocks.
+ *
+ * - A **bold** note before the heading.
+ *
+ * #### `HeadingNode::parent`
+ *
+ * This paragraph is not part of the heading.
+ *
+ * 1. First requirement.
+ *
+ * 1. Second requirement.
+ */
+class HeadingNode {};

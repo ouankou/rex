@@ -84,4 +84,6 @@ fi
 require_file "$site_dir/CNAME"
 require_file "$site_dir/.nojekyll"
 
+python3 "$repo_root/scripts/validate-site-links.py" --site-dir "$site_dir"
+
 echo "GitHub Pages site assembled in $site_dir"
