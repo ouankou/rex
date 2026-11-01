@@ -56,7 +56,7 @@ jobs:
         ./build-rex.sh "$GITHUB_WORKSPACE/rex_install" Debug
 
     - name: Validate Markdown documentation
-      if: matrix.suite == 'core' && github.event_name == 'pull_request'
+      if: matrix.suite == 'core'
       run: |
         source scripts/ci-llvm-env "${{ env.LLVM_VERSION }}"
         export DOCS_JOBS=2
@@ -77,28 +77,26 @@ jobs:
           --test-dir build \
           "${selector[@]}"
 
+    - name: Upload docs site
+      if: matrix.suite == 'core'
+      uses: actions/upload-artifact@v7
+      with:
+        name: ${{ env.DOCS_SITE_ARTIFACT }}
+        path: _site
+        overwrite: true
+
   rex-wasm:
     name: Build & Test (WASM)
     uses: ./.github/workflows/rex-wasm-build.yml
     with:
-      upload-artifact: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+      upload-artifact: true
 
-  deploy-rex-wasm:
-    name: Deploy REX WASM site
+  assemble-pages:
+    name: Assemble Pages
     runs-on: ubuntu-26.04
     needs: [build, rex-wasm]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    permissions:
-      actions: read
-      contents: read
-      pages: write
-      id-token: write
-    concurrency:
-      group: pages
-      cancel-in-progress: false
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      artifact-name: github-pages-${{ github.run_attempt }}
 
     steps:
     - name: Checkout REX
@@ -112,21 +110,13 @@ jobs:
         name: ${{ env.REX_WASM_ARTIFACT }}
         path: ${{ env.REX_WASM_ARTIFACT }}
 
-    - name: Download latest docs site artifact
-      id: docs-artifact
-      env:
-        GH_TOKEN: ${{ github.token }}
-        DOCS_ARTIFACT_BRANCH: ${{ github.event.repository.default_branch }}
-      run: |
-        scripts/ci-download-latest-artifact "$DOCS_SITE_ARTIFACT" "$DOCS_SITE_ARTIFACT" --optional "$DOCS_ARTIFACT_BRANCH"
-
-    - name: Skip deploy until docs artifact exists
-      if: steps.docs-artifact.outputs.found != 'true'
-      run: |
-        echo "No $DOCS_SITE_ARTIFACT artifact found; run Publish Docs once to bootstrap the full static site."
+    - name: Download docs site
+      uses: actions/download-artifact@v8
+      with:
+        name: ${{ env.DOCS_SITE_ARTIFACT }}
+        path: ${{ env.DOCS_SITE_ARTIFACT }}
 
     - name: Assemble GitHub Pages site
-      if: steps.docs-artifact.outputs.found == 'true'
       env:
         PAGES_WASM_DIR: ${{ env.REX_WASM_ARTIFACT }}
         PAGES_DOCS_DIR: ${{ env.DOCS_SITE_ARTIFACT }}
@@ -134,21 +124,35 @@ jobs:
         PAGES_REQUIRE_DOCS: "1"
       run: scripts/ci-pages-assemble-site
 
-    - name: Configure GitHub Pages
-      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
-      uses: actions/configure-pages@v6
-
     - name: Upload GitHub Pages artifact
-      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       uses: actions/upload-pages-artifact@v5
       with:
         name: github-pages-${{ github.run_attempt }}
         path: ${{ env.PAGES_SITE_DIR }}
         include-hidden-files: true
 
+  deploy-pages:
+    name: Deploy Pages
+    runs-on: ubuntu-26.04
+    needs: assemble-pages
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+    - name: Configure GitHub Pages
+      uses: actions/configure-pages@v6
+
     - name: Deploy to GitHub Pages
-      if: ${{ steps.docs-artifact.outputs.found == 'true' && !env.ACT }}
       id: deployment
       uses: actions/deploy-pages@v5
       with:
-        artifact_name: github-pages-${{ github.run_attempt }}
+        artifact_name: ${{ needs.assemble-pages.outputs.artifact-name }}

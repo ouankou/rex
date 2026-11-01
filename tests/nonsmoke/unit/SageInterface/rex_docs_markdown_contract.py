@@ -258,6 +258,60 @@ class MarkdownContract(unittest.TestCase):
                                          "--base-path", "/docs/")
                 self.assertEqual(result.returncode == 0, success, result.stderr)
 
+    @unittest.skipUnless(importlib.util.find_spec("yaml"), "install docs requirements for workflow coverage")
+    def test_pages_use_current_run_artifacts(self):
+        import yaml
+        jobs = yaml.safe_load((SCRIPTS.parent / ".github/workflows/ci.yml").read_text())["jobs"]
+        steps = jobs["build"]["steps"]
+        docs = next(step for step in steps if "scripts/ci-docs-build" in step.get("run", ""))
+        upload = next(step for step in steps if step.get("uses", "").startswith("actions/upload-artifact@"))
+        self.assertEqual(docs["if"], "matrix.suite == 'core'")
+        self.assertEqual(upload["if"], docs["if"])
+        self.assertEqual(upload["with"]["name"], "${{ env.DOCS_SITE_ARTIFACT }}")
+        self.assertIs(upload["with"]["overwrite"], True)
+        self.assertIs(jobs["rex-wasm"]["with"]["upload-artifact"], True)
+        assembly = jobs["assemble-pages"]
+        self.assertNotIn("if", assembly)
+        self.assertNotIn("environment", assembly)
+        self.assertEqual(set(assembly["needs"]), {"build", "rex-wasm"})
+        downloads = [step["with"] for step in assembly["steps"]
+                     if step.get("uses", "").startswith("actions/download-artifact@")]
+        self.assertEqual({step["name"] for step in downloads},
+                         {"${{ env.DOCS_SITE_ARTIFACT }}", "${{ env.REX_WASM_ARTIFACT }}"})
+        for step in downloads:
+            self.assertEqual(set(step), {"name", "path"})  # No cross-run selector or token.
+        self.assertEqual(jobs["deploy-pages"]["needs"], "assemble-pages")
+        pages_upload = next(step for step in assembly["steps"]
+                            if step.get("uses", "").startswith("actions/upload-pages-artifact@"))
+        self.assertEqual(assembly["outputs"]["artifact-name"], pages_upload["with"]["name"])
+        deploy = next(step for step in jobs["deploy-pages"]["steps"]
+                      if step.get("uses", "").startswith("actions/deploy-pages@"))
+        self.assertEqual(deploy["with"]["artifact_name"], "${{ needs.assemble-pages.outputs.artifact-name }}")
+        self.assertEqual(jobs["deploy-pages"]["if"],
+                         "github.event_name == 'push' && github.ref == 'refs/heads/main'")
+
+    def test_pages_assembly_rejects_old_root_mounted_docs(self):
+        wasm, docs, site = (self.root / name for name in ("wasm", "docs", "site"))
+        wasm.mkdir()
+        docs.mkdir()
+        (wasm / "index.html").write_text('<a href="docs/">Docs</a>')
+        (wasm / "rex_wasm.js").write_text("// fixture")
+        (wasm / "rex_wasm.wasm").write_bytes(b"fixture")
+        (docs / "index.html").write_text('<h1 id="start">Docs</h1>')
+        (docs / "style.css").write_text("body {}")
+        env = dict(os.environ, PAGES_WASM_DIR=str(wasm), PAGES_DOCS_DIR=str(docs),
+                   PAGES_SITE_DIR=str(site), PAGES_REQUIRE_WASM="1", PAGES_REQUIRE_DOCS="1")
+        for prefix, expected in (("/", 1), ("/docs/", 0)):
+            (docs / "404.html").write_text(f'<link href="{prefix}style.css"><a href="{prefix}#start">Home</a>')
+            result = subprocess.run(["bash", str(SCRIPTS / "ci-pages-assemble-site")],
+                                    env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, expected, result.stdout + result.stderr)
+            if expected:
+                self.assertIn("docs/404.html", result.stderr)
+            else:
+                self.assertEqual((site / "docs/404.html").read_bytes(), (docs / "404.html").read_bytes())
+                self.assertEqual((site / "index.html").read_bytes(), (wasm / "index.html").read_bytes())
+
     def test_site_payload_limit(self):
         site = self.root / "site"
         site.mkdir()
