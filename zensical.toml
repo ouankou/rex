@@ -1,46 +1,49 @@
 [project]
 site_name = "REX Documentation"
+site_description = "Compiler source, build notes and API reference for REX."
 site_url = "https://rex.ouankou.com/docs/"
 docs_dir = "docs"
 site_dir = "_site"
 extra_css = ["stylesheets/reference.css"]
-extra_javascript = ["javascripts/reference-table-sizing.js"]
-exclude_docs = "mrdocs-addons/**"
+extra_javascript = ["javascripts/reference-table-sizing.js", "javascripts/api-lookup.js"]
+exclude_docs = "mrdocs-addons/**\noverrides/**"
 not_in_nav = """
 reference/**/*.md
 !reference/index.md
 !reference/sections/*.md
 """
 nav = [
-  { Home = "index.md" },
-  { Build = "build.md" },
-  { Notes = [
-    { "Clang OpenMP" = "clang-openmp-notes.md" },
-    { "Memory Tooling" = "REX_MEMORY_TOOLING.md" },
-    { "Upstream Sync" = "upstream-sync/rose-upstream-sync-guide.md" },
-  ] },
+  { "Developer workspace" = "index.md" },
   { API = [
     { Overview = "api.md" },
-    { "Quick Lookup" = "api-lookup.md" },
-    { "Reference Index" = "reference/index.md" },
+    { "Symbol lookup" = "api-lookup.md" },
+    { "Reference index" = "reference/index.md" },
     { Namespaces = "reference/sections/namespaces.md" },
     { Types = "reference/sections/types.md" },
+    { Functions = "reference/sections/functions.md" },
     { "Type Aliases" = "reference/sections/type-aliases.md" },
     { Enums = "reference/sections/enums.md" },
-    { Functions = "reference/sections/functions.md" },
     { Variables = "reference/sections/variables.md" },
     { "Using Declarations" = "reference/sections/using-declarations.md" },
     { "Using Namespace Directives" = "reference/sections/using-namespace-directives.md" },
+  ] },
+  { "Developer guides" = [
+    { "Build REX" = "build.md" },
+    { "Build documentation" = "documentation.md" },
+    { "Clang OpenMP" = "clang-openmp-notes.md" },
+    { "Memory tooling" = "REX_MEMORY_TOOLING.md" },
+    { "Upstream sync" = "upstream-sync/rose-upstream-sync-guide.md" },
   ] },
 ]
 
 [project.theme]
 variant = "classic"
+custom_dir = "docs/overrides"
 features = [
   "navigation.top",
-  "navigation.tabs",
+  "navigation.sections",
+  "toc.integrate",
   "navigation.path",
-  "navigation.tracking",
   "toc.follow",
   "content.code.copy",
 ]
