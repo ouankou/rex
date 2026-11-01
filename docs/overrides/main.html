@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% set unlisted = page and not (nav.items | selectattr("active") | list) %}
+{% set hidden_parts = page.meta.hide if page and page.meta and page.meta.hide else [] %}
+{% set sections = page.toc if page else [] %}
+{% set first = sections | first %}
+{% if first and first.level == 1 %}{% set sections = first.children %}{% endif %}
+
+{% block content %}
+  {% if unlisted and sections | length > 1 and "toc" not in hidden_parts %}
+    <nav class="reference-sections" aria-label="Page sections">
+      {% for section in sections %}
+        <a href="{{ section.url }}">{{ section.title | striptags }}</a>
+      {% endfor %}
+    </nav>
+  {% endif %}
+  {{ super() }}
+{% endblock %}

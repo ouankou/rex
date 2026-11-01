@@ -33,6 +33,10 @@
     const tables = document.querySelectorAll(".md-typeset__table table")
     for (const table of tables) {
       if (!isTwoColNameDescTable(table)) continue
+      const descriptions = Array.from(table.querySelectorAll("tbody > tr > td:last-child"))
+      if (descriptions.length && descriptions.every(cell => !cell.innerHTML.trim())) {
+        table.classList.add("ref-no-descriptions")
+      }
       const ch = computeNameColCh(table)
       if (!ch) continue
       table.classList.add("ref-two-col")

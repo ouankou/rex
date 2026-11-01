@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
@@ -20,8 +21,10 @@ class Links(HTMLParser):
     def __init__(self):
         super().__init__()
         self.hrefs = []
+        self.elements = []
 
     def handle_starttag(self, tag, attrs):
+        self.elements.append((tag, dict(attrs)))
         self.hrefs.extend(value for name, value in attrs if name == "href")
 
 
@@ -547,11 +550,16 @@ class MarkdownContract(unittest.TestCase):
             self.assertIn('operator[](int i)', html.unescape(point_html))
             self.assertIn('data-search-exclude', point)
 
-    def build_site(self):
+    def build_site(self, nav='[{ Home = "index.md" }]'):
+        theme = tomllib.loads((SCRIPTS.parent / "zensical.toml").read_text())["project"]["theme"]
         config = self.root / "zensical.toml"
         config.write_text(
             '[project]\nsite_name = "Fixture"\ndocs_dir = "reference"\nsite_dir = "site"\n'
-            '[project.theme]\nvariant = "classic"\n[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
+            f'nav = {nav}\n'
+            '[project.theme]\nvariant = "classic"\n'
+            f'custom_dir = {json.dumps(str(SCRIPTS.parent / "docs/overrides"))}\n'
+            f'features = {json.dumps(theme["features"])}\n'
+            '[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
             '[project.plugins.minify]\nminify_html = true\n')
         stale = self.root / "site/obsolete.html"
         stale.parent.mkdir(exist_ok=True)
@@ -567,6 +575,32 @@ class MarkdownContract(unittest.TestCase):
         result = self.run_script("validate-site-links.py", "--site-dir", site)
         self.assertEqual(result.returncode, 0, result.stderr)
         return site
+
+    @unittest.skipUnless(importlib.util.find_spec("zensical"), "install docs requirements for site coverage")
+    def test_reference_desk_navigation(self):
+        for name, content in {
+            "index.md": "# Home\n\n## Start\n",
+            "guide.md": "# Guide\n\n## Setup\n",
+            "Hidden.md": "# Hidden class\n\n## Declaration\n\n### Nested detail\n\n## Members\n",
+            "Leaf.md": "# Leaf\n\nA declaration without sections.\n",
+            "NoToc.md": "---\nhide: [toc]\n---\n# Hidden TOC\n\n## Secret section\n",
+        }.items():
+            (self.reference / name).write_text(content)
+        site = self.build_site('[{ Home = "index.md" }, { Guides = [{ Setup = "guide.md" }] }]')
+        for name in ("index.html", "guide/index.html", "Hidden/index.html", "Leaf/index.html", "NoToc/index.html", "404.html"):
+            with self.subTest(page=name):
+                parser = Links()
+                parser.feed((site / name).read_text())
+                ids = [attrs["id"] for _, attrs in parser.elements if "id" in attrs]
+                self.assertEqual(len(ids), len(set(ids)), "duplicate element IDs")
+                self.assertTrue(any(attrs.get("data-md-type") == "navigation" for _, attrs in parser.elements))
+                if name in ("index.html", "guide/index.html", "Hidden/index.html"):
+                    self.assertEqual(ids.count("__toc"), 1)
+                if name == "Hidden/index.html":
+                    self.assertIn("#nested-detail", parser.hrefs)
+                    self.assertTrue(any(attrs.get("aria-label") == "Page sections" for _, attrs in parser.elements))
+                if name in ("Leaf/index.html", "NoToc/index.html"):
+                    self.assertNotIn("__toc", ids)
 
     @unittest.skipUnless(importlib.util.find_spec("zensical"), "install docs requirements for site coverage")
     def test_zensical_site(self):
