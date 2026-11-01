@@ -12,7 +12,8 @@ concurrency:
 env:
   IMAGE_REPO: ghcr.io/${{ github.repository_owner }}/rex
   LOCAL_IMAGE_REPO: rex-local
-  REX_IMAGE_BUILD_JOBS: 4
+  # Empty selects all available cores inside the build container.
+  REX_IMAGE_BUILD_JOBS: ""
 
 jobs:
   base:

@@ -37,9 +37,13 @@ jobs:
         run: |
           main_tests='rex|astInterface|testQuery|fortran|f90|f03|gfortran|OMPTEST_|OMPACCTEST_|OMPFORTRAN_|OMPANALYZE_|OMPVV_5_0_|OMPVV_4_5_|OMPVV_5_1_|OMPVV_5_2_|OMPVV_6_0_|omp_lowering_|OMPLOWERING_CPU_|OMPLOWERING_RODINIA_|^Cxx_tests_test2013_69_C$|^Cxx_tests_test2013_198_C$'
           run_tests() {
+            local -a test_jobs=()
+            if [[ -n "${ACT_CTEST_JOBS:-}" ]]; then
+              test_jobs=(--jobs "$ACT_CTEST_JOBS")
+            fi
             docker run --rm --platform="linux/$ARCH" "$IMAGE" \
               python3 /opt/rex/src/scripts/run_ctest_name_set.py \
-              --test-dir /opt/rex/src/build --jobs "${ACT_CTEST_JOBS:-4}" "$@"
+              --test-dir /opt/rex/src/build "${test_jobs[@]}" "$@"
           }
           if [[ "$ARCH" == amd64 || ( "$ARCH" == arm64 && -z "${ACT:-}" ) ]]; then
             run_tests \

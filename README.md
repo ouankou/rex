@@ -19,15 +19,19 @@ Manual:
 ```bash
 mkdir -p build
 cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo -DCMAKE_INSTALL_PREFIX=$HOME/rex-install
-cmake --build build --parallel 1
+cmake --build build --parallel "$(nproc)"
 cmake --install build
 ```
 
 ## Tests
 
 ```bash
-ctest --test-dir build -j1 --output-on-failure
+ctest --test-dir build -j"$(nproc)" --output-on-failure
 ```
+
+`build-rex.sh` and the CI test selector default to all available Linux cores (`nproc`).
+Set `NUM_JOBS` to limit build parallelism, or `CTEST_PARALLEL_LEVEL` (or the
+test helper's `--jobs` option) to limit test parallelism.
 
 ## Sanitizers and Valgrind memcheck
 

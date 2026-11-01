@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -133,12 +134,16 @@ def main() -> int:
     parser.add_argument("--exclude-label")
     parser.add_argument("--shard-index", type=int, default=1)
     parser.add_argument("--shard-count", type=int, default=1)
-    parser.add_argument("--jobs", type=int, required=True)
+    parser.add_argument("--jobs", type=int,
+                        default=os.environ.get("CTEST_PARALLEL_LEVEL") or None,
+                        help="Parallel jobs (default: CTEST_PARALLEL_LEVEL or nproc)")
     parser.add_argument("--ctest", default="ctest")
     parser.add_argument("--memcheck", action="store_true")
     parser.add_argument("--timeout", type=int)
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
+    if args.jobs is None:
+        args.jobs = int(subprocess.check_output(["nproc"], text=True))
     if args.jobs < 1 or not 1 <= args.shard_index <= args.shard_count:
         parser.error("jobs and shard count must be positive; shard index must be in range")
 
@@ -177,6 +182,7 @@ def main() -> int:
     if args.dry_run:
         return 0
 
+    print(f"CTest parallel jobs: {args.jobs}", flush=True)
     indices = {test["name"]: index for index, test in enumerate(registry, 1)}
     selector = "0,0,1," + ",".join(
         str(indices[name]) for name in sorted(selected, key=indices.get)

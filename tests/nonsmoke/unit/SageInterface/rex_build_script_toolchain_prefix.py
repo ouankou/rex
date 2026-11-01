@@ -113,6 +113,29 @@ with open(os.environ["REX_PREFIX_RECORD"], "a") as stream:
 
         if index == 0:
             invocation = ["bash", str(build_script), str(work / "install"), "Debug"]
+            # Defaults must use this process's available CPUs, including when
+            # Docker passes an empty build-argument override. Explicit
+            # NUM_JOBS=2 is checked above with unrestricted CPU affinity.
+            available_cpus = set(sorted(os.sched_getaffinity(0))[:2])
+            for jobs_override in (None, ""):
+                parallel_record = root / f"parallel-{jobs_override is None}.jsonl"
+                parallel_env = dict(env, REX_PREFIX_RECORD=str(parallel_record))
+                for key in ("NUM_JOBS", "OMP_NUM_THREADS", "OMP_THREAD_LIMIT"):
+                    parallel_env.pop(key, None)
+                if jobs_override is not None:
+                    parallel_env["NUM_JOBS"] = jobs_override
+                # A cgroup quota can allow fewer CPUs than the affinity mask.
+                expected_jobs = subprocess.check_output(
+                    ["nproc"], env=parallel_env, text=True,
+                    preexec_fn=lambda: os.sched_setaffinity(0, available_cpus)).strip()
+                accepted = subprocess.run(
+                    invocation, cwd=work, env=parallel_env, text=True,
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    preexec_fn=lambda: os.sched_setaffinity(0, available_cpus))
+                assert accepted.returncode == 0, accepted.stdout
+                commands = [json.loads(line)
+                            for line in parallel_record.read_text().splitlines()]
+                assert commands[1] == ["--build", ".", "-j", expected_jobs], commands
             for version in ("23garbage", "23..1", "23.1.8\nprobe error", ""):
                 rejected = subprocess.run(
                     invocation, cwd=work,
