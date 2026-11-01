@@ -2,6 +2,12 @@
 source-root: ..
 input:
   - ../src
+  # Only API headers: the directory also contains generated parser sources.
+  - ../build/src/frontend/SageIII/AstQueryMemoryPool.h
+  - ../build/src/frontend/SageIII/Cxx_Grammar.h
+  - ../build/src/frontend/SageIII/Cxx_GrammarDeclarations.h
+  - ../build/src/frontend/SageIII/Cxx_GrammarTreeTraversalAccessEnums.h
+  - ../build/src/frontend/SageIII/Cxx_GrammarVariants.h
 recursive: true
 exclude:
   - ../src/frontend/SageIII/ompparser

@@ -363,6 +363,13 @@ class MarkdownContract(unittest.TestCase):
     def test_real_generator(self):
         source = self.root / "src" / "fixture.cpp"
         shutil.copyfile(Path(__file__).with_name("rex_docs_markdown.cpp"), source)
+        generated = self.root / "build/src/frontend/SageIII/Cxx_Grammar.h"
+        generated.parent.mkdir(parents=True)
+        generated.write_text(
+            "/// A generated AST node.\nclass GeneratedNode {\npublic:\n"
+            "  /// Inspect a generated node.\n  GeneratedNode const* value() const;\n};\n")
+        with source.open("a") as stream:
+            stream.write('\n#include "../build/src/frontend/SageIII/Cxx_Grammar.h"\n')
         dependency = Path(__file__).with_name("rex_docs_markdown_dependency.hpp")
         shutil.copyfile(dependency, self.root / dependency.name)
         database = self.root / "compile_commands.json"
@@ -373,11 +380,13 @@ class MarkdownContract(unittest.TestCase):
         config = self.root / "mrdocs.yml"
         config.write_text(
             "generator: md\nmultipage: true\nconcurrency: 1\nsource-root: .\n"
-            "input: [src]\noutput: reference\ncompilation-database: compile_commands.json\n"
+            "output: reference\ncompilation-database: compile_commands.json\n"
             f"addons-supplemental: [{json.dumps(str(SCRIPTS.parent / 'docs/mrdocs-addons'))}]\n")
         import yaml
         policy = yaml.safe_load((SCRIPTS.parent / "docs/mrdocs.yml").read_text())
         with config.open("a") as stream:
+            inputs = [path.removeprefix("../") for path in policy["input"]]
+            stream.write(f"input: {json.dumps(inputs)}\n")
             for key in ("inherit-base-members", "inherit-hidden-friends", "exclude-symbols", "auto-relates"):
                 stream.write(f"{key}: {json.dumps(policy[key])}\n")
         result = subprocess.run([os.environ["MRDOCS_BIN"], "--config", str(config),
@@ -389,6 +398,8 @@ class MarkdownContract(unittest.TestCase):
         for filename, kind in (("Docs/vector.md", "using"), ("Docs/Point.md", "record"),
                                ("Docs/Coordinate.md", "typedef"), ("Docs/Direction.md", "enum")):
             self.assertIn(f'data-mrdocs-kind="{kind}"', (self.reference / filename).read_text())
+        self.assertTrue((self.reference / "GeneratedNode/value.md").is_file(),
+                        "Generated AST members must be part of the published API")
         heading = (self.reference / "HeadingNode.md").read_text()
         self.assertIn('</ul>\n\n#### <code>HeadingNode::parent</code>\n\nThis paragraph', heading)
         self.assertIn('1. First requirement.\n\n1. Second requirement.', heading)
