@@ -5,8 +5,9 @@ import html
 import json
 import posixpath
 import re
+import subprocess
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import unquote, urlsplit, urlunsplit
 
 import tomllib
 
@@ -22,7 +23,13 @@ def page_url(path):
     return path[:-8] if posixpath.basename(path) == 'index.md' else path[:-3] + '/'
 
 
-def prepare(reference, nav_config):
+def prepare(reference, nav_config, source_url='', source_root=None, source_revision='HEAD'):
+    tracked = set()
+    if source_url:
+        tracked = set(subprocess.check_output(
+            ['git', '-C', str(source_root), 'ls-tree', '-rz', '--name-only', source_revision],
+            text=True).split('\0'))
+
     pages = {p.relative_to(reference).as_posix(): p.read_text() for p in reference.rglob('*.md')}
     if 'index.md' not in pages or len(pages) < 2:
         raise ValueError('MrDocs must generate index.md and symbol pages')
@@ -64,6 +71,46 @@ def prepare(reference, nav_config):
         body = HREF.sub(lambda m: f'href="../{m[1]}"' if not urlsplit(m[1]).scheme and not m[1].startswith('#') else m[0], body)
         pages[target] = f'# {title}\n\n{body.strip()}\n'
         output_names[target] = target
+
+    # Generated headers exist locally but have no GitHub blob. Keep their
+    # declaration locations without advertising a broken source link.
+    if source_url:
+        def source_location(match):
+            generated = False
+            def anchor(link):
+                nonlocal generated
+                url = html.unescape(link[1])
+                if url.startswith(source_url) and unquote(urlsplit(url[len(source_url):]).path) not in tracked:
+                    generated = True
+                    return link[2]
+                return link[0]
+            location = re.sub(r'<a href="([^"]+)">(.*?)</a>', anchor, match[0])
+            return location + (' (not stored in Git)' if generated else '')
+        pages = {name: re.sub(r'Declared in <code[^>]*>.*?</code>', source_location, text)
+                 for name, text in pages.items()}
+
+    # Keep individual overloads connected to their owning overload set.
+    for group, text in list(pages.items()):
+        if 'data-mrdocs-kind="overloads"' not in text:
+            continue
+        heading = re.search(r'^# (.+)$', text, re.M)
+        if not heading:
+            raise ValueError(f'overload group has no heading: {group}')
+        title = plain(heading[1])
+        for href in HREF.findall(text):
+            url = urlsplit(html.unescape(href))
+            if url.scheme or url.netloc:
+                continue
+            target = posixpath.normpath(posixpath.join(posixpath.dirname(group), url.path))
+            member = pages.get(target, '')
+            member_heading = re.search(r'^# (.+)$', member, re.M)
+            if ('data-mrdocs-kind="function"' not in member or not member_heading
+                    or plain(member_heading[1]) != title):
+                continue
+            relative = posixpath.relpath(group, posixpath.dirname(target) or '.')
+            link = f'<a href="{html.escape(relative, quote=True)}">All overloads of {html.escape(title)}</a>'
+            if link not in member:
+                pages[target] = member[:member_heading.end()] + '\n\n' + link + member[member_heading.end():]
 
     # Preserve the useful compact first signature in function listings. This is
     # presentation only: MrDocs itself resolves all signature type links.
@@ -119,5 +166,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--reference-dir', type=Path, required=True)
     parser.add_argument('--nav-config', type=Path, default=Path(__file__).resolve().parent.parent / 'zensical.toml')
+    parser.add_argument('--source-url', default='')
+    parser.add_argument('--source-revision', default='HEAD')
+    parser.add_argument('--source-root', type=Path, default=Path(__file__).resolve().parent.parent)
     args = parser.parse_args()
-    prepare(args.reference_dir, args.nav_config)
+    prepare(args.reference_dir, args.nav_config, args.source_url, args.source_root, args.source_revision)

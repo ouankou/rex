@@ -1,90 +1,35 @@
 #!/usr/bin/env python3
-import html
+"""Index every prepared MrDocs symbol, including members and overloads."""
 import json
-import posixpath
 import re
 import sys
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
 
-_LINK_RE = re.compile(
-    r"\[([^]\n]+)\]\(([^)\s]+)\)|<a\s+[^>]*href=[\"\']([^\"\']+)[\"\'][^>]*>(.*?)</a>",
-    re.DOTALL,
-)
-
-
-def _normalize_label(text: str, *, html_markup: bool = False) -> str:
-    if html_markup:
-        text = re.sub(r"<[^>]+>", "", text)
-    text = html.unescape(text)
-    text = text.strip()
-    if text.startswith("`") and text.endswith("`") and len(text) >= 2:
-        text = text[1:-1].strip()
-    text = text.replace("\u00ad", "")
-    return text
-
-
-def _to_url(target: str) -> str:
-    parts = urlsplit(html.unescape(target.strip()))
-    if parts.scheme or parts.netloc:
-        return ""
-    # Both Markdown and HTML links remain relative to the category source page.
-    if not parts.path.endswith(".md"):
-        return ""
-    path = posixpath.normpath(posixpath.join("sections", parts.path))
-    if path == ".." or path.startswith("../") or path.startswith("/"):
-        return ""
-    path = path[:-3]
-    if path in ("index", "."):
-        path = ""
-    elif path.endswith("/index"):
-        path = path[:-6]
-    return urlunsplit(("", "", f"reference/{path}/" if path else "reference/", parts.query, parts.fragment))
-
-
-def main() -> int:
+def main():
     root = Path(__file__).resolve().parent.parent
-    sections_dir = root / "docs" / "reference" / "sections"
-    out_path = root / "_site" / "assets" / "api" / "symbols.json"
-
-    if len(sys.argv) >= 2:
-        sections_dir = Path(sys.argv[1]).resolve()
-    if len(sys.argv) >= 3:
-        out_path = Path(sys.argv[2]).resolve()
-
-    if not sections_dir.is_dir():
-        raise SystemExit(f"sections directory not found: {sections_dir}")
-
-    entries: dict[tuple[str, str], dict] = {}
-    for section in sorted(sections_dir.glob("*.md")):
-        kind = section.stem
-        text = section.read_text(encoding="utf-8")
-        for m in _LINK_RE.finditer(text):
-            target = m.group(2) or m.group(3)
-            label = _normalize_label(m.group(1) or m.group(4), html_markup=m.group(4) is not None)
-            if not target or not label:
-                continue
-            url = _to_url(target)
-            if not url:
-                continue
-            key = (label, url)
-            if key in entries:
-                continue
-            entries[key] = {"name": label, "url": url, "kind": kind}
-
-    if not entries:
-        raise SystemExit(f"no API symbol links found in Markdown sections: {sections_dir}")
-
-    symbols = sorted(
-        entries.values(),
-        key=lambda x: (x["name"].casefold(), x["kind"], x["url"]),
-    )
-
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps({"symbols": symbols}, indent=2), encoding="utf-8")
-    return 0
+    reference = Path(sys.argv[1]) if len(sys.argv) > 1 else root / "docs/reference"
+    output = Path(sys.argv[2]) if len(sys.argv) > 2 else root / "_site/assets/api/symbols.json"
+    symbols = []
+    for page in sorted(reference.rglob("*.md")):
+        text = page.read_text(encoding="utf-8")
+        kind = re.search(r'data-mrdocs-kind="([^"]+)"', text)
+        if not kind:
+            continue  # Authored category pages have no symbol identity.
+        title = re.search(r'^title: (.+)$', text, re.M)
+        if not title:
+            raise ValueError(f"Missing prepared symbol title: {page}")
+        name = json.loads(title[1]).replace("\u00ad", "")
+        if not name or page == reference / "index.md":
+            continue
+        path = page.relative_to(reference).with_suffix("").as_posix()
+        symbols.append({"name": name, "url": f"reference/{path}/", "kind": kind[1]})
+    if not symbols:
+        raise SystemExit(f"No prepared API symbols found: {reference}")
+    symbols.sort(key=lambda symbol: (symbol["name"].casefold(), symbol["kind"], symbol["url"]))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps({"symbols": symbols}, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()
