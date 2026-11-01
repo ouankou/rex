@@ -1201,6 +1201,28 @@ add_test(
 set_tests_properties(ASTJSON_rex_size_this_result_types_roundtrip
   PROPERTIES LABELS "ASTJSON;rex;CFE")
 
+# These independent variants unparse the same input basename. Each test owns
+# its backend outputs and relative JSON scratch files, even when all variants
+# run concurrently. Keep the unparser's output-identity assertions enabled.
+foreach(_ast_json_test IN ITEMS
+    ASTJSON_rex_constructor_preinitialization_frontend
+    ASTJSON_rex_constructor_preinitialization_roundtrip
+    ASTJSON_rex_constructor_preinitialization_cxx14_frontend
+    ASTJSON_rex_constructor_preinitialization_cxx14_roundtrip
+    ASTJSON_rex_constructor_preinitialization_cxx14_no_elision
+    ASTJSON_rex_constructor_preinitialization_cxx20_frontend
+    ASTJSON_rex_constructor_preinitialization_cxx20_roundtrip
+    ASTJSON_rex_operator_result_types_frontend
+    ASTJSON_rex_operator_result_types_roundtrip
+    ASTJSON_rex_size_this_result_types_frontend
+    ASTJSON_rex_size_this_result_types_roundtrip)
+  set(_ast_json_work_dir
+    "${CMAKE_CURRENT_BINARY_DIR}/test-output/${_ast_json_test}")
+  file(MAKE_DIRECTORY "${_ast_json_work_dir}")
+  set_tests_properties(${_ast_json_test} PROPERTIES
+    WORKING_DIRECTORY "${_ast_json_work_dir}")
+endforeach()
+
 set(_ast_json_statement_attributes_dir
   ${CMAKE_CURRENT_BINARY_DIR}/statement-attributes-json)
 set(_ast_json_statement_attributes_output
