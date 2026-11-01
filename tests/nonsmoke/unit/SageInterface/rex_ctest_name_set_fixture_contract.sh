@@ -123,8 +123,42 @@ python3 "$runner" \
 
 python3 - "$runner" "$binary_dir" <<'PY'
 from pathlib import Path
+import json
+import os
+import re
 import runpy
+import subprocess
 import sys
+
+runner, directory = sys.argv[1:]
+available_cpus = set(sorted(os.sched_getaffinity(0))[:2])
+for level, explicit_jobs, expected in (
+    (None, None, None),
+    ("3", None, 3),
+    ("3", "1", 1),
+):
+    env = dict(os.environ)
+    for key in ("CTEST_PARALLEL_LEVEL", "OMP_NUM_THREADS", "OMP_THREAD_LIMIT"):
+        env.pop(key, None)
+    if level is not None:
+        env["CTEST_PARALLEL_LEVEL"] = level
+    if expected is None:
+        expected = int(subprocess.check_output(
+            ["nproc"], env=env, text=True,
+            preexec_fn=lambda: os.sched_setaffinity(0, available_cpus)))
+    command = [sys.executable, runner, "--test-dir", directory,
+               "--include-regex", "^rex_regex_only$"]
+    if explicit_jobs is not None:
+        command.extend(["--jobs", explicit_jobs])
+    result = subprocess.run(
+        command, env=env, capture_output=True, text=True,
+        preexec_fn=lambda: os.sched_setaffinity(0, available_cpus))
+    assert result.returncode == 0, result.stdout + result.stderr
+    run_dir = re.search(r"^CTest selection and results: (.+)$",
+                        result.stdout, re.MULTILINE)
+    assert run_dir is not None, result.stdout
+    recorded = json.loads((Path(run_dir[1]) / "command.json").read_text())
+    assert recorded[-1] == f"-j{expected}", recorded
 
 verify = runpy.run_path(sys.argv[1])["verify_results"]
 report = Path(sys.argv[2]) / "malformed-results.xml"

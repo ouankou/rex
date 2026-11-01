@@ -51,7 +51,7 @@ if [ "$LLVM_REQUIRED_MAJOR" != "23" ]; then
     echo -e "${RED}Error: REX is pinned to LLVM/Clang major 23; LLVM_REQUIRED_MAJOR='$LLVM_REQUIRED_MAJOR' is unsupported.${NC}" >&2
     exit 1
 fi
-NUM_JOBS="${NUM_JOBS:-1}"
+NUM_JOBS="${NUM_JOBS:-$(nproc)}"
 if ! [[ "$NUM_JOBS" =~ ^[0-9]+$ ]] || [ "$NUM_JOBS" -lt 1 ]; then
     echo -e "${RED}Error: NUM_JOBS must be a positive integer, got '$NUM_JOBS'.${NC}" >&2
     exit 1

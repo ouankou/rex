@@ -75,8 +75,7 @@ jobs:
         fi
         python3 scripts/run_ctest_name_set.py \
           --test-dir build \
-          "${selector[@]}" \
-          --jobs "${CTEST_PARALLEL_LEVEL:-$(nproc)}"
+          "${selector[@]}"
 
   rex-wasm:
     name: Build & Test (WASM)
