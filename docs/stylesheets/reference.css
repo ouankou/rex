@@ -91,3 +91,12 @@
   .reference-sections { flex-wrap: nowrap; overflow-x: auto; }
   .reference-sections a { flex-shrink: 0; }
 }
+
+/* Keep small links and keyboard outlines legible on Latte's pale surfaces. */
+[data-md-color-scheme="catppuccin-latte"] {
+  --md-typeset-a-color: color-mix(in srgb, var(--ctp-blue) 65%, var(--ctp-text));
+  --md-accent-fg-color: var(--md-typeset-a-color);
+  --md-accent-fg-color--transparent: color-mix(in srgb, var(--md-accent-fg-color) 14%, transparent);
+}
+[data-md-color-scheme="catppuccin-latte"] .md-typeset a:not(.md-button):is(:hover, :visited) { color: var(--md-typeset-a-color); }
+[data-md-color-scheme="catppuccin-latte"] .md-clipboard:focus-visible { outline-color: var(--md-accent-fg-color); }
