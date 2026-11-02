@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 
 
@@ -20,8 +21,10 @@ class Links(HTMLParser):
     def __init__(self):
         super().__init__()
         self.hrefs = []
+        self.elements = []
 
     def handle_starttag(self, tag, attrs):
+        self.elements.append((tag, dict(attrs)))
         self.hrefs.extend(value for name, value in attrs if name == "href")
 
 
@@ -340,6 +343,18 @@ class MarkdownContract(unittest.TestCase):
                 result = self.run_script("validate-site-links.py", "--site-dir", site)
                 self.assertEqual(result.returncode == 0, success, result.stderr)
 
+    def test_site_rejects_duplicate_ids(self):
+        site = self.root / "site"
+        site.mkdir()
+        page = site / "index.html"
+        page.write_text('<a id="symbol"></a><h1 id="symbol">Symbol</h1>')
+        result = self.run_script("validate-site-links.py", "--site-dir", site)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("duplicate HTML IDs", result.stderr)
+        page.write_text('<a id="symbol" name="symbol"></a><h1 id="symbol_1">Symbol</h1>')
+        result = self.run_script("validate-site-links.py", "--site-dir", site)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_reference_preparation(self):
         (self.reference / "index.md").write_text(
             '# Reference\n\n## Types\n\n| Name | Description |\n| --- | --- |\n'
@@ -423,7 +438,7 @@ class MarkdownContract(unittest.TestCase):
             "/// A generated AST node.\nclass GeneratedNode {\npublic:\n"
             "  /// Inspect a generated node.\n  GeneratedNode const* value() const;\n};\n")
         with source.open("a") as stream:
-            stream.write('\n#include "../build/src/frontend/SageIII/Cxx_Grammar.h"\n')
+            stream.write('\n#include "../build/src/frontend/SageIII/Cxx_Grammar.h"\n/** \\code\n#if CONDITION\n#endif\n\\endcode */\nvoid lower_name();\n')
         dependency = Path(__file__).with_name("rex_docs_markdown_dependency.hpp")
         shutil.copyfile(dependency, self.root / dependency.name)
         database = self.root / "compile_commands.json"
@@ -546,12 +561,27 @@ class MarkdownContract(unittest.TestCase):
             point_html = (site / "Docs/Point/index.html").read_text()
             self.assertIn('operator[](int i)', html.unescape(point_html))
             self.assertIn('data-search-exclude', point)
+            lower = Links()
+            lower.feed((site / "lower_name/index.html").read_text())
+            ids = [attrs["id"] for _, attrs in lower.elements if "id" in attrs]
+            self.assertEqual(len(ids), len(set(ids)))
+            self.assertEqual(sum(tag == "h1" for tag, _ in lower.elements), 1)
+            self.assertIn("#if CONDITION", (site / "lower_name/index.html").read_text())
+            self.assertIn("lower_name", ids)  # Preserve the original symbol fragment.
+            self.assertTrue(any(tag == "h1" and attrs.get("id") != "lower_name"
+                                for tag, attrs in lower.elements))
+            self.assertTrue(any(item["name"] == "lower_name" for item in symbols))
 
-    def build_site(self):
+    def build_site(self, nav='[{ Home = "index.md" }]'):
+        theme = tomllib.loads((SCRIPTS.parent / "zensical.toml").read_text())["project"]["theme"]
         config = self.root / "zensical.toml"
         config.write_text(
             '[project]\nsite_name = "Fixture"\ndocs_dir = "reference"\nsite_dir = "site"\n'
-            '[project.theme]\nvariant = "classic"\n[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
+            f'nav = {nav}\n'
+            '[project.theme]\nvariant = "classic"\n'
+            f'custom_dir = {json.dumps(str(SCRIPTS.parent / "docs/overrides"))}\n'
+            f'features = {json.dumps(theme["features"])}\n'
+            '[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
             '[project.plugins.minify]\nminify_html = true\n')
         stale = self.root / "site/obsolete.html"
         stale.parent.mkdir(exist_ok=True)
@@ -567,6 +597,35 @@ class MarkdownContract(unittest.TestCase):
         result = self.run_script("validate-site-links.py", "--site-dir", site)
         self.assertEqual(result.returncode, 0, result.stderr)
         return site
+
+    @unittest.skipUnless(importlib.util.find_spec("zensical"), "install docs requirements for site coverage")
+    def test_reference_desk_navigation(self):
+        for name, content in {
+            "index.md": "# Home\n\n## Start\n",
+            "guide.md": "# Guide\n\n## Setup\n",
+            "Hidden.md": "# Hidden class\n\n## Declaration\n\n### Nested detail\n\n## Members\n",
+            "Leaf.md": "# Leaf\n\nA declaration without sections.\n",
+            "NoToc.md": "---\nhide: [toc]\n---\n# Hidden TOC\n\n## Secret section\n",
+        }.items():
+            (self.reference / name).write_text(content)
+        site = self.build_site('[{ Home = "index.md" }, { Guides = [{ Setup = "guide.md" }] }]')
+        for name in ("index.html", "guide/index.html", "Hidden/index.html", "Leaf/index.html", "NoToc/index.html", "404.html"):
+            with self.subTest(page=name):
+                parser = Links()
+                parser.feed((site / name).read_text())
+                ids = [attrs["id"] for _, attrs in parser.elements if "id" in attrs]
+                self.assertEqual(len(ids), len(set(ids)), "duplicate element IDs")
+                primary = [attrs for tag, attrs in parser.elements
+                           if tag == "nav" and "md-nav--primary" in attrs.get("class", "").split()]
+                self.assertEqual(len(primary), 1, "multiple primary menus overlap in the mobile drawer")
+                self.assertTrue(any(attrs.get("data-md-type") == "navigation" for _, attrs in parser.elements))
+                if name in ("index.html", "guide/index.html", "Hidden/index.html"):
+                    self.assertEqual(ids.count("__toc"), 1)
+                if name == "Hidden/index.html":
+                    self.assertIn("#nested-detail", parser.hrefs)
+                    self.assertTrue(any(attrs.get("aria-label") == "Page sections" for _, attrs in parser.elements))
+                if name in ("Leaf/index.html", "NoToc/index.html"):
+                    self.assertNotIn("__toc", ids)
 
     @unittest.skipUnless(importlib.util.find_spec("zensical"), "install docs requirements for site coverage")
     def test_zensical_site(self):
