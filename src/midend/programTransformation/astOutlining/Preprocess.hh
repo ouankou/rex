@@ -49,6 +49,7 @@ SgBasicBlock *createBlock(SgStatement *s);
  *  2 '#if' directives straddling it (labeled 'B' and 'D') and
  *  one surrounding it ('A').
  *
+ *  \code
  *    #if [A1]
  *       S0;
  *    #  if [B1]     <==+
@@ -76,10 +77,12 @@ SgBasicBlock *createBlock(SgStatement *s);
  *    #  endif [D]  <==+
  *       S12;
  *    #endif [A]
+ *  \endcode
  *
  *  This routine will transform this block into (new statements
  *  and directives marked with a '**'):
  *
+ *  \code
  *    #if [A1]
  *       S0;
  *    #  if [B1]
@@ -117,6 +120,7 @@ SgBasicBlock *createBlock(SgStatement *s);
  *    #  endif [D]
  *       S12;
  *    #endif [A]
+ *  \endcode
  *
  *  Note that the block to-be-outlined is now fully
  *  self-contained. Logically, the transformation consists of

@@ -12,9 +12,15 @@ class _LinkParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.links: list[str] = []
         self.anchors: set[str] = set()
+        self.ids: set[str] = set()
+        self.duplicate_ids: set[str] = set()
 
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         for k, v in attrs:
+            if k == "id" and v is not None:
+                if v in self.ids:
+                    self.duplicate_ids.add(v)
+                self.ids.add(v)
             if v is not None and (k == "id" or (tag == "a" and k == "name")):
                 self.anchors.add(v)
             if k in {"href", "src"} and v:
@@ -83,6 +89,9 @@ def main() -> int:
         if p.suffix == ".html":
             parser = _LinkParser()
             parser.feed(p.read_text(encoding="utf-8"))
+            if parser.duplicate_ids:
+                print(f"{rel}: duplicate HTML IDs: {sorted(parser.duplicate_ids)}", file=sys.stderr)
+                return 1
             documents[p] = parser
 
     if not documents:
