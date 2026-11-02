@@ -24,3 +24,5 @@ DOCS_SCRATCH_DIR=build/docs-scratch bash scripts/ci-docs-build
 ```
 
 [Build provenance](docs-build-manifest.json) records the source revision and tool versions for the published site.
+
+Appearance uses [Catppuccin Zensical](https://github.com/jonathan343/catppuccin-zensical) with the Latte palette ([MIT license](licenses/catppuccin-zensical.txt)).

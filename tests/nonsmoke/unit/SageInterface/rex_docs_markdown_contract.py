@@ -573,14 +573,21 @@ class MarkdownContract(unittest.TestCase):
             self.assertTrue(any(item["name"] == "lower_name" for item in symbols))
 
     def build_site(self, nav='[{ Home = "index.md" }]'):
-        theme = tomllib.loads((SCRIPTS.parent / "zensical.toml").read_text())["project"]["theme"]
+        project = tomllib.loads((SCRIPTS.parent / "zensical.toml").read_text())["project"]
+        theme = project["theme"]
+        shutil.copytree(SCRIPTS.parent / "docs/stylesheets", self.reference / "stylesheets", dirs_exist_ok=True)
+        theme_settings = "".join(f"{key} = {json.dumps(theme[key])}\n"
+                                 for key in ("name", "variant", "features"))
+        palette_settings = "".join("[[project.theme.palette]]\n" + "".join(
+            f"{key} = {json.dumps(value)}\n" for key, value in palette.items())
+            for palette in theme["palette"])
         config = self.root / "zensical.toml"
         config.write_text(
             '[project]\nsite_name = "Fixture"\ndocs_dir = "reference"\nsite_dir = "site"\n'
-            f'nav = {nav}\n'
-            '[project.theme]\nvariant = "classic"\n'
+            f'nav = {nav}\nextra_css = {json.dumps(project["extra_css"])}\n'
+            f'[project.theme]\n{theme_settings}'
             f'custom_dir = {json.dumps(str(SCRIPTS.parent / "docs/overrides"))}\n'
-            f'features = {json.dumps(theme["features"])}\n'
+            f'{palette_settings}'
             '[project.markdown_extensions]\ntables = {}\nmd_in_html = {}\n'
             '[project.plugins.minify]\nminify_html = true\n')
         stale = self.root / "site/obsolete.html"
@@ -603,7 +610,7 @@ class MarkdownContract(unittest.TestCase):
         for name, content in {
             "index.md": "# Home\n\n## Start\n",
             "guide.md": "# Guide\n\n## Setup\n",
-            "Hidden.md": "# Hidden class\n\n## Declaration\n\n### Nested detail\n\n## Members\n",
+            "Hidden.md": "# Namespace::ClassWithAVeryLongQualifiedName\n\n## Declaration\n\n### Nested detail\n\n## Members\n",
             "Leaf.md": "# Leaf\n\nA declaration without sections.\n",
             "NoToc.md": "---\nhide: [toc]\n---\n# Hidden TOC\n\n## Secret section\n",
         }.items():
@@ -619,9 +626,18 @@ class MarkdownContract(unittest.TestCase):
                            if tag == "nav" and "md-nav--primary" in attrs.get("class", "").split()]
                 self.assertEqual(len(primary), 1, "multiple primary menus overlap in the mobile drawer")
                 self.assertTrue(any(attrs.get("data-md-type") == "navigation" for _, attrs in parser.elements))
-                if name in ("index.html", "guide/index.html", "Hidden/index.html"):
-                    self.assertEqual(ids.count("__toc"), 1)
+                self.assertNotIn("__toc", ids)  # Modern integrates the TOC without a toggle.
+                self.assertEqual(sum(href.endswith("assets/stylesheets/catppuccin.css")
+                                     for href in parser.hrefs if href), 1)
+                self.assertTrue(any(attrs.get("data-md-color-scheme") == "catppuccin-latte"
+                                    for _, attrs in parser.elements))
                 if name == "Hidden/index.html":
+                    active = [i for i, (tag, attrs) in enumerate(parser.elements)
+                              if tag == "a" and "md-nav__link--active" in attrs.get("class", "").split()]
+                    self.assertTrue(active)
+                    for i in active:
+                        tag, attrs = parser.elements[i + 1]
+                        self.assertEqual((tag, attrs.get("class")), ("span", "md-ellipsis"))
                     self.assertIn("#nested-detail", parser.hrefs)
                     self.assertTrue(any(attrs.get("aria-label") == "Page sections" for _, attrs in parser.elements))
                 if name in ("Leaf/index.html", "NoToc/index.html"):
