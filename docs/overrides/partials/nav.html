@@ -26,11 +26,13 @@
     {% endfor %}
     {% if unlisted and sections and "toc" not in hidden_parts %}
       <li class="md-nav__item md-nav__item--active reference-current">
-        <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+        {% if config.theme.variant == "classic" %}
+          <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+        {% endif %}
         <label class="md-nav__link md-nav__link--active" for="__toc">
           <span class="md-ellipsis">{{ page.title }}</span><span class="md-nav__icon md-icon"></span>
         </label>
-        <a href="{{ page.url | url }}" class="md-nav__link md-nav__link--active">{{ page.title }}</a>
+        <a href="{{ page.url | url }}" class="md-nav__link md-nav__link--active"><span class="md-ellipsis">{{ page.title }}</span></a>
         {% include "partials/toc.html" %}
       </li>
     {% endif %}

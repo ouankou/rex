@@ -4,7 +4,8 @@ site_description = "Compiler source, build notes and API reference for REX."
 site_url = "https://rex.ouankou.com/docs/"
 docs_dir = "docs"
 site_dir = "_site"
-extra_css = ["stylesheets/reference.css"]
+# Our main.html override retains the theme stylesheet explicitly.
+extra_css = ["assets/stylesheets/catppuccin.css", "stylesheets/reference.css"]
 extra_javascript = ["javascripts/reference-table-sizing.js", "javascripts/api-lookup.js"]
 exclude_docs = "mrdocs-addons/**\noverrides/**"
 not_in_nav = """
@@ -37,7 +38,8 @@ nav = [
 ]
 
 [project.theme]
-variant = "classic"
+name = "catppuccin"
+variant = "modern"
 custom_dir = "docs/overrides"
 features = [
   "navigation.top",
@@ -47,6 +49,11 @@ features = [
   "toc.follow",
   "content.code.copy",
 ]
+
+[[project.theme.palette]]
+scheme = "catppuccin-latte"
+primary = "custom"
+accent = "custom"
 
 [project.markdown_extensions]
 admonition = {}
