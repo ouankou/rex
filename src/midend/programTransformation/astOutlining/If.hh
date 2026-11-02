@@ -46,7 +46,9 @@ void dump(const Ifs_t ifs);
  *  directive, including all its cases. That is, a If object
  *  corresponding to the following '#if' directive,
  *
+ *  \code
  *    #if C_1 ... #elif C_2 ... #elif C_k ... #endif // k+1
+ *  \endcode
  *
  *  stores a sequence of k cases plus the final '#endif'. One may view
  *  a If object as a container of cases (If::Cases).
