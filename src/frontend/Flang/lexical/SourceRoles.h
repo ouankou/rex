@@ -8,12 +8,44 @@
 #include <flang/Parser/provenance.h>
 #include <limits>
 #include <llvm/Support/ErrorHandling.h>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace Rose::FortranLex {
+
+// Immutable original input for one invocation or explicitly synthesized token.
+// No token buffer or expansion-frame address escapes through this snapshot.
+struct TokenInvocationSource {
+  std::vector<Fortran::parser::ProvenanceRange> source;
+  std::string spelling;
+};
+
+struct TokenCharacterSource {
+  enum class Kind { input, normalization, invocation };
+  Kind kind{Kind::input};
+  Fortran::parser::Provenance anchor;
+  std::optional<char> spelling;
+  std::shared_ptr<const TokenInvocationSource> invocation;
+
+  static TokenCharacterSource Input(Fortran::parser::Provenance anchor,
+                                    char spelling) {
+    return {Kind::input, anchor, spelling, {}};
+  }
+  static TokenCharacterSource
+  Normalization(Fortran::parser::Provenance anchor,
+                std::optional<char> spelling = std::nullopt) {
+    return {Kind::normalization, anchor, spelling, {}};
+  }
+  static TokenCharacterSource
+  Invocation(std::shared_ptr<const TokenInvocationSource> invocation) {
+    CHECK(invocation && !invocation->source.empty() &&
+          !invocation->spelling.empty());
+    return {Kind::invocation, {}, {}, std::move(invocation)};
+  }
+};
 
 // One actual macro invocation in the source arena. An empty replacement has
 // an empty `expansion` range, while still owning all of its input tokens.

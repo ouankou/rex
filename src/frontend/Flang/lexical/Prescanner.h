@@ -21,10 +21,10 @@
 // fixed form character literals on truncated card images, file
 // inclusion, and driving the Fortran source preprocessor.
 
+#include "TokenSequence.h"
 #include "flang/Parser/characters.h"
 #include "flang/Parser/message.h"
 #include "flang/Parser/provenance.h"
-#include "flang/Parser/token-sequence.h"
 #include "flang/Support/Fortran-features.h"
 #include <bitset>
 #include <optional>
@@ -42,7 +42,6 @@ using ::Fortran::parser::Message;
 using ::Fortran::parser::Messages;
 using ::Fortran::parser::Provenance;
 using ::Fortran::parser::ProvenanceRange;
-using ::Fortran::parser::TokenSequence;
 class Preprocessor;
 
 class Prescanner {
@@ -102,7 +101,8 @@ public:
   Provenance GetCurrentProvenance() const { return GetProvenance(at_); }
 
   std::optional<CharBlock> GetKeywordMacroName(const char *) const;
-  TokenSequence ExpandKeywordMacro(CharBlock, Provenance) const;
+  TokenSequence ExpandKeywordMacro(CharBlock, Provenance,
+                                   const TokenSequence *input = nullptr) const;
 
   const char *IsCompilerDirectiveSentinel(const char *, std::size_t) const;
   const char *IsCompilerDirectiveSentinel(CharBlock) const;
@@ -179,9 +179,12 @@ private:
     tokens.PutNextTokenChar(ch, GetCurrentProvenance());
   }
 
-  void EmitInsertedChar(TokenSequence &tokens, char ch) {
+  void EmitInsertedChar(TokenSequence &tokens, char ch,
+                        std::optional<char> spelling = std::nullopt) {
     Provenance provenance{allSources().CompilerInsertionProvenance(ch)};
-    tokens.PutNextTokenChar(ch, provenance);
+    tokens.PutNextTokenChar(
+        ch, provenance,
+        TokenCharacterSource::Normalization(GetCurrentProvenance(), spelling));
   }
 
   char EmitCharAndAdvance(TokenSequence &tokens, char ch) {
@@ -250,15 +253,18 @@ private:
   std::optional<LineClassification>
   IsFixedFormCompilerDirectiveLine(const char *) const;
   std::optional<LineClassification>
-  IsFreeFormCompilerDirectiveLine(const char *) const;
-  LineClassification ClassifyLine(const char *) const;
+  IsFreeFormCompilerDirectiveLine(const char *,
+                                  const TokenSequence *input = nullptr) const;
+  LineClassification ClassifyLine(const char *,
+                                  const TokenSequence *input = nullptr) const;
   LineClassification ClassifyLine(TokenSequence &,
                                   Provenance newlineProvenance) const;
   bool SourceFormChange(std::string &&);
   bool CompilerDirectiveContinuation(TokenSequence &, const char *sentinel);
   bool SourceLineContinuation(TokenSequence &);
   std::optional<LineClassification>
-  IsCompilerDirectiveSentinelAfterKeywordMacro(const char *p) const;
+  IsCompilerDirectiveSentinelAfterKeywordMacro(
+      const char *p, const TokenSequence *input = nullptr) const;
 
   Messages &messages_;
   CookedSource &cooked_;

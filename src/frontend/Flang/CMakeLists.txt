@@ -8,7 +8,8 @@ if(ENABLE-FORTRAN)
     driver/flang-parser-driver.cc
     lexical/FortranLexical.C
     lexical/Prescanner.C
-    lexical/Preprocessor.C)
+    lexical/Preprocessor.C
+    lexical/TokenSequence.C)
 
   target_include_directories(libroseFlangFrontend PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/driver)

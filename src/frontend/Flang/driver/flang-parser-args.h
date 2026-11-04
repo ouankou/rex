@@ -32,6 +32,7 @@ struct DriverOptions {
   bool warningsAreErrors{false};      // -Werror
   Fortran::parser::Encoding encoding{Fortran::parser::Encoding::LATIN_1};
   bool lineDirectives{true}; // -P disables
+  std::optional<bool> includePredefinedMacros; // Last -cpp/-nocpp wins.
   bool dumpProvenance{false};
   bool dumpUnparse{false};
   bool dumpParseTree{false};
@@ -122,6 +123,8 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
           Fortran::common::LanguageFeature::OldDebugLines);
     } else if (arg == "-E") {
       ctx.options.prescanAndReformat = true;
+    } else if (arg == "-cpp" || arg == "-nocpp") {
+      ctx.driver.includePredefinedMacros = arg == "-cpp";
     } else if (arg == "-P") {
       ctx.driver.lineDirectives = false;
     } else if (arg == "-funsigned" || arg == "-fno-unsigned") {
@@ -213,6 +216,8 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
           << "  -Werror              treat warnings as errors\n"
           << "  -ed                  enable fixed form D lines\n"
           << "  -E                   prescan & preprocess only\n"
+          << "  -cpp | -nocpp        enable[disable] predefined and CLI "
+             "macros\n"
           << "  -fsyntax-only        parse only, no output except messages\n"
           << "  -funparse            parse & reformat only, no code "
              "generation\n"

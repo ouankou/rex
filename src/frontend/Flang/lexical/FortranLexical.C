@@ -42,7 +42,8 @@ const CookedSource &LexicalSource::cooked() const {
 
 const SourceFile *LexicalSource::Prescan(const std::string &path,
                                          Fortran::parser::Options options,
-                                         bool retainRexOpenMP) {
+                                         bool retainRexOpenMP,
+                                         bool includePredefinedMacros) {
   if (currentCooked_ != nullptr ||
       options.features.IsEnabled(::Fortran::common::LanguageFeature::OpenMP)) {
     llvm::errs() << "REX_FORTRAN_LEXICAL_INVARIANT[ownership]: lexical input "
@@ -76,7 +77,10 @@ const SourceFile *LexicalSource::Prescan(const std::string &path,
     for (const auto &directory : options.searchDirectories)
       allSources.AppendSearchPathDirectory(directory);
 
-  if (!options.predefinitions.empty()) {
+  // The lexer always processes source directives. Macro availability is an
+  // independent driver policy, so a CPP input with no -D/-U arguments still
+  // receives the standard definitions, and -nocpp suppresses both sets.
+  if (includePredefinedMacros) {
     preprocessor_->DefineStandardMacros();
     for (const auto &definition : options.predefinitions) {
       if (definition.second)

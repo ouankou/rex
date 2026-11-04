@@ -51,6 +51,7 @@
 #include <flang/Evaluate/real.h>
 #include <flang/Evaluate/target.h>
 #include <flang/Evaluate/tools.h>
+#include <flang/Parser/characters.h>
 #include <flang/Parser/tools.h>
 #include <flang/Semantics/expression.h>
 #include <flang/Semantics/tools.h>
@@ -1668,6 +1669,70 @@ RequireFortranLiteralSemantics(BuildExprVisitor &visitor) {
   return semantic;
 }
 
+template <typename Character>
+SgStringVal *
+BuildFortranCharacterScalarValue(const std::basic_string<Character> &scalar) {
+  std::string payload;
+  if constexpr (std::is_same_v<Character, char>) {
+    // Default CHARACTER stores bytes, including UTF-8 source bytes and NUL.
+    payload = scalar;
+  } else {
+    // Each wide scalar element is one Fortran character, not a byte or a
+    // UTF-16 surrogate pair. Sage's Fortran string payload uses UTF-8 bytes.
+    const std::u32string codepoints(scalar.begin(), scalar.end());
+    payload = parser::EncodeString<parser::Encoding::UTF_8>(codepoints);
+  }
+  auto *value = SageBuilder::buildStringVal_nfi(payload);
+  ASSERT_not_null(value);
+  value->set_usesSingleQuotes(true);
+  value->set_usesDoubleQuotes(false);
+  return value;
+}
+
+SgStringVal *BuildFortranCharacterLiteralValue(
+    const evaluate::Expr<evaluate::SomeType> &semantic) {
+  const auto type = semantic.GetType();
+  ROSE_ASSERT(type && type->category() == common::TypeCategory::Character &&
+              semantic.Rank() == 0);
+  const auto *character =
+      evaluate::UnwrapExpr<evaluate::Expr<evaluate::SomeCharacter>>(semantic);
+  ASSERT_not_null(character);
+  return common::visit(
+      [](const auto &expression) -> SgStringVal * {
+        using Type = evaluate::ResultType<decltype(expression)>;
+        const auto scalar = evaluate::GetScalarConstantValue<Type>(expression);
+        ROSE_ASSERT(scalar.has_value());
+        return BuildFortranCharacterScalarValue(*scalar);
+      },
+      character->u);
+}
+
+SgStringVal *
+BuildFortranCharacterLiteralValue(const evaluate::StaticDataObject &data,
+                                  int kind, bool bigEndian) {
+  switch (kind) {
+  case 1: {
+    const auto scalar = data.AsString();
+    ROSE_ASSERT(scalar.has_value());
+    return BuildFortranCharacterScalarValue(*scalar);
+  }
+  case 2: {
+    const auto scalar = data.AsU16String(bigEndian);
+    ROSE_ASSERT(scalar.has_value());
+    return BuildFortranCharacterScalarValue(*scalar);
+  }
+  case 4: {
+    const auto scalar = data.AsU32String(bigEndian);
+    ROSE_ASSERT(scalar.has_value());
+    return BuildFortranCharacterScalarValue(*scalar);
+  }
+  }
+  std::cerr << "REX_FLANG_INVARIANT[literal-character-value]: semantic "
+               "constant has an unsupported CHARACTER kind "
+            << kind << '\n';
+  ROSE_ABORT();
+}
+
 template <typename BuildLiteral>
 SgValueExp *BuildExactFortranLiteral(BuildExprVisitor &visitor,
                                      FortranLiteralCategory category,
@@ -1813,9 +1878,14 @@ void BuildExprVisitor::Build(
   this->set(BuildSignedIntegerLiteral(x, expectedLiteralType()));
 }
 
-void BuildExprVisitor::Build(const Fortran::parser::CharLiteralConstant &x) {
+void BuildExprVisitor::Build(const Fortran::parser::CharLiteralConstant &) {
   this->set(
-      BuildExactFortranLiteral(*this, x, FortranLiteralCategory::character));
+      BuildExactFortranLiteral(*this, FortranLiteralCategory::character, [&]() {
+        // Parser strings retain prescanner escape guards. Semantic analysis
+        // owns the decoded scalar value, independently of source spelling.
+        return BuildFortranCharacterLiteralValue(
+            RequireFortranLiteralSemantics(*this));
+      }));
 }
 
 void BuildExprVisitor::Build(
@@ -20648,19 +20718,6 @@ void BuildComplexLiteralConstant(const parser::ComplexLiteralConstant &x,
 }
 } // namespace
 
-void BuildImpl(const parser::CharLiteralConstant &x, SgExpression *&expr) {
-  // Flang publishes the decoded character payload: doubled source delimiters
-  // have already been reduced to one character.  Sage stores that decoded
-  // value and the unparser performs the one required source-encoding step.
-  // Pre-escaping here creates a malformed value contract and makes every
-  // later consumer unable to distinguish data from source quoting.
-  SgStringVal *stringVal = SageBuilder::buildStringVal_nfi(x.GetString());
-  ASSERT_not_null(stringVal);
-  stringVal->set_usesSingleQuotes(true);
-  stringVal->set_usesDoubleQuotes(false);
-  expr = stringVal;
-}
-
 void BuildImpl(const parser::LogicalLiteralConstant &x, SgExpression *&expr) {
   expr = SageBuilder::buildBoolValExp_nfi(std::get<0>(x.t));
 }
@@ -29193,8 +29250,6 @@ void Build(
                  "CHARACTER type\n";
     ROSE_ABORT();
   }
-  const parser::CharLiteralConstant &literal =
-      std::get<parser::CharLiteralConstant>(x.t);
   SgExpression *literalLength =
       SageBuilder::buildIntVal_nfi(std::to_string(literalCharacters));
   ASSERT_not_null(literalLength);
@@ -29204,9 +29259,13 @@ void Build(
   SgTypeString *literalType =
       SgTypeString::createType(literalLength, literalKind);
   ASSERT_not_null(literalType);
-  SgExpression *base{nullptr};
-  BuildExprTreeWithExpectedLiteralType(literal, literalType, base);
+  // The substring's semantic parent retains the full literal value before
+  // slicing. Its scalar storage also preserves the target's byte order.
+  SgStringVal *base = BuildFortranCharacterLiteralValue(
+      **literalData, dynamicType->kind(), target.isBigEndian());
   ASSERT_not_null(base);
+  ROSE_ASSERT(base->get_literal_type() == nullptr);
+  base->set_literal_type(literalType);
   SetExactFlangExpressionSourcePosition(base, source.base, source.base);
 
   const auto &range = std::get<parser::SubstringRange>(x.t);
