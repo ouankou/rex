@@ -16,6 +16,7 @@
 #include <list>
 #include <optional>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "builder/Tokens.h"
@@ -95,14 +96,56 @@ struct FlangDirectiveGroup {
   std::string source_expression_spelling;
 };
 
+struct FlangMacroInvocationSource {
+  // SourceFile storage belongs to the same AllSources arena as cooked input.
+  const Fortran::parser::SourceFile *file{nullptr};
+  Fortran::parser::Provenance file_start;
+  std::vector<std::pair<std::size_t, std::size_t>> pieces;
+  std::size_t begin{0};
+  std::size_t end{0};
+};
+
+// One immutable lexical snapshot and its resolved physical invocation values.
+// AllSources must outlive collection and Build, as for the cooked CharBlocks.
+class FlangMacroProvenance {
+public:
+  FlangMacroProvenance() = default;
+  FlangMacroProvenance(
+      std::vector<Rose::FortranLex::MacroExpansionProvenance> records,
+      const Fortran::parser::AllCookedSources &cooked);
+  FlangMacroProvenance(const FlangMacroProvenance &) = default;
+  FlangMacroProvenance(FlangMacroProvenance &&) noexcept = default;
+  FlangMacroProvenance &operator=(FlangMacroProvenance other) noexcept {
+    using std::swap;
+    swap(index_, other.index_);
+    invocations_.swap(other.invocations_);
+    swap(source_arena_, other.source_arena_);
+    return *this;
+  }
+
+  const auto &records() const { return index_.records(); }
+  const Rose::FortranLex::MacroExpansionProvenance *
+  Find(Fortran::parser::Provenance at) const {
+    return index_.Find(at);
+  }
+  const FlangMacroInvocationSource &InvocationAt(std::size_t index) const;
+  const FlangMacroInvocationSource &InvocationForExpansion(
+      const Rose::FortranLex::MacroExpansionProvenance &record,
+      const Fortran::parser::AllCookedSources &cooked) const;
+
+private:
+  Rose::FortranLex::MacroExpansionProvenanceIndex index_;
+  std::vector<FlangMacroInvocationSource> invocations_;
+  const Fortran::parser::AllSources *source_arena_{nullptr};
+};
+
 struct FlangSourceStream {
   std::vector<FlangSourceToken> tokens;
   std::vector<FlangDirectiveGroup> directives;
   Fortran::parser::CharBlock directive_cooked_source;
   Fortran::parser::CharBlock base_cooked_source;
   std::vector<std::size_t> base_to_directive_offsets;
-  std::vector<Rose::FortranLex::MacroExpansionProvenance>
-      macro_expansion_provenance;
+  FlangMacroProvenance macro_expansion_provenance;
 };
 
 struct FlangBaseFortranCookedSource {
