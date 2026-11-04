@@ -19,6 +19,7 @@
 
 #include "SourceRoles.h"
 #include "flang/Parser/char-block.h"
+#include "flang/Parser/message.h"
 #include "flang/Parser/provenance.h"
 #include <cstddef>
 #include <string>
@@ -27,10 +28,6 @@
 
 namespace llvm {
 class raw_ostream;
-}
-
-namespace Fortran::parser {
-class Messages;
 }
 
 namespace Rose::FortranLex {
