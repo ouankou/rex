@@ -7,6 +7,7 @@
 #include <iostream>
 #include <llvm/Support/raw_ostream.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -23,10 +24,80 @@ std::string withoutWhitespace(std::string text) {
              text.end());
   return text;
 }
+
+void checkMacroProvenanceIndex() {
+  using Fortran::parser::Provenance;
+  using Fortran::parser::ProvenanceRange;
+  using Rose::FortranLex::MacroExpansionProvenance;
+  using Rose::FortranLex::MacroExpansionProvenanceIndex;
+
+  // Provenance identity follows allocation order, while recursive macro
+  // completion need not. Empty replacements retain records but own no
+  // expansion bytes. Adjacent intervals still have different owners.
+  MacroExpansionProvenanceIndex index{{
+      {ProvenanceRange{Provenance{15}, 3}, {}, {}, "last"},
+      {{}, {}, {}, "empty"},
+      {ProvenanceRange{Provenance{10}, 2}, {}, {}, "first"},
+      {ProvenanceRange{Provenance{12}, 3}, {}, {}, "middle"},
+  }};
+  require(index.records().size() == 4 && index.records()[1].spelling == "empty",
+          "index changed or discarded invocation records");
+  require(index.Find(Provenance{9}) == nullptr &&
+              index.Find(Provenance{18}) == nullptr,
+          "index claimed source outside expansion intervals");
+  for (std::size_t at = 10; at < 18; ++at) {
+    const auto *role = index.Find(Provenance{at});
+    const char *expected = at < 12 ? "first" : at < 15 ? "middle" : "last";
+    require(role && role->spelling == expected,
+            "index selected the wrong owner at an interval boundary");
+  }
+  require(index.NextExpansionStartAfter(Provenance{9}) == 10 &&
+              index.NextExpansionStartAfter(Provenance{10}) == 12 &&
+              index.NextExpansionStartAfter(Provenance{12}) == 15 &&
+              !index.NextExpansionStartAfter(Provenance{17}),
+          "index lost the next expansion boundary");
+  const auto copied = index;
+  const auto moved = std::move(index);
+  index = MacroExpansionProvenanceIndex{};
+  const auto *copiedFirst = copied.Find(Provenance{10});
+  const auto *movedLast = moved.Find(Provenance{17});
+  require(index.Find(Provenance{10}) == nullptr && copiedFirst &&
+              copiedFirst->spelling == "first" && movedLast &&
+              movedLast->spelling == "last" &&
+              copiedFirst == &copied.records()[2] &&
+              movedLast == &moved.records()[0],
+          "index copy or move retained pointers into another snapshot");
+
+  // A dense macro ledger exercises point lookup for every byte and every
+  // gap, without a wall-clock threshold that depends on the CI host.
+  constexpr std::size_t count = 8192;
+  std::vector<MacroExpansionProvenance> records;
+  for (std::size_t position = count; position > 0; --position) {
+    const std::size_t start = 4 * position;
+    records.push_back({ProvenanceRange{Provenance{start}, 3},
+                       {},
+                       {},
+                       std::to_string(position)});
+    if (position % 16 == 0)
+      records.push_back({{}, {}, {}, "empty"});
+  }
+  const MacroExpansionProvenanceIndex dense{std::move(records)};
+  for (std::size_t position = 1; position <= count; ++position) {
+    const std::size_t start = 4 * position;
+    for (std::size_t offset = 0; offset < 3; ++offset) {
+      const auto *role = dense.Find(Provenance{start + offset});
+      require(role && role->spelling == std::to_string(position),
+              "dense macro index lost an expansion identity");
+    }
+    require(dense.Find(Provenance{start + 3}) == nullptr,
+            "dense macro index claimed a gap between expansions");
+  }
+}
 } // namespace
 
 int main(int argc, char **argv) {
   require(argc == 2, "expected one physical input");
+  checkMacroProvenanceIndex();
   DriverContext context;
   std::vector<std::string> arguments{"rex-base-fortran", "-D_OPENMP=202411",
                                      argv[1]};
