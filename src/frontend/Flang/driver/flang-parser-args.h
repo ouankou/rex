@@ -2,14 +2,13 @@
 #include <algorithm>
 #include <flang/Parser/dump-parse-tree.h>
 #include <flang/Parser/message.h>
+#include <flang/Parser/options.h>
 #include <flang/Parser/parse-tree-visitor.h>
 #include <flang/Parser/parse-tree.h>
-#include <flang/Parser/parsing.h>
 #include <flang/Parser/provenance.h>
 #include <flang/Parser/unparse.h>
 #include <flang/Support/Fortran-features.h>
 #include <flang/Support/LangOptions.h>
-#include <flang/Support/OpenMP-features.h>
 #include <flang/Support/default-kinds.h>
 
 #include <filesystem>
@@ -36,7 +35,6 @@ struct DriverOptions {
   bool dumpProvenance{false};
   bool dumpUnparse{false};
   bool dumpParseTree{false};
-  bool openMPEnabled{false};
 };
 
 struct DriverContext {
@@ -68,6 +66,8 @@ inline void AddFlangIntrinsicSearchDirectory(DriverOptions &driver) {
       flang_intrinsic_dir.lexically_normal().string();
   AddExistingSearchDirectory(driver.searchDirectories, normalized_dir);
   AddExistingSearchDirectory(driver.intrinsicModuleDirectories, normalized_dir);
+#else
+  static_cast<void>(driver);
 #endif
 }
 
@@ -79,6 +79,7 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
 
   ctx.options.features.Enable(Fortran::common::LanguageFeature::Unsigned,
                               false);
+  ctx.options.features.Enable(Fortran::common::LanguageFeature::OpenMP, false);
 
   // Transfer argv to a list of strings.
   std::list<std::string> args{};
@@ -154,8 +155,10 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
     } else if (arg == "-funparse") {
       ctx.driver.dumpUnparse = true;
     } else if (arg == "-fopenmp") {
-      ctx.options.features.Enable(Fortran::common::LanguageFeature::OpenMP);
-      ctx.driver.openMPEnabled = true;
+      llvm::errs() << "REX_FLANG_INVARIANT[native-openmp-option]: REX owns "
+                      "OpenMP mode; -fopenmp reached the base-language "
+                      "frontend\n";
+      std::abort();
     } else if (arg == "-fopenmp-version" ||
                arg.rfind("-fopenmp-version=", 0) == 0) {
       llvm::errs()
@@ -244,12 +247,6 @@ inline int ParseFlangArgs(int argc, char *const argv[], DriverContext &ctx) {
   }
   if (ctx.driver.warnOnSuspiciousUsage) {
     ctx.options.features.WarnOnAllUsage();
-  }
-  if (ctx.driver.openMPEnabled) {
-    constexpr unsigned defaultOpenMPVersion = 60;
-    ctx.driver.langOpts.OpenMPVersion = defaultOpenMPVersion;
-    Fortran::common::setOpenMPMacro(ctx.driver.langOpts.OpenMPVersion,
-                                    ctx.options.predefinitions);
   }
   AddFlangIntrinsicSearchDirectory(ctx.driver);
 
