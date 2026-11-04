@@ -364,6 +364,17 @@ unset(_rex_pool_contract_flags)
 unset(_rex_pool_contract_sanitizers)
 
 if(ENABLE-FORTRAN)
+  add_executable(rex_fortran_lexical_boundary rex_fortran_lexical_boundary.cpp)
+  target_include_directories(rex_fortran_lexical_boundary PRIVATE
+    ${ROSE_TOP_SRC_DIR}/src)
+  rose_force_system_include_dirs(rex_fortran_lexical_boundary
+    ${FLANG_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+  target_link_libraries(rex_fortran_lexical_boundary ROSE_DLL)
+  add_test(NAME rex_fortran_lexical_boundary
+    COMMAND rex_fortran_lexical_boundary
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_lexical_boundary.F90)
+  set_tests_properties(rex_fortran_lexical_boundary
+    PROPERTIES LABELS "rex;Fortran;frontend;sanitizer")
   add_executable(rex_flang_imported_components rex_flang_imported_components.cpp)
   target_link_libraries(rex_flang_imported_components ROSE_DLL)
   add_test(NAME rex_flang_include_paths

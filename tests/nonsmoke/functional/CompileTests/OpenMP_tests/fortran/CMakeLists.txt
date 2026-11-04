@@ -442,3 +442,33 @@ foreach(_form IN ITEMS free fixed)
     OMPFORTRAN_rex_fortran_openmp_${_form}_directive_continuation_contract
     PROPERTIES LABELS "OMPFORTRAN;rex;UNPARSER")
 endforeach()
+
+# Exercise the selected preprocessing mode through native and JSON-round-trip
+# ASTs. Every case owns its output directory, including native module files.
+find_program(_rex_fortran_lexical_python NAMES python3 REQUIRED)
+foreach(_lexical_form IN ITEMS free fixed macros keywords)
+  set(_lexical_modes disabled fopenmp simd libomp rex_ast parse_only)
+  if(_lexical_form STREQUAL "keywords")
+    set(_lexical_modes parse_only)
+  endif()
+  foreach(_lexical_mode IN LISTS _lexical_modes)
+    set(_lexical_name
+      OMPFORTRAN_rex_fortran_lexical_${_lexical_form}_${_lexical_mode})
+    set(_lexical_work
+      ${CMAKE_CURRENT_BINARY_DIR}/lexical-preservation/${_lexical_form}-${_lexical_mode})
+    file(MAKE_DIRECTORY ${_lexical_work})
+    add_test(
+      NAME ${_lexical_name}
+      WORKING_DIRECTORY ${_lexical_work}
+      COMMAND ${_rex_fortran_lexical_python}
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_lexical_preservation.py
+        $<TARGET_FILE:testTranslator>
+        ${CMAKE_Fortran_COMPILER}
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${_lexical_work}
+        --form ${_lexical_form}
+        --mode ${_lexical_mode})
+    set_tests_properties(${_lexical_name}
+      PROPERTIES LABELS "OMPFORTRAN;rex;ASTJSON;UNPARSER;runtime")
+  endforeach()
+endforeach()

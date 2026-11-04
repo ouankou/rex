@@ -2542,11 +2542,10 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv) {
   flangCommandLine.push_back("rex-flang-frontend");
   vector<string> flangArgs = argv;
   SgFile::stripRoseCommandLineOptions(flangArgs);
-  // Flang's parse tree and cooked-source provenance are the canonical
-  // producer for Fortran directive boundaries and physical spelling.  REX
-  // still owns semantic Sage OpenMP/OpenACC construction through ompparser,
-  // but disabling the Flang language features discards directives as
-  // comments before the AST builder can receive typed provenance.
+  // The REX lexical stage obtains OpenMP mode from this source file and
+  // preserves generic directive groups with physical provenance. Never turn
+  // that mode back into a native Flang OpenMP switch. OpenACC retains its
+  // existing grammar/semantic configuration independently.
   if (get_openmp() || get_openacc()) {
     flangArgs.erase(std::remove_if(flangArgs.begin(), flangArgs.end(),
                                    [&](const std::string &arg) {
@@ -2559,9 +2558,6 @@ int SgSourceFile::build_Fortran_AST(vector<string> argv) {
                                      return get_openacc() && arg == "-fopenacc";
                                    }),
                     flangArgs.end());
-    if (get_openmp()) {
-      flangArgs.push_back("-fopenmp");
-    }
     if (get_openacc()) {
       flangArgs.push_back("-fopenacc");
     }

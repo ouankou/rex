@@ -5,6 +5,8 @@
 
 #include <flang/Parser/parse-tree.h>
 
+#include <flang/Parser/provenance.h>
+
 #include <flang/Semantics/scope.h>
 
 #include <flang/Semantics/symbol.h>
@@ -18,6 +20,7 @@
 
 #include "builder/Tokens.h"
 #include "general_language_translation.h"
+#include "lexical/SourceRoles.h"
 
 class SgEntryStatement;
 class SgExpression;
@@ -65,6 +68,12 @@ struct FlangSourceToken {
 struct FlangDirectivePhysicalLine {
   FlangSourceRange range;
   std::string spelling;
+  // The raw member includes its trailing comment for exact source metadata.
+  // Only this prefix belongs to the directive syntax and its printed pragma.
+  std::size_t syntax_size{0};
+  // A macro-produced sentinel has no directly printable physical family.
+  // Keep its selected spelling separate from the exact raw source member.
+  std::string selected_spelling{};
 };
 
 struct FlangDirectiveGroup {
@@ -82,6 +91,8 @@ struct FlangDirectiveGroup {
   std::vector<FlangDirectivePhysicalLine> physical_lines;
   std::string logical_spelling;
   std::string semantic_spelling;
+  // Selected directive grammar with independently owned exact host spelling.
+  std::string source_expression_spelling;
 };
 
 struct FlangSourceStream {
@@ -90,6 +101,8 @@ struct FlangSourceStream {
   Fortran::parser::CharBlock directive_cooked_source;
   Fortran::parser::CharBlock base_cooked_source;
   std::vector<std::size_t> base_to_directive_offsets;
+  std::vector<Rose::FortranLex::MacroExpansionProvenance>
+      macro_expansion_provenance;
 };
 
 struct FlangBaseFortranCookedSource {
@@ -105,6 +118,8 @@ BuildFlangBaseFortranCookedSource(Fortran::parser::AllCookedSources &,
 FlangSourceStream CollectFlangSourceStream(
     Fortran::parser::Program &, Fortran::parser::AllCookedSources &,
     const Fortran::parser::CookedSource &, const FlangBaseFortranCookedSource &,
+    const std::vector<Fortran::parser::ProvenanceRange> &,
+    const std::vector<Rose::FortranLex::MacroExpansionProvenance> &,
     bool enable_openmp, bool enable_openacc, bool fixed_form);
 
 void setSgSourceFile(SgSourceFile *sg_file);

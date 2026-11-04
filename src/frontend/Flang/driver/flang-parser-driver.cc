@@ -14,6 +14,7 @@
 #include "flang-parser-args.h"
 
 #include "../FlangModuleInfo.h"
+#include "../lexical/FortranLexical.h"
 #include "../sage-build.h"
 #include "../type-parsers.h"
 
@@ -183,13 +184,14 @@ private:
   std::vector<PhysicalLabel> physical_labels_;
 };
 
-void ParseExternalBuilderBaseFortran(
-    Fortran::parser::Parsing &parsing,
+std::optional<Fortran::parser::Program> ParseExternalBuilderBaseFortran(
+    Fortran::parser::Messages &messages,
     const Fortran::parser::Options &prescanOptions,
     Fortran::parser::AllCookedSources &allCookedSources,
     const Fortran::parser::CookedSource &baseCookedSource) {
   auto parseFeatures = prescanOptions.features;
-  parseFeatures.Enable(Fortran::common::LanguageFeature::OpenMP, false);
+  ROSE_ASSERT(
+      !parseFeatures.IsEnabled(Fortran::common::LanguageFeature::OpenMP));
   Fortran::parser::UserState userState{allCookedSources, parseFeatures};
   userState.set_debugOutput(llvm::nulls())
       .set_instrumentedParse(prescanOptions.instrumentedParse);
@@ -198,16 +200,17 @@ void ParseExternalBuilderBaseFortran(
       .set_userState(&userState)
       .set_deferMessages(prescanOptions.isModuleFile);
 
-  parsing.parseTree() = Fortran::parser::program.Parse(parseState);
+  auto parseTree = Fortran::parser::program.Parse(parseState);
   CHECK(!parseState.anyErrorRecovery() ||
         parseState.messages().AnyFatalError());
-  parsing.messages().Annex(std::move(parseState.messages()));
-  if (!parseState.IsAtEnd() && !parsing.messages().AnyFatalError()) {
+  messages.Annex(std::move(parseState.messages()));
+  if (!parseState.IsAtEnd() && !messages.AnyFatalError()) {
     std::cerr << "REX_FLANG_INVARIANT[base-fortran-parse]: external-builder "
                  "base Fortran grammar did not consume the complete cooked "
                  "source\n";
     ROSE_ABORT();
   }
+  return parseTree;
 }
 
 std::vector<LabeledDoSourceContract>
@@ -334,14 +337,20 @@ bool CompileFortran(const std::string &path,
   allSources.set_encoding(driver.encoding);
   allSources.setShowColors(options.showColors);
   Fortran::parser::AllCookedSources allCookedSources{allSources};
-  Fortran::parser::Parsing parsing{allCookedSources};
+  Rose::FortranLex::LexicalSource lexicalSource{allCookedSources};
 
-  parsing.Prescan(path, options);
+  ASSERT_not_null(sourceFile);
+  ROSE_ASSERT(
+      !options.features.IsEnabled(Fortran::common::LanguageFeature::OpenMP));
+  ROSE_ASSERT(driver.langOpts.OpenMPVersion == 0 &&
+              !driver.langOpts.OpenMPSimd);
+  const bool rexOpenMP = sourceFile->get_openmp();
+  lexicalSource.Prescan(path, options, rexOpenMP);
 
-  auto &messages = parsing.messages();
-  messages.ResolveProvenances(parsing.allCooked());
+  auto &messages = lexicalSource.messages();
+  messages.ResolveProvenances(allCookedSources);
   if (!messages.empty()) {
-    messages.Emit(llvm::errs(), parsing.allCooked());
+    messages.Emit(llvm::errs(), allCookedSources);
   }
   const bool hasPrescanErrors = HasErrorDiagnostics(messages);
   const bool hasPrescanFatalErrors = messages.AnyFatalError();
@@ -350,28 +359,26 @@ bool CompileFortran(const std::string &path,
   }
 
   if (options.prescanAndReformat) {
-    parsing.EmitPreprocessedSource(llvm::outs(), driver.lineDirectives);
+    lexicalSource.EmitPreprocessedSource(llvm::outs(), driver.lineDirectives);
     return true;
   }
 
   Rose::builder::FlangBaseFortranCookedSource baseFortranCooked;
-  if (driver.openMPEnabled) {
-    // OpenMP-aware prescan above owns exact directive spelling, macro
-    // expansion, and provenance.  REX owns the directive grammar, so Flang's
-    // parse tree is built from an exact provenance-preserving base-Fortran
-    // projection of that same cooked stream.
+  if (rexOpenMP) {
+    // REX's lexical stage owns directive spelling, token formation, macro
+    // expansion, and provenance. Flang receives only the mapped base-language
+    // projection and never enables its OpenMP grammar.
     baseFortranCooked = Rose::builder::BuildFlangBaseFortranCookedSource(
-        allCookedSources, parsing.cooked(), true);
+        allCookedSources, lexicalSource.cooked(), true);
     ASSERT_not_null(baseFortranCooked.source);
-    ParseExternalBuilderBaseFortran(parsing, options, allCookedSources,
-                                    *baseFortranCooked.source);
-  } else {
-    parsing.Parse(llvm::nulls());
   }
+  auto parseTreeOpt = ParseExternalBuilderBaseFortran(
+      messages, options, allCookedSources,
+      rexOpenMP ? *baseFortranCooked.source : lexicalSource.cooked());
 
-  messages.ResolveProvenances(parsing.allCooked());
+  messages.ResolveProvenances(allCookedSources);
   if (!messages.empty()) {
-    messages.Emit(llvm::errs(), parsing.allCooked());
+    messages.Emit(llvm::errs(), allCookedSources);
   }
   const bool hasParseErrors = HasErrorDiagnostics(messages);
   const bool hasParseFatalErrors = messages.AnyFatalError();
@@ -379,7 +386,6 @@ bool CompileFortran(const std::string &path,
     return false;
   }
 
-  auto &parseTreeOpt = parsing.parseTree();
   if (!parseTreeOpt) {
     return false;
   }
@@ -387,9 +393,8 @@ bool CompileFortran(const std::string &path,
   auto labeledDoSourceContracts = CaptureLabeledDoSourceContracts(parseTree);
 
   auto semanticFeatures = options.features;
-  if (driver.openMPEnabled) {
-    semanticFeatures.Enable(Fortran::common::LanguageFeature::OpenMP, false);
-  }
+  ROSE_ASSERT(
+      !semanticFeatures.IsEnabled(Fortran::common::LanguageFeature::OpenMP));
   Fortran::semantics::SemanticsContext semanticsContext(
       driver.defaultKinds, semanticFeatures, driver.langOpts, allCookedSources);
   ASSERT_not_null(sourceFile);
@@ -436,9 +441,10 @@ bool CompileFortran(const std::string &path,
     SgSourceFile *roseSource = Rose::builder::getSgSourceFile();
     ASSERT_not_null(roseSource);
     sourceStream = Rose::builder::CollectFlangSourceStream(
-        parseTree, allCookedSources, parsing.cooked(), baseFortranCooked,
-        roseSource->get_openmp(), roseSource->get_openacc(),
-        options.isFixedForm);
+        parseTree, allCookedSources, lexicalSource.cooked(), baseFortranCooked,
+        lexicalSource.inactiveProvenanceRanges(),
+        lexicalSource.macroExpansionProvenance(), roseSource->get_openmp(),
+        roseSource->get_openacc(), options.isFixedForm);
   }
 
   Rose::builder::Build(parseTree, allCookedSources, sourceStream,
@@ -446,7 +452,7 @@ bool CompileFortran(const std::string &path,
                        semanticsContext);
 
   if (driver.dumpProvenance) {
-    parsing.DumpProvenance(llvm::outs());
+    lexicalSource.DumpProvenance(llvm::outs());
     return true;
   }
   if (driver.dumpParseTree) {

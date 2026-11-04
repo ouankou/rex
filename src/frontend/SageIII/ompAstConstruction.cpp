@@ -1811,6 +1811,26 @@ collectFortranDirectiveGroups(SgSourceFile *source_file,
   return groups;
 }
 
+void removeFortranDirectiveContinuationPragmas(
+    SgSourceFile *source_file, const std::string &requested_family,
+    bool autoRelocatePreprocessingInfo) {
+  // Parsing retains the complete physical directive group. Only AST
+  // construction consumes its continuation statements: parse-only output
+  // must still own every line required by the primary pragma's spelling.
+  const std::vector<FortranDirectiveGroupView> groups =
+      collectFortranDirectiveGroups(source_file, requested_family);
+  for (const FortranDirectiveGroupView &group : groups) {
+    // Opaque extensions remain generic source groups after construction;
+    // their physical continuation members are never consumed as OpenMP IR.
+    if (group.family == "ompx") {
+      continue;
+    }
+    for (size_t index = 1; index < group.members.size(); ++index) {
+      removeStatement(group.members[index], autoRelocatePreprocessingInfo);
+    }
+  }
+}
+
 std::string getCxxOpenMPDirectiveSourceText(SgPragmaDeclaration *pragma) {
   if (pragma == nullptr) {
     std::cerr << "REX_OMP_AST_INVARIANT[source-text]: null C/C++ pragma\n";
@@ -4923,8 +4943,18 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
     source_context.directive = directive;
     source_context.capture_source_text_only = true;
 
+    // The REX Fortran producer preserves raw and logical source separately
+    // from this parser-safe projection. Its grammar comes from selected
+    // preprocessing, while each independently owned host fragment retains
+    // exact source spelling. Raw grammar may itself be a macro invocation.
+    const std::string &source_expression_text =
+        directive->getBaseLang() == Lang_Fortran &&
+                context.fortran_semantics.bindings->producer() ==
+                    OmpFortranExactSemanticBindings::Producer::rex_typed_scope
+            ? context.fortran_semantics.bindings->directiveSource()
+            : *source_directive_text;
     const std::string source_parse_text = normalizeOpenMPDirectiveForParser(
-        *source_directive_text, directive->getBaseLang());
+        source_expression_text, directive->getBaseLang());
     RexOpenMPHostLanguageHooks source_hooks(&source_context);
     ompparser::ParseOptions source_parse_options =
         makeOpenMPParseOptions(directive->getBaseLang(), &source_hooks);
@@ -4935,7 +4965,7 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
       MLOG_ERROR_C("ompAstConstruction",
                    "Exact OpenMP source text cannot be parsed for source "
                    "expression ownership: %s\n",
-                   source_directive_text->c_str());
+                   source_expression_text.c_str());
       ROSE_ABORT();
     }
 
@@ -4966,7 +4996,7 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
                    "Exact OpenMP source text has a different clause count: "
                    "semantic=%zu source=%zu text=%s\n",
                    semantic_clauses.size(), source_clauses->size(),
-                   source_directive_text->c_str());
+                   source_expression_text.c_str());
       ROSE_ABORT();
     }
 
@@ -4981,7 +5011,7 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
                      "at index %zu: semantic=%d source=%d text=%s\n",
                      index, static_cast<int>(original_clause->getKind()),
                      static_cast<int>(source_clause->getKind()),
-                     source_directive_text->c_str());
+                     source_expression_text.c_str());
         ROSE_ABORT();
       }
 
@@ -7977,7 +8007,6 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       local_fortran_paired_pragma_dict;
   std::map<SgPragmaDeclaration *, SgPragmaDeclaration *>
       local_fortran_explicit_end_pragma_dict;
-  std::vector<SgPragmaDeclaration *> pragmas_to_remove;
 
   for (const FortranDirectiveGroupView *group : omp_groups) {
     ROSE_ASSERT(group != nullptr && group->primary != nullptr);
@@ -8094,11 +8123,6 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       local_omp_pragma_list.push_back(primary);
     }
     local_directive_owners.push_back(std::move(directive_owner));
-
-    for (size_t member_index = 1; member_index < group->members.size();
-         ++member_index) {
-      pragmas_to_remove.push_back(group->members[member_index]);
-    }
   }
 
   for (OpenMPDirective *unmatched_begin : pairing_list) {
@@ -8150,9 +8174,6 @@ static bool parseOpenMPFortranPragmas(SgSourceFile *sageFilePtr) {
       ROSE_ABORT();
     }
   }
-  for (SgPragmaDeclaration *decl : pragmas_to_remove) {
-    removeStatement(decl);
-  }
   return true;
 }
 
@@ -8203,7 +8224,6 @@ static bool parseOpenACCFortranPragmas(SgSourceFile *sageFilePtr,
     return false;
   }
 
-  std::vector<SgPragmaDeclaration *> continuation_pragmas;
   for (const FortranDirectiveGroupView &group : acc_groups) {
     SgPragmaDeclaration *primary = group.primary;
     ROSE_ASSERT(primary != nullptr);
@@ -8235,12 +8255,6 @@ static bool parseOpenACCFortranPragmas(SgSourceFile *sageFilePtr,
     if (directive->kind() != openacc::DirectiveKind::End) {
       openMPPragmas().push_back(primary);
     }
-    for (size_t index = 1; index < group.members.size(); ++index) {
-      continuation_pragmas.push_back(group.members[index]);
-    }
-  }
-  for (SgPragmaDeclaration *pragma : continuation_pragmas) {
-    removeStatement(pragma, false);
   }
   return true;
 }
@@ -8273,6 +8287,14 @@ static void removeFortranOpenMPPragmas(SgSourceFile *sageFilePtr) {
       ROSE_ABORT();
     }
     if (!info->isTransformation() && !info->isSameFile(sageFilePtr)) {
+      continue;
+    }
+    if (decl->get_fortran_directive_family() ==
+            SgPragmaDeclaration::e_fortran_directive_ompx &&
+        !decl->get_fortran_directive_primary()) {
+      // Complete extension groups were validated before conversion. A
+      // continuation is physical source for its opaque primary, not another
+      // independently parsed OpenMP directive to remove here.
       continue;
     }
     if (!isFortranOpenMPPragmaDeclaration(decl)) {
@@ -10594,6 +10616,17 @@ void processOpenMP(SgSourceFile *&sageFilePtr) {
     releaseOpenMPParseStateForSourceFile(sageFilePtr);
     mark_processed(sageFilePtr);
     return;
+  }
+
+  if (isFortran) {
+    if (parsed_fortran_pragmas) {
+      removeFortranDirectiveContinuationPragmas(
+          sageFilePtr, "omp", /*autoRelocatePreprocessingInfo=*/true);
+    }
+    if (parsed_fortran_acc_pragmas) {
+      removeFortranDirectiveContinuationPragmas(
+          sageFilePtr, "acc", /*autoRelocatePreprocessingInfo=*/false);
+    }
   }
 
   // Build OpenMP AST nodes based on parsing results

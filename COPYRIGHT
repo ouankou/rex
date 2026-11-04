@@ -62,6 +62,14 @@ the following restrictions:
 
 ---------------------------------------------------------------------------
 
+The REX-owned Fortran lexical and macro preprocessing implementation in
+src/frontend/Flang/lexical includes code adapted from LLVM 23.1.5 Flang.
+Those files retain their LLVM copyright and SPDX notices and are licensed
+under Apache-2.0 WITH LLVM-exception. The complete applicable license is in
+LicenseInformation/LLVM_Apache_2_0_with_exception.txt and is installed with
+the REX license information. This attribution does not change the license
+of unrelated REX or ROSE source files.
+
 ROSE also contains a binary copy of ANTLR 3.0, with the following license:
 
 Copyright (c) 2003-2008, Terence Parr

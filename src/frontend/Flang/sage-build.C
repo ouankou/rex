@@ -12,6 +12,7 @@
 #include "FlangModuleInfo.h"
 
 #include "FlangDirectiveProvenance.h"
+#include "lexical/SourceWhitespace.h"
 
 #include "ompAstConstruction.h"
 
@@ -35,6 +36,7 @@
 
 #include <set>
 
+#include <tuple>
 #include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
@@ -2765,29 +2767,16 @@ ExtractIncludeFilenameFromRange(const Fortran::parser::AllSources &sources,
   return ExtractIncludeFilenameFromDirective(directive);
 }
 
-std::optional<SourcePosition> BuildSourcePositionFromProvenance(
-    const Fortran::parser::AllSources &sources,
-    const Fortran::parser::Provenance provenance) {
-  const Fortran::parser::Provenance physical =
-      sources.GetReplacedProvenance(provenance);
-  std::size_t offset = 0;
-  if (const Fortran::parser::SourceFile *file =
-          sources.GetSourceFile(physical, &offset, /*topLevel=*/false)) {
-    const Fortran::parser::SourcePosition position =
-        file->GetSourcePosition(offset);
-    ROSE_ASSERT(position.trueLineNumber > 0 && position.column > 0);
-    return SourcePosition{RequirePhysicalSourcePath(*file),
-                          position.trueLineNumber, position.column};
-  }
-  return std::nullopt;
-}
+std::optional<SourcePosition>
+BuildSourcePositionFromProvenance(const Fortran::parser::AllSources &sources,
+                                  Fortran::parser::Provenance provenance);
 
 std::optional<std::string> GetPhysicalSourcePathForProvenance(
     const Fortran::parser::AllSources &sources,
     const Fortran::parser::Provenance provenance) {
-  if (const Fortran::parser::SourceFile *file =
-          sources.GetSourceFile(provenance, nullptr, /*topLevel=*/false)) {
-    return RequirePhysicalSourcePath(*file);
+  if (const auto position =
+          BuildSourcePositionFromProvenance(sources, provenance)) {
+    return position->path;
   }
   return std::nullopt;
 }
@@ -2912,6 +2901,28 @@ static bool StartsWithKeywordAt(const std::string &text, size_t offset,
   return StartsWithKeyword(text.substr(offset), keyword);
 }
 
+void TrimFortranSourceLeft(std::string &text) {
+  std::size_t first = 0;
+  while (first < text.size() &&
+         Rose::FortranLex::BlankBytes(text.c_str() + first)) {
+    first += Rose::FortranLex::BlankBytes(text.c_str() + first);
+  }
+  text.erase(0, first);
+}
+
+bool IsFlangInactiveSourceLine(
+    Fortran::parser::Provenance start, std::size_t size,
+    const std::vector<Fortran::parser::ProvenanceRange> &inactiveRanges) {
+  if (size == 0) {
+    return false;
+  }
+  const Fortran::parser::ProvenanceRange line{start, size};
+  // Provenance identifies an exact include occurrence. Inactive ranges are
+  // emitted by the REX preprocessor, not inferred from missing cooked text.
+  return std::any_of(inactiveRanges.begin(), inactiveRanges.end(),
+                     [&](const auto &range) { return range.Contains(line); });
+}
+
 size_t FindFortranDirectivePayloadStart(const std::string &text) {
   if (text.empty()) {
     return std::string::npos;
@@ -2921,14 +2932,14 @@ size_t FindFortranDirectivePayloadStart(const std::string &text) {
   if (marker == '!' || marker == 'c' || marker == 'd' || marker == '*') {
     size_t next = 1;
     while (next < text.size() &&
-           std::isspace(static_cast<unsigned char>(text[next]))) {
-      ++next;
+           Rose::FortranLex::BlankBytes(text.c_str() + next)) {
+      next += Rose::FortranLex::BlankBytes(text.c_str() + next);
     }
     if (next < text.size() && text[next] == '$') {
       ++next;
       while (next < text.size() &&
-             std::isspace(static_cast<unsigned char>(text[next]))) {
-        ++next;
+             Rose::FortranLex::BlankBytes(text.c_str() + next)) {
+        next += Rose::FortranLex::BlankBytes(text.c_str() + next);
       }
       return next;
     }
@@ -2936,8 +2947,8 @@ size_t FindFortranDirectivePayloadStart(const std::string &text) {
   if (text.front() == '$') {
     size_t next = 1;
     while (next < text.size() &&
-           std::isspace(static_cast<unsigned char>(text[next]))) {
-      ++next;
+           Rose::FortranLex::BlankBytes(text.c_str() + next)) {
+      next += Rose::FortranLex::BlankBytes(text.c_str() + next);
     }
     return next;
   }
@@ -3302,6 +3313,138 @@ struct FlangPhysicalMapping {
   bool macro_expansion{false};
 };
 
+using FlangMacroProvenance =
+    std::vector<Rose::FortranLex::MacroExpansionProvenance>;
+
+const FlangMacroProvenance &
+RequireFlangMacroProvenance(const FlangMacroProvenance *explicitRoles) {
+  if (explicitRoles != nullptr) {
+    return *explicitRoles;
+  }
+  if (flang_source_stream_ == nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: no invocation-owned "
+                 "macro provenance ledger\n";
+    ROSE_ABORT();
+  }
+  return flang_source_stream_->macro_expansion_provenance;
+}
+
+const Rose::FortranLex::MacroExpansionProvenance *
+FindFlangMacroExpansion(Fortran::parser::Provenance at,
+                        const FlangMacroProvenance &roles) {
+  const Rose::FortranLex::MacroExpansionProvenance *found = nullptr;
+  for (const auto &role : roles) {
+    if (!role.expansion.empty() && role.expansion.Contains(at)) {
+      if (found != nullptr) {
+        std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: overlapping "
+                     "macro expansion identities\n";
+        ROSE_ABORT();
+      }
+      found = &role;
+    }
+  }
+  return found;
+}
+
+struct FlangMacroInvocationSource {
+  const Fortran::parser::SourceFile *file{nullptr};
+  Fortran::parser::Provenance file_start;
+  std::vector<std::pair<std::size_t, std::size_t>> pieces;
+  std::size_t begin{0};
+  std::size_t end{0};
+};
+
+FlangMacroInvocationSource ResolveFlangMacroInvocationSource(
+    const Rose::FortranLex::MacroExpansionProvenance &role,
+    const Fortran::parser::AllCookedSources &cooked,
+    const FlangMacroProvenance &roles) {
+  FlangMacroInvocationSource result;
+  const auto &sources = cooked.allSources();
+  std::unordered_set<std::size_t> active;
+  std::function<void(const Fortran::parser::ProvenanceRange &)> resolve;
+  resolve = [&](const auto &range) {
+    for (std::size_t consumed = 0; consumed < range.size();) {
+      const auto at = range.start() + consumed;
+      const auto *nested = FindFlangMacroExpansion(at, roles);
+      if (nested != nullptr) {
+        if (nested->source.empty() ||
+            !active.insert(nested->expansion.start().offset()).second) {
+          std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: missing or "
+                       "cyclic lexical invocation source\n";
+          ROSE_ABORT();
+        }
+        for (const auto &piece : nested->source) {
+          resolve(piece);
+        }
+        active.erase(nested->expansion.start().offset());
+        consumed +=
+            std::min(range.size() - consumed,
+                     nested->expansion.size() -
+                         (at.offset() - nested->expansion.start().offset()));
+        continue;
+      }
+      if (sources.GetReplacedProvenance(at) != at) {
+        std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: expansion has "
+                     "no exact owned lexical source record\n";
+        ROSE_ABORT();
+      }
+      std::size_t offset = 0;
+      const auto *file = sources.GetSourceFile(at, &offset, false);
+      if (file == nullptr || offset >= file->content().size()) {
+        std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: invocation "
+                     "source is not a physical source occurrence\n";
+        ROSE_ABORT();
+      }
+      std::size_t count =
+          std::min(range.size() - consumed, file->content().size() - offset);
+      for (const auto &candidate : roles) {
+        if (!candidate.expansion.empty() &&
+            candidate.expansion.start().offset() > at.offset()) {
+          count = std::min(count,
+                           candidate.expansion.start().offset() - at.offset());
+        }
+      }
+      const auto occurrence = at + (-static_cast<std::ptrdiff_t>(offset));
+      if (result.file == nullptr) {
+        result.file = file;
+        result.file_start = occurrence;
+      } else if (result.file != file || result.file_start != occurrence) {
+        std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: invocation "
+                     "crosses physical files or include occurrences\n";
+        ROSE_ABORT();
+      }
+      result.pieces.emplace_back(offset, offset + count);
+      consumed += count;
+    }
+  };
+  if (role.source.empty() || role.spelling.empty()) {
+    std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: invocation has no "
+                 "formed lexical source or spelling\n";
+    ROSE_ABORT();
+  }
+  for (const auto &piece : role.source) {
+    resolve(piece);
+  }
+  std::sort(result.pieces.begin(), result.pieces.end());
+  std::vector<std::pair<std::size_t, std::size_t>> disjoint;
+  for (const auto &piece : result.pieces) {
+    if (!disjoint.empty() && piece.first <= disjoint.back().second) {
+      disjoint.back().second = std::max(disjoint.back().second, piece.second);
+    } else {
+      disjoint.push_back(piece);
+    }
+  }
+  if (result.file == nullptr || disjoint.empty()) {
+    std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: invocation has no "
+                 "complete physical source pieces\n";
+    ROSE_ABORT();
+  }
+  result.pieces = std::move(disjoint);
+  result.begin = result.pieces.front().first;
+  result.end = result.pieces.back().second;
+  return result;
+}
+
 const FlangPhysicalMapping &RequireExactFlangDirectivePhysicalMapping(
     const std::optional<FlangPhysicalMapping> &mapping,
     const Fortran::parser::SourceFile &expectedFile,
@@ -3319,7 +3462,8 @@ const FlangPhysicalMapping &RequireExactFlangDirectivePhysicalMapping(
 
 std::optional<FlangPhysicalMapping>
 GetFlangPhysicalMapping(const Fortran::parser::AllCookedSources &cooked,
-                        const Fortran::parser::CharBlock &character) {
+                        const Fortran::parser::CharBlock &character,
+                        const FlangMacroProvenance *explicitRoles = nullptr) {
   const std::optional<Fortran::parser::ProvenanceRange> range =
       cooked.GetProvenanceRange(character);
   if (!range || range->empty()) {
@@ -3327,8 +3471,20 @@ GetFlangPhysicalMapping(const Fortran::parser::AllCookedSources &cooked,
   }
   const Fortran::parser::AllSources &sources = cooked.allSources();
   const Fortran::parser::Provenance original = range->start();
+  const auto &roles = RequireFlangMacroProvenance(explicitRoles);
+  if (const auto *role = FindFlangMacroExpansion(original, roles)) {
+    const auto invocation =
+        ResolveFlangMacroInvocationSource(*role, cooked, roles);
+    return FlangPhysicalMapping{invocation.file, invocation.begin,
+                                invocation.file_start + invocation.begin, true};
+  }
   const Fortran::parser::Provenance physical =
       sources.GetReplacedProvenance(original);
+  if (physical != original) {
+    std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: cooked macro "
+                 "character has no exact expansion ledger record\n";
+    ROSE_ABORT();
+  }
   std::size_t offset = 0;
   const Fortran::parser::SourceFile *file =
       sources.GetSourceFile(physical, &offset, /*topLevel=*/false);
@@ -3338,154 +3494,116 @@ GetFlangPhysicalMapping(const Fortran::parser::AllCookedSources &cooked,
   return FlangPhysicalMapping{file, offset, physical, physical != original};
 }
 
+std::optional<SourcePosition>
+BuildSourcePositionFromProvenance(const Fortran::parser::AllSources &sources,
+                                  Fortran::parser::Provenance provenance) {
+  if (flang_source_stream_ != nullptr && cooked_ != nullptr &&
+      &cooked_->allSources() == &sources) {
+    const auto &roles = flang_source_stream_->macro_expansion_provenance;
+    if (const auto *role = FindFlangMacroExpansion(provenance, roles)) {
+      const auto invocation =
+          ResolveFlangMacroInvocationSource(*role, *cooked_, roles);
+      const auto position =
+          invocation.file->GetSourcePosition(invocation.begin);
+      return SourcePosition{RequirePhysicalSourcePath(*invocation.file),
+                            position.trueLineNumber, position.column};
+    }
+  }
+  if (sources.GetReplacedProvenance(provenance) != provenance) {
+    std::cerr << "REX_FLANG_INVARIANT[macro-source-role]: build source has no "
+                 "exact invocation-owned expansion identity\n";
+    ROSE_ABORT();
+  }
+  std::size_t offset = 0;
+  if (const auto *file = sources.GetSourceFile(provenance, &offset, false)) {
+    const auto position = file->GetSourcePosition(offset);
+    ROSE_ASSERT(position.trueLineNumber > 0 && position.column > 0);
+    return SourcePosition{RequirePhysicalSourcePath(*file),
+                          position.trueLineNumber, position.column};
+  }
+  return std::nullopt;
+}
+
 SourcePositionPair BuildExactFlangMacroInvocationRange(
     const Fortran::parser::CharBlock &source,
-    const Fortran::parser::AllCookedSources &cooked) {
+    const Fortran::parser::AllCookedSources &cooked,
+    const FlangMacroProvenance *explicitRoles = nullptr) {
   if (source.empty()) {
     std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: empty "
                  "parser statement\n";
     ROSE_ABORT();
   }
-
-  const std::optional<FlangPhysicalMapping> firstMapping =
-      GetFlangPhysicalMapping(cooked,
-                              Fortran::parser::CharBlock{source.begin(), 1});
-  if (!firstMapping || !firstMapping->macro_expansion ||
-      firstMapping->file == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: "
-                 "collapsed statement range is not owned by one exact macro "
-                 "invocation\n";
+  const auto &roles = RequireFlangMacroProvenance(explicitRoles);
+  const auto firstRange =
+      cooked.GetProvenanceRange(Fortran::parser::CharBlock{source.begin(), 1});
+  const auto *role = firstRange
+                         ? FindFlangMacroExpansion(firstRange->start(), roles)
+                         : nullptr;
+  if (role == nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: source "
+                 "has no exact lexical macro invocation\n";
     ROSE_ABORT();
   }
-
-  const Fortran::parser::SourceFile &physicalFile = *firstMapping->file;
-  const std::size_t invocationStart = firstMapping->offset;
-  const llvm::ArrayRef<char> content = physicalFile.content();
-  auto isIdentifierStart = [](unsigned char ch) {
-    return std::isalpha(ch) != 0 || ch == '_';
+  const auto invocation =
+      ResolveFlangMacroInvocationSource(*role, cooked, roles);
+  auto contains = [&](std::size_t begin, std::size_t end) {
+    return std::any_of(invocation.pieces.begin(), invocation.pieces.end(),
+                       [&](const auto &piece) {
+                         return piece.first <= begin && end <= piece.second;
+                       });
   };
-  auto isIdentifierContinue = [&](unsigned char ch) {
-    return isIdentifierStart(ch) || std::isdigit(ch) != 0;
-  };
-  if (invocationStart >= content.size() ||
-      !isIdentifierStart(
-          static_cast<unsigned char>(content[invocationStart]))) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: macro "
-                 "replacement does not begin at a physical identifier\n";
-    ROSE_ABORT();
-  }
-
-  std::size_t cursor = invocationStart + 1;
-  while (cursor < content.size() &&
-         isIdentifierContinue(static_cast<unsigned char>(content[cursor]))) {
-    ++cursor;
-  }
-  const std::size_t identifierEnd = cursor;
-  while (cursor < content.size() &&
-         (content[cursor] == ' ' || content[cursor] == '\t')) {
-    ++cursor;
-  }
-
-  std::size_t invocationEnd = identifierEnd;
-  if (cursor < content.size() && content[cursor] == '(') {
-    std::size_t depth = 0;
-    char quote = '\0';
-    bool blockComment = false;
-    bool escaped = false;
-    for (; cursor < content.size(); ++cursor) {
-      const char ch = content[cursor];
-      const char next =
-          cursor + 1 < content.size() ? content[cursor + 1] : '\0';
-      if (blockComment) {
-        if (ch == '*' && next == '/') {
-          blockComment = false;
-          ++cursor;
-        }
-        continue;
-      }
-      if (quote != '\0') {
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (ch == '\\') {
-          escaped = true;
-          continue;
-        }
-        if (ch == quote) {
-          if (next == quote) {
-            ++cursor;
-          } else {
-            quote = '\0';
-          }
-        }
-        continue;
-      }
-      if (ch == '/' && next == '*') {
-        blockComment = true;
-        ++cursor;
-        continue;
-      }
-      if (ch == '\'' || ch == '"') {
-        quote = ch;
-        continue;
-      }
-      if (ch == '(') {
-        ++depth;
-        continue;
-      }
-      if (ch == ')') {
-        if (depth == 0) {
-          std::cerr
-              << "REX_FLANG_INVARIANT[statement-source-macro-range]: "
-                 "macro invocation has an unmatched closing parenthesis\n";
-          ROSE_ABORT();
-        }
-        --depth;
-        if (depth == 0) {
-          invocationEnd = cursor + 1;
-          break;
-        }
-      }
-    }
-    if (invocationEnd == identifierEnd || depth != 0 || quote != '\0' ||
-        blockComment) {
-      std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: "
-                   "macro invocation has no exact physical closing token\n";
-      ROSE_ABORT();
-    }
-  }
-
-  if (invocationEnd <= invocationStart || invocationEnd > content.size()) {
-    std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: invalid "
-                 "physical macro invocation interval\n";
-    ROSE_ABORT();
-  }
   for (std::size_t index = 0; index < source.size(); ++index) {
-    const std::optional<FlangPhysicalMapping> mapping = GetFlangPhysicalMapping(
-        cooked, Fortran::parser::CharBlock{source.begin() + index, 1});
-    if (!mapping || mapping->file != &physicalFile ||
-        mapping->offset < invocationStart || mapping->offset >= invocationEnd) {
-      std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: "
-                   "parser statement escapes its exact physical macro "
-                   "invocation\n";
+    const auto range = cooked.GetProvenanceRange(
+        Fortran::parser::CharBlock{source.begin() + index, 1});
+    if (!range) {
+      std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: source "
+                   "character has no exact provenance\n";
       ROSE_ABORT();
     }
+    if (role->expansion.Contains(range->start())) {
+      continue;
+    }
+    if (const auto *nested = FindFlangMacroExpansion(range->start(), roles)) {
+      const auto nestedSource =
+          ResolveFlangMacroInvocationSource(*nested, cooked, roles);
+      if (nestedSource.file != invocation.file ||
+          nestedSource.file_start != invocation.file_start ||
+          !std::all_of(nestedSource.pieces.begin(), nestedSource.pieces.end(),
+                       [&](const auto &piece) {
+                         return contains(piece.first, piece.second);
+                       })) {
+        std::cerr
+            << "REX_FLANG_INVARIANT[statement-source-macro-range]: source "
+               "escapes its exact lexical invocation\n";
+        ROSE_ABORT();
+      }
+    } else {
+      const auto mapping = GetFlangPhysicalMapping(
+          cooked, Fortran::parser::CharBlock{source.begin() + index, 1},
+          &roles);
+      if (!mapping || mapping->file != invocation.file ||
+          mapping->provenance.offset() - mapping->offset !=
+              invocation.file_start.offset() ||
+          !contains(mapping->offset, mapping->offset + 1)) {
+        std::cerr
+            << "REX_FLANG_INVARIANT[statement-source-macro-range]: source "
+               "escapes its exact physical invocation pieces\n";
+        ROSE_ABORT();
+      }
+    }
   }
-  const Fortran::parser::SourcePosition begin =
-      physicalFile.GetSourcePosition(invocationStart);
-  const Fortran::parser::SourcePosition final =
-      physicalFile.GetSourcePosition(invocationEnd - 1);
-  if (begin.trueLineNumber < 1 || begin.column < 1 ||
-      final.trueLineNumber < begin.trueLineNumber || final.column < 1) {
+  const auto begin = invocation.file->GetSourcePosition(invocation.begin);
+  const auto end = invocation.file->GetSourcePosition(invocation.end - 1);
+  if (begin.trueLineNumber <= 0 || begin.column <= 0 ||
+      end.trueLineNumber < begin.trueLineNumber || end.column <= 0) {
     std::cerr << "REX_FLANG_INVARIANT[statement-source-macro-range]: macro "
                  "invocation has inconsistent physical source coordinates\n";
     ROSE_ABORT();
   }
-  const std::string path = RequirePhysicalSourcePath(physicalFile);
+  const auto path = RequirePhysicalSourcePath(*invocation.file);
   return SourcePositionPair{
       SourcePosition{path, begin.trueLineNumber, begin.column},
-      SourcePosition{path, final.trueLineNumber, final.column + 1}};
+      SourcePosition{path, end.trueLineNumber, end.column + 1}};
 }
 
 const FlangDirectiveGroup *
@@ -4073,54 +4191,48 @@ std::string ReconstructExactFlangDirectiveSpelling(
     const Fortran::parser::CharBlock &block,
     const Fortran::parser::AllCookedSources &cooked,
     const Fortran::parser::SourceFile &physicalFile,
-    std::size_t physicalGroupEnd) {
-  const llvm::ArrayRef<char> content = physicalFile.content();
+    std::size_t physicalGroupEnd, const FlangMacroProvenance &roles) {
   std::string result;
   for (std::size_t index = 0; index < block.size();) {
     const Fortran::parser::CharBlock character{block.begin() + index, 1};
-    const std::optional<FlangPhysicalMapping> mapping =
-        GetFlangPhysicalMapping(cooked, character);
-    const FlangPhysicalMapping &physicalMapping =
+    const auto mapping = GetFlangPhysicalMapping(cooked, character, &roles);
+    const auto &physicalMapping =
         RequireExactFlangDirectivePhysicalMapping(mapping, physicalFile, index);
     if (!physicalMapping.macro_expansion) {
-      if (physicalMapping.offset >= content.size()) {
-        std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: direct "
-                     "mapping exceeds its source file\n";
-        ROSE_ABORT();
-      }
-      result.push_back(content[physicalMapping.offset]);
+      result.push_back(physicalFile.content()[physicalMapping.offset]);
       ++index;
       continue;
     }
-
-    const std::size_t macroStart = physicalMapping.offset;
-    std::size_t next = index + 1;
-    std::size_t macroEnd = physicalGroupEnd;
-    for (; next < block.size(); ++next) {
-      const std::optional<FlangPhysicalMapping> following =
-          GetFlangPhysicalMapping(
-              cooked, Fortran::parser::CharBlock{block.begin() + next, 1});
-      const FlangPhysicalMapping &followingMapping =
-          RequireExactFlangDirectivePhysicalMapping(following, physicalFile,
-                                                    next);
-      if (followingMapping.macro_expansion &&
-          followingMapping.offset == macroStart) {
-        continue;
-      }
-      if (followingMapping.offset > macroStart) {
-        macroEnd = followingMapping.offset;
-        break;
-      }
-    }
-    if (macroStart >= macroEnd || macroEnd > content.size()) {
+    const auto provenance = cooked.GetProvenanceRange(character);
+    const auto *role = provenance
+                           ? FindFlangMacroExpansion(provenance->start(), roles)
+                           : nullptr;
+    if (role == nullptr) {
       std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: macro "
-                   "replacement has no exact physical invocation span\n";
+                   "spelling has no exact invocation identity\n";
       ROSE_ABORT();
     }
-    result.append(content.data() + macroStart, macroEnd - macroStart);
-    index = next;
+    const auto invocation =
+        ResolveFlangMacroInvocationSource(*role, cooked, roles);
+    if (invocation.file != &physicalFile || invocation.end > physicalGroupEnd) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: macro "
+                   "spelling escapes its source group\n";
+      ROSE_ABORT();
+    }
+    result += role->spelling;
+    do {
+      ++index;
+      if (index == block.size()) {
+        break;
+      }
+      const auto following = cooked.GetProvenanceRange(
+          Fortran::parser::CharBlock{block.begin() + index, 1});
+      if (!following || !role->expansion.Contains(following->start())) {
+        break;
+      }
+    } while (true);
   }
-  return TrimFlangDirectiveSpelling(std::move(result));
+  return result;
 }
 
 FlangSourceRange
@@ -4270,6 +4382,65 @@ bool HasFlangPreprocessingLineContinuation(const llvm::ArrayRef<char> content,
   return content[lineContentEnd - 1] == '\\';
 }
 
+std::vector<FlangSourceToken> CollectFlangPhysicalPreprocessingTokens(
+    const Fortran::parser::SourceFile &file,
+    Fortran::parser::Provenance fileProvenanceStart) {
+  const auto content = file.content();
+  std::vector<FlangSourceToken> tokens;
+  for (std::size_t start = 0; start < content.size();) {
+    std::size_t contentEnd = start;
+    while (contentEnd < content.size() && content[contentEnd] != '\n') {
+      ++contentEnd;
+    }
+    std::size_t end = contentEnd < content.size() ? contentEnd + 1 : contentEnd;
+    if (contentEnd > start && content[contentEnd - 1] == '\r') {
+      --contentEnd;
+    }
+    std::size_t first = start;
+    while (first < contentEnd &&
+           (content[first] == ' ' || content[first] == '\t')) {
+      ++first;
+    }
+    if (first == contentEnd || content[first] != '#') {
+      start = end;
+      continue;
+    }
+    const auto kind =
+        ClassifyFlangPreprocessingDirective(file, start, contentEnd);
+    std::size_t lastStart = start;
+    std::size_t lastContentEnd = contentEnd;
+    while (HasFlangPreprocessingLineContinuation(content, lastStart,
+                                                 lastContentEnd)) {
+      if (end == content.size()) {
+        std::cerr << "REX_FLANG_INVARIANT[source-stream-preprocessing]: "
+                     "unterminated preprocessing line continuation at "
+                  << file.path() << ':'
+                  << file.GetSourcePosition(start).trueLineNumber << '\n';
+        ROSE_ABORT();
+      }
+      lastStart = end;
+      lastContentEnd = lastStart;
+      while (lastContentEnd < content.size() &&
+             content[lastContentEnd] != '\n') {
+        ++lastContentEnd;
+      }
+      end =
+          lastContentEnd < content.size() ? lastContentEnd + 1 : lastContentEnd;
+      if (lastContentEnd > lastStart && content[lastContentEnd - 1] == '\r') {
+        --lastContentEnd;
+      }
+    }
+    FlangSourceToken token;
+    token.kind = FlangSourceToken::Kind::preprocessing;
+    token.preprocessing_kind = kind;
+    token.range = BuildFlangSourceRange(file, fileProvenanceStart, start, end);
+    token.spelling.assign(content.data() + start, end - start);
+    tokens.push_back(std::move(token));
+    start = end;
+  }
+  return tokens;
+}
+
 struct ConstructedFlangDirectiveGroup {
   FlangDirectiveGroup group;
   const Fortran::parser::SourceFile *file;
@@ -4277,13 +4448,213 @@ struct ConstructedFlangDirectiveGroup {
   std::size_t physical_end;
 };
 
-ConstructedFlangDirectiveGroup
-BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
-                              const Fortran::parser::AllCookedSources &cooked) {
+std::string BuildFortranDirectiveSourceExpressionProjection(
+    OpenMPDirective &directive, const std::string &parseText,
+    const Fortran::parser::CharBlock &body,
+    const Fortran::parser::CharBlock &sentinel,
+    const Fortran::parser::AllCookedSources &cooked,
+    const FlangMacroProvenance &macroExpansionProvenance,
+    const Fortran::parser::SourceFile &physicalFile) {
+  if (body.size() > parseText.size() || parseText.compare(0, 2, "!$") != 0 ||
+      sentinel.empty() || sentinel.begin() >= body.begin()) {
+    std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: selected "
+                 "directive has no exact sentinel and body\n";
+    ROSE_ABORT();
+  }
+  const std::size_t bodyPrefix = parseText.size() - body.size();
+  if (parseText.compare(bodyPrefix, body.size(), body.ToString()) != 0) {
+    std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: selected "
+                 "directive body disagrees with its parser source\n";
+    ROSE_ABORT();
+  }
+  const Fortran::parser::CharBlock syntax{sentinel.begin(), body.end()};
+  const std::size_t bodyOffset = body.begin() - syntax.begin();
+  std::vector<FlangPhysicalMapping> mappings;
+  mappings.reserve(syntax.size());
+  for (std::size_t index = 0; index < syntax.size(); ++index) {
+    const auto mapping = GetFlangPhysicalMapping(
+        cooked, Fortran::parser::CharBlock{syntax.begin() + index, 1},
+        &macroExpansionProvenance);
+    mappings.push_back(RequireExactFlangDirectivePhysicalMapping(
+        mapping, physicalFile, index));
+  }
+
+  struct SourceFragment {
+    std::size_t begin;
+    std::size_t end;
+    std::string spelling;
+  };
+  std::vector<SourceFragment> fragments;
+  directive.visitHostFragments([&](ompparser::HostFragment &fragment) {
+    if (fragment.spelling.empty()) {
+      return;
+    }
+    // Verbatim fragments are selected OpenMP grammar tokens. Their parser
+    // representation can be synthesized, so they do not own independent host
+    // source ranges or require raw-expression spelling reconstruction.
+    if (fragment.role == ompparser::HostFragmentRole::Verbatim) {
+      return;
+    }
+    const std::size_t begin = fragment.range.begin.offset;
+    const std::size_t end = fragment.range.end.offset;
+    if (begin < bodyPrefix || begin >= end || end > parseText.size() ||
+        parseText.compare(begin, end - begin, fragment.spelling) != 0) {
+      std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: host "
+                   "fragment has no exact selected-source range\n";
+      ROSE_ABORT();
+    }
+    const std::size_t syntaxBegin = bodyOffset + begin - bodyPrefix;
+    const std::size_t syntaxEnd = bodyOffset + end - bodyPrefix;
+    std::string sourceSpelling;
+    for (std::size_t index = syntaxBegin; index < syntaxEnd;) {
+      const FlangPhysicalMapping &mapping = mappings[index];
+      if (!mapping.macro_expansion) {
+        sourceSpelling.push_back(physicalFile.content()[mapping.offset]);
+        ++index;
+        continue;
+      }
+      const auto provenance = cooked.GetProvenanceRange(
+          Fortran::parser::CharBlock{syntax.begin() + index, 1});
+      const auto *role = provenance
+                             ? FindFlangMacroExpansion(provenance->start(),
+                                                       macroExpansionProvenance)
+                             : nullptr;
+      if (role == nullptr) {
+        std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: "
+                     "macro fragment has no exact lexical invocation\n";
+        ROSE_ABORT();
+      }
+      const auto invocation = ResolveFlangMacroInvocationSource(
+          *role, cooked, macroExpansionProvenance);
+      auto owns = [&](const FlangPhysicalMapping &candidate) {
+        return candidate.file == invocation.file &&
+               candidate.provenance.offset() - candidate.offset ==
+                   invocation.file_start.offset() &&
+               std::any_of(invocation.pieces.begin(), invocation.pieces.end(),
+                           [&](const auto &piece) {
+                             return piece.first <= candidate.offset &&
+                                    candidate.offset < piece.second;
+                           });
+      };
+      std::size_t replacementBegin = syntax.size();
+      std::size_t replacementEnd = 0;
+      for (std::size_t at = 0; at < syntax.size(); ++at) {
+        if (owns(mappings[at])) {
+          replacementBegin = std::min(replacementBegin, at);
+          replacementEnd = at + 1;
+        }
+      }
+      // A source invocation owns either an entire host fragment or part of
+      // the selected grammar. Only the former can be printed as a host macro.
+      // For example BODY -> parallel num_threads(1) cannot supply BODY as the
+      // spelling of the host value 1; a variable-list macro spanning multiple
+      // parser fragments likewise retains the selected fragment cardinality.
+      if (replacementBegin != index || replacementBegin < syntaxBegin ||
+          replacementEnd > syntaxEnd) {
+        sourceSpelling.push_back(syntax.begin()[index]);
+        ++index;
+        continue;
+      }
+      for (std::size_t at = replacementBegin; at < replacementEnd; ++at) {
+        if (!owns(mappings[at])) {
+          std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: "
+                       "macro replacement has conflicting source ownership\n";
+          ROSE_ABORT();
+        }
+      }
+      sourceSpelling += role->spelling;
+      index = replacementEnd;
+    }
+    fragments.push_back(SourceFragment{begin, end, std::move(sourceSpelling)});
+  });
+  std::sort(fragments.begin(), fragments.end(),
+            [](const SourceFragment &left, const SourceFragment &right) {
+              return std::tie(left.begin, left.end) <
+                     std::tie(right.begin, right.end);
+            });
+  std::string projection;
+  std::size_t consumed = 0;
+  for (const SourceFragment &fragment : fragments) {
+    if (fragment.begin < consumed) {
+      std::cerr << "REX_FLANG_INVARIANT[source-expression-projection]: host "
+                   "fragments overlap in selected directive syntax\n";
+      ROSE_ABORT();
+    }
+    projection.append(parseText, consumed, fragment.begin - consumed);
+    projection += fragment.spelling;
+    consumed = fragment.end;
+  }
+  projection.append(parseText, consumed, parseText.size() - consumed);
+  return projection.substr(2); // The producer record stores the family body.
+}
+
+ConstructedFlangDirectiveGroup BuildTypedFlangDirectiveGroup(
+    const FlangDirectiveSourceBlock &sourceBlock,
+    const Fortran::parser::AllCookedSources &cooked,
+    const std::vector<Fortran::parser::ProvenanceRange>
+        &inactiveProvenanceRanges,
+    const std::vector<Rose::FortranLex::MacroExpansionProvenance>
+        &macroExpansionProvenance) {
   const Fortran::parser::CharBlock &block = sourceBlock.source;
+  const Fortran::parser::CookedSource *cookedOwner = cooked.Find(block);
+  if (cookedOwner == nullptr) {
+    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
+                 "block has no owning cooked source\n";
+    ROSE_ABORT();
+  }
+  const Fortran::parser::CharBlock cookedOwnerBlock =
+      cookedOwner->AsCharBlock();
+  if (block.begin() < cookedOwnerBlock.begin() ||
+      block.begin() + block.size() >
+          cookedOwnerBlock.begin() + cookedOwnerBlock.size()) {
+    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
+                 "block escapes its owning cooked source\n";
+    ROSE_ABORT();
+  }
+
+  // The body and sentinel can be produced independently. A macro replacing
+  // the first directive keyword does not replace a physical !$omp sentinel;
+  // conversely, !PREFIX can replace the sentinel while leaving a literal
+  // body. Classify the complete cooked family token by its own provenance.
+  const std::string family = FlangDirectiveFamilySpelling(sourceBlock.family);
+  Fortran::parser::CharBlock sentinel;
+  if (sourceBlock.producer ==
+      FlangDirectiveGroup::Producer::rex_openmp_parser) {
+    std::size_t cookedLineStart = block.begin() - cookedOwnerBlock.begin();
+    while (cookedLineStart != 0 &&
+           cookedOwnerBlock.begin()[cookedLineStart - 1] != '\n') {
+      --cookedLineStart;
+    }
+    const std::string prefix(cookedOwnerBlock.begin() + cookedLineStart,
+                             block.begin());
+    std::size_t textStart = 0;
+    while (textStart < prefix.size() &&
+           std::isspace(static_cast<unsigned char>(prefix[textStart]))) {
+      ++textStart;
+    }
+    const std::size_t familyStart =
+        FindFortranDirectivePayloadStart(prefix.substr(textStart));
+    if (familyStart == std::string::npos ||
+        !StartsWithKeywordAt(prefix, textStart + familyStart, family.c_str())) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
+                   "body has no matching cooked sentinel\n";
+      ROSE_ABORT();
+    }
+    const std::size_t familyEnd = textStart + familyStart + family.size();
+    if (!std::all_of(prefix.begin() + familyEnd, prefix.end(),
+                     [](unsigned char ch) { return std::isspace(ch); })) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: cooked "
+                   "sentinel does not immediately precede its body\n";
+      ROSE_ABORT();
+    }
+    sentinel = Fortran::parser::CharBlock{
+        cookedOwnerBlock.begin() + cookedLineStart + textStart + familyStart,
+        family.size()};
+  }
   const std::optional<FlangPhysicalMapping> firstMapping =
       GetFlangPhysicalMapping(cooked,
-                              Fortran::parser::CharBlock{block.begin(), 1});
+                              Fortran::parser::CharBlock{block.begin(), 1},
+                              &macroExpansionProvenance);
   if (!firstMapping) {
     std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: typed "
                  "directive has no physical mapping for its first cooked "
@@ -4292,20 +4663,103 @@ BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
   }
   const Fortran::parser::SourceFile *physicalFile = firstMapping->file;
   ASSERT_not_null(physicalFile);
-  const bool macroExpansion = firstMapping->macro_expansion;
 
+  const Fortran::parser::Provenance fileProvenanceStart =
+      firstMapping->provenance +
+      (-static_cast<std::ptrdiff_t>(firstMapping->offset));
   std::size_t first = firstMapping->offset;
   std::size_t last = firstMapping->offset;
+  std::vector<std::pair<std::size_t, std::size_t>> syntaxSpans;
+  std::unordered_set<const Rose::FortranLex::MacroExpansionProvenance *>
+      recorded;
+  auto recordMacro = [&](const auto &role) {
+    if (!recorded.insert(&role).second) {
+      return;
+    }
+    const auto invocation = ResolveFlangMacroInvocationSource(
+        role, cooked, macroExpansionProvenance);
+    if (invocation.file != physicalFile ||
+        invocation.file_start != fileProvenanceStart) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: macro "
+                   "syntax crosses source occurrences\n";
+      ROSE_ABORT();
+    }
+    for (const auto &piece : invocation.pieces) {
+      syntaxSpans.push_back(piece);
+      first = std::min(first, piece.first);
+      last = std::max(last, piece.second - 1);
+    }
+  };
+  auto recordSyntax = [&](const Fortran::parser::CharBlock &character,
+                          const FlangPhysicalMapping &mapping) {
+    if (mapping.macro_expansion) {
+      const auto provenance = cooked.GetProvenanceRange(character);
+      const auto *role = provenance
+                             ? FindFlangMacroExpansion(provenance->start(),
+                                                       macroExpansionProvenance)
+                             : nullptr;
+      if (role == nullptr) {
+        std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: macro "
+                     "syntax has no lexical invocation identity\n";
+        ROSE_ABORT();
+      }
+      recordMacro(*role);
+      return;
+    }
+    if (mapping.provenance.offset() - mapping.offset !=
+            fileProvenanceStart.offset() ||
+        mapping.offset >= physicalFile->content().size()) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
+                   "syntax has no exact physical occurrence\n";
+      ROSE_ABORT();
+    }
+    syntaxSpans.emplace_back(mapping.offset, mapping.offset + 1);
+    first = std::min(first, mapping.offset);
+    last = std::max(last, mapping.offset);
+  };
   for (std::size_t index = 0; index < block.size(); ++index) {
-    const std::optional<FlangPhysicalMapping> mapping = GetFlangPhysicalMapping(
-        cooked, Fortran::parser::CharBlock{block.begin() + index, 1});
-    const FlangPhysicalMapping &physicalMapping =
-        RequireExactFlangDirectivePhysicalMapping(mapping, *physicalFile,
-                                                  index);
-    first = std::min(first, physicalMapping.offset);
-    last = std::max(last, physicalMapping.offset);
+    const Fortran::parser::CharBlock character{block.begin() + index, 1};
+    const auto mapping =
+        GetFlangPhysicalMapping(cooked, character, &macroExpansionProvenance);
+    recordSyntax(character, RequireExactFlangDirectivePhysicalMapping(
+                                mapping, *physicalFile, index));
   }
-
+  const std::size_t firstBody = first;
+  bool macroExpansion = sentinel.empty() && firstMapping->macro_expansion;
+  std::size_t physicalFamilyEnd = 0;
+  for (std::size_t index = 0; index < sentinel.size(); ++index) {
+    const Fortran::parser::CharBlock character{sentinel.begin() + index, 1};
+    const auto mapping =
+        GetFlangPhysicalMapping(cooked, character, &macroExpansionProvenance);
+    const auto &physicalMapping = RequireExactFlangDirectivePhysicalMapping(
+        mapping, *physicalFile, index);
+    recordSyntax(character, physicalMapping);
+    macroExpansion |= physicalMapping.macro_expansion;
+    if (!physicalMapping.macro_expansion) {
+      physicalFamilyEnd =
+          std::max(physicalFamilyEnd, physicalMapping.offset + 1);
+    }
+  }
+  // The emitted logical newline identifies the physical end consumed by the
+  // lexer, including terminal continuations whose macros expand to nothing.
+  // It determines the group extent, not ownership of intervening source.
+  if (!sentinel.empty()) {
+    const char *newline = block.end();
+    while (newline < cookedOwnerBlock.end() && *newline != '\n') {
+      ++newline;
+    }
+    if (newline < cookedOwnerBlock.end()) {
+      const auto mapping = GetFlangPhysicalMapping(
+          cooked, Fortran::parser::CharBlock{newline, 1},
+          &macroExpansionProvenance);
+      if (mapping && mapping->file == physicalFile &&
+          mapping->provenance.offset() - mapping->offset ==
+              fileProvenanceStart.offset() &&
+          mapping->offset < physicalFile->content().size()) {
+        last = std::max(last, mapping->offset);
+      }
+    }
+  }
   const llvm::ArrayRef<char> content = physicalFile->content();
   if (first >= content.size() || last >= content.size()) {
     std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
@@ -4338,28 +4792,27 @@ BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
     ROSE_ABORT();
   }
 
-  const Fortran::parser::Provenance fileProvenanceStart =
-      firstMapping->provenance +
-      (-static_cast<std::ptrdiff_t>(firstMapping->offset));
+  const auto preprocessingTokens = CollectFlangPhysicalPreprocessingTokens(
+      *physicalFile, fileProvenanceStart);
+  // Empty invocations still consumed real syntax. Include every actual
+  // invocation inside this exact logical source occurrence, even when it has
+  // no cooked expansion characters to drive the loop above.
+  for (const auto &role : macroExpansionProvenance) {
+    if (recorded.count(&role) != 0) {
+      continue;
+    }
+    const auto invocation = ResolveFlangMacroInvocationSource(
+        role, cooked, macroExpansionProvenance);
+    if (invocation.file == physicalFile &&
+        invocation.file_start == fileProvenanceStart &&
+        groupStart <= invocation.begin && invocation.end <= groupEnd) {
+      recordMacro(role);
+    }
+  }
   FlangDirectiveGroup group;
   group.family = sourceBlock.family;
   group.producer = sourceBlock.producer;
   group.cooked_source = block;
-  const Fortran::parser::CookedSource *cookedOwner = cooked.Find(block);
-  if (cookedOwner == nullptr) {
-    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
-                 "block has no owning cooked source\n";
-    ROSE_ABORT();
-  }
-  const Fortran::parser::CharBlock cookedOwnerBlock =
-      cookedOwner->AsCharBlock();
-  if (block.begin() < cookedOwnerBlock.begin() ||
-      block.begin() + block.size() >
-          cookedOwnerBlock.begin() + cookedOwnerBlock.size()) {
-    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
-                 "block escapes its owning cooked source\n";
-    ROSE_ABORT();
-  }
   group.source_order_start =
       static_cast<std::size_t>(block.begin() - cookedOwnerBlock.begin());
   group.source_order_size = block.size();
@@ -4368,7 +4821,6 @@ BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
                           : FlangDirectiveGroup::SourceForm::physical_directive;
   group.range = BuildFlangSourceRange(*physicalFile, fileProvenanceStart,
                                       groupStart, groupEnd);
-  const std::string family = FlangDirectiveFamilySpelling(sourceBlock.family);
   group.semantic_spelling =
       family + " " + TrimFlangDirectiveSpelling(block.ToString());
   if (group.producer == FlangDirectiveGroup::Producer::rex_openmp_parser) {
@@ -4396,21 +4848,44 @@ BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
       }
       ROSE_ABORT();
     }
+    std::size_t selectedBegin = 0;
+    std::size_t selectedEnd = block.size();
+    while (selectedBegin < selectedEnd &&
+           std::isspace(
+               static_cast<unsigned char>(block.begin()[selectedBegin]))) {
+      ++selectedBegin;
+    }
+    while (selectedEnd > selectedBegin &&
+           std::isspace(
+               static_cast<unsigned char>(block.begin()[selectedEnd - 1]))) {
+      --selectedEnd;
+    }
+    group.source_expression_spelling =
+        BuildFortranDirectiveSourceExpressionProjection(
+            *parseResult.directive, parseText,
+            Fortran::parser::CharBlock{block.begin() + selectedBegin,
+                                       selectedEnd - selectedBegin},
+            sentinel, cooked, macroExpansionProvenance, *physicalFile);
   }
   if (macroExpansion) {
-    // There are no physical directive tokens at the invocation site: the raw
-    // source member below owns the exact macro invocation, while Flang's typed
-    // parse-tree block owns the exact expanded directive spelling.
-    BuildExactFlangMacroInvocationRange(block, cooked);
+    // Raw physical members own the exact invocation and any literal suffixes
+    // or continuations. The selected family and body own the expanded syntax.
     group.logical_spelling = group.semantic_spelling;
+    if (sentinel.empty()) {
+      BuildExactFlangMacroInvocationRange(block, cooked,
+                                          &macroExpansionProvenance);
+    }
   } else {
     const std::string exactFamily = ExtractExactFlangDirectiveFamily(
-        *physicalFile, groupStart, first, sourceBlock.family);
-    group.logical_spelling = exactFamily + " " +
-                             ReconstructExactFlangDirectiveSpelling(
-                                 block, cooked, *physicalFile, groupEnd);
+        *physicalFile, groupStart,
+        sentinel.empty() ? firstBody : physicalFamilyEnd, sourceBlock.family);
+    group.logical_spelling =
+        exactFamily + " " +
+        ReconstructExactFlangDirectiveSpelling(
+            block, cooked, *physicalFile, groupEnd, macroExpansionProvenance);
   }
 
+  std::map<int, std::size_t> physicalMembers;
   for (int lineNumber = firstPosition.trueLineNumber;
        lineNumber <= lastPosition.trueLineNumber; ++lineNumber) {
     const std::size_t lineStart = physicalFile->GetLineStartOffset(lineNumber);
@@ -4424,15 +4899,102 @@ BuildTypedFlangDirectiveGroup(const FlangDirectiveSourceBlock &sourceBlock,
     if (lineEnd > lineStart && content[lineEnd - 1] == '\r') {
       --lineEnd;
     }
-    if (lineStart >= lineEnd) {
+    if (IsFlangInactiveSourceLine(fileProvenanceStart + lineStart,
+                                  lineEnd - lineStart,
+                                  inactiveProvenanceRanges)) {
+      continue;
+    }
+    const auto lineProvenance = (fileProvenanceStart + lineStart).offset();
+    if (std::any_of(preprocessingTokens.begin(), preprocessingTokens.end(),
+                    [&](const auto &token) {
+                      return token.range.provenance_start <= lineProvenance &&
+                             lineProvenance - token.range.provenance_start <=
+                                 token.range.provenance_size &&
+                             lineEnd - lineStart <=
+                                 token.range.provenance_size -
+                                     (lineProvenance -
+                                      token.range.provenance_start);
+                    })) {
+      continue;
+    }
+    std::size_t syntaxEnd = lineStart;
+    for (const auto &[begin, end] : syntaxSpans) {
+      if (begin < lineEnd && end > lineStart) {
+        syntaxEnd = std::max(syntaxEnd, std::min(end, lineEnd));
+      }
+    }
+    const std::string raw(content.data() + lineStart, lineEnd - lineStart);
+    std::string trimmed = raw;
+    TrimFortranSourceLeft(trimmed);
+    const std::size_t payload = FindFortranDirectivePayloadStart(trimmed);
+    const bool physicalSentinel =
+        payload != std::string::npos &&
+        StartsWithKeywordAt(trimmed, payload, family.c_str());
+    if (physicalSentinel) {
+      syntaxEnd = std::max(syntaxEnd,
+                           lineEnd - trimmed.size() + payload + family.size());
+    }
+    // Continuation groups can contain ordinary comments and empty lines.
+    // They retain their normal source-token owners rather than acquiring a
+    // fake directive member. An empty sentinel continuation is still syntax.
+    if (syntaxEnd == lineStart) {
+      continue;
+    }
+    const auto comment =
+        std::find(content.begin() + syntaxEnd, content.begin() + lineEnd, '!');
+    const std::size_t syntaxSize =
+        static_cast<std::size_t>(comment - content.begin()) - lineStart;
+    if (raw.empty() || syntaxSize == 0 || syntaxSize > raw.size()) {
       std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
-                   "group contains an empty physical line\n";
+                   "member has no nonempty exact syntax prefix\n";
       ROSE_ABORT();
     }
+    physicalMembers.emplace(lineNumber, group.physical_lines.size());
     group.physical_lines.push_back(FlangDirectivePhysicalLine{
         BuildFlangSourceRange(*physicalFile, fileProvenanceStart, lineStart,
                               lineEnd),
-        std::string(content.data() + lineStart, lineEnd - lineStart)});
+        raw, syntaxSize});
+  }
+  if (group.physical_lines.empty()) {
+    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: directive "
+                 "group has no actual physical members\n";
+    ROSE_ABORT();
+  }
+
+  if (macroExpansion) {
+    std::vector<std::string> selectedBodies(group.physical_lines.size());
+    std::size_t previousMember = 0;
+    for (std::size_t index = 0; index < block.size(); ++index) {
+      const auto mapping = GetFlangPhysicalMapping(
+          cooked, Fortran::parser::CharBlock{block.begin() + index, 1},
+          &macroExpansionProvenance);
+      const auto &physicalMapping = RequireExactFlangDirectivePhysicalMapping(
+          mapping, *physicalFile, index);
+      const auto position =
+          physicalFile->GetSourcePosition(physicalMapping.offset);
+      const auto physicalMember = physicalMembers.find(position.trueLineNumber);
+      if (physicalMember == physicalMembers.end()) {
+        std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: selected "
+                     "directive body escapes its physical source group\n";
+        ROSE_ABORT();
+      }
+      // A function-like macro may reorder source arguments. The selected
+      // spelling follows cooked token order; crossing a physical boundary
+      // advances output placement without reordering the replacement text.
+      const std::size_t member =
+          std::max(previousMember, physicalMember->second);
+      selectedBodies[member].push_back(block.begin()[index]);
+      previousMember = member;
+    }
+    for (std::size_t member = 0; member < group.physical_lines.size();
+         ++member) {
+      std::string selected = family + (member == 0 ? " " : "&");
+      selected += selectedBodies[member];
+      if (member + 1 != group.physical_lines.size()) {
+        selected += '&';
+      }
+      group.physical_lines[member].selected_spelling = std::move(selected);
+    }
   }
 
   return ConstructedFlangDirectiveGroup{std::move(group), physicalFile,
@@ -4477,24 +5039,27 @@ AppendTypedFortranDirectiveGroup(const FlangDirectiveGroup &group,
   SgPragmaDeclaration *primaryPragma = nullptr;
   for (std::size_t index = 0; index < group.physical_lines.size(); ++index) {
     const FlangDirectivePhysicalLine &line = group.physical_lines[index];
-    if (line.spelling.empty() || line.range.path != group.range.path) {
+    if (line.spelling.empty() || line.syntax_size == 0 ||
+        line.syntax_size > line.spelling.size() ||
+        line.range.path != group.range.path) {
       std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: invalid "
                    "physical directive member\n";
       ROSE_ABORT();
     }
-    std::string pragmaText = line.spelling;
+    std::string pragmaText = line.spelling.substr(0, line.syntax_size);
     TrimLeft(pragmaText);
     const std::size_t payloadStart =
         FindFortranDirectivePayloadStart(pragmaText);
     if (group.source_form == FlangDirectiveGroup::SourceForm::macro_expansion) {
-      if (group.physical_lines.size() != 1 ||
-          payloadStart != std::string::npos) {
+      if (line.selected_spelling.empty() ||
+          (group.producer != FlangDirectiveGroup::Producer::rex_openmp_parser &&
+           (group.physical_lines.size() != 1 ||
+            payloadStart != std::string::npos))) {
         std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: macro "
-                     "directive must own exactly one sentinel-free physical "
-                     "invocation\n";
+                     "directive member has no selected source spelling\n";
         ROSE_ABORT();
       }
-      pragmaText = group.semantic_spelling;
+      pragmaText = line.selected_spelling;
     } else {
       if (payloadStart == std::string::npos) {
         std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: physical "
@@ -4546,13 +5111,16 @@ AppendTypedFortranDirectiveGroup(const FlangDirectiveGroup &group,
   return primaryPragma;
 }
 
-FlangSourceStream
-CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
-                             Fortran::parser::AllCookedSources &cooked,
-                             const Fortran::parser::CookedSource &cookedSource,
-                             const FlangBaseFortranCookedSource &baseFortran,
-                             bool enableOpenMp, bool enableOpenAcc,
-                             bool fixedForm) {
+FlangSourceStream CollectFlangSourceStreamImpl(
+    Fortran::parser::Program &program,
+    Fortran::parser::AllCookedSources &cooked,
+    const Fortran::parser::CookedSource &cookedSource,
+    const FlangBaseFortranCookedSource &baseFortran,
+    const std::vector<Fortran::parser::ProvenanceRange>
+        &inactiveProvenanceRanges,
+    const std::vector<Rose::FortranLex::MacroExpansionProvenance>
+        &macroExpansionProvenance,
+    bool enableOpenMp, bool enableOpenAcc, bool fixedForm) {
   const Fortran::parser::AllSources &sources = cooked.allSources();
   const std::optional<Fortran::parser::ProvenanceRange> firstFileRange =
       sources.GetFirstFileProvenance();
@@ -4600,7 +5168,19 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
   }
 
   std::vector<bool> directiveOwned(content.size(), false);
+  std::vector<bool> directiveGroupExtent(content.size(), false);
+  auto preprocessingTokens = CollectFlangPhysicalPreprocessingTokens(
+      *primaryFile, firstFileRange->start());
+  std::vector<bool> preprocessingOwned(content.size(), false);
+  for (const auto &token : preprocessingTokens) {
+    const std::size_t begin =
+        token.range.provenance_start - firstFileRange->start().offset();
+    std::fill(preprocessingOwned.begin() + begin,
+              preprocessingOwned.begin() + begin + token.range.provenance_size,
+              true);
+  }
   FlangSourceStream stream;
+  stream.macro_expansion_provenance = macroExpansionProvenance;
   stream.directive_cooked_source = cookedSource.AsCharBlock();
   if (baseFortran.source != nullptr) {
     stream.base_cooked_source = baseFortran.source->AsCharBlock();
@@ -4654,15 +5234,31 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
   std::vector<FlangDirectiveSourceBlock> sourceBlocks = collector.blocks();
   AddRexOpenMPDirectiveSourceBlocks(sourceBlocks, cookedSource, enableOpenMp);
   for (const FlangDirectiveSourceBlock &sourceBlock : sourceBlocks) {
-    ConstructedFlangDirectiveGroup constructed =
-        BuildTypedFlangDirectiveGroup(sourceBlock, cooked);
+    ConstructedFlangDirectiveGroup constructed = BuildTypedFlangDirectiveGroup(
+        sourceBlock, cooked, inactiveProvenanceRanges,
+        macroExpansionProvenance);
     constructed.group.source_order_start =
         sourceOrder(constructed.group.cooked_source);
     constructed.group.source_order_size =
         constructed.group.cooked_source.size();
     if (constructed.file == primaryFile) {
-      std::fill(directiveOwned.begin() + constructed.physical_start,
-                directiveOwned.begin() + constructed.physical_end, true);
+      std::fill(directiveGroupExtent.begin() + constructed.physical_start,
+                directiveGroupExtent.begin() + constructed.physical_end, true);
+      for (const FlangDirectivePhysicalLine &member :
+           constructed.group.physical_lines) {
+        const std::size_t begin =
+            member.range.provenance_start - firstFileRange->start().offset();
+        if (begin < constructed.physical_start ||
+            begin >= constructed.physical_end || member.syntax_size == 0 ||
+            member.syntax_size > member.spelling.size() ||
+            member.spelling.size() > constructed.physical_end - begin) {
+          std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: physical "
+                       "member escapes its exact group extent\n";
+          ROSE_ABORT();
+        }
+        std::fill(directiveOwned.begin() + begin,
+                  directiveOwned.begin() + begin + member.syntax_size, true);
+      }
     }
     stream.directives.push_back(std::move(constructed.group));
   }
@@ -4672,8 +5268,10 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
          ++index) {
       const std::optional<FlangPhysicalMapping> mapping =
           GetFlangPhysicalMapping(
-              cooked, Fortran::parser::CharBlock{
-                          stream.directive_cooked_source.begin() + index, 1});
+              cooked,
+              Fortran::parser::CharBlock{
+                  stream.directive_cooked_source.begin() + index, 1},
+              &macroExpansionProvenance);
       if (mapping && mapping->file == primaryFile &&
           mapping->offset > physicalOffset) {
         return index;
@@ -4682,20 +5280,27 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
     return stream.directive_cooked_source.size();
   };
 
-  // Flang intentionally omits implementation-defined !$ompx lines from its
-  // cooked parse tree.  They are nevertheless enabled OpenMP-family source
-  // directives, not comments or skipped preprocessing.  Build an exact typed
-  // group from the physical source and give the zero-width cooked projection
-  // an insertion point immediately before the next cooked character.
+  // Preserve extension source not represented by a cooked directive, including
+  // fixed-form sentinels wider than the standard directive columns. A group
+  // already captured by the REX lexer must match its physical source exactly;
+  // the cooked and physical views cannot acquire separate semantic owners.
   if (enableOpenMp) {
     for (std::size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
       const PhysicalLine &firstLine = lines[lineIndex];
       if (firstLine.start == firstLine.content_end) {
         continue;
       }
+      if (preprocessingOwned[firstLine.start]) {
+        continue;
+      }
+      if (IsFlangInactiveSourceLine(firstFileRange->start() + firstLine.start,
+                                    firstLine.content_end - firstLine.start,
+                                    inactiveProvenanceRanges)) {
+        continue;
+      }
       std::string firstText(content.data() + firstLine.start,
                             firstLine.content_end - firstLine.start);
-      TrimLeft(firstText);
+      TrimFortranSourceLeft(firstText);
       const std::size_t firstPayload =
           FindFortranDirectivePayloadStart(firstText);
       if (firstPayload == std::string::npos ||
@@ -4705,9 +5310,121 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
       if (std::any_of(directiveOwned.begin() + firstLine.start,
                       directiveOwned.begin() + firstLine.end,
                       [](bool owned) { return owned; })) {
-        std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: physical "
-                     "OMPX source has multiple typed owners\n";
-        ROSE_ABORT();
+        const std::size_t firstProvenance =
+            firstFileRange->start().offset() + firstLine.start;
+        const FlangDirectiveGroup *owner = nullptr;
+        std::size_t ownerFirstLine = 0;
+        for (const FlangDirectiveGroup &candidate : stream.directives) {
+          if (candidate.range.path != RequirePhysicalSourcePath(*primaryFile)) {
+            continue;
+          }
+          const auto matchingMember = std::find_if(
+              candidate.physical_lines.begin(), candidate.physical_lines.end(),
+              [&](const FlangDirectivePhysicalLine &member) {
+                return member.range.provenance_start == firstProvenance;
+              });
+          if (matchingMember == candidate.physical_lines.end()) {
+            continue;
+          }
+          if (owner != nullptr ||
+              candidate.family !=
+                  FlangDirectiveGroup::Family::openmp_extension ||
+              candidate.producer !=
+                  FlangDirectiveGroup::Producer::rex_openmp_parser ||
+              candidate.cooked_source.empty() ||
+              candidate.range.start_line <= 0 ||
+              static_cast<std::size_t>(candidate.range.start_line) >
+                  lineIndex + 1) {
+            std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                         "physical source has conflicting cooked owners\n";
+            ROSE_ABORT();
+          }
+          owner = &candidate;
+          ownerFirstLine = candidate.range.start_line - 1;
+        }
+        if (owner == nullptr || owner->physical_lines.empty() ||
+            owner->range.end_line <= 0 ||
+            static_cast<std::size_t>(owner->range.end_line) > lines.size()) {
+          std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                       "physical source has no exact cooked owner\n";
+          ROSE_ABORT();
+        }
+        std::size_t nextLine = ownerFirstLine;
+        for (const auto &record : owner->physical_lines) {
+          if (record.range.start_line <= 0 ||
+              record.range.end_line != record.range.start_line ||
+              static_cast<std::size_t>(record.range.start_line) >
+                  lines.size() ||
+              static_cast<std::size_t>(record.range.start_line - 1) <
+                  nextLine) {
+            std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                         "member has an invalid physical line identity\n";
+            ROSE_ABORT();
+          }
+          const std::size_t memberLine = record.range.start_line - 1;
+          for (; nextLine < memberLine; ++nextLine) {
+            const auto &gap = lines[nextLine];
+            const bool inactive = IsFlangInactiveSourceLine(
+                firstFileRange->start() + gap.start,
+                gap.content_end - gap.start, inactiveProvenanceRanges);
+            std::string text(content.data() + gap.start,
+                             gap.content_end - gap.start);
+            TrimFortranSourceLeft(text);
+            const char first = text.empty() ? '\0' : text.front();
+            const bool comment =
+                first == '!' ||
+                (fixedForm && !text.empty() &&
+                 text.size() == gap.content_end - gap.start &&
+                 (first == 'c' || first == 'C' || first == '*' ||
+                  first == 'd' || first == 'D'));
+            if ((!text.empty() && !comment && !inactive &&
+                 !preprocessingOwned[gap.start]) ||
+                std::any_of(directiveOwned.begin() + gap.start,
+                            directiveOwned.begin() + gap.end,
+                            [](bool owned) { return owned; })) {
+              std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                           "member gap is not independently owned trivia\n";
+              ROSE_ABORT();
+            }
+          }
+          const auto &physical = lines[memberLine];
+          if (record.range.path != owner->range.path ||
+              record.range.provenance_start !=
+                  firstFileRange->start().offset() + physical.start ||
+              record.range.provenance_size !=
+                  physical.content_end - physical.start ||
+              record.spelling !=
+                  std::string(content.data() + physical.start,
+                              physical.content_end - physical.start) ||
+              record.syntax_size == 0 ||
+              record.syntax_size > record.spelling.size() ||
+              (record.syntax_size < record.spelling.size() &&
+               record.spelling[record.syntax_size] != '!') ||
+              !std::all_of(directiveOwned.begin() + physical.start,
+                           directiveOwned.begin() + physical.start +
+                               record.syntax_size,
+                           [](bool owned) { return owned; })) {
+            std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                         "cooked and physical group members disagree\n";
+            ROSE_ABORT();
+          }
+          nextLine = memberLine + 1;
+        }
+        const auto &first = lines[ownerFirstLine];
+        const std::size_t ownerLastLine = owner->range.end_line - 1;
+        const auto &last = lines[ownerLastLine];
+        if (owner->range.provenance_start !=
+                firstFileRange->start().offset() + first.start ||
+            owner->range.provenance_size != last.end - first.start ||
+            nextLine != ownerLastLine + 1 ||
+            owner->physical_lines.front().range.start_line !=
+                owner->range.start_line) {
+          std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OMPX "
+                       "cooked and physical group extents disagree\n";
+          ROSE_ABORT();
+        }
+        lineIndex = ownerLastLine;
+        continue;
       }
 
       FlangDirectiveGroup group;
@@ -4729,7 +5446,7 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
         const PhysicalLine &line = lines[lastLineIndex];
         std::string text(content.data() + line.start,
                          line.content_end - line.start);
-        TrimLeft(text);
+        TrimFortranSourceLeft(text);
         const std::size_t payload = FindFortranDirectivePayloadStart(text);
         if (payload == std::string::npos ||
             !StartsWithKeywordAt(text, payload, "ompx")) {
@@ -4764,7 +5481,8 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
             BuildFlangSourceRange(*primaryFile, firstFileRange->start(),
                                   line.start, line.content_end),
             std::string(content.data() + line.start,
-                        line.content_end - line.start)});
+                        line.content_end - line.start),
+            line.content_end - line.start});
         std::fill(directiveOwned.begin() + line.start,
                   directiveOwned.begin() + line.end, true);
         if (continued) {
@@ -4776,6 +5494,7 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
                                 firstLine.start, lines[lastLineIndex].end);
       group.logical_spelling = "ompx " + logicalPayload;
       group.semantic_spelling = group.logical_spelling;
+      group.source_expression_spelling = group.logical_spelling;
       stream.directives.push_back(std::move(group));
       lineIndex = lastLineIndex;
     }
@@ -4788,9 +5507,17 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
     if (line.start == line.content_end) {
       continue;
     }
+    if (preprocessingOwned[line.start]) {
+      continue;
+    }
+    if (IsFlangInactiveSourceLine(firstFileRange->start() + line.start,
+                                  line.content_end - line.start,
+                                  inactiveProvenanceRanges)) {
+      continue;
+    }
     std::string trimmed(content.data() + line.start,
                         line.content_end - line.start);
-    TrimLeft(trimmed);
+    TrimFortranSourceLeft(trimmed);
     if (trimmed.empty() || trimmed.front() == '$') {
       // A bare '$' is a fixed-form continuation marker in column 6.  It is
       // never a directive sentinel; directive lines have one of the typed
@@ -4844,7 +5571,8 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
   const Fortran::parser::CharBlock allCooked = cookedSource.AsCharBlock();
   for (std::size_t index = 0; index < allCooked.size(); ++index) {
     const std::optional<FlangPhysicalMapping> mapping = GetFlangPhysicalMapping(
-        cooked, Fortran::parser::CharBlock{allCooked.begin() + index, 1});
+        cooked, Fortran::parser::CharBlock{allCooked.begin() + index, 1},
+        &macroExpansionProvenance);
     if (!mapping) {
       continue;
     }
@@ -4874,40 +5602,56 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
       cookedOwned[mapping->offset] = true;
       continue;
     }
-    std::size_t macroEnd = content.size();
-    for (std::size_t next = index + 1; next < allCooked.size(); ++next) {
-      const std::optional<FlangPhysicalMapping> following =
-          GetFlangPhysicalMapping(
-              cooked, Fortran::parser::CharBlock{allCooked.begin() + next, 1});
-      if (!following || following->file != primaryFile) {
-        continue;
-      }
-      if (following->macro_expansion && following->offset == mapping->offset) {
-        continue;
-      }
-      if (following->offset > mapping->offset) {
-        macroEnd = following->offset;
-        break;
-      }
+  }
+  // Every actual invocation owns its input token pieces, including invocations
+  // with no expansion characters. Gaps between pieces remain source trivia.
+  for (const auto &role : macroExpansionProvenance) {
+    const auto invocation = ResolveFlangMacroInvocationSource(
+        role, cooked, macroExpansionProvenance);
+    if (invocation.file != primaryFile ||
+        invocation.file_start != firstFileRange->start()) {
+      continue;
     }
-    if (macroEnd == content.size()) {
-      const Fortran::parser::SourcePosition position =
-          primaryFile->GetSourcePosition(mapping->offset);
-      if (position.trueLineNumber <= 0 ||
-          static_cast<std::size_t>(position.trueLineNumber) > lines.size()) {
-        std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: terminal "
-                     "macro has no physical source line\n";
+    for (const auto &[begin, end] : invocation.pieces) {
+      if (begin >= end || end > content.size()) {
+        std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: macro "
+                     "input ownership escapes its exact primary occurrence\n";
         ROSE_ABORT();
       }
-      macroEnd = lines[position.trueLineNumber - 1].content_end;
+      std::fill(cookedOwned.begin() + begin, cookedOwned.begin() + end, true);
     }
-    if (mapping->offset >= macroEnd || macroEnd > content.size()) {
-      std::cerr << "REX_FLANG_INVARIANT[source-stream-provenance]: macro "
-                   "ownership has an invalid physical range\n";
-      ROSE_ABORT();
+  }
+
+  // Whitespace between actual directive members is independent source
+  // trivia. Preserve its exact bytes without manufacturing an empty pragma.
+  for (const PhysicalLine &line : lines) {
+    if (IsFlangInactiveSourceLine(firstFileRange->start() + line.start,
+                                  line.content_end - line.start,
+                                  inactiveProvenanceRanges)) {
+      // A physical macro invocation can span inactive conditional source;
+      // that extent does not give its selected payload ownership of skipped
+      // physical bytes. The preprocessor's exact occurrence role prevails.
+      std::fill(cookedOwned.begin() + line.start,
+                cookedOwned.begin() + line.end, false);
     }
-    std::fill(cookedOwned.begin() + mapping->offset,
-              cookedOwned.begin() + macroEnd, true);
+    if (!directiveGroupExtent[line.start] || preprocessingOwned[line.start]) {
+      continue;
+    }
+    std::string text(content.data() + line.start,
+                     line.content_end - line.start);
+    TrimFortranSourceLeft(text);
+    if (!text.empty()) {
+      continue;
+    }
+    FlangSourceToken token;
+    token.kind = FlangSourceToken::Kind::preprocessing;
+    token.preprocessing_kind = PreprocessingDirectiveKind::skipped;
+    token.range = BuildFlangSourceRange(*primaryFile, firstFileRange->start(),
+                                        line.start, line.end);
+    token.spelling.assign(content.data() + line.start, line.end - line.start);
+    stream.tokens.push_back(std::move(token));
+    std::fill(tokenOwned.begin() + line.start, tokenOwned.begin() + line.end,
+              true);
   }
 
   auto lineHasCookedSource = [&](const PhysicalLine &line) {
@@ -4929,9 +5673,12 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
     if (line.start == line.content_end) {
       continue;
     }
+    if (preprocessingOwned[line.start]) {
+      continue;
+    }
     std::string trimmed(content.data() + line.start,
                         line.content_end - line.start);
-    TrimLeft(trimmed);
+    TrimFortranSourceLeft(trimmed);
     const auto payload = FindFortranDirectivePayloadStart(trimmed);
     if (trimmed.empty() || trimmed.front() == '$' ||
         payload == std::string::npos) {
@@ -4948,7 +5695,9 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
     const bool conditionalCompilation =
         trimmed.size() >= 2 && trimmed[1] == '$' &&
         (trimmed.size() == 2 ||
-         std::isspace(static_cast<unsigned char>(trimmed[2])));
+         Rose::FortranLex::BlankBytes(trimmed.c_str() + 2) ||
+         trimmed[2] == '&' ||
+         (fixedForm && std::isdigit(static_cast<unsigned char>(trimmed[2]))));
     if (!languageDirective && !conditionalCompilation) {
       continue;
     }
@@ -4956,6 +5705,18 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
         directiveOwned.begin() + line.start, directiveOwned.begin() + line.end,
         [](bool byteOwned) { return byteOwned; });
     if (hasTypedDirectiveOwner) {
+      continue;
+    }
+    // An active conditional payload already belongs to the selected-mode
+    // language AST. Recording the complete physical line again as skipped
+    // input duplicates its effects when the result is compiled with OpenMP.
+    // Inactive lines retain their exact skipped/preprocessing representation.
+    if (conditionalCompilation && lineHasCookedSource(line)) {
+      // The prefix is lexical syntax for the selected AST, not an ordinary
+      // comment. Claim just those two bytes, leaving a trailing actual comment
+      // available to the comment collector below.
+      const std::size_t prefix = line.content_end - trimmed.size();
+      cookedOwned[prefix] = cookedOwned[prefix + 1] = true;
       continue;
     }
 
@@ -4970,53 +5731,30 @@ CollectFlangSourceStreamImpl(Fortran::parser::Program &program,
               true);
   }
 
-  for (std::size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
-    const PhysicalLine &line = lines[lineIndex];
-    std::size_t firstNonSpace = line.start;
-    while (firstNonSpace < line.content_end &&
-           (content[firstNonSpace] == ' ' || content[firstNonSpace] == '\t')) {
-      ++firstNonSpace;
+  for (auto &token : preprocessingTokens) {
+    const std::size_t tokenStart =
+        token.range.provenance_start - firstFileRange->start().offset();
+    const std::size_t tokenEnd = tokenStart + token.range.provenance_size;
+    const std::size_t hash = token.spelling.find_first_not_of(" \t");
+    if (hash == std::string::npos || token.spelling[hash] != '#') {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-preprocessing]: exact "
+                   "preprocessing token has no leading source hash\n";
+      ROSE_ABORT();
     }
-    if (firstNonSpace == line.content_end || content[firstNonSpace] != '#' ||
-        directiveOwned[firstNonSpace] || tokenOwned[firstNonSpace]) {
+    if (tokenOwned[tokenStart + hash]) {
+      // Expanded include provenance already owns its originating directive.
       continue;
     }
-
-    std::size_t lastLine = lineIndex;
-    while (HasFlangPreprocessingLineContinuation(content, lines[lastLine].start,
-                                                 lines[lastLine].content_end)) {
-      if (lastLine + 1 >= lines.size()) {
-        std::cerr << "REX_FLANG_INVARIANT[source-stream-preprocessing]: "
-                     "unterminated preprocessing line continuation at "
-                  << primaryFile->path() << ':' << lineIndex + 1 << '\n';
-        ROSE_ABORT();
-      }
-      ++lastLine;
-      const bool overlapsTypedDirective =
-          std::any_of(directiveOwned.begin() + lines[lastLine].start,
-                      directiveOwned.begin() + lines[lastLine].end,
-                      [](bool owned) { return owned; });
-      if (overlapsTypedDirective) {
-        std::cerr << "REX_FLANG_INVARIANT[source-stream-preprocessing]: "
-                     "preprocessing continuation overlaps a typed Fortran "
-                     "directive at "
-                  << primaryFile->path() << ':' << lastLine + 1 << '\n';
-        ROSE_ABORT();
-      }
+    if (std::any_of(directiveOwned.begin() + tokenStart,
+                    directiveOwned.begin() + tokenEnd,
+                    [](bool owned) { return owned; })) {
+      std::cerr << "REX_FLANG_INVARIANT[source-stream-preprocessing]: exact "
+                   "preprocessing source overlaps another source owner\n";
+      ROSE_ABORT();
     }
-    const std::size_t tokenStart = line.start;
-    const std::size_t tokenEnd = lines[lastLine].end;
-    FlangSourceToken token;
-    token.kind = FlangSourceToken::Kind::preprocessing;
-    token.preprocessing_kind = ClassifyFlangPreprocessingDirective(
-        *primaryFile, line.start, line.content_end);
-    token.range = BuildFlangSourceRange(*primaryFile, firstFileRange->start(),
-                                        tokenStart, tokenEnd);
-    token.spelling.assign(content.data() + tokenStart, tokenEnd - tokenStart);
-    stream.tokens.push_back(std::move(token));
     std::fill(tokenOwned.begin() + tokenStart, tokenOwned.begin() + tokenEnd,
               true);
-    lineIndex = lastLine;
+    stream.tokens.push_back(std::move(token));
   }
 
   // Flang's preprocessor removes inactive conditional bodies from the cooked
@@ -5364,16 +6102,19 @@ Fortran::evaluate::FoldingContext &BuildVisitor::foldingContext() const {
   return semantic_context_->foldingContext();
 }
 
-FlangSourceStream
-CollectFlangSourceStream(Fortran::parser::Program &program,
-                         Fortran::parser::AllCookedSources &cooked,
-                         const Fortran::parser::CookedSource &cookedSource,
-                         const FlangBaseFortranCookedSource &baseFortran,
-                         bool enableOpenMp, bool enableOpenAcc,
-                         bool fixedForm) {
-  return CollectFlangSourceStreamImpl(program, cooked, cookedSource,
-                                      baseFortran, enableOpenMp, enableOpenAcc,
-                                      fixedForm);
+FlangSourceStream CollectFlangSourceStream(
+    Fortran::parser::Program &program,
+    Fortran::parser::AllCookedSources &cooked,
+    const Fortran::parser::CookedSource &cookedSource,
+    const FlangBaseFortranCookedSource &baseFortran,
+    const std::vector<Fortran::parser::ProvenanceRange>
+        &inactiveProvenanceRanges,
+    const std::vector<Rose::FortranLex::MacroExpansionProvenance>
+        &macroExpansionProvenance,
+    bool enableOpenMp, bool enableOpenAcc, bool fixedForm) {
+  return CollectFlangSourceStreamImpl(
+      program, cooked, cookedSource, baseFortran, inactiveProvenanceRanges,
+      macroExpansionProvenance, enableOpenMp, enableOpenAcc, fixedForm);
 }
 
 SourcePosition
@@ -5391,16 +6132,30 @@ BuildRequiredStatementSourcePosition(const Fortran::parser::CharBlock &source,
   }
 
   const Fortran::parser::AllSources &sources = cooked_->allSources();
-  const std::optional<Fortran::parser::ProvenanceRange> provenance =
-      cooked_->GetProvenanceRange(source);
+  const auto firstProvenance = cooked_->GetProvenanceRange(
+      Fortran::parser::CharBlock{source.begin(), 1});
+  const auto lastProvenance = cooked_->GetProvenanceRange(
+      Fortran::parser::CharBlock{source.end() - 1, 1});
   std::optional<SourcePosition> physicalBegin, physicalEnd;
-  if (provenance && !provenance->empty()) {
+  if (firstProvenance && lastProvenance) {
     physicalBegin =
-        BuildSourcePositionFromProvenance(sources, provenance->start());
-    physicalEnd =
-        BuildSourcePositionFromProvenance(sources, provenance->Last());
-    if (physicalEnd) {
-      ++physicalEnd->column;
+        BuildSourcePositionFromProvenance(sources, firstProvenance->start());
+    const auto &roles = RequireFlangMacroProvenance(nullptr);
+    if (const auto *role =
+            FindFlangMacroExpansion(lastProvenance->start(), roles)) {
+      const auto invocation =
+          ResolveFlangMacroInvocationSource(*role, *cooked_, roles);
+      const auto position =
+          invocation.file->GetSourcePosition(invocation.end - 1);
+      physicalEnd =
+          SourcePosition{RequirePhysicalSourcePath(*invocation.file),
+                         position.trueLineNumber, position.column + 1};
+    } else {
+      physicalEnd =
+          BuildSourcePositionFromProvenance(sources, lastProvenance->start());
+      if (physicalEnd) {
+        ++physicalEnd->column;
+      }
     }
   }
   const bool physicalRangeOrdered =
@@ -15456,7 +16211,7 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
           builder.getSourceFile(), directive.primary_pragma,
           OmpFortranExactSemanticBindings(
               OmpFortranExactSemanticBindings::Producer::rex_typed_scope,
-              directive.group->logical_spelling,
+              directive.group->source_expression_spelling,
               BuildFortranDefaultIntegerType(), {}, {}));
       continue;
     }
