@@ -345,7 +345,10 @@ bool CompileFortran(const std::string &path,
   ROSE_ASSERT(driver.langOpts.OpenMPVersion == 0 &&
               !driver.langOpts.OpenMPSimd);
   const bool rexOpenMP = sourceFile->get_openmp();
-  lexicalSource.Prescan(path, options, rexOpenMP);
+  const bool includePredefinedMacros = driver.includePredefinedMacros.value_or(
+      sourceFile->get_requires_C_preprocessor() ||
+      !options.predefinitions.empty());
+  lexicalSource.Prescan(path, options, rexOpenMP, includePredefinedMacros);
 
   auto &messages = lexicalSource.messages();
   messages.ResolveProvenances(allCookedSources);

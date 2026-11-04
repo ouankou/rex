@@ -184,7 +184,6 @@ void BuildImpl(const Fortran::parser::HollerithLiteralConstant &,
                SgExpression *&);
 void BuildImpl(const Fortran::parser::SignedRealLiteralConstant &,
                SgExpression *&);
-void BuildImpl(const Fortran::parser::CharLiteralConstant &, SgExpression *&);
 void BuildImpl(const Fortran::parser::LogicalLiteralConstant &,
                SgExpression *&);
 

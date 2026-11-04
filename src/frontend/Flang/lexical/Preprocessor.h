@@ -21,9 +21,9 @@
 // extensions for preprocessing will not be necessary.
 
 #include "SourceRoles.h"
+#include "TokenSequence.h"
 #include "flang/Parser/char-block.h"
 #include "flang/Parser/provenance.h"
-#include "flang/Parser/token-sequence.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstddef>
 #include <list>
@@ -39,7 +39,6 @@ namespace common = ::Fortran::common;
 using ::Fortran::parser::AllSources;
 using ::Fortran::parser::CharBlock;
 using ::Fortran::parser::ProvenanceRange;
-using ::Fortran::parser::TokenSequence;
 
 class Prescanner;
 class Preprocessor;
@@ -104,6 +103,8 @@ public:
   macroExpansionProvenance() const {
     return sourceRoles_->macros;
   }
+  std::shared_ptr<const TokenInvocationSource>
+  CurrentMacroInvocationSource() const;
 
   void DefineStandardMacros();
   void Define(const std::string &macro, const std::string &value);
@@ -146,16 +147,14 @@ private:
                          std::size_t exprTokens, Prescanner &);
   void LineDirective(const TokenSequence &, std::size_t, Prescanner &);
   TokenSequence TokenizeMacroBody(const std::string &);
-  void RecordMacroExpansion(ProvenanceRange expansion, ProvenanceRange use,
-                            const TokenSequence &, std::size_t firstToken,
-                            std::size_t tokens);
-  struct MacroInvocationSource {
-    std::vector<ProvenanceRange> source;
-    std::string spelling;
-  };
+  std::shared_ptr<const TokenInvocationSource>
+  RecordMacroExpansion(ProvenanceRange expansion, ProvenanceRange use,
+                       const TokenSequence &, std::size_t firstToken,
+                       std::size_t tokens);
+  using MacroInvocationSource = TokenInvocationSource;
   struct MacroSourceContext {
     std::vector<ProvenanceRange> replacement;
-    MacroInvocationSource invocation;
+    std::shared_ptr<const MacroInvocationSource> invocation;
   };
   MacroInvocationSource
   CaptureMacroInvocationSource(const TokenSequence &, std::size_t firstToken,

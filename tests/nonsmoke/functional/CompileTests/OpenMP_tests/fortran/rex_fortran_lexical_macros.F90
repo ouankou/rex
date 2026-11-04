@@ -25,5 +25,33 @@ this inactive source is intentionally not valid Fortran
   total = total + REX_LEXICAL_ALIAS(1)
 !REX_LEXICAL_OMP_PREFIX end parallel
 !$ total = total + 10
+  REX_LEXICAL_WARNING_IF(total > 0, "rex warning\npayload")
+  REX_LEXICAL_WARNING_IF(total > 0, "rex warning\npayload")
+  REX_LEXICAL_IGNORED_WARNING_IF(total < 0, "rex ignored\npayload");
+  REX_LEXICAL_CAPTURE(total + (1))
+  REX_LEXICAL_CAPTURE()
+  REX_LEXICAL_VARIADIC(1, 2, 3)
+  REX_LEXICAL_COMMENT
   print '(I0)', total
 end program rex_fortran_lexical_macros
+
+subroutine rex_lexical_record(message, filename, line)
+  implicit none
+  character(len=*), intent(in) :: message, filename
+  integer, intent(in) :: line
+  if (len_trim(filename) == 0 .or. line <= 0) stop 5
+  print '(A)', message
+end subroutine rex_lexical_record
+
+subroutine rex_lexical_text(text)
+  implicit none
+  character(len=*), intent(in) :: text
+  print '(I0,1X,A)', len(text), text
+end subroutine rex_lexical_text
+
+subroutine rex_lexical_values(first, second, third)
+  implicit none
+  integer, intent(in) :: first, second, third
+  if (first /= 1 .or. second /= 2 .or. third /= 3) stop 6
+  print '(3(I0,1X))', first, second, third
+end subroutine rex_lexical_values

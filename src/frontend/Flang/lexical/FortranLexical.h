@@ -27,7 +27,8 @@ public:
 
   const Fortran::parser::SourceFile *Prescan(const std::string &path,
                                              Fortran::parser::Options options,
-                                             bool retainRexOpenMP);
+                                             bool retainRexOpenMP,
+                                             bool includePredefinedMacros);
 
   Fortran::parser::Messages &messages() { return messages_; }
   const Fortran::parser::CookedSource &cooked() const;

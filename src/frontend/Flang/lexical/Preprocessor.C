@@ -110,7 +110,19 @@ TokenSequence Definition::Tokenize(const std::vector<std::string> &argNames,
     if (IsLegalIdentifierStart(tok)) {
       auto it{args.find(tok.ToString())};
       if (it != args.end()) {
-        result.Put(it->second, token.GetTokenProvenance(j));
+        auto origin = std::make_shared<TokenInvocationSource>();
+        origin->spelling = tok.ToString();
+        for (std::size_t offset = 0; offset < tok.size(); ++offset) {
+          const auto &source = token.GetTokenSource(firstToken + j, offset);
+          CHECK(source.kind == TokenCharacterSource::Kind::input);
+          const ProvenanceRange range{source.anchor, 1};
+          if (origin->source.empty() ||
+              !origin->source.back().AnnexIfPredecessor(range)) {
+            origin->source.push_back(range);
+          }
+        }
+        result.Put(it->second, token.GetTokenProvenance(j),
+                   TokenCharacterSource::Invocation(std::move(origin)));
         continue;
       }
     }
@@ -126,11 +138,13 @@ std::size_t Definition::GetArgumentIndex(const CharBlock &token) const {
   return argumentCount();
 }
 
-static TokenSequence Stringify(const TokenSequence &tokens,
-                               AllSources &allSources) {
+static TokenSequence
+Stringify(const TokenSequence &tokens, AllSources &allSources,
+          std::shared_ptr<const TokenInvocationSource> origin) {
   TokenSequence result;
+  const auto role = TokenCharacterSource::Invocation(std::move(origin));
   Provenance quoteProvenance{allSources.CompilerInsertionProvenance('"')};
-  result.PutNextTokenChar('"', quoteProvenance);
+  result.PutNextTokenChar('"', quoteProvenance, role);
   for (std::size_t j{0}; j < tokens.SizeInTokens(); ++j) {
     const CharBlock &token{tokens.TokenAt(j)};
     std::size_t bytes{token.size()};
@@ -138,12 +152,12 @@ static TokenSequence Stringify(const TokenSequence &tokens,
       char ch{token[k]};
       Provenance from{tokens.GetTokenProvenance(j, k)};
       if (ch == '"' || ch == '\\') {
-        result.PutNextTokenChar(ch, from);
+        result.PutNextTokenChar(ch, from, role);
       }
-      result.PutNextTokenChar(ch, from);
+      result.PutNextTokenChar(ch, from, role);
     }
   }
-  result.PutNextTokenChar('"', quoteProvenance);
+  result.PutNextTokenChar('"', quoteProvenance, role);
   result.CloseToken();
   return result;
 }
@@ -266,7 +280,9 @@ TokenSequence Definition::Apply(const std::vector<TokenSequence> &args,
         result.pop_back();
         AllSources &allSources{
             *const_cast<AllSources *>(&prescanner.allSources())};
-        result.CopyAll(Stringify(args[index], allSources));
+        result.CopyAll(Stringify(
+            args[index], allSources,
+            prescanner.preprocessor().CurrentMacroInvocationSource()));
       } else {
         const TokenSequence *arg{&args[index]};
         std::optional<TokenSequence> replaced;
@@ -297,7 +313,10 @@ TokenSequence Definition::Apply(const std::vector<TokenSequence> &args,
       Provenance commaProvenance{allSources.CompilerInsertionProvenance(',')};
       for (std::size_t k{argumentCount()}; k < args.size(); ++k) {
         if (k > argumentCount()) {
-          result.Put(","s, commaProvenance);
+          result.Put(
+              ","s, commaProvenance,
+              TokenCharacterSource::Invocation(
+                  prescanner.preprocessor().CurrentMacroInvocationSource()));
         }
         result.CopyAll(args[k]);
       }
@@ -340,15 +359,20 @@ Preprocessor::Preprocessor(AllSources &allSources,
   CHECK(&allSources_ == &sourceRoleOwner.allSources_);
 }
 
-void Preprocessor::RecordMacroExpansion(ProvenanceRange expansion,
-                                        ProvenanceRange use,
-                                        const TokenSequence &input,
-                                        std::size_t firstToken,
-                                        std::size_t tokens) {
-  auto invocation = CaptureMacroInvocationSource(input, firstToken, tokens);
-  sourceRoles_->macros.push_back(
-      MacroExpansionProvenance{expansion, use, std::move(invocation.source),
-                               std::move(invocation.spelling)});
+std::shared_ptr<const TokenInvocationSource> Preprocessor::RecordMacroExpansion(
+    ProvenanceRange expansion, ProvenanceRange use, const TokenSequence &input,
+    std::size_t firstToken, std::size_t tokens) {
+  auto invocation = std::make_shared<const TokenInvocationSource>(
+      CaptureMacroInvocationSource(input, firstToken, tokens));
+  sourceRoles_->macros.push_back(MacroExpansionProvenance{
+      expansion, use, invocation->source, invocation->spelling});
+  return invocation;
+}
+
+std::shared_ptr<const TokenInvocationSource>
+Preprocessor::CurrentMacroInvocationSource() const {
+  CHECK(!macroSourceContexts_.empty());
+  return macroSourceContexts_.back().invocation;
 }
 
 Preprocessor::MacroInvocationSource Preprocessor::CaptureMacroInvocationSource(
@@ -358,29 +382,36 @@ Preprocessor::MacroInvocationSource Preprocessor::CaptureMacroInvocationSource(
         tokens <= input.SizeInTokens() - firstToken);
   struct CharacterSource {
     Provenance provenance;
-    char spelling;
-    const MacroSourceContext *context;
+    std::optional<char> spelling;
+    const TokenInvocationSource *context;
   };
   std::vector<CharacterSource> characters;
-  std::vector<const MacroSourceContext *> contexts;
+  std::vector<const TokenInvocationSource *> contexts;
   for (std::size_t at = firstToken; at < firstToken + tokens; ++at) {
     const auto token = input.TokenAt(at);
     for (std::size_t offset = 0; offset < token.size(); ++offset) {
-      const Provenance provenance{input.GetTokenProvenance(at, offset)};
-      const MacroSourceContext *context{nullptr};
-      if (resolveContexts) {
+      const auto &role = input.GetTokenSource(at, offset);
+      const Provenance provenance{role.anchor};
+      const TokenInvocationSource *context{nullptr};
+      if (role.kind == TokenCharacterSource::Kind::invocation) {
+        CHECK(role.invocation);
+        context = role.invocation.get();
+      } else {
+        CHECK(provenance.offset() > 0);
+      }
+      if (context == nullptr && resolveContexts) {
         for (auto frame = macroSourceContexts_.rbegin();
              frame != macroSourceContexts_.rend(); ++frame) {
           if (std::any_of(frame->replacement.begin(), frame->replacement.end(),
                           [&](const auto &range) {
                             return range.Contains(provenance);
                           })) {
-            context = &*frame;
+            context = frame->invocation.get();
             break;
           }
         }
       }
-      characters.push_back({provenance, token[offset], context});
+      characters.push_back({provenance, role.spelling, context});
       if (context != nullptr && std::find(contexts.begin(), contexts.end(),
                                           context) == contexts.end()) {
         contexts.push_back(context);
@@ -390,12 +421,12 @@ Preprocessor::MacroInvocationSource Preprocessor::CaptureMacroInvocationSource(
   auto coveredByContexts = [](ProvenanceRange source, const auto &owners) {
     return std::any_of(owners.begin(), owners.end(), [&](const auto *owner) {
       return std::any_of(
-          owner->invocation.source.begin(), owner->invocation.source.end(),
+          owner->source.begin(), owner->source.end(),
           [&](const auto &range) { return range.Contains(source); });
     });
   };
   MacroInvocationSource result;
-  std::vector<const MacroSourceContext *> emittedContexts;
+  std::vector<const TokenInvocationSource *> emittedContexts;
   for (const auto &character : characters) {
     if (const auto *context = character.context) {
       if (std::find(emittedContexts.begin(), emittedContexts.end(), context) !=
@@ -403,22 +434,21 @@ Preprocessor::MacroInvocationSource Preprocessor::CaptureMacroInvocationSource(
         continue;
       }
       const bool covered =
-          std::all_of(context->invocation.source.begin(),
-                      context->invocation.source.end(), [&](const auto &range) {
+          std::all_of(context->source.begin(), context->source.end(),
+                      [&](const auto &range) {
                         return coveredByContexts(range, emittedContexts);
                       });
       if (!covered) {
-        result.spelling += context->invocation.spelling;
+        result.spelling += context->spelling;
       }
-      result.source.insert(result.source.end(),
-                           context->invocation.source.begin(),
-                           context->invocation.source.end());
+      result.source.insert(result.source.end(), context->source.begin(),
+                           context->source.end());
       emittedContexts.push_back(context);
     } else {
       const ProvenanceRange source{character.provenance, 1};
       result.source.push_back(source);
-      if (!coveredByContexts(source, contexts)) {
-        result.spelling.push_back(character.spelling);
+      if (character.spelling && !coveredByContexts(source, contexts)) {
+        result.spelling.push_back(*character.spelling);
       }
     }
   }
@@ -450,7 +480,8 @@ void Preprocessor::PushMacroSourceContext(const TokenSequence &replacement,
                                               replacement.SizeInTokens(), false)
                      .source;
   }
-  auto invocation = CaptureMacroInvocationSource(input, firstToken, tokens);
+  auto invocation = std::make_shared<const TokenInvocationSource>(
+      CaptureMacroInvocationSource(input, firstToken, tokens));
   macroSourceContexts_.push_back(
       MacroSourceContext{std::move(definition), std::move(invocation)});
 }
@@ -647,9 +678,17 @@ std::optional<TokenSequence> Preprocessor::MacroReplacement(
                input.TokenAt(*rightParenthesis).OnlyNonBlank() == ')';
         }
         if (ok && prev && IsDefinedKeyword(result.TokenAt(*prev))) {
+          TokenSequence original{result, *prev, result.SizeInTokens() - *prev};
+          original.AppendRange(
+              input, j, rightParenthesis ? *rightParenthesis - j + 1 : 1);
+          const auto origin = std::make_shared<const TokenInvocationSource>(
+              CaptureMacroInvocationSource(original, 0,
+                                           original.SizeInTokens()));
           result = TokenSequence{result, 0, *prev}; // trims off "defined ("
           char truth{it != definitions_.end() ? '1' : '0'};
-          result.Put(&truth, 1, allSources_.CompilerInsertionProvenance(truth));
+          result.Put(std::string(1, truth),
+                     allSources_.CompilerInsertionProvenance(truth),
+                     TokenCharacterSource::Invocation(origin));
           j = rightParenthesis.value_or(j);
           continue;
         }
@@ -696,8 +735,9 @@ std::optional<TokenSequence> Preprocessor::MacroReplacement(
           ProvenanceRange insert{allSources_.AddCompilerInsertion(repl)};
           const ProvenanceRange use{input.GetTokenProvenanceRange(j)};
           ProvenanceRange call{allSources_.AddMacroCall(insert, use, repl)};
-          RecordMacroExpansion(call, use, input, j, 1);
-          result.Put(repl, call.start());
+          const auto origin = RecordMacroExpansion(call, use, input, j, 1);
+          result.Put(repl, call.start(),
+                     TokenCharacterSource::Invocation(origin));
           continue;
         }
       }
@@ -718,8 +758,9 @@ std::optional<TokenSequence> Preprocessor::MacroReplacement(
         ProvenanceRange use{input.GetTokenProvenanceRange(j)};
         ProvenanceRange newRange{
             allSources_.AddMacroCall(from, use, replaced.ToString())};
-        RecordMacroExpansion(newRange, use, input, j, 1);
-        result.CopyWithProvenance(replaced, newRange);
+        const auto origin = RecordMacroExpansion(newRange, use, input, j, 1);
+        result.CopyWithProvenance(replaced, newRange,
+                                  TokenCharacterSource::Invocation(origin));
       } else {
         RecordMacroExpansion({}, input.GetTokenProvenanceRange(j), input, j, 1);
       }
@@ -801,8 +842,10 @@ std::optional<TokenSequence> Preprocessor::MacroReplacement(
         ProvenanceRange use{input.GetIntervalProvenanceRange(j, k - j)};
         ProvenanceRange newRange{
             allSources_.AddMacroCall(from, use, replaced.ToString())};
-        RecordMacroExpansion(newRange, use, input, j, k - j + 1);
-        result.CopyWithProvenance(replaced, newRange);
+        const auto origin =
+            RecordMacroExpansion(newRange, use, input, j, k - j + 1);
+        result.CopyWithProvenance(replaced, newRange,
+                                  TokenCharacterSource::Invocation(origin));
       } else {
         RecordMacroExpansion({}, input.GetIntervalProvenanceRange(j, k - j),
                              input, j, k - j + 1);

@@ -18,7 +18,6 @@
 #include "flang/Parser/characters.h"
 #include "flang/Parser/message.h"
 #include "flang/Parser/source.h"
-#include "flang/Parser/token-sequence.h"
 #include "llvm/Support/raw_ostream.h"
 #include <cstddef>
 #include <cstring>
@@ -375,72 +374,13 @@ void Prescanner::Statement() {
 
 TokenSequence &Prescanner::ClipComment(TokenSequence &sequence,
                                        bool skipFirst) const {
-  std::size_t tokens{sequence.SizeInTokens()};
-  for (std::size_t j{0}; j < tokens; ++j) {
-    CharBlock tok{sequence.TokenAt(j)};
-    if (std::size_t blanks{tok.CountLeadingBlanks()};
-        blanks < tok.size() && tok[blanks] == '!') {
-      // Retain active compiler directive sentinels (e.g. "!dir$")
-      for (std::size_t k{j + 1}; k < tokens && tok.size() <= blanks + 5; ++k) {
-        if (tok.begin() + tok.size() == sequence.TokenAt(k).begin()) {
-          tok.ExtendToCover(sequence.TokenAt(k));
-        } else {
-          break;
-        }
-      }
-      bool isSentinel{false};
-      if (tok.size() > blanks + 5) {
-        isSentinel = IsCompilerDirectiveSentinel(&tok[blanks + 1]).has_value();
-      }
-      if (isSentinel) {
-      } else if (skipFirst) {
-        skipFirst = false;
-      } else {
-        TokenSequence result;
-        if (j > 0) {
-          result.AppendRange(sequence, 0, j - 1);
-        }
-        sequence.swap(result);
-        return sequence;
-      }
-    }
-  }
-  return sequence;
+  return sequence.ClipComment(*this, skipFirst);
 }
 
 void Prescanner::CheckBadFortranCharacters(
     const TokenSequence &sequence) const {
-  const bool preprocessingOnly{disableSourceContinuation_ ||
-                               preprocessingOnly_};
-  std::size_t tokens{sequence.SizeInTokens()};
-  for (std::size_t j{0}; j < tokens; ++j) {
-    CharBlock token{sequence.TokenAt(j)};
-    char ch{token.FirstNonBlank()};
-    if (ch != ' ' && !IsValidFortranTokenCharacter(ch)) {
-      if (ch == '!') {
-        if (IsCompilerDirectiveSentinel(token)) {
-          continue;
-        } else if (j + 1 < tokens &&
-                   IsCompilerDirectiveSentinel(
-                       sequence.TokenAt(j + 1))) { // !dir$, &c.
-          ++j;
-          continue;
-        } else if (preprocessingOnly) {
-          continue;
-        }
-      } else if (ch == '&' && preprocessingOnly) {
-        continue;
-      }
-      if (ch < ' ' || ch >= '\x7f') {
-        messages_.Say(sequence.GetTokenProvenanceRange(j),
-                      "bad character (0x%02x) in Fortran token"_err_en_US,
-                      ch & 0xff);
-      } else {
-        messages_.Say(sequence.GetTokenProvenanceRange(j),
-                      "bad character ('%c') in Fortran token"_err_en_US, ch);
-      }
-    }
-  }
+  sequence.CheckBadFortranCharacters(
+      messages_, *this, disableSourceContinuation_ || preprocessingOnly_);
 }
 
 void Prescanner::CheckAndEmitLine(TokenSequence &tokens,
@@ -1082,7 +1022,13 @@ void Prescanner::QuotedCharacterLiteral(TokenSequence &tokens,
   inCharLiteral_ = true;
   continuationInCharLiteral_ = true;
   const auto emit{[&](char ch) { EmitChar(tokens, ch); }};
-  const auto insert{[&](char ch) { EmitInsertedChar(tokens, ch); }};
+  bool emittedSourceNewline{false};
+  const auto insert{[&](char ch) {
+    const bool sourceNewline = *at_ == '\n' && !emittedSourceNewline;
+    EmitInsertedChar(tokens, ch,
+                     sourceNewline ? std::optional<char>{'\n'} : std::nullopt);
+    emittedSourceNewline |= sourceNewline;
+  }};
   bool isEscaped{false};
   bool escapesEnabled{features_.IsEnabled(LanguageFeature::BackslashEscapes)};
   while (true) {
@@ -1216,7 +1162,9 @@ void Prescanner::Hollerith(TokenSequence &tokens, int count,
 bool Prescanner::PadOutCharacterLiteral(TokenSequence &tokens) {
   while (inFixedForm_ && !tabInCurrentLine_ && at_[1] == '\n') {
     if (column_ < fixedFormColumnLimit_) {
-      tokens.PutNextTokenChar(' ', spaceProvenance_);
+      tokens.PutNextTokenChar(
+          ' ', spaceProvenance_,
+          TokenCharacterSource::Normalization(GetCurrentProvenance(), ' '));
       ++column_;
       return true;
     }
@@ -1783,10 +1731,12 @@ Prescanner::IsFixedFormCompilerDirectiveLine(const char *start) const {
 }
 
 std::optional<Prescanner::LineClassification>
-Prescanner::IsFreeFormCompilerDirectiveLine(const char *start) const {
+Prescanner::IsFreeFormCompilerDirectiveLine(const char *start,
+                                            const TokenSequence *input) const {
   if (const char *p{SkipWhiteSpaceIncludingEmptyMacros(start)};
       p && *p == '!') {
-    if (auto lnClass{IsCompilerDirectiveSentinelAfterKeywordMacro(p + 1)}) {
+    if (auto lnClass{
+            IsCompilerDirectiveSentinelAfterKeywordMacro(p + 1, input)}) {
       if (lnClass->kind == LineClassification::Kind::CompilerDirective) {
         const char *sentinel{lnClass->sentinel};
         CHECK(sentinel != nullptr);
@@ -1859,9 +1809,22 @@ Prescanner::GetKeywordMacroName(const char *start) const {
 }
 
 TokenSequence Prescanner::ExpandKeywordMacro(CharBlock name,
-                                             Provenance provenance) const {
+                                             Provenance provenance,
+                                             const TokenSequence *input) const {
   TokenSequence toks;
-  toks.Put(name, provenance);
+  if (input != nullptr) {
+    const auto source = input->ToCharBlock();
+    CHECK(name.begin() >= source.begin() && name.end() <= source.end());
+    const std::size_t start = name.begin() - source.begin();
+    for (std::size_t offset = 0; offset < name.size(); ++offset) {
+      toks.PutNextTokenChar(name[offset],
+                            input->GetCharProvenance(start + offset),
+                            input->GetCharSource(start + offset));
+    }
+    toks.CloseToken();
+  } else {
+    toks.Put(name, provenance);
+  }
   return preprocessor_.MacroReplacement(toks, *this).value();
 }
 
@@ -1922,10 +1885,14 @@ Prescanner::IsCompilerDirectiveSentinel(const char *p) const {
 }
 
 auto Prescanner::IsCompilerDirectiveSentinelAfterKeywordMacro(
-    const char *p) const -> std::optional<LineClassification> {
+    const char *p, const TokenSequence *input) const
+    -> std::optional<LineClassification> {
   if (auto name{GetKeywordMacroName(p)}) {
-    Provenance provenance{GetProvenance(p)};
-    TokenSequence expansion{ExpandKeywordMacro(*name, provenance)};
+    Provenance provenance{
+        input != nullptr
+            ? input->GetCharProvenance(p - input->ToCharBlock().begin())
+            : GetProvenance(p)};
+    TokenSequence expansion{ExpandKeywordMacro(*name, provenance, input)};
     expansion.Put("\n", 1, provenance); // termination
     CharBlock block{expansion.ToLowerCase().ToCharBlock()};
     if (auto maybePair{IsCompilerDirectiveSentinel(block.begin())}) {
@@ -1941,7 +1908,9 @@ auto Prescanner::IsCompilerDirectiveSentinelAfterKeywordMacro(
   return std::nullopt;
 }
 
-auto Prescanner::ClassifyLine(const char *start) const -> LineClassification {
+auto Prescanner::ClassifyLine(const char *start,
+                              const TokenSequence *input) const
+    -> LineClassification {
   if (inFixedForm_) {
     if (std::optional<LineClassification> lc{
             IsFixedFormCompilerDirectiveLine(start)}) {
@@ -1952,7 +1921,7 @@ auto Prescanner::ClassifyLine(const char *start) const -> LineClassification {
     }
   } else {
     if (std::optional<LineClassification> lc{
-            IsFreeFormCompilerDirectiveLine(start)}) {
+            IsFreeFormCompilerDirectiveLine(start, input)}) {
       return std::move(*lc);
     }
     if (const char *bang{IsFreeFormComment(start)}) {
@@ -1985,7 +1954,7 @@ Prescanner::ClassifyLine(TokenSequence &tokens,
   tokens.PutNextTokenChar('\n', newlineProvenance);
   tokens.CloseToken();
   const char *ppd{tokens.ToCharBlock().begin()};
-  LineClassification classification{ClassifyLine(ppd)};
+  LineClassification classification{ClassifyLine(ppd, &tokens)};
   tokens.pop_back(); // remove the newline
   return classification;
 }
