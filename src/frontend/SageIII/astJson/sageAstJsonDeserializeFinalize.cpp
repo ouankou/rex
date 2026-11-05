@@ -219,13 +219,18 @@ openACCCxxExactSemanticBindingsFromJson(const JsonValue &json,
   return OpenACCCxxExactSemanticBindings(std::move(restored_expressions));
 }
 
-OmpFortranExactSemanticBindings
-openMPFortranSemanticBindingsFromJson(const JsonValue &json,
-                                      const NodeMap &nodes) {
+OmpFortranExactSemanticBindings openMPFortranSemanticBindingsFromJson(
+    const JsonValue &json, const NodeMap &nodes, SgPragmaDeclaration *pragma) {
   if (json.kind != JsonValue::Kind::Object) {
     throw std::runtime_error(
         "AST JSON OpenMP Fortran semantic bindings is not an object");
   }
+  const auto producer = requiredEnum<OmpFortranExactSemanticBindings::Producer>(
+      json, "producer", "Fortran semantic producer",
+      {OmpFortranExactSemanticBindings::Producer::flang_parse_tree,
+       OmpFortranExactSemanticBindings::Producer::rex_typed_scope});
+  OmpSupport::requireFortranDirectiveSemanticProducer(pragma, producer,
+                                                      "AST JSON restoration");
   const JsonValue &bindings = json.at("bindings");
   const JsonValue &expressions = json.at("expressions");
   if (bindings.kind != JsonValue::Kind::Array ||
@@ -288,11 +293,7 @@ openMPFortranSemanticBindingsFromJson(const JsonValue &json,
                                      "Fortran semantic expression"));
   }
   return OmpFortranExactSemanticBindings(
-      requiredEnum<OmpFortranExactSemanticBindings::Producer>(
-          json, "producer", "Fortran semantic producer",
-          {OmpFortranExactSemanticBindings::Producer::flang_parse_tree,
-           OmpFortranExactSemanticBindings::Producer::rex_typed_scope}),
-      json.requiredString("directive_source"),
+      producer, json.requiredString("directive_source"),
       typeFromJson(json.at("default_integer_type"), nodes),
       std::move(restored_bindings), std::move(restored_expressions));
 }
@@ -329,7 +330,7 @@ void restoreOpenMPProducerSemanticRecords(const AstFileRecord &ast,
     const JsonValue &fortran = json.at("fortran_exact_semantic_bindings");
     if (fortran.kind != JsonValue::Kind::Null) {
       records.fortran_exact_semantic_bindings.emplace(
-          openMPFortranSemanticBindingsFromJson(fortran, nodes));
+          openMPFortranSemanticBindingsFromJson(fortran, nodes, pragma));
     }
     if (records.openacc_cxx_semantic_bindings.has_value() &&
         records.fortran_exact_semantic_bindings.has_value()) {

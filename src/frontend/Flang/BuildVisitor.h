@@ -1,8 +1,10 @@
 #pragma once
 
+#include "FlangDirectiveOwnership.h"
 #include "SageTreeBuilder.h"
 
 #include <cstddef>
+#include <flang/Parser/parse-tree-visitor.h>
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -61,7 +63,9 @@ public:
   // callbacks for the parse tree walking framework in favor of two void
   // functions, Before() and Build(), which imply true and false return
   // values for Pre() respectively.
-  template <typename T> void Before(T &) {}
+  template <typename T> void Before(T &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Before");
+  }
   template <typename T> double Build(T &); // not void, never used
 
   void setStatementLabel(std::optional<Fortran::parser::Label> label) {
@@ -80,6 +84,7 @@ public:
 
   // Save and subsequently remove any label
   template <typename T> void Before(Fortran::parser::Statement<T> &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Before statement");
     setStatementLabel(x.label);
     BeginStatementSource(x.source);
     PublishSemanticNamesBeforeStatement(x.statement);
@@ -94,6 +99,7 @@ public:
     BeginStatementSource(x.source);
   }
   template <typename T> void Post(Fortran::parser::Statement<T> &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Post statement");
     if (label_) {
       CloseLabelDoLoops(label_.value());
     }
@@ -101,15 +107,17 @@ public:
     EndStatementSource();
   }
   template <typename T> void Before(Fortran::parser::UnlabeledStatement<T> &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Before statement");
     BeginStatementSource(x.source);
     PublishSemanticNamesBeforeStatement(x.statement);
   }
-  template <typename T>
-  void Post(Fortran::parser::UnlabeledStatement<T> & /*x*/) {
+  template <typename T> void Post(Fortran::parser::UnlabeledStatement<T> &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Post statement");
     EndStatementSource();
   }
 
   template <typename T> bool PreImpl(T &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor");
     if constexpr (std::is_void_v<decltype(Build(x))>) {
       // There is a local definition of Build() for this type.  It
       // overrides the parse tree walker's default Walk() over the descendents.
@@ -129,7 +137,9 @@ public:
     return PreImpl(x);
   }
   template <typename T> bool Pre(T &x) { return PreImpl(x); }
-  template <typename T> void Post(T &) {}
+  template <typename T> void Post(T &x) {
+    RequireNoFlangOpenMPParseTreeNode(x, "BuildVisitor Post");
+  }
 
   // Call back to the traversal framework.
   template <typename T> void Walk(T &x) { Fortran::parser::Walk(x, *this); }
@@ -138,8 +148,6 @@ public:
     const Fortran::parser::Name *name;
     std::size_t source_offset;
     std::size_t source_size;
-    bool directive_local;
-    bool directive_local_declaration;
   };
 
   struct FortranDirectiveSemanticExpression {
@@ -158,11 +166,8 @@ public:
       const Fortran::parser::CharBlock &source,
       const FlangDirectiveGroup &group,
       std::vector<FortranDirectiveSemanticName> semantic_names = {},
-      std::vector<FortranDirectiveSemanticExpression> semantic_expressions = {},
-      bool is_declare_simd = false,
-      const Fortran::parser::Name *declare_simd_target_name = nullptr,
-      bool is_declare_variant = false,
-      const Fortran::parser::Name *declare_variant_base_name = nullptr);
+      std::vector<FortranDirectiveSemanticExpression> semantic_expressions =
+          {});
 
   void RegisterSemanticSymbol(const Fortran::semantics::Symbol *semantic,
                               SgSymbol *sage);
@@ -217,11 +222,6 @@ public:
                                   SgType *sage);
   SgType *
   LookupSemanticObjectType(const Fortran::semantics::Symbol *semantic) const;
-  void BeginDirectiveLocalSemanticTypes(
-      std::unordered_map<const Fortran::semantics::Symbol *, SgType *> types);
-  SgType *LookupDirectiveLocalSemanticType(
-      const Fortran::semantics::Symbol *semantic) const;
-  void EndDirectiveLocalSemanticTypes();
   void RegisterProvisionalDynamicCharacterLength(
       const Fortran::semantics::Symbol *semantic, SgType *semantic_type);
   void FinalizeProvisionalDynamicCharacterLength(
@@ -537,7 +537,10 @@ private:
       Fortran::parser::Walk(std::get<2>(entry.t), *this);
       return false;
     }
-    template <typename T> bool Pre(T &) { return true; }
+    template <typename T> bool Pre(T &node) {
+      RequireNoFlangOpenMPParseTreeNode(node, "semantic name publication");
+      return true;
+    }
     template <typename T> void Post(T &) {}
 
   private:
@@ -632,10 +635,6 @@ private:
     SgScopeStatement *scope;
     std::vector<FortranDirectiveSemanticName> semantic_names;
     std::vector<FortranDirectiveSemanticExpression> semantic_expressions;
-    bool is_declare_simd;
-    const Fortran::parser::Name *declare_simd_target_name;
-    bool is_declare_variant;
-    const Fortran::parser::Name *declare_variant_base_name;
   };
 
   struct MaterializedTypedFortranDirective {
@@ -645,10 +644,6 @@ private:
     SgPragmaDeclaration *primary_pragma;
     std::vector<FortranDirectiveSemanticName> semantic_names;
     std::vector<FortranDirectiveSemanticExpression> semantic_expressions;
-    bool is_declare_simd;
-    const Fortran::parser::Name *declare_simd_target_name;
-    bool is_declare_variant;
-    const Fortran::parser::Name *declare_variant_base_name;
   };
 
   void BeginStatementSource(const Fortran::parser::CharBlock &source);
@@ -744,10 +739,6 @@ private:
   std::vector<MaterializedTypedFortranDirective> materialized_typed_directives_;
   std::vector<LabelDoFrame> label_do_stack_;
   std::vector<PendingFortranLabelReference> pending_fortran_label_references_;
-  bool active_declare_simd_ = false;
-  const Fortran::parser::Name *active_declare_simd_target_name_ = nullptr;
-  bool active_declare_variant_ = false;
-  const Fortran::parser::Name *active_declare_variant_base_name_ = nullptr;
   std::unordered_map<const Fortran::semantics::Symbol *,
                      std::vector<SemanticSymbolBinding>>
       semantic_symbols_;
@@ -764,8 +755,6 @@ private:
   std::vector<SemanticGenericProcedureBinding> semantic_generic_procedures_;
   std::unordered_map<const Fortran::semantics::Symbol *, SgType *>
       semantic_object_types_;
-  std::unordered_map<const Fortran::semantics::Symbol *, SgType *>
-      active_directive_local_semantic_types_;
   std::unordered_map<const Fortran::semantics::Symbol *, SgTypeString *>
       provisional_dynamic_character_lengths_;
   std::unordered_map<const Fortran::semantics::Symbol *,

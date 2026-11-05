@@ -210,6 +210,41 @@ if(ENABLE-FORTRAN)
   add_omp_fortran_ast_json_checkpoint_test(schedule.f all)
   add_omp_fortran_ast_json_checkpoint_test(exampleA41f.f90 all)
   add_omp_fortran_ast_json_checkpoint_test(task_scalar.f all)
+  add_omp_fortran_ast_json_checkpoint_test(
+    rex_fortran_openmp_empty_region_free.f90 all)
+  add_omp_fortran_ast_json_checkpoint_test(
+    rex_fortran_openmp_empty_region_fixed.f all)
+
+  foreach(_empty_source IN ITEMS
+      rex_fortran_openmp_empty_region_free.f90
+      rex_fortran_openmp_empty_region_fixed.f)
+    _omp_sanitize_name(_empty_name ${_empty_source})
+    set(_empty_work ${_omp_fortran_lowering_output_dir}/ast-json/${_empty_name})
+    set(_empty_checkpoint_test ASTJSON_omp_lowering_fortran_all_${_empty_name})
+    set_property(TEST ${_empty_checkpoint_test}
+      omp_lowering_fortran_semantic_${_empty_name}
+      omp_lowering_fortran_invariant_${_empty_name}
+      APPEND PROPERTY LABELS "rex;empty-region")
+    set_tests_properties(${_empty_checkpoint_test}
+      PROPERTIES FIXTURES_SETUP ${_empty_name}_lowered_output)
+    add_test(NAME ASTJSON_omp_lowering_fortran_empty_surface_${_empty_name}
+      COMMAND ${BASH_EXECUTABLE} -c [=[
+        set -eu
+        for output in "$@"; do
+          for marker in REX_EMPTY_BEFORE REX_EMPTY_BEGIN_INLINE REX_EMPTY_INSIDE_FIRST REX_EMPTY_INSIDE_LAST REX_EMPTY_END_INLINE REX_EMPTY_AFTER; do
+            test "$(grep -Fc -- "$marker" "$output")" -eq 1
+          done
+          first=$(grep -nF REX_EMPTY_INSIDE_FIRST "$output")
+          last=$(grep -nF REX_EMPTY_INSIDE_LAST "$output")
+          test "${first%%:*}" -lt "${last%%:*}"
+          test "$(grep -Eic '^[[:space:]]*[!c*][$]omp[[:space:]]+(end[[:space:]]+)?parallel([[:space:]]|$)' "$output")" -eq 0
+        done
+      ]=] dummy ${_empty_work}/baseline/rose_${_empty_source}
+        ${_empty_work}/checkpoint/rose_${_empty_source})
+    set_tests_properties(ASTJSON_omp_lowering_fortran_empty_surface_${_empty_name}
+      PROPERTIES FIXTURES_REQUIRED ${_empty_name}_lowered_output
+        LABELS "ASTJSON;OMPLOWERING;OMPLOWERING_FORTRAN;rex;empty-region")
+  endforeach()
 
   add_test(
     NAME omp_lowering_fortran_negative_unsupported_declarative

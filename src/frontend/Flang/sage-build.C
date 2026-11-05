@@ -61,6 +61,13 @@ namespace Rose::builder {
 using namespace Fortran;
 using SageInterface::Detail::isExactFortranSemanticProcedurePublication;
 
+[[noreturn]] void RejectFlangOpenMPParseTreeNode(const char *boundary) {
+  std::cerr << "REX_FLANG_INVARIANT[openmp-parse-tree-owner]: " << boundary
+            << " received a native Flang OpenMP parse-tree node; OpenMP "
+               "directives must enter through REX generic pragmas\n";
+  ROSE_ABORT();
+}
+
 // Helps with finding source position information
 enum class Order { begin, end };
 std::size_t
@@ -3164,8 +3171,8 @@ inline constexpr bool IsOpenAccDirectiveSourceNode =
 
 class FlangParserSourceCollector {
 public:
-  FlangParserSourceCollector(bool enableOpenMp, bool enableOpenAcc)
-      : enable_openmp_{enableOpenMp}, enable_openacc_{enableOpenAcc} {}
+  explicit FlangParserSourceCollector(bool enableOpenAcc)
+      : enable_openacc_{enableOpenAcc} {}
 
   bool Pre(Fortran::parser::Expr &expression) {
     auto *defined =
@@ -3201,23 +3208,9 @@ public:
   }
 
   template <typename T> bool Pre(T &node) {
+    RequireNoFlangOpenMPParseTreeNode(node, "source collector");
     using Node = std::remove_cv_t<std::remove_reference_t<T>>;
-    if constexpr (std::is_same_v<Node,
-                                 Fortran::parser::OpenMPInvalidDirective>) {
-      if (enable_openmp_) {
-        Add(FlangDirectiveGroup::Family::openmp,
-            FlangDirectiveGroup::Producer::rex_openmp_parser, node.source);
-      }
-      return false;
-    } else if constexpr (std::is_base_of_v<
-                             Fortran::parser::OmpDirectiveSpecification,
-                             Node>) {
-      if (enable_openmp_) {
-        Add(FlangDirectiveGroup::Family::openmp,
-            FlangDirectiveGroup::Producer::flang_parse_tree, node.source);
-      }
-      return false;
-    } else if constexpr (IsOpenAccDirectiveSourceNode<Node>) {
+    if constexpr (IsOpenAccDirectiveSourceNode<Node>) {
       if (enable_openacc_) {
         Add(FlangDirectiveGroup::Family::openacc,
             FlangDirectiveGroup::Producer::flang_parse_tree, node.source);
@@ -3269,7 +3262,6 @@ private:
     blocks_.push_back(FlangDirectiveSourceBlock{family, producer, source});
   }
 
-  bool enable_openmp_;
   bool enable_openacc_;
   std::vector<FlangDirectiveSourceBlock> blocks_;
 };
@@ -3772,9 +3764,9 @@ void RequireTypedFlangDirective(const Fortran::parser::CharBlock &source,
   CurrentBuildVisitor().QueueTypedFortranDirective(source, *group);
 }
 
-class FlangDirectiveSemanticNameCollector {
+class FlangOpenACCSemanticNameCollector {
 public:
-  explicit FlangDirectiveSemanticNameCollector(
+  explicit FlangOpenACCSemanticNameCollector(
       const Fortran::parser::CharBlock &directiveSource)
       : directive_source_{directiveSource} {
     if (directive_source_.empty()) {
@@ -3797,10 +3789,7 @@ public:
     const std::size_t offset = static_cast<std::size_t>(
         name.source.begin() - directive_source_.begin());
     names_.push_back(BuildVisitor::FortranDirectiveSemanticName{
-        &name, offset, name.source.size(),
-        name.symbol != nullptr &&
-            directive_local_symbols_.count(name.symbol) != 0,
-        false});
+        &name, offset, name.source.size()});
     if (semantic_expression_root_depth_ == 0) {
       expressions_.push_back(BuildVisitor::FortranDirectiveSemanticExpression{
           BuildVisitor::FortranDirectiveSemanticExpression::Kind::syntax,
@@ -3832,20 +3821,6 @@ public:
   }
 
   bool Pre(Fortran::parser::Designator &designator) {
-    const Fortran::parser::DataRef *dataRef =
-        std::get_if<Fortran::parser::DataRef>(&designator.u);
-    const Fortran::parser::Name *name =
-        dataRef != nullptr ? std::get_if<Fortran::parser::Name>(&dataRef->u)
-                           : nullptr;
-    if (name != nullptr && name->symbol != nullptr &&
-        name->symbol->test(Fortran::semantics::Symbol::Flag::OmpCriticalLock) &&
-        name->symbol->detailsIf<Fortran::semantics::UnknownDetails>() !=
-            nullptr) {
-      beginSemanticExpressionRoot(
-          BuildVisitor::FortranDirectiveSemanticExpression::Kind::syntax,
-          nullptr, nullptr, nullptr, nullptr, designator.source, &designator);
-      return true;
-    }
     beginSemanticExpressionRoot(
         BuildVisitor::FortranDirectiveSemanticExpression::Kind::designator,
         nullptr, nullptr, &designator, nullptr, designator.source);
@@ -3872,90 +3847,6 @@ public:
 
   void Post(Fortran::parser::AssignmentStmt &assignment) {
     endSemanticExpressionRoot(&assignment);
-  }
-
-  bool Pre(Fortran::parser::OmpTypeName &) { return false; }
-  bool Pre(Fortran::parser::OmpMapper &) { return false; }
-  bool Pre(Fortran::parser::OmpMapperSpecifier &mapper) {
-    Fortran::parser::Name &name = std::get<Fortran::parser::Name>(mapper.t);
-    addDirectiveLocalDeclaration(name, "declare mapper variable");
-    return false;
-  }
-
-  bool Pre(Fortran::parser::OmpArgument &argument) {
-    Fortran::parser::OmpObject *object =
-        std::get_if<Fortran::parser::OmpObject>(&argument.u);
-    Fortran::parser::Name *name =
-        object != nullptr ? std::get_if<Fortran::parser::Name>(&object->u)
-                          : nullptr;
-    if (name == nullptr || name->symbol == nullptr ||
-        name->symbol->detailsIf<Fortran::semantics::CommonBlockDetails>() ==
-            nullptr) {
-      return true;
-    }
-    if (argument.source.empty() ||
-        argument.source.begin() < directive_source_.begin() ||
-        argument.source.end() > directive_source_.end() ||
-        name->source.empty() ||
-        name->source.begin() <= argument.source.begin() ||
-        name->source.end() >= argument.source.end() ||
-        *(name->source.begin() - 1) != '/' || *name->source.end() != '/') {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-expression-type-source]: "
-                   "common-block locator has no exact slash-delimited "
-                   "directive expression range\n";
-      ROSE_ABORT();
-    }
-    if (!syntax_argument_roots_.insert(&argument).second) {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-expression-type-source]: "
-                   "common-block argument entered semantic traversal twice\n";
-      ROSE_ABORT();
-    }
-    beginSemanticExpressionRoot(
-        BuildVisitor::FortranDirectiveSemanticExpression::Kind::syntax, nullptr,
-        nullptr, nullptr, nullptr, argument.source, &argument);
-    return true;
-  }
-
-  void Post(Fortran::parser::OmpArgument &argument) {
-    if (syntax_argument_roots_.erase(&argument) != 0) {
-      endSemanticExpressionRoot(&argument);
-    }
-  }
-
-  bool Pre(Fortran::parser::OmpObject &object) {
-    Fortran::parser::Name *name = std::get_if<Fortran::parser::Name>(&object.u);
-    if (name == nullptr || name->symbol == nullptr ||
-        name->symbol->detailsIf<Fortran::semantics::CommonBlockDetails>() ==
-            nullptr) {
-      return true;
-    }
-    if (name->source.empty() ||
-        name->source.begin() <= directive_source_.begin() ||
-        name->source.end() >= directive_source_.end() ||
-        *(name->source.begin() - 1) != '/' || *name->source.end() != '/') {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-expression-type-source]: "
-                   "common-block object has no exact slash-delimited "
-                   "directive expression range\n";
-      ROSE_ABORT();
-    }
-    if (!syntax_object_roots_.insert(&object).second) {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-expression-type-source]: "
-                   "common-block object entered semantic traversal twice\n";
-      ROSE_ABORT();
-    }
-    beginSemanticExpressionRoot(
-        BuildVisitor::FortranDirectiveSemanticExpression::Kind::syntax, nullptr,
-        nullptr, nullptr, nullptr,
-        Fortran::parser::CharBlock(name->source.begin() - 1,
-                                   name->source.end() + 1),
-        &object);
-    return true;
-  }
-
-  void Post(Fortran::parser::OmpObject &object) {
-    if (syntax_object_roots_.erase(&object) != 0) {
-      endSemanticExpressionRoot(&object);
-    }
   }
 
   bool Pre(Fortran::parser::AccObject &object) {
@@ -3994,51 +3885,13 @@ public:
     }
   }
 
-  bool Pre(Fortran::parser::OmpReductionIdentifier &) { return false; }
-
-  bool Pre(Fortran::parser::OmpIteratorSpecifier &iterator) {
-    Fortran::parser::TypeDeclarationStmt &declaration =
-        std::get<Fortran::parser::TypeDeclarationStmt>(iterator.t);
-    for (Fortran::parser::EntityDecl &entity :
-         std::get<std::list<Fortran::parser::EntityDecl>>(declaration.t)) {
-      Fortran::parser::ObjectName &object =
-          std::get<Fortran::parser::ObjectName>(entity.t);
-      Fortran::parser::Name &name = object;
-      addDirectiveLocalDeclaration(name, "iterator variable");
-    }
-    Fortran::parser::Walk(
-        std::get<Fortran::parser::SubscriptTriplet>(iterator.t), *this);
-    return false;
+  template <typename T> bool Pre(T &node) {
+    RequireNoFlangOpenMPParseTreeNode(node, "OpenACC semantic collector");
+    return true;
   }
-
-  template <typename T> bool Pre(T &) { return true; }
   template <typename T> void Post(T &) {}
 
-  void addDirectiveLocalDeclaration(Fortran::parser::Name &name,
-                                    const char *contract) {
-    if (contract == nullptr || name.symbol == nullptr || name.source.empty() ||
-        name.source.begin() < directive_source_.begin() ||
-        name.source.end() > directive_source_.end()) {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-local]: "
-                << (contract != nullptr ? contract : "directive-local name")
-                << " has no exact Flang semantic identity and source range\n";
-      ROSE_ABORT();
-    }
-    directive_local_symbols_.insert(name.symbol);
-    names_.push_back(BuildVisitor::FortranDirectiveSemanticName{
-        &name,
-        static_cast<std::size_t>(name.source.begin() -
-                                 directive_source_.begin()),
-        name.source.size(), true, true});
-  }
-
   std::vector<BuildVisitor::FortranDirectiveSemanticName> takeNames() {
-    for (auto &name : names_) {
-      if (name.name->symbol != nullptr &&
-          directive_local_symbols_.count(name.name->symbol) != 0) {
-        name.directive_local = true;
-      }
-    }
     std::sort(names_.begin(), names_.end(),
               [](const auto &left, const auto &right) {
                 return left.source_offset < right.source_offset;
@@ -4151,52 +4004,9 @@ private:
   const void *active_semantic_expression_root_ = nullptr;
   BuildVisitor::FortranDirectiveSemanticExpression
       active_semantic_expression_{};
-  std::unordered_set<const Fortran::semantics::Symbol *>
-      directive_local_symbols_;
-  std::unordered_set<const Fortran::parser::OmpArgument *>
-      syntax_argument_roots_;
-  std::unordered_set<const Fortran::parser::OmpObject *> syntax_object_roots_;
   std::unordered_set<const Fortran::parser::AccObject *>
       syntax_acc_object_roots_;
 };
-
-class FlangDeclareSimdTargetNameCollector {
-public:
-  bool Pre(Fortran::parser::Name &name) {
-    names_.push_back(&name);
-    return false;
-  }
-
-  template <typename T> bool Pre(T &) { return true; }
-  template <typename T> void Post(T &) {}
-
-  const std::vector<const Fortran::parser::Name *> &names() const {
-    return names_;
-  }
-
-private:
-  std::vector<const Fortran::parser::Name *> names_;
-};
-
-template <typename Directive>
-void RequireTypedFlangOpenMPDirective(Directive &directive) {
-  const FlangDirectiveGroup *group =
-      FindTypedFlangDirectiveGroup(directive.source);
-  if (group == nullptr ||
-      (group->family != FlangDirectiveGroup::Family::openmp &&
-       group->family != FlangDirectiveGroup::Family::openmp_extension)) {
-    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: OpenMP parse "
-                 "tree node has no exact typed source group\n";
-    ROSE_ABORT();
-  }
-  FlangDirectiveSemanticNameCollector collector{directive.source};
-  Fortran::parser::Walk(directive, collector);
-  auto semanticNames = collector.takeNames();
-  auto semanticExpressions = collector.takeExpressions();
-  CurrentBuildVisitor().QueueTypedFortranDirective(
-      directive.source, *group, std::move(semanticNames),
-      std::move(semanticExpressions));
-}
 
 template <typename Directive>
 void RequireTypedFlangOpenACCDirective(Directive &directive) {
@@ -4208,7 +4018,7 @@ void RequireTypedFlangOpenACCDirective(Directive &directive) {
                  "tree node has no exact typed source group\n";
     ROSE_ABORT();
   }
-  FlangDirectiveSemanticNameCollector collector{directive.source};
+  FlangOpenACCSemanticNameCollector collector{directive.source};
   Fortran::parser::Walk(directive, collector);
   auto semanticNames = collector.takeNames();
   auto semanticExpressions = collector.takeExpressions();
@@ -5474,7 +5284,7 @@ FlangSourceStream CollectFlangSourceStreamImpl(
                  "owned by neither the directive nor base cooked stream\n";
     ROSE_ABORT();
   };
-  FlangParserSourceCollector collector{enableOpenMp, enableOpenAcc};
+  FlangParserSourceCollector collector{enableOpenAcc};
   Fortran::parser::Walk(program, collector);
   std::vector<FlangDirectiveSourceBlock> sourceBlocks = collector.blocks();
   AddRexOpenMPDirectiveSourceBlocks(sourceBlocks, cookedSource, enableOpenMp);
@@ -8814,51 +8624,6 @@ SgType *BuildVisitor::LookupSemanticObjectType(
   return found != semantic_object_types_.end() ? found->second : nullptr;
 }
 
-void BuildVisitor::BeginDirectiveLocalSemanticTypes(
-    std::unordered_map<const Fortran::semantics::Symbol *, SgType *> types) {
-  if (!active_directive_local_semantic_types_.empty() || types.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[directive-local-type-lifecycle]: "
-                 "cannot begin an empty or nested directive-local semantic "
-                 "type transaction\n";
-    ROSE_ABORT();
-  }
-  for (const auto &[semantic, type] : types) {
-    if (semantic == nullptr || SageInterface::containsUnknownType(type)) {
-      std::cerr << "REX_FLANG_INVARIANT[directive-local-type-lifecycle]: "
-                   "directive-local semantic type transaction contains an "
-                   "invalid symbol or type\n";
-      ROSE_ABORT();
-    }
-  }
-  active_directive_local_semantic_types_ = std::move(types);
-}
-
-SgType *BuildVisitor::LookupDirectiveLocalSemanticType(
-    const Fortran::semantics::Symbol *semantic) const {
-  if (semantic == nullptr || active_directive_local_semantic_types_.empty()) {
-    return nullptr;
-  }
-  const auto found = active_directive_local_semantic_types_.find(semantic);
-  if (found != active_directive_local_semantic_types_.end()) {
-    return found->second;
-  }
-  const auto ultimate =
-      active_directive_local_semantic_types_.find(&semantic->GetUltimate());
-  return ultimate != active_directive_local_semantic_types_.end()
-             ? ultimate->second
-             : nullptr;
-}
-
-void BuildVisitor::EndDirectiveLocalSemanticTypes() {
-  if (active_directive_local_semantic_types_.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[directive-local-type-lifecycle]: "
-                 "cannot end an inactive directive-local semantic type "
-                 "transaction\n";
-    ROSE_ABORT();
-  }
-  active_directive_local_semantic_types_.clear();
-}
-
 void BuildVisitor::RegisterProvisionalDynamicCharacterLength(
     const Fortran::semantics::Symbol *semantic, SgType *semanticType) {
   ASSERT_not_null(semantic);
@@ -9265,12 +9030,6 @@ SgExpression *BuildFlangSemanticNameReference(const Fortran::parser::Name &name,
   SgSymbol *published =
       LookupFlangPublishedSemanticSymbol(name, visitor, scope);
   if (published == nullptr) {
-    if (SgType *directiveLocalType =
-            visitor.LookupDirectiveLocalSemanticType(name.symbol)) {
-      SgOmpDirectiveLocalRefExp *reference =
-          new SgOmpDirectiveLocalRefExp(spelling, directiveLocalType);
-      return reference;
-    }
     std::cerr << "REX_FLANG_INVARIANT[expression-semantic-publication]: "
                  "Flang expression name '"
               << spelling << "' has no exact published Sage symbol\n";
@@ -15835,10 +15594,18 @@ void BuildVisitor::CloseLabelDoLoops(const parser::Label &label) {
 void BuildVisitor::QueueTypedFortranDirective(
     const Fortran::parser::CharBlock &source, const FlangDirectiveGroup &group,
     std::vector<FortranDirectiveSemanticName> semanticNames,
-    std::vector<FortranDirectiveSemanticExpression> semanticExpressions,
-    bool isDeclareSimd, const Fortran::parser::Name *declareSimdTargetName,
-    bool isDeclareVariant,
-    const Fortran::parser::Name *declareVariantBaseName) {
+    std::vector<FortranDirectiveSemanticExpression> semanticExpressions) {
+  const bool isOpenMPFamily =
+      group.family == FlangDirectiveGroup::Family::openmp ||
+      group.family == FlangDirectiveGroup::Family::openmp_extension;
+  if (isOpenMPFamily &&
+      (group.producer != FlangDirectiveGroup::Producer::rex_openmp_parser ||
+       !semanticNames.empty() || !semanticExpressions.empty())) {
+    std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-producer]: OpenMP "
+                 "source groups require the REX producer without Flang "
+                 "semantic payloads\n";
+    ROSE_ABORT();
+  }
   const bool isPhysicalOmpxProjection =
       source.empty() &&
       group.family == FlangDirectiveGroup::Family::openmp_extension &&
@@ -15868,8 +15635,7 @@ void BuildVisitor::QueueTypedFortranDirective(
   }
   pending_typed_directives_.push_back(PendingTypedFortranDirective{
       source, &group, scope, std::move(semanticNames),
-      std::move(semanticExpressions), isDeclareSimd, declareSimdTargetName,
-      isDeclareVariant, declareVariantBaseName});
+      std::move(semanticExpressions)});
 }
 
 std::size_t
@@ -15936,9 +15702,7 @@ void BuildVisitor::MaterializeTypedFortranDirective(
       AppendTypedFortranDirectiveGroup(*pending.group, pending.scope);
   materialized_typed_directives_.push_back(MaterializedTypedFortranDirective{
       pending.source, pending.group, pending.scope, primaryPragma,
-      pending.semantic_names, pending.semantic_expressions,
-      pending.is_declare_simd, pending.declare_simd_target_name,
-      pending.is_declare_variant, pending.declare_variant_base_name});
+      pending.semantic_names, pending.semantic_expressions});
 }
 
 void BuildVisitor::FlushTypedFortranDirectivesBefore(
@@ -16251,13 +16015,13 @@ FortranOpenMPSubexpressionKind(SgExpression *expression) {
   return OmpExactSubexpressionKind::invalid;
 }
 
-void CollectFortranOpenMPSubexpressionTypes(
+void CollectFortranDirectiveSubexpressionTypes(
     SgNode *node, std::vector<OmpExactSubexpressionType> &types) {
   if (node == nullptr) {
     return;
   }
   for (SgNode *child : node->get_traversalSuccessorContainer()) {
-    CollectFortranOpenMPSubexpressionTypes(child, types);
+    CollectFortranDirectiveSubexpressionTypes(child, types);
   }
   SgExpression *expression = isSgExpression(node);
   if (expression == nullptr) {
@@ -16289,7 +16053,7 @@ void CollectFortranOpenMPSubexpressionTypes(
   types.emplace_back(kind, resultType);
 }
 
-SgExpression *BuildFortranOpenMPSemanticExpressionTree(
+SgExpression *BuildFortranDirectiveSemanticExpressionTree(
     const BuildVisitor::FortranDirectiveSemanticExpression &record) {
   SgExpression *root = nullptr;
   switch (record.kind) {
@@ -16368,120 +16132,52 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
         directive.primary_pragma->get_fortran_directive_family();
     const bool isOpenMP =
         family == SgPragmaDeclaration::e_fortran_directive_openmp;
+    const bool isOMPX = family == SgPragmaDeclaration::e_fortran_directive_ompx;
     const bool isOpenACC =
         family == SgPragmaDeclaration::e_fortran_directive_openacc;
-    if (family != SgPragmaDeclaration::e_fortran_directive_openmp &&
-        family != SgPragmaDeclaration::e_fortran_directive_ompx &&
-        family != SgPragmaDeclaration::e_fortran_directive_openacc) {
+    if (isOpenMP || isOMPX) {
+      if (directive.group->producer !=
+              FlangDirectiveGroup::Producer::rex_openmp_parser ||
+          !directive.semantic_names.empty() ||
+          !directive.semantic_expressions.empty()) {
+        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-producer]: OpenMP "
+                     "directives require the REX producer without Flang "
+                     "semantic payloads\n";
+        ROSE_ABORT();
+      }
+      if (isOpenMP) {
+        OmpSupport::registerOpenMPFortranExactSemanticBindings(
+            builder.getSourceFile(), directive.primary_pragma,
+            OmpFortranExactSemanticBindings(
+                OmpFortranExactSemanticBindings::Producer::rex_typed_scope,
+                directive.group->source_expression_spelling,
+                BuildFortranDefaultIntegerType(), {}, {}));
+      }
+      continue;
+    }
+    if (!isOpenACC) {
       if (!directive.semantic_names.empty() ||
-          !directive.semantic_expressions.empty() ||
-          directive.is_declare_simd ||
-          directive.declare_simd_target_name != nullptr ||
-          directive.is_declare_variant ||
-          directive.declare_variant_base_name != nullptr) {
+          !directive.semantic_expressions.empty()) {
         std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-family]: "
-                     "non-OpenMP directive owns OpenMP semantic records\n";
+                     "non-OpenACC directive owns Flang semantic records\n";
         ROSE_ABORT();
       }
       continue;
     }
-    if (family == SgPragmaDeclaration::e_fortran_directive_ompx) {
-      if (directive.is_declare_simd ||
-          directive.declare_simd_target_name != nullptr ||
-          directive.is_declare_variant ||
-          directive.declare_variant_base_name != nullptr) {
-        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-family]: "
-                     "OMPX directive owns an OpenMP function target\n";
-        ROSE_ABORT();
-      }
-      continue;
-    }
-    if (isOpenACC && (directive.is_declare_simd ||
-                      directive.declare_simd_target_name != nullptr ||
-                      directive.is_declare_variant ||
-                      directive.declare_variant_base_name != nullptr)) {
-      std::cerr << "REX_FLANG_INVARIANT[openacc-semantic-handoff-family]: "
-                   "OpenACC directive owns an OpenMP function target\n";
+    if (directive.group->producer !=
+        FlangDirectiveGroup::Producer::flang_parse_tree) {
+      std::cerr << "REX_FLANG_INVARIANT[openacc-semantic-producer]: OpenACC "
+                   "directive has no Flang semantic producer\n";
       ROSE_ABORT();
     }
-
-    if (!directive.is_declare_simd &&
-        directive.declare_simd_target_name != nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: non-declare-simd "
-                   "directive owns a procedure target\n";
-      ROSE_ABORT();
-    }
-    if (!directive.is_declare_variant &&
-        directive.declare_variant_base_name != nullptr) {
-      std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: "
-                   "non-declare-variant directive owns a base procedure "
-                   "target\n";
-      ROSE_ABORT();
-    }
-    if (directive.is_declare_simd && directive.is_declare_variant) {
-      std::cerr << "REX_FLANG_INVARIANT[openmp-procedure-target]: one "
-                   "directive cannot be both declare simd and declare "
-                   "variant\n";
-      ROSE_ABORT();
-    }
-
     const std::string directiveSource = directive.source.ToString();
     if (directiveSource.empty()) {
       std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-source]: "
                    "materialized directive has no cooked source\n";
       ROSE_ABORT();
     }
-    const bool rexTypedScopeProducer =
-        directive.group->producer ==
-        FlangDirectiveGroup::Producer::rex_openmp_parser;
-    if (rexTypedScopeProducer) {
-      if (!isOpenMP || !directive.semantic_names.empty() ||
-          !directive.semantic_expressions.empty() ||
-          directive.is_declare_simd ||
-          directive.declare_simd_target_name != nullptr ||
-          directive.is_declare_variant ||
-          directive.declare_variant_base_name != nullptr) {
-        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-producer]: "
-                     "REX-owned directive has contradictory Flang semantic "
-                     "records or function-target state\n";
-        ROSE_ABORT();
-      }
-      OmpSupport::registerOpenMPFortranExactSemanticBindings(
-          builder.getSourceFile(), directive.primary_pragma,
-          OmpFortranExactSemanticBindings(
-              OmpFortranExactSemanticBindings::Producer::rex_typed_scope,
-              directive.group->source_expression_spelling,
-              BuildFortranDefaultIntegerType(), {}, {}));
-      continue;
-    }
     std::vector<OmpFortranExactSemanticBindings::Binding> bindings;
     bindings.reserve(directive.semantic_names.size());
-    std::unordered_map<const Fortran::semantics::Symbol *, SgType *>
-        directiveLocalTypes;
-    for (const FortranDirectiveSemanticName &record :
-         directive.semantic_names) {
-      if (!record.directive_local) {
-        continue;
-      }
-      if (record.name == nullptr || record.name->symbol == nullptr) {
-        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-local]: "
-                     "directive-local name has no Flang semantic identity\n";
-        ROSE_ABORT();
-      }
-      SgType *type =
-          BuildFortranSemanticObjectType(*record.name->symbol, *this);
-      const Fortran::semantics::Symbol *ultimate =
-          &record.name->symbol->GetUltimate();
-      const auto [position, inserted] =
-          directiveLocalTypes.emplace(ultimate, type);
-      if ((!inserted && position->second != type) ||
-          SageInterface::containsUnknownType(type)) {
-        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-local]: "
-                     "directive-local name has no unique exact semantic "
-                     "type\n";
-        ROSE_ABORT();
-      }
-    }
     for (const FortranDirectiveSemanticName &record :
          directive.semantic_names) {
       if (record.name == nullptr || record.source_size == 0 ||
@@ -16550,36 +16246,12 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
           OmpFortranExactSemanticBindings::BindingKind::syntax_name;
       SgNode *semanticNode = nullptr;
       SgSymbol *bindingSymbol = nullptr;
-      SgType *directiveLocalType = nullptr;
       const Fortran::semantics::Symbol *semantic = record.name->symbol;
       if (semantic == nullptr) {
-        if (!isOpenMP || (ToLowerCopy(spelling) != "omp_all_memory" &&
-                          ToLowerCopy(spelling) != "omp_cur_iteration")) {
-          std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-missing]: "
-                       "directive identifier '"
-                    << spelling << "' has no Flang semantic identity\n";
-          ROSE_ABORT();
-        }
-        bindingKind = OmpFortranExactSemanticBindings::BindingKind::syntax_name;
-      } else if (record.directive_local) {
-        bindingKind =
-            record.directive_local_declaration
-                ? OmpFortranExactSemanticBindings::BindingKind::
-                      directive_local_declaration
-                : OmpFortranExactSemanticBindings::BindingKind::directive_local;
-        const auto localType =
-            directiveLocalTypes.find(&semantic->GetUltimate());
-        if (localType == directiveLocalTypes.end()) {
-          std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-local]: "
-                       "directive-local binding has no exact semantic type\n";
-          ROSE_ABORT();
-        }
-        directiveLocalType = localType->second;
-      } else if (semantic->test(
-                     Fortran::semantics::Symbol::Flag::OmpCriticalLock) &&
-                 semantic->detailsIf<Fortran::semantics::UnknownDetails>() !=
-                     nullptr) {
-        bindingKind = OmpFortranExactSemanticBindings::BindingKind::syntax_name;
+        std::cerr << "REX_FLANG_INVARIANT[openmp-semantic-handoff-missing]: "
+                     "directive identifier '"
+                  << spelling << "' has no Flang semantic identity\n";
+        ROSE_ABORT();
       } else if (semantic
                      ->detailsIf<Fortran::semantics::CommonBlockDetails>() !=
                  nullptr) {
@@ -16644,17 +16316,13 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
       }
       bindings.emplace_back(record.source_offset, record.source_size, spelling,
                             sourceSpelling, bindingKind, semanticNode,
-                            bindingSymbol, directiveLocalType);
+                            bindingSymbol, nullptr);
     }
     std::vector<OmpFortranExactSemanticBindings::ExpressionTypes>
         expressionTypes;
     expressionTypes.reserve(directive.semantic_expressions.size());
     SageBuilder::pushScopeStack(finalDirectiveScope);
     BeginSemanticPredeclarationSource(directive.source);
-    const bool hasDirectiveLocalTypes = !directiveLocalTypes.empty();
-    if (hasDirectiveLocalTypes) {
-      BeginDirectiveLocalSemanticTypes(std::move(directiveLocalTypes));
-    }
     for (const FortranDirectiveSemanticExpression &record :
          directive.semantic_expressions) {
       if (record.source_size == 0 ||
@@ -16669,15 +16337,12 @@ void BuildVisitor::FinalizeTypedFortranDirectiveSemanticBindings() {
       std::vector<OmpExactSubexpressionType> subexpressions;
       if (record.kind != FortranDirectiveSemanticExpression::Kind::syntax) {
         SgExpression *semanticTree =
-            BuildFortranOpenMPSemanticExpressionTree(record);
-        CollectFortranOpenMPSubexpressionTypes(semanticTree, subexpressions);
+            BuildFortranDirectiveSemanticExpressionTree(record);
+        CollectFortranDirectiveSubexpressionTypes(semanticTree, subexpressions);
         SageInterface::deleteAST(semanticTree);
       }
       expressionTypes.emplace_back(record.source_offset, record.source_size,
                                    expression, std::move(subexpressions));
-    }
-    if (hasDirectiveLocalTypes) {
-      EndDirectiveLocalSemanticTypes();
     }
     EndStatementSource();
     SageBuilder::popScopeStack();
@@ -30676,200 +30341,54 @@ void BuildVisitor::Build(parser::CompilerDirective &x) {
   AppendDirectivePragmasFromParserSource(x.source);
 }
 
-void BuildVisitor::Before(parser::OmpDeclareSimdDirective &x) {
-  if (active_declare_simd_) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: nested declare "
-                 "simd parse-tree ownership\n";
-    ROSE_ABORT();
-  }
-  if (x.v.DirId() != llvm::omp::OMPD_declare_simd) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: declare simd "
-                 "wrapper owns the wrong directive kind\n";
-    ROSE_ABORT();
-  }
-
-  active_declare_simd_ = true;
-  active_declare_simd_target_name_ = nullptr;
-  auto &arguments = std::get<std::optional<parser::OmpArgumentList>>(x.v.t);
-  if (!arguments) {
-    return;
-  }
-  if (arguments->v.size() != 1) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: explicit form "
-                 "does not own exactly one procedure argument\n";
-    ROSE_ABORT();
-  }
-  FlangDeclareSimdTargetNameCollector collector;
-  Fortran::parser::Walk(arguments->v.front(), collector);
-  if (collector.names().size() != 1 || collector.names().front() == nullptr ||
-      collector.names().front()->source.empty()) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: explicit form "
-                 "does not contain one exact procedure identifier\n";
-    ROSE_ABORT();
-  }
-  active_declare_simd_target_name_ = collector.names().front();
+void BuildVisitor::Before(parser::OmpDeclareSimdDirective &) {
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Before(OmpDeclareSimdDirective)");
 }
 
 void BuildVisitor::Post(parser::OmpDeclareSimdDirective &) {
-  if (!active_declare_simd_) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: declare simd "
-                 "wrapper lost its active ownership context\n";
-    ROSE_ABORT();
-  }
-  active_declare_simd_ = false;
-  active_declare_simd_target_name_ = nullptr;
+  RejectFlangOpenMPParseTreeNode("BuildVisitor Post(OmpDeclareSimdDirective)");
 }
 
-void BuildVisitor::Before(parser::OmpDeclareVariantDirective &x) {
-  if (active_declare_variant_) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: nested declare "
-                 "variant parse-tree ownership\n";
-    ROSE_ABORT();
-  }
-  if (x.v.DirId() != llvm::omp::OMPD_declare_variant) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: declare "
-                 "variant wrapper owns the wrong directive kind\n";
-    ROSE_ABORT();
-  }
-
-  active_declare_variant_ = true;
-  active_declare_variant_base_name_ = nullptr;
-  auto &arguments = std::get<std::optional<parser::OmpArgumentList>>(x.v.t);
-  if (!arguments || arguments->v.size() != 1) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: directive does "
-                 "not own exactly one base/variant argument\n";
-    ROSE_ABORT();
-  }
-
-  auto requireProcedureName = [&](parser::OmpObject &object, const char *role) {
-    FlangDeclareSimdTargetNameCollector collector;
-    Fortran::parser::Walk(object, collector);
-    if (collector.names().size() != 1 || collector.names().front() == nullptr ||
-        collector.names().front()->source.empty()) {
-      std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: " << role
-                << " object does not contain one exact procedure "
-                   "identifier\n";
-      ROSE_ABORT();
-    }
-    return collector.names().front();
-  };
-
-  parser::OmpArgument &argument = arguments->v.front();
-  common::visit(
-      common::visitors{
-          [&](parser::OmpBaseVariantNames &names) {
-            active_declare_variant_base_name_ = requireProcedureName(
-                std::get<0>(names.t), "explicit base procedure");
-            static_cast<void>(requireProcedureName(std::get<1>(names.t),
-                                                   "variant procedure"));
-          },
-          [&](parser::OmpObject &variant) {
-            static_cast<void>(
-                requireProcedureName(variant, "variant procedure"));
-          },
-          [&](auto &) {
-            std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: "
-                         "directive argument is not a base/variant procedure "
-                         "identity\n";
-            ROSE_ABORT();
-          }},
-      argument.u);
+void BuildVisitor::Before(parser::OmpDeclareVariantDirective &) {
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Before(OmpDeclareVariantDirective)");
 }
 
 void BuildVisitor::Post(parser::OmpDeclareVariantDirective &) {
-  if (!active_declare_variant_) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: declare "
-                 "variant wrapper lost its active ownership context\n";
-    ROSE_ABORT();
-  }
-  active_declare_variant_ = false;
-  active_declare_variant_base_name_ = nullptr;
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Post(OmpDeclareVariantDirective)");
 }
 
-void BuildVisitor::Build(parser::OmpDirectiveSpecification &x) {
-  if (x.DirId() != llvm::omp::OMPD_declare_simd &&
-      x.DirId() != llvm::omp::OMPD_declare_variant) {
-    RequireTypedFlangOpenMPDirective(x);
-    return;
-  }
-  if (x.DirId() == llvm::omp::OMPD_declare_variant) {
-    if (!active_declare_variant_) {
-      std::cerr << "REX_FLANG_INVARIANT[declare-variant-target]: declare "
-                   "variant directive has no exact wrapper ownership "
-                   "context\n";
-      ROSE_ABORT();
-    }
-    const FlangDirectiveGroup *group = FindTypedFlangDirectiveGroup(x.source);
-    if (group == nullptr ||
-        (group->family != FlangDirectiveGroup::Family::openmp &&
-         group->family != FlangDirectiveGroup::Family::openmp_extension)) {
-      std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: declare "
-                   "variant parse tree node has no exact typed source group\n";
-      ROSE_ABORT();
-    }
-    FlangDirectiveSemanticNameCollector collector{x.source};
-    Fortran::parser::Walk(x, collector);
-    auto semanticNames = collector.takeNames();
-    auto semanticExpressions = collector.takeExpressions();
-    QueueTypedFortranDirective(
-        x.source, *group, std::move(semanticNames),
-        std::move(semanticExpressions), /*isDeclareSimd=*/false,
-        /*declareSimdTargetName=*/nullptr, /*isDeclareVariant=*/true,
-        active_declare_variant_base_name_);
-    return;
-  }
-  if (!active_declare_simd_) {
-    std::cerr << "REX_FLANG_INVARIANT[declare-simd-target]: declare simd "
-                 "directive has no exact wrapper ownership context\n";
-    ROSE_ABORT();
-  }
-  const FlangDirectiveGroup *group = FindTypedFlangDirectiveGroup(x.source);
-  if (group == nullptr ||
-      (group->family != FlangDirectiveGroup::Family::openmp &&
-       group->family != FlangDirectiveGroup::Family::openmp_extension)) {
-    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: declare simd "
-                 "parse tree node has no exact typed source group\n";
-    ROSE_ABORT();
-  }
-  FlangDirectiveSemanticNameCollector collector{x.source};
-  Fortran::parser::Walk(x, collector);
-  auto semanticNames = collector.takeNames();
-  auto semanticExpressions = collector.takeExpressions();
-  QueueTypedFortranDirective(x.source, *group, std::move(semanticNames),
-                             std::move(semanticExpressions), true,
-                             active_declare_simd_target_name_);
+void BuildVisitor::Build(parser::OmpDirectiveSpecification &) {
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Build(OmpDirectiveSpecification)");
 }
 
-void BuildVisitor::Build(parser::OmpBeginDirective &x) {
-  RequireTypedFlangOpenMPDirective(x);
+void BuildVisitor::Build(parser::OmpBeginDirective &) {
+  RejectFlangOpenMPParseTreeNode("BuildVisitor Build(OmpBeginDirective)");
 }
 
-void BuildVisitor::Build(parser::OmpEndDirective &x) {
-  RequireTypedFlangOpenMPDirective(x);
+void BuildVisitor::Build(parser::OmpEndDirective &) {
+  RejectFlangOpenMPParseTreeNode("BuildVisitor Build(OmpEndDirective)");
 }
 
-void BuildVisitor::Build(parser::OpenMPInvalidDirective &x) {
-  const FlangDirectiveGroup *group = FindTypedFlangDirectiveGroup(x.source);
-  if (group == nullptr ||
-      group->family != FlangDirectiveGroup::Family::openmp ||
-      group->producer != FlangDirectiveGroup::Producer::rex_openmp_parser) {
-    std::cerr << "REX_FLANG_INVARIANT[source-stream-directive]: Flang invalid "
-                 "OpenMP node has no exact REX-parser-owned source group\n";
-    ROSE_ABORT();
-  }
-  QueueTypedFortranDirective(x.source, *group);
+void BuildVisitor::Build(parser::OpenMPInvalidDirective &) {
+  RejectFlangOpenMPParseTreeNode("BuildVisitor Build(OpenMPInvalidDirective)");
 }
 
-void BuildVisitor::Build(parser::OmpBeginSectionsDirective &x) {
-  RequireTypedFlangOpenMPDirective(x);
+void BuildVisitor::Build(parser::OmpBeginSectionsDirective &) {
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Build(OmpBeginSectionsDirective)");
 }
 
-void BuildVisitor::Build(parser::OmpEndSectionsDirective &x) {
-  RequireTypedFlangOpenMPDirective(x);
+void BuildVisitor::Build(parser::OmpEndSectionsDirective &) {
+  RejectFlangOpenMPParseTreeNode("BuildVisitor Build(OmpEndSectionsDirective)");
 }
 
-void BuildVisitor::Build(parser::OpenMPMisplacedEndDirective &x) {
-  RequireTypedFlangOpenMPDirective(x);
+void BuildVisitor::Build(parser::OpenMPMisplacedEndDirective &) {
+  RejectFlangOpenMPParseTreeNode(
+      "BuildVisitor Build(OpenMPMisplacedEndDirective)");
 }
 
 void BuildVisitor::Build(parser::AccBeginBlockDirective &x) {
