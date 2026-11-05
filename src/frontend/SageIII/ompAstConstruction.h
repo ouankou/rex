@@ -135,7 +135,7 @@ private:
 
 class OmpFortranExactSemanticBindings {
 public:
-  enum class Producer { flang_parse_tree, rex_typed_scope };
+  enum class Producer { flang_parse_tree = 0, rex_typed_scope = 1 };
 
   enum class BindingKind {
     value,
@@ -251,6 +251,13 @@ private:
 void processOpenMP(SgSourceFile *&sageFilePtr);
 
 void requireOpenMPConversionSession();
+// The selected pragma family owns the producer policy. OpenMP resolves names
+// through REX's Sage scope; Flang semantic payloads belong only to OpenACC.
+void requireFortranDirectiveSemanticProducer(
+    SgPragmaDeclaration *pragma,
+    OmpFortranExactSemanticBindings::Producer producer, const char *operation,
+    SgPragmaDeclaration::fortran_directive_family_enum expected_family =
+        SgPragmaDeclaration::e_fortran_directive_none);
 void registerOpenACCCxxExactSemanticBindings(
     SgSourceFile *source_file, SgPragmaDeclaration *pragma,
     OpenACCCxxExactSemanticBindings bindings);

@@ -31,6 +31,7 @@
 #include <sstream>
 #include <thread>
 #include <tuple>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -158,6 +159,69 @@ struct CxxOpenACCExactSemanticConsumptionState {
 
 namespace OmpSupport {
 
+static void stripFortranDirectiveSentinel(std::string &text);
+static bool startsWithKeywordBoundaryCaseInsensitive(const std::string &text,
+                                                     const char *keyword);
+
+void requireFortranDirectiveSemanticProducer(
+    SgPragmaDeclaration *pragma,
+    OmpFortranExactSemanticBindings::Producer producer, const char *operation,
+    SgPragmaDeclaration::fortran_directive_family_enum expected_family) {
+  const auto family = pragma != nullptr
+                          ? pragma->get_fortran_directive_family()
+                          : SgPragmaDeclaration::e_fortran_directive_none;
+  const char *keyword = nullptr;
+  switch (family) {
+  case SgPragmaDeclaration::e_fortran_directive_openmp:
+    keyword = "omp";
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_ompx:
+    keyword = "ompx";
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_openacc:
+    keyword = "acc";
+    break;
+  default:
+    break;
+  }
+  std::string selected = pragma != nullptr && pragma->get_pragma() != nullptr
+                             ? pragma->get_pragma()->get_pragma()
+                             : std::string{};
+  stripFortranDirectiveSentinel(selected);
+  if (operation == nullptr || keyword == nullptr ||
+      (expected_family != SgPragmaDeclaration::e_fortran_directive_none &&
+       family != expected_family) ||
+      !startsWithKeywordBoundaryCaseInsensitive(selected, keyword)) {
+    std::cerr << "REX_OMP_AST_INVARIANT[fortran-semantic-producer-family]: "
+              << (operation != nullptr ? operation : "<null>")
+              << " has no coherent typed Fortran family and selected pragma "
+                 "identity\n";
+    ROSE_ABORT();
+  }
+  if (family == SgPragmaDeclaration::e_fortran_directive_openmp ||
+      family == SgPragmaDeclaration::e_fortran_directive_ompx) {
+    if (producer !=
+        OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
+      std::cerr << "REX_OMP_AST_INVARIANT[fortran-openmp-producer]: "
+                << operation
+                << " rejects flang_parse_tree OpenMP semantic records; OpenMP "
+                   "requires "
+                   "the REX rex_typed_scope producer\n";
+      ROSE_ABORT();
+    }
+    if (family == SgPragmaDeclaration::e_fortran_directive_ompx) {
+      std::cerr << "REX_OMP_AST_INVARIANT[fortran-semantic-producer-family]: "
+                << operation << " attaches semantic records to opaque OMPX\n";
+      ROSE_ABORT();
+    }
+  } else if (producer !=
+             OmpFortranExactSemanticBindings::Producer::flang_parse_tree) {
+    std::cerr << "REX_ACC_AST_INVARIANT[fortran-semantic-producer]: "
+              << operation << " requires the Flang OpenACC semantic producer\n";
+    ROSE_ABORT();
+  }
+}
+
 namespace {
 std::atomic<OpenMPConversionSession *> activeOpenMPConversionSession{nullptr};
 
@@ -238,6 +302,11 @@ void transferOpenMPProducerRecordsForSource(
                 << " pragma was not attached to its exact producer source "
                    "file before OpenMP conversion\n";
       ROSE_ABORT();
+    }
+    if constexpr (std::is_same_v<Record, OmpFortranExactSemanticBindings>) {
+      requireFortranDirectiveSemanticProducer(
+          record->first, record->second.record.producer(),
+          "semantic-handoff consumption transfer");
     }
     auto current = record++;
     if (!owned.emplace(current->first, std::move(current->second.record))
@@ -410,6 +479,8 @@ void registerOpenMPFortranExactSemanticBindings(
     OmpFortranExactSemanticBindings bindings) {
   requireOpenMPProducerRegistrationSource(source_file, pragma,
                                           "Fortran-exact-semantic-binding");
+  requireFortranDirectiveSemanticProducer(pragma, bindings.producer(),
+                                          "direct registration");
   if (bindings.directiveSource().empty()) {
     std::cerr << "REX_OMP_AST_INVARIANT[semantic-handoff-registration]: "
                  "Fortran binding record has no directive source\n";
@@ -462,6 +533,8 @@ snapshotOpenMPProducerSemanticRecords(SgPragmaDeclaration *pragma) {
                    "Fortran binding source ownership changed\n";
       ROSE_ABORT();
     }
+    requireFortranDirectiveSemanticProducer(
+        pragma, found->second.record.producer(), "semantic-record snapshot");
     result.fortran_exact_semantic_bindings.emplace(found->second.record);
   }
   if (!result.empty() && activeOpenMPConversionSession.load(
@@ -489,6 +562,11 @@ void registerOpenMPProducerSemanticRecords(
     std::cerr << "REX_OMP_AST_INVARIANT[semantic-handoff-registration]: "
                  "serialized Fortran binding record has no directive source\n";
     ROSE_ABORT();
+  }
+  if (records.fortran_exact_semantic_bindings.has_value()) {
+    requireFortranDirectiveSemanticProducer(
+        pragma, records.fortran_exact_semantic_bindings->producer(),
+        "restored record registration");
   }
 
   PendingOpenMPProducerRecords &pending = pendingOpenMPProducerRecords();
@@ -1876,6 +1954,85 @@ static int compareOpenMPSourceLocations(const Sg_File_Info *lhs,
   return 0;
 }
 
+static void attachDirectivePreprocessingInfoInSourceOrder(
+    SgLocatedNode *destination, PreprocessingInfo *info,
+    PreprocessingInfo::RelativePositionType relative) {
+  if (destination == nullptr || info == nullptr ||
+      !hasUsableSourceLocation(info->get_file_info())) {
+    std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: cannot attach "
+                 "a source record without an exact destination and location\n";
+    ROSE_ABORT();
+  }
+  info->setRelativePosition(relative);
+  AttachedPreprocessingInfoType *attached =
+      destination->get_attachedPreprocessingInfoPtr();
+  AttachedPreprocessingInfoType::iterator position;
+  if (attached != nullptr) {
+    position = attached->begin();
+  }
+  for (; attached != nullptr && position != attached->end(); ++position) {
+    PreprocessingInfo *existing = *position;
+    if (existing == nullptr ||
+        !hasUsableSourceLocation(existing->get_file_info())) {
+      std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: destination "
+                   "owns preprocessing information without an exact location\n";
+      ROSE_ABORT();
+    }
+    if (compareOpenMPSourceLocations(info->get_file_info(),
+                                     existing->get_file_info()) < 0) {
+      break;
+    }
+  }
+  if (attached == nullptr || position == attached->end()) {
+    destination->attachPreprocessingInfo(
+        info, relative, SgLocatedNode::PreprocessingInfoInsertion::back);
+  } else {
+    destination->attachPreprocessingInfoRelative(info, relative, *position,
+                                                 false);
+  }
+}
+
+static void moveEmptyPairedDirectivePreprocessingInfo(
+    SgPragmaDeclaration *begin, SgPragmaDeclaration *end, SgBasicBlock *body) {
+  ROSE_ASSERT(begin != nullptr && end != nullptr && body != nullptr);
+  const Sg_File_Info *begin_start = begin->get_startOfConstruct();
+  const Sg_File_Info *end_start = end->get_startOfConstruct();
+  for (SgPragmaDeclaration *owner : {begin, end}) {
+    const auto *attached = owner->get_attachedPreprocessingInfoPtr();
+    if (attached == nullptr) {
+      continue;
+    }
+    const AttachedPreprocessingInfoType records = *attached;
+    for (PreprocessingInfo *info : records) {
+      if (info == nullptr || !hasUsableSourceLocation(info->get_file_info())) {
+        std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: empty paired "
+                     "directive owns a record without an exact location\n";
+        ROSE_ABORT();
+      }
+      const int after_begin =
+          compareOpenMPSourceLocations(begin_start, info->get_file_info());
+      const int before_end =
+          compareOpenMPSourceLocations(info->get_file_info(), end_start);
+      if (after_begin < 0 && before_end < 0) {
+        // This includes the BEGIN line's trailing comment. The transparent
+        // empty body emits these source records between the generated pair.
+        owner->detachPreprocessingInfo(info);
+        attachDirectivePreprocessingInfoInSourceOrder(
+            body, info, PreprocessingInfo::inside);
+      } else if (owner == end || before_end >= 0) {
+        // END will be removed. Its closing-line and following records belong
+        // after the complete paired construct, whose surviving source owner
+        // is BEGIN until conversion publishes the corresponding directive.
+        owner->detachPreprocessingInfo(info);
+        attachDirectivePreprocessingInfoInSourceOrder(
+            begin, info,
+            before_end >= 0 ? PreprocessingInfo::after
+                            : PreprocessingInfo::before);
+      }
+    }
+  }
+}
+
 static void
 moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
                                              SgStatement *converted_statement) {
@@ -1904,6 +2061,7 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
                  "directive has no exact source end\n";
     ROSE_ABORT();
   }
+  const Sg_File_Info *empty_body_boundary = nullptr;
   while (hasUsableSourceLocation(body->get_startOfConstruct()) &&
          compareOpenMPSourceLocations(pragma_end,
                                       body->get_startOfConstruct()) >= 0) {
@@ -1922,6 +2080,25 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
     // not mistake the structural wrapper's source span for its body boundary.
     if (SgBasicBlock *block = isSgBasicBlock(body)) {
       const SgStatementPtrList &statements = block->get_statements();
+      if (statements.empty()) {
+        const auto closing = openMPFortranExplicitEndPragmas().find(pragma);
+        SgPragmaDeclaration *end =
+            closing != openMPFortranExplicitEndPragmas().end() ? closing->second
+                                                               : nullptr;
+        if (end == nullptr ||
+            !hasUsableSourceLocation(block->get_startOfConstruct()) ||
+            !hasUsableSourceLocation(block->get_endOfConstruct()) ||
+            compareOpenMPSourceLocations(block->get_startOfConstruct(),
+                                         pragma->get_startOfConstruct()) != 0 ||
+            compareOpenMPSourceLocations(block->get_endOfConstruct(),
+                                         end->get_endOfConstruct()) != 0) {
+          std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: empty "
+                       "structured body has no exact matched directive span\n";
+          ROSE_ABORT();
+        }
+        empty_body_boundary = end->get_startOfConstruct();
+        break;
+      }
       SgStatement *first = statements.empty() ? nullptr : statements.front();
       if (first == nullptr || first->get_parent() != block ||
           first->get_scope() != block) {
@@ -1935,7 +2112,9 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
     }
     break;
   }
-  const Sg_File_Info *body_start = body->get_startOfConstruct();
+  const Sg_File_Info *body_start = empty_body_boundary != nullptr
+                                       ? empty_body_boundary
+                                       : body->get_startOfConstruct();
   if (!hasUsableSourceLocation(body_start) ||
       compareOpenMPSourceLocations(pragma_end, body_start) >= 0) {
     std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: structured "
@@ -1968,35 +2147,8 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
 
   for (PreprocessingInfo *info : intervening) {
     pragma->detachPreprocessingInfo(info);
-    info->setRelativePosition(PreprocessingInfo::before);
-    AttachedPreprocessingInfoType *body_info =
-        body->get_attachedPreprocessingInfoPtr();
-    AttachedPreprocessingInfoType::iterator position;
-    if (body_info != nullptr) {
-      position = body_info->begin();
-    }
-    for (; body_info != nullptr && position != body_info->end(); ++position) {
-      PreprocessingInfo *existing = *position;
-      if (existing == nullptr ||
-          !hasUsableSourceLocation(existing->get_file_info())) {
-        std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: body owns "
-                     "preprocessing information without an exact source "
-                     "location\n";
-        ROSE_ABORT();
-      }
-      if (compareOpenMPSourceLocations(info->get_file_info(),
-                                       existing->get_file_info()) < 0) {
-        break;
-      }
-    }
-    if (body_info == nullptr || position == body_info->end()) {
-      body->attachPreprocessingInfo(
-          info, PreprocessingInfo::before,
-          SgLocatedNode::PreprocessingInfoInsertion::back);
-    } else {
-      body->attachPreprocessingInfoRelative(info, PreprocessingInfo::before,
-                                            *position, false);
-    }
+    attachDirectivePreprocessingInfoInSourceOrder(body, info,
+                                                  PreprocessingInfo::before);
   }
 }
 
@@ -2379,180 +2531,37 @@ SgExpression *buildOpenMPSyntaxTokenExpression(const std::string &text,
   return buildOpenMPSourceExpression(token);
 }
 
+const OmpFortranExactSemanticBindings &
+requireOpenMPFortranSemanticRecord(SgPragmaDeclaration *pragma) {
+  const auto record = openMPFortranExactSemanticBindings().find(pragma);
+  if (record == openMPFortranExactSemanticBindings().end() ||
+      record->second.directiveSource().empty()) {
+    std::cerr
+        << "REX_OMP_AST_INVARIANT[fortran-exact-semantic-binding]: pragma "
+           "has no invocation-owned REX typed-scope record\n";
+    ROSE_ABORT();
+  }
+  OmpSupport::requireFortranDirectiveSemanticProducer(
+      pragma, record->second.producer(), "OpenMP directive consumption",
+      SgPragmaDeclaration::e_fortran_directive_openmp);
+  return record->second;
+}
+
 void initializeOpenMPExactSemanticBindings(OmpExprParseContext *context) {
   ROSE_ASSERT(context != nullptr);
   ROSE_ASSERT(context->pragma_declaration != nullptr);
   ROSE_ASSERT(context->directive != nullptr);
   const OpenMPBaseLang base_language = context->directive->getBaseLang();
   if (base_language == Lang_Fortran) {
-    auto record =
-        openMPFortranExactSemanticBindings().find(context->pragma_declaration);
-    if (record == openMPFortranExactSemanticBindings().end() ||
-        record->second.directiveSource().empty()) {
-      std::cerr
-          << "REX_OMP_AST_INVARIANT[fortran-exact-semantic-binding]: pragma "
-             "has no invocation-owned Flang binding record\n";
-      ROSE_ABORT();
-    }
+    const auto &record =
+        requireOpenMPFortranSemanticRecord(context->pragma_declaration);
     context->fortran_semantics.pragma = context->pragma_declaration;
-    context->fortran_semantics.bindings = &record->second;
+    context->fortran_semantics.bindings = &record;
     context->fortran_semantics.binding_consumed.assign(
         context->fortran_semantics.bindings->bindings().size(), false);
     context->fortran_semantics.expression_consumed.assign(
         context->fortran_semantics.bindings->expressions().size(), false);
     context->fortran_semantics.source_cursor = 0;
-    if (context->fortran_semantics.bindings->producer() ==
-        OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
-      return;
-    }
-    if (context->fortran_semantics.bindings->producer() !=
-        OmpFortranExactSemanticBindings::Producer::flang_parse_tree) {
-      std::cerr << "REX_OMP_AST_INVARIANT[fortran-exact-semantic-binding]: "
-                   "pragma has an invalid Fortran semantic producer\n";
-      ROSE_ABORT();
-    }
-    auto predefinedAllocatorSpelling =
-        [](OpenMPAllocateClauseAllocator allocator) -> const char * {
-      switch (allocator) {
-      case OMPC_ALLOCATE_ALLOCATOR_default:
-        return "omp_default_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_large_cap:
-        return "omp_large_cap_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_cons_mem:
-        return "omp_const_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_high_bw:
-        return "omp_high_bw_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_low_lat:
-        return "omp_low_lat_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_cgroup:
-        return "omp_cgroup_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_pteam:
-        return "omp_pteam_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_thread:
-        return "omp_thread_mem_alloc";
-      case OMPC_ALLOCATE_ALLOCATOR_unspecified:
-      case OMPC_ALLOCATE_ALLOCATOR_user:
-        return nullptr;
-      default:
-        std::cerr << "REX_OMP_AST_INVARIANT[fortran-predefined-allocator]: "
-                     "allocate clause has an invalid allocator kind\n";
-        ROSE_ABORT();
-      }
-    };
-    auto foldSpelling = [](std::string spelling) {
-      std::transform(spelling.begin(), spelling.end(), spelling.begin(),
-                     [](unsigned char character) {
-                       return static_cast<char>(std::tolower(character));
-                     });
-      return spelling;
-    };
-
-    std::vector<std::string> grammarOwnedAllocators;
-    if (const std::vector<OpenMPClause *> *clauses =
-            context->directive->findClauses(OMPC_allocate)) {
-      for (OpenMPClause *clause : *clauses) {
-        OpenMPAllocateClause *allocate =
-            dynamic_cast<OpenMPAllocateClause *>(clause);
-        if (allocate == nullptr) {
-          std::cerr
-              << "REX_OMP_AST_INVARIANT[fortran-predefined-allocator]: "
-                 "allocate clause list contains the wrong typed IR node\n";
-          ROSE_ABORT();
-        }
-        if (const char *spelling =
-                predefinedAllocatorSpelling(allocate->getAllocator())) {
-          grammarOwnedAllocators.emplace_back(spelling);
-        }
-      }
-    }
-
-    const auto &bindings = context->fortran_semantics.bindings->bindings();
-    const auto &expressions =
-        context->fortran_semantics.bindings->expressions();
-    auto consumeGrammarOwnedName =
-        [&](const std::string &expected,
-            OmpFortranExactSemanticBindings::BindingKind expectedKind,
-            const char *contract) {
-          ROSE_ASSERT(contract != nullptr);
-          std::size_t selectedBinding = std::string::npos;
-          std::size_t selectedExpression = std::string::npos;
-          for (std::size_t index = 0; index < bindings.size(); ++index) {
-            const auto &binding = bindings[index];
-            if (!context->fortran_semantics.binding_consumed[index] &&
-                binding.kind() == expectedKind &&
-                foldSpelling(binding.spelling()) == expected) {
-              selectedBinding = index;
-              break;
-            }
-          }
-          if (selectedBinding == std::string::npos) {
-            std::cerr << "REX_OMP_AST_INVARIANT[" << contract
-                      << "]: grammar-owned name '" << expected
-                      << "' has no exact Flang semantic identity\n";
-            ROSE_ABORT();
-          }
-          const auto &binding = bindings[selectedBinding];
-          for (std::size_t index = 0; index < expressions.size(); ++index) {
-            const auto &expression = expressions[index];
-            if (!context->fortran_semantics.expression_consumed[index] &&
-                expression.sourceOffset() == binding.sourceOffset() &&
-                expression.sourceSize() == binding.sourceSize() &&
-                foldSpelling(expression.expression()) == expected &&
-                expression.subexpressions().empty()) {
-              if (selectedExpression != std::string::npos) {
-                std::cerr << "REX_OMP_AST_INVARIANT[" << contract
-                          << "]: one grammar-owned name maps to multiple exact "
-                             "Flang expression records\n";
-                ROSE_ABORT();
-              }
-              selectedExpression = index;
-            }
-          }
-          if (selectedExpression == std::string::npos) {
-            std::cerr << "REX_OMP_AST_INVARIANT[" << contract
-                      << "]: grammar-owned name has no exact scalar Flang "
-                         "expression record\n";
-            ROSE_ABORT();
-          }
-          context->fortran_semantics.binding_consumed[selectedBinding] = true;
-          context->fortran_semantics.expression_consumed[selectedExpression] =
-              true;
-        };
-    for (const std::string &expected : grammarOwnedAllocators) {
-      consumeGrammarOwnedName(
-          expected, OmpFortranExactSemanticBindings::BindingKind::value,
-          "fortran-predefined-allocator");
-    }
-
-    OpenMPDirective *grammarOwnedDirective = context->directive;
-    if (context->directive->getKind() == OMPD_end) {
-      OpenMPEndDirective *endDirective =
-          dynamic_cast<OpenMPEndDirective *>(context->directive);
-      if (endDirective == nullptr ||
-          endDirective->getPairedDirective() == nullptr) {
-        std::cerr << "REX_OMP_AST_INVARIANT[fortran-end-directive]: END "
-                     "directive has no exact paired typed IR node\n";
-        ROSE_ABORT();
-      }
-      grammarOwnedDirective = endDirective->getPairedDirective();
-    }
-    if (grammarOwnedDirective->getKind() == OMPD_critical) {
-      OpenMPCriticalDirective *critical =
-          dynamic_cast<OpenMPCriticalDirective *>(grammarOwnedDirective);
-      if (critical == nullptr) {
-        std::cerr << "REX_OMP_AST_INVARIANT[fortran-critical-name]: "
-                     "critical directive has the wrong typed IR node\n";
-        ROSE_ABORT();
-      }
-      const std::string criticalName =
-          foldSpelling(critical->getCriticalName());
-      if (!criticalName.empty()) {
-        consumeGrammarOwnedName(
-            criticalName,
-            OmpFortranExactSemanticBindings::BindingKind::syntax_name,
-            "fortran-critical-name");
-      }
-    }
     return;
   }
   if (base_language != Lang_C && base_language != Lang_Cplusplus) {
@@ -2616,6 +2625,10 @@ selectFortranExactSemanticExpressionBindings(
            "Fortran expression binding request\n";
     ROSE_ABORT();
   }
+  OmpSupport::requireFortranDirectiveSemanticProducer(
+      state->pragma, state->bindings->producer(),
+      "OpenACC expression consumption",
+      SgPragmaDeclaration::e_fortran_directive_openacc);
 
   const auto &bindings = state->bindings->bindings();
   const auto &expressions = state->bindings->expressions();
@@ -2703,50 +2716,6 @@ selectFortranExactSemanticExpressionBindings(
   return {&state->active_bindings, &selectedExpression.subexpressions()};
 }
 
-const OmpFortranExactSemanticBindings::Binding &
-consumeFortranExactSemanticNameBinding(
-    FortranExactSemanticConsumptionState *state, const std::string &name,
-    OmpFortranExactSemanticBindings::BindingKind expectedKind,
-    const char *consumer) {
-  if (state == nullptr || state->pragma == nullptr ||
-      state->bindings == nullptr || name.empty() || consumer == nullptr ||
-      state->bindings->producer() !=
-          OmpFortranExactSemanticBindings::Producer::flang_parse_tree ||
-      state->binding_consumed.size() != state->bindings->bindings().size()) {
-    std::cerr << "REX_OMP_AST_INVARIANT[fortran-exact-name-binding]: invalid "
-                 "Fortran name binding request\n";
-    ROSE_ABORT();
-  }
-
-  const std::string canonicalName =
-      canonicalFortranExpressionCallbackSpelling(name);
-  const auto &bindings = state->bindings->bindings();
-  std::size_t selected = std::string::npos;
-  for (std::size_t index = 0; index < bindings.size(); ++index) {
-    const auto &binding = bindings[index];
-    if (!state->binding_consumed[index] && binding.kind() == expectedKind &&
-        canonicalFortranExpressionCallbackSpelling(binding.spelling()) ==
-            canonicalName) {
-      if (selected != std::string::npos) {
-        std::cerr << "REX_OMP_AST_INVARIANT[fortran-exact-name-binding]: "
-                  << consumer << " name '" << name
-                  << "' has multiple unconsumed Flang identities\n";
-        ROSE_ABORT();
-      }
-      selected = index;
-    }
-  }
-  if (selected == std::string::npos) {
-    std::cerr << "REX_OMP_AST_INVARIANT[fortran-exact-name-binding]: "
-              << consumer << " name '" << name
-              << "' has no exact Flang identity\n";
-    ROSE_ABORT();
-  }
-
-  state->binding_consumed[selected] = true;
-  return bindings[selected];
-}
-
 void requireCompleteFortranExactSemanticConsumption(
     const FortranExactSemanticConsumptionState *state, const char *consumer) {
   if (state == nullptr || state->pragma == nullptr ||
@@ -2759,6 +2728,9 @@ void requireCompleteFortranExactSemanticConsumption(
                  "invalid or incomplete Fortran semantic-consumption state\n";
     ROSE_ABORT();
   }
+  OmpSupport::requireFortranDirectiveSemanticProducer(
+      state->pragma, state->bindings->producer(),
+      "Fortran semantic consumption completion");
   const auto &bindings = state->bindings->bindings();
   for (std::size_t index = 0; index < bindings.size(); ++index) {
     if (!state->binding_consumed[index]) {
@@ -2789,7 +2761,7 @@ void finishOpenMPExactSemanticBindings(OmpExprParseContext *context) {
     if (context->fortran_semantics.bindings == nullptr) {
       std::cerr
           << "REX_OMP_AST_INVARIANT[fortran-exact-semantic-binding]: parser "
-             "has no active Flang binding record\n";
+             "has no active REX typed-scope record\n";
       ROSE_ABORT();
     }
     requireCompleteFortranExactSemanticConsumption(&context->fortran_semantics,
@@ -2852,35 +2824,20 @@ parseOpenMPHostFragment(const ompparser::HostFragment &fragment,
   const bool is_fortran = context->directive->getBaseLang() == Lang_Fortran;
   auto begin_exact = [&]() {
     if (is_fortran) {
-      if (context->fortran_semantics.bindings->producer() ==
-          OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
-        SgScopeStatement *scope = context->pragma_declaration->get_scope();
-        if (scope == nullptr ||
-            context->pragma_declaration->get_parent() != scope) {
-          std::cerr << "REX_OMP_AST_INVARIANT[fortran-typed-scope]: "
-                       "REX-owned directive has no exact lexical Sage scope\n";
-          ROSE_ABORT();
-        }
-        omp_exprparser_begin_fortran_typed_scope_semantics(
-            scope, context->fortran_semantics.bindings->defaultIntegerType());
-      } else {
-        const auto fortranBindings =
-            selectFortranExactSemanticExpressionBindings(
-                &context->fortran_semantics, parsed->text, "OpenMP");
-        omp_exprparser_begin_fortran_exact_semantic_bindings(
-            fortranBindings.identifiers, fortranBindings.subexpressions,
-            context->fortran_semantics.bindings->defaultIntegerType());
+      SgScopeStatement *scope = context->pragma_declaration->get_scope();
+      if (scope == nullptr ||
+          context->pragma_declaration->get_parent() != scope) {
+        std::cerr << "REX_OMP_AST_INVARIANT[fortran-typed-scope]: "
+                     "REX-owned directive has no exact lexical Sage scope\n";
+        ROSE_ABORT();
       }
+      omp_exprparser_begin_fortran_typed_scope_semantics(
+          scope, context->fortran_semantics.bindings->defaultIntegerType());
     }
   };
   auto end_exact = [&]() {
     if (is_fortran) {
-      if (context->fortran_semantics.bindings->producer() ==
-          OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
-        omp_exprparser_end_fortran_typed_scope_semantics();
-      } else {
-        omp_exprparser_end_fortran_exact_semantic_bindings();
-      }
+      omp_exprparser_end_fortran_typed_scope_semantics();
     }
   };
 
@@ -2910,34 +2867,6 @@ parseOpenMPHostFragment(const ompparser::HostFragment &fragment,
       std::cerr << "REX_OMP_AST_INVARIANT[declare-mapper-variable]: callback "
                    "has no valid directive-local variable context\n";
       ROSE_ABORT();
-    }
-    if (is_fortran) {
-      const OmpFortranExactSemanticBindings::Producer producer =
-          context->fortran_semantics.bindings->producer();
-      if (producer ==
-          OmpFortranExactSemanticBindings::Producer::flang_parse_tree) {
-        const OmpFortranExactSemanticBindings::Binding &local =
-            consumeFortranExactSemanticNameBinding(
-                &context->fortran_semantics, name,
-                OmpFortranExactSemanticBindings::BindingKind::
-                    directive_local_declaration,
-                "OpenMP declare mapper variable");
-        if (canonicalFortranExpressionCallbackSpelling(local.spelling()) !=
-                canonicalFortranExpressionCallbackSpelling(name) ||
-            local.directiveLocalType() == nullptr ||
-            local.directiveLocalType() != context->declare_mapper_type) {
-          std::cerr << "REX_OMP_AST_INVARIANT[declare-mapper-variable]: exact "
-                       "Fortran directive-local identity disagrees with the "
-                       "typed mapper declaration\n";
-          ROSE_ABORT();
-        }
-      } else if (producer !=
-                 OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
-        std::cerr << "REX_OMP_AST_INVARIANT[declare-mapper-variable]: "
-                     "Fortran mapper variable has an invalid semantic "
-                     "producer\n";
-        ROSE_ABORT();
-      }
     }
     SgVariableSymbol *symbol =
         context->directive_local_scope->lookup_variable_symbol(name);
@@ -2981,45 +2910,15 @@ parseOpenMPHostFragment(const ompparser::HostFragment &fragment,
 
     SgType *directiveLocalType = nullptr;
     if (is_fortran) {
-      const OmpFortranExactSemanticBindings::Producer producer =
-          context->fortran_semantics.bindings->producer();
-      if (producer ==
-          OmpFortranExactSemanticBindings::Producer::flang_parse_tree) {
-        const OmpFortranExactSemanticBindings::Binding &local =
-            consumeFortranExactSemanticNameBinding(
-                &context->fortran_semantics, name,
-                OmpFortranExactSemanticBindings::BindingKind::
-                    directive_local_declaration,
-                "OpenMP iterator");
-        directiveLocalType = local.directiveLocalType();
-        if (local.kind() != OmpFortranExactSemanticBindings::BindingKind::
-                                directive_local_declaration ||
-            canonicalFortranExpressionCallbackSpelling(local.spelling()) !=
-                canonicalFortranExpressionCallbackSpelling(name) ||
-            directiveLocalType == nullptr ||
-            (context->pending_iterator_type != nullptr &&
-             context->pending_iterator_type != directiveLocalType)) {
-          std::cerr
-              << "REX_OMP_AST_INVARIANT[iterator-name]: Fortran iterator '"
-              << name << "' does not match its exact frontend-declared type\n";
-          ROSE_ABORT();
-        }
-      } else if (producer ==
-                 OmpFortranExactSemanticBindings::Producer::rex_typed_scope) {
-        directiveLocalType =
-            context->pending_iterator_type != nullptr
-                ? context->pending_iterator_type
-                : context->fortran_semantics.bindings->defaultIntegerType();
-        if (directiveLocalType == nullptr ||
-            isSgTypeUnknown(directiveLocalType) != nullptr ||
-            isSgTypeDefault(directiveLocalType) != nullptr) {
-          std::cerr << "REX_OMP_AST_INVARIANT[iterator-name]: REX-owned "
-                       "Fortran iterator has no exact typed-scope type\n";
-          ROSE_ABORT();
-        }
-      } else {
-        std::cerr << "REX_OMP_AST_INVARIANT[iterator-name]: Fortran iterator "
-                     "has an invalid semantic producer\n";
+      directiveLocalType =
+          context->pending_iterator_type != nullptr
+              ? context->pending_iterator_type
+              : context->fortran_semantics.bindings->defaultIntegerType();
+      if (directiveLocalType == nullptr ||
+          isSgTypeUnknown(directiveLocalType) != nullptr ||
+          isSgTypeDefault(directiveLocalType) != nullptr) {
+        std::cerr << "REX_OMP_AST_INVARIANT[iterator-name]: REX-owned "
+                     "Fortran iterator has no exact typed-scope type\n";
         ROSE_ABORT();
       }
     } else {
@@ -3413,6 +3312,14 @@ void finishOpenACCCxxExactSemanticConsumption(SgPragmaDeclaration *pragma) {
 
 void beginOpenACCFortranExactSemanticConsumption(SgPragmaDeclaration *pragma) {
   requireOpenMPConversionSession();
+  const auto record = openMPFortranExactSemanticBindings().find(pragma);
+  if (record != openMPFortranExactSemanticBindings().end()) {
+    // Validate the record's actual family before requiring this consumer's
+    // OpenACC owner. A prohibited OpenMP producer must not enter a shared
+    // semantic consumer even when the caller selected the wrong consumer.
+    requireFortranDirectiveSemanticProducer(pragma, record->second.producer(),
+                                            "Fortran directive consumption");
+  }
   requireFortranOpenACCSemanticPragma(pragma, "begin directive");
   auto &active = openMPConversionState().openacc_fortran_semantic_consumption;
   if (active.has_value()) {
@@ -3420,7 +3327,6 @@ void beginOpenACCFortranExactSemanticConsumption(SgPragmaDeclaration *pragma) {
                  "nested OpenACC semantic-consumption transaction\n";
     ROSE_ABORT();
   }
-  auto record = openMPFortranExactSemanticBindings().find(pragma);
   if (record == openMPFortranExactSemanticBindings().end() ||
       record->second.directiveSource().empty()) {
     std::cerr << "REX_ACC_AST_INVARIANT[fortran-semantic-consumption]: "
@@ -4210,6 +4116,11 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
                  "nonempty directive text\n");
     ROSE_ABORT();
   }
+  if (directive->getBaseLang() == Lang_Fortran) {
+    // Even directives without host fragments consume their producer identity.
+    // Validate before the no-expression fast path can return.
+    static_cast<void>(requireOpenMPFortranSemanticRecord(pragma_declaration));
+  }
   parsed_cache.directive_owns_source_expression_spelling =
       pragma_declaration->get_cxx_top_level_macro_expansion();
 
@@ -4948,9 +4859,7 @@ OmpDirectiveParseCacheTree parseClauseNodesForDirective(
     // preprocessing, while each independently owned host fragment retains
     // exact source spelling. Raw grammar may itself be a macro invocation.
     const std::string &source_expression_text =
-        directive->getBaseLang() == Lang_Fortran &&
-                context.fortran_semantics.bindings->producer() ==
-                    OmpFortranExactSemanticBindings::Producer::rex_typed_scope
+        directive->getBaseLang() == Lang_Fortran
             ? context.fortran_semantics.bindings->directiveSource()
             : *source_directive_text;
     const std::string source_parse_text = normalizeOpenMPDirectiveForParser(
@@ -9819,7 +9728,50 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
   ROSE_ASSERT(end_decl != NULL);
   SgStatement *result = NULL;
   if (stmt_vec.empty()) {
-    return NULL;
+    SgSourceFile *source = getEnclosingSourceFile(begin_decl);
+    const bool is_fortran =
+        source != nullptr &&
+        (source->get_Fortran_only() || source->get_F77_only() ||
+         source->get_F90_only() || source->get_F95_only() ||
+         source->get_F2003_only());
+    if (!is_fortran) {
+      return NULL;
+    }
+    const auto family = begin_decl->get_fortran_directive_family();
+    SgBasicBlock *scope = isSgBasicBlock(begin_decl->get_parent());
+    if ((family != SgPragmaDeclaration::e_fortran_directive_openmp &&
+         family != SgPragmaDeclaration::e_fortran_directive_openacc) ||
+        end_decl->get_fortran_directive_family() != family ||
+        scope == nullptr || begin_decl->get_scope() != scope ||
+        end_decl->get_scope() != scope || end_decl->get_parent() != scope ||
+        getEnclosingSourceFile(end_decl) != source ||
+        getNextStatementInSameBasicBlock(begin_decl) != end_decl) {
+      std::cerr << "REX_OMP_AST_INVARIANT[paired-body]: empty Fortran region "
+                   "does not have adjacent matched directives in one scope\n";
+      ROSE_ABORT();
+    }
+    const auto *begin_start = begin_decl->get_startOfConstruct();
+    const auto *begin_end = begin_decl->get_endOfConstruct();
+    const auto *end_start = end_decl->get_startOfConstruct();
+    const auto *end_end = end_decl->get_endOfConstruct();
+    if (!hasUsableSourceLocation(begin_start) ||
+        !hasUsableSourceLocation(begin_end) ||
+        !hasUsableSourceLocation(end_start) ||
+        !hasUsableSourceLocation(end_end) ||
+        compareOpenMPSourceLocations(begin_start, begin_end) > 0 ||
+        compareOpenMPSourceLocations(begin_end, end_start) >= 0 ||
+        compareOpenMPSourceLocations(end_start, end_end) > 0) {
+      std::cerr << "REX_OMP_AST_INVARIANT[paired-body]: empty Fortran region "
+                   "does not have exact ordered directive source anchors\n";
+      ROSE_ABORT();
+    }
+    SgBasicBlock *empty_body = buildBasicBlock();
+    initializeGeneratedOpenMPStatement(empty_body);
+    copyStartFileInfo(begin_decl, empty_body);
+    copyEndFileInfo(end_decl, empty_body);
+    insertStatementAfter(begin_decl, empty_body, false);
+    moveEmptyPairedDirectivePreprocessingInfo(begin_decl, end_decl, empty_body);
+    return empty_body;
   }
   if (stmt_vec.size() == 1) {
     result = stmt_vec[0];

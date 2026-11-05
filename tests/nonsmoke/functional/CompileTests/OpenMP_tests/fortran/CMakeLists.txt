@@ -310,6 +310,111 @@ foreach(file_to_test ${OPENMP_FORTRAN_TESTCODES})
     PROPERTIES LABELS "${_labels}")
 endforeach()
 
+add_executable(rex_fortran_directive_producer_contract
+  rex_fortran_directive_producer_contract.cpp)
+target_include_directories(rex_fortran_directive_producer_contract PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
+target_link_libraries(rex_fortran_directive_producer_contract
+  ROSE_DLL ${link_with_libraries})
+
+foreach(_producer_mode IN ITEMS
+    rex-openmp-json openacc-json json-invalid-enum json-malformed-bindings
+    json-malformed-expression)
+  string(REPLACE "-" "_" _producer_name "${_producer_mode}")
+  add_test(NAME OMPFORTRAN_rex_producer_${_producer_name}
+    COMMAND rex_fortran_directive_producer_contract
+      --producer-contract=${_producer_mode}
+      -rose:skip_unparse -rose:skipfinalCompileStep -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_owner.f90)
+  set_tests_properties(OMPFORTRAN_rex_producer_${_producer_name}
+    PROPERTIES LABELS "OMPFORTRAN;ASTJSON;rex;producer-ownership")
+endforeach()
+
+add_executable(rex_flang_openmp_callback_contract
+  rex_flang_openmp_callback_contract.cpp)
+rose_force_system_include_dirs(rex_flang_openmp_callback_contract
+  ${FLANG_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+target_link_libraries(rex_flang_openmp_callback_contract PRIVATE
+  ROSE_DLL ${link_with_libraries} ${FLANG_LIBS})
+add_test(NAME OMPFORTRAN_rex_flang_callback_plain_fortran_control
+  COMMAND rex_flang_openmp_callback_contract control
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_openmp_callback_source.f90)
+set_tests_properties(OMPFORTRAN_rex_flang_callback_plain_fortran_control
+  PROPERTIES LABELS "OMPFORTRAN;rex;producer-ownership")
+
+foreach(_callback_mode IN ITEMS
+    build-spec build-begin build-end build-sections-begin build-sections-end
+    build-invalid build-misplaced-end before-simd post-simd before-variant
+    post-variant pre-spec pre-block pre-wrapper pre-concrete-clause
+    pre-generated-clause pre-empty-clause pre-derived-name collector-executable
+    collector-declarative collector-disabled)
+  string(REPLACE "-" "_" _callback_name "${_callback_mode}")
+  set(_callback_test OMPFORTRAN_rex_flang_callback_${_callback_name}_is_rejected)
+  add_test(NAME ${_callback_test}
+    WORKING_DIRECTORY ${_omp_fortran_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=\"$1\"; shift; set +e; \"$@\" >\"$log\" 2>&1; status=$?; set -e; test \"$status\" -eq 134; test \"$(grep -Fc 'REX_FLANG_INVARIANT[openmp-parse-tree-owner]' \"$log\")\" -eq 1"
+      dummy ${_callback_test}.log
+      $<TARGET_FILE:rex_flang_openmp_callback_contract> ${_callback_mode}
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_openmp_callback_source.f90)
+  set_tests_properties(${_callback_test}
+    PROPERTIES LABELS "OMPFORTRAN;rex;producer-ownership;death")
+endforeach()
+
+foreach(_producer_mode IN ITEMS
+    register-flang register-common-flang transfer-flang snapshot-flang
+    consume-flang json-flang)
+  string(REPLACE "-" "_" _producer_name "${_producer_mode}")
+  set(_producer_test OMPFORTRAN_rex_producer_${_producer_name}_is_rejected)
+  add_test(NAME ${_producer_test}
+    WORKING_DIRECTORY ${_omp_fortran_output_dir}
+    COMMAND ${BASH_EXECUTABLE} -c
+      "ulimit -c 0; log=\"$1\"; shift; set +e; \"$@\" >\"$log\" 2>&1; status=$?; set -e; test \"$status\" -eq 134; test \"$(grep -Fc 'REX_OMP_AST_INVARIANT[fortran-openmp-producer]' \"$log\")\" -eq 1"
+      dummy ${_producer_test}.log
+      $<TARGET_FILE:rex_fortran_directive_producer_contract>
+      --producer-contract=${_producer_mode}
+      -rose:skip_unparse -rose:skipfinalCompileStep -c
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_owner.f90)
+  set_tests_properties(${_producer_test}
+    PROPERTIES LABELS "OMPFORTRAN;ASTJSON;rex;producer-ownership;death")
+endforeach()
+
+set(_producer_handoff_work ${CMAKE_CURRENT_BINARY_DIR}/producer-handoff)
+file(MAKE_DIRECTORY ${_producer_handoff_work})
+add_test(NAME OMPFORTRAN_rex_producer_rex_scope_handoff_all_checkpoints
+  WORKING_DIRECTORY ${_producer_handoff_work}
+  COMMAND rex_fortran_openmp_exact_semantic_handoff_translator
+    -rose:openmp:ast_only -rose:verbose 0
+    -rex:ast-json-checkpoint=all
+    -rex:ast-json-dir=${_producer_handoff_work}/json
+    -rose:skip_unparse -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openmp_exact_semantic_handoff.f90)
+set_tests_properties(OMPFORTRAN_rex_producer_rex_scope_handoff_all_checkpoints
+  PROPERTIES LABELS "OMPFORTRAN;ASTJSON;rex;producer-ownership")
+
+set(_producer_openacc_work ${CMAKE_CURRENT_BINARY_DIR}/producer-openacc)
+file(MAKE_DIRECTORY ${_producer_openacc_work})
+add_test(NAME OMPFORTRAN_rex_producer_flang_openacc_all_checkpoints
+  WORKING_DIRECTORY ${_producer_openacc_work}
+  COMMAND testTranslator
+    -rose:openacc:ast_only -rose:verbose 0
+    -rex:ast-json-checkpoint=all
+    -rex:ast-json-dir=${_producer_openacc_work}/json
+    -rose:skip_unparse -rose:skipfinalCompileStep -c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../OpenACC_tests/fortran/rex_fortran_openacc_semantic_positive.f90)
+set_tests_properties(OMPFORTRAN_rex_producer_flang_openacc_all_checkpoints
+  PROPERTIES LABELS "OMPFORTRAN;OpenACC_fortran;ASTJSON;rex;producer-ownership")
+
+add_executable(rex_fortran_empty_region_contract
+  rex_fortran_empty_region_contract.cpp)
+target_link_libraries(rex_fortran_empty_region_contract
+  ROSE_DLL ${link_with_libraries})
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../rex_fortran_empty_region_tests.cmake)
+rex_add_fortran_empty_region_tests(omp free
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openmp_empty_region_free.f90)
+rex_add_fortran_empty_region_tests(omp fixed
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openmp_empty_region_fixed.f)
+
 set(_openmp_function_reference_role_output
   ${_omp_fortran_output_dir}/rose_rex_fortran_openmp_exact_semantic_handoff.f90)
 add_test(

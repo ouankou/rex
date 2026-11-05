@@ -1,6 +1,12 @@
 set(ROSE_FLAGS -rose:openacc:ast_only -rose:verbose 0)
 set(_openacc_includes -I${CMAKE_SOURCE_DIR}/src/frontend/SageIII)
 
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../rex_fortran_empty_region_tests.cmake)
+rex_add_fortran_empty_region_tests(acc free
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openacc_empty_region_free.f90)
+rex_add_fortran_empty_region_tests(acc fixed
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openacc_empty_region_fixed.f)
+
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)
   message(FATAL_ERROR "bash not found; OpenACC Fortran tests require bash")
