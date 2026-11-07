@@ -1,0 +1,2 @@
+! REX_REBIND_NATIVE_INCREMENT
+total = total + 3

@@ -2,12 +2,14 @@
 
 #include "rose_config.h"
 
+#include "FortranSourceContext.h"
 #include "SageTreeBuilder.h"
 
 #include <algorithm>
 #include <filesystem>
 #include <iostream>
 #include <limits>
+#include <stdexcept>
 
 #include <tuple>
 #include <utility>
@@ -86,8 +88,39 @@ bool isInSourceFileForComments(const SgLocatedNode *node,
               << node->class_name() << " has no exact physical source owner\n";
     ROSE_ABORT();
   }
-  return node_info->get_physical_file_id() ==
-         source_info->get_physical_file_id();
+  if (isSgGlobal(node) != nullptr &&
+      node_info->get_physical_file_id() == source_info->get_physical_file_id())
+    return true;
+  if (node_info->get_source_sequence_number() == 0 ||
+      node_info->get_physical_file_occurrence_id() == 0) {
+    std::cerr << "REX_FLANG_INVARIANT[comment-source-order]: source-backed "
+                 "attachment owner has no exact lexical point\n";
+    ROSE_ABORT();
+  }
+  return true;
+}
+
+unsigned int RequireCommentSourceOrder(const Sg_File_Info *position) {
+  if (position == nullptr || position->get_source_sequence_number() == 0 ||
+      position->get_physical_file_occurrence_id() == 0) {
+    std::cerr << "REX_FLANG_INVARIANT[comment-source-order]: source-backed "
+                 "attachment boundary has no exact lexical point\n";
+    ROSE_ABORT();
+  }
+  return position->get_source_sequence_number();
+}
+
+bool TokenSharesPhysicalLine(const Token &token, const Sg_File_Info *position) {
+  RequireCommentSourceOrder(position);
+  if (token.getSourcePoint().physical_occurrence !=
+      position->get_physical_file_occurrence_id())
+    return false;
+  if (token.getPath() != position->get_physical_filename()) {
+    std::cerr << "REX_FLANG_INVARIANT[comment-source-order]: one physical "
+                 "occurrence has disagreeing source files\n";
+    ROSE_ABORT();
+  }
+  return token.getStartLine() == position->get_physical_line();
 }
 
 PreprocessingInfo::DirectiveType
@@ -202,6 +235,36 @@ void attachCommentFromToken(SgLocatedNode *node, const Token &token,
       style, spelling, filename, token.getStartLine(), token.getStartCol(),
       numberOfLines, adjusted_position);
   ROSE_ASSERT(info != nullptr);
+  const auto &sourcePoint = token.getSourcePoint();
+  if (sourcePoint.order == 0 || sourcePoint.physical_occurrence == 0) {
+    std::cerr << "REX_FLANG_INVARIANT[source-token-position]: source token "
+                 "has no exact lexical point identity\n";
+    ROSE_ABORT();
+  }
+  info->get_file_info()->set_source_sequence_number(sourcePoint.order);
+  info->get_file_info()->set_physical_file_occurrence_id(
+      sourcePoint.physical_occurrence);
+  using Role = PreprocessingInfo::FortranSourceRole;
+  switch (token.getFortranSourceRole()) {
+  case FortranSourceTokenRole::comment:
+    info->setFortranSourceRole(Role::comment);
+    break;
+  case FortranSourceTokenRole::layout:
+    info->setFortranSourceRole(Role::layout);
+    break;
+  case FortranSourceTokenRole::cpp_control:
+    info->setFortranSourceRole(Role::cpp_control);
+    break;
+  case FortranSourceTokenRole::cpp_inactive:
+    info->setFortranSourceRole(Role::cpp_inactive);
+    break;
+  case FortranSourceTokenRole::disabled_directive:
+    info->setFortranSourceRole(Role::disabled_directive);
+    break;
+  case FortranSourceTokenRole::lexical_control:
+    info->setFortranSourceRole(Role::lexical_control);
+    break;
+  }
   if (position == PreprocessingInfo::after_syntax &&
       token.getTokenType() == TokenKind::comment) {
     info->setOutputPlacement(PreprocessingInfo::attached_output_trailing_line);
@@ -383,23 +446,27 @@ SgVariableDeclaration *BuildUnclassifiedSourceVariableDeclaration(
 
 void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
                                      bool at_end) {
-  if (!isInSourceFileForComments(node, source_)) {
+  if (!isInSourceFileForComments(node, source_) ||
+      tokens_.getNextToken() == nullptr) {
     return;
   }
+  const auto *start = node->get_startOfConstruct();
+  const auto *end = node->get_endOfConstruct();
+  const unsigned int start_order = RequireCommentSourceOrder(start);
+  const unsigned int end_order = RequireCommentSourceOrder(end);
+  ASSERT_require(start_order <= end_order);
   // Attach comments at end of a statement or expression
   if (at_end && (isSgStatement(node) || isSgExpression(node))) {
-    ASSERT_require(pos.getStartLine() > 0 &&
-                   pos.getEndLine() >= pos.getStartLine());
+    ASSERT_require(pos.getStartLine() > 0 && pos.getEndLine() > 0);
     const Token *token = nullptr;
 
     // If a scope, some comments should be attached to last statement in scope
     SgStatement *last{nullptr};
     SgStatement *first{nullptr};
-    int first_start_line = pos.getStartLine();
+    unsigned int leading_order = start_order;
     if (auto scope = isSgScopeStatement(node)) {
-      first = scope->firstStatement();
-      int best_line = -1;
-      int last_end_line = -1;
+      unsigned int best_order = 0;
+      unsigned int last_end_order = 0;
       SgStatement *best_stmt = nullptr;
       auto consider_stmt = [&](SgStatement *stmt) {
         if (stmt == nullptr) {
@@ -408,15 +475,17 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
         if (!isInSourceFileForComments(stmt, source_)) {
           return;
         }
-        PosInfo stmt_pos{stmt};
-        int line = stmt_pos.getStartLine();
-        ASSERT_require(line > 0 && stmt_pos.getEndLine() >= line);
-        if (best_line < 0 || line < best_line) {
-          best_line = line;
+        const unsigned int begin =
+            RequireCommentSourceOrder(stmt->get_startOfConstruct());
+        const unsigned int finish =
+            RequireCommentSourceOrder(stmt->get_endOfConstruct());
+        ASSERT_require(begin <= finish);
+        if (best_order == 0 || begin < best_order) {
+          best_order = begin;
           best_stmt = stmt;
         }
-        if (stmt_pos.getEndLine() >= last_end_line) {
-          last_end_line = stmt_pos.getEndLine();
+        if (finish >= last_end_order) {
+          last_end_order = finish;
           last = stmt;
         }
       };
@@ -426,22 +495,20 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
       }
       if (best_stmt != nullptr) {
         first = best_stmt;
-        first_start_line = best_line;
+        leading_order = best_order;
       }
     }
-    const int leading_line = first_start_line;
-
-    const int end_line = pos.getEndLine();
-
     while ((token = tokens_.getNextToken()) &&
-           token->getStartLine() <= end_line) {
-      if (first && token->getStartLine() <= leading_line) {
+           (token->getSourcePoint().order <= end_order ||
+            TokenSharesPhysicalLine(*token, end))) {
+      if (first && token->getSourcePoint().order <= leading_order) {
         if (!isInSourceFileForComments(first, source_)) {
           break;
         }
         attachCommentFromToken(first, *token, PreprocessingInfo::before,
                                source_);
-      } else if (last && token->getEndLine() <= end_line) {
+      } else if (last && (token->getSourcePoint().order <= end_order ||
+                          TokenSharesPhysicalLine(*token, end))) {
         if (!isInSourceFileForComments(last, source_)) {
           break;
         }
@@ -457,15 +524,15 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
   if (auto scope = isSgScopeStatement(node)) {
     const Token *token = nullptr;
     SgStatement *first_stmt = nullptr;
-    int best_line = -1;
+    unsigned int best_order = 0;
     auto consider_stmt = [&](SgStatement *stmt) {
       if (stmt == nullptr || !isInSourceFileForComments(stmt, source_)) {
         return;
       }
-      const int line = PosInfo{stmt}.getStartLine();
-      ASSERT_require(line > 0);
-      if (best_line < 0 || line < best_line) {
-        best_line = line;
+      const unsigned int order =
+          RequireCommentSourceOrder(stmt->get_startOfConstruct());
+      if (best_order == 0 || order < best_order) {
+        best_order = order;
         first_stmt = stmt;
       }
     };
@@ -475,7 +542,7 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
     }
     // Comments before scoping unit
     while ((token = tokens_.getNextToken()) &&
-           token->getStartLine() < pos.getStartLine()) {
+           token->getSourcePoint().order < start_order) {
       if (first_stmt != nullptr) {
         attachCommentFromToken(first_stmt, *token, PreprocessingInfo::before,
                                source_);
@@ -491,20 +558,25 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
   if (SgStatement *stmt = isSgStatement(node)) {
     const Token *token = nullptr;
     while ((token = tokens_.getNextToken()) &&
-           token->getStartLine() <= pos.getStartLine()) {
+           (token->getSourcePoint().order < start_order ||
+            TokenSharesPhysicalLine(*token, start) ||
+            TokenSharesPhysicalLine(*token, end))) {
       SgLocatedNode *commentNode{stmt};
       auto commentPosition = PreprocessingInfo::before;
-      if (token->getStartLine() == pos.getStartLine()) {
+      if (TokenSharesPhysicalLine(*token, start) ||
+          TokenSharesPhysicalLine(*token, end)) {
         commentPosition = PreprocessingInfo::after;
-        if (isSgFunctionDeclaration(stmt) != nullptr) {
+        if (isSgProcedureHeaderStatement(stmt) != nullptr ||
+            isSgProgramHeaderStatement(stmt) != nullptr) {
           commentPosition = PreprocessingInfo::after_syntax;
         }
         // check for a source token following a variable initializer
         if (SgVariableDeclaration *varDecl = isSgVariableDeclaration(stmt)) {
           for (SgInitializedName *name : varDecl->get_variables()) {
             if (SgInitializer *init = name->get_initializer()) {
-              PosInfo initPos{init};
-              if (initPos.getEndCol() > token->getStartCol()) {
+              const auto *initEnd = init->get_endOfConstruct();
+              if (RequireCommentSourceOrder(initEnd) >
+                  token->getSourcePoint().order) {
                 commentNode = init;
                 break;
               }
@@ -521,7 +593,7 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node, const PosInfo &pos,
     // try only attaching comments from same line (what about multi-line
     // comments)
     while ((token = tokens_.getNextToken()) &&
-           token->getStartLine() == pos.getStartLine()) {
+           TokenSharesPhysicalLine(*token, start)) {
       if (token->getEndCol() == pos.getStartCol()) {
         commentPosition = PreprocessingInfo::after;
       }
@@ -538,10 +610,11 @@ void SageTreeBuilder::attachComments(SgLocatedNode *node,
   ASSERT_require(comments.tokens.empty() ||
                  isInSourceFileForComments(node, source_));
   ASSERT_require(comments.range.has_value() || comments.tokens.empty());
+  ASSERT_require(comments.tokens.empty() ||
+                 (comments.start_point && comments.end_point));
   for (const Token &token : comments.tokens) {
-    ASSERT_require(token.getEndLine() <= comments.range->getEndLine());
     const auto placement =
-        token.getStartLine() >= comments.range->getStartLine()
+        token.getSourcePoint().order >= comments.start_point->order
             ? PreprocessingInfo::after_syntax
             : PreprocessingInfo::before;
     attachCommentFromToken(node, token, placement, source_);
@@ -563,14 +636,26 @@ void SageTreeBuilder::attachRemainingComments(SgLocatedNode *node) {
 
 /** Capture header tokens before constructing dependent declarations. */
 void SageTreeBuilder::captureHeaderComments(HeaderComments &comments,
-                                            const PosInfo &range) {
+                                            const SourcePosition &start,
+                                            const SourcePosition &end) {
   ASSERT_require(!comments.range.has_value() && comments.tokens.empty());
-  ASSERT_require(range.getStartLine() > 0 &&
-                 range.getEndLine() >= range.getStartLine());
+  const PosInfo range{start.line, start.column, end.line, end.column};
+  ASSERT_require(range.getStartLine() > 0 && range.getEndLine() > 0);
   comments.range = range;
+  ROSE_ASSERT(start.lexical_identity && end.lexical_identity &&
+              start.lexical_identity->order > 0 &&
+              start.lexical_identity->physical_occurrence > 0 &&
+              end.lexical_identity->physical_occurrence > 0 &&
+              start.lexical_identity->order <= end.lexical_identity->order);
+  comments.start_point = start.lexical_identity;
+  comments.end_point = end.lexical_identity;
   const Token *token = nullptr;
-  while ((token = tokens_.getNextToken()) &&
-         token->getEndLine() <= range.getEndLine()) {
+  while (
+      (token = tokens_.getNextToken()) &&
+      (token->getSourcePoint().order <= comments.end_point->order ||
+       (token->getSourcePoint().physical_occurrence ==
+            comments.end_point->physical_occurrence &&
+        token->getPath() == end.path && token->getStartLine() == end.line))) {
     comments.tokens.push_back(*token);
     tokens_.consumeNextToken();
   }
@@ -625,16 +710,33 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
 
   const auto &startPath = start.path;
   const auto &endPath = end.path;
-  if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath) {
+  const auto hasIdentity = [](const SourcePosition &position) {
+    return position.lexical_identity && position.lexical_identity->order > 0 &&
+           position.lexical_identity->physical_occurrence > 0;
+  };
+  const bool exactPoints = hasIdentity(start) && hasIdentity(end);
+  if (!isRecordedPhysicalSourcePath(startPath) ||
+      !isRecordedPhysicalSourcePath(endPath) ||
+      (startPath != endPath && !exactPoints)) {
     std::cerr << "REX_FLANG_INVARIANT[source-position-file]: "
               << node->class_name()
               << " source range does not belong to one exact physical file\n";
     ROSE_ABORT();
   }
 
-  const bool ordered = end.line > start.line ||
-                       (end.line == start.line && end.column > start.column);
-  if (!ordered) {
+  const bool sameOccurrence =
+      exactPoints && start.lexical_identity->physical_occurrence ==
+                         end.lexical_identity->physical_occurrence;
+  const bool physicallyOrdered =
+      startPath == endPath &&
+      (end.line > start.line ||
+       (end.line == start.line && end.column > start.column));
+  if ((exactPoints &&
+       (start.lexical_identity->order > end.lexical_identity->order ||
+        (sameOccurrence && !physicallyOrdered) ||
+        (!sameOccurrence &&
+         start.lexical_identity->order == end.lexical_identity->order))) ||
+      (!exactPoints && !physicallyOrdered)) {
     std::cerr << "REX_FLANG_INVARIANT[source-position-order]: "
               << node->class_name()
               << " source range is not a non-empty ordered half-open "
@@ -659,10 +761,16 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
   SgDeclarationStatement *declaration = isSgDeclarationStatement(node);
   const bool parsedDeclaration =
       declaration != nullptr && input == ExactSourceInput::source_spelled;
+  if (input == ExactSourceInput::source_spelled &&
+      (!exactPoints ||
+       start.lexical_identity->order > end.lexical_identity->order)) {
+    std::cerr << "REX_FLANG_INVARIANT[source-point-order]: "
+              << node->class_name()
+              << " requires exact ordered source-point endpoints\n";
+    ROSE_ABORT();
+  }
   if (parsedDeclaration &&
-      (!start.cooked_source_order ||
-       *start.cooked_source_order >= std::numeric_limits<unsigned int>::max() ||
-       declaration->get_translation_unit_source_order().has_value())) {
+      declaration->get_translation_unit_source_order().has_value()) {
     std::cerr << "REX_FLANG_INVARIANT[declaration-source-order]: "
               << node->class_name()
               << " requires one fresh exact cooked-source producer\n";
@@ -788,10 +896,19 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
   node->set_endOfConstruct(endInfo);
   startInfo->set_parent(node);
   endInfo->set_parent(node);
+  if (start.lexical_identity) {
+    startInfo->set_source_sequence_number(start.lexical_identity->order);
+    startInfo->set_physical_file_occurrence_id(
+        start.lexical_identity->physical_occurrence);
+  }
+  if (end.lexical_identity) {
+    endInfo->set_source_sequence_number(end.lexical_identity->order);
+    endInfo->set_physical_file_occurrence_id(
+        end.lexical_identity->physical_occurrence);
+  }
   if (parsedDeclaration) {
-    const unsigned int order = *start.cooked_source_order + 1;
-    startInfo->set_source_sequence_number(order);
-    declaration->initialize_translation_unit_source_order(order);
+    declaration->initialize_translation_unit_source_order(
+        start.lexical_identity->order);
   }
   Sg_File_Info *operatorInfo = nullptr;
   if (expression != nullptr) {
@@ -823,8 +940,9 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
   }
 
   const int nodePhysicalFileId = startInfo->get_physical_file_id();
-  if (nodePhysicalFileId < 0 ||
-      endInfo->get_physical_file_id() != nodePhysicalFileId ||
+  if (nodePhysicalFileId < 0 || endInfo->get_physical_file_id() < 0 ||
+      (sameOccurrence &&
+       endInfo->get_physical_file_id() != nodePhysicalFileId) ||
       startInfo->isShared() || endInfo->isShared() ||
       (operatorInfo != nullptr &&
        (operatorInfo->get_physical_file_id() != nodePhysicalFileId ||
@@ -844,7 +962,7 @@ void SageTreeBuilder::setExactSourcePosition(SgLocatedNode *node,
     ROSE_ABORT();
   }
 
-  if (input == ExactSourceInput::source_spelled && primarySource) {
+  if (input == ExactSourceInput::source_spelled) {
     for (Sg_File_Info *info :
          {node->get_file_info(), node->get_startOfConstruct(),
           node->get_endOfConstruct(), operatorInfo}) {
@@ -907,6 +1025,38 @@ void SageTreeBuilder::setSourcePosition(SgLocatedNode *node,
   }
 }
 
+SgEmptyDeclaration *SageTreeBuilder::buildSourcePreprocessingAnchor(
+    const Token &token, const SourcePosition &start, const SourcePosition &end,
+    SgScopeStatement *scope) {
+  ASSERT_not_null(scope);
+  ROSE_ASSERT(scope == SageBuilder::topScopeStack() &&
+              token.getTokenType() == TokenKind::preprocessing &&
+              token.getFortranSourceRole() ==
+                  FortranSourceTokenRole::cpp_control);
+  auto *anchor = new SgEmptyDeclaration(
+      SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor);
+  anchor->set_firstNondefiningDeclaration(anchor);
+  anchor->set_definingDeclaration(anchor);
+  setExactSourcePosition(anchor, start, end, /*attach_comments=*/false,
+                         ExactSourceInput::source_spelled);
+  // Publish earlier ordinary preprocessing before the include's own token.
+  // A child declaration is a later lexical boundary and cannot own these
+  // records when preserve-source output retains the original CPP include.
+  while (const Token *preceding = tokens_.getNextToken()) {
+    if (preceding->getSourcePoint().order >= token.getSourcePoint().order)
+      break;
+    attachCommentFromToken(anchor, *preceding, PreprocessingInfo::before,
+                           source_);
+    tokens_.consumeNextToken();
+  }
+  attachCommentFromToken(anchor, token, PreprocessingInfo::before, source_);
+  SageInterface::appendStatement(anchor, scope);
+  ROSE_ASSERT(anchor->get_parent() == scope && anchor->get_scope() == scope &&
+              anchor->getAttachedPreprocessingInfo() != nullptr &&
+              !anchor->getAttachedPreprocessingInfo()->empty());
+  return anchor;
+}
+
 void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
                                         const SourcePosition &start,
                                         const SourcePosition &end) {
@@ -922,6 +1072,13 @@ void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
   const auto &startPath = start.path;
   const auto &endPath = end.path;
   if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath ||
+      !start.lexical_identity || !end.lexical_identity ||
+      start.lexical_identity->order == 0 || end.lexical_identity->order == 0 ||
+      start.lexical_identity->physical_occurrence == 0 ||
+      end.lexical_identity->physical_occurrence == 0 ||
+      start.lexical_identity->physical_occurrence !=
+          end.lexical_identity->physical_occurrence ||
+      start.lexical_identity->order > end.lexical_identity->order ||
       pragma->get_startOfConstruct() != nullptr ||
       pragma->get_endOfConstruct() != nullptr) {
     std::cerr << "REX_FLANG_INVARIANT[pragma-source-position]: SgPragma "
@@ -938,6 +1095,12 @@ void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
   pragma->set_endOfConstruct(endInfo);
   startInfo->set_parent(pragma);
   endInfo->set_parent(pragma);
+  startInfo->set_source_sequence_number(start.lexical_identity->order);
+  startInfo->set_physical_file_occurrence_id(
+      start.lexical_identity->physical_occurrence);
+  endInfo->set_source_sequence_number(end.lexical_identity->order);
+  endInfo->set_physical_file_occurrence_id(
+      end.lexical_identity->physical_occurrence);
 
   const int physicalFileId = startInfo->get_physical_file_id();
   if (pragma->get_file_info() != startInfo || physicalFileId < 0 ||
@@ -959,9 +1122,9 @@ void SageTreeBuilder::setSourcePosition(SgPragma *pragma,
                    "file\n";
       ROSE_ABORT();
     }
-    startInfo->setOutputInCodeGeneration();
-    endInfo->setOutputInCodeGeneration();
   }
+  startInfo->setOutputInCodeGeneration();
+  endInfo->setOutputInCodeGeneration();
 }
 
 void SageTreeBuilder::setGeneratedSourcePosition(
@@ -1091,6 +1254,19 @@ void setLocatedNodeSourceAnchor(SgLocatedNode *node,
   node->set_endOfConstruct(end_info);
   start_info->set_parent(node);
   end_info->set_parent(node);
+  if (anchor.lexical_identity) {
+    if (anchor.lexical_identity->order == 0 ||
+        anchor.lexical_identity->physical_occurrence == 0) {
+      std::cerr << "REX_FLANG_INVARIANT[source-anchor-owner]: semantic alias "
+                   "has an incomplete lexical point identity\n";
+      ROSE_ABORT();
+    }
+    for (auto *info : {start_info, end_info}) {
+      info->set_source_sequence_number(anchor.lexical_identity->order);
+      info->set_physical_file_occurrence_id(
+          anchor.lexical_identity->physical_occurrence);
+    }
+  }
   Sg_File_Info *operator_info = nullptr;
   if (expression != nullptr) {
     operator_info = new Sg_File_Info(*start_info);
@@ -1259,7 +1435,8 @@ SgFunctionParameterList *cloneFortranCanonicalParameterList(
 
 void requireFortranProcedureCanonicalSource(
     SgProcedureHeaderStatement *canonical, SgScopeStatement *scope,
-    const SourcePosition &start, const SourcePosition &end) {
+    const SgSourceFile *source, const SourcePosition &start,
+    const SourcePosition &end) {
   ASSERT_not_null(canonical);
   ASSERT_not_null(scope);
 
@@ -1270,8 +1447,9 @@ void requireFortranProcedureCanonicalSource(
   SgAuxiliaryDeclarationList *auxiliary =
       isSgAuxiliaryDeclarationList(canonical->get_parent());
   const int expectedEndColumn = end.column - 1;
-  if (!isRecordedPhysicalSourcePath(startPath) || startPath != endPath ||
-      start.line < 1 || start.column < 1 || end.line < 1 || end.column < 1 ||
+  if (!isRecordedPhysicalSourcePath(startPath) ||
+      !isRecordedPhysicalSourcePath(endPath) || start.line < 1 ||
+      start.column < 1 || end.line < 1 || end.column < 1 ||
       startInfo == nullptr || endInfo == nullptr || startInfo == endInfo ||
       canonical->get_file_info() != startInfo ||
       startInfo->get_parent() != canonical ||
@@ -1288,8 +1466,8 @@ void requireFortranProcedureCanonicalSource(
       startInfo->isTransformation() || endInfo->isTransformation() ||
       startInfo->isShared() || endInfo->isShared() ||
       startInfo->get_physical_file_id() < 0 ||
-      endInfo->get_physical_file_id() != startInfo->get_physical_file_id() ||
-      auxiliary == nullptr || auxiliary->get_parent() != scope ||
+      endInfo->get_physical_file_id() < 0 || auxiliary == nullptr ||
+      auxiliary->get_parent() != scope ||
       scope->get_auxiliary_declarations() != auxiliary ||
       canonical->get_scope() != scope ||
       std::count(auxiliary->get_declarations().begin(),
@@ -1298,6 +1476,48 @@ void requireFortranProcedureCanonicalSource(
         << "REX_FLANG_INVARIANT[procedure-canonical-source-owner]: procedure='"
         << canonical->get_name().str()
         << "' has no exact generated source range and auxiliary owner\n";
+    ROSE_ABORT();
+  }
+
+  // Canonical declarations are generated semantic aliases of the complete
+  // written procedure. Their endpoints can belong to different INCLUDE
+  // occurrences; the active lexical context, rather than filename equality,
+  // proves that they are one chronological source span.
+  bool exactSpan = false;
+  if (start.lexical_identity || end.lexical_identity) {
+    if (source != nullptr && start.lexical_identity && end.lexical_identity &&
+        start.lexical_identity->order > 0 && end.lexical_identity->order > 0 &&
+        start.lexical_identity->physical_occurrence > 0 &&
+        end.lexical_identity->physical_occurrence > 0 &&
+        startInfo->get_source_sequence_number() ==
+            start.lexical_identity->order &&
+        endInfo->get_source_sequence_number() == end.lexical_identity->order &&
+        startInfo->get_physical_file_occurrence_id() ==
+            start.lexical_identity->physical_occurrence &&
+        endInfo->get_physical_file_occurrence_id() ==
+            end.lexical_identity->physical_occurrence &&
+        start.lexical_identity->order <= end.lexical_identity->order) {
+      try {
+        const Rose::FortranSource::Context context(source);
+        exactSpan = context.ownsSourcePoint(startInfo) &&
+                    context.ownsSourcePoint(endInfo);
+      } catch (const std::runtime_error &error) {
+        std::cerr << "REX_FLANG_INVARIANT[procedure-canonical-source-owner]: "
+                  << error.what() << '\n';
+        ROSE_ABORT();
+      }
+    }
+  } else {
+    // Manually supplied/generated positions without a lexical context retain
+    // the existing exact physical-file contract.
+    exactSpan = startPath == endPath && startInfo->get_physical_file_id() ==
+                                            endInfo->get_physical_file_id();
+  }
+  if (!exactSpan) {
+    std::cerr
+        << "REX_FLANG_INVARIANT[procedure-canonical-source-owner]: procedure='"
+        << canonical->get_name().str()
+        << "' has no exact chronological canonical source span\n";
     ROSE_ABORT();
   }
 
@@ -1901,7 +2121,7 @@ void SageTreeBuilder::attachFortranProcedureCanonical(
       ROSE_ABORT();
     }
   }
-  requireFortranProcedureCanonicalSource(canonical, scope, start, end);
+  requireFortranProcedureCanonicalSource(canonical, scope, source_, start, end);
 }
 
 void SageTreeBuilder::Enter(SgFunctionParameterList *&param_list,
@@ -2334,7 +2554,7 @@ void SageTreeBuilder::Enter(
       ROSE_ABORT();
     }
     if (canonicalWasPredeclared) {
-      requireFortranProcedureCanonicalSource(canonical, scope, fs, fe);
+      requireFortranProcedureCanonicalSource(canonical, scope, source_, fs, fe);
     } else {
       attachFortranProcedureCanonical(canonical, scope, fs, fe);
     }

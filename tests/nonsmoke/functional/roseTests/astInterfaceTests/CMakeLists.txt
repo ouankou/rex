@@ -493,7 +493,7 @@ function(add_rex_sageinterface_producer_death_test test_name mode diagnostic)
       dummy
       "${diagnostic}"
       $<TARGET_FILE:rex_sageinterface_producer_contract>
-      ${mode})
+      ${mode} ${ARGN})
   set_tests_properties(${test_name}
     PROPERTIES LABELS "astInterface;rex;death")
 endfunction()
@@ -1483,3 +1483,61 @@ foreach(_test IN LISTS _ast_interface_registered_tests)
                  "ROSE_TEST_OUTPUT_DIR=${_ast_interface_output_dir}")
   endif()
 endforeach()
+
+
+if(ENABLE-FORTRAN)
+  set(_pending_source
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_pending_publication.f90)
+  set(_pending_foreign
+    ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_pending_foreign.f90)
+  set(_pending_base ${CMAKE_CURRENT_BINARY_DIR}/pending-fortran-publication)
+  set(_pending_oracle ${_pending_base}/native-oracle)
+  set(_pending_positive ${_pending_base}/positive)
+  set(_pending_negative ${_pending_base}/foreign-point)
+  file(MAKE_DIRECTORY ${_pending_oracle} ${_pending_positive} ${_pending_negative})
+  add_test(NAME astInterface_rex_fortran_pending_publication_native_oracle
+    WORKING_DIRECTORY ${_pending_oracle}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      compiler=$1; source=$2; foreign=$3; work=$4
+      rm -f -- "$work/source" "$work/foreign" "$work/source.out" "$work/foreign.out"
+      "$compiler" "$source" -o "$work/source"
+      "$work/source" > "$work/source.out"
+      test "$(tr -d '[:space:]' < "$work/source.out")" = 7
+      "$compiler" "$foreign" -o "$work/foreign"
+      "$work/foreign" > "$work/foreign.out"
+      cmp "$work/source.out" "$work/foreign.out"
+    ]=] dummy ${CMAKE_Fortran_COMPILER} ${_pending_source}
+      ${_pending_foreign} ${_pending_oracle})
+  set_tests_properties(astInterface_rex_fortran_pending_publication_native_oracle
+    PROPERTIES FIXTURES_SETUP rex_fortran_pending_native
+      LABELS "astInterface;rex;FORTRANTEST;native-oracle" TIMEOUT 180
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_pending_oracle}")
+  add_test(NAME astInterface_rex_fortran_pending_publication
+    WORKING_DIRECTORY ${_pending_positive}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      checker=$1; compiler=$2; source=$3; work=$4; oracle=$5
+      rm -f -- "$work/pending.f90" "$work/pending" "$work/pending.out"
+      "$checker" --fortran-pending-publication "$source" "$work"
+      "$compiler" "$work/pending.f90" -o "$work/pending"
+      "$work/pending" > "$work/pending.out"
+      cmp "$oracle/source.out" "$work/pending.out"
+    ]=] dummy $<TARGET_FILE:rex_sageinterface_producer_contract>
+      ${CMAKE_Fortran_COMPILER} ${_pending_source} ${_pending_positive}
+      ${_pending_oracle})
+  set_tests_properties(astInterface_rex_fortran_pending_publication
+    PROPERTIES FIXTURES_REQUIRED rex_fortran_pending_native
+      LABELS "astInterface;rex;FORTRANTEST;unparser;runtime" TIMEOUT 180
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_pending_positive}")
+  add_rex_sageinterface_producer_death_test(
+    astInterface_rex_fortran_pending_publication_foreign_point_is_rejected
+    --reject-fortran-pending-point
+    "^REX_AST_INVARIANT\\[fortran-preprocessing-output-owner\\]: Fortran source context: source point escapes its exact occurrence$"
+    ${_pending_source} ${_pending_foreign} ${_pending_negative})
+  set_tests_properties(
+    astInterface_rex_fortran_pending_publication_foreign_point_is_rejected
+    PROPERTIES WORKING_DIRECTORY ${_pending_negative}
+      FIXTURES_REQUIRED rex_fortran_pending_native TIMEOUT 180
+      ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_pending_negative}")
+endif()

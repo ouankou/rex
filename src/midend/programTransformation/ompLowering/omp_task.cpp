@@ -322,6 +322,7 @@ static void transOmpTaskForC(SgOmpTaskStatement *target) {
 
 //! Translate omp task
 void OmpSupport::transOmpTask(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpTaskStatement *target = isSgOmpTaskStatement(node);
   ROSE_ASSERT(target != NULL);

@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <list>
+#include <memory>
 #include <optional>
 #include <string>
 #include <utility>
@@ -64,6 +65,8 @@ struct FlangSourceToken {
       PreprocessingDirectiveKind::none};
   FlangSourceRange range;
   std::string spelling;
+  std::optional<FlangSourcePointIdentity> source_point;
+  std::optional<FortranSourceTokenRole> source_role;
 };
 
 struct FlangDirectivePhysicalLine {
@@ -88,12 +91,15 @@ struct FlangDirectiveGroup {
   Fortran::parser::CharBlock cooked_source;
   std::size_t source_order_start{0};
   std::size_t source_order_size{0};
+  std::optional<FlangSourcePointIdentity> source_point;
   FlangSourceRange range;
   std::vector<FlangDirectivePhysicalLine> physical_lines;
   std::string logical_spelling;
   std::string semantic_spelling;
   // Selected directive grammar with independently owned exact host spelling.
   std::string source_expression_spelling;
+  std::string selected_output_text;
+  std::vector<Rose::FortranLex::SelectedDirectiveToken> selected_output_tokens;
 };
 
 struct FlangMacroInvocationSource {
@@ -124,6 +130,9 @@ public:
   }
 
   const auto &records() const { return index_.records(); }
+  const Rose::FortranLex::MacroExpansionProvenanceIndex &index() const {
+    return index_;
+  }
   const Rose::FortranLex::MacroExpansionProvenance *
   Find(Fortran::parser::Provenance at) const {
     return index_.Find(at);
@@ -139,6 +148,23 @@ private:
   const Fortran::parser::AllSources *source_arena_{nullptr};
 };
 
+class FlangSourcePointOrder;
+
+struct FlangSourceInclude {
+  Fortran::parser::ProvenanceRange source;
+  std::optional<Fortran::parser::ProvenanceRange> included;
+  std::string included_path;
+  std::string source_filename;
+  bool preprocessing{false};
+  unsigned int order{0};
+  FlangSourcePointIdentity end_point{0, 0};
+  FlangSourcePointIdentity child_entry{0, 0};
+  FlangSourcePointIdentity child_exit{0, 0};
+  std::optional<std::size_t> preprocessing_token;
+  PreprocessingDirectiveKind preprocessing_kind{
+      PreprocessingDirectiveKind::none};
+};
+
 struct FlangSourceStream {
   std::vector<FlangSourceToken> tokens;
   std::vector<FlangDirectiveGroup> directives;
@@ -146,6 +172,43 @@ struct FlangSourceStream {
   Fortran::parser::CharBlock base_cooked_source;
   std::vector<std::size_t> base_to_directive_offsets;
   FlangMacroProvenance macro_expansion_provenance;
+  std::vector<Rose::FortranLex::SourceInclusionProvenance>
+      source_inclusion_provenance;
+  std::shared_ptr<const FlangSourcePointOrder> source_point_order;
+  std::vector<FlangSourceInclude> source_includes;
+  std::vector<Rose::FortranLex::SelectedDirectiveSource> selected_directives;
+};
+
+// Complete invocation-owned point order, frozen before any Sage publication.
+// Physical and cooked queries are separate: macro expansion order must not be
+// reconstructed from the positions of its original argument spellings.
+class FlangSourcePointOrder {
+public:
+  struct PhysicalOccurrence {
+    const Fortran::parser::SourceFile *file;
+    Fortran::parser::ProvenanceRange range;
+    std::optional<Fortran::parser::ProvenanceRange> included_from;
+  };
+  FlangSourcePointOrder(const Fortran::parser::AllCookedSources &,
+                        const FlangSourceStream &);
+  ~FlangSourcePointOrder();
+  FlangSourcePointIdentity RequirePhysical(Fortran::parser::Provenance) const;
+  FlangSourcePointIdentity RequireCooked(std::size_t,
+                                         Fortran::parser::Provenance) const;
+  // Structural inclusion boundaries and unowned insertions are excluded;
+  // source-backed cooked aliases retain their distinct macro chronology.
+  std::pair<Fortran::parser::Provenance, FlangSourcePointIdentity>
+      PrecedingPhysicalPoint(FlangSourcePointIdentity) const;
+  FlangSourcePointIdentity RootEntry() const;
+  FlangSourcePointIdentity RootExit() const;
+  const FlangSourceInclude &
+      RequireSourceInclude(Fortran::parser::Provenance) const;
+  std::vector<PhysicalOccurrence> PhysicalOccurrences() const;
+  std::vector<FlangSourceInclude> SourceIncludes() const;
+
+private:
+  struct Impl;
+  std::unique_ptr<const Impl> impl_;
 };
 
 struct FlangBaseFortranCookedSource {
@@ -163,6 +226,9 @@ FlangSourceStream CollectFlangSourceStream(
     const Fortran::parser::CookedSource &, const FlangBaseFortranCookedSource &,
     const std::vector<Fortran::parser::ProvenanceRange> &,
     const std::vector<Rose::FortranLex::MacroExpansionProvenance> &,
+    const std::vector<Rose::FortranLex::SourceInclusionProvenance> &,
+    const std::vector<Rose::FortranLex::SelectedDirectiveSource> &,
+    const std::vector<Rose::FortranLex::TokenInvocationSource> &,
     bool enable_openmp, bool enable_openacc, bool fixed_form);
 
 void setSgSourceFile(SgSourceFile *sg_file);

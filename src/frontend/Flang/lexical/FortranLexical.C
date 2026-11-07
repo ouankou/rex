@@ -32,6 +32,21 @@ LexicalSource::macroExpansionProvenance() const {
   return preprocessor_->macroExpansionProvenance();
 }
 
+const std::vector<SourceInclusionProvenance> &
+LexicalSource::sourceInclusions() const {
+  return preprocessor_->sourceInclusions();
+}
+
+const std::vector<SelectedDirectiveSource> &
+LexicalSource::selectedDirectives() const {
+  return preprocessor_->selectedDirectives();
+}
+
+const std::vector<TokenInvocationSource> &
+LexicalSource::directiveSyntaxPrefixes() const {
+  return preprocessor_->directiveSyntaxPrefixes();
+}
+
 const CookedSource &LexicalSource::cooked() const {
   if (currentCooked_ == nullptr) {
     llvm::errs() << "REX_FORTRAN_LEXICAL_INVARIANT[source]: no cooked input\n";

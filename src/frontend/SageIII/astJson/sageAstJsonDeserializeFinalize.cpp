@@ -1,5 +1,6 @@
 #include "AstNodes/Expression/ExpressionTypeClassification.h"
 #include "AstNodes/Expression/OpenMPModifierValidation.h"
+#include "FortranSourceContext.h"
 #include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
 #include "tokenStreamMapping.h"
@@ -5903,7 +5904,9 @@ static void restoreClassTypeConstructionInputs(
       node_ids.erase(identity.first);
       throw;
     }
-    argument.release();
+    RecordNodeConstruction ownership;
+    ownership.own(argument.release());
+    ownership.publish();
     argument_states[id] = RestoreState::Complete;
   };
 
@@ -6784,7 +6787,8 @@ struct ArrayConstruction {
   NodeIds &node_ids;
   SemanticArrayConstruction arrays;
   RecordNodeConstruction ownership;
-  std::vector<uint64_t> provisional;
+  SourceTypeConstruction types{SourceTypeConstruction::Activation::deferred};
+  std::vector<std::pair<uint64_t, SgNode *>> provisional;
   std::vector<std::pair<SgSymbolTable *, SgSymbol *>> symbols;
   std::vector<SgInitializedName *> initialized_names;
   std::vector<SgFunctionParameterList *> parameter_lists;
@@ -6805,10 +6809,15 @@ struct ArrayConstruction {
 
   ArrayConstruction(NodeMap &nodes, NodeIds &node_ids,
                     const NodeIds &initial_nodes)
-      : nodes(nodes), node_ids(node_ids), ownership(initial_nodes) {}
+      : nodes(nodes), node_ids(node_ids),
+        ownership(initial_nodes,
+                  RecordNodeConstruction::Publication::deferred) {}
   ~ArrayConstruction() {
     if (committed)
       return;
+    SourceTypeConstructionScope type_scope(&types);
+    RecordNodeConstructionScope record_scope(&ownership);
+    SemanticArrayConstructionScope array_scope(&arrays);
     arrays.prepareRollback();
     for (auto *name : initialized_names)
       name->set_initializer(nullptr);
@@ -6833,38 +6842,77 @@ struct ArrayConstruction {
       owner->get_inheritances().swap(bases);
     for (const auto &[scope, owner] : auxiliary_owners)
       scope->set_auxiliary_declarations(owner);
-    for (const auto &[node, parent] : parameter_parents)
-      node->set_parent(parent);
     for (const auto &[table, symbol] : symbols)
       table->remove(symbol);
-    for (uint64_t id : provisional) {
+    for (const auto &[id, node] : provisional) {
       const auto found = nodes.find(id);
       if (found != nodes.end()) {
-        node_ids.erase(found->second);
+        ROSE_ASSERT(found->second == node);
         nodes.erase(found);
       }
+      node_ids.erase(node);
     }
+    // Restore borrowed graph mutations first. Then retire the private source
+    // types while the record declarations used as their semantic bases live.
+    types.takeRollback(arrays);
+    ownership.prepareRollback(types);
+    // These group snapshots precede any nested record/type borrow. Apply them
+    // after those guards restore their snapshots, while all keys still live.
+    for (const auto &[node, parent] : parameter_parents)
+      node->set_parent(parent);
+    types.rollback();
   }
   void retain(uint64_t id, SgNode *node) {
+    provisional.reserve(provisional.size() + 1);
+    provisional.emplace_back(id, node);
     ownership.own(node);
     if (auto *declaration = isSgTypedefDeclaration(node))
       ownership.own(declaration->get_type());
     if (auto *declaration = isSgEnumDeclaration(node))
       if (declaration->get_type()->get_declaration() == declaration)
         ownership.own(declaration->get_type());
-    provisional.push_back(id);
   }
-  void retain(SgSymbolTable *table, SgSymbol *symbol) {
-    ownership.own(symbol);
-    symbols.emplace_back(table, symbol);
+  void retain(uint64_t id, SgNode *node, RecordNodeConstruction &source) {
+    provisional.reserve(provisional.size() + 1);
+    source.publishTo(ownership);
+    retain(id, node);
   }
-  void commit(SourceTypeConstruction *source_types = nullptr) {
-    arrays.publish();
-    if (source_types != nullptr)
-      source_types->publish();
+  SgSymbol *retain(SgSymbolTable *table, const SgName &name,
+                   std::unique_ptr<SgSymbol> symbol) {
+    symbols.reserve(symbols.size() + 1);
+    auto *published = static_cast<SgSymbol *>(ownership.own(symbol.release()));
+    // The native insertion rolls its indexes back if allocation fails. The
+    // sole record owner already protects the symbol before that mutation.
+    table->insert(name, published);
+    symbols.emplace_back(table, published);
+    return published;
+  }
+  void commit() {
+    // Consolidation may allocate, but both forests remain private. Once both
+    // publication destinations are prepared, the final transfers allocate no
+    // storage and each native node has one record owner.
+    types.take(arrays);
+    types.preparePublish();
+    ownership.preparePublish();
+    types.publish();
     ownership.publish();
     committed = true;
   }
+};
+
+class ArrayConstructionScope {
+  SourceTypeConstructionScope types_;
+  RecordNodeConstructionScope records_;
+  SemanticArrayConstructionScope arrays_;
+
+public:
+  explicit ArrayConstructionScope(ArrayConstruction *owner,
+                                  SemanticArrayConstruction *arrays = nullptr)
+      : types_(owner != nullptr && !owner->committed ? &owner->types : nullptr),
+        records_(owner != nullptr && !owner->committed ? &owner->ownership
+                                                       : nullptr),
+        arrays_(owner != nullptr && !owner->committed ? &owner->arrays
+                                                      : arrays) {}
 };
 
 // Construct symbols after their exact basis, before dependent references.
@@ -6872,6 +6920,7 @@ struct ArrayConstruction {
 void restoreConstructedBasisSymbols(const SymbolBindingIndex &bindings,
                                     uint64_t built_id, NodeMap &nodes,
                                     ArrayConstruction *construction) {
+  ArrayConstructionScope construction_scope(construction);
   SgNode *basis = nodes.at(built_id);
   const auto found = bindings.by_basis.find(built_id);
   if (found == bindings.by_basis.end())
@@ -6905,10 +6954,14 @@ void restoreConstructedBasisSymbols(const SymbolBindingIndex &bindings,
           getVariantName(decoded.symbol_kind));
     }
     validateExternalSymbolBasisOwnership(symbol.get());
-    table->insert(decoded.entry_name, symbol.get());
+    SgSymbol *published = nullptr;
     if (construction != nullptr)
-      construction->retain(table, symbol.get());
-    SgSymbol *published = symbol.release();
+      published =
+          construction->retain(table, decoded.entry_name, std::move(symbol));
+    else {
+      table->insert(decoded.entry_name, symbol.get());
+      published = symbol.release();
+    }
     if (isSgLabelSymbol(published) != nullptr &&
         symbolIsLookupPreferred(table, published->get_name(), published) !=
             decoded.lookup_preferred)
@@ -6917,11 +6970,11 @@ void restoreConstructedBasisSymbols(const SymbolBindingIndex &bindings,
   }
 }
 
-void publishConstructedDeclaration(const AstFileRecord &ast,
-                                   const NodeRecord &record,
-                                   const NodeConstructionFlags &flags,
-                                   SgNode *node, NodeMap &nodes,
-                                   ArrayConstruction *construction) {
+void publishConstructedDeclaration(
+    const AstFileRecord &ast, const NodeRecord &record,
+    const NodeConstructionFlags &flags, SgNode *node, NodeMap &nodes,
+    ArrayConstruction *construction,
+    RecordNodeConstruction *record_owner = nullptr) {
   if (node == nullptr) {
     throw std::runtime_error("AST JSON delayed declaration construction "
                              "produced no node for " +
@@ -6930,14 +6983,18 @@ void publishConstructedDeclaration(const AstFileRecord &ast,
   SourceDeclaratorScopeConstruction source_scope(record, node, nodes);
   source_scope.populate(ast, record, nodes);
   flags.initialize(node);
-  if (!nodes.emplace(record.id, node).second) {
+  if (nodes.count(record.id) != 0) {
     throw std::runtime_error("AST JSON duplicate delayed declaration id " +
                              std::to_string(record.id));
   }
   if (construction != nullptr) {
-    construction->retain(record.id, node);
+    if (record_owner != nullptr)
+      construction->retain(record.id, node, *record_owner);
+    else
+      construction->retain(record.id, node);
     construction->node_ids.emplace(node, record.id);
   }
+  nodes.emplace(record.id, node);
   source_scope.publish();
 }
 
@@ -6946,6 +7003,7 @@ void buildDelayedDeclaration(
     ArrayConstruction *construction, const RecordConstructionFields &fields,
     SgType *typedef_semantic_base = nullptr,
     const NodeRecord *constructing_function = nullptr) {
+  ArrayConstructionScope construction_scope(construction);
   if (nodes.count(record.id) != 0)
     throw std::runtime_error("AST JSON duplicate delayed declaration id " +
                              std::to_string(record.id));
@@ -6963,12 +7021,13 @@ void buildDelayedDeclaration(
   const auto &flags = fields.flags;
   const auto &positions = fields.positions.value();
   if (record.kind == "SgEnumDeclaration") {
-    std::unique_ptr<SgEnumDeclaration> declaration(
-        isSgEnumDeclaration(createNodeFromRecord(record, nullptr, nodes)));
-    std::unique_ptr<SgEnumType> wrapper(
-        declaration->get_type()->get_declaration() == declaration.get()
-            ? declaration->get_type()
-            : nullptr);
+    RecordNodeConstruction local_ownership;
+    auto &ownership =
+        construction != nullptr ? construction->ownership : local_ownership;
+    auto *declaration = isSgEnumDeclaration(
+        ownership.own(createNodeFromRecord(record, nullptr, nodes)));
+    if (declaration->get_type()->get_declaration() == declaration)
+      ownership.own(declaration->get_type());
     const uint64_t parent = singleEdgeTarget(record, "parent");
     if (parent != 0 && ast.node(parent).kind == "SgDeclarationScope") {
       const auto children = edgesFor(ast.node(parent), "declarations");
@@ -6983,10 +7042,10 @@ void buildDelayedDeclaration(
                (parent == requiredSingleEdgeTarget(record, "scope") ||
                 ast.node(parent).kind == "SgAuxiliaryDeclarationList"))
       declaration->set_parent(nodeById(nodes, parent));
-    publishConstructedDeclaration(ast, record, flags, declaration.get(), nodes,
+    publishConstructedDeclaration(ast, record, flags, declaration, nodes,
                                   construction);
-    wrapper.release();
-    declaration.release();
+    if (construction == nullptr)
+      ownership.publish();
     return;
   }
   auto publish_scope = [&](auto *node) {
@@ -7008,7 +7067,9 @@ void buildDelayedDeclaration(
         record, "initialized_name", "initializedName");
     auto *name =
         name_id != 0 ? nodeByIdAs<SgInitializedName>(nodes, name_id) : nullptr;
-    RecordNodeConstruction ownership;
+    RecordNodeConstruction local_ownership;
+    auto &ownership =
+        construction != nullptr ? construction->ownership : local_ownership;
     if (name != nullptr && name->get_parent() == nullptr)
       ownership.borrow(name);
     auto *declaration = isSgUsingDeclarationStatement(
@@ -7016,22 +7077,26 @@ void buildDelayedDeclaration(
     publish_scope(declaration);
     publishConstructedDeclaration(ast, record, flags, declaration, nodes,
                                   construction);
-    ownership.publish();
+    if (construction == nullptr)
+      ownership.publish();
   } else if (record.kind == "SgNonrealDecl") {
-    std::unique_ptr<SgNonrealDecl> declaration(
-        isSgNonrealDecl(createNodeFromRecord(record, nullptr, nodes)));
+    RecordNodeConstruction local_ownership;
+    auto &ownership =
+        construction != nullptr ? construction->ownership : local_ownership;
+    auto *declaration = isSgNonrealDecl(
+        ownership.own(createNodeFromRecord(record, nullptr, nodes)));
     ASSERT_not_null(declaration);
-    std::unique_ptr<SgNonrealType> type(declaration->get_type());
-    publish_scope(declaration.get());
+    ownership.own(declaration->get_type());
+    publish_scope(declaration);
     if (uint64_t parent_id = singleEdgeTarget(record, "parent")) {
       auto parent = nodes.find(parent_id);
       if (parent != nodes.end())
         declaration->set_parent(parent->second);
     }
-    publishConstructedDeclaration(ast, record, flags, declaration.get(), nodes,
+    publishConstructedDeclaration(ast, record, flags, declaration, nodes,
                                   construction);
-    type.release();
-    declaration.release();
+    if (construction == nullptr)
+      ownership.publish();
   } else if (record.kind == "SgNamespaceAliasDeclarationStatement") {
     auto *target = nodeByIdAs<SgNamespaceDeclarationStatement>(
         nodes, record.properties.requiredInt("namespace_declaration"));
@@ -7049,18 +7114,22 @@ void buildDelayedDeclaration(
         statementFieldsFromJson(record, V_SgNamespaceAliasDeclarationStatement);
     auto fields = declarationFieldsFromJson(
         record.properties, V_SgNamespaceAliasDeclarationStatement, record.kind);
-    auto declaration =
-        std::make_unique<SgNamespaceAliasDeclarationStatement>(name, target);
-    installSourcePositions(declaration.get(),
-                           constructSourcePositions(positions), record.kind);
+    RecordNodeConstruction local_ownership;
+    auto &ownership =
+        construction != nullptr ? construction->ownership : local_ownership;
+    auto *declaration =
+        ownership.make<SgNamespaceAliasDeclarationStatement>(name, target);
+    installSourcePositions(declaration, constructSourcePositions(positions),
+                           record.kind);
     declaration->set_namespaceAliasDeclaration(alias);
     declaration->set_is_alias_for_another_namespace_alias(alias != nullptr);
-    publish_scope(declaration.get());
-    statement_fields.initialize(declaration.get());
-    fields.initialize(declaration.get());
-    publishConstructedDeclaration(ast, record, flags, declaration.get(), nodes,
+    publish_scope(declaration);
+    statement_fields.initialize(declaration);
+    fields.initialize(declaration);
+    publishConstructedDeclaration(ast, record, flags, declaration, nodes,
                                   construction);
-    declaration.release();
+    if (construction == nullptr)
+      ownership.publish();
   } else if (record.kind == "SgTemplateParameter") {
     const auto fields =
         templateParameterSourceFieldsFromJson(record.properties);
@@ -7077,13 +7146,17 @@ void buildDelayedDeclaration(
         isSgTemplateParameterList(owner) == nullptr)
       throw std::runtime_error("AST JSON template parameter has invalid owner");
     if (fields.kind != SgTemplateParameter::nontype_parameter) {
-      std::unique_ptr<SgTemplateParameter> parameter(
-          isSgTemplateParameter(createNodeFromRecord(record, nullptr, nodes)));
+      RecordNodeConstruction local_ownership;
+      auto &ownership =
+          construction != nullptr ? construction->ownership : local_ownership;
+      auto *parameter = isSgTemplateParameter(
+          ownership.own(createNodeFromRecord(record, nullptr, nodes)));
       if (owner != nullptr)
         parameter->set_parent(owner);
-      publishConstructedDeclaration(ast, record, flags, parameter.get(), nodes,
+      publishConstructedDeclaration(ast, record, flags, parameter, nodes,
                                     construction);
-      parameter.release();
+      if (construction == nullptr)
+        ownership.publish();
       return;
     }
     const uint64_t name_id =
@@ -7113,7 +7186,9 @@ void buildDelayedDeclaration(
     }
     const auto operands = templateParameterOperandsFromRecord(record, nodes);
     SgNode::SourceStateConstruction source_construction;
-    RecordNodeConstruction ownership;
+    RecordNodeConstruction local_ownership;
+    auto &ownership =
+        construction != nullptr ? construction->ownership : local_ownership;
     ownership.borrow(name);
     if (operands.expression != nullptr)
       ownership.borrow(operands.expression);
@@ -7135,7 +7210,8 @@ void buildDelayedDeclaration(
       parameter->set_parent(owner);
     publishConstructedDeclaration(ast, record, flags, parameter, nodes,
                                   construction);
-    ownership.publish();
+    if (construction == nullptr)
+      ownership.publish();
   } else if (record.kind == "SgInitializedName") {
     const SgName name = record.properties.requiredName("name");
     const InitializedNameRoles roles =
@@ -7213,7 +7289,9 @@ void buildDelayedDeclaration(
     SgInitializedName *previous =
         previous_id != 0 ? nodeByIdAs<SgInitializedName>(nodes, previous_id)
                          : nullptr;
-    SourceTypeConstruction interface_types;
+    std::optional<SourceTypeConstruction> interface_types;
+    if (construction == nullptr)
+      interface_types.emplace();
     InlineExpressionConstruction ownership;
     ownership.borrow(type);
     const uint64_t binding_scope_id =
@@ -7274,8 +7352,15 @@ void buildDelayedDeclaration(
       if (binding_value != nullptr)
         ownership.borrow(binding_value);
     }
+    // A private group takes all operands, lexical tokens and original borrowed
+    // parents before a record can attach them. Its record and type guards then
+    // protect every observer through later decoding or a failed retry.
+    if (construction != nullptr)
+      construction->ownership.take(ownership);
     auto *initialized_name = static_cast<SgInitializedName *>(
-        ownership.own(constructInitializedName(name, type)));
+        construction != nullptr
+            ? construction->ownership.own(constructInitializedName(name, type))
+            : ownership.own(constructInitializedName(name, type)));
     if (binding_kind != SgInitializedName::e_not_structured_binding) {
       publish_scope(initialized_name);
       initialized_name->initialize_structured_binding(
@@ -7341,11 +7426,14 @@ void buildDelayedDeclaration(
         initialized_name->set_parent(parameters);
       }
     }
-    interface_types.preparePublish();
+    if (interface_types)
+      interface_types->preparePublish();
     publishConstructedDeclaration(ast, record, flags, published, nodes,
                                   construction);
-    interface_types.publish();
-    ownership.publish();
+    if (interface_types)
+      interface_types->publish();
+    if (construction == nullptr)
+      ownership.publishAst();
   } else {
     const SgName name = record.properties.requiredName("name");
     const TypedefMetadata metadata = typedefMetadataFromJson(record.properties);
@@ -7400,34 +7488,41 @@ void buildDelayedDeclaration(
         deduced_arguments.push_back(
             nodeByIdAs<SgTemplateArgument>(nodes, edge.target));
     }
-    std::unique_ptr<SgTypedefDeclaration> declaration(
-        constructTypedefDeclaration(
+    const NodeIds mapped_nodes =
+        construction != nullptr ||
+                RecordNodeConstruction::hasActiveTransaction()
+            ? NodeIds{}
+            : mappedNodePointers(nodes);
+    RecordNodeConstruction ownership(
+        construction != nullptr ? construction->node_ids : mapped_nodes);
+    auto *declaration = static_cast<SgTypedefDeclaration *>(
+        ownership.own(constructTypedefDeclaration(
             name, base, base_declaration, owns_base_declaration, kind,
-            template_declaration, arguments, deduced_arguments, metadata));
+            template_declaration, arguments, deduced_arguments, metadata)));
     // Generated declaration destructors do not reclaim the canonical wrapper.
-    std::unique_ptr<SgTypedefType> wrapper(declaration->get_type());
-    SgTypedefDeclaration *published = declaration.get();
+    ownership.own(declaration->get_type());
+    SgTypedefDeclaration *published = declaration;
     const bool owns_source_type = isTypedefOwnedSourceType(base);
     ROSE_ASSERT(!owns_source_type || base->get_parent() == published);
     try {
-      installSourcePositions(declaration.get(),
-                             constructSourcePositions(positions), record.kind);
+      installSourcePositions(declaration, constructSourcePositions(positions),
+                             record.kind);
       if (auto *instantiation =
-              isSgTemplateInstantiationTypedefDeclaration(declaration.get())) {
+              isSgTemplateInstantiationTypedefDeclaration(declaration)) {
         ROSE_ASSERT(template_spelling.has_value());
         instantiation->set_templateName(template_spelling->first);
         instantiation->set_templateHeader(template_spelling->second);
       }
-      publish_scope(declaration.get());
-      if (auto *alias = isSgTemplateTypedefDeclaration(declaration.get())) {
+      publish_scope(declaration);
+      if (auto *alias = isSgTemplateTypedefDeclaration(declaration)) {
         alias->get_templateParameters() = parameters;
         for (auto *parameter : parameters)
           parameter->set_parent(alias);
       }
-      statement_fields.initialize(declaration.get());
-      fields.initialize(declaration.get());
+      statement_fields.initialize(declaration);
+      fields.initialize(declaration);
       publishConstructedDeclaration(ast, record, flags, published, nodes,
-                                    construction);
+                                    construction, &ownership);
     } catch (...) {
       for (const auto *list : {&arguments, &deduced_arguments})
         for (auto *argument : *list)
@@ -7442,8 +7537,8 @@ void buildDelayedDeclaration(
         base_declaration->set_parent(nullptr);
       throw;
     }
-    wrapper.release();
-    declaration.release();
+    if (construction == nullptr)
+      ownership.publish();
   }
 }
 } // namespace
@@ -7452,6 +7547,7 @@ static bool constructTemplateVariableDeclarator(
     const AstFileRecord &ast, NodeMap &nodes, uint64_t id,
     const std::function<bool(uint64_t)> &construct_dependency,
     ArrayConstruction *construction) {
+  ArrayConstructionScope construction_scope(construction);
   auto *declaration = nodeByIdAs<SgTemplateVariableDeclaration>(nodes, id);
   const auto &variables = edgesFor(ast.node(id), "variables");
   if (variables.size() != 1)
@@ -7802,8 +7898,8 @@ constructReciprocalSourceAliases(const AstFileRecord &ast,
   NodeMap private_nodes = nodes;
   const NodeIds borrowed = mappedNodePointers(nodes);
   NodeIds private_ids = borrowed;
-  SourceTypeConstruction semantic_types;
   ArrayConstruction construction(private_nodes, private_ids, borrowed);
+  ArrayConstructionScope construction_scope(&construction);
   std::vector<uint64_t> built;
   built.reserve(aliases.size());
   std::vector<const NodeRecord *> pending = aliases;
@@ -7871,12 +7967,9 @@ constructReciprocalSourceAliases(const AstFileRecord &ast,
   for (uint64_t id : built)
     restoreConstructedBasisSymbols(bindings, id, private_nodes, &construction);
   nodes.reserve(private_nodes.size());
-  source_types.preparePublish();
-  semantic_types.preparePublish();
-  construction.arrays.preparePublish();
+  // Written bases first join this group's still-private type forest. Record
+  // publication happens only after that forest and its destination are ready.
   source_types.publish();
-  construction.arrays.publish();
-  semantic_types.publish();
   construction.commit();
   source_bases.published = true;
   nodes.merge(private_nodes);
@@ -7973,7 +8066,7 @@ void drainDelayedDeclarationsWithArrays(
         ++index;
         continue;
       }
-      SemanticArrayConstructionScope array_scope(arrays);
+      ArrayConstructionScope construction_scope(construction, arrays);
       buildDelayedDeclaration(ast, record, nodes, construction,
                               construction_fields.at(record.id));
       // Publish canonical table entries for the new declaration before any
@@ -8026,6 +8119,7 @@ static void constructRecordedNodes(
     const SymbolConstructionAdvance &advance_symbols,
     ArrayConstruction *source_construction,
     RecordConstructionFieldMap *prepared_construction_fields) {
+  ArrayConstructionScope source_scope(source_construction);
   RecordConstructionFieldMap local_construction_fields;
   static const VariantVector expression_variants(V_SgExpression);
   static const VariantVector omp_body_variants(V_SgOmpBodyStatement);
@@ -10675,7 +10769,9 @@ static void constructRecordedNodes(
       auto *construction = source_construction != nullptr
                                ? source_construction
                                : array_owner(record.id);
-      auto *arrays = construction == nullptr ? nullptr : &construction->arrays;
+      auto *arrays = construction == nullptr
+                         ? SemanticArrayConstruction::current()
+                         : &construction->arrays;
       if (!semanticArrayDependenciesReady(record.properties, arrays))
         continue;
       if (construction != nullptr && construction != source_construction &&
@@ -10700,7 +10796,7 @@ static void constructRecordedNodes(
         if (pending_declaration || pending_operand)
           continue;
       }
-      SemanticArrayConstructionScope array_scope(arrays);
+      ArrayConstructionScope construction_scope(construction, arrays);
       std::unordered_set<uint64_t> dependencies, symbol_dependencies,
           type_dependencies;
       std::unordered_set<uint64_t> lifetime_declarations;
@@ -12728,27 +12824,27 @@ static void constructVariableDefinitions(const AstFileRecord &ast,
     ROSE_ASSERT(fields.statement.has_value() && fields.declaration.has_value());
     auto positions = constructSourcePositions(fields.positions.value());
     SgNode::SourceStateConstruction construction;
-    std::unique_ptr<SgVariableDefinition> definition(new SgVariableDefinition(
-        static_cast<Sg_File_Info *>(nullptr), name, bitfield));
+    RecordNodeConstruction ownership;
+    auto *definition = ownership.make<SgVariableDefinition>(
+        static_cast<Sg_File_Info *>(nullptr), name, bitfield);
     try {
-      fields.declaration->initialize(definition.get());
+      fields.declaration->initialize(definition);
       definition->set_is_zero_width_bitfield(zero_width);
       definition->set_has_no_unique_address(no_unique_address);
-      fields.statement->initialize(definition.get());
-      installSourcePositions(definition.get(), std::move(positions),
-                             record.kind);
-      fields.flags.initialize(definition.get());
+      fields.statement->initialize(definition);
+      installSourcePositions(definition, std::move(positions), record.kind);
+      fields.flags.initialize(definition);
       definition->set_parent(name);
-      name->set_definition(definition.get());
-      nodes.emplace(record.id, definition.get());
+      name->set_definition(definition);
+      nodes.emplace(record.id, definition);
     } catch (...) {
-      if (name->get_definition() == definition.get())
+      if (name->get_definition() == definition)
         name->set_definition(nullptr);
-      if (bitfield != nullptr && bitfield->get_parent() == definition.get())
+      if (bitfield != nullptr && bitfield->get_parent() == definition)
         bitfield->set_parent(nullptr);
       throw;
     }
-    definition.release();
+    ownership.publish();
   }
 }
 
@@ -12777,6 +12873,7 @@ static void
 constructBaseClassRecord(const NodeRecord &record, NodeMap &nodes,
                          RecordConstructionFields &fields,
                          ArrayConstruction *construction = nullptr) {
+  ArrayConstructionScope construction_scope(construction);
   const bool plain = record.kind == "SgBaseClass";
   const bool expression = record.kind == "SgExpBaseClass";
   const bool nonreal = record.kind == "SgNonrealBaseClass";
@@ -14153,6 +14250,7 @@ static bool constructSignatureDependency(
     std::unordered_set<uint64_t> &visiting,
     std::vector<const NodeRecord *> &delayed_declarations,
     ArrayConstruction *construction = nullptr) {
+  ArrayConstructionScope construction_scope(construction);
   if (declarationConstructionDependencyReady(ast, nodes, id, needs_symbol,
                                              needs_type))
     return true;
@@ -14315,12 +14413,15 @@ static bool constructSignatureDependency(
         record, nodes, fields.template_argument.value(), fields.flags,
         fields.positions.value());
     auto *input = argument.get();
+    RecordNodeConstruction ownership;
     if (construction != nullptr)
       construction->retain(id, argument.release());
     if (!nodes.emplace(id, input).second)
       throw std::runtime_error(
           "AST JSON template argument was published twice");
-    argument.release();
+    if (argument != nullptr)
+      ownership.own(argument.release());
+    ownership.publish();
   } else if (base_class) {
     constructBaseClassRecord(record, nodes, construction_fields.at(id),
                              construction);
@@ -14545,7 +14646,6 @@ struct FunctionParameterConstruction {
   NodeMap nodes;
   NodeIds borrowed;
   NodeIds node_ids;
-  SourceTypeConstruction types;
   ArrayConstruction construction;
   std::vector<const NodeRecord *> delayed;
   std::unordered_set<uint64_t> symbols;
@@ -14563,7 +14663,7 @@ struct FunctionParameterConstruction {
                std::unordered_set<uint64_t> &constructed_symbols) {
     nodes.merge(group);
     available.reserve(nodes.size());
-    construction.commit(&types);
+    construction.commit();
     available.merge(nodes);
     delayed_declarations = std::move(delayed);
     constructed_symbols = std::move(symbols);
@@ -14683,9 +14783,7 @@ static bool constructFunctionDeclaration(
                                   : constructed_signature_symbol_bases;
   auto *transaction =
       parameters != nullptr ? &parameters->construction : construction;
-  SemanticArrayConstructionScope array_scope(
-      transaction != nullptr ? &transaction->arrays
-                             : SemanticArrayConstruction::current());
+  ArrayConstructionScope construction_scope(transaction);
   FunctionParameterInputs parameter_inputs;
   if (needs_parameters &&
       !parameter_inputs.prepare(
@@ -15326,6 +15424,26 @@ SgSourceFile *reconstructSourceFile(const AstFileRecord &ast,
   ExternalFunctionDeserializationIdentityGuard external_function_identity_guard(
       ast);
   ExternalClassDeserializationIdentityGuard external_class_identity_guard;
+  SgNode::SourceStateConstruction source_construction;
+  // Publication is deferred across the whole graph, including disconnected
+  // intermediate records. Source types outlive the private AST preparation
+  // phase so their original semantic bases remain available for cache removal.
+  RecordNodeConstruction records(
+      RecordNodeConstruction::Publication::transaction);
+  SourceTypeConstruction source_types;
+  struct ReconstructionRollback {
+    RecordNodeConstruction &records;
+    SourceTypeConstruction &types;
+    bool committed = false;
+    ~ReconstructionRollback() {
+      if (!committed) {
+        records.forEachSource([](SgSourceFile *source) {
+          OmpSupport::discardOpenMPProducerSemanticRecords(source);
+        });
+        records.prepareRollback(types);
+      }
+    }
+  } rollback{records, source_types};
   restoreFileIdMapFromMetadata(ast.metadata);
 
   for (const NodeRecord &record : ast.nodes)
@@ -15340,7 +15458,6 @@ SgSourceFile *reconstructSourceFile(const AstFileRecord &ast,
       throw std::runtime_error(
           "AST JSON non-located node owns preprocessing entries");
   }
-  SgNode::SourceStateConstruction source_construction;
   NodeMap nodes;
   nodes.reserve(ast.nodes.size());
   for (const NodeRecord &record : ast.nodes) {
@@ -15988,8 +16105,17 @@ SgSourceFile *reconstructSourceFile(const AstFileRecord &ast,
   }
   restoreFileIdMapFromMetadata(ast.metadata);
   restoreOpenMPProducerSemanticRecords(ast, nodes);
+  for (const NodeRecord &record : ast.nodes)
+    if (auto *source = isSgSourceFile(nodeById(nodes, record.id)))
+      Rose::FortranSource::validate(source);
+  source_types.preparePublish();
+  records.preparePublish();
+  source_types.publish();
+  records.publish();
+  static_assert(std::is_nothrow_swappable_v<NodeMap>);
   if (restored_nodes != nullptr)
-    *restored_nodes = std::move(nodes);
+    restored_nodes->swap(nodes);
+  rollback.committed = true;
   file_id_maps.committed = true;
   return file;
 }

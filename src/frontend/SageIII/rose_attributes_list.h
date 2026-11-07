@@ -58,6 +58,19 @@ public:
     attached_output_trailing_line = 2
   };
 
+  // These roles are assigned by the Fortran lexical producer before source
+  // attachment. In particular, skipped text is not necessarily inactive CPP:
+  // it can be whitespace or an intentionally disabled directive surface.
+  enum class FortranSourceRole {
+    none = 0,
+    comment = 1,
+    layout = 2,
+    cpp_control = 3,
+    cpp_inactive = 4,
+    disabled_directive = 5,
+    lexical_control = 6
+  };
+
   // Enum type to help classify the type for string that has been saved.
   // This helps in the unparsing to make sure that line feeds are introduced
   // properly.
@@ -171,6 +184,7 @@ private:
   bool p_isTransformation;
 
   OutputPlacementType outputPlacement;
+  FortranSourceRole fortranSourceRole = FortranSourceRole::none;
 
   // An attached preprocessing record is an owned source-surface object, not a
   // shareable attribute.  The owning SgLocatedNode is recorded explicitly so
@@ -202,6 +216,8 @@ public:
   PreprocessingInfo(const PreprocessingInfo &prepInfo);
 
   // Access functions
+  FortranSourceRole getFortranSourceRole() const { return fortranSourceRole; }
+  void setFortranSourceRole(FortranSourceRole role);
   int getLineNumber() const;
   int getColumnNumber() const;
   std::string getString() const;

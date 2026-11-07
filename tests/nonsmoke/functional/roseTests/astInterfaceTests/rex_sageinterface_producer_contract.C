@@ -1,9 +1,14 @@
 #include "rose.h"
 
+#include "FortranSourceContext.h"
 #include "RoseAst.h"
+#include "astJson/sageAstJsonPrivate.h"
 
 #include <algorithm>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <string>
 #include <unordered_set>
 #include <vector>
@@ -829,9 +834,208 @@ int exerciseEmptyPreprocessingMoveToDetachedDestination() {
   return 0;
 }
 
+struct FortranSourceRecord {
+  SgLocatedNode *owner;
+  PreprocessingInfo *record;
+};
+
+FortranSourceRecord findFortranSourceRecord(SgSourceFile *file,
+                                            const std::string &marker) {
+  FortranSourceRecord found{};
+  for (auto *node : NodeQuery::querySubTree(file, V_SgLocatedNode)) {
+    auto *owner = isSgLocatedNode(node);
+    owner->validateAttachedPreprocessingInfoOwnership();
+    const auto *entries = owner->get_attachedPreprocessingInfoPtr();
+    if (entries == nullptr)
+      continue;
+    for (auto *entry : *entries) {
+      if (entry->getString() != marker)
+        continue;
+      ROSE_ASSERT(found.record == nullptr);
+      found = {owner, entry};
+    }
+  }
+  ROSE_ASSERT(found.owner != nullptr && found.record != nullptr);
+  return found;
+}
+
+struct FortranSourceRecordSnapshot {
+  const Sg_File_Info *point;
+  std::string raw_point;
+  std::string text;
+  PreprocessingInfo::DirectiveType directive;
+  PreprocessingInfo::RelativePositionType relative;
+  PreprocessingInfo::OutputPlacementType placement;
+  PreprocessingInfo::FortranSourceRole role;
+  int lines;
+  bool transformation;
+
+  explicit FortranSourceRecordSnapshot(const PreprocessingInfo *record)
+      : point(record->get_file_info()),
+        raw_point(Rose::AstJson::rawFileInfoJson(point)),
+        text(record->getString()), directive(record->getTypeOfDirective()),
+        relative(record->getRelativePosition()),
+        placement(record->getOutputPlacement()),
+        role(record->getFortranSourceRole()), lines(record->getNumberOfLines()),
+        transformation(record->isTransformation()) {}
+
+  void requireUnchanged(const PreprocessingInfo *record,
+                        const SgLocatedNode *owner) const {
+    ROSE_ASSERT(record->get_file_info() == point &&
+                record->getAttachedOwner() == owner &&
+                point->get_parent() == owner);
+    ROSE_ASSERT(Rose::AstJson::rawFileInfoJson(point) == raw_point &&
+                record->getString() == text &&
+                record->getTypeOfDirective() == directive &&
+                record->getRelativePosition() == relative &&
+                record->getOutputPlacement() == placement &&
+                record->getFortranSourceRole() == role &&
+                record->getNumberOfLines() == lines &&
+                record->isTransformation() == transformation);
+    owner->validateAttachedPreprocessingInfoOwnership();
+    const auto *records = owner->get_attachedPreprocessingInfoPtr();
+    ROSE_ASSERT(records != nullptr &&
+                std::count(records->begin(), records->end(), record) == 1);
+  }
+};
+
+int exerciseFortranPendingPublication(const char *executable,
+                                      const std::string &source,
+                                      const std::filesystem::path &directory,
+                                      const std::string &foreign = {}) {
+  namespace fs = std::filesystem;
+  fs::create_directories(directory);
+  std::vector<std::string> arguments{executable,   "-rose:skipfinalCompileStep",
+                                     "-outputdir", directory.string(),
+                                     "-c",         source};
+  if (!foreign.empty())
+    arguments.push_back(foreign);
+  auto *project = frontend(arguments);
+  ROSE_ASSERT(project != nullptr &&
+              project->get_fileList().size() == (foreign.empty() ? 1 : 2));
+  auto *file = isSgSourceFile(project->get_fileList().front());
+  auto *record_file =
+      foreign.empty() ? file : isSgSourceFile(project->get_fileList().back());
+  ROSE_ASSERT(file != nullptr && record_file != nullptr);
+  Rose::FortranSource::validate(file);
+  Rose::FortranSource::validate(record_file);
+  const Rose::FortranSource::Context context(file);
+  const Rose::FortranSource::Context record_context(record_file);
+  const std::string marker = foreign.empty()
+                                 ? "! REX_PENDING_PUBLICATION_SOURCE"
+                                 : "! REX_PENDING_PUBLICATION_FOREIGN";
+  const auto original = findFortranSourceRecord(record_file, marker);
+  auto *record = original.record;
+  const auto *point = record->get_file_info();
+  const auto &lexical = record_file->get_fortran_source_context();
+  ROSE_ASSERT(
+      record->getFortranSourceRole() ==
+          PreprocessingInfo::FortranSourceRole::comment &&
+      record->getTypeOfDirective() == PreprocessingInfo::F90StyleComment &&
+      !record->isTransformation() && record_context.ownsSourcePoint(point));
+  ROSE_ASSERT(point->get_parent() == original.owner &&
+              point->get_physical_filename() ==
+                  record_file->get_file_info()->get_physical_filename() &&
+              point->get_raw_line() == 5 && point->get_physical_line() == 5 &&
+              point->get_raw_col() == 3 && point->get_col() == 3 &&
+              point->get_physical_file_occurrence_id() ==
+                  lexical.root_occurrence &&
+              lexical.root_entry < point->get_source_sequence_number() &&
+              point->get_source_sequence_number() < lexical.root_exit);
+  const auto original_raw = Rose::AstJson::rawFileInfoJson(point);
+  const auto targets = NodeQuery::querySubTree(file, V_SgFortranContinueStmt);
+  ROSE_ASSERT(targets.size() == 1);
+  auto *target = isSgFortranContinueStmt(targets.front());
+  auto *body = isSgBasicBlock(target->get_parent());
+  ROSE_ASSERT(body != nullptr && context.ownsOutputBoundary(target));
+  auto *leaf = SageBuilder::buildFortranContinueStmt();
+  auto *root = SageBuilder::buildBasicBlock(leaf);
+  root->setCaseInsensitive(body->isCaseInsensitive());
+  ROSE_ASSERT(root->get_parent() == nullptr && leaf->get_parent() == root);
+
+  // Establish the real attached output owner before moving source trivia.
+  // Removing this temporary root without relocation then reproduces the
+  // already-published-boundary -> pending-subtree phase of nested lowering.
+  SageInterface::appendStatement(root, body);
+  ROSE_ASSERT(root->get_parent() == body &&
+              SageInterface::getEnclosingSourceFile(leaf) == file);
+  original.owner->transferPreprocessingInfo(record, leaf,
+                                            PreprocessingInfo::before);
+  ROSE_ASSERT(Rose::AstJson::rawFileInfoJson(point) == original_raw);
+  ROSE_ASSERT(record->getOutputPlacement() ==
+              PreprocessingInfo::attached_output_boundary);
+  const FortranSourceRecordSnapshot snapshot(record);
+  if (foreign.empty()) {
+    ROSE_ASSERT(context.canAttachSourcePreprocessing(record, root));
+    // Already-attached publication is independently valid, including self.
+    SageInterface::publishGeneratedSubtreeOutputOwner(root, root);
+    snapshot.requireUnchanged(record, leaf);
+  } else {
+    ROSE_ASSERT(record_file != file &&
+                record_file->get_file_info()->get_physical_filename() !=
+                    file->get_file_info()->get_physical_filename());
+  }
+  SageInterface::removeStatement(root, false);
+  ROSE_ASSERT(root->get_parent() == nullptr && leaf->get_parent() == root &&
+              SageInterface::getEnclosingSourceFile(leaf) == nullptr &&
+              target->get_parent() == body);
+  requireExactLocatedOwnership(root, file);
+  snapshot.requireUnchanged(record, leaf);
+  if (!foreign.empty()) {
+    // The source point is genuinely owned by a different parsed TU. All
+    // generated nodes already belong to the intended target file, so this
+    // reaches source-point publication rather than a generated-file mismatch.
+    SageInterface::publishGeneratedSubtreeOutputOwner(root, target);
+    fprintf(stderr, "forbidden foreign Fortran point publication returned\n");
+    std::_Exit(1);
+  }
+  ROSE_ASSERT(context.ownsSourcePoint(point) &&
+              context.ownsOutputBoundary(target) &&
+              !context.canAttachSourcePreprocessing(record, target));
+  SageInterface::publishGeneratedSubtreeOutputOwner(root, target);
+  ROSE_ASSERT(root->get_parent() == nullptr && leaf->get_parent() == root &&
+              SageInterface::getEnclosingSourceFile(leaf) == nullptr &&
+              !context.canAttachSourcePreprocessing(record, target));
+  snapshot.requireUnchanged(record, leaf);
+  SageInterface::replaceStatement(target, root, false);
+  ROSE_ASSERT(root->get_parent() == body && target->get_parent() == nullptr &&
+              std::count(body->get_statements().begin(),
+                         body->get_statements().end(), root) == 1 &&
+              std::count(body->get_statements().begin(),
+                         body->get_statements().end(), target) == 0 &&
+              context.canAttachSourcePreprocessing(record, root));
+  snapshot.requireUnchanged(record, leaf);
+  SageInterface::publishGeneratedSubtreeOutputOwner(root, root);
+  snapshot.requireUnchanged(record, leaf);
+  const auto attached = findFortranSourceRecord(file, marker);
+  ROSE_ASSERT(attached.record == record && attached.owner == leaf);
+  SageInterface::deleteAST(target);
+  Rose::FortranSource::validate(file);
+  AstTests::runAllTests(project);
+  const auto output = directory / "pending.f90";
+  fs::remove(output);
+  file->set_unparse_output_filename(output.string());
+  file->unparse();
+  std::ifstream stream(output);
+  ROSE_ASSERT(stream.good());
+  const std::string text{std::istreambuf_iterator<char>(stream),
+                         std::istreambuf_iterator<char>()};
+  const auto at = text.find(marker);
+  ROSE_ASSERT(at != std::string::npos &&
+              text.find(marker, at + marker.size()) == std::string::npos);
+  snapshot.requireUnchanged(record, leaf);
+  SageInterface::deleteAST(project);
+  return 0;
+}
+
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 4 && std::string(argv[1]) == "--fortran-pending-publication")
+    return exerciseFortranPendingPublication(argv[0], argv[2], argv[3]);
+  if (argc == 5 && std::string(argv[1]) == "--reject-fortran-pending-point")
+    return exerciseFortranPendingPublication(argv[0], argv[2], argv[4],
+                                             argv[3]);
   if (argc == 1) {
     return exercisePositiveContracts();
   }

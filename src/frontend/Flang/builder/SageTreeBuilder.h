@@ -39,14 +39,20 @@ enum class ProcessControlKind { stop, error_stop, fail_image, pause };
 
 struct HeaderComments {
   std::optional<PosInfo> range;
+  std::optional<FlangSourcePointIdentity> start_point;
+  std::optional<FlangSourcePointIdentity> end_point;
   std::vector<Token> tokens;
 };
 
 // This is similar to F18 Fortran::parser::SourcePosition
 struct SourcePosition {
   std::string path; // replaces Fortran::parser::SourceFile
-  int line, column;
-  std::optional<std::size_t> cooked_source_order;
+  int line{0}, column{0};
+  std::optional<std::size_t> cooked_source_order{std::nullopt};
+  // Physical provenance selects one exact inclusion occurrence. Cooked order
+  // is only a raw hint; the frozen point index publishes the lexical rank.
+  std::optional<std::size_t> physical_provenance{std::nullopt};
+  std::optional<FlangSourcePointIdentity> lexical_identity{std::nullopt};
   friend std::ostream &operator<<(std::ostream &os, const SourcePosition &sp) {
     os << sp.line << ',' << sp.column;
     return os;
@@ -239,7 +245,13 @@ public:
                       bool at_end = false);
   void attachComments(SgLocatedNode *node, HeaderComments &comments);
   void attachRemainingComments(SgLocatedNode *node);
-  void captureHeaderComments(HeaderComments &comments, const PosInfo &range);
+  SgEmptyDeclaration *buildSourcePreprocessingAnchor(const Token &,
+                                                     const SourcePosition &,
+                                                     const SourcePosition &,
+                                                     SgScopeStatement *);
+  void captureHeaderComments(HeaderComments &comments,
+                             const SourcePosition &start,
+                             const SourcePosition &end);
   void setSourcePosition(SgLocatedNode *node, const SourcePosition &start,
                          const SourcePosition &end);
   void setSourcePosition(SgPragma *pragma, const SourcePosition &start,

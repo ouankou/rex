@@ -23,6 +23,7 @@ add_subdirectory(astTokenStream)
 add_subdirectory(includeDirectivesProcessing)
 
 set(SAGE3_SOURCES
+  FortranSourceContext.cpp
   rose_attributes_list.C
   attachPreprocessingInfo.C
   attachPreprocessingInfoTraversal.C
@@ -109,6 +110,7 @@ endif()
 
 install(
   FILES
+    FortranSourceContext.h
     sage3.h ${CMAKE_CURRENT_BINARY_DIR}/sage3basic.h rose_attributes_list.h attachPreprocessingInfo.h
     astJson/sageAstJson.h
     attachPreprocessingInfoTraversal.h manglingSupport.h

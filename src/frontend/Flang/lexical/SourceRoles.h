@@ -66,6 +66,49 @@ struct MacroExpansionProvenance {
   std::string spelling;
 };
 
+// An include operation actually performed by the owned lexical stage. Empty
+// files have no native provenance allocation, but still have a real typed
+// include event, parsed filename, and opened SourceFile.
+struct SourceInclusionProvenance {
+  enum class Kind {
+    fortran_include,
+    preprocessing_include,
+    preprocessing_include_next
+  };
+  Kind kind;
+  const Fortran::parser::SourceFile *file;
+  Fortran::parser::ProvenanceRange native_source;
+  std::vector<Fortran::parser::ProvenanceRange> source;
+  // The complete physical include line is consumed before its child input,
+  // including any trailing comment omitted from the native use range.
+  Fortran::parser::Provenance insertion;
+  std::optional<Fortran::parser::ProvenanceRange> included;
+  std::string source_filename;
+  bool fixed_form{false};
+};
+
+// A completed active generic directive after lexical token formation and CPP.
+// Output spelling is decoded/requoted for source emission; it is independent
+// of the parser-normalized character stream and original source ownership.
+struct SelectedDirectiveToken {
+  std::string spelling;
+  std::optional<unsigned> quoted_literal_offset;
+};
+
+struct SelectedDirectiveSource {
+  enum class ControlKind { source_form, preprocessing };
+  std::size_t cooked_offset;
+  std::size_t cooked_size;
+  std::string sentinel;
+  std::string output_text;
+  std::optional<TokenInvocationSource> lexical_control{};
+  Fortran::parser::Provenance control_insertion{};
+  bool fixed_form_after_control{false};
+  ControlKind control_kind{ControlKind::source_form};
+  std::vector<SelectedDirectiveToken> output_tokens{};
+  std::string preprocessing_name{};
+};
+
 // Immutable lookup over one completed lexical input. Record indices, rather
 // than stored pointers, keep copies and moves independent of vector addresses.
 class MacroExpansionProvenanceIndex {

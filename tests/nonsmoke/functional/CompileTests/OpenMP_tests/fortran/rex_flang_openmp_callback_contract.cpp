@@ -161,8 +161,8 @@ public:
     base.original_offsets.resize(parsing_.cooked().AsCharBlock().size());
     std::iota(base.original_offsets.begin(), base.original_offsets.end(), 0);
     static_cast<void>(Rose::builder::CollectFlangSourceStream(
-        program(), cooked_, parsing_.cooked(), base, {}, {}, rex_openmp, false,
-        false));
+        program(), cooked_, parsing_.cooked(), base, {}, {}, {}, {}, {},
+        rex_openmp, false, false));
   }
 
   Rose::builder::BuildVisitor &visitor() { return visitor_; }

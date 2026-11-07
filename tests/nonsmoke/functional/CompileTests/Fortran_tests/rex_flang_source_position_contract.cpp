@@ -3,7 +3,11 @@
 #include "Rose/FileSystem.h"
 #include "SageTreeBuilder.h"
 #include "astJson/sageAstJson.h"
+#include "astJson/sageAstJsonPrivate.h"
 
+#include <cctype>
+#include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -13,8 +17,15 @@ namespace {
 using Rose::builder::SageTreeBuilder;
 using Rose::builder::SourcePosition;
 
-const SourcePosition kStart{"/tmp/rex_flang_source_position.f90", 2, 3, 0};
-const SourcePosition kEnd{"/tmp/rex_flang_source_position.f90", 2, 8};
+const SourcePosition kStart{
+    "/tmp/rex_flang_source_position.f90",         2, 3, 0, std::nullopt,
+    Rose::builder::FlangSourcePointIdentity{1, 1}};
+const SourcePosition kEnd{"/tmp/rex_flang_source_position.f90",
+                          2,
+                          8,
+                          std::nullopt,
+                          std::nullopt,
+                          Rose::builder::FlangSourcePointIdentity{2, 1}};
 
 SgNullStatement *buildSourceNode() {
   SgNullStatement *node = SageBuilder::buildNullStatement_nfi();
@@ -35,6 +46,13 @@ bool hasExactRange(const SgLocatedNode *node) {
          start->get_raw_col() == kStart.column &&
          end->get_raw_line() == kEnd.line &&
          end->get_raw_col() == kEnd.column - 1 &&
+         start->get_source_sequence_number() ==
+             kStart.lexical_identity->order &&
+         end->get_source_sequence_number() == kEnd.lexical_identity->order &&
+         start->get_physical_file_occurrence_id() ==
+             kStart.lexical_identity->physical_occurrence &&
+         end->get_physical_file_occurrence_id() ==
+             kEnd.lexical_identity->physical_occurrence &&
          !start->isSourcePositionUnavailableInFrontend() &&
          !end->isSourcePositionUnavailableInFrontend();
 }
@@ -50,7 +68,11 @@ bool hasExactExpressionRange(const SgExpression *expression) {
          operatorPosition->get_parent() == expression &&
          operatorPosition->get_raw_filename() == kStart.path &&
          operatorPosition->get_raw_line() == kStart.line &&
-         operatorPosition->get_raw_col() == kStart.column;
+         operatorPosition->get_raw_col() == kStart.column &&
+         operatorPosition->get_source_sequence_number() ==
+             kStart.lexical_identity->order &&
+         operatorPosition->get_physical_file_occurrence_id() ==
+             kStart.lexical_identity->physical_occurrence;
 }
 
 void checkRecordedSourceIdentity() {
@@ -63,8 +85,9 @@ void checkRecordedSourceIdentity() {
     output << "program snapshot\n  continue\nend\n";
     ROSE_ASSERT(output.good());
   }
-  const SourcePosition start{original.string(), 2, 3};
-  const SourcePosition end{original.string(), 2, 8};
+  SourcePosition start = kStart;
+  SourcePosition end = kEnd;
+  start.path = end.path = original.string();
   SgSourceFile source;
   source.set_file_info(new Sg_File_Info(start.path, 1, 1));
   source.set_sourceFileNameWithPath(start.path);
@@ -87,9 +110,501 @@ void checkRecordedSourceIdentity() {
   }
   fs::remove_all(directory);
 }
+
+struct CompilerInlinePragma {
+  int line;
+  const char *raw;
+  const char *syntax;
+  unsigned member;
+  unsigned count;
+};
+
+const std::vector<CompilerInlinePragma> kCompilerInlinePragmas{
+    {5, "!dir$ unroll ! REX_COMPILER_INLINE_COMMENT", "!dir$ unroll", 0, 1},
+    {10, "!dir$ unroll REX_EMPTY(\"!\") ! REX_COMPILER_EMPTY_INLINE_COMMENT",
+     "!dir$ unroll REX_EMPTY(\"!\")", 0, 1},
+    {14, "!dir$ un&", "!dir$ un&", 0, 2},
+    {17, "!dir$ &roll ! REX_COMPILER_CONTINUED_INLINE_COMMENT", "!dir$ &roll",
+     1, 2},
+    {22, "!dir$ un&", "!dir$ un&", 0, 2},
+    {23, "REX_REST ! REX_COMPILER_MACRO_INLINE_COMMENT", "REX_REST", 1, 2}};
+
+struct CompilerInlineComment {
+  int line;
+  int column;
+  const char *text;
+};
+
+const std::vector<CompilerInlineComment> kCompilerInlineComments{
+    {5, 14, "! REX_COMPILER_INLINE_COMMENT"},
+    {10, 29, "! REX_COMPILER_EMPTY_INLINE_COMMENT"},
+    {15, 1, "! REX_COMPILER_GAP_COMMENT"},
+    {17, 13, "! REX_COMPILER_CONTINUED_INLINE_COMMENT"},
+    {23, 10, "! REX_COMPILER_MACRO_INLINE_COMMENT"}};
+
+struct CompilerPragmaSnapshot {
+  std::string pragma_location;
+  std::string payload_location;
+  Rose::AstJson::JsonValue pragma_properties;
+
+  bool operator==(const CompilerPragmaSnapshot &other) const {
+    return pragma_location == other.pragma_location &&
+           payload_location == other.payload_location &&
+           pragma_properties.exactlyEquals(other.pragma_properties);
+  }
+};
+
+struct CompilerInlineSnapshot {
+  SgSourceFile::fortran_source_context context;
+  std::vector<CompilerPragmaSnapshot> pragmas;
+  std::vector<Rose::AstJson::JsonValue> trivia;
+
+  bool operator==(const CompilerInlineSnapshot &other) const {
+    if (!(context == other.context) || pragmas != other.pragmas ||
+        trivia.size() != other.trivia.size())
+      return false;
+    for (size_t index = 0; index < trivia.size(); ++index)
+      if (!trivia[index].exactlyEquals(other.trivia[index]))
+        return false;
+    return true;
+  }
+};
+
+CompilerInlineSnapshot checkCompilerInlineComment(SgSourceFile *file) {
+  using namespace Rose::AstJson;
+  ROSE_ASSERT(file != nullptr);
+  const auto path =
+      std::filesystem::canonical(file->get_sourceFileNameWithPath()).string();
+  const auto &context = file->get_fortran_source_context();
+  ROSE_ASSERT(context.root_occurrence > 0 && context.root_entry > 0 &&
+              context.root_entry < context.root_exit &&
+              context.root_path == path);
+  const auto point = [&](const Sg_File_Info *position, int line, int column) {
+    ROSE_ASSERT(
+        position != nullptr && position->get_physical_filename() == path &&
+        position->get_physical_line() == line &&
+        position->get_raw_line() == line && position->get_col() == column &&
+        position->get_raw_col() == column);
+    ROSE_ASSERT(position->get_source_sequence_number() > context.root_entry &&
+                position->get_source_sequence_number() < context.root_exit &&
+                position->get_physical_file_occurrence_id() ==
+                    context.root_occurrence);
+  };
+  const auto pragmas = NodeQuery::querySubTree(file, V_SgPragmaDeclaration);
+  ROSE_ASSERT(pragmas.size() == kCompilerInlinePragmas.size());
+  for (size_t index = 0; index < pragmas.size(); ++index) {
+    auto *pragma = isSgPragmaDeclaration(pragmas[index]);
+    const auto &expected = kCompilerInlinePragmas[index];
+    ROSE_ASSERT(pragma->get_fortran_directive_family() ==
+                SgPragmaDeclaration::e_fortran_directive_compiler);
+    ROSE_ASSERT(
+        pragma->get_fortran_directive_member_count() == expected.count &&
+        pragma->get_fortran_directive_member_index() == expected.member &&
+        pragma->get_fortran_directive_primary() == (expected.member == 0));
+    ROSE_ASSERT(pragma->get_fortran_compiler_directive_sentinel() == "dir$");
+    ROSE_ASSERT(pragma->get_fortran_directive_raw_text() == expected.raw);
+    ROSE_ASSERT(pragma->get_pragma() != nullptr &&
+                pragma->get_pragma()->get_pragma() == expected.syntax);
+    ROSE_ASSERT(pragma->get_fortran_selected_output_text() ==
+                (expected.member == 0 ? "!dir$ unroll" : ""));
+    ROSE_ASSERT(SgPragmaDeclaration::fortran_selected_output_is_valid(
+        pragma->get_fortran_selected_output_text(),
+        pragma->get_fortran_selected_output_tokens()));
+    if (expected.member != 0)
+      ROSE_ASSERT(pragma->get_fortran_directive_group_id() ==
+                  isSgPragmaDeclaration(pragmas[index - 1])
+                      ->get_fortran_directive_group_id());
+    const auto checkRange = [&](const auto *node) {
+      point(node->get_startOfConstruct(), expected.line, 1);
+      point(node->get_endOfConstruct(), expected.line,
+            static_cast<int>(std::strlen(expected.raw)));
+    };
+    checkRange(pragma);
+    checkRange(pragma->get_pragma());
+  }
+
+  std::vector<const PreprocessingInfo *> comments(
+      kCompilerInlineComments.size());
+  const PreprocessingInfo *blank = nullptr;
+  std::map<const PreprocessingInfo *, SgLocatedNode *> owners;
+  for (SgNode *node : NodeQuery::querySubTree(file, V_SgLocatedNode)) {
+    auto *located = isSgLocatedNode(node);
+    const auto *entries = located->getAttachedPreprocessingInfo();
+    if (entries == nullptr)
+      continue;
+    for (const auto *entry : *entries) {
+      ROSE_ASSERT(entry != nullptr);
+      if (entry->getFortranSourceRole() ==
+              PreprocessingInfo::FortranSourceRole::layout &&
+          entry->get_file_info()->get_physical_line() == 16) {
+        ROSE_ASSERT(blank == nullptr && entry->getString() == "\n");
+        ROSE_ASSERT(entry->getTypeOfDirective() ==
+                    PreprocessingInfo::CSkippedToken);
+        ROSE_ASSERT(entry->getAttachedOwner() == located &&
+                    entry->get_file_info()->get_parent() == located);
+        point(entry->get_file_info(), 16, 1);
+        blank = entry;
+        owners.emplace(entry, located);
+        continue;
+      }
+      if (entry->getString().find("REX_COMPILER_") == std::string::npos)
+        continue;
+      const auto found = std::find_if(
+          kCompilerInlineComments.begin(), kCompilerInlineComments.end(),
+          [&](const auto &expected) {
+            return entry->getString() == expected.text;
+          });
+      ROSE_ASSERT(found != kCompilerInlineComments.end());
+      const size_t index =
+          std::distance(kCompilerInlineComments.begin(), found);
+      ROSE_ASSERT(comments[index] == nullptr);
+      ROSE_ASSERT(entry->getFortranSourceRole() ==
+                  PreprocessingInfo::FortranSourceRole::comment);
+      ROSE_ASSERT(entry->getTypeOfDirective() ==
+                  PreprocessingInfo::F90StyleComment);
+      ROSE_ASSERT(entry->getAttachedOwner() == located &&
+                  entry->get_file_info()->get_parent() == located);
+      point(entry->get_file_info(), found->line, found->column);
+      comments[index] = entry;
+      owners.emplace(entry, located);
+    }
+  }
+  ROSE_ASSERT(blank != nullptr &&
+              std::all_of(comments.begin(), comments.end(),
+                          [](const auto *p) { return p != nullptr; }));
+  ROSE_ASSERT(isSgPragmaDeclaration(pragmas[2])
+                      ->get_endOfConstruct()
+                      ->get_source_sequence_number() <
+                  comments[2]->get_file_info()->get_source_sequence_number() &&
+              comments[2]->get_file_info()->get_source_sequence_number() <
+                  blank->get_file_info()->get_source_sequence_number() &&
+              blank->get_file_info()->get_source_sequence_number() <
+                  isSgPragmaDeclaration(pragmas[3])
+                      ->get_startOfConstruct()
+                      ->get_source_sequence_number());
+  NodeMap nodes;
+  const auto ast = parseAstFileJson(
+      buildJson(file, Checkpoint::PreOmpConstruction, file, nullptr, &nodes),
+      checkpointName(Checkpoint::PreOmpConstruction));
+  CompilerInlineSnapshot result{context, {}, {}};
+  for (SgNode *node : pragmas) {
+    const auto record =
+        std::find_if(nodes.begin(), nodes.end(),
+                     [&](const auto &entry) { return entry.second == node; });
+    ROSE_ASSERT(record != nodes.end());
+    auto *pragma = isSgPragmaDeclaration(node);
+    result.pragmas.push_back({rawLocationJson(pragma),
+                              rawLocationJson(pragma->get_pragma()),
+                              ast.node(record->first).properties});
+  }
+  comments.push_back(blank);
+  for (const auto *comment : comments) {
+    const auto owner =
+        std::find_if(nodes.begin(), nodes.end(), [&](const auto &entry) {
+          return entry.second == owners.at(comment);
+        });
+    ROSE_ASSERT(owner != nodes.end());
+    const auto &entries = ast.node(owner->first).preprocessing.array;
+    const auto record =
+        std::find_if(entries.begin(), entries.end(), [&](const auto &entry) {
+          return entry.at("text").asString() == comment->getString() &&
+                 entry.at("file_info").at("physical_line").asInt() ==
+                     comment->get_file_info()->get_physical_line();
+        });
+    ROSE_ASSERT(record != entries.end());
+    result.trivia.push_back(*record);
+  }
+  return result;
+}
+
+void writeCompilerInlineSurface(SgSourceFile *file,
+                                const std::filesystem::path &output) {
+  std::filesystem::remove(output);
+  file->set_unparse_output_filename(output.string());
+  file->unparse();
+  const auto text = Rose::StringUtility::readFile(output.string());
+  const auto count = [&](const std::string &needle) {
+    size_t matches = 0;
+    for (size_t at = text.find(needle); at != std::string::npos;
+         at = text.find(needle, at + needle.size()))
+      ++matches;
+    return matches;
+  };
+  for (const auto &comment : kCompilerInlineComments)
+    ROSE_ASSERT(count(comment.text) == 1);
+  const std::string directive = "!dir$ unroll";
+  const bool selected =
+      file->get_fortran_source_context().output_surface ==
+      SgSourceFile::fortran_output_surface::selected_translation_unit;
+  ROSE_ASSERT(count(directive) == (selected ? 4 : 2));
+  if (selected) {
+    ROSE_ASSERT(text.find("REX_EMPTY") == std::string::npos);
+    ROSE_ASSERT(text.find("REX_REST") == std::string::npos);
+    ROSE_ASSERT(count("!dir$ un&") == 0 && count("!dir$ &roll") == 0);
+    const auto first = text.find(directive);
+    const auto second = text.find(directive, first + directive.size());
+    const auto third = text.find(directive, second + directive.size());
+    ROSE_ASSERT(third != std::string::npos &&
+                third < text.find("! REX_COMPILER_GAP_COMMENT"));
+  } else {
+    ROSE_ASSERT(count("!dir$ un&") == 2 && count("!dir$ &roll") == 2);
+    ROSE_ASSERT(
+        text.find("!dir$ un&") < text.find("! REX_COMPILER_GAP_COMMENT") &&
+        text.find("! REX_COMPILER_GAP_COMMENT") < text.find("!dir$ &roll"));
+    ROSE_ASSERT(count("REX_EMPTY(\"!\")") == 1);
+    ROSE_ASSERT(count("REX_REST") == 2);
+  }
+}
+
+struct ExactSourceRecord {
+  uint64_t id;
+  std::string kind;
+  Rose::AstJson::JsonValue location;
+  Rose::AstJson::JsonValue preprocessing;
+
+  bool operator==(const ExactSourceRecord &other) const {
+    return id == other.id && kind == other.kind &&
+           location.exactlyEquals(other.location) &&
+           preprocessing.exactlyEquals(other.preprocessing);
+  }
+};
+
+struct ExactSourceSnapshot {
+  SgSourceFile::fortran_source_context context;
+  std::vector<ExactSourceRecord> records;
+
+  bool operator==(const ExactSourceSnapshot &other) const {
+    if (!(context == other.context)) {
+      std::cerr << "source snapshot context mismatch\n";
+      return false;
+    }
+    if (records.size() != other.records.size()) {
+      std::cerr << "source snapshot node-count mismatch: actual="
+                << records.size() << " expected=" << other.records.size()
+                << '\n';
+      return false;
+    }
+    for (size_t index = 0; index < records.size(); ++index) {
+      const auto &actual = records[index];
+      const auto &expected = other.records[index];
+      if (!(actual == expected)) {
+        std::cerr << "source snapshot record mismatch at " << index
+                  << ": actual=" << actual.id << '/' << actual.kind
+                  << " expected=" << expected.id << '/' << expected.kind
+                  << " location_equal="
+                  << actual.location.exactlyEquals(expected.location)
+                  << " preprocessing_equal="
+                  << actual.preprocessing.exactlyEquals(expected.preprocessing)
+                  << '\n';
+        return false;
+      }
+    }
+    return true;
+  }
+};
+
+const std::vector<std::string> kEntryComments{"! REX_PROCEDURE_HEADER_COMMENT",
+                                              "! REX_ENTRY_INLINE_COMMENT",
+                                              "! REX_PROCEDURE_END_COMMENT"};
+
+ExactSourceSnapshot checkSourcePredicate(SgSourceFile *file, bool entry) {
+  using namespace Rose::AstJson;
+  ROSE_ASSERT(file != nullptr);
+  const auto path =
+      std::filesystem::canonical(file->get_sourceFileNameWithPath()).string();
+  const auto &context = file->get_fortran_source_context();
+  ROSE_ASSERT(context.root_path == path && context.root_occurrence > 0 &&
+              context.root_entry > 0 && context.root_entry < context.root_exit);
+  if (entry) {
+    const auto original = Rose::StringUtility::readFile(path);
+    std::vector<unsigned> counts(kEntryComments.size());
+    for (SgNode *node : NodeQuery::querySubTree(file, V_SgLocatedNode)) {
+      auto *owner = isSgLocatedNode(node);
+      const auto *comments = owner->getAttachedPreprocessingInfo();
+      if (comments == nullptr)
+        continue;
+      for (const auto *comment : *comments) {
+        ROSE_ASSERT(comment != nullptr);
+        for (size_t index = 0; index < kEntryComments.size(); ++index) {
+          const auto &text = kEntryComments[index];
+          if (comment->getString().find(text) == std::string::npos)
+            continue;
+          ++counts[index];
+          ROSE_ASSERT(comment->getString() == text && counts[index] == 1);
+          const size_t at = original.find(text);
+          ROSE_ASSERT(at != std::string::npos &&
+                      original.find(text, at + text.size()) ==
+                          std::string::npos);
+          const int line =
+              1 + std::count(original.begin(), original.begin() + at, '\n');
+          const size_t previous = original.rfind('\n', at);
+          const int column =
+              at - (previous == std::string::npos ? 0 : previous + 1) + 1;
+          const auto *position = comment->get_file_info();
+          ROSE_ASSERT(comment->getFortranSourceRole() ==
+                          PreprocessingInfo::FortranSourceRole::comment &&
+                      comment->getTypeOfDirective() ==
+                          PreprocessingInfo::F90StyleComment &&
+                      comment->getAttachedOwner() == owner &&
+                      position != nullptr && position->get_parent() == owner);
+          ROSE_ASSERT(
+              position->get_raw_filename() == path &&
+              position->get_physical_filename() == path &&
+              position->get_raw_line() == line &&
+              position->get_physical_line() == line &&
+              position->get_raw_col() == column &&
+              position->get_col() == column &&
+              position->get_physical_file_occurrence_id() ==
+                  context.root_occurrence &&
+              position->get_source_sequence_number() > context.root_entry &&
+              position->get_source_sequence_number() < context.root_exit);
+          if (index == 1) {
+            ROSE_ASSERT(
+                isSgEntryStatement(owner) != nullptr &&
+                comment->getRelativePosition() == PreprocessingInfo::after &&
+                comment->getOutputPlacement() ==
+                    PreprocessingInfo::source_position &&
+                owner->get_startOfConstruct() != nullptr &&
+                owner->get_endOfConstruct() != nullptr &&
+                owner->get_startOfConstruct()->get_physical_line() == line &&
+                owner->get_endOfConstruct()->get_physical_line() == line &&
+                owner->get_endOfConstruct()->get_raw_col() < column);
+          }
+        }
+      }
+    }
+    ROSE_ASSERT(std::all_of(counts.begin(), counts.end(),
+                            [](unsigned count) { return count == 1; }));
+  } else {
+    const std::string expected_text = "hello world     !";
+    const SgStringCodeUnitList expected(expected_text.begin(),
+                                        expected_text.end());
+    unsigned literals = 0;
+    for (SgNode *node : NodeQuery::querySubTree(file, V_SgStringVal))
+      if (isSgStringVal(node)->get_value() == expected)
+        ++literals;
+    ROSE_ASSERT(literals == 2);
+  }
+  // roundTripSourceFile snapshots the owning file list and preserves its IDs.
+  // Use that same graph boundary before, after copying, and after JSON so IDs
+  // describe equivalent graphs while every raw location/PP check stays exact.
+  auto *files = isSgFileList(file->get_parent());
+  ROSE_ASSERT(files != nullptr);
+  const auto ast = parseAstFileJson(
+      buildJson(file, Checkpoint::PreOmpConstruction, file, files),
+      checkpointName(Checkpoint::PreOmpConstruction));
+  ExactSourceSnapshot result{context, {}};
+  for (const auto &record : ast.nodes)
+    result.records.push_back(
+        {record.id, record.kind, record.location, record.preprocessing});
+  return result;
+}
+
+void writeSourcePredicateSurface(SgSourceFile *file,
+                                 const std::filesystem::path &output,
+                                 bool entry) {
+  std::filesystem::remove(output);
+  file->set_unparse_output_filename(output.string());
+  file->unparse();
+  if (!entry)
+    return;
+  const auto text = Rose::StringUtility::readFile(output.string());
+  for (const auto &comment : kEntryComments) {
+    const size_t at = text.find(comment);
+    ROSE_ASSERT(at != std::string::npos &&
+                text.find(comment, at + comment.size()) == std::string::npos);
+  }
+  const size_t at = text.find(kEntryComments[1]);
+  const size_t previous = text.rfind('\n', at);
+  auto line =
+      text.substr(previous == std::string::npos ? 0 : previous + 1,
+                  at - (previous == std::string::npos ? 0 : previous + 1));
+  std::transform(line.begin(), line.end(), line.begin(),
+                 [](unsigned char c) { return std::tolower(c); });
+  ROSE_ASSERT(line.find("entry rex_alternate(") != std::string::npos);
+}
 } // namespace
 
 int main(int argc, char **argv) {
+  if (argc == 4 &&
+      (std::string(argv[1]) == "source-predicate-entry-preserve" ||
+       std::string(argv[1]) == "source-predicate-entry-selected" ||
+       std::string(argv[1]) == "source-predicate-character-preserve" ||
+       std::string(argv[1]) == "source-predicate-character-selected")) {
+    const std::string mode = argv[1];
+    const bool entry = mode.find("-entry-") != std::string::npos;
+    const auto directory = std::filesystem::absolute(argv[3]);
+    std::filesystem::create_directories(directory);
+    const std::vector<std::string> arguments{
+        argv[0],      "-rose:skipfinalCompileStep",
+        "-outputdir", directory.string(),
+        "-c",         argv[2]};
+    SgProject *project = frontend(arguments);
+    ROSE_ASSERT(project != nullptr && project->numberOfFiles() == 1);
+    auto *file = isSgSourceFile(project->get_fileList().front());
+    ROSE_ASSERT(file != nullptr);
+    if (mode.find("-selected") != std::string::npos) {
+      auto context = file->get_fortran_source_context();
+      context.output_surface =
+          SgSourceFile::fortran_output_surface::selected_translation_unit;
+      file->set_fortran_source_context(context);
+    }
+    const auto snapshot = checkSourcePredicate(file, entry);
+    writeSourcePredicateSurface(file, directory / "live.f90", entry);
+    SgTreeCopy copier(
+        SgCopyHelp::ProvenancePolicy::PreserveExactFrontendSemantic);
+    auto *copy = isSgProject(project->copy(copier));
+    ROSE_ASSERT(copy != nullptr && copy->numberOfFiles() == 1);
+    auto *copied_file = isSgSourceFile(copy->get_fileList().front());
+    ROSE_ASSERT(checkSourcePredicate(copied_file, entry) == snapshot);
+    writeSourcePredicateSurface(copied_file, directory / "copied.f90", entry);
+    SageInterface::deleteAST(copy);
+    Rose::AstJson::Options options;
+    options.outputDirectory = (directory / "json").string();
+    file = Rose::AstJson::roundTripSourceFile(
+        file, Rose::AstJson::Checkpoint::PreOmpConstruction, options);
+    ROSE_ASSERT(checkSourcePredicate(file, entry) == snapshot);
+    writeSourcePredicateSurface(file, directory / "restored.f90", entry);
+    SageInterface::deleteAST(project);
+    return 0;
+  }
+  if (argc == 4 && (std::string(argv[1]) == "compiler-inline-preserve" ||
+                    std::string(argv[1]) == "compiler-inline-selected")) {
+    const auto directory = std::filesystem::absolute(argv[3]);
+    std::filesystem::create_directories(directory);
+    const std::vector<std::string> arguments{
+        argv[0],      "-rose:skipfinalCompileStep",
+        "-outputdir", directory.string(),
+        "-c",         argv[2]};
+    SgProject *project = frontend(arguments);
+    ROSE_ASSERT(project != nullptr && project->numberOfFiles() == 1);
+    auto *file = isSgSourceFile(project->get_fileList().front());
+    ROSE_ASSERT(file != nullptr);
+    if (std::string(argv[1]) == "compiler-inline-selected") {
+      auto context = file->get_fortran_source_context();
+      context.output_surface =
+          SgSourceFile::fortran_output_surface::selected_translation_unit;
+      file->set_fortran_source_context(context);
+    }
+    const auto snapshot = checkCompilerInlineComment(file);
+    writeCompilerInlineSurface(file, directory / "live.F90");
+    SgTreeCopy copier(
+        SgCopyHelp::ProvenancePolicy::PreserveExactFrontendSemantic);
+    auto *copy = isSgProject(project->copy(copier));
+    ROSE_ASSERT(copy != nullptr && copy->numberOfFiles() == 1);
+    auto *copied_file = isSgSourceFile(copy->get_fileList().front());
+    ROSE_ASSERT(checkCompilerInlineComment(copied_file) == snapshot);
+    writeCompilerInlineSurface(copied_file, directory / "copied.F90");
+    SageInterface::deleteAST(copy);
+    Rose::AstJson::Options options;
+    options.outputDirectory = (directory / "json").string();
+    file = Rose::AstJson::roundTripSourceFile(
+        file, Rose::AstJson::Checkpoint::PreOmpConstruction, options);
+    ROSE_ASSERT(checkCompilerInlineComment(file) == snapshot);
+    writeCompilerInlineSurface(file, directory / "restored.F90");
+    SageInterface::deleteAST(project);
+    return 0;
+  }
   if (argc == 3 && std::string(argv[1]) == "directive-source") {
     const std::string path = std::filesystem::canonical(argv[2]).string();
     const std::vector<std::string> arguments{
@@ -220,14 +735,28 @@ int main(int argc, char **argv) {
 
     SgNullStatement *primary = buildSourceNode();
     builder.setSourcePosition(primary, kStart, kEnd);
-    const SourcePosition includeStart{"/tmp/rex_flang_include.inc", 4, 2};
-    const SourcePosition includeEnd{"/tmp/rex_flang_include.inc", 4, 7};
+    const SourcePosition includeStart{
+        "/tmp/rex_flang_include.inc",
+        4,
+        2,
+        std::nullopt,
+        std::nullopt,
+        Rose::builder::FlangSourcePointIdentity{3, 2}};
+    const SourcePosition includeEnd{
+        "/tmp/rex_flang_include.inc",
+        4,
+        7,
+        std::nullopt,
+        std::nullopt,
+        Rose::builder::FlangSourcePointIdentity{4, 2}};
     SgNullStatement *included = buildSourceNode();
     builder.setSourcePosition(included, includeStart, includeEnd);
     return primary->get_file_info()->get_physical_file_id() ==
                        source.get_file_info()->get_physical_file_id() &&
                    included->get_file_info()->get_physical_file_id() !=
-                       source.get_file_info()->get_physical_file_id()
+                       source.get_file_info()->get_physical_file_id() &&
+                   primary->get_file_info()->isOutputInCodeGeneration() &&
+                   included->get_file_info()->isOutputInCodeGeneration()
                ? 0
                : 1;
   }
@@ -256,7 +785,9 @@ int main(int argc, char **argv) {
     builder.setTokens({Rose::builder::Token(
         Rose::builder::TokenKind::comment,
         Rose::builder::PreprocessingDirectiveKind::none, kStart.path, 3, 1, 3,
-        21, "! rex_source_comment\n")});
+        21, "! rex_source_comment\n",
+        Rose::builder::FlangSourcePointIdentity{3, 1},
+        Rose::builder::FortranSourceTokenRole::comment)});
     builder.attachRemainingComments(declaration);
     const auto *generatedComments = declaration->getAttachedPreprocessingInfo();
     ROSE_ASSERT(generatedComments == nullptr || generatedComments->empty());
@@ -267,6 +798,12 @@ int main(int argc, char **argv) {
     ROSE_ASSERT(writtenComments != nullptr && writtenComments->size() == 1);
     ROSE_ASSERT(writtenComments->front()->getString() ==
                 "! rex_source_comment\n");
+    ROSE_ASSERT(writtenComments->front()
+                    ->get_file_info()
+                    ->get_source_sequence_number() == 3);
+    ROSE_ASSERT(writtenComments->front()
+                    ->get_file_info()
+                    ->get_physical_file_occurrence_id() == 1);
     SageInterface::deepDelete(written);
     SageInterface::deepDelete(declaration);
     return valid ? 0 : 1;

@@ -2302,6 +2302,63 @@ HEADER_TEMPLATE_INSTANTIATION_TYPEDEF_DECLARATION_STATEMENT_END
 
 HEADER_PRAGMA_STATEMENT_START
 
+// Printable selected pieces retain the owned lexer's token boundaries. The
+// optional byte offset identifies a complete quoted constant, including any
+// preceding kind or BOZ prefix; opaque/Hollerith text is never guessed to be a
+// character literal by the backend.
+struct fortran_selected_token {
+  std::string spelling;
+  std::optional<unsigned> quoted_literal_offset;
+
+  bool operator==(const fortran_selected_token &other) const {
+    return spelling == other.spelling &&
+           quoted_literal_offset == other.quoted_literal_offset;
+  }
+  friend std::ostream &operator<<(std::ostream &out,
+                                  const fortran_selected_token &token) {
+    out << token.spelling;
+    if (token.quoted_literal_offset)
+      out << " (quoted literal at " << *token.quoted_literal_offset << ')';
+    return out;
+  }
+};
+using fortran_selected_tokens = std::vector<fortran_selected_token>;
+
+static bool fortran_selected_output_is_valid(
+    const std::optional<std::string> &text,
+    const fortran_selected_tokens &tokens) {
+  if (!text)
+    return tokens.empty();
+  if (text->find('\0') != std::string::npos)
+    return false;
+  std::size_t consumed = 0;
+  for (const auto &token : tokens) {
+    const auto &piece = token.spelling;
+    if (piece.empty() || piece.find('\0') != std::string::npos ||
+        piece.find_first_of("\r\n") != std::string::npos ||
+        piece.size() > text->size() - consumed ||
+        text->compare(consumed, piece.size(), piece) != 0)
+      return false;
+    if (token.quoted_literal_offset) {
+      const auto offset = *token.quoted_literal_offset;
+      if (offset >= piece.size() - 1 ||
+          (piece[offset] != '\'' && piece[offset] != '"') ||
+          piece.back() != piece[offset])
+        return false;
+      for (std::size_t index = offset + 1; index + 1 < piece.size(); ++index) {
+        if (piece[index] == piece[offset]) {
+          if (index + 1 >= piece.size() - 1 ||
+              piece[index + 1] != piece[offset])
+            return false;
+          ++index;
+        }
+      }
+    }
+    consumed += piece.size();
+  }
+  return consumed == text->size();
+}
+
 enum fortran_directive_family_enum {
   e_fortran_directive_none = 0,
   e_fortran_directive_openmp,
@@ -2331,16 +2388,21 @@ HEADER_PRAGMA_STATEMENT_END
 
 HEADER_EMPTY_DECLARATION_START
 
-// An empty declaration has one of three explicit lexical roles.  A source
+// An empty declaration has one of four explicit lexical roles.  A source
 // empty declaration owns the `;` token.  A preprocessing anchor owns only
 // attached comments/directives.  A zero-width source replacement preserves an
 // exact lexical position after a transformation removes a source surface, but
-// does not itself contribute spelling.  The role is a required construction
+// does not itself contribute spelling. A source preprocessing anchor owns one
+// original CPP inclusion directive and any source preprocessing records that
+// precede it in translation-unit order, without claiming language syntax or
+// generated origin. Each attached record retains its own physical provenance.
+// The role is a required construction
 // parameter so an unclassified empty declaration cannot exist.
 enum empty_declaration_role_enum {
   e_empty_declaration_source_semicolon = 0,
   e_empty_declaration_preprocessing_anchor,
-  e_empty_declaration_zero_width_source_replacement
+  e_empty_declaration_zero_width_source_replacement,
+  e_empty_declaration_source_preprocessing_anchor
 };
 
 empty_declaration_role_enum get_lexical_role() const;
@@ -10965,6 +11027,11 @@ void SgEmptyDeclaration::validate_lexical_role() const {
   case e_empty_declaration_source_semicolon:
   case e_empty_declaration_preprocessing_anchor:
   case e_empty_declaration_zero_width_source_replacement:
+    return;
+  case e_empty_declaration_source_preprocessing_anchor:
+    // Source anchors are constructed before positions and attachment lists
+    // are published. Rooted Fortran context validation subsequently proves
+    // the one inclusion event and its ordered source preprocessing prefix.
     return;
   }
 

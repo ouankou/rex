@@ -1,5 +1,6 @@
 #include "AstNodes/Expression/BuiltinOperandValidation.h"
 #include "AstNodes/Expression/OpenMPModifierValidation.h"
+#include "FortranSourceContext.h"
 #include "sageAstJsonPrivate.h"
 
 #include <algorithm>
@@ -2818,13 +2819,13 @@ SgNode *createNodeFromRecordImpl(
     return declaration;
   }
   if (kind == "SgEmptyDeclaration") {
-    const auto role =
-        requiredEnum<SgEmptyDeclaration::empty_declaration_role_enum>(
-            p, "empty_declaration_lexical_role", "SgEmptyDeclaration",
-            {SgEmptyDeclaration::e_empty_declaration_source_semicolon,
-             SgEmptyDeclaration::e_empty_declaration_preprocessing_anchor,
-             SgEmptyDeclaration::
-                 e_empty_declaration_zero_width_source_replacement});
+    const auto role = requiredEnum<
+        SgEmptyDeclaration::empty_declaration_role_enum>(
+        p, "empty_declaration_lexical_role", "SgEmptyDeclaration",
+        {SgEmptyDeclaration::e_empty_declaration_source_semicolon,
+         SgEmptyDeclaration::e_empty_declaration_preprocessing_anchor,
+         SgEmptyDeclaration::e_empty_declaration_zero_width_source_replacement,
+         SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor});
     return constructRecordNode<SgEmptyDeclaration>(record, ownership,
                                                    dependencies, role);
   }
@@ -3394,9 +3395,40 @@ SgNode *createNodeFromRecordImpl(
         p.requiredString("fortran_directive_logical_text");
     const std::string semantic_text =
         p.requiredString("fortran_directive_semantic_text");
+    const std::string compiler_sentinel =
+        p.requiredString("fortran_compiler_directive_sentinel");
+    const JsonValue &selected_value = p.at("fortran_selected_output_text");
+    std::optional<std::string> selected_text;
+    if (selected_value.kind != JsonValue::Kind::Null) {
+      selected_text = selected_value.asString();
+      if (selected_text->find('\0') != std::string::npos)
+        throw std::runtime_error(
+            "AST JSON Fortran selected output text contains a NUL byte");
+    }
+    const JsonValue &selected_pieces = p.at("fortran_selected_output_tokens");
+    if (selected_pieces.kind != JsonValue::Kind::Array)
+      throw std::runtime_error(
+          "AST JSON Fortran selected output tokens is not an array");
+    SgPragmaDeclaration::fortran_selected_tokens selected_tokens;
+    for (const JsonValue &piece : selected_pieces.array) {
+      const auto offset = requiredOptionalUnsignedInteger(
+          piece, "quoted_literal_offset", "Fortran selected token");
+      selected_tokens.push_back({piece.requiredString("spelling"), offset});
+    }
+    if (!SgPragmaDeclaration::fortran_selected_output_is_valid(selected_text,
+                                                               selected_tokens))
+      throw std::runtime_error(
+          "AST JSON Fortran selected output tokens have inconsistent payload");
+    const bool compiler_family =
+        family == SgPragmaDeclaration::e_fortran_directive_compiler;
+    const bool compiler_group_claims =
+        compiler_family &&
+        (!compiler_sentinel.empty() || !group_id.empty() || memberIndex != 0 ||
+         memberCount != 0 || primary || !raw_text.empty() ||
+         !logical_text.empty() || !semantic_text.empty());
     const bool has_fortran_directive =
         family != SgPragmaDeclaration::e_fortran_directive_none &&
-        family != SgPragmaDeclaration::e_fortran_directive_compiler;
+        (!compiler_family || compiler_group_claims);
     const bool valid_fortran_ownership =
         has_fortran_directive && !group_id.empty() && memberCount > 0 &&
         memberIndex < memberCount && primary == (memberIndex == 0) &&
@@ -3407,7 +3439,16 @@ SgNode *createNodeFromRecordImpl(
         !has_fortran_directive && group_id.empty() && memberIndex == 0 &&
         memberCount == 0 && !primary && raw_text.empty() &&
         logical_text.empty() && semantic_text.empty();
-    if (!valid_fortran_ownership && !empty_fortran_ownership) {
+    if (selected_text &&
+        (family == SgPragmaDeclaration::e_fortran_directive_none ||
+         (has_fortran_directive &&
+          (primary ? selected_text->empty() : !selected_text->empty())) ||
+         (compiler_family && !compiler_group_claims)))
+      throw std::runtime_error(
+          "AST JSON Fortran selected output text has inconsistent ownership");
+    if ((!compiler_family && !compiler_sentinel.empty()) ||
+        (compiler_group_claims && compiler_sentinel.empty()) ||
+        (!valid_fortran_ownership && !empty_fortran_ownership)) {
       throw std::runtime_error(
           "AST JSON SgPragmaDeclaration has malformed Fortran directive "
           "ownership");
@@ -3441,10 +3482,14 @@ SgNode *createNodeFromRecordImpl(
     declaration->set_fortran_directive_raw_text(raw_text);
     declaration->set_fortran_directive_logical_text(logical_text);
     declaration->set_fortran_directive_semantic_text(semantic_text);
+    declaration->set_fortran_compiler_directive_sentinel(compiler_sentinel);
+    declaration->set_fortran_selected_output_text(selected_text);
+    declaration->set_fortran_selected_output_tokens(selected_tokens);
     declaration->set_cxx_pragma_payload_kind(payload_kind);
     declaration->set_cxx_source_text(cxx_source_text);
     declaration->set_cxx_top_level_macro_expansion(
         cxx_top_level_macro_expansion);
+    Rose::FortranSource::validateSelectedPragma(declaration);
     return declaration;
   }
   if (kind == "SgAttributeSpecificationStatement") {
@@ -6619,7 +6664,16 @@ preprocessingInfoFieldsFromJson(const NodeRecord &record) {
             entry, "output_placement", "preprocessing entry",
             {PreprocessingInfo::source_position,
              PreprocessingInfo::attached_output_boundary,
-             PreprocessingInfo::attached_output_trailing_line})};
+             PreprocessingInfo::attached_output_trailing_line}),
+        requiredEnum<PreprocessingInfo::FortranSourceRole>(
+            entry, "fortran_source_role", "preprocessing entry",
+            {PreprocessingInfo::FortranSourceRole::none,
+             PreprocessingInfo::FortranSourceRole::comment,
+             PreprocessingInfo::FortranSourceRole::layout,
+             PreprocessingInfo::FortranSourceRole::cpp_control,
+             PreprocessingInfo::FortranSourceRole::cpp_inactive,
+             PreprocessingInfo::FortranSourceRole::disabled_directive,
+             PreprocessingInfo::FortranSourceRole::lexical_control})};
   };
   std::vector<PreprocessingInfoFields> prepared;
   prepared.reserve(record.preprocessing.array.size());
@@ -6646,6 +6700,7 @@ PreparedPreprocessingInfo constructPreprocessingInfo(
     else
       info->unsetAsTransformation();
     info->setOutputPlacement(fields.placement);
+    info->setFortranSourceRole(fields.fortran_source_role);
     pending.push_back(std::move(info));
   }
   return pending;

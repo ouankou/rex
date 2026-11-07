@@ -6,6 +6,8 @@ rex_add_fortran_empty_region_tests(acc free
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openacc_empty_region_free.f90)
 rex_add_fortran_empty_region_tests(acc fixed
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openacc_empty_region_fixed.f)
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../rex_fortran_include_region_tests.cmake)
+rex_add_fortran_include_region_tests(acc)
 
 find_program(BASH_EXECUTABLE bash)
 if(NOT BASH_EXECUTABLE)

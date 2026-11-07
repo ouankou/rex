@@ -22,6 +22,11 @@ void commandLineProcessing(std::vector<std::string> &argvList);
 //! The top level interface to translate OpenMP directives
 void lower_omp(SgSourceFile *);
 
+//! Prepare the exact written directive/body surfaces before an actual lowering
+//! operation changes them. Direct transformation APIs use the same boundary as
+//! the lowering driver; unrelated source inclusions remain retained.
+void prepareSourceForOpenMPTransformation(SgNode *);
+
 void analyze_omp(SgSourceFile *);
 
 //! Return true when an OpenMP statement is a syntax-only construct selector

@@ -2039,6 +2039,7 @@ void OmpSimdCompiler::setInductionSymbol(SgVariableSymbol *symbol) {
 // The entry point to the SIMD analyzer
 
 void OmpSupport::transOmpSimd(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   if (simd_arch == Nothing)
     failSimdContract("omp-simd-architecture", node,
                      "cannot lower SIMD with no selected architecture");

@@ -1,6 +1,8 @@
 
 #include "sage3basic.h"
 
+#include "FortranSourceContext.h"
+
 #include <algorithm>
 #include <unordered_set>
 
@@ -151,6 +153,96 @@ string encodeMangledIdentityComponent(const string &value) {
   return encoded;
 }
 
+const SgSourceFile *
+fortranProgramUnitSourceFile(const SgScopeStatement *scope) {
+  std::unordered_set<const SgNode *> visited;
+  for (const SgNode *current = scope; current != nullptr;) {
+    if (!visited.insert(current).second) {
+      fprintf(stderr,
+              "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+              "program unit has a cyclic source-owner chain\n");
+      ROSE_ABORT();
+    }
+    if (const auto *global = isSgGlobal(current)) {
+      if (global->get_parent() == nullptr)
+        return nullptr;
+      const auto *file = isSgSourceFile(global->get_parent());
+      if (file == nullptr || file->get_globalScope() != global) {
+        fprintf(stderr,
+                "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                "global scope has no exact source-file owner\n");
+        ROSE_ABORT();
+      }
+      return file;
+    }
+    if (const auto *definition = isSgFunctionDefinition(current)) {
+      const auto *owner = definition->get_construction_physical_output_owner();
+      const bool named =
+          !definition->get_fortran_construction_name().getString().empty();
+      if (definition->get_parent() == nullptr) {
+        if (definition->get_declaration() != nullptr || owner == nullptr ||
+            !named || definition->get_body() == nullptr ||
+            definition->get_body()->get_parent() != definition) {
+          fprintf(stderr,
+                  "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                  "detached definition has no exact construction owner\n");
+          ROSE_ABORT();
+        }
+        current = owner;
+        continue;
+      }
+      const auto *declaration = definition->get_declaration();
+      if (owner != nullptr || named || declaration == nullptr ||
+          definition->get_parent() != declaration ||
+          declaration->get_definition() != definition) {
+        fprintf(stderr,
+                "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                "attached definition retained a construction owner\n");
+        ROSE_ABORT();
+      }
+    }
+    if (const auto *body = isSgBasicBlock(current)) {
+      if (const auto *definition = isSgFunctionDefinition(body->get_parent());
+          definition != nullptr && definition->get_body() != body) {
+        fprintf(stderr,
+                "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                "body has no exact function-definition owner\n");
+        ROSE_ABORT();
+      }
+    }
+    if (const auto *parameters = isSgFunctionParameterScope(current)) {
+      const auto *owner = parameters->get_construction_physical_output_owner();
+      const auto *semantic = parameters->get_construction_semantic_scope();
+      if (parameters->get_parent() == nullptr) {
+        const auto *nested = isSgFunctionParameterScope(semantic);
+        const bool exactNested =
+            nested != nullptr && nested->get_parent() == nullptr &&
+            nested->get_construction_physical_output_owner() == owner &&
+            nested->get_construction_semantic_scope() != nullptr;
+        if (owner == nullptr || owner == parameters || semantic == nullptr ||
+            semantic == parameters || (owner != semantic && !exactNested) ||
+            parameters->get_completed_semantic_scope() != nullptr ||
+            parameters->get_scope() != semantic) {
+          fprintf(stderr,
+                  "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                  "detached parameters have no exact construction owner\n");
+          ROSE_ABORT();
+        }
+        current = owner;
+        continue;
+      }
+      if (owner != nullptr || semantic != nullptr) {
+        fprintf(stderr,
+                "REX_MANGLING_INVARIANT[fortran-program-unit-source-owner]: "
+                "attached parameters retained a construction owner\n");
+        ROSE_ABORT();
+      }
+    }
+    current = current->get_parent();
+  }
+  return nullptr;
+}
+
 string
 mangleFortranProcedureScopeToString(const SgFunctionDefinition *definition) {
   ROSE_ASSERT(definition != nullptr);
@@ -207,12 +299,15 @@ mangleFortranProcedureScopeToString(const SgFunctionDefinition *definition) {
       !procedureIdentity.getString().empty() && start != nullptr &&
       end != nullptr && start != end && definition->get_file_info() == start &&
       start->get_parent() == definition && end->get_parent() == definition &&
-      start->get_physical_file_id() >= 0 &&
-      end->get_physical_file_id() == start->get_physical_file_id() &&
+      start->get_physical_file_id() >= 0 && end->get_physical_file_id() >= 0 &&
       !start->get_physical_filename().empty() &&
-      end->get_physical_filename() == start->get_physical_filename() &&
-      !start->isShared() && !end->isShared();
-  const bool generatedDefinition = commonSourceIdentityValid &&
+      !end->get_physical_filename().empty() && !start->isShared() &&
+      !end->isShared();
+  const bool samePhysicalSource =
+      commonSourceIdentityValid &&
+      end->get_physical_file_id() == start->get_physical_file_id() &&
+      end->get_physical_filename() == start->get_physical_filename();
+  const bool generatedDefinition = samePhysicalSource &&
                                    start->isTransformation() &&
                                    end->isTransformation();
   const bool generatedIdentityValid =
@@ -221,11 +316,35 @@ mangleFortranProcedureScopeToString(const SgFunctionDefinition *definition) {
           SgProcedureHeaderStatement::e_fortran_procedure_source_form_header &&
       start->isOutputInCodeGeneration() && end->isOutputInCodeGeneration() &&
       !start->isCompilerGenerated() && !end->isCompilerGenerated();
-  const bool sourceIdentityValid =
+  bool sourceIdentityValid =
       commonSourceIdentityValid && !start->isTransformation() &&
       !end->isTransformation() && !start->isCompilerGenerated() &&
       !end->isCompilerGenerated() && start->get_line() > 0 &&
       start->get_col() > 0;
+  if (sourceIdentityValid) {
+    const bool hasLexicalIdentity =
+        start->get_source_sequence_number() != 0 ||
+        end->get_source_sequence_number() != 0 ||
+        start->get_physical_file_occurrence_id() != 0 ||
+        end->get_physical_file_occurrence_id() != 0;
+    if (hasLexicalIdentity) {
+      const auto *file = fortranProgramUnitSourceFile(outerScope);
+      if (file == nullptr ||
+          file->get_fortran_source_context().root_occurrence == 0) {
+        sourceIdentityValid = false;
+      } else {
+        const Rose::FortranSource::Context context(file);
+        sourceIdentityValid = context.ownsSourcePoint(start) &&
+                              context.ownsSourcePoint(end) &&
+                              start->get_source_sequence_number() <=
+                                  end->get_source_sequence_number();
+      }
+    } else {
+      // Manual source fixtures have no persisted lexical context. Preserve
+      // their original single-physical-file contract.
+      sourceIdentityValid = samePhysicalSource;
+    }
+  }
   if (!generatedIdentityValid && !sourceIdentityValid) {
     fprintf(stderr,
             "REX_MANGLING_INVARIANT[fortran-program-unit-scope-source]: "

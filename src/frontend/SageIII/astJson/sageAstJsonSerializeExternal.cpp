@@ -1,4 +1,5 @@
 #include "AstNodes/Expression/OpenMPModifierValidation.h"
+#include "FortranSourceContext.h"
 #include "ompAstConstruction.h"
 #include "sageAstJsonPrivate.h"
 #include "tokenStreamMapping.h"
@@ -11,6 +12,42 @@ namespace {
 thread_local std::vector<SgCxxArrayInitBinding *> inlineArrayInitBindings;
 thread_local std::vector<SgOpaqueValueBinding *> inlineOpaqueBindings;
 thread_local unsigned inlineOpaqueDepth = 0;
+
+std::string rawFortranSourceContext(SgSourceFile *file) {
+  Rose::FortranSource::validate(file);
+  const auto &context = file->get_fortran_source_context();
+  std::vector<std::string> fields{
+      rawIntegerField("root_occurrence", context.root_occurrence),
+      rawIntegerField("root_entry", context.root_entry),
+      rawIntegerField("root_exit", context.root_exit),
+      rawStringField("root_path", context.root_path),
+      rawIntegerField("output_surface",
+                      static_cast<int>(context.output_surface))};
+  std::ostringstream inclusions;
+  inclusions << '[';
+  for (size_t index = 0; index < context.inclusions.size(); ++index) {
+    const auto &edge = context.inclusions[index];
+    if (index != 0)
+      inclusions << ',';
+    writeRawObject(
+        inclusions, 0,
+        {rawIntegerField("kind", static_cast<int>(edge.kind)),
+         rawIntegerField("parent_occurrence", edge.parent_occurrence),
+         rawIntegerField("directive_begin", edge.directive_begin),
+         rawIntegerField("directive_end", edge.directive_end),
+         rawIntegerField("child_occurrence", edge.child_occurrence),
+         rawIntegerField("child_entry", edge.child_entry),
+         rawIntegerField("child_exit", edge.child_exit),
+         rawStringField("physical_path", edge.physical_path),
+         rawStringField("source_filename", edge.source_filename)},
+        false);
+  }
+  inclusions << ']';
+  fields.push_back(jsonString("inclusions") + ": " + inclusions.str());
+  std::ostringstream out;
+  writeRawObject(out, 0, fields, false);
+  return out.str();
+}
 
 std::string
 rawOpaqueBindingRef(SgOpaqueValueBinding *binding,
@@ -1974,9 +2011,23 @@ rawNodeProperties(SgNode *node,
   }
   if (SgPragmaDeclaration *pragma = isSgPragmaDeclaration(node)) {
     const auto fortranFamily = pragma->get_fortran_directive_family();
+    const auto &compilerSentinel =
+        pragma->get_fortran_compiler_directive_sentinel();
+    const bool compilerFamily =
+        fortranFamily == SgPragmaDeclaration::e_fortran_directive_compiler;
+    const bool compilerGroupClaims =
+        compilerFamily &&
+        (!compilerSentinel.empty() ||
+         !pragma->get_fortran_directive_group_id().empty() ||
+         pragma->get_fortran_directive_member_index() != 0 ||
+         pragma->get_fortran_directive_member_count() != 0 ||
+         pragma->get_fortran_directive_primary() ||
+         !pragma->get_fortran_directive_raw_text().empty() ||
+         !pragma->get_fortran_directive_logical_text().empty() ||
+         !pragma->get_fortran_directive_semantic_text().empty());
     const bool hasFortranDirective =
         fortranFamily != SgPragmaDeclaration::e_fortran_directive_none &&
-        fortranFamily != SgPragmaDeclaration::e_fortran_directive_compiler;
+        (!compilerFamily || compilerGroupClaims);
     const bool validFortranFamily =
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_none ||
         fortranFamily == SgPragmaDeclaration::e_fortran_directive_openmp ||
@@ -2007,7 +2058,8 @@ rawNodeProperties(SgNode *node,
         pragma->get_fortran_directive_raw_text().empty() &&
         pragma->get_fortran_directive_logical_text().empty() &&
         pragma->get_fortran_directive_semantic_text().empty();
-    if (!validFortranFamily ||
+    if (!validFortranFamily || (!compilerFamily && !compilerSentinel.empty()) ||
+        (compilerGroupClaims && compilerSentinel.empty()) ||
         (!hasValidFortranOwnership && !hasEmptyFortranOwnership)) {
       throw std::runtime_error(
           "AST JSON SgPragmaDeclaration has malformed Fortran directive "
@@ -2033,6 +2085,44 @@ rawNodeProperties(SgNode *node,
     fields.push_back(
         rawStringField("fortran_directive_semantic_text",
                        pragma->get_fortran_directive_semantic_text()));
+    fields.push_back(rawStringField("fortran_compiler_directive_sentinel",
+                                    compilerSentinel));
+    const auto &selected = pragma->get_fortran_selected_output_text();
+    if (selected && selected->find('\0') != std::string::npos)
+      throw std::runtime_error(
+          "AST JSON Fortran selected output text contains a NUL byte");
+    if (selected &&
+        (fortranFamily == SgPragmaDeclaration::e_fortran_directive_none ||
+         (hasFortranDirective &&
+          (pragma->get_fortran_directive_primary() ? selected->empty()
+                                                   : !selected->empty())) ||
+         (compilerFamily && !compilerGroupClaims)))
+      throw std::runtime_error(
+          "AST JSON Fortran selected output text has inconsistent ownership");
+    fields.push_back(jsonString("fortran_selected_output_text") + ": " +
+                     (selected ? jsonString(*selected) : "null"));
+    const auto &selected_tokens = pragma->get_fortran_selected_output_tokens();
+    if (!SgPragmaDeclaration::fortran_selected_output_is_valid(selected,
+                                                               selected_tokens))
+      throw std::runtime_error(
+          "AST JSON Fortran selected output tokens have inconsistent payload");
+    Rose::FortranSource::validateSelectedPragma(pragma);
+    std::ostringstream tokens;
+    tokens << '[';
+    for (size_t index = 0; index < selected_tokens.size(); ++index) {
+      const auto &token = selected_tokens[index];
+      if (index != 0)
+        tokens << ',';
+      writeRawObject(
+          tokens, 0,
+          {rawStringField("spelling", token.spelling),
+           rawOptionalUnsignedIntegerField("quoted_literal_offset",
+                                           token.quoted_literal_offset)},
+          false);
+    }
+    tokens << ']';
+    fields.push_back(jsonString("fortran_selected_output_tokens") + ": " +
+                     tokens.str());
     const auto payloadKind = pragma->get_cxx_pragma_payload_kind();
     if (payloadKind != SgPragmaDeclaration::e_cxx_pragma_payload_none &&
         payloadKind != SgPragmaDeclaration::e_cxx_pragma_source_spelled &&
@@ -2091,6 +2181,8 @@ rawNodeProperties(SgNode *node,
         rawBoolField("isRootSourceFile", include->get_isRootSourceFile()));
   }
   if (SgSourceFile *file = isSgSourceFile(node)) {
+    fields.push_back(jsonString("fortran_source_context") + ": " +
+                     rawFortranSourceContext(file));
     fields.push_back(rawIntegerField("standard", file->get_standard()));
     fields.push_back(rawBoolField("gnu_standard", file->is_gnu_standard()));
     const std::vector<std::string> arguments = commandLine(file);

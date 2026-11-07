@@ -321,11 +321,16 @@ foreach(_producer_mode IN ITEMS
     rex-openmp-json openacc-json json-invalid-enum json-malformed-bindings
     json-malformed-expression)
   string(REPLACE "-" "_" _producer_name "${_producer_mode}")
+  set(_producer_family openmp)
+  if(_producer_mode STREQUAL "openacc-json")
+    set(_producer_family openacc)
+  endif()
   add_test(NAME OMPFORTRAN_rex_producer_${_producer_name}
     COMMAND rex_fortran_directive_producer_contract
       --producer-contract=${_producer_mode}
+      -rose:${_producer_family}:parse_only
       -rose:skip_unparse -rose:skipfinalCompileStep -c
-      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_owner.f90)
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_${_producer_family}.F90)
   set_tests_properties(OMPFORTRAN_rex_producer_${_producer_name}
     PROPERTIES LABELS "OMPFORTRAN;ASTJSON;rex;producer-ownership")
 endforeach()
@@ -366,6 +371,10 @@ foreach(_producer_mode IN ITEMS
     consume-flang json-flang)
   string(REPLACE "-" "_" _producer_name "${_producer_mode}")
   set(_producer_test OMPFORTRAN_rex_producer_${_producer_name}_is_rejected)
+  set(_producer_family openmp)
+  if(_producer_mode MATCHES "^(transfer-flang|snapshot-flang|consume-flang)$")
+    set(_producer_family openacc)
+  endif()
   add_test(NAME ${_producer_test}
     WORKING_DIRECTORY ${_omp_fortran_output_dir}
     COMMAND ${BASH_EXECUTABLE} -c
@@ -373,8 +382,9 @@ foreach(_producer_mode IN ITEMS
       dummy ${_producer_test}.log
       $<TARGET_FILE:rex_fortran_directive_producer_contract>
       --producer-contract=${_producer_mode}
+      -rose:${_producer_family}:parse_only
       -rose:skip_unparse -rose:skipfinalCompileStep -c
-      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_owner.f90)
+      ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_directive_producer_${_producer_family}.F90)
   set_tests_properties(${_producer_test}
     PROPERTIES LABELS "OMPFORTRAN;ASTJSON;rex;producer-ownership;death")
 endforeach()
@@ -414,6 +424,16 @@ rex_add_fortran_empty_region_tests(omp free
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openmp_empty_region_free.f90)
 rex_add_fortran_empty_region_tests(omp fixed
   ${CMAKE_CURRENT_SOURCE_DIR}/rex_fortran_openmp_empty_region_fixed.f)
+
+add_executable(rex_fortran_include_region_contract
+  rex_fortran_include_region_contract.cpp)
+target_include_directories(rex_fortran_include_region_contract PRIVATE
+  ${CMAKE_SOURCE_DIR}/src/frontend/SageIII/astJson)
+target_link_libraries(rex_fortran_include_region_contract
+  ROSE_DLL ${link_with_libraries})
+include(${CMAKE_CURRENT_SOURCE_DIR}/../../rex_fortran_include_region_tests.cmake)
+rex_add_fortran_include_region_tests(omp)
+rex_add_fortran_include_provenance_tests()
 
 set(_openmp_function_reference_role_output
   ${_omp_fortran_output_dir}/rose_rex_fortran_openmp_exact_semantic_handoff.f90)

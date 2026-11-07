@@ -5435,10 +5435,73 @@ public:
 
   HEADER_APPLICATION_SOURCE_FILE_START
 public:
-// Frontend-provided scalar representation for this translation unit. KIND is
-// zero for C/C++ scalar variants and the resolved positive KIND for Fortran.
-// Floating precision and exponent range distinguish equally sized storage such
-// as x87 extended precision and IEEE binary128.
+  // A selected Fortran translation unit has already executed preprocessing in
+  // each native INCLUDE's independent macro environment. Its source graph is
+  // value-owned so copies and checkpoints cannot retain frontend arena nodes.
+  enum class fortran_output_surface {
+    preserve_source = 0,
+    selected_translation_unit = 1
+  };
+  enum class fortran_include_kind {
+    native_include = 0,
+    cpp_include = 1,
+    cpp_include_next = 2
+  };
+  struct fortran_source_inclusion {
+    fortran_include_kind kind = fortran_include_kind::native_include;
+    unsigned parent_occurrence = 0;
+    unsigned directive_begin = 0;
+    unsigned directive_end = 0;
+    unsigned child_occurrence = 0;
+    unsigned child_entry = 0;
+    unsigned child_exit = 0;
+    std::string physical_path;
+    std::string source_filename;
+
+    bool operator==(const fortran_source_inclusion &other) const {
+      return kind == other.kind &&
+             parent_occurrence == other.parent_occurrence &&
+             directive_begin == other.directive_begin &&
+             directive_end == other.directive_end &&
+             child_occurrence == other.child_occurrence &&
+             child_entry == other.child_entry && child_exit == other.child_exit &&
+             physical_path == other.physical_path &&
+             source_filename == other.source_filename;
+    }
+  };
+  struct fortran_source_context {
+    unsigned root_occurrence = 0;
+    unsigned root_entry = 0;
+    unsigned root_exit = 0;
+    std::string root_path;
+    std::vector<fortran_source_inclusion> inclusions;
+    fortran_output_surface output_surface =
+        fortran_output_surface::preserve_source;
+
+    bool operator==(const fortran_source_context &other) const {
+      return root_occurrence == other.root_occurrence &&
+             root_entry == other.root_entry && root_exit == other.root_exit &&
+             root_path == other.root_path && inclusions == other.inclusions &&
+             output_surface == other.output_surface;
+    }
+    friend std::ostream &operator<<(std::ostream &out,
+                                    const fortran_source_context &context) {
+      return out << "Fortran source occurrence " << context.root_occurrence
+                 << ", inclusions " << context.inclusions.size()
+                 << ", output surface " << static_cast<int>(context.output_surface);
+    }
+  };
+
+  // Output queries run for each statement and preprocessing record. Read the
+  // policy directly instead of copying the value-owned inclusion snapshot.
+  fortran_output_surface get_fortran_output_surface() const {
+    return p_fortran_source_context.output_surface;
+  }
+
+  // Frontend-provided scalar representation for this translation unit. KIND is
+  // zero for C/C++ scalar variants and the resolved positive KIND for Fortran.
+  // Floating precision and exponent range distinguish equally sized storage
+  // such as x87 extended precision and IEEE binary128.
   struct scalar_abi_layout {
     unsigned size_bits = 0;
     unsigned alignment_bits = 0;

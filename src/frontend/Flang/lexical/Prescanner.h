@@ -99,6 +99,8 @@ public:
   ProvenanceRange SkipInactiveConditionalSourceLine();
   TokenSequence TokenizePreprocessorDirective();
   Provenance GetCurrentProvenance() const { return GetProvenance(at_); }
+  Provenance GetNextLineProvenance() const { return GetProvenance(nextLine_); }
+  bool IsFixedForm() const { return inFixedForm_; }
 
   std::optional<CharBlock> GetKeywordMacroName(const char *) const;
   TokenSequence ExpandKeywordMacro(CharBlock, Provenance,
@@ -166,16 +168,29 @@ private:
   }
 
   Provenance GetProvenance(const char *sourceChar) const {
+    if (mappedInput_) {
+      const auto offset = static_cast<std::size_t>(sourceChar - start_);
+      CHECK(offset < mappedInput_->SizeInChars());
+      return mappedInput_->GetCharProvenance(offset);
+    }
     return startProvenance_ + (sourceChar - start_);
   }
 
   ProvenanceRange GetProvenanceRange(const char *first,
                                      const char *afterLast) const {
+    if (mappedInput_)
+      return mappedDiagnosticRange_;
     std::size_t bytes = afterLast - first;
     return {startProvenance_ + (first - start_), bytes};
   }
 
   void EmitChar(TokenSequence &tokens, char ch) {
+    if (mappedInput_) {
+      const auto offset = static_cast<std::size_t>(at_ - start_);
+      tokens.PutNextTokenChar(ch, GetCurrentProvenance(),
+                              mappedInput_->GetCharSource(offset));
+      return;
+    }
     tokens.PutNextTokenChar(ch, GetCurrentProvenance());
   }
 
@@ -217,7 +232,10 @@ private:
 
   TokenSequence &ClipComment(TokenSequence &, bool skipFirst = false) const;
   void CheckBadFortranCharacters(const TokenSequence &) const;
-  void CheckAndEmitLine(TokenSequence &, Provenance newlineProvenance);
+  void CheckAndEmitLine(TokenSequence &, Provenance newlineProvenance,
+                        const char *selectedSentinel = nullptr);
+  std::vector<SelectedDirectiveToken>
+  RenderSelectedDirective(const TokenSequence &, Provenance, const char *);
   void LabelField(TokenSequence &);
   void EnforceStupidEndStatementRules(const TokenSequence &);
   void SkipToEndOfLine();
@@ -242,11 +260,16 @@ private:
   bool IsFixedFormCommentLine(const char *) const;
   const char *IsFreeFormComment(const char *) const;
   std::optional<std::size_t> IsIncludeLine(const char *) const;
-  void FortranInclude(const char *quote);
+  void FortranInclude(const char *quote,
+                      const TokenSequence *originalTokens = nullptr,
+                      bool conditional = false);
   const char *IsPreprocessorDirectiveLine(const char *) const;
   const char *FixedFormContinuationLine(bool atNewline);
   const char *FreeFormContinuationLine(bool ampersand);
   bool IsImplicitContinuation() const;
+  TokenInvocationSource CaptureDirectiveSyntaxPrefix(const char *,
+                                                     const char *) const;
+  void RecordDirectiveSyntaxPrefix(TokenInvocationSource);
   bool FixedFormContinuation(bool atNewline);
   bool FreeFormContinuation();
   bool Continuation(bool mightNeedFixedFormSpace);
@@ -259,7 +282,7 @@ private:
                                   const TokenSequence *input = nullptr) const;
   LineClassification ClassifyLine(TokenSequence &,
                                   Provenance newlineProvenance) const;
-  bool SourceFormChange(std::string &&);
+  bool SourceFormChange(const TokenSequence &);
   bool CompilerDirectiveContinuation(TokenSequence &, const char *sentinel);
   bool SourceLineContinuation(TokenSequence &);
   std::optional<LineClassification>
@@ -290,6 +313,11 @@ private:
   const char *limit_{nullptr};    // first address after end of current source
   const char *nextLine_{nullptr}; // next line to process; <= limit_
   const char *directiveSentinel_{nullptr}; // current compiler directive
+  // A local final-token formation view; never escapes its renderer call.
+  const TokenSequence *mappedInput_{nullptr};
+  Encoding mappedOutputEncoding_{Encoding::UTF_8};
+  ProvenanceRange mappedDiagnosticRange_;
+  std::optional<std::size_t> emittedQuotedLiteral_;
 
   // These data members are state for processing the source line containing
   // "at_", which goes to up to the newline character before "nextLine_".
@@ -334,6 +362,9 @@ private:
   std::unordered_set<std::string> compilerDirectiveSentinels_;
   std::unordered_set<std::string> conditionalCompilationSentinels_;
   std::unordered_set<std::string> fixedFormParenthesisWhitespaceSentinels_;
+  // Synchronous, scoped metadata staging while a following line is tested.
+  // Published prefix snapshots contain values and never retain this pointer.
+  std::vector<TokenInvocationSource> *directiveSyntaxPrefixCapture_{nullptr};
 };
 } // namespace Rose::FortranLex
 #endif // REX_FORTRAN_LEX_PRESCANNER_H_

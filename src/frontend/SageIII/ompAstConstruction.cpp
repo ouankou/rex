@@ -6,6 +6,7 @@
 #include "OpenACCParser.h"
 #include "accAstConstruction.h"
 
+#include "FortranSourceContext.h"
 #include "astJson/sageAstJson.h"
 #include "astPostProcessing.h"
 #include "openMPConstantInteger.h"
@@ -1797,6 +1798,8 @@ struct FortranDirectiveGroupView {
   std::string cooked_text;
 };
 
+void requireFortranDirectiveMemberSourceSpan(SgPragmaDeclaration *pragma);
+
 std::vector<FortranDirectiveGroupView>
 collectFortranDirectiveGroups(SgSourceFile *source_file,
                               const std::string &requested_family) {
@@ -1828,6 +1831,7 @@ collectFortranDirectiveGroups(SgSourceFile *source_file,
     if (!requested) {
       continue;
     }
+    requireFortranDirectiveMemberSourceSpan(pragma);
     const std::string &group_id = pragma->get_fortran_directive_group_id();
     const size_t member_count = pragma->get_fortran_directive_member_count();
     const size_t member_index = pragma->get_fortran_directive_member_index();
@@ -1937,8 +1941,8 @@ static bool hasUsableSourceLocation(const Sg_File_Info *info) {
          info->get_physical_file_id() >= 0 && info->get_physical_line() > 0;
 }
 
-static int compareOpenMPSourceLocations(const Sg_File_Info *lhs,
-                                        const Sg_File_Info *rhs) {
+static int comparePhysicalDirectiveSourceLocations(const Sg_File_Info *lhs,
+                                                   const Sg_File_Info *rhs) {
   if (!hasUsableSourceLocation(lhs) || !hasUsableSourceLocation(rhs) ||
       lhs->get_physical_file_id() != rhs->get_physical_file_id()) {
     std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-location]: cannot "
@@ -1954,9 +1958,101 @@ static int compareOpenMPSourceLocations(const Sg_File_Info *lhs,
   return 0;
 }
 
+class DirectiveSourceOrdering {
+public:
+  explicit DirectiveSourceOrdering(SgNode *context)
+      : fortran_{isFortranSource(context)} {}
+
+  int compare(const Sg_File_Info *lhs, const Sg_File_Info *rhs) const {
+    if (!fortran_) {
+      return comparePhysicalDirectiveSourceLocations(lhs, rhs);
+    }
+    requireFortranPoint(lhs);
+    requireFortranPoint(rhs);
+    const unsigned int left = lhs->get_source_sequence_number();
+    const unsigned int right = rhs->get_source_sequence_number();
+    if (left != right) {
+      return left < right ? -1 : 1;
+    }
+    if (!samePhysicalPoint(lhs, rhs)) {
+      std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-location-identity]: "
+                   "one Fortran source ordinal names different exact physical "
+                   "points\n";
+      ROSE_ABORT();
+    }
+    return 0;
+  }
+
+  bool samePoint(const Sg_File_Info *lhs, const Sg_File_Info *rhs) const {
+    return compare(lhs, rhs) == 0 && (!fortran_ || samePhysicalPoint(lhs, rhs));
+  }
+
+  void requireWrittenSpan(const Sg_File_Info *start,
+                          const Sg_File_Info *end) const {
+    if (fortran_) {
+      requireFortranPoint(start);
+      requireFortranPoint(end);
+    }
+    if (!hasUsableSourceLocation(start) || !hasUsableSourceLocation(end) ||
+        start->get_physical_file_id() != end->get_physical_file_id() ||
+        (fortran_ && start->get_physical_file_occurrence_id() !=
+                         end->get_physical_file_occurrence_id()) ||
+        comparePhysicalDirectiveSourceLocations(start, end) > 0 ||
+        compare(start, end) > 0) {
+      std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-source-span]: written "
+                   "directive member has no coherent physical occurrence and "
+                   "ordered source span\n";
+      ROSE_ABORT();
+    }
+  }
+
+private:
+  static bool isFortranSource(SgNode *context) {
+    SgSourceFile *source =
+        context != nullptr ? getEnclosingSourceFile(context) : nullptr;
+    if (source == nullptr) {
+      std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-source-context]: "
+                   "directive ordering has no attached source-file owner\n";
+      ROSE_ABORT();
+    }
+    return source->get_Fortran_only() || source->get_F77_only() ||
+           source->get_F90_only() || source->get_F95_only() ||
+           source->get_F2003_only();
+  }
+
+  static void requireFortranPoint(const Sg_File_Info *point) {
+    if (!hasUsableSourceLocation(point) ||
+        point->get_source_sequence_number() == 0 ||
+        point->get_physical_file_occurrence_id() == 0) {
+      std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-source-order]: "
+                   "Fortran source point requires exact physical, lexical "
+                   "order, and file-occurrence identities\n";
+      ROSE_ABORT();
+    }
+  }
+
+  static bool samePhysicalPoint(const Sg_File_Info *lhs,
+                                const Sg_File_Info *rhs) {
+    return lhs->get_physical_file_id() == rhs->get_physical_file_id() &&
+           lhs->get_physical_file_occurrence_id() ==
+               rhs->get_physical_file_occurrence_id() &&
+           lhs->get_physical_line() == rhs->get_physical_line() &&
+           lhs->get_col() == rhs->get_col();
+  }
+
+  const bool fortran_;
+};
+
+void requireFortranDirectiveMemberSourceSpan(SgPragmaDeclaration *pragma) {
+  const DirectiveSourceOrdering ordering{pragma};
+  ordering.requireWrittenSpan(pragma->get_startOfConstruct(),
+                              pragma->get_endOfConstruct());
+}
+
 static void attachDirectivePreprocessingInfoInSourceOrder(
     SgLocatedNode *destination, PreprocessingInfo *info,
-    PreprocessingInfo::RelativePositionType relative) {
+    PreprocessingInfo::RelativePositionType relative,
+    const DirectiveSourceOrdering &ordering) {
   if (destination == nullptr || info == nullptr ||
       !hasUsableSourceLocation(info->get_file_info())) {
     std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: cannot attach "
@@ -1978,8 +2074,8 @@ static void attachDirectivePreprocessingInfoInSourceOrder(
                    "owns preprocessing information without an exact location\n";
       ROSE_ABORT();
     }
-    if (compareOpenMPSourceLocations(info->get_file_info(),
-                                     existing->get_file_info()) < 0) {
+    if (ordering.compare(info->get_file_info(), existing->get_file_info()) <
+        0) {
       break;
     }
   }
@@ -1993,7 +2089,8 @@ static void attachDirectivePreprocessingInfoInSourceOrder(
 }
 
 static void moveEmptyPairedDirectivePreprocessingInfo(
-    SgPragmaDeclaration *begin, SgPragmaDeclaration *end, SgBasicBlock *body) {
+    SgPragmaDeclaration *begin, SgPragmaDeclaration *end, SgBasicBlock *body,
+    const DirectiveSourceOrdering &ordering) {
   ROSE_ASSERT(begin != nullptr && end != nullptr && body != nullptr);
   const Sg_File_Info *begin_start = begin->get_startOfConstruct();
   const Sg_File_Info *end_start = end->get_startOfConstruct();
@@ -2010,15 +2107,14 @@ static void moveEmptyPairedDirectivePreprocessingInfo(
         ROSE_ABORT();
       }
       const int after_begin =
-          compareOpenMPSourceLocations(begin_start, info->get_file_info());
-      const int before_end =
-          compareOpenMPSourceLocations(info->get_file_info(), end_start);
+          ordering.compare(begin_start, info->get_file_info());
+      const int before_end = ordering.compare(info->get_file_info(), end_start);
       if (after_begin < 0 && before_end < 0) {
         // This includes the BEGIN line's trailing comment. The transparent
         // empty body emits these source records between the generated pair.
         owner->detachPreprocessingInfo(info);
         attachDirectivePreprocessingInfoInSourceOrder(
-            body, info, PreprocessingInfo::inside);
+            body, info, PreprocessingInfo::inside, ordering);
       } else if (owner == end || before_end >= 0) {
         // END will be removed. Its closing-line and following records belong
         // after the complete paired construct, whose surviving source owner
@@ -2027,7 +2123,8 @@ static void moveEmptyPairedDirectivePreprocessingInfo(
         attachDirectivePreprocessingInfoInSourceOrder(
             begin, info,
             before_end >= 0 ? PreprocessingInfo::after
-                            : PreprocessingInfo::before);
+                            : PreprocessingInfo::before,
+            ordering);
       }
     }
   }
@@ -2055,6 +2152,10 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
     ROSE_ABORT();
   }
 
+  // The original pragma may already be detached by replacement. The converted
+  // statement is the published owner of this source-ordering context.
+  const DirectiveSourceOrdering ordering{converted_statement};
+
   const Sg_File_Info *pragma_end = pragma->get_endOfConstruct();
   if (!hasUsableSourceLocation(pragma_end)) {
     std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: structured "
@@ -2063,8 +2164,7 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
   }
   const Sg_File_Info *empty_body_boundary = nullptr;
   while (hasUsableSourceLocation(body->get_startOfConstruct()) &&
-         compareOpenMPSourceLocations(pragma_end,
-                                      body->get_startOfConstruct()) >= 0) {
+         ordering.compare(pragma_end, body->get_startOfConstruct()) >= 0) {
     SgOmpBodyStatement *nested = isSgOmpBodyStatement(body);
     SgLocatedNode *nested_body =
         nested != nullptr ? isSgLocatedNode(nested->get_body()) : nullptr;
@@ -2088,10 +2188,10 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
         if (end == nullptr ||
             !hasUsableSourceLocation(block->get_startOfConstruct()) ||
             !hasUsableSourceLocation(block->get_endOfConstruct()) ||
-            compareOpenMPSourceLocations(block->get_startOfConstruct(),
-                                         pragma->get_startOfConstruct()) != 0 ||
-            compareOpenMPSourceLocations(block->get_endOfConstruct(),
-                                         end->get_endOfConstruct()) != 0) {
+            !ordering.samePoint(block->get_startOfConstruct(),
+                                pragma->get_startOfConstruct()) ||
+            !ordering.samePoint(block->get_endOfConstruct(),
+                                end->get_endOfConstruct())) {
           std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: empty "
                        "structured body has no exact matched directive span\n";
           ROSE_ABORT();
@@ -2116,7 +2216,7 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
                                        ? empty_body_boundary
                                        : body->get_startOfConstruct();
   if (!hasUsableSourceLocation(body_start) ||
-      compareOpenMPSourceLocations(pragma_end, body_start) >= 0) {
+      ordering.compare(pragma_end, body_start) >= 0) {
     std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: structured "
                  "directive and body have an invalid source order\n";
     ROSE_ABORT();
@@ -2136,8 +2236,8 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
                    "location\n";
       ROSE_ABORT();
     }
-    if (compareOpenMPSourceLocations(pragma_end, info->get_file_info()) < 0 &&
-        compareOpenMPSourceLocations(info->get_file_info(), body_start) < 0) {
+    if (ordering.compare(pragma_end, info->get_file_info()) < 0 &&
+        ordering.compare(info->get_file_info(), body_start) < 0) {
       intervening.push_back(info);
     }
   }
@@ -2147,8 +2247,8 @@ moveInterveningPreprocessingInfoToOpenMPBody(SgPragmaDeclaration *pragma,
 
   for (PreprocessingInfo *info : intervening) {
     pragma->detachPreprocessingInfo(info);
-    attachDirectivePreprocessingInfoInSourceOrder(body, info,
-                                                  PreprocessingInfo::before);
+    attachDirectivePreprocessingInfoInSourceOrder(
+        body, info, PreprocessingInfo::before, ordering);
   }
 }
 
@@ -8195,7 +8295,7 @@ static void removeFortranOpenMPPragmas(SgSourceFile *sageFilePtr) {
                    "pragma has no source metadata\n";
       ROSE_ABORT();
     }
-    if (!info->isTransformation() && !info->isSameFile(sageFilePtr)) {
+    if (getEnclosingSourceFile(decl) != sageFilePtr) {
       continue;
     }
     if (decl->get_fortran_directive_family() ==
@@ -8255,6 +8355,12 @@ static void removeFortranOpenMPPragmas(SgSourceFile *sageFilePtr) {
     if (!fortranAstUnparserEmitsOpenMPEnd(paired_begin->getKind())) {
       std::cerr << "REX_OMP_AST_INVARIANT[pragma-cleanup]: Sage OpenMP node "
                    "cannot emit the required Fortran end directive\n";
+      ROSE_ABORT();
+    }
+    if (const auto *records = decl->getAttachedPreprocessingInfo();
+        records != nullptr && !records->empty()) {
+      std::cerr << "REX_OMP_AST_INVARIANT[paired-end-preprocessing]: END "
+                   "pragma still owns source records during cleanup\n";
       ROSE_ABORT();
     }
     removeStatement(decl, false);
@@ -9720,20 +9826,97 @@ void OpenMPIRToSageAST(SgSourceFile *sageFilePtr,
 static SgStatement *getNextStatementInSameBasicBlock(SgStatement *stmt);
 static const Sg_File_Info *getStatementStartLocation(const SgStatement *stmt);
 
+static SgStatement *moveNonemptyPairedFortranDirectivePreprocessingInfo(
+    SgPragmaDeclaration *begin, SgPragmaDeclaration *end, SgStatement *body,
+    bool owns_paired_wrapper) {
+  ROSE_ASSERT(begin != nullptr && end != nullptr && body != nullptr);
+  const DirectiveSourceOrdering ordering{begin};
+  const auto *begin_start = begin->get_startOfConstruct();
+  const auto *end_start = end->get_startOfConstruct();
+  ordering.requireWrittenSpan(begin_start, begin->get_endOfConstruct());
+  ordering.requireWrittenSpan(end_start, end->get_endOfConstruct());
+  if (ordering.compare(begin->get_endOfConstruct(), end_start) >= 0) {
+    std::cerr << "REX_OMP_AST_INVARIANT[paired-body]: paired Fortran "
+                 "directives have unordered source boundaries\n";
+    ROSE_ABORT();
+  }
+  Rose::FortranSource::preparePairedBoundary(begin, end);
+
+  SgBasicBlock *wrapper = owns_paired_wrapper ? isSgBasicBlock(body) : nullptr;
+  ROSE_ASSERT(!owns_paired_wrapper || wrapper != nullptr);
+  SgStatement *first =
+      wrapper != nullptr ? wrapper->get_statements().front() : body;
+  ROSE_ASSERT(first != nullptr);
+  const auto *first_start = first->get_startOfConstruct();
+  if (!hasUsableSourceLocation(first_start)) {
+    std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-boundary]: nonempty "
+                 "paired body has no exact first statement\n";
+    ROSE_ABORT();
+  }
+
+  for (SgPragmaDeclaration *owner : {begin, end}) {
+    const auto *attached = owner->get_attachedPreprocessingInfoPtr();
+    if (attached == nullptr)
+      continue;
+    const AttachedPreprocessingInfoType records = *attached;
+    for (PreprocessingInfo *info : records) {
+      if (info == nullptr || !hasUsableSourceLocation(info->get_file_info())) {
+        std::cerr << "REX_OMP_AST_INVARIANT[preprocessing-owner]: paired "
+                     "Fortran directive owns a record without an exact "
+                     "location\n";
+        ROSE_ABORT();
+      }
+      const auto *point = info->get_file_info();
+      const int after_begin = ordering.compare(begin_start, point);
+      const int before_end = ordering.compare(point, end_start);
+      if (after_begin < 0 && before_end < 0) {
+        owner->detachPreprocessingInfo(info);
+        if (ordering.compare(point, first_start) < 0) {
+          attachDirectivePreprocessingInfoInSourceOrder(
+              first, info, PreprocessingInfo::before, ordering);
+        } else {
+          if (wrapper == nullptr) {
+            // A single source statement also needs a stable closing trivia
+            // boundary. Keep it intact under a transparent paired wrapper;
+            // an END pragma is not a surviving attachment owner.
+            wrapper = buildBasicBlock();
+            initializeGeneratedOpenMPStatement(wrapper);
+            copyStartFileInfo(begin, wrapper);
+            copyEndFileInfo(end, wrapper);
+            removeStatement(body, false);
+            insertStatementAfter(begin, wrapper, false);
+            appendStatement(body, wrapper);
+            body = wrapper;
+          }
+          attachDirectivePreprocessingInfoInSourceOrder(
+              wrapper, info, PreprocessingInfo::inside, ordering);
+        }
+      } else if (owner == end || before_end >= 0) {
+        owner->detachPreprocessingInfo(info);
+        attachDirectivePreprocessingInfoInSourceOrder(
+            begin, info,
+            before_end >= 0 ? PreprocessingInfo::after
+                            : PreprocessingInfo::before,
+            ordering);
+      }
+    }
+  }
+  return body;
+}
+
 static SgStatement *
 ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
                              SgPragmaDeclaration *end_decl,
                              const std::vector<SgStatement *> &stmt_vec) {
   ROSE_ASSERT(begin_decl != NULL);
   ROSE_ASSERT(end_decl != NULL);
+  SgSourceFile *source = getEnclosingSourceFile(begin_decl);
+  const bool is_fortran =
+      source != nullptr && (source->get_Fortran_only() ||
+                            source->get_F77_only() || source->get_F90_only() ||
+                            source->get_F95_only() || source->get_F2003_only());
   SgStatement *result = NULL;
   if (stmt_vec.empty()) {
-    SgSourceFile *source = getEnclosingSourceFile(begin_decl);
-    const bool is_fortran =
-        source != nullptr &&
-        (source->get_Fortran_only() || source->get_F77_only() ||
-         source->get_F90_only() || source->get_F95_only() ||
-         source->get_F2003_only());
     if (!is_fortran) {
       return NULL;
     }
@@ -9754,23 +9937,22 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     const auto *begin_end = begin_decl->get_endOfConstruct();
     const auto *end_start = end_decl->get_startOfConstruct();
     const auto *end_end = end_decl->get_endOfConstruct();
-    if (!hasUsableSourceLocation(begin_start) ||
-        !hasUsableSourceLocation(begin_end) ||
-        !hasUsableSourceLocation(end_start) ||
-        !hasUsableSourceLocation(end_end) ||
-        compareOpenMPSourceLocations(begin_start, begin_end) > 0 ||
-        compareOpenMPSourceLocations(begin_end, end_start) >= 0 ||
-        compareOpenMPSourceLocations(end_start, end_end) > 0) {
+    const DirectiveSourceOrdering ordering{begin_decl};
+    ordering.requireWrittenSpan(begin_start, begin_end);
+    ordering.requireWrittenSpan(end_start, end_end);
+    if (ordering.compare(begin_end, end_start) >= 0) {
       std::cerr << "REX_OMP_AST_INVARIANT[paired-body]: empty Fortran region "
                    "does not have exact ordered directive source anchors\n";
       ROSE_ABORT();
     }
+    Rose::FortranSource::preparePairedBoundary(begin_decl, end_decl);
     SgBasicBlock *empty_body = buildBasicBlock();
     initializeGeneratedOpenMPStatement(empty_body);
     copyStartFileInfo(begin_decl, empty_body);
     copyEndFileInfo(end_decl, empty_body);
     insertStatementAfter(begin_decl, empty_body, false);
-    moveEmptyPairedDirectivePreprocessingInfo(begin_decl, end_decl, empty_body);
+    moveEmptyPairedDirectivePreprocessingInfo(begin_decl, end_decl, empty_body,
+                                              ordering);
     return empty_body;
   }
   if (stmt_vec.size() == 1) {
@@ -9807,6 +9989,10 @@ ensureSingleStmtOrBasicBlock(SgPragmaDeclaration *begin_decl,
     }
     insertStatementAfter(begin_decl, result, false);
     appendStatementList(stmt_vec, new_scope);
+  }
+  if (is_fortran) {
+    result = moveNonemptyPairedFortranDirectivePreprocessingInfo(
+        begin_decl, end_decl, result, stmt_vec.size() > 1);
   }
   return result;
 }
@@ -10299,6 +10485,12 @@ void merge_Matching_Fortran_ACC_Pragma_pairs(SgPragmaDeclaration *decl,
   setExactDirectiveEndKind(decl, SgStatement::e_directive_end_explicit,
                            "Fortran OpenACC matched source END");
   session.markEndConsumed(end_decl);
+  if (const auto *records = end_decl->getAttachedPreprocessingInfo();
+      records != nullptr && !records->empty()) {
+    std::cerr << "REX_ACC_AST_INVARIANT[paired-end-preprocessing]: END "
+                 "pragma still owns source records during cleanup\n";
+    ROSE_ABORT();
+  }
   removeStatement(end_decl, false);
 }
 
