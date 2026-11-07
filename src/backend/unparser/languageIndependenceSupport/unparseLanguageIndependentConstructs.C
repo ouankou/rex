@@ -1095,8 +1095,23 @@ bool is_preprocessing_comment_directive(
          directive_type == PreprocessingInfo::CplusplusStyleComment;
 }
 
-bool preprocessing_uses_attached_output_placement(PreprocessingInfo *info,
-                                                  SgLocatedNode *owner) {
+const Rose::FortranSource::Context *
+fortranOutputSourceContext(Unparser *unparser, SgUnparse_Info &info) {
+  auto *file = info.get_current_source_file();
+  if (file == nullptr)
+    return nullptr;
+  if (Rose::FortranSource::selectedOutput(file))
+    return &unparser->fortranSourceContext(file);
+  if (!file->get_Fortran_only() && !file->get_F77_only() &&
+      !file->get_F90_only() && !file->get_F95_only() && !file->get_F2003_only())
+    return nullptr;
+  const auto &context = unparser->fortranSourceContext(file);
+  return context.hasLexicalSource() ? &context : nullptr;
+}
+
+bool preprocessing_uses_attached_output_placement(
+    PreprocessingInfo *info, SgLocatedNode *owner,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (info == nullptr || owner == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[preprocessing-output-placement]: output "
@@ -1138,6 +1153,8 @@ bool preprocessing_uses_attached_output_placement(PreprocessingInfo *info,
       relative_position == PreprocessingInfo::inside ||
       relative_position == PreprocessingInfo::before_syntax ||
       relative_position == PreprocessingInfo::after_syntax;
+  const bool logicalOwner =
+      context != nullptr && context->canAttachSourcePreprocessing(info, owner);
   if (info->getAttachedOwner() != owner || owner_info == nullptr ||
       owner_start == nullptr || owner_end == nullptr ||
       record_info->isShared() || owner_info->isShared() ||
@@ -1150,12 +1167,12 @@ bool preprocessing_uses_attached_output_placement(PreprocessingInfo *info,
       owner_info->get_physical_file_id() < 0 ||
       owner_start->get_physical_file_id() < 0 ||
       owner_end->get_physical_file_id() < 0 ||
-      record_info->get_physical_file_id() !=
-          owner_info->get_physical_file_id() ||
-      record_info->get_physical_file_id() !=
-          owner_start->get_physical_file_id() ||
-      record_info->get_physical_file_id() !=
-          owner_end->get_physical_file_id() ||
+      (!logicalOwner && (record_info->get_physical_file_id() !=
+                             owner_info->get_physical_file_id() ||
+                         record_info->get_physical_file_id() !=
+                             owner_start->get_physical_file_id() ||
+                         record_info->get_physical_file_id() !=
+                             owner_end->get_physical_file_id())) ||
       owner_info->get_parent() != owner || owner_start->get_parent() != owner ||
       owner_end->get_parent() != owner || !valid_relative_position) {
     fprintf(stderr,
@@ -1169,8 +1186,9 @@ bool preprocessing_uses_attached_output_placement(PreprocessingInfo *info,
   return true;
 }
 
-bool preprocessing_info_is_within_node_construct(PreprocessingInfo *info,
-                                                 SgLocatedNode *node) {
+bool preprocessing_info_is_within_node_construct(
+    PreprocessingInfo *info, SgLocatedNode *node,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (info == nullptr || node == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[preprocessing-source-provenance]: source "
@@ -1192,6 +1210,15 @@ bool preprocessing_info_is_within_node_construct(PreprocessingInfo *info,
             "REX_UNPARSE_INVARIANT[preprocessing-source-anchor]: source "
             "preprocessing owner has no complete source range\n");
     ROSE_ABORT();
+  }
+  if (context != nullptr && context->ownsSourcePoint(info_fi) &&
+      context->ownsSourcePoint(start_fi) && context->ownsSourcePoint(end_fi)) {
+    ROSE_ASSERT(start_fi->get_source_sequence_number() <=
+                end_fi->get_source_sequence_number());
+    return start_fi->get_source_sequence_number() <=
+               info_fi->get_source_sequence_number() &&
+           info_fi->get_source_sequence_number() <=
+               end_fi->get_source_sequence_number();
   }
   if (info_fi->get_line() <= 0 || info_fi->get_col() < 0 ||
       info_fi->get_physical_file_id() < 0 || start_fi->get_line() <= 0 ||
@@ -1260,7 +1287,8 @@ int preprocessing_info_text_end_line(PreprocessingInfo *info) {
 
 bool is_inline_block_comment_before_construct(
     PreprocessingInfo *info, SgLocatedNode *node,
-    PreprocessingInfo::RelativePositionType where_to_unparse) {
+    PreprocessingInfo::RelativePositionType where_to_unparse,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (info == nullptr || node == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[preprocessing-source-provenance]: comment "
@@ -1282,11 +1310,11 @@ bool is_inline_block_comment_before_construct(
       info_fi->isCompilerGenerated()) {
     return false;
   }
-  if (preprocessing_uses_attached_output_placement(info, node)) {
+  if (preprocessing_uses_attached_output_placement(info, node, context)) {
     return false;
   }
 
-  if (!preprocessing_info_is_within_node_construct(info, node)) {
+  if (!preprocessing_info_is_within_node_construct(info, node, context)) {
     return false;
   }
 
@@ -1302,8 +1330,9 @@ bool is_inline_block_comment_before_construct(
          comment_end_line == start_fi->get_line();
 }
 
-bool preprocessing_infos_share_source_line(PreprocessingInfo *lhs,
-                                           PreprocessingInfo *rhs) {
+bool preprocessing_infos_share_source_line(
+    PreprocessingInfo *lhs, PreprocessingInfo *rhs,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (lhs == nullptr) {
     return false;
   }
@@ -1319,6 +1348,12 @@ bool preprocessing_infos_share_source_line(PreprocessingInfo *lhs,
   if (lhs->isTransformation() || rhs->isTransformation() ||
       lhs_fi->isTransformation() || rhs_fi->isTransformation() ||
       lhs_fi->isCompilerGenerated() || rhs_fi->isCompilerGenerated()) {
+    return false;
+  }
+  if (context != nullptr && lhs_fi->get_physical_file_occurrence_id() !=
+                                rhs_fi->get_physical_file_occurrence_id()) {
+    ROSE_ASSERT(context->ownsSourcePoint(lhs_fi) &&
+                context->ownsSourcePoint(rhs_fi));
     return false;
   }
   if (lhs->getOutputPlacement() != PreprocessingInfo::source_position ||
@@ -1338,7 +1373,8 @@ bool preprocessing_infos_share_source_line(PreprocessingInfo *lhs,
 
 bool is_trailing_comment_after_node(
     PreprocessingInfo *info, SgLocatedNode *node,
-    PreprocessingInfo::RelativePositionType where_to_unparse) {
+    PreprocessingInfo::RelativePositionType where_to_unparse,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (info == nullptr || node == nullptr) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[preprocessing-source-provenance]: trailing "
@@ -1360,14 +1396,14 @@ bool is_trailing_comment_after_node(
   Sg_File_Info *info_fi = info->get_file_info();
   if (info->getOutputPlacement() ==
       PreprocessingInfo::attached_output_trailing_line) {
-    (void)preprocessing_uses_attached_output_placement(info, node);
+    (void)preprocessing_uses_attached_output_placement(info, node, context);
     return true;
   }
   if (info->isTransformation() || info_fi->isTransformation() ||
       info_fi->isCompilerGenerated()) {
     return false;
   }
-  if (preprocessing_uses_attached_output_placement(info, node)) {
+  if (preprocessing_uses_attached_output_placement(info, node, context)) {
     return false;
   }
   Sg_File_Info *end_fi = node->get_endOfConstruct();
@@ -1416,7 +1452,9 @@ bool located_node_has_real_source_extent(SgLocatedNode *node) {
          file_info_is_real_source_position(end) && end->isSameFile(start);
 }
 
-bool statement_has_source_trailing_comment(SgStatement *statement) {
+bool statement_has_source_trailing_comment(
+    SgStatement *statement,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (!located_node_has_real_source_extent(statement)) {
     return false;
   }
@@ -1435,7 +1473,7 @@ bool statement_has_source_trailing_comment(SgStatement *statement) {
     }
 
     if (is_trailing_comment_after_node(info, statement,
-                                       PreprocessingInfo::after)) {
+                                       PreprocessingInfo::after, context)) {
       return true;
     }
   }
@@ -1449,7 +1487,9 @@ bool preprocessing_info_matches_unparse_position(
   return info_position == unparse_position;
 }
 
-bool located_node_has_inline_leading_block_comment(SgLocatedNode *node) {
+bool located_node_has_inline_leading_block_comment(
+    SgLocatedNode *node,
+    const Rose::FortranSource::Context *context = nullptr) {
   if (node == nullptr) {
     return false;
   }
@@ -1463,8 +1503,8 @@ bool located_node_has_inline_leading_block_comment(SgLocatedNode *node) {
   for (size_t index = 0; index < prep_info->size(); ++index) {
     PreprocessingInfo *info =
         requiredAttachedPreprocessingInfoEntry(*prep_info, index);
-    if (is_inline_block_comment_before_construct(info, node,
-                                                 PreprocessingInfo::before)) {
+    if (is_inline_block_comment_before_construct(
+            info, node, PreprocessingInfo::before, context)) {
       return true;
     }
   }
@@ -2101,13 +2141,23 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
     }
     ROSE_ABORT();
   }
-  if (statementInfo->get_physical_file_id() !=
-      sourceInfo->get_physical_file_id()) {
+  const bool selectedFortranOwner =
+      Rose::FortranSource::selectedOutput(sourceFile) &&
+      (unp->fortranSourceContext(sourceFile).ownsSourcePoint(statementInfo) ||
+       unp->fortranSourceContext(sourceFile).ownsOutputBoundary(stmt));
+  const auto *fortranContext = fortranOutputSourceContext(unp, info);
+  const bool fortranProgramUnitContainer =
+      fortranContext != nullptr &&
+      fortranContext->ownsProgramUnitContainer(stmt);
+  if (!selectedFortranOwner && !fortranProgramUnitContainer &&
+      statementInfo->get_physical_file_id() !=
+          sourceInfo->get_physical_file_id()) {
     return false;
   }
   const unsigned int activeOccurrence =
       info.get_current_physical_file_occurrence_id();
-  if (activeOccurrence != 0) {
+  if (!selectedFortranOwner && !fortranProgramUnitContainer &&
+      activeOccurrence != 0) {
     const unsigned int statementOccurrence =
         statementInfo->get_physical_file_occurrence_id();
     if (statementOccurrence == 0) {
@@ -2129,6 +2179,8 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
     const bool ownsZeroWidthSurface =
         role == SgEmptyDeclaration::e_empty_declaration_preprocessing_anchor ||
         role == SgEmptyDeclaration::
+                    e_empty_declaration_source_preprocessing_anchor ||
+        role == SgEmptyDeclaration::
                     e_empty_declaration_zero_width_source_replacement;
     if (ownsZeroWidthSurface) {
       if (!statementInfo->isOutputInCodeGeneration()) {
@@ -2149,13 +2201,21 @@ bool UnparseLanguageIndependentConstructs::statementFromFile(
 
       AttachedPreprocessingInfoType *attached =
           empty->getAttachedPreprocessingInfo();
-      if (role ==
-              SgEmptyDeclaration::e_empty_declaration_preprocessing_anchor &&
+      if ((role ==
+               SgEmptyDeclaration::e_empty_declaration_preprocessing_anchor ||
+           role == SgEmptyDeclaration::
+                       e_empty_declaration_source_preprocessing_anchor) &&
           (attached == nullptr || attached->empty())) {
         fprintf(stderr,
                 "REX_UNPARSE_INVARIANT[preprocessing-anchor]: anchor has no "
                 "exactly owned preprocessing record\n");
         ROSE_ABORT();
+      }
+      if (role ==
+          SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor) {
+        unp->fortranSourceContext(sourceFile)
+            .validateSourcePreprocessingAnchor(empty);
+        return true;
       }
       if (attached != nullptr) {
         for (size_t index = 0; index < attached->size(); ++index) {
@@ -4549,7 +4609,8 @@ void UnparseLanguageIndependentConstructs::unparseStatement(
           // unparseLanguageSpecificStatement(stmt,info);
           // unp->repl->unparseLanguageSpecificStatement(stmt,info);
           SgUnparse_Info language_info(info);
-          if (located_node_has_inline_leading_block_comment(stmt)) {
+          if (located_node_has_inline_leading_block_comment(
+                  stmt, fortranOutputSourceContext(unp, info))) {
             // The leading block comment belongs on the statement's source line.
             // Suppress the second formatter pass inside the language-specific
             // unparser so the statement stays on that same line.
@@ -4687,7 +4748,9 @@ void UnparseLanguageIndependentConstructs::unparseStatement(
                                         outputStatementAsTokens == false &&
                                         outputPartialStatementAsTokens == false;
     const bool defer_format_for_trailing_comment =
-        format_after_statement && statement_has_source_trailing_comment(stmt);
+        format_after_statement &&
+        statement_has_source_trailing_comment(
+            stmt, fortranOutputSourceContext(unp, info));
     if (format_after_statement && !defer_format_for_trailing_comment) {
       // DQ (comments) This is where new lines are output after the statement.
       // I think this will only output a newline if the statement unparsed is
@@ -4822,7 +4885,8 @@ void UnparseLanguageIndependentConstructs::unparseExpressionWithListSeparators(
   SgExpression *source_expression =
       validatedOriginalExpressionSource(expr, "unparse-expression");
 
-  if (source_expression != nullptr && !info.SkipConstantFoldedExpressions()) {
+  if (source_expression != nullptr && !info.SkipConstantFoldedExpressions() &&
+      !Rose::FortranSource::selectedOutput(info.get_current_source_file())) {
     // Separator placement belongs to the exact expression syntax that is
     // emitted.  Source-expression provenance is an owned syntax edge, so pass
     // the placement through the semantic wrapper instead of printing a comma
@@ -5438,6 +5502,7 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
     // There's no preprocessing info attached to the current statement
     return;
   }
+  const auto *source_context = fortranOutputSourceContext(unp, info);
 
   // When token-stream unparsing is active, file-level directives/comments
   // attached to SgGlobal are already emitted from token ranges. Re-emitting
@@ -5577,6 +5642,16 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           }
         } else {
           return false;
+        }
+
+        if (source_context != nullptr) {
+          ROSE_ASSERT(source_context->ownsSourcePoint(preproc_file_info));
+          if (isSgGlobal(stmt) == nullptr) {
+            ROSE_ASSERT(source_context->ownsSourcePoint(anchor_info));
+            ROSE_ASSERT(preproc_file_info->get_source_sequence_number() <=
+                        anchor_info->get_source_sequence_number());
+          }
+          return true;
         }
 
         if (anchor_info == nullptr || anchor_info->get_line() <= 0 ||
@@ -5788,6 +5863,13 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
     if (previous_is_comment != current_is_comment) {
       return;
     }
+    if (source_context != nullptr &&
+        previous_file_info->get_physical_file_occurrence_id() !=
+            current_file_info->get_physical_file_occurrence_id()) {
+      ROSE_ASSERT(source_context->ownsSourcePoint(previous_file_info) &&
+                  source_context->ownsSourcePoint(current_file_info));
+      return;
+    }
 
     if (previous_file_info->get_physical_file_id() < 0 ||
         current_file_info->get_physical_file_id() < 0 ||
@@ -5864,7 +5946,10 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
               "bit\n");
       ROSE_ABORT();
     }
-    (void)preprocessing_uses_attached_output_placement(*i, stmt);
+    if (source_context != nullptr && !source_context->emitPreprocessing(*i))
+      continue;
+    (void)preprocessing_uses_attached_output_placement(*i, stmt,
+                                                       source_context);
 
     if (suppressNonTransformedGlobalPreproc == true) {
       Sg_File_Info *preprocFileInfo = (*i)->get_file_info();
@@ -5899,8 +5984,13 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
     const bool is_transformation_preprocessing =
         (*i)->isTransformation() || (preprocessing_info_fi != nullptr &&
                                      preprocessing_info_fi->isTransformation());
+    const bool selected_source_record =
+        source_context != nullptr && source_context->selectedOutput() &&
+        (*i)->getFortranSourceRole() !=
+            PreprocessingInfo::FortranSourceRole::none &&
+        source_context->ownsSourcePoint(preprocessing_info_fi);
     if (infoSaysGoAhead && current_source_file != nullptr &&
-        !is_transformation_preprocessing) {
+        !is_transformation_preprocessing && !selected_source_record) {
       Sg_File_Info *current_file_info = current_source_file->get_file_info();
       if (current_file_info == nullptr || preprocessing_info_fi == nullptr ||
           current_file_info->get_physical_file_id() < 0 ||
@@ -5946,7 +6036,8 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           located_node_has_real_source_extent(statement);
       const bool source_trailing_comment =
           statement_has_source_extent &&
-          is_trailing_comment_after_node(*i, statement, whereToUnparse);
+          is_trailing_comment_after_node(*i, statement, whereToUnparse,
+                                         source_context);
       // A fixed-form comment is a column-one lexical record, so even a source
       // trailing comment starts its own line in fixed-form output.
       const bool fixed_form_fortran_output =
@@ -5958,7 +6049,7 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
           is_preprocessing_comment_directive((*i)->getTypeOfDirective()) &&
           (source_trailing_comment ||
            preprocessing_infos_share_source_line(
-               last_unparsed_preprocessing_info, *i));
+               last_unparsed_preprocessing_info, *i, source_context));
 
       const bool is_commented_pragma =
           (((*i)->getTypeOfDirective() ==
@@ -5979,7 +6070,8 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
         const bool use_current_line_indentation =
             comment_uses_current_line_indentation(*i);
         const bool inline_block_comment =
-            is_inline_block_comment_before_construct(*i, stmt, whereToUnparse);
+            is_inline_block_comment_before_construct(*i, stmt, whereToUnparse,
+                                                     source_context);
         if (inline_block_comment) {
           if (SgStatement *statement = isSgStatement(stmt)) {
             if (unp->cur.line_is_empty()) {
@@ -6035,8 +6127,8 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
         case PreprocessingInfo::CplusplusStyleComment:
           if (!info.SkipComments()) {
             const bool inline_block_comment =
-                is_inline_block_comment_before_construct(*i, stmt,
-                                                         whereToUnparse);
+                is_inline_block_comment_before_construct(
+                    *i, stmt, whereToUnparse, source_context);
             std::string comment_text = (*i)->getString();
             if (inline_block_comment) {
               comment_text = strip_trailing_line_breaks(comment_text);
@@ -6094,8 +6186,8 @@ void UnparseLanguageIndependentConstructs::unparseAttachedPreprocessingInfo(
         case PreprocessingInfo::C_StyleComment:
           if (!info.SkipComments()) {
             const bool inline_block_comment =
-                is_inline_block_comment_before_construct(*i, stmt,
-                                                         whereToUnparse);
+                is_inline_block_comment_before_construct(
+                    *i, stmt, whereToUnparse, source_context);
             std::string comment_text = (*i)->getString();
             if (inline_block_comment) {
               comment_text = strip_trailing_line_breaks(comment_text);
@@ -7005,7 +7097,9 @@ void UnparseLanguageIndependentConstructs::unparseExprList(
       SgExpression *next_source_expression = validatedOriginalExpressionSource(
           next_expression, "expression-list-separator");
       if (next_source_expression != nullptr &&
-          !newinfo.SkipConstantFoldedExpressions()) {
+          !newinfo.SkipConstantFoldedExpressions() &&
+          !Rose::FortranSource::selectedOutput(
+              newinfo.get_current_source_file())) {
         next_separator_owner = next_source_expression;
       }
       separatorBelongsToNextExpression = locatedNodeHasConditionalRegionOpening(
@@ -10285,8 +10379,11 @@ void UnparseLanguageIndependentConstructs::unparseOmpVariablesClause(
 
   const SgExpressionPtrList &semantic_items =
       required_omp_clause_items(c, semantic_variables);
+  const bool use_source_variables =
+      source_overrides_semantics &&
+      !Rose::FortranSource::selectedOutput(info.get_current_source_file());
   SgExprListExp *variables_for_output =
-      source_overrides_semantics ? source_variables : semantic_variables;
+      use_source_variables ? source_variables : semantic_variables;
   const SgExpressionPtrList &clause_items =
       required_omp_clause_items(c, variables_for_output);
   const bool ordered_policy_mapping =
@@ -10317,10 +10414,10 @@ void UnparseLanguageIndependentConstructs::unparseOmpVariablesClause(
   for (size_t item_index = 0; item_index < clause_items.size(); ++item_index) {
     SgExpression *expression = clause_items[item_index];
     const SgOmpMapDistDataPolicyPtrList *policies = nullptr;
-    if (is_map && (!source_overrides_semantics || ordered_policy_mapping)) {
+    if (is_map && (!use_source_variables || ordered_policy_mapping)) {
       SgOmpMapItem *map_item = isSgOmpMapItem(semantic_items[item_index]);
       ASSERT_not_null(map_item);
-      if (!source_overrides_semantics) {
+      if (!use_source_variables) {
         expression = map_item->get_expression();
       }
       policies = &map_item->get_policies();
@@ -10457,8 +10554,11 @@ void UnparseLanguageIndependentConstructs::unparseOmpVariablesComplexClause(
          << endl;
     ROSE_ABORT();
   }
+  const bool use_source_variables =
+      source_overrides_semantics &&
+      !Rose::FortranSource::selectedOutput(info.get_current_source_file());
   SgExprListExp *variables_for_output =
-      source_overrides_semantics ? source_variables : semantic_variables;
+      use_source_variables ? source_variables : semantic_variables;
   const SgExpressionPtrList &clause_items =
       required_omp_clause_items(c, variables_for_output);
   const bool ordered_policy_mapping =
@@ -10489,10 +10589,10 @@ void UnparseLanguageIndependentConstructs::unparseOmpVariablesComplexClause(
   for (size_t item_index = 0; item_index < clause_items.size(); ++item_index) {
     SgExpression *expression = clause_items[item_index];
     const SgOmpMapDistDataPolicyPtrList *policies = nullptr;
-    if (is_map && (!source_overrides_semantics || ordered_policy_mapping)) {
+    if (is_map && (!use_source_variables || ordered_policy_mapping)) {
       SgOmpMapItem *map_item = isSgOmpMapItem(semantic_items[item_index]);
       ASSERT_not_null(map_item);
-      if (!source_overrides_semantics) {
+      if (!use_source_variables) {
         expression = map_item->get_expression();
       }
       policies = &map_item->get_policies();

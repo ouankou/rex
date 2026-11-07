@@ -41,7 +41,7 @@ std::string takeMode(int &argc, char **argv) {
 }
 
 struct Fixture {
-  explicit Fixture(SgProject *project) {
+  explicit Fixture(SgProject *project, bool openmp) {
     ROSE_ASSERT(project != nullptr && project->numberOfFiles() == 1);
     file = isSgSourceFile(&project->get_file(0));
     ROSE_ASSERT(file != nullptr && file->get_Fortran_only());
@@ -57,74 +57,25 @@ struct Fixture {
     ROSE_ASSERT(scope != nullptr);
     symbol = isSgVariableSymbol(variable->get_symbol_from_symbol_table());
     ROSE_ASSERT(symbol != nullptr && symbol->get_declaration() == variable);
-    ROSE_ASSERT(NodeQuery::querySubTree(file, V_SgPragmaDeclaration).empty());
-  }
-
-  SgPragmaDeclaration *addPragma(bool openmp, const std::string &directive) {
-    const std::string text = std::string(openmp ? "omp " : "acc ") + directive;
-    auto *pragma = SageBuilder::buildPragmaDeclaration_nfi(
-        text, scope,
-        openmp ? SgPragmaDeclaration::e_fortran_directive_openmp
-               : SgPragmaDeclaration::e_fortran_directive_openacc);
-    ROSE_ASSERT(pragma != nullptr && pragma->get_pragma() != nullptr);
-    auto *position = variable->get_file_info();
-    ROSE_ASSERT(position != nullptr);
-    pragma->set_file_info(new Sg_File_Info(*position));
-    pragma->get_file_info()->set_parent(pragma);
-    pragma->set_startOfConstruct(new Sg_File_Info(*position));
-    pragma->get_startOfConstruct()->set_parent(pragma);
-    pragma->set_endOfConstruct(new Sg_File_Info(*position));
-    pragma->get_endOfConstruct()->set_parent(pragma);
-    pragma->get_pragma()->set_startOfConstruct(new Sg_File_Info(*position));
-    pragma->get_pragma()->get_startOfConstruct()->set_parent(
-        pragma->get_pragma());
-    pragma->get_pragma()->set_endOfConstruct(new Sg_File_Info(*position));
-    pragma->get_pragma()->get_endOfConstruct()->set_parent(
-        pragma->get_pragma());
-    for (Sg_File_Info *anchor :
-         {pragma->get_file_info(), pragma->get_startOfConstruct(),
-          pragma->get_endOfConstruct(),
-          pragma->get_pragma()->get_startOfConstruct(),
-          pragma->get_pragma()->get_endOfConstruct()})
-      anchor->set_line(5 + 2 * next_group);
-    pragma->set_fortran_directive_group_id("rex-producer-" +
-                                           std::to_string(next_group++));
-    pragma->set_fortran_directive_member_count(1);
-    pragma->set_fortran_directive_member_index(0);
-    pragma->set_fortran_directive_primary(true);
-    pragma->set_fortran_directive_raw_text("!$" + text);
-    pragma->set_fortran_directive_logical_text("!$" + text);
-    pragma->set_fortran_directive_semantic_text(text);
-    SageInterface::appendStatement(pragma, scope);
-    return pragma;
-  }
-
-  void addStructuredBody() {
-    SgFortranContinueStmt *statement = nullptr;
-    for (SgStatement *candidate : scope->get_statements()) {
-      if (auto *continuation = isSgFortranContinueStmt(candidate)) {
-        ROSE_ASSERT(statement == nullptr);
-        statement = continuation;
-      }
-    }
-    ROSE_ASSERT(statement != nullptr &&
-                statement->get_startOfConstruct()->get_line() == 6);
-    auto *body = SageBuilder::buildBasicBlock();
-    ROSE_ASSERT(body != nullptr && body->get_statements().empty());
-    body->set_file_info(new Sg_File_Info(*statement->get_file_info()));
-    body->set_startOfConstruct(
-        new Sg_File_Info(*statement->get_startOfConstruct()));
-    body->set_endOfConstruct(
-        new Sg_File_Info(*statement->get_endOfConstruct()));
-    for (Sg_File_Info *anchor :
-         {body->get_file_info(), body->get_startOfConstruct(),
-          body->get_endOfConstruct()}) {
-      anchor->set_parent(body);
-      anchor->set_line(6);
-    }
-    SageInterface::removeStatement(statement, false);
-    SageInterface::appendStatement(statement, body);
-    SageInterface::appendStatement(body, scope);
+    const auto pragmas = NodeQuery::querySubTree(file, V_SgPragmaDeclaration);
+    ROSE_ASSERT(pragmas.size() == (openmp ? 2 : 1));
+    primary = isSgPragmaDeclaration(pragmas.front());
+    if (openmp)
+      ending = isSgPragmaDeclaration(pragmas.back());
+    ROSE_ASSERT(primary != nullptr && primary->get_scope() == scope);
+    ROSE_ASSERT(primary->get_fortran_directive_semantic_text() ==
+                (openmp ? "omp parallel num_threads(rex_queue + 1)"
+                        : "acc wait(rex_queue + 1)"));
+    if (openmp)
+      ROSE_ASSERT(ending != nullptr &&
+                  ending->get_fortran_directive_semantic_text() ==
+                      "omp end parallel");
+    OmpSupport::discardOpenMPProducerSemanticRecords(file);
+    file->set_openmp_processed(false);
+    file->set_openmp_parse_only(false);
+    file->set_openacc_parse_only(false);
+    file->set_openmp_ast_only(openmp);
+    file->set_openacc_ast_only(!openmp);
   }
 
   OmpFortranExactSemanticBindings record(SgPragmaDeclaration *pragma,
@@ -155,7 +106,8 @@ struct Fixture {
   SgBasicBlock *scope = nullptr;
   SgInitializedName *variable = nullptr;
   SgVariableSymbol *symbol = nullptr;
-  unsigned next_group = 0;
+  SgPragmaDeclaration *primary = nullptr;
+  SgPragmaDeclaration *ending = nullptr;
 };
 
 struct Snapshot {
@@ -252,12 +204,10 @@ int main(int argc, char **argv) {
   static_assert(static_cast<int>(Producer::flang_parse_tree) == 0);
   static_assert(static_cast<int>(Producer::rex_typed_scope) == 1);
   const std::string mode = takeMode(argc, argv);
-  Fixture fixture(frontend(argc, argv));
   const bool openmp = mode != "openacc-json" && mode != "consume-flang" &&
                       mode != "transfer-flang" && mode != "snapshot-flang";
-  const std::string directive =
-      openmp ? "parallel num_threads(rex_queue + 1)" : "wait(rex_queue + 1)";
-  auto *pragma = fixture.addPragma(openmp, directive);
+  Fixture fixture(frontend(argc, argv), openmp);
+  auto *pragma = fixture.primary;
 
   if (mode == "register-flang" || mode == "register-common-flang") {
     auto bindings = fixture.record(pragma, Producer::flang_parse_tree);
@@ -294,6 +244,10 @@ int main(int argc, char **argv) {
     pragma->set_fortran_directive_raw_text("!$omp parallel");
     pragma->set_fortran_directive_logical_text("!$omp parallel");
     pragma->set_fortran_directive_semantic_text("omp parallel");
+    pragma->set_fortran_selected_output_text("omp parallel");
+    pragma->set_fortran_selected_output_tokens({{"omp", std::nullopt},
+                                                {" ", std::nullopt},
+                                                {"parallel", std::nullopt}});
     if (mode == "consume-flang") {
       OmpSupport::beginOpenACCFortranExactSemanticConsumption(pragma);
     } else if (mode == "snapshot-flang") {
@@ -316,8 +270,7 @@ int main(int argc, char **argv) {
                      !openmp));
   if (mode == "rex-openmp-json" || mode == "openacc-json") {
     if (openmp) {
-      fixture.addStructuredBody();
-      auto *end = fixture.addPragma(true, "end parallel");
+      auto *end = fixture.ending;
       OmpSupport::registerOpenMPFortranExactSemanticBindings(
           fixture.file, end, fixture.record(end, Producer::rex_typed_scope));
     }

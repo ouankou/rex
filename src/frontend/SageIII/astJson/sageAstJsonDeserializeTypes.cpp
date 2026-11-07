@@ -8,6 +8,49 @@
 namespace Rose {
 namespace AstJson {
 
+SgSourceFile::fortran_source_context
+fortranSourceContextFromJson(const JsonValue &properties) {
+  const JsonValue &value = properties.at("fortran_source_context");
+  auto ordinal = [](const JsonValue &object, const char *field) {
+    const int64_t number = object.requiredInt(field);
+    if (number < 0 ||
+        static_cast<uint64_t>(number) > std::numeric_limits<unsigned>::max())
+      throw std::runtime_error("AST JSON Fortran source " + std::string(field) +
+                               " is outside its unsigned range");
+    return static_cast<unsigned>(number);
+  };
+  SgSourceFile::fortran_source_context context;
+  context.root_occurrence = ordinal(value, "root_occurrence");
+  context.root_entry = ordinal(value, "root_entry");
+  context.root_exit = ordinal(value, "root_exit");
+  context.root_path = value.requiredString("root_path");
+  using Surface = SgSourceFile::fortran_output_surface;
+  context.output_surface = requiredEnum<Surface>(
+      value, "output_surface", "Fortran source context",
+      {Surface::preserve_source, Surface::selected_translation_unit});
+  const JsonValue &edges = value.at("inclusions");
+  if (edges.kind != JsonValue::Kind::Array)
+    throw std::runtime_error(
+        "AST JSON Fortran source inclusions is not an array");
+  using Kind = SgSourceFile::fortran_include_kind;
+  for (const JsonValue &edge : edges.array) {
+    SgSourceFile::fortran_source_inclusion inclusion;
+    inclusion.kind = requiredEnum<Kind>(
+        edge, "kind", "Fortran source inclusion",
+        {Kind::native_include, Kind::cpp_include, Kind::cpp_include_next});
+    inclusion.parent_occurrence = ordinal(edge, "parent_occurrence");
+    inclusion.directive_begin = ordinal(edge, "directive_begin");
+    inclusion.directive_end = ordinal(edge, "directive_end");
+    inclusion.child_occurrence = ordinal(edge, "child_occurrence");
+    inclusion.child_entry = ordinal(edge, "child_entry");
+    inclusion.child_exit = ordinal(edge, "child_exit");
+    inclusion.physical_path = edge.requiredString("physical_path");
+    inclusion.source_filename = edge.requiredString("source_filename");
+    context.inclusions.push_back(std::move(inclusion));
+  }
+  return context;
+}
+
 std::optional<SgInitializedName::FortranProcedureComponentBinding>
 fortranProcedureComponentBindingFromJson(const JsonValue &properties) {
   const JsonValue &value = properties.at("fortran_procedure_component_binding");
@@ -2612,9 +2655,15 @@ SgNode *InlineExpressionConstruction::own(SgNode *node) {
       delete node;
   };
   std::unique_ptr<SgNode, decltype(delete_node)> pending(node, delete_node);
+  // A record constructor may have published this node before its enclosing
+  // type factory adopts it. That factory may consume it during interning, so
+  // the inline owner, including this enrollment guard, must be its sole owner.
+  RecordNodeConstruction::forgetDeletedNode(node);
   try {
+    owned_index_.insert(node);
     owned_.push_back(node);
   } catch (...) {
+    owned_index_.erase(node);
     // The new owner may already have adopted tracked or borrowed operands.
     // Do not let its destructor consume those on enrollment failure.
     disconnect(node);
@@ -2635,6 +2684,8 @@ void InlineExpressionConstruction::transferTo(
   ROSE_ASSERT(&owner != this);
   for (SgNode *node : owned_)
     ROSE_ASSERT(!owner.owns(node));
+  owner.owned_index_.merge(owned_index_);
+  ROSE_ASSERT(owned_index_.empty());
   owner.owned_.splice(owner.owned_.end(), owned_);
   owner.tokens_.splice(owner.tokens_.end(), tokens_);
   // An enclosing scope keeps the parent observed before any private child
@@ -2645,6 +2696,8 @@ void InlineExpressionConstruction::transferTo(
 
 void InlineExpressionConstruction::forgetDeletedNodes(
     const std::unordered_set<SgNode *> &nodes) {
+  for (SgNode *node : nodes)
+    owned_index_.erase(node);
   owned_.remove_if([&nodes](SgNode *node) { return nodes.count(node) != 0; });
   for (auto token = tokens_.begin(); token != tokens_.end();) {
     if (nodes.count(token->get()) != 0) {
@@ -2668,7 +2721,12 @@ void InlineExpressionConstruction::publish() {
     tokens.release();
   tokens_.clear();
   owned_.clear();
+  owned_index_.clear();
   borrowed_parents_.clear();
+}
+
+void InlineExpressionConstruction::publishAst() {
+  RecordNodeConstruction::publishAst(*this);
 }
 
 void InlineExpressionConstruction::detachTypeShapeBorrows() {
@@ -2700,14 +2758,18 @@ InlineExpressionConstruction::~InlineExpressionConstruction() {
     entry.first->set_parent(entry.second);
   // Delete disconnected private expressions individually.
   for (SgNode *node : owned_)
-    if (isSgType(node) == nullptr)
+    if (isSgType(node) == nullptr) {
+      RecordNodeConstruction::forgetDeletedNode(node);
       delete node;
+    }
   // Retire exact derived caches while their fresh bases are still alive.
   // Private expression edges have already been disconnected above.
   for (auto node = owned_.rbegin(); node != owned_.rend(); ++node)
-    if (SgNode::isLiveNode(*node) && isSgType(*node) != nullptr)
+    if (SgNode::isLiveNode(*node) && isSgType(*node) != nullptr) {
+      RecordNodeConstruction::forgetDeletedNode(*node);
       SageInterface::deleteAST(*node,
                                SageInterface::DeleteAstMode::kRequireIsolated);
+    }
 }
 
 // Keep fresh types and their operands private until the enclosing
@@ -2716,8 +2778,12 @@ SourceTypeConstruction *&SourceTypeConstruction::current() {
   static thread_local SourceTypeConstruction *scope = nullptr;
   return scope;
 }
-SourceTypeConstruction::SourceTypeConstruction() : previous_(current()) {
-  current() = this;
+SourceTypeConstruction::SourceTypeConstruction(Activation activation)
+    : previous_(current()), active_(activation == Activation::scoped) {
+  if (active_) {
+    array_scope_.emplace(&arrays_);
+    current() = this;
+  }
 }
 
 namespace {
@@ -2763,13 +2829,26 @@ void retireTypeDeserializationIdentities(Predicate deleted) {
 } // namespace
 
 SourceTypeConstruction::~SourceTypeConstruction() {
+  rollback();
+  if (active_) {
+    ROSE_ASSERT(current() == this);
+    current() = previous_;
+  } else
+    ROSE_ASSERT(current() != this);
+}
+
+void SourceTypeConstruction::rollback() {
   for (uint64_t identity : identities_)
     sourceTypeDeserializationIdentities.erase(identity);
+  identities_.clear();
   arrays_.transferTo(ownership_);
   if (!ownership_.empty())
     retireTypeDeserializationIdentities(
         [this](SgType *type) { return ownership_.owns(type); });
-  current() = previous_;
+  // Explicit rollback lets a deferred record owner keep semantic declaration
+  // bases alive until their private source types and native caches are gone.
+  InlineExpressionConstruction abandoned;
+  ownership_.transferTo(abandoned);
 }
 
 void SourceTypeConstruction::take(InlineExpressionConstruction &nodes) {
@@ -2841,6 +2920,7 @@ void SourceTypeConstruction::discardDetachedNode(SgNode *root) {
 
 void SourceTypeConstruction::forgetDeletedNodes(
     const std::unordered_set<SgNode *> &nodes) {
+  RecordNodeConstruction::forgetDeletedNodes(nodes);
   for (auto *scope = current(); scope != nullptr; scope = scope->previous_) {
     scope->ownership_.forgetDeletedNodes(nodes);
     auto &identities = scope->identities_;
@@ -3059,13 +3139,16 @@ void SemanticArrayConstruction::preparePublish() {
   }
 }
 
-void SemanticArrayConstruction::publish() {
-  preparePublish();
-  if (state_->parent != nullptr) {
-    state_->detached_shapes.transferTo(state_->parent->state_->detached_shapes);
-    auto &parent = state_->parent->state_->arrays;
+void SemanticArrayConstruction::publish() { publishTo(state_->parent); }
+
+void SemanticArrayConstruction::publishTo(SemanticArrayConstruction *owner) {
+  ROSE_ASSERT(owner != this);
+  if (owner != nullptr) {
+    auto &parent = owner->state_->arrays;
+    parent.reserve(parent.size() + state_->arrays.size());
+    state_->detached_shapes.transferTo(owner->state_->detached_shapes);
     for (auto &array : state_->arrays) {
-      pendingSemanticArrays.at(array.type) = state_->parent;
+      pendingSemanticArrays.at(array.type) = owner;
       parent.push_back(std::move(array));
     }
   } else {
@@ -7267,6 +7350,7 @@ SgSourceFile *createSourceFileFromRecord(const NodeRecord &record,
        SgFile::e_f95_standard,     SgFile::e_f03_standard,
        SgFile::e_f08_standard,     SgFile::e_f18_standard});
   const bool gnu_standard = p.requiredBool("gnu_standard");
+  auto fortran_source_context = fortranSourceContextFromJson(p);
   const auto target_abi = targetAbiFromJson(p.at("target_abi"));
   const auto flags = validateConstructionFlags(record);
   auto ownershipPaths = [&](const char *field) {
@@ -7332,6 +7416,7 @@ SgSourceFile *createSourceFileFromRecord(const NodeRecord &record,
       ownership.make<SgSourceFile>(args, project, owner, filename, origin);
   installSourcePositions(file, std::move(positions), record.kind);
   file->set_target_abi(target_abi);
+  file->set_fortran_source_context(fortran_source_context);
   file->set_target_size_type(target_size_type);
   file->set_standard(standard);
   if (gnu_standard)

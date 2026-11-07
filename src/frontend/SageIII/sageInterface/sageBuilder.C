@@ -1,5 +1,6 @@
 #include "AstNodes/Expression/BuiltinOperandValidation.h"
 #include "FortranProcedureBinding.h"
+#include "FortranSourceContext.h"
 #include "fixupCopy.h"
 #include "integerWidth.h"
 #include "sage3basic.h"
@@ -18,6 +19,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <stdexcept>
 #include <unordered_set>
 
 #include "AstConsistencyTests.h"
@@ -19726,6 +19728,62 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
   }
   const int originalFileId = sourceStart->get_physical_file_id();
   const std::string originalFileName = sourceStart->get_physical_filename();
+  std::optional<SgSourceFile::fortran_source_context> reboundFortranContext;
+  std::string physicalOutputName = newFileName;
+  if (sourceFile->get_Fortran_only() || sourceFile->get_F77_only() ||
+      sourceFile->get_F90_only() || sourceFile->get_F95_only() ||
+      sourceFile->get_F2003_only()) {
+    try {
+      Rose::FortranSource::validate(sourceFile);
+      auto context = sourceFile->get_fortran_source_context();
+      if (context.root_occurrence != 0) {
+        ROSE_ASSERT(context.root_path == originalFileName);
+        if (newFileName.find('\0') != std::string::npos)
+          throw std::runtime_error("output filename contains NUL");
+        const auto absolute = std::filesystem::absolute(newFileName);
+        if (absolute.filename().empty())
+          throw std::runtime_error("output filename has no file component");
+        // The unparser creates absent output directories. Resolve only the
+        // parent so this identity names the requested destination entry;
+        // output commit validates that entry and rejects symlinks.
+        physicalOutputName =
+            (std::filesystem::weakly_canonical(absolute.parent_path()) /
+             absolute.filename())
+                .string();
+        if (!context.inclusions.empty() &&
+            std::filesystem::weakly_canonical(
+                std::filesystem::path(context.root_path).parent_path()) !=
+                std::filesystem::path(physicalOutputName).parent_path()) {
+          // Retaining raw include syntax in a new directory can resolve a
+          // different file. Publish the complete selected lexical snapshot,
+          // including CPP state, before taking the context to be rebound.
+          auto *global = sourceFile->get_globalScope();
+          ROSE_ASSERT(global != nullptr && global->get_parent() == sourceFile);
+          SgNode::SourceStateConstruction policyPublication;
+          Rose::FortranSource::prepareEdit(
+              sourceFile,
+              Rose::FortranSource::EditReason::source_file_relocation, {global},
+              {global});
+          Rose::FortranSource::validate(sourceFile);
+          context = sourceFile->get_fortran_source_context();
+          ROSE_ASSERT(
+              context.output_surface ==
+              SgSourceFile::fortran_output_surface::selected_translation_unit);
+        }
+        context.root_path = physicalOutputName;
+        reboundFortranContext.emplace(std::move(context));
+      }
+    } catch (const std::exception &error) {
+      fprintf(stderr,
+              "REX_SAGEBUILDER_INVARIANT[copied-fortran-source-context]: "
+              "source=%p output=%s: %s\n",
+              static_cast<void *>(sourceFile), newFileName.c_str(),
+              error.what());
+      ROSE_ABORT();
+    }
+  }
+  const unsigned rootOccurrence =
+      reboundFortranContext ? reboundFortranContext->root_occurrence : 0;
   SgIncludeFile *includeRoot = sourceFile->get_associated_include_file();
   if (includeRoot != nullptr) {
     ROSE_ASSERT(includeRoot->get_parent() == sourceFile &&
@@ -19734,13 +19792,16 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
     includeRoot->validateIncludeOwnership();
   }
   const int newFileId = Sg_File_Info::addFilenameToMap(newFileName);
-  if (newFileId < 0 || newFileId == originalFileId) {
+  const int newPhysicalFileId =
+      Sg_File_Info::addFilenameToMap(physicalOutputName);
+  if (newFileId < 0 || newPhysicalFileId < 0 ||
+      newPhysicalFileId == originalFileId) {
     fprintf(stderr,
             "REX_SAGEBUILDER_INVARIANT[copied-source-owner]: source=%p "
             "parsed-owner=%d output-owner=%d output=%s is not an exact "
             "physical transfer\n",
-            static_cast<void *>(sourceFile), originalFileId, newFileId,
-            newFileName.c_str());
+            static_cast<void *>(sourceFile), originalFileId, newPhysicalFileId,
+            physicalOutputName.c_str());
     ROSE_ABORT();
   }
 
@@ -19757,9 +19818,34 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
       unsigned int sourceSequence;
     };
 
-    Traversal(const std::string &newFileName, int newFileId, int originalFileId)
+    Traversal(const std::string &newFileName, int newFileId,
+              const std::string &physicalOutputName, int newPhysicalFileId,
+              int originalFileId, unsigned rootOccurrence)
         : newFileName(newFileName), newFileId(newFileId),
-          originalFileId(originalFileId) {}
+          physicalOutputName(physicalOutputName),
+          newPhysicalFileId(newPhysicalFileId), originalFileId(originalFileId),
+          rootOccurrence(rootOccurrence) {}
+
+    bool ownsPrimaryPosition(const Sg_File_Info *position) const {
+      return position->get_physical_file_id() == originalFileId &&
+             (rootOccurrence == 0 ||
+              position->get_physical_file_occurrence_id() == 0 ||
+              position->get_physical_file_occurrence_id() == rootOccurrence);
+    }
+
+    bool allowsCrossOccurrenceRange(const Sg_File_Info *start,
+                                    const Sg_File_Info *end) const {
+      // Full rooted ownership was validated before any position changed.
+      // Composite Fortran ranges retain two independent physical endpoints.
+      return rootOccurrence != 0 &&
+             start->get_physical_file_occurrence_id() != 0 &&
+             end->get_physical_file_occurrence_id() != 0 &&
+             start->get_physical_file_occurrence_id() !=
+                 end->get_physical_file_occurrence_id() &&
+             start->get_source_sequence_number() != 0 &&
+             start->get_source_sequence_number() <=
+                 end->get_source_sequence_number();
+    }
 
     void visit(SgNode *node) {
       SgLocatedNode *locatedNode = isSgLocatedNode(node);
@@ -19776,9 +19862,8 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                   locatedNode->class_name().c_str());
           ROSE_ABORT();
         }
-        const bool renameStart =
-            start->get_physical_file_id() == originalFileId;
-        const bool renameEnd = end->get_physical_file_id() == originalFileId;
+        const bool renameStart = ownsPrimaryPosition(start);
+        const bool renameEnd = ownsPrimaryPosition(end);
         const bool semanticStart =
             renameStart &&
             SageInterface::hasExactSemanticFrontendSourcePosition(locatedNode,
@@ -19786,7 +19871,8 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
         const bool semanticEnd =
             renameEnd && SageInterface::hasExactSemanticFrontendSourcePosition(
                              locatedNode, end);
-        if (renameStart != renameEnd) {
+        if (renameStart != renameEnd &&
+            !allowsCrossOccurrenceRange(start, end)) {
           fprintf(stderr,
                   "REX_SAGEBUILDER_INVARIANT[file-specification-range]: "
                   "node=%p/%s crosses the renamed physical boundary=%d\n",
@@ -19794,7 +19880,7 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                   locatedNode->class_name().c_str(), originalFileId);
           ROSE_ABORT();
         }
-        if (renameStart && semanticStart != semanticEnd) {
+        if (renameStart && renameEnd && semanticStart != semanticEnd) {
           fprintf(stderr,
                   "REX_SAGEBUILDER_INVARIANT[file-specification-range]: "
                   "node=%p/%s crosses source and semantic logical ownership "
@@ -19803,7 +19889,7 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                   locatedNode->class_name().c_str(), originalFileId);
           ROSE_ABORT();
         }
-        if (renameStart) {
+        if (renameStart || renameEnd) {
           if (start->isShared() || end->isShared()) {
             fprintf(stderr,
                     "REX_SAGEBUILDER_INVARIANT[file-specification-range]: "
@@ -19812,25 +19898,23 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                     locatedNode->class_name().c_str());
             ROSE_ABORT();
           }
-          if (semanticStart) {
-            const SemanticLogicalIdentity startIdentity =
-                semanticLogicalIdentity(start);
-            const SemanticLogicalIdentity endIdentity =
-                semanticLogicalIdentity(end);
-            start->set_physical_file_id(newFileId);
-            end->set_physical_file_id(newFileId);
-            requireReboundSemanticPosition(start, locatedNode, "start",
-                                           startIdentity);
-            requireReboundSemanticPosition(end, locatedNode, "end",
-                                           endIdentity);
-          } else {
-            start->set_file_id(newFileId);
-            end->set_file_id(newFileId);
-            start->set_physical_file_id(newFileId);
-            end->set_physical_file_id(newFileId);
-            requireReboundPosition(start, locatedNode, "start");
-            requireReboundPosition(end, locatedNode, "end");
-          }
+          const auto transfer = [&](Sg_File_Info *position, bool semantic,
+                                    const char *role) {
+            if (semantic) {
+              const auto identity = semanticLogicalIdentity(position);
+              position->set_physical_file_id(newPhysicalFileId);
+              requireReboundSemanticPosition(position, locatedNode, role,
+                                             identity);
+            } else {
+              position->set_file_id(newFileId);
+              position->set_physical_file_id(newPhysicalFileId);
+              requireReboundPosition(position, locatedNode, role);
+            }
+          };
+          if (renameStart)
+            transfer(start, semanticStart, "start");
+          if (renameEnd)
+            transfer(end, semanticEnd, "end");
         }
 
         locatedNode->validateAttachedPreprocessingInfoOwnership();
@@ -19847,7 +19931,7 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
               ROSE_ABORT();
             }
             Sg_File_Info *recordInfo = record->get_file_info();
-            if (recordInfo->get_physical_file_id() == originalFileId) {
+            if (ownsPrimaryPosition(recordInfo)) {
               if (recordInfo->isShared()) {
                 fprintf(stderr,
                         "REX_SAGEBUILDER_INVARIANT[file-specification-"
@@ -19862,16 +19946,19 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
               const int physicalLine = recordInfo->get_physical_line();
               const unsigned int sourceSequence =
                   recordInfo->get_source_sequence_number();
+              const unsigned int occurrence =
+                  recordInfo->get_physical_file_occurrence_id();
               recordInfo->set_file_id(newFileId);
-              recordInfo->set_physical_file_id(newFileId);
+              recordInfo->set_physical_file_id(newPhysicalFileId);
               if (recordInfo->get_file_id() != newFileId ||
-                  recordInfo->get_physical_file_id() != newFileId ||
+                  recordInfo->get_physical_file_id() != newPhysicalFileId ||
                   recordInfo->get_classificationBitField() != classification ||
                   recordInfo->get_raw_filename() != newFileName ||
                   recordInfo->get_raw_line() != rawLine ||
                   recordInfo->get_raw_col() != rawColumn ||
                   recordInfo->get_physical_line() != physicalLine ||
-                  recordInfo->get_source_sequence_number() != sourceSequence) {
+                  recordInfo->get_source_sequence_number() != sourceSequence ||
+                  recordInfo->get_physical_file_occurrence_id() != occurrence) {
                 fprintf(stderr,
                         "REX_SAGEBUILDER_INVARIANT[file-specification-"
                         "preprocessing]: record=%p failed exact logical and "
@@ -19880,7 +19967,17 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                 ROSE_ABORT();
               }
             }
-            if (record->getOutputPlacement() !=
+            // Source-owned Fortran records can intentionally be attached to
+            // a different occurrence in selected output. Their source and
+            // logical placement are proved by the complete context before
+            // and after this transfer, not by matching attachment filenames.
+            const bool exactFortranSource =
+                rootOccurrence != 0 &&
+                record->getFortranSourceRole() !=
+                    PreprocessingInfo::FortranSourceRole::none &&
+                recordInfo->get_source_sequence_number() != 0;
+            if (!exactFortranSource &&
+                record->getOutputPlacement() !=
                     PreprocessingInfo::source_position &&
                 (recordInfo->get_physical_file_id() !=
                      start->get_physical_file_id() ||
@@ -19912,10 +20009,10 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                     static_cast<void *>(initializedName));
             ROSE_ABORT();
           }
-          const bool renameStart =
-              start->get_physical_file_id() == originalFileId;
-          const bool renameEnd = end->get_physical_file_id() == originalFileId;
-          if (renameStart != renameEnd) {
+          const bool renameStart = ownsPrimaryPosition(start);
+          const bool renameEnd = ownsPrimaryPosition(end);
+          if (renameStart != renameEnd &&
+              !allowsCrossOccurrenceRange(start, end)) {
             fprintf(stderr,
                     "REX_SAGEBUILDER_INVARIANT[copied-source-initialized-"
                     "name]: node=%p crosses the parsed primary-file boundary\n",
@@ -19924,10 +20021,12 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
           }
           if (renameStart) {
             start->set_file_id(newFileId);
-            end->set_file_id(newFileId);
-            start->set_physical_file_id(newFileId);
-            end->set_physical_file_id(newFileId);
+            start->set_physical_file_id(newPhysicalFileId);
             requireReboundPosition(start, initializedName, "start");
+          }
+          if (renameEnd) {
+            end->set_file_id(newFileId);
+            end->set_physical_file_id(newPhysicalFileId);
             requireReboundPosition(end, initializedName, "end");
           }
         } else {
@@ -19944,11 +20043,10 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                       static_cast<void *>(pragma));
               ROSE_ABORT();
             }
-            const bool renameStart =
-                start->get_physical_file_id() == originalFileId;
-            const bool renameEnd =
-                end->get_physical_file_id() == originalFileId;
-            if (renameStart != renameEnd) {
+            const bool renameStart = ownsPrimaryPosition(start);
+            const bool renameEnd = ownsPrimaryPosition(end);
+            if (renameStart != renameEnd &&
+                !allowsCrossOccurrenceRange(start, end)) {
               fprintf(stderr,
                       "REX_SAGEBUILDER_INVARIANT[copied-source-pragma]: "
                       "pragma=%p crosses the parsed primary-file boundary\n",
@@ -19957,10 +20055,12 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
             }
             if (renameStart) {
               start->set_file_id(newFileId);
-              start->set_physical_file_id(newFileId);
-              end->set_file_id(newFileId);
-              end->set_physical_file_id(newFileId);
+              start->set_physical_file_id(newPhysicalFileId);
               requireReboundPosition(start, pragma, "start");
+            }
+            if (renameEnd) {
+              end->set_file_id(newFileId);
+              end->set_physical_file_id(newPhysicalFileId);
               requireReboundPosition(end, pragma, "end");
             }
           } else if (SgSourceFile *sourceFile = isSgSourceFile(node)) {
@@ -19975,7 +20075,7 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
               ROSE_ABORT();
             }
             start->set_file_id(newFileId);
-            start->set_physical_file_id(newFileId);
+            start->set_physical_file_id(newPhysicalFileId);
             requireReboundPosition(start, sourceFile, "file");
           }
         }
@@ -19994,9 +20094,9 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
                     expression->class_name().c_str());
             ROSE_ABORT();
           }
-          if (operatorPosition->get_physical_file_id() == originalFileId) {
+          if (ownsPrimaryPosition(operatorPosition)) {
             operatorPosition->set_file_id(newFileId);
-            operatorPosition->set_physical_file_id(newFileId);
+            operatorPosition->set_physical_file_id(newPhysicalFileId);
             requireReboundPosition(operatorPosition, expression, "operator");
           }
         }
@@ -20024,8 +20124,8 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
     void requireReboundPosition(Sg_File_Info *position, SgNode *owner,
                                 const char *role) const {
       if (position->get_raw_filename() != newFileName ||
-          position->get_physical_file_id() != newFileId ||
-          position->get_physical_filename() != newFileName) {
+          position->get_physical_file_id() != newPhysicalFileId ||
+          position->get_physical_filename() != physicalOutputName) {
         fprintf(stderr,
                 "REX_SAGEBUILDER_INVARIANT[copied-source-transfer]: "
                 "node=%p/%s role=%s did not acquire exact output=%s/%d "
@@ -20045,8 +20145,8 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
         const SemanticLogicalIdentity &logicalIdentity) const {
       if (!SageInterface::hasExactSemanticFrontendSourcePosition(owner,
                                                                  position) ||
-          position->get_physical_file_id() != newFileId ||
-          position->get_physical_filename() != newFileName ||
+          position->get_physical_file_id() != newPhysicalFileId ||
+          position->get_physical_filename() != physicalOutputName ||
           position->get_file_id() != logicalIdentity.fileId ||
           position->get_filenameString() != logicalIdentity.fileName ||
           position->get_raw_filename() != logicalIdentity.rawFileName ||
@@ -20080,9 +20180,13 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
 
     const std::string &newFileName;
     int newFileId;
+    const std::string &physicalOutputName;
+    int newPhysicalFileId;
     int originalFileId;
+    unsigned rootOccurrence;
   };
-  Traversal traversal(newFileName, newFileId, originalFileId);
+  Traversal traversal(newFileName, newFileId, physicalOutputName,
+                      newPhysicalFileId, originalFileId, rootOccurrence);
   traversal.traverse(sourceFile, preorder);
   for (SgToken *token : sourceFile->get_token_list()) {
     ROSE_ASSERT(token != nullptr && token->get_parent() == sourceFile);
@@ -20095,39 +20199,68 @@ void SageBuilder::rebindCopiedSourceFilePhysicalIdentity(
       auto primary = streams.extract(originalFileName);
       ROSE_ASSERT(!primary.empty() && primary.mapped() != nullptr);
       ROSE_ASSERT(primary.mapped()->getFileName() == originalFileName);
+      // This map is keyed by the public logical filename used by
+      // getTokenStream; physical positions carry their separate exact owner.
       primary.key() = newFileName;
       primary.mapped()->setFileName(newFileName);
       auto &aliases = primary.mapped()->get_filenameIdSet();
-      if (aliases.erase(originalFileId) != 0)
-        aliases.insert(newFileId);
+      const bool hadPrimaryAlias = aliases.erase(originalFileId) != 0;
       for (PreprocessingInfo *record : primary.mapped()->getList()) {
         ROSE_ASSERT(record != nullptr && record->has_file_info());
         Sg_File_Info *position = record->get_file_info();
-        if (position->get_physical_file_id() == originalFileId) {
+        if (traversal.ownsPrimaryPosition(position)) {
           position->set_file_id(newFileId);
-          position->set_physical_file_id(newFileId);
+          position->set_physical_file_id(newPhysicalFileId);
         }
+      }
+      if (hadPrimaryAlias) {
+        aliases.insert(newPhysicalFileId);
+        if (rootOccurrence != 0 &&
+            std::any_of(
+                primary.mapped()->getList().begin(),
+                primary.mapped()->getList().end(),
+                [&](const PreprocessingInfo *record) {
+                  return record->get_file_info()->get_physical_file_id() ==
+                         originalFileId;
+                }))
+          aliases.insert(originalFileId);
       }
       ROSE_ASSERT(streams.insert(std::move(primary)).inserted);
     }
   }
   if (includeRoot != nullptr) {
-    const std::filesystem::path outputPath(newFileName);
-    includeRoot->set_filename(newFileName);
+    const std::filesystem::path outputPath(physicalOutputName);
+    includeRoot->set_filename(physicalOutputName);
     includeRoot->set_name_used_in_include_directive(
         outputPath.filename().string());
     includeRoot->set_directory_prefix(outputPath.parent_path().string());
   }
 
   if (sourceFile->get_file_info()->get_file_id() != newFileId ||
-      sourceFile->get_file_info()->get_physical_file_id() != newFileId ||
+      sourceFile->get_file_info()->get_physical_file_id() !=
+          newPhysicalFileId ||
       sourceFile->get_file_info()->get_filenameString() != newFileName ||
-      sourceFile->get_file_info()->get_physical_filename() != newFileName) {
+      sourceFile->get_file_info()->get_physical_filename() !=
+          physicalOutputName) {
     fprintf(stderr,
             "REX_SAGEBUILDER_INVARIANT[copied-source-transfer]: source=%p "
             "did not commit exact output=%s/%d\n",
             static_cast<void *>(sourceFile), newFileName.c_str(), newFileId);
     ROSE_ABORT();
+  }
+  if (reboundFortranContext) {
+    SgNode::SourceStateConstruction contextPublication;
+    sourceFile->set_fortran_source_context(std::move(*reboundFortranContext));
+    try {
+      Rose::FortranSource::validate(sourceFile);
+    } catch (const std::runtime_error &error) {
+      fprintf(stderr,
+              "REX_SAGEBUILDER_INVARIANT[copied-fortran-source-context]: "
+              "source=%p output=%s: %s\n",
+              static_cast<void *>(sourceFile), physicalOutputName.c_str(),
+              error.what());
+      ROSE_ABORT();
+    }
   }
 }
 

@@ -3954,6 +3954,10 @@ void Unparse_ExprStmt::unparseEmptyDeclaration(SgStatement *stmt,
     // The common statement path emits the exactly owned preprocessing records.
     // These roles deliberately contribute no independent token.
     return;
+  case SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor:
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-source-anchor]: Fortran "
+                    "preprocessing anchor reached C/C++ syntax emission\n");
+    ROSE_ABORT();
   }
   fprintf(stderr,
           "REX_UNPARSE_INVARIANT[empty-declaration-role]: declaration=%p has "

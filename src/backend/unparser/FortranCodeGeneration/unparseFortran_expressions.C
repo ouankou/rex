@@ -60,7 +60,12 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificExpression(
       ROSE_ABORT();
     }
     curprint("/");
-    curprint(reference->get_use_name().str());
+    if (Rose::FortranSource::selectedOutput(info.get_current_source_file())) {
+      ASSERT_not_null(reference->get_common_block());
+      curprint(reference->get_common_block()->get_block_name());
+    } else {
+      curprint(reference->get_use_name().str());
+    }
     curprint("/");
     break;
   }

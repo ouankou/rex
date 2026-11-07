@@ -364,6 +364,21 @@ unset(_rex_pool_contract_flags)
 unset(_rex_pool_contract_sanitizers)
 
 if(ENABLE-FORTRAN)
+  add_executable(rex_flang_builder_header_contract
+    rex_flang_builder_header_contract.cpp)
+  set_target_properties(rex_flang_builder_header_contract PROPERTIES
+    DISABLE_PRECOMPILE_HEADERS TRUE)
+  target_include_directories(rex_flang_builder_header_contract PRIVATE
+    ${ROSE_TOP_SRC_DIR}/src/frontend/Flang
+    ${ROSE_TOP_SRC_DIR}/src/frontend/Flang/builder)
+  rose_force_system_include_dirs(rex_flang_builder_header_contract
+    ${FLANG_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
+  target_link_libraries(rex_flang_builder_header_contract PRIVATE LLVMSupport)
+  add_test(NAME rex_flang_builder_header_contract
+    COMMAND rex_flang_builder_header_contract)
+  set_tests_properties(rex_flang_builder_header_contract
+    PROPERTIES LABELS "rex;Fortran;frontend;build-system")
+
   add_executable(rex_fortran_lexical_boundary rex_fortran_lexical_boundary.cpp)
   target_include_directories(rex_fortran_lexical_boundary PRIVATE
     ${ROSE_TOP_SRC_DIR}/src)
@@ -1481,6 +1496,103 @@ foreach(language IN LISTS _rex_copied_preprocessing_languages)
 endforeach()
 unset(_rex_copied_preprocessing_languages)
 
+if(ENABLE-FORTRAN)
+  add_executable(rex_sagebuilder_fortran_rebind_contract
+    rex_sagebuilder_fortran_rebind_contract.cpp)
+  target_link_libraries(rex_sagebuilder_fortran_rebind_contract PRIVATE ROSE_DLL)
+  target_include_directories(rex_sagebuilder_fortran_rebind_contract PRIVATE
+    ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII)
+  foreach(_kind IN ITEMS native self)
+    if(_kind STREQUAL "native")
+      set(_source rex_sagebuilder_fortran_rebind_native.f90)
+      set(_includes
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_sagebuilder_fortran_rebind_begin.inc
+        ${CMAKE_CURRENT_SOURCE_DIR}/rex_sagebuilder_fortran_rebind_increment.inc)
+    else()
+      set(_source rex_sagebuilder_fortran_rebind_self.F90)
+      set(_includes)
+    endif()
+    set(_work ${CMAKE_CURRENT_BINARY_DIR}/fortran-rebind-${_kind})
+    add_test(NAME rex_sagebuilder_fortran_rebind_${_kind}
+      COMMAND ${BASH_EXECUTABLE} -c [=[
+        set -eu
+        translator=$1; compiler=$2; source=$3; work=$4; kind=$5; shift 5
+        rm -rf -- "$work"
+        mkdir -p "$work/input"
+        cp -- "$source" "$@" "$work/input/"
+        input="$work/input/${source##*/}"
+        "$compiler" "$input" -o "$work/oracle"
+        "$work/oracle" > "$work/oracle.out"
+        test "$(tr -d '[:space:]' < "$work/oracle.out")" = 7
+        "$translator" "$input" "$work" "$kind"
+        for mode in absolute relative missing; do
+          output="$work/input/$mode.F90"
+          if test "$mode" = missing; then
+            output="$work/absent/nested/missing.F90"
+          fi
+          # Deliberately no -I for the old input directory. Relocation must
+          # preserve native/CPP include semantics in the actual output TU.
+          "$compiler" "$output" -o "$work/translated-$mode"
+          "$work/translated-$mode" > "$work/translated-$mode.out"
+          cmp "$work/oracle.out" "$work/translated-$mode.out"
+        done
+      ]=] dummy $<TARGET_FILE:rex_sagebuilder_fortran_rebind_contract>
+        ${CMAKE_Fortran_COMPILER} ${CMAKE_CURRENT_SOURCE_DIR}/${_source}
+        ${_work} ${_kind} ${_includes})
+    set_tests_properties(rex_sagebuilder_fortran_rebind_${_kind} PROPERTIES
+      LABELS "rex;AST;SageInterface;preprocessing;Fortran;ASTJSON"
+      TIMEOUT 240)
+    set(_negative_work ${CMAKE_CURRENT_BINARY_DIR}/fortran-rebind-${_kind}-symlink-rejected)
+    add_test(NAME rex_sagebuilder_fortran_rebind_${_kind}_symlink_is_rejected
+      COMMAND ${BASH_EXECUTABLE} -c [=[
+        set -eu
+        ulimit -c 0
+        translator=$1; compiler=$2; source=$3; work=$4; kind=$5; shift 5
+        rm -rf -- "$work"
+        mkdir -p "$work/input"
+        cp -- "$source" "$@" "$work/input/"
+        input="$work/input/${source##*/}"
+        "$compiler" "$input" -o "$work/oracle"
+        "$work/oracle" > "$work/oracle.out"
+        test "$(tr -d '[:space:]' < "$work/oracle.out")" = 7
+        # Atomic output validates the destination entry without following it.
+        output="$(realpath "$work/input")/symlink.F90"
+        target="${output%/*}/rex_rebind_symlink_target.txt"
+        printf '%s\n' REX_REBIND_DO_NOT_OVERWRITE > "$target"
+        cp -- "$target" "$work/symlink-target.expected"
+        ln -s "${target##*/}" "$output"
+        set +e
+        "$translator" "$input" "$work" "$kind" reject-symlink \
+          > "$work/symlink-rejected.log" 2>&1
+        status=$?
+        set -e
+        test "$status" -eq 134
+        test "$(grep -Fxc -- \
+          "REX_UNPARSE_INVARIANT[output-permissions]: output=$output is not a regular file; symlinks and other special files are not valid output destinations" \
+          "$work/symlink-rejected.log")" -eq 1
+        test -L "$output"
+        test "$(readlink "$output")" = "${target##*/}"
+        cmp "$work/symlink-target.expected" "$target"
+        cmp "$source" "$input"
+        if find "$work/input" -maxdepth 1 -name '.*.rex-unparse-*' \
+          -print -quit | grep -q .; then
+          echo "unparser left a staging file behind" >&2
+          exit 1
+        fi
+      ]=] dummy $<TARGET_FILE:rex_sagebuilder_fortran_rebind_contract>
+        ${CMAKE_Fortran_COMPILER} ${CMAKE_CURRENT_SOURCE_DIR}/${_source}
+        ${_negative_work} ${_kind} ${_includes})
+    set_tests_properties(rex_sagebuilder_fortran_rebind_${_kind}_symlink_is_rejected
+      PROPERTIES LABELS "rex;AST;SageInterface;preprocessing;Fortran;death"
+      TIMEOUT 120)
+  endforeach()
+  unset(_kind)
+  unset(_source)
+  unset(_includes)
+  unset(_work)
+  unset(_negative_work)
+endif()
+
 add_test(NAME rex_cmake_valgrind_selection
   COMMAND ${REX_TEST_PYTHON_EXECUTABLE}
     ${CMAKE_CURRENT_SOURCE_DIR}/rex_cmake_valgrind_selection.py
@@ -1503,3 +1615,55 @@ add_test(NAME rex_walrus_graph_output
     $<TARGET_FILE:rex_walrus_graph_output>)
 set_tests_properties(rex_walrus_graph_output
   PROPERTIES LABELS "rex;AST;SageInterface;graph")
+
+if(ENABLE-FORTRAN)
+  add_executable(rex_flang_program_unit_include_contract
+    rex_flang_program_unit_include_contract.cpp)
+  target_link_libraries(rex_flang_program_unit_include_contract PRIVATE ROSE_DLL)
+  target_include_directories(rex_flang_program_unit_include_contract PRIVATE
+    ${ROSE_TOP_SRC_DIR}/src/frontend/SageIII)
+  foreach(_kind IN ITEMS implicit closing header procedure whole)
+    set(_source ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_unit_${_kind}.f90)
+    if(_kind STREQUAL "implicit")
+      set(_include rex_flang_unit_implicit_decl.inc)
+    elseif(_kind STREQUAL "closing")
+      set(_include rex_flang_unit_closing_end.inc)
+    elseif(_kind STREQUAL "header")
+      set(_include rex_flang_unit_header_begin.inc)
+    elseif(_kind STREQUAL "procedure")
+      set(_include rex_flang_unit_procedure_end.inc)
+    else()
+      set(_include rex_flang_unit_whole_main.inc)
+    endif()
+    set(_work ${CMAKE_CURRENT_BINARY_DIR}/fortran-unit-${_kind})
+    add_test(NAME rex_flang_program_unit_include_${_kind}
+      COMMAND ${BASH_EXECUTABLE} -c [=[
+        set -eu
+        driver=$1; compiler=$2; source=$3; include=$4; work=$5; kind=$6
+        rm -rf -- "$work"
+        mkdir -p "$work/input"
+        cp -- "$source" "$include" "$work/input/"
+        input="$work/input/${source##*/}"
+        "$compiler" "$input" -o "$work/oracle"
+        "$work/oracle" > "$work/oracle.out"
+        test "$(tr -d '[:space:]' < "$work/oracle.out")" = 7
+        for surface in preserve selected; do
+          "$driver" "$input" "$work" "$kind" "$surface"
+          for phase in live copied restored; do
+            output="$work/input/$phase-$surface.f90"
+            "$compiler" "$output" -o "$work/$phase-$surface"
+            "$work/$phase-$surface" > "$work/$phase-$surface.out"
+            cmp "$work/oracle.out" "$work/$phase-$surface.out"
+          done
+        done
+      ]=] dummy $<TARGET_FILE:rex_flang_program_unit_include_contract>
+        ${CMAKE_Fortran_COMPILER} ${_source}
+        ${CMAKE_CURRENT_SOURCE_DIR}/${_include} ${_work} ${_kind})
+    set_tests_properties(rex_flang_program_unit_include_${_kind} PROPERTIES
+      LABELS "rex;AST;SageInterface;Fortran;UNPARSER;ASTJSON" TIMEOUT 240)
+  endforeach()
+  unset(_kind)
+  unset(_source)
+  unset(_include)
+  unset(_work)
+endif()

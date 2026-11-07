@@ -2785,6 +2785,23 @@ void Grammar::setUpStatements() {
       "std::string", "fortran_directive_semantic_text", "= \"\"",
       NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL,
       NO_DELETE);
+  // A registered compiler directive may use an arbitrary sentinel. Preserve
+  // its actual lexical identity, without the leading comment character.
+  PragmaDeclaration.setDataPrototype(
+      "std::string", "fortran_compiler_directive_sentinel", "= \"\"",
+      NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE,
+      COPY_DATA);
+  // Printable selected lexical syntax, distinct from parser-normalized text
+  // and source macro invocations. Absence means that no producer supplied a
+  // selected surface; an empty value is an owned continuation member.
+  PragmaDeclaration.setDataPrototype(
+      "std::optional<std::string>", "fortran_selected_output_text",
+      "= std::nullopt", NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
+      NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  PragmaDeclaration.setDataPrototype(
+      "SgPragmaDeclaration::fortran_selected_tokens",
+      "fortran_selected_output_tokens", "", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
   // The REX C/C++ preprocessor callback captures both normalized pragma text
   // and the exact source-spelled directive. Preserve the latter, plus whether
   // its top-level token stream came from a macro expansion, as typed frontend

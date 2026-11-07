@@ -610,12 +610,14 @@ public:
 };
 
 class InlineExpressionConstruction {
+  friend class RecordNodeConstruction;
   struct DeleteLiteralTokens {
     void operator()(SgCxxLiteralTokenList *tokens) const;
   };
   std::list<std::unique_ptr<SgCxxLiteralTokenList, DeleteLiteralTokens>>
       tokens_;
   std::list<SgNode *> owned_;
+  std::set<SgNode *> owned_index_;
   std::map<SgNode *, SgNode *> borrowed_parents_;
   void disconnect(SgNode *node) const;
 
@@ -632,14 +634,21 @@ public:
     return node;
   }
   SgCxxLiteralTokenList *ownTokens(SgCxxLiteralTokenList *tokens);
-  bool owns(SgNode *node) const {
-    return std::find(owned_.begin(), owned_.end(), node) != owned_.end();
-  }
+  bool owns(SgNode *node) const { return owned_index_.count(node) != 0; }
   bool empty() const { return owned_.empty(); }
   void transferTo(InlineExpressionConstruction &owner) noexcept;
   void forgetDeletedNodes(const std::unordered_set<SgNode *> &nodes);
   void publish();
+  void publishAst();
   void detachTypeShapeBorrows();
+  void appendOwnedNodes(std::vector<SgNode *> &nodes) const {
+    nodes.insert(nodes.end(), owned_.begin(), owned_.end());
+    for (const auto &tokens : tokens_) {
+      RoseAst tree(tokens.get());
+      for (SgNode *node : tree)
+        nodes.push_back(node);
+    }
+  }
 };
 class SemanticArrayConstruction {
   struct State;
@@ -655,6 +664,7 @@ public:
             std::shared_ptr<InlineExpressionConstruction> shape);
   static SemanticArrayConstruction *current();
   void preparePublish();
+  void publishTo(SemanticArrayConstruction *owner);
   void transferTo(InlineExpressionConstruction &ownership);
   bool owns(SgArrayType *type) const;
   void forgetDeletedNodes(const std::unordered_set<SgNode *> &nodes);
@@ -670,28 +680,71 @@ public:
 bool semanticArrayDependenciesReady(const JsonValue &json,
                                     const SemanticArrayConstruction *owner);
 
+class SourceTypeConstructionScope;
+
 class SourceTypeConstruction {
+  friend class SourceTypeConstructionScope;
   SourceTypeConstruction *previous_;
+  bool active_;
   SemanticArrayConstruction arrays_;
-  SemanticArrayConstructionScope array_scope_{&arrays_};
+  std::optional<SemanticArrayConstructionScope> array_scope_;
   InlineExpressionConstruction ownership_;
   std::vector<uint64_t> identities_;
   static void forgetDeletedNodes(const std::unordered_set<SgNode *> &nodes);
 
 public:
+  enum class Activation { scoped, deferred };
   static SourceTypeConstruction *&current();
-  SourceTypeConstruction();
+  explicit SourceTypeConstruction(Activation activation = Activation::scoped);
   SourceTypeConstruction(const SourceTypeConstruction &) = delete;
   SourceTypeConstruction &operator=(const SourceTypeConstruction &) = delete;
   ~SourceTypeConstruction();
   void take(InlineExpressionConstruction &nodes);
+  void take(SemanticArrayConstruction &arrays) { arrays.publishTo(&arrays_); }
+  void takeRollback(SemanticArrayConstruction &arrays) {
+    arrays.prepareRollback();
+    arrays.transferTo(ownership_);
+  }
+  void rollback();
   SgType *own(SgType *type);
   void recordIdentity(uint64_t identity, const JsonValue &json, SgType *type);
   void preparePublish();
   void publish();
   SgType *publish(SgType *type);
+  void prepareRollback(std::vector<SgNode *> &nodes) {
+    arrays_.prepareRollback();
+    arrays_.transferTo(ownership_);
+    ownership_.detachTypeShapeBorrows();
+    ownership_.appendOwnedNodes(nodes);
+  }
   static void discardAst(SgNode *root);
   static void discardDetachedNode(SgNode *root);
+};
+
+// A deferred forest can survive several attempts and need not be destroyed in
+// stack order. Activate it only while that attempt is actually constructing or
+// rolling back nodes; its captured publication parent remains unchanged.
+class SourceTypeConstructionScope {
+  SourceTypeConstruction *previous_ = nullptr;
+  bool active_ = false;
+  std::optional<SemanticArrayConstructionScope> arrays_;
+
+public:
+  explicit SourceTypeConstructionScope(SourceTypeConstruction *owner) {
+    if (owner != nullptr) {
+      previous_ = SourceTypeConstruction::current();
+      arrays_.emplace(&owner->arrays_);
+      SourceTypeConstruction::current() = owner;
+      active_ = true;
+    }
+  }
+  ~SourceTypeConstructionScope() {
+    if (active_)
+      SourceTypeConstruction::current() = previous_;
+  }
+  SourceTypeConstructionScope(const SourceTypeConstructionScope &) = delete;
+  SourceTypeConstructionScope &
+  operator=(const SourceTypeConstructionScope &) = delete;
 };
 
 std::string rawExtendedFloatingValue(Rose::FloatingValue value);
@@ -1220,39 +1273,130 @@ inline NodeIds mappedNodePointers(const NodeMap &nodes) {
 // A record's node and constructor-created children remain private until
 // every required property has been decoded. Borrowed types and enclosing
 // scopes are not owned by this construction transaction.
+class RecordNodeConstructionScope;
+
 class RecordNodeConstruction {
+  friend class RecordNodeConstructionScope;
+  struct PublicationFrame {
+    RecordNodeConstruction *owner;
+    RecordNodeConstruction *transaction;
+    PublicationFrame *previous;
+  };
   using Owner =
       std::unique_ptr<SgNode,
                       decltype(&SourceTypeConstruction::discardDetachedNode)>;
-  std::vector<Owner> owned_;
+  std::list<Owner> owned_;
+  std::unordered_map<SgNode *, std::list<Owner>::iterator> owned_index_;
   std::unordered_set<SgNode *> borrowed_;
+  std::map<SgNode *, SgNode *> borrowed_parents_;
+  std::unordered_set<SgNode *> managed_types_;
   const NodeIds *mapped_nodes_ = nullptr;
-  bool contains(SgNode *node) const {
-    return std::any_of(owned_.begin(), owned_.end(), [node](const auto &owner) {
-      return owner.get() == node;
-    });
-  }
+  RecordNodeConstruction *previous_ = nullptr;
+  RecordNodeConstruction *publication_parent_ = nullptr;
+  RecordNodeConstruction *prepared_target_ = nullptr;
+  bool transaction_ = false;
+  bool deferred_ = false;
+  bool prepared_ = false;
+  bool published_ = false;
 
-public:
-  RecordNodeConstruction() = default;
-  explicit RecordNodeConstruction(const NodeIds &mapped_nodes)
-      : mapped_nodes_(&mapped_nodes) {}
-  void borrow(SgNode *node) {
-    if (node == nullptr || node->get_parent() != nullptr)
-      throw std::runtime_error(
-          "AST JSON node construction requires an unowned child");
-    borrowed_.insert(node);
+  static RecordNodeConstruction *&activeTransaction() {
+    static thread_local RecordNodeConstruction *active = nullptr;
+    return active;
   }
-  bool isBorrowed(SgNode *node) const {
-    return borrowed_.count(node) != 0 ||
-           (mapped_nodes_ != nullptr && mapped_nodes_->count(node) != 0);
+  static PublicationFrame *&activePublication() {
+    static thread_local PublicationFrame *active = nullptr;
+    return active;
   }
-  SgNode *own(SgNode *node) {
-    if (contains(node))
-      return node;
-    ROSE_ASSERT(node != nullptr);
-    Owner pending(node, &SourceTypeConstruction::discardDetachedNode);
-    owned_.push_back(std::move(pending));
+  static RecordNodeConstruction *
+  currentPublicationTarget(const RecordNodeConstruction *exclude = nullptr) {
+    auto *transaction = activeTransaction();
+    for (auto *frame = activePublication(); frame != nullptr;
+         frame = frame->previous)
+      if (frame->transaction == transaction && frame->owner != exclude)
+        return frame->owner;
+    return transaction != exclude ? transaction : nullptr;
+  }
+  bool contains(SgNode *node) const { return owned_index_.count(node) != 0; }
+  RecordNodeConstruction *publicationTarget() const {
+    return transaction_ ? publication_parent_ : currentPublicationTarget(this);
+  }
+  void prepareTake(size_t owners, size_t borrows) {
+    ROSE_ASSERT(!prepared_);
+    const auto reserve = [](auto &index, size_t added) {
+      const size_t needed = index.size() + added;
+      if (added != 0 && (index.empty() || needed > index.bucket_count() *
+                                                       index.max_load_factor()))
+        index.reserve(std::max(needed, index.size() * 2));
+    };
+    reserve(owned_index_, owners);
+    reserve(borrowed_, borrows);
+  }
+  void prepareTake(const RecordNodeConstruction &other) {
+    prepareTake(other.owned_index_.size(), other.borrowed_.size());
+  }
+  void take(RecordNodeConstruction &other) {
+    owned_index_.merge(other.owned_index_);
+    ROSE_ASSERT(other.owned_index_.empty());
+    borrowed_.merge(other.borrowed_);
+    other.borrowed_.clear();
+    borrowed_parents_.merge(other.borrowed_parents_);
+    other.borrowed_parents_.clear();
+    owned_.splice(owned_.end(), other.owned_);
+  }
+  void takeAst(InlineExpressionConstruction &source) {
+    std::vector<SgNode *> nodes;
+    source.appendOwnedNodes(nodes);
+    std::list<Owner> owners;
+    std::unordered_map<SgNode *, std::list<Owner>::iterator> index;
+    index.reserve(nodes.size());
+    for (SgNode *node : nodes) {
+      if (index.count(node) != 0)
+        continue;
+      ROSE_ASSERT(node != nullptr && !contains(node) && !isBorrowed(node));
+      owners.emplace_back(nullptr,
+                          &SourceTypeConstruction::discardDetachedNode);
+      index.emplace(node, std::prev(owners.end()));
+    }
+    std::unordered_set<SgNode *> borrowed;
+    borrowed.reserve(source.borrowed_parents_.size());
+    for (const auto &entry : source.borrowed_parents_)
+      borrowed.insert(entry.first);
+    prepareTake(index.size(), borrowed.size());
+
+    // All allocations precede the ownership change. The inline guards own
+    // every node until these prepared slots take the complete AST forest.
+    for (const auto &entry : index)
+      entry.second->reset(entry.first);
+    source.owned_.clear();
+    source.owned_index_.clear();
+    for (auto &tokens : source.tokens_)
+      tokens.release();
+    source.tokens_.clear();
+    owned_index_.merge(index);
+    ROSE_ASSERT(index.empty());
+    owned_.splice(owned_.end(), owners);
+    borrowed_.merge(borrowed);
+    borrowed_parents_.merge(source.borrowed_parents_);
+    source.borrowed_parents_.clear();
+  }
+  template <class Action>
+  void forEachNativeSymbolTable(SgNode *root, Action &&action) {
+    std::vector<SgNode *> pending{root};
+    std::unordered_set<SgNode *> visited;
+    for (size_t index = 0; index < pending.size(); ++index) {
+      SgNode *node = pending[index];
+      if (node == nullptr || managed_types_.count(node) != 0 ||
+          (!contains(node) && isBorrowed(node)) || !visited.insert(node).second)
+        continue;
+      if (auto *table = isSgSymbolTable(node))
+        action(table);
+      // These helpers remain exclusively owned by their native destructor.
+      // Their hash symbols require explicit ownership and removal, including
+      // tables nested below SgTypeTable or other destructor-owned helpers.
+      node->appendDestructorOwnedNodes(pending);
+    }
+  }
+  void enrollChildren(SgNode *node) {
     class Children : public SimpleReferenceToPointerHandler {
       RecordNodeConstruction &construction_;
       SgNode *parent_;
@@ -1266,6 +1410,8 @@ public:
       void operator()(SgNode *&edge, const SgName &, bool) override {
         if (edge != nullptr && edge != parent_ &&
             edge->get_parent() == parent_ && !isSg_File_Info(edge)) {
+          if (construction_.managed_types_.count(edge) != 0)
+            return;
           if (construction_.isBorrowed(edge))
             construction_.borrowed_.insert(edge);
           else if (std::find(native_owned_.begin(), native_owned_.end(),
@@ -1275,19 +1421,219 @@ public:
       }
     } children(*this, node);
     node->processDataMemberReferenceToPointers(&children);
+    // Symbol hashes are owning storage outside ROSETTA's pointer fields.
+    forEachNativeSymbolTable(node, [this](SgSymbolTable *table) {
+      for (const auto &entry : *table->get_table()) {
+        ROSE_ASSERT(entry.second != nullptr &&
+                    entry.second->get_parent() == table);
+        own(entry.second);
+      }
+    });
+  }
+  void drainSymbolTables() {
+    for (const auto &owned : owned_)
+      forEachNativeSymbolTable(owned.get(), [this](SgSymbolTable *table) {
+        while (!table->get_table()->empty()) {
+          auto *symbol = table->get_table()->begin()->second;
+          ROSE_ASSERT(contains(symbol) || isBorrowed(symbol));
+          table->remove(symbol);
+        }
+      });
+  }
+
+public:
+  enum class Publication { local, transaction, deferred };
+  static bool hasActiveTransaction() { return activeTransaction() != nullptr; }
+  static void publishAst(InlineExpressionConstruction &source) {
+    if (auto *target = currentPublicationTarget())
+      target->takeAst(source);
+    else
+      source.publish();
+  }
+  RecordNodeConstruction() = default;
+  explicit RecordNodeConstruction(const NodeIds &mapped_nodes,
+                                  Publication publication = Publication::local)
+      : mapped_nodes_(&mapped_nodes),
+        deferred_(publication == Publication::deferred) {
+    ROSE_ASSERT(publication != Publication::transaction);
+  }
+  explicit RecordNodeConstruction(Publication publication)
+      : previous_(activeTransaction()),
+        publication_parent_(currentPublicationTarget()),
+        transaction_(publication == Publication::transaction) {
+    ROSE_ASSERT(transaction_);
+    activeTransaction() = this;
+  }
+  void borrow(SgNode *node) {
+    if (node == nullptr || node->get_parent() != nullptr)
+      throw std::runtime_error(
+          "AST JSON node construction requires an unowned child");
+    borrowed_.insert(node);
+  }
+  bool isBorrowed(SgNode *node) const {
+    if (borrowed_.count(node) != 0 || managed_types_.count(node) != 0 ||
+        (mapped_nodes_ != nullptr && mapped_nodes_->count(node) != 0))
+      return true;
+    for (const auto *active = activeTransaction(); active != nullptr;
+         active = active->previous_)
+      if (active != this && active->contains(node))
+        return true;
+    for (auto *frame = activePublication(); frame != nullptr;
+         frame = frame->previous)
+      if (frame->owner != this && frame->owner->contains(node))
+        return true;
+    return false;
+  }
+  SgNode *own(SgNode *node) {
+    if (contains(node))
+      return node;
+    ROSE_ASSERT(node != nullptr && !prepared_);
+    if (isBorrowed(node)) {
+      borrowed_.insert(node);
+      return node;
+    }
+    Owner pending(node, &SourceTypeConstruction::discardDetachedNode);
+    auto entry = owned_index_.emplace(node, owned_.end()).first;
+    try {
+      owned_.push_back(std::move(pending));
+    } catch (...) {
+      owned_index_.erase(entry);
+      throw;
+    }
+    entry->second = std::prev(owned_.end());
+    enrollChildren(node);
     return node;
   }
   template <class Node, class... Args> Node *make(Args &&...args) {
     auto *node = new Node(std::forward<Args>(args)...);
     return static_cast<Node *>(own(node));
   }
+  void preparePublish() {
+    prepared_target_ = publicationTarget();
+    if (prepared_target_ != nullptr)
+      prepared_target_->prepareTake(*this);
+    prepared_ = true;
+  }
+  void take(InlineExpressionConstruction &source) { takeAst(source); }
+  // Transfer the complete guarded forest. Reserving the destination indexes
+  // precedes every ownership change, and take retains its disjointness check.
+  void publishTo(RecordNodeConstruction &target) {
+    ROSE_ASSERT(!transaction_ && !published_ && &target != this);
+    target.prepareTake(*this);
+    target.take(*this);
+    published_ = true;
+  }
   void publish() {
-    for (auto &node : owned_)
-      node.release();
-    owned_.clear();
-    borrowed_.clear();
+    if (!prepared_)
+      preparePublish();
+    ROSE_ASSERT(publicationTarget() == prepared_target_);
+    if (prepared_target_ != nullptr)
+      prepared_target_->take(*this);
+    else {
+      for (auto &node : owned_)
+        node.release();
+      owned_.clear();
+      owned_index_.clear();
+      borrowed_.clear();
+      borrowed_parents_.clear();
+    }
+    published_ = true;
+    if (transaction_) {
+      ROSE_ASSERT(activeTransaction() == this);
+      activeTransaction() = previous_;
+    }
+  }
+  template <class Action> void forEachSource(Action &&action) const {
+    for (const auto &node : owned_)
+      if (auto *source = isSgSourceFile(node.get()))
+        action(source);
+  }
+  static void forgetDeletedNode(SgNode *node) {
+    const auto forget = [node](RecordNodeConstruction *owner) {
+      const auto found = owner->owned_index_.find(node);
+      if (found != owner->owned_index_.end()) {
+        found->second->release();
+        owner->owned_.erase(found->second);
+        owner->owned_index_.erase(found);
+      }
+      owner->borrowed_.erase(node);
+      owner->borrowed_parents_.erase(node);
+    };
+    for (auto *transaction = activeTransaction(); transaction != nullptr;
+         transaction = transaction->previous_)
+      forget(transaction);
+    for (auto *frame = activePublication(); frame != nullptr;
+         frame = frame->previous)
+      forget(frame->owner);
+  }
+  static void forgetDeletedNodes(const std::unordered_set<SgNode *> &nodes) {
+    for (SgNode *node : nodes)
+      forgetDeletedNode(node);
+  }
+  // Called before type rollback. Keep record declarations/type bases alive,
+  // but remove private AST observers of the separately owned type forest.
+  void prepareRollback(SourceTypeConstruction &types) {
+    ROSE_ASSERT((transaction_ || deferred_) && !published_);
+    prepared_ = false;
+    std::vector<SgNode *> managed;
+    types.prepareRollback(managed);
+    managed_types_.insert(managed.begin(), managed.end());
+    for (auto node = owned_.begin(); node != owned_.end();) {
+      if (managed_types_.count(node->get()) != 0) {
+        owned_index_.erase(node->get());
+        node->release();
+        node = owned_.erase(node);
+      } else
+        ++node;
+    }
+    for (SgNode *node : managed_types_) {
+      borrowed_.erase(node);
+      borrowed_parents_.erase(node);
+    }
+    // Revisit all published roots: linking creates helper scopes, symbols and
+    // other children after their record constructor has returned.
+    for (const auto &node : owned_)
+      enrollChildren(node.get());
+    drainSymbolTables();
+    class DisconnectTypes : public SimpleReferenceToPointerHandler {
+      const std::unordered_set<SgNode *> &managed_;
+      SgNode *owner_;
+
+    public:
+      DisconnectTypes(const std::unordered_set<SgNode *> &managed,
+                      SgNode *owner)
+          : managed_(managed), owner_(owner) {}
+      void operator()(SgNode *&edge, const SgName &, bool) override {
+        if (managed_.count(edge) == 0)
+          return;
+        if (auto *type = isSgType(owner_);
+            type != nullptr &&
+            (edge == type->get_ptr_to() || edge == type->get_ref_to() ||
+             edge == type->get_rvalue_ref_to()))
+          return; // The maintained isolated type deleter retires these caches.
+        if (edge->get_parent() == owner_)
+          edge->set_parent(nullptr);
+        edge = nullptr;
+      }
+    };
+    for (const auto &node : owned_) {
+      DisconnectTypes disconnect(managed_types_, node.get());
+      node->processDataMemberReferenceToPointers(&disconnect);
+    }
+    for (const auto &entry : borrowed_parents_)
+      entry.first->set_parent(entry.second);
+    borrowed_parents_.clear();
   }
   ~RecordNodeConstruction() {
+    prepared_ = false;
+    for (const auto &node : owned_)
+      enrollChildren(node.get());
+    if (transaction_ && !published_) {
+      ROSE_ASSERT(activeTransaction() == this);
+      activeTransaction() = previous_;
+    }
+    // Remove private hash entries before disconnecting symbol bases/parents.
+    drainSymbolTables();
     for (const auto &owned : owned_) {
       if (auto *definition = isSgClassDefinition(owned.get())) {
         auto *declaration = isSgClassDeclaration(definition->get_parent());
@@ -1301,10 +1647,11 @@ public:
           declaration->set_definition(nullptr);
       }
     }
-    for (SgNode *node : borrowed_) {
-      if (contains(node->get_parent()))
+    for (SgNode *node : borrowed_)
+      if (borrowed_parents_.count(node) == 0 && contains(node->get_parent()))
         node->set_parent(nullptr);
-    }
+    for (const auto &entry : borrowed_parents_)
+      entry.first->set_parent(entry.second);
     class Disconnect : public SimpleReferenceToPointerHandler {
       const RecordNodeConstruction &construction_;
 
@@ -1319,6 +1666,31 @@ public:
     for (const auto &node : owned_)
       node->processDataMemberReferenceToPointers(&disconnect);
   }
+};
+
+// Coexisting deferred groups are not a transaction stack. Only the operation
+// currently building a group redirects factory publication to that group.
+class RecordNodeConstructionScope {
+  RecordNodeConstruction::PublicationFrame frame_;
+  bool active_;
+
+public:
+  explicit RecordNodeConstructionScope(RecordNodeConstruction *owner)
+      : frame_{owner, RecordNodeConstruction::activeTransaction(),
+               RecordNodeConstruction::activePublication()},
+        active_(owner != nullptr) {
+    if (active_)
+      RecordNodeConstruction::activePublication() = &frame_;
+  }
+  ~RecordNodeConstructionScope() {
+    if (active_) {
+      ROSE_ASSERT(RecordNodeConstruction::activePublication() == &frame_);
+      RecordNodeConstruction::activePublication() = frame_.previous;
+    }
+  }
+  RecordNodeConstructionScope(const RecordNodeConstructionScope &) = delete;
+  RecordNodeConstructionScope &
+  operator=(const RecordNodeConstructionScope &) = delete;
 };
 
 class SourceDeclaratorScopeConstruction {
@@ -2283,8 +2655,7 @@ struct FunctionModifierFields {
   SgBitVector function;
   SgBitVector special;
 };
-FunctionModifierFields
-functionModifierFieldsFromJson(const NodeRecord &record);
+FunctionModifierFields functionModifierFieldsFromJson(const NodeRecord &record);
 struct FortranInterfaceFields {
   SgName name;
   SgInterfaceStatement::generic_spec_enum kind;
@@ -2490,7 +2861,10 @@ struct PreprocessingInfoFields {
   PreprocessingInfo::RelativePositionType relative;
   bool transformation;
   PreprocessingInfo::OutputPlacementType placement;
+  PreprocessingInfo::FortranSourceRole fortran_source_role;
 };
+SgSourceFile::fortran_source_context
+fortranSourceContextFromJson(const JsonValue &properties);
 std::vector<PreprocessingInfoFields>
 preprocessingInfoFieldsFromJson(const NodeRecord &record);
 PreparedPreprocessingInfo

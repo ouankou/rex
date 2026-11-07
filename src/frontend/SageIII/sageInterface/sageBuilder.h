@@ -2609,7 +2609,13 @@ ROSE_DLL_API SgSourceFile *buildSourceFile(const std::string &inputFileName,
 /*! The source file must still identify the primary file it was parsed from.
  * Positions owned by that primary file are rebound to newFileName. Positions
  * originating in included files retain their exact physical provenance.
- * Incomplete, shared, or mixed source ranges are hard producer errors.
+ * Incomplete or shared source ranges are hard producer errors. Rooted Fortran
+ * transfers only the primary occurrence, preserving included occurrences even
+ * when they refer to the same physical file. Composite Fortran endpoints keep
+ * their independent occurrence identities and canonical lexical order. Mixed
+ * physical ranges outside that validated Fortran contract still fail. The
+ * requested spelling remains the logical identity; its absolute resolved
+ * destination is the physical identity recorded by the Fortran context.
  */
 ROSE_DLL_API void
 rebindCopiedSourceFilePhysicalIdentity(SgSourceFile *sourceFile,

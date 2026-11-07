@@ -11,3 +11,10 @@ tests/nonsmoke/functional/CompileTests/OpenMP_tests/rex_omp_declare_variant_sema
 tests/nonsmoke/functional/CompileTests/OpenACC_tests/rex_openacc_session_first.c
 tests/nonsmoke/functional/CompileTests/sourcePosition_tests/statements.C
 tests/nonsmoke/functional/moveDeclarationTool/referenceResults/**
+
+# Fortran INCLUDE/CPP specimens use the .inc extension; clang-format would
+# rewrite their comment and continuation layout, which changes the program.
+tests/nonsmoke/functional/CompileTests/OpenMP_tests/fortran/*.inc
+tests/nonsmoke/functional/CompileTests/OpenACC_tests/fortran/*.inc
+tests/nonsmoke/unit/SageInterface/rex_flang_unit_*.inc
+tests/nonsmoke/unit/SageInterface/rex_sagebuilder_fortran_rebind_*.inc

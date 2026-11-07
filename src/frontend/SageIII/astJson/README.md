@@ -1,5 +1,13 @@
 # Sage AST JSON Checkpoints
 
+Schema252 requires Fortran source-inclusion context, explicit output surface,
+preprocessing source roles, and printable selected pragma text with exact token
+boundaries and quoted-literal offsets. Compiler directive groups also retain
+their exact registered sentinel. Source
+occurrences and include owners survive copies and checkpoints without frontend
+arena references. Readers reject absent or invalid values and malformed source
+graphs; regenerate older checkpoints. OpenMP producer wire values remain unchanged.
+
 Schema251 requires initialized names' brace-initialization and assignment-copy
 syntax flags. Both readers preserve direct-list versus copy initialization;
 missing or malformed flags are rejected. Regenerate older checkpoints.
@@ -295,7 +303,7 @@ Checkpoint files have this top-level shape:
 ```json
 {
   "format": "rex-sage-ast-json",
-  "schema_version": 248,
+  "schema_version": 252,
   "root_id": 1,
   "project_files_id": 0,
   "root_kind": "SgSourceFile",

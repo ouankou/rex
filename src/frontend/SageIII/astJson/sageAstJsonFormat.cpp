@@ -4,7 +4,7 @@ namespace Rose {
 namespace AstJson {
 
 const char *const kFormat = "rex-sage-ast-json";
-const int kSchemaVersion = 251;
+const int kSchemaVersion = 252;
 
 namespace {
 

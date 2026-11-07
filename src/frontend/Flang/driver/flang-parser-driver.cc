@@ -446,7 +446,9 @@ bool CompileFortran(const std::string &path,
     sourceStream = Rose::builder::CollectFlangSourceStream(
         parseTree, allCookedSources, lexicalSource.cooked(), baseFortranCooked,
         lexicalSource.inactiveProvenanceRanges(),
-        lexicalSource.macroExpansionProvenance(), roseSource->get_openmp(),
+        lexicalSource.macroExpansionProvenance(),
+        lexicalSource.sourceInclusions(), lexicalSource.selectedDirectives(),
+        lexicalSource.directiveSyntaxPrefixes(), roseSource->get_openmp(),
         roseSource->get_openacc(), options.isFixedForm);
   }
 

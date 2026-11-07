@@ -1,5 +1,6 @@
 // tps (01/14/2010) : Switching from rose.h to sage3.
 #include "omp_lowering.h"
+#include "FortranSourceContext.h"
 
 #include "Outliner.hh"
 
@@ -32,6 +33,27 @@ using namespace Rose;
 using namespace SageInterface;
 using namespace SageBuilder;
 using namespace OmpSupport;
+
+void OmpSupport::prepareSourceForOpenMPTransformation(SgNode *node) {
+  auto *statement = isSgStatement(node);
+  // Each transformation retains its own typed-input diagnostics. A missing
+  // statement has no written Fortran surface for this preparation step.
+  if (statement == nullptr)
+    return;
+  auto *file = getEnclosingSourceFile(statement);
+  if (file == nullptr ||
+      !(file->get_Fortran_only() || file->get_F77_only() ||
+        file->get_F90_only() || file->get_F95_only() || file->get_F2003_only()))
+    return;
+  std::vector<const SgStatement *> bodies;
+  if (auto *directive = isSgOmpBodyStatement(statement)) {
+    if (directive->get_body() != nullptr)
+      bodies.push_back(directive->get_body());
+  }
+  Rose::FortranSource::prepareEdit(
+      file, Rose::FortranSource::EditReason::directive_lowering, {statement},
+      bodies);
+}
 
 std::string OmpSupport::getKmpcRuntimeFunctionName(const std::string &abiName) {
   static const std::string prefix = "__kmpc_";
@@ -6599,6 +6621,7 @@ static void transOmpLoop_others(
 }
 
 void transOmpLoop(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpForStatement *target1 = isSgOmpForStatement(node);
   SgOmpDoStatement *target2 = isSgOmpDoStatement(node);
@@ -7175,6 +7198,7 @@ SgFunctionDeclaration *generateOutlinedTask(SgNode *node,
 }
 
 void transOmpParallel(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpParallelStatement *target = isSgOmpParallelStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -8586,6 +8610,7 @@ static SgVariableDeclaration *buildTargetKernelArgsDeclaration(
 void transOmpTargetSpmd(SgNode *node, SgExpression *omp_num_teams,
                         SgExpression *omp_num_threads,
                         SgExpression *kernel_launch_bounds) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
@@ -9792,6 +9817,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
                                    SgExpression *kernel_launch_bounds,
                                    bool has_explicit_num_teams,
                                    bool has_explicit_num_threads) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
@@ -10338,6 +10364,7 @@ void transOmpTargetSpmdWorksharing(SgNode *node, SgExpression *omp_num_teams,
 }
 
 void transOmpLoopInTargetRegion(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
@@ -10354,6 +10381,7 @@ void transOmpLoopInTargetRegion(SgNode *node) {
 
 // transformation for combined directive omp target teams
 void transOmpTargetTeams(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetTeamsStatement *target = isSgOmpTargetTeamsStatement(node);
@@ -10378,6 +10406,7 @@ void transOmpTargetTeams(SgNode *node) {
 
 // transformation for combined directive omp target parallel
 void transOmpTargetParallel(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetParallelStatement *target = isSgOmpTargetParallelStatement(node);
@@ -10403,6 +10432,7 @@ void transOmpTargetParallel(SgNode *node) {
 
 // transformation for omp target
 void transOmpTarget(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetStatement *target = isSgOmpTargetStatement(node);
@@ -10418,6 +10448,7 @@ void transOmpTarget(SgNode *node) {
 
 // transformation for combined directive omp target teams distribute
 void transOmpTargetTeamsDistribute(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetTeamsDistributeStatement *target =
@@ -10445,6 +10476,7 @@ void transOmpTargetTeamsDistribute(SgNode *node) {
 
 // transformation for combined directive omp target parallel for
 void transOmpTargetParallelFor(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetParallelForStatement *target =
@@ -10474,6 +10506,7 @@ void transOmpTargetParallelFor(SgNode *node) {
 // transformation for combined directive omp target teams distribute parallel
 // for
 void transOmpTargetTeamsDistributeParallelFor(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   // Sanity check first
   ROSE_ASSERT(node != NULL);
   SgOmpTargetTeamsDistributeParallelForStatement *target =
@@ -10522,6 +10555,7 @@ void transOmpTargetTeamsDistributeParallelFor(SgNode *node) {
  *   LLVM OpenMP runtime for both C/C++ and Fortran.
  * */
 void transOmpSections(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   //    cout<<"Entering transOmpSections() ..."<<endl;
   ROSE_ASSERT(node != NULL);
   // verify the AST is expected
@@ -10807,6 +10841,7 @@ void transOmpSections(SgNode *node) {
 }
 
 void transOmpAtomic(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpAtomicStatement *target = isSgOmpAtomicStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -10831,6 +10866,7 @@ void transOmpAtomic(SgNode *node) {
 
 //! Translate the ordered directive, (not the ordered clause)
 void transOmpOrdered(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpOrderedStatement *target = isSgOmpOrderedStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -10869,6 +10905,7 @@ static const int kKmpCriticalNameBytes = 32; // kmp_critical_name is int32_t[8]
 static const int kKmpCriticalNameAlignment = alignof(void *);
 
 void transOmpCritical(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpCriticalStatement *target = isSgOmpCriticalStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11061,6 +11098,7 @@ void transOmpCritical(SgNode *node) {
 }
 
 void transOmpTaskwait(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpTaskwaitStatement *target = isSgOmpTaskwaitStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11100,6 +11138,7 @@ void transOmpTaskwait(SgNode *node) {
 
 //! Lower one taskgroup to the exact LLVM OpenMP runtime scope operations.
 void transOmpTaskgroup(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   if (node == nullptr) {
     fprintf(stderr,
             "REX_OMP_LOWERING_INVARIANT[taskgroup-owner]: directive is null\n");
@@ -11182,6 +11221,7 @@ void transOmpTaskgroup(SgNode *node) {
 }
 
 void transOmpBarrier(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpBarrierStatement *target = isSgOmpBarrierStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11221,6 +11261,7 @@ void transOmpBarrier(SgNode *node) {
 
 //! Simply replace the pragma with a function call to __sync_synchronize ();
 void transOmpFlush(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpFlushStatement *target = isSgOmpFlushStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11240,6 +11281,7 @@ void transOmpFlush(SgNode *node) {
 
 // TODO: translate if() and device() clauses
 void transOmpTargetData(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpTargetDataStatement *target = isSgOmpTargetDataStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11404,6 +11446,7 @@ void transOmpTargetData(SgNode *node) {
 }
 
 void transOmpTargetUpdate(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpTargetUpdateStatement *target = isSgOmpTargetUpdateStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11528,6 +11571,7 @@ void transOmpTargetUpdate(SgNode *node) {
 }
 
 void transOmpAllocate(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpAllocateStatement *target = isSgOmpAllocateStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -11541,7 +11585,6 @@ void transOmpAllocate(SgNode *node) {
 
   SgScopeStatement *scope = target->get_scope();
   ROSE_ASSERT(scope != NULL);
-  ensureFortranOmpAllocatorInterfaces(scope);
 
   SgStatement *next_stmt = findNextOriginalStatementInScope(target);
   SgAllocateStatement *allocate_stmt = isSgAllocateStatement(next_stmt);
@@ -11562,6 +11605,12 @@ void transOmpAllocate(SgNode *node) {
            "list to match the following allocate statement exactly";
     ROSE_ABORT();
   }
+
+  Rose::FortranSource::prepareEdit(
+      getEnclosingSourceFile(target),
+      Rose::FortranSource::EditReason::associated_statement_rewrite,
+      {target, allocate_stmt});
+  ensureFortranOmpAllocatorInterfaces(scope);
 
   SgOmpAllocatorClause *allocator_clause = getAllocatorClauseOrAbort(target);
   SgExpression *allocator_expr =
@@ -11601,6 +11650,7 @@ void transOmpAllocate(SgNode *node) {
 }
 
 void transOmpRequires(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpRequiresStatement *target = isSgOmpRequiresStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -12304,6 +12354,7 @@ requireExactPositiveIntegralConstant(SgExpression *expression,
 //! Add __thread for each threadprivate variable's declaration statement and
 //! remove the #pragma omp threadprivate(...)
 void transOmpThreadprivate(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpThreadprivateStatement *target = isSgOmpThreadprivateStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -12510,6 +12561,7 @@ void transOmpThreadprivate(SgNode *node) {
 
 //! Lowers the OMP unroll statement
 void transOmpUnroll(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   if (node == nullptr) {
     fprintf(stderr,
             "REX_OMP_LOWERING_INVARIANT[unroll-owner]: directive is null\n");
@@ -12590,6 +12642,7 @@ void transOmpUnroll(SgNode *node) {
 //! Lowers the OMP tile statement
 // Yes, this is basically the same as the unroll
 void transOmpTile(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   if (node == nullptr) {
     fprintf(stderr,
             "REX_OMP_LOWERING_INVARIANT[tile-owner]: directive is null\n");
@@ -14166,6 +14219,7 @@ static void transOmpVariablesWithContext(
 void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
                        SgExpression *orig_loop_upper /*= NULL*/,
                        bool isAcceleratorModel /*= false*/) {
+  prepareSourceForOpenMPTransformation(ompStmt);
   transOmpVariablesWithContext(ompStmt, bb1, orig_loop_upper,
                                isAcceleratorModel, NULL);
 }
@@ -14175,6 +14229,7 @@ void transOmpVariables(SgStatement *ompStmt, SgBasicBlock *bb1,
 //  Or if (XOMP_master())
 //     { ...  }
 void transOmpMaster(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpMasterStatement *target = isSgOmpMasterStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -14249,6 +14304,7 @@ void transOmpMaster(SgNode *node) {
 }
 
 void transOmpSingle(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   ROSE_ASSERT(node != NULL);
   SgOmpSingleStatement *target = isSgOmpSingleStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -14829,6 +14885,7 @@ SgExprListExp *collapseFortranDoNest(SgOmpClauseBodyStatement *target,
 } // namespace
 
 void transOmpCollapse(SgStatement *node) {
+  prepareSourceForOpenMPTransformation(node);
 
   SgOmpClauseBodyStatement *target = isSgOmpClauseBodyStatement(node);
   ROSE_ASSERT(target != NULL);
@@ -14994,6 +15051,7 @@ void transOmpCollapse(SgStatement *node) {
 //! min(num_tasks, trip_count) nonempty tasks without evaluating the source
 //! loop bounds or num_tasks expression more than once.
 void transOmpTaskloop(SgNode *node) {
+  prepareSourceForOpenMPTransformation(node);
   SgOmpTaskloopStatement *target = isSgOmpTaskloopStatement(node);
   SgScopeStatement *scope = target != nullptr ? target->get_scope() : nullptr;
   SgOmpClauseList *clause_list =

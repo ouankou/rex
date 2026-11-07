@@ -103,8 +103,36 @@ public:
   macroExpansionProvenance() const {
     return sourceRoles_->macros;
   }
+  const std::vector<SourceInclusionProvenance> &sourceInclusions() const {
+    return sourceRoles_->includes;
+  }
+  const std::vector<SelectedDirectiveSource> &selectedDirectives() const {
+    return sourceRoles_->directives;
+  }
+  const std::vector<TokenInvocationSource> &directiveSyntaxPrefixes() const {
+    return sourceRoles_->directive_syntax_prefixes;
+  }
+  void RecordDirectiveSyntaxPrefix(TokenInvocationSource prefix) {
+    CHECK(!prefix.source.empty() && !prefix.spelling.empty());
+    sourceRoles_->directive_syntax_prefixes.push_back(std::move(prefix));
+  }
+  void RecordSelectedDirective(SelectedDirectiveSource directive) {
+    CHECK((directive.cooked_size > 0 ||
+           (directive.lexical_control &&
+            !directive.lexical_control->source.empty())) &&
+          !directive.sentinel.empty() && !directive.output_text.empty());
+    sourceRoles_->directives.push_back(std::move(directive));
+  }
+  void RecordSourceInclusion(SourceInclusionProvenance inclusion) {
+    CHECK(inclusion.file && !inclusion.source.empty() &&
+          !inclusion.source_filename.empty());
+    sourceRoles_->includes.push_back(std::move(inclusion));
+  }
   std::shared_ptr<const TokenInvocationSource>
   CurrentMacroInvocationSource() const;
+  TokenInvocationSource CaptureTokenSource(const TokenSequence &tokens) const {
+    return CaptureMacroInvocationSource(tokens, 0, tokens.SizeInTokens());
+  }
 
   void DefineStandardMacros();
   void Define(const std::string &macro, const std::string &value);
@@ -167,6 +195,9 @@ private:
   struct SourceRoleLedger {
     std::vector<ProvenanceRange> inactive;
     std::vector<MacroExpansionProvenance> macros;
+    std::vector<SourceInclusionProvenance> includes;
+    std::vector<SelectedDirectiveSource> directives;
+    std::vector<TokenInvocationSource> directive_syntax_prefixes;
   };
 
   AllSources &allSources_;

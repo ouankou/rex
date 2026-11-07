@@ -31,6 +31,7 @@
 #include "RoseAst.h"
 
 #include "FortranIntegerSelector.h"
+#include "FortranSourceContext.h"
 #include "IncludeDirective.h"
 #include "Preprocess.hh"
 #include "integerWidth.h"
@@ -74,6 +75,7 @@
 #include <limits>
 #include <list>
 #include <memory>
+#include <stdexcept>
 #include <tuple>
 #include <type_traits>
 
@@ -6202,6 +6204,13 @@ static void publishGeneratedPreprocessingInfoAtPlacement(
             "null\n");
     ROSE_ABORT();
   }
+  if (record->getFortranSourceRole() !=
+      PreprocessingInfo::FortranSourceRole::none) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[generated-preprocessing-kind]: written "
+            "Fortran preprocessing requires logical output publication\n");
+    ROSE_ABORT();
+  }
   const PreprocessingInfo::DirectiveType directive =
       record->getTypeOfDirective();
   const PreprocessingInfo::RelativePositionType position =
@@ -6320,6 +6329,66 @@ void SageInterface::publishGeneratedTrailingComment(PreprocessingInfo *record,
       record, exactOwner, PreprocessingInfo::attached_output_trailing_line);
 }
 
+// A selected Fortran translation unit has one explicit logical output owner.
+// Its written preprocessing records retain their original lexical identities
+// when a transformation transfers them to a runtime statement boundary.
+static SgSourceFile *
+requireFortranPreprocessingPublicationFile(SgLocatedNode *exactOwner) {
+  SgSourceFile *file = exactOwner == nullptr
+                           ? nullptr
+                           : SageInterface::getEnclosingSourceFile(exactOwner);
+  if (file == nullptr || (!file->get_Fortran_only() && !file->get_F77_only() &&
+                          !file->get_F90_only() && !file->get_F95_only() &&
+                          !file->get_F2003_only())) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[fortran-preprocessing-output-owner]: lexical "
+            "record has no attached Fortran output boundary\n");
+    ROSE_ABORT();
+  }
+  return file;
+}
+
+static bool publishFortranSourcePreprocessing(
+    PreprocessingInfo *record, SgLocatedNode *exactOwner,
+    std::unique_ptr<Rose::FortranSource::Context> &context,
+    const Rose::FortranSource::Context::PendingSubtreePublication *publication =
+        nullptr) {
+  if (record == nullptr || record->getFortranSourceRole() ==
+                               PreprocessingInfo::FortranSourceRole::none)
+    return false;
+  SgSourceFile *file = requireFortranPreprocessingPublicationFile(exactOwner);
+  try {
+    if (!context)
+      context = std::make_unique<Rose::FortranSource::Context>(file);
+    const bool canAttach =
+        publication != nullptr
+            ? publication->canAttachSourcePreprocessing(record, exactOwner)
+            : context->canAttachSourcePreprocessing(record, exactOwner);
+    if (!canAttach)
+      throw std::runtime_error(
+          "Fortran source context: preprocessing transfer has no exact "
+          "logical output boundary");
+    switch (record->getOutputPlacement()) {
+    case PreprocessingInfo::source_position:
+      record->setOutputPlacement(PreprocessingInfo::attached_output_boundary);
+      break;
+    case PreprocessingInfo::attached_output_boundary:
+    case PreprocessingInfo::attached_output_trailing_line:
+      break;
+    default:
+      throw std::runtime_error(
+          "Fortran source context: preprocessing transfer has invalid output "
+          "placement");
+    }
+  } catch (const std::runtime_error &error) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[fortran-preprocessing-output-owner]: %s\n",
+            error.what());
+    ROSE_ABORT();
+  }
+  return true;
+}
+
 void SageInterface::relocateAttachedPreprocessingInfoPhysicalOutputOwner(
     PreprocessingInfo *record, SgLocatedNode *priorOwner,
     SgLocatedNode *exactOwner) {
@@ -6343,6 +6412,25 @@ void SageInterface::relocateAttachedPreprocessingInfoPhysicalOutputOwner(
             static_cast<void *>(record), prior.physicalFileId,
             prior.physicalFileOccurrence);
     ROSE_ABORT();
+  }
+
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
+  if (record->getFortranSourceRole() !=
+      PreprocessingInfo::FortranSourceRole::none) {
+    // Source records remain attached to their own descendant node while
+    // the enclosing generated subtree changes its output placement.
+    auto *attachedOwner = record->getAttachedOwner();
+    if (attachedOwner == nullptr ||
+        SageInterface::getEnclosingSourceFile(attachedOwner) !=
+            SageInterface::getEnclosingSourceFile(exactOwner)) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[attached-preprocessing-relocation]: source "
+              "record has a different translation-unit output owner\n");
+      ROSE_ABORT();
+    }
+    if (publishFortranSourcePreprocessing(record, attachedOwner,
+                                          fortranContext))
+      return;
   }
 
   Sg_File_Info *recordInfo = record->get_file_info();
@@ -6405,6 +6493,9 @@ void SageInterface::publishPreprocessingInfoPhysicalOutputOwner(
             static_cast<void *>(record));
     ROSE_ABORT();
   }
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
+  if (publishFortranSourcePreprocessing(record, exactOwner, fortranContext))
+    return;
   Sg_File_Info *recordInfo = record->get_file_info();
   if (record->isTransformation() || recordInfo->isTransformation() ||
       recordInfo->isCompilerGenerated()) {
@@ -6734,6 +6825,10 @@ void SageInterface::publishGeneratedSubtreeOutputOwner(
   const ExactPhysicalOutputOwner owner =
       requireExactPhysicalOutputOwner(exactOwner, "generated-subtree-owner");
 
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
+  std::unique_ptr<Rose::FortranSource::Context::PendingSubtreePublication>
+      fortranPublication;
+  bool inspectedFortranPublication = false;
   RoseAst ast(generatedSubtree);
   for (RoseAst::iterator current = ast.begin(); current != ast.end();
        ++current) {
@@ -6993,7 +7088,37 @@ void SageInterface::publishGeneratedSubtreeOutputOwner(
       // therefore the only valid physical-output authority for every record
       // in that subtree; a descendant becomes attached only after this
       // publication completes.
-      if (generatedRecord) {
+      if (record->getFortranSourceRole() !=
+              PreprocessingInfo::FortranSourceRole::none &&
+          (generatedRecord || record->getOutputPlacement() !=
+                                  PreprocessingInfo::source_position)) {
+        if (!inspectedFortranPublication) {
+          try {
+            if (!fortranContext)
+              fortranContext = std::make_unique<Rose::FortranSource::Context>(
+                  requireFortranPreprocessingPublicationFile(exactOwner));
+            bool pending = SageInterface::getEnclosingSourceFile(
+                               generatedSubtree, true) == nullptr;
+            if (const auto *parent = generatedSubtree->get_parent()) {
+              const auto children = parent->get_traversalSuccessorContainer();
+              pending |= std::count(children.begin(), children.end(),
+                                    generatedSubtree) != 1;
+            }
+            if (pending)
+              fortranPublication = fortranContext->prepareSubtreePublication(
+                  generatedSubtree, exactOwner);
+            inspectedFortranPublication = true;
+          } catch (const std::runtime_error &error) {
+            fprintf(
+                stderr,
+                "REX_AST_INVARIANT[fortran-preprocessing-output-owner]: %s\n",
+                error.what());
+            ROSE_ABORT();
+          }
+        }
+        (void)publishFortranSourcePreprocessing(
+            record, exactOwner, fortranContext, fortranPublication.get());
+      } else if (generatedRecord) {
         if (record->getOutputPlacement() ==
             PreprocessingInfo::attached_output_trailing_line) {
           publishGeneratedTrailingComment(record, exactOwner);
@@ -7002,7 +7127,9 @@ void SageInterface::publishGeneratedSubtreeOutputOwner(
         }
       } else if (record->getOutputPlacement() ==
                  PreprocessingInfo::attached_output_boundary) {
-        publishPreprocessingInfoPhysicalOutputOwner(record, exactOwner);
+        if (!publishFortranSourcePreprocessing(record, exactOwner,
+                                               fortranContext))
+          publishPreprocessingInfoPhysicalOutputOwner(record, exactOwner);
       } else if (recordInfo->isShared() ||
                  recordInfo->get_physical_file_id() < 0) {
         fprintf(stderr,
@@ -7011,6 +7138,16 @@ void SageInterface::publishGeneratedSubtreeOutputOwner(
                 static_cast<void *>(located), located->class_name().c_str());
         ROSE_ABORT();
       }
+    }
+  }
+  if (fortranPublication) {
+    try {
+      fortranPublication->complete();
+    } catch (const std::runtime_error &error) {
+      fprintf(stderr,
+              "REX_AST_INVARIANT[fortran-preprocessing-output-owner]: %s\n",
+              error.what());
+      ROSE_ABORT();
     }
   }
 }
@@ -7076,6 +7213,7 @@ void SageInterface::relocateGeneratedSubtreePhysicalOutputOwner(
     ROSE_ABORT();
   }
 
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
   RoseAst ast(generatedSubtree);
   for (RoseAst::iterator current = ast.begin(); current != ast.end();
        ++current) {
@@ -7280,8 +7418,9 @@ void SageInterface::relocateGeneratedSubtreePhysicalOutputOwner(
           outputPlacement == PreprocessingInfo::attached_output_boundary ||
           outputPlacement == PreprocessingInfo::attached_output_trailing_line;
       if (hasGeneratedOrigin && hasAttachedOutputPlacement) {
-        relocateAttachedPreprocessingInfoPhysicalOutputOwner(record, priorOwner,
-                                                             exactOwner);
+        if (!publishFortranSourcePreprocessing(record, located, fortranContext))
+          relocateAttachedPreprocessingInfoPhysicalOutputOwner(
+              record, priorOwner, exactOwner);
       } else if (hasGeneratedOrigin && generatedRecord) {
         fprintf(stderr,
                 "REX_AST_INVARIANT[generated-subtree-relocation]: node=%p "
@@ -12738,9 +12877,11 @@ void SageInterface::moveCommentsToNewStatement(
     Sg_File_Info *recordInfo = record->get_file_info();
     const auto directive = record->getTypeOfDirective();
     const bool generated =
-        record->isTransformation() ||
-        (recordInfo != nullptr &&
-         (recordInfo->isTransformation() || recordInfo->isCompilerGenerated()));
+        record->getFortranSourceRole() ==
+            PreprocessingInfo::FortranSourceRole::none &&
+        (record->isTransformation() ||
+         (recordInfo != nullptr && (recordInfo->isTransformation() ||
+                                    recordInfo->isCompilerGenerated())));
     const int priorPhysicalFileId = recordInfo != nullptr
                                         ? recordInfo->get_physical_file_id()
                                         : Sg_File_Info::BAD_FILE_ID;
@@ -12772,6 +12913,7 @@ void SageInterface::moveCommentsToNewStatement(
   // owner.  This keeps the source and destination attachment lists valid at
   // every observable boundary instead of temporarily sharing a record and
   // repairing the source list afterward.
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
   auto transfer = [&](const PendingCommentTransfer &pending,
                       SgLocatedNode::PreprocessingInfoInsertion insertion) {
     PreprocessingInfo *detached =
@@ -12784,7 +12926,10 @@ void SageInterface::moveCommentsToNewStatement(
               static_cast<void *>(pending.record));
       ROSE_ABORT();
     }
-    publishPreprocessingInfoPhysicalOutputOwner(detached, destinationStatement);
+    if (!publishFortranSourcePreprocessing(detached, destinationStatement,
+                                           fortranContext))
+      publishPreprocessingInfoPhysicalOutputOwner(detached,
+                                                  destinationStatement);
     destinationStatement->attachPreprocessingInfo(
         detached, pending.destinationPosition, insertion);
   };
@@ -21672,12 +21817,14 @@ void SageInterface::movePreprocessingInfo(
     return;
   }
   (void)requireExactPhysicalOutputOwner(stmtDst, "move-preprocessing-owner");
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
 
   auto transferRecord = [&](PreprocessingInfo *record) {
     const auto position = dstPosition == PreprocessingInfo::undef
                               ? record->getRelativePosition()
                               : dstPosition;
-    publishPreprocessingInfoPhysicalOutputOwner(record, stmtDst);
+    if (!publishFortranSourcePreprocessing(record, stmtDst, fortranContext))
+      publishPreprocessingInfoPhysicalOutputOwner(record, stmtDst);
     stmtSrc->transferPreprocessingInfo(
         record, stmtDst, position,
         usePrepend ? SgLocatedNode::PreprocessingInfoInsertion::front
@@ -21764,6 +21911,7 @@ void SageInterface::pastePreprocessingInfo(
     return;
   }
   (void)requireExactPhysicalOutputOwner(dstNode, "paste-preprocessing-owner");
+  std::unique_ptr<Rose::FortranSource::Context> fortranContext;
 
   AttachedPreprocessingInfoType *destinationRecords =
       dstNode->getAttachedPreprocessingInfo();
@@ -21789,14 +21937,17 @@ void SageInterface::pastePreprocessingInfo(
     if (prependAtPosition) {
       for (auto record = savedRecords.rbegin(); record != savedRecords.rend();
            ++record) {
-        publishPreprocessingInfoPhysicalOutputOwner(*record, dstNode);
+        if (!publishFortranSourcePreprocessing(*record, dstNode,
+                                               fortranContext))
+          publishPreprocessingInfoPhysicalOutputOwner(*record, dstNode);
         dstNode->attachPreprocessingInfo(
             *record, position,
             SgLocatedNode::PreprocessingInfoInsertion::front);
       }
     } else {
       for (PreprocessingInfo *record : savedRecords) {
-        publishPreprocessingInfoPhysicalOutputOwner(record, dstNode);
+        if (!publishFortranSourcePreprocessing(record, dstNode, fortranContext))
+          publishPreprocessingInfoPhysicalOutputOwner(record, dstNode);
         dstNode->attachPreprocessingInfo(
             record, position, SgLocatedNode::PreprocessingInfoInsertion::back);
       }

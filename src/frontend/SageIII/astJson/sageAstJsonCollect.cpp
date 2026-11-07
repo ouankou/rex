@@ -1358,6 +1358,9 @@ void addLocatedPreprocessing(std::vector<std::string> &fields,
       entry.push_back(rawBoolField("transformation", info->isTransformation()));
       entry.push_back(rawIntegerField(
           "output_placement", static_cast<int>(info->getOutputPlacement())));
+      entry.push_back(
+          rawIntegerField("fortran_source_role",
+                          static_cast<int>(info->getFortranSourceRole())));
       preprocessing_entries.push_back(std::move(entry));
     }
     if (!preprocessing_entries.empty()) {

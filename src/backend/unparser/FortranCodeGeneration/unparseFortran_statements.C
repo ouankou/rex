@@ -312,6 +312,29 @@ bool blockDataHasName(const SgProcedureHeaderStatement *procedure) {
     ROSE_ABORT();
   }
 }
+
+bool emitFortranProgramUnitBoundary(
+    Unparser *unparser, const SgFunctionDeclaration *declaration,
+    SgUnparse_Info &info, Rose::FortranSource::ProgramUnitBoundary boundary) {
+  if (declaration->get_definition() == nullptr)
+    return true;
+  auto *file = info.get_current_source_file();
+  if (file == nullptr) {
+    for (const auto *point : {declaration->get_startOfConstruct(),
+                              declaration->get_endOfConstruct()}) {
+      if (point != nullptr && (point->get_source_sequence_number() != 0 ||
+                               point->get_physical_file_occurrence_id() != 0)) {
+        std::cerr << "REX_UNPARSE_INVARIANT[fortran-program-unit-output]: "
+                     "written program unit has no active source context\n";
+        ROSE_ABORT();
+      }
+    }
+    // Standalone manual/generated units retain their existing output policy.
+    return true;
+  }
+  return unparser->fortranSourceContext(file).emitProgramUnitBoundary(
+      declaration, boundary, info.get_current_physical_file_occurrence_id());
+}
 } // namespace
 
 // Unparse language keywords
@@ -420,11 +443,32 @@ void FortranCodeGeneration_locatedNode::unparseStatementNumbers(
   // This is a virtual function (called by the
   // UnparseLanguageIndependentConstructs::unparseStatement() member function).
 
+  if (const auto *declaration = isSgFunctionDeclaration(stmt);
+      declaration != nullptr &&
+      (isSgProgramHeaderStatement(declaration) != nullptr ||
+       isSgProcedureHeaderStatement(declaration) != nullptr) &&
+      !emitFortranProgramUnitBoundary(
+          unp, declaration, info,
+          Rose::FortranSource::ProgramUnitBoundary::header))
+    return;
+
   // DQ (11/29/2008): If this is a CPP directive then don't output statement
   // number or the white space for then in fixed format mode.
   if (isSgC_PreprocessorDirectiveStatement(stmt) != nullptr) {
     return;
   }
+  if (auto *anchor = isSgEmptyDeclaration(stmt)) {
+    anchor->validate_lexical_role();
+    if (anchor->get_lexical_role() ==
+        SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor)
+      return;
+  }
+  if (auto *pragma = isSgPragmaDeclaration(stmt);
+      pragma != nullptr &&
+      Rose::FortranSource::selectedOutput(info.get_current_source_file()) &&
+      pragma->get_fortran_directive_family() !=
+          SgPragmaDeclaration::e_fortran_directive_none)
+    return;
   if (flangParser && isSgLabelStatement(stmt) != nullptr) {
     // Label statements handle their own fixed/free-form alignment.
     return;
@@ -674,6 +718,17 @@ void FortranCodeGeneration_locatedNode::unparseLanguageSpecificStatement(
   case V_SgFortranIncludeLine:
     unparseFortranIncludeLine(stmt, info);
     break;
+  case V_SgEmptyDeclaration: {
+    auto *anchor = isSgEmptyDeclaration(stmt);
+    anchor->validate_lexical_role();
+    if (anchor->get_lexical_role() !=
+        SgEmptyDeclaration::e_empty_declaration_source_preprocessing_anchor) {
+      std::cerr << "REX_UNPARSE_INVARIANT[fortran-empty-declaration]: "
+                   "Fortran source contains an unsupported empty syntax role\n";
+      ROSE_ABORT();
+    }
+    break;
+  }
   case V_SgAllocateStatement:
     unparseAllocateStatement(stmt, info);
     break;
@@ -721,6 +776,9 @@ void FortranCodeGeneration_locatedNode::unparseFortranIncludeLine(
     return;
   SgFortranIncludeLine *includeLine = isSgFortranIncludeLine(stmt);
   ASSERT_not_null(includeLine);
+  if (!unp->fortranSourceContext(info.get_current_source_file())
+           .emitInclude(includeLine))
+    return;
 
   const string includeFileName = includeLine->get_filename();
   if (includeFileName.empty()) {
@@ -766,7 +824,8 @@ void FortranCodeGeneration_locatedNode::unparseEntryStatement(
     curprint(")");
   }
 
-  unp->cur.insert_newline(1);
+  // The statement formatter terminates ENTRY after emitting any source
+  // trailing comment, just as it does for other ordinary statements.
 }
 
 void FortranCodeGeneration_locatedNode::unparseContainsStatement(
@@ -2168,6 +2227,10 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
     // unparseFuncDefnStmt directly
     unparseFuncDefnStmt(proghdr->get_definition(), ninfo);
 
+    if (!emitFortranProgramUnitBoundary(
+            unp, proghdr, info,
+            Rose::FortranSource::ProgramUnitBoundary::closing))
+      return;
     unparseStatementNumbersSupport(proghdr->get_end_numeric_label(), info);
 
     if (hasProgramStatement) {
@@ -2193,6 +2256,10 @@ void FortranCodeGeneration_locatedNode::unparseProgHdrStmt(
   } else {
     // Output only the header syntax while the definition is being emitted by
     // the enclosing SgFunctionDefinition traversal.
+    if (!emitFortranProgramUnitBoundary(
+            unp, proghdr, info,
+            Rose::FortranSource::ProgramUnitBoundary::header))
+      return;
     if (hasProgramStatement) {
       curprint("PROGRAM ");
       curprint(proghdr->get_name().str());
@@ -4043,13 +4110,21 @@ void FortranCodeGeneration_locatedNode::unparseExprStmt(SgStatement *stmt,
 //----------------------------------------------------------------------------
 
 void FortranCodeGeneration_locatedNode::unparsePragmaDeclStmt(
-    SgStatement *stmt, SgUnparse_Info &) {
+    SgStatement *stmt, SgUnparse_Info &info) {
   // Sage node corresponds to Fortran convention !pragma
   SgPragmaDeclaration *pragmaDeclaration = isSgPragmaDeclaration(stmt);
   ASSERT_not_null(pragmaDeclaration);
 
   SgPragma *pragma = pragmaDeclaration->get_pragma();
   ASSERT_not_null(pragma);
+  if (Rose::FortranSource::selectedOutput(info.get_current_source_file()) &&
+      pragmaDeclaration->get_fortran_directive_family() !=
+          SgPragmaDeclaration::e_fortran_directive_none &&
+      unp->fortranSourceContext(info.get_current_source_file())
+          .ownsSourcePoint(pragmaDeclaration->get_file_info())) {
+    unp->emitFortranSelectedDirective(pragmaDeclaration);
+    return;
+  }
 
   switch (pragmaDeclaration->get_fortran_directive_family()) {
   case SgPragmaDeclaration::e_fortran_directive_none:
@@ -4753,6 +4828,10 @@ void FortranCodeGeneration_locatedNode::unparseProcHdrStmt(
     // unparseFuncDefnStmt directly
     unparseFuncDefnStmt(procedureHeader->get_definition(), ninfo);
 
+    if (!emitFortranProgramUnitBoundary(
+            unp, procedureHeader, info,
+            Rose::FortranSource::ProgramUnitBoundary::closing))
+      return;
     unp->cur.insert_newline(1);
 
     // The "END" has just been output by the unparsing of the
@@ -4771,6 +4850,10 @@ void FortranCodeGeneration_locatedNode::unparseProcHdrStmt(
     unp->cur.insert_newline(1);
     unp->cur.insert_newline(2); // FMZ
   } else {
+    if (!emitFortranProgramUnitBoundary(
+            unp, procedureHeader, info,
+            Rose::FortranSource::ProgramUnitBoundary::header))
+      return;
     if (procedureHeader->get_functionModifier().isPure()) {
       curprint("PURE ");
     }

@@ -1124,12 +1124,25 @@ void Preprocessor::Directive(const TokenSequence &dir, Prescanner &prescanner) {
     llvm::raw_string_ostream error{buf};
     if (const SourceFile *included{
             allSources_.Open(include, error, std::move(prependPath))}) {
+      const auto source =
+          CaptureMacroInvocationSource(dir, 0, dir.SizeInTokens());
       if (included->bytes() > 0) {
         ProvenanceRange fileRange{
             allSources_.AddIncludedFile(*included, dir.GetProvenanceRange())};
+        RecordSourceInclusion(SourceInclusionProvenance{
+            SourceInclusionProvenance::Kind::preprocessing_include, included,
+            dir.GetProvenanceRange(), source.source,
+            prescanner.GetNextLineProvenance(), fileRange, include,
+            prescanner.IsFixedForm()});
         Prescanner{prescanner, *this, /*isNestedInIncludeDirective=*/true}
             .set_encoding(included->encoding())
             .Prescan(fileRange);
+      } else {
+        RecordSourceInclusion(SourceInclusionProvenance{
+            SourceInclusionProvenance::Kind::preprocessing_include, included,
+            dir.GetProvenanceRange(), source.source,
+            prescanner.GetNextLineProvenance(), std::nullopt, include,
+            prescanner.IsFixedForm()});
       }
     } else {
       prescanner.Say(dir.GetTokenProvenanceRange(j), "#include: %s"_err_en_US,

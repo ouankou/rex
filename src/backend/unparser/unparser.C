@@ -25,6 +25,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <streambuf>
 #include <string.h>
 #include <sys/stat.h>
@@ -2049,8 +2050,9 @@ Unparser::FortranDirectiveKind Unparser::getFortranDirectiveKind() const {
 }
 
 Unparser::FortranDirectiveContextGuard::FortranDirectiveContextGuard(
-    Unparser *unparser, FortranDirectiveKind kind)
-    : unparser_(unparser), kind_(kind) {
+    Unparser *unparser, FortranDirectiveKind kind, bool exactTokenBoundaries,
+    const std::string &compilerSentinel)
+    : unparser_(unparser), kind_(kind), exact_(exactTokenBoundaries) {
   ASSERT_not_null(unparser_);
   if (kind_ == FortranDirectiveKind::none) {
     fprintf(stderr,
@@ -2067,6 +2069,17 @@ Unparser::FortranDirectiveContextGuard::FortranDirectiveContextGuard(
   }
 
   previous_ = unparser_->getFortranDirectiveKind();
+  previousExact_ = unparser_->exactFortranDirectiveTokens;
+  previousCompilerPrefix_ =
+      unparser_->fortranCompilerDirectiveContinuationPrefix;
+  if ((kind_ == FortranDirectiveKind::compiler) != !compilerSentinel.empty()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-directive-context]: compiler "
+            "context has no exact registered sentinel\n");
+    ROSE_ABORT();
+  }
+  if (!compilerSentinel.empty())
+    compilerPrefix_ = "!" + compilerSentinel + "&";
   if (previous_ != FortranDirectiveKind::none && previous_ != kind_) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[fortran-directive-context]: conflicting "
@@ -2074,6 +2087,8 @@ Unparser::FortranDirectiveContextGuard::FortranDirectiveContextGuard(
     ROSE_ABORT();
   }
   unparser_->setFortranDirectiveKind(kind_);
+  unparser_->exactFortranDirectiveTokens = exact_;
+  unparser_->fortranCompilerDirectiveContinuationPrefix = compilerPrefix_;
   active_ = true;
 }
 
@@ -2081,13 +2096,19 @@ Unparser::FortranDirectiveContextGuard::~FortranDirectiveContextGuard() {
   if (!active_) {
     return;
   }
-  if (unparser_->getFortranDirectiveKind() != kind_) {
+  if (unparser_->getFortranDirectiveKind() != kind_ ||
+      unparser_->exactFortranDirectiveTokens != exact_ ||
+      unparser_->fortranCompilerDirectiveContinuationPrefix !=
+          compilerPrefix_) {
     fprintf(stderr,
             "REX_UNPARSE_INVARIANT[fortran-directive-context]: directive "
             "context changed before its emission completed\n");
     ROSE_ABORT();
   }
   unparser_->setFortranDirectiveKind(previous_);
+  unparser_->exactFortranDirectiveTokens = previousExact_;
+  unparser_->fortranCompilerDirectiveContinuationPrefix =
+      previousCompilerPrefix_;
 }
 
 void Unparser::setFortranDirectiveKind(FortranDirectiveKind kind) {
@@ -2095,6 +2116,9 @@ void Unparser::setFortranDirectiveKind(FortranDirectiveKind kind) {
   case FortranDirectiveKind::none:
   case FortranDirectiveKind::openmp:
   case FortranDirectiveKind::openacc:
+  case FortranDirectiveKind::openmp_extension:
+  case FortranDirectiveKind::cuda:
+  case FortranDirectiveKind::compiler:
     fortranDirectiveKind = kind;
     return;
   }
@@ -2120,9 +2144,16 @@ Unparser::fortranDirectiveContinuationPrefix(bool fixedFormat) const {
   case FortranDirectiveKind::none:
     return nullptr;
   case FortranDirectiveKind::openmp:
-    return fixedFormat ? "!$omp&" : "!$omp& ";
+    return fixedFormat || exactFortranDirectiveTokens ? "!$omp&" : "!$omp& ";
   case FortranDirectiveKind::openacc:
-    return fixedFormat ? "!$acc&" : "!$acc& ";
+    return fixedFormat || exactFortranDirectiveTokens ? "!$acc&" : "!$acc& ";
+  case FortranDirectiveKind::openmp_extension:
+    return fixedFormat || exactFortranDirectiveTokens ? "!$ompx&" : "!$ompx& ";
+  case FortranDirectiveKind::cuda:
+    return fixedFormat || exactFortranDirectiveTokens ? "!$cuf&" : "!$cuf& ";
+  case FortranDirectiveKind::compiler:
+    ROSE_ASSERT(!fortranCompilerDirectiveContinuationPrefix.empty());
+    return fortranCompilerDirectiveContinuationPrefix.c_str();
   }
 
   fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-directive-context]: invalid "
@@ -2382,6 +2413,12 @@ void Unparser::emitFortranCharacterLiteral(const std::string &value,
   }
   literal.push_back(delimiter);
 
+  emitFortranQuotedLiteralSource(literal, delimiter);
+}
+
+void Unparser::emitFortranQuotedLiteralSource(const std::string &literal,
+                                              char delimiter) {
+
   const std::vector<size_t> lexicalBoundaries =
       Rose::FortranLineWrapSupport::stringLiteralLexicalBoundaries(literal,
                                                                    delimiter);
@@ -2433,6 +2470,26 @@ void Unparser::emitFortranCharacterLiteral(const std::string &value,
       ROSE_ABORT();
     }
 
+    if (offset == 0 && exactFortranDirectiveTokens) {
+      // The quoted token has not started. Join the preceding lexical token
+      // (including a kind prefix) without a character-literal continuation.
+      const char *prefix =
+          fortranDirectiveContinuationPrefix(layout.fixedFormat);
+      ROSE_ASSERT(prefix != nullptr);
+      if (!layout.fixedFormat)
+        emitFortranRawText("&");
+      cur.insert_newline(1);
+      emitFortranRawText(prefix);
+      usedColumns = cur.current_col();
+      if (usedColumns < 0 || usedColumns >= layout.textColumns) {
+        fprintf(stderr,
+                "REX_UNPARSE_INVARIANT[fortran-string-wrap]: continuation "
+                "prefix leaves no room for the quoted token\n");
+        ROSE_ABORT();
+      }
+      continue;
+    }
+
     const char *directivePrefix =
         fortranDirectiveContinuationPrefix(layout.fixedFormat);
     if (layout.fixedFormat) {
@@ -2468,6 +2525,59 @@ void Unparser::emitFortranCharacterLiteral(const std::string &value,
       ROSE_ABORT();
     }
   }
+}
+
+void Unparser::emitFortranSelectedDirective(const SgPragmaDeclaration *pragma) {
+  Rose::FortranSource::validateSelectedPragma(pragma);
+  const auto text = pragma->get_fortran_selected_output_text();
+  if (!text.has_value()) {
+    fprintf(stderr,
+            "REX_UNPARSE_INVARIANT[fortran-selected-pragma]: source pragma "
+            "has no authoritative selected output spelling\n");
+    ROSE_ABORT();
+  }
+  if (text->empty())
+    return;
+  FortranDirectiveKind kind;
+  const auto family = pragma->get_fortran_directive_family();
+  switch (family) {
+  case SgPragmaDeclaration::e_fortran_directive_openmp:
+    kind = FortranDirectiveKind::openmp;
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_ompx:
+    kind = FortranDirectiveKind::openmp_extension;
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_openacc:
+    kind = FortranDirectiveKind::openacc;
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_cuda:
+    kind = FortranDirectiveKind::cuda;
+    break;
+  case SgPragmaDeclaration::e_fortran_directive_compiler:
+    kind = FortranDirectiveKind::compiler;
+    break;
+  default:
+    fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-selected-pragma]: selected "
+                    "directive has no exact sentinel family\n");
+    ROSE_ABORT();
+  }
+  FortranDirectiveContextGuard context(
+      this, kind, true, pragma->get_fortran_compiler_directive_sentinel());
+  if (!cur.line_is_empty())
+    cur.insert_newline(1);
+  if (family != SgPragmaDeclaration::e_fortran_directive_compiler)
+    emitFortranText("!$");
+  for (const auto &token : pragma->get_fortran_selected_output_tokens()) {
+    if (token.quoted_literal_offset.has_value()) {
+      const auto offset = *token.quoted_literal_offset;
+      emitFortranText(token.spelling.substr(0, offset));
+      emitFortranQuotedLiteralSource(token.spelling.substr(offset),
+                                     token.spelling[offset]);
+    } else {
+      emitFortranText(token.spelling);
+    }
+  }
+  cur.insert_newline(1);
 }
 
 //-----------------------------------------------------------------------------------
@@ -2651,9 +2761,38 @@ void Unparser::computeNameQualification(
   }
 }
 
+const Rose::FortranSource::Context &
+Unparser::fortranSourceContext(const SgSourceFile *file) {
+  auto found = fortranSourceContexts.find(file);
+  if (found == fortranSourceContexts.end()) {
+    try {
+      found = fortranSourceContexts
+                  .emplace(file,
+                           std::make_unique<Rose::FortranSource::Context>(file))
+                  .first;
+    } catch (const std::runtime_error &error) {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-source-context]: %s\n",
+              error.what());
+      ROSE_ABORT();
+    }
+  }
+  return *found->second;
+}
+
 void Unparser::unparseFile(SgSourceFile *file, SgUnparse_Info &info,
                            SgScopeStatement *unparseScope) {
   ASSERT_not_null(file);
+  if (file->get_Fortran_only() || file->get_F77_only() ||
+      file->get_F90_only() || file->get_F95_only() || file->get_F2003_only()) {
+    try {
+      Rose::FortranSource::validate(file);
+    } catch (const std::runtime_error &error) {
+      fprintf(stderr, "REX_UNPARSE_INVARIANT[fortran-source-context]: %s\n",
+              error.what());
+      ROSE_ABORT();
+    }
+    static_cast<void>(fortranSourceContext(file));
+  }
   info.set_previousStatementUnparsedFromTokenStream(false);
 
   SgSourceFile *sourceFile = info.get_current_source_file();

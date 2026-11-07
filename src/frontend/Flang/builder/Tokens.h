@@ -1,6 +1,8 @@
 #ifndef ROSE_FLANG_BUILDER_TOKENS_H_
 #define ROSE_FLANG_BUILDER_TOKENS_H_
 
+#include "SourcePoint.h"
+
 #include <cstddef>
 #include <string>
 #include <utility>
@@ -38,14 +40,25 @@ enum class PreprocessingDirectiveKind {
   skipped
 };
 
+enum class FortranSourceTokenRole {
+  comment,
+  layout,
+  cpp_control,
+  cpp_inactive,
+  disabled_directive,
+  lexical_control
+};
+
 class Token {
 public:
   Token(TokenKind type, PreprocessingDirectiveKind preprocessingKind,
         std::string path, int beginLine, int beginColumn, int endLine,
-        int endColumn, std::string spelling)
+        int endColumn, std::string spelling,
+        FlangSourcePointIdentity sourcePoint, FortranSourceTokenRole sourceRole)
       : type_{type}, bLine_{beginLine}, eLine_{endLine}, bCol_{beginColumn},
         eCol_{endColumn}, lexeme_{std::move(spelling)}, path_{std::move(path)},
-        preprocessingKind_{preprocessingKind} {}
+        preprocessingKind_{preprocessingKind}, sourcePoint_{sourcePoint},
+        sourceRole_{sourceRole} {}
 
   int getStartLine() const { return bLine_; }
   int getStartCol() const { return bCol_; }
@@ -58,6 +71,10 @@ public:
   }
   const std::string &getLexeme() const { return lexeme_; }
   const std::string &getPath() const { return path_; }
+  const FlangSourcePointIdentity &getSourcePoint() const {
+    return sourcePoint_;
+  }
+  FortranSourceTokenRole getFortranSourceRole() const { return sourceRole_; }
 
 private:
   TokenKind type_;    // token type
@@ -66,6 +83,8 @@ private:
   std::string lexeme_;
   std::string path_;
   PreprocessingDirectiveKind preprocessingKind_;
+  FlangSourcePointIdentity sourcePoint_;
+  FortranSourceTokenRole sourceRole_;
 }; // Token
 
 class TokenStream {

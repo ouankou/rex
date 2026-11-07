@@ -4,7 +4,10 @@
 #define UNPARSER_H
 
 #include <map>
+#include <memory>
 #include <unordered_map>
+
+#include "FortranSourceContext.h"
 
 #include "unparse_format.h"
 
@@ -78,11 +81,20 @@ using UnparsePreprocessingInfoRewriteMap =
  */
 class Unparser {
 public:
-  enum class FortranDirectiveKind { none, openmp, openacc };
+  enum class FortranDirectiveKind {
+    none,
+    openmp,
+    openacc,
+    openmp_extension,
+    cuda,
+    compiler
+  };
 
   class FortranDirectiveContextGuard {
   public:
-    FortranDirectiveContextGuard(Unparser *unparser, FortranDirectiveKind kind);
+    FortranDirectiveContextGuard(Unparser *unparser, FortranDirectiveKind kind,
+                                 bool exactTokenBoundaries = false,
+                                 const std::string &compilerSentinel = {});
     ~FortranDirectiveContextGuard();
 
     FortranDirectiveContextGuard(const FortranDirectiveContextGuard &) = delete;
@@ -93,7 +105,11 @@ public:
     Unparser *unparser_ = nullptr;
     FortranDirectiveKind kind_ = FortranDirectiveKind::none;
     FortranDirectiveKind previous_ = FortranDirectiveKind::none;
+    bool previousExact_ = false;
+    bool exact_ = false;
     bool active_ = false;
+    std::string previousCompilerPrefix_;
+    std::string compilerPrefix_;
   };
 
   struct FortranLineWrapLayout {
@@ -161,6 +177,13 @@ private:
   std::unordered_map<const SgNode *, SgAuxiliaryDeclarationList *>
       exactAuxiliaryOwners;
   FortranDirectiveKind fortranDirectiveKind;
+  bool exactFortranDirectiveTokens = false;
+  std::string fortranCompilerDirectiveContinuationPrefix;
+  void emitFortranQuotedLiteralSource(const std::string &literal,
+                                      char delimiter);
+  std::unordered_map<const SgSourceFile *,
+                     std::unique_ptr<Rose::FortranSource::Context>>
+      fortranSourceContexts;
   void emitFortranRawText(const std::string &text);
 
 public:
@@ -183,6 +206,8 @@ public:
   NameQualificationContext &get_name_qualification_context();
 
   std::string preprocessingInfoText(const PreprocessingInfo *info) const;
+  const Rose::FortranSource::Context &
+  fortranSourceContext(const SgSourceFile *file);
   void claimPreprocessingInfoReceipt(const PreprocessingInfo *record,
                                      const SgLocatedNode *owner,
                                      int relativePosition);
@@ -202,6 +227,7 @@ public:
   void emitFortranText(const std::string &text);
   void emitFortranComment(const std::string &text);
   void emitFortranCharacterLiteral(const std::string &value, char delimiter);
+  void emitFortranSelectedDirective(const SgPragmaDeclaration *pragma);
 
   //! true if SgLocatedNode is part of a transformation on the AST
   bool isPartOfTransformation(SgLocatedNode *n);

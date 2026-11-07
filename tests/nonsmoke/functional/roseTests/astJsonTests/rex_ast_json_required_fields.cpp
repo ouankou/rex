@@ -2919,6 +2919,72 @@ void requireDeclarationConditionPredicatePreflight() {
 }
 
 void requireRecordConstructionOwnership() {
+  using namespace Rose::AstJson;
+  {
+    std::unique_ptr<SgExprListExp, DeleteFixtureAst> original(
+        new SgExprListExp());
+    auto *borrowed = new SgIntVal(11, std::string{});
+    original->append_expression(borrowed);
+    SgType *type = SageBuilder::buildIntType();
+    const auto count = numberOfNodes();
+    for (int repeat = 0; repeat != 10; ++repeat) {
+      {
+        RecordNodeConstruction transaction(
+            RecordNodeConstruction::Publication::transaction);
+        InlineExpressionConstruction ast;
+        ast.borrow(borrowed);
+        auto *right = static_cast<SgExpression *>(
+            ast.own(new SgIntVal(9, std::string{})));
+        ast.own(new SgAddOp(borrowed, right, type));
+        ast.own(new SgInitializedName("rex_unattached_name", type, nullptr));
+        ast.publishAst();
+      }
+      ROSE_ASSERT(numberOfNodes() == count);
+      ROSE_ASSERT(borrowed->get_parent() == original.get() &&
+                  original->get_expressions().front() == borrowed);
+    }
+  }
+  const auto integers = SgIntVal::numberOfNodes();
+  const auto lists = SgExprListExp::numberOfNodes();
+  for (int repeat = 0; repeat != 10; ++repeat) {
+    {
+      RecordNodeConstruction transaction(
+          RecordNodeConstruction::Publication::transaction);
+      SgIntVal *outer = nullptr;
+      {
+        RecordNodeConstruction record;
+        outer = record.make<SgIntVal>(7, std::string{});
+        record.publish();
+      }
+      {
+        RecordNodeConstruction nested(
+            RecordNodeConstruction::Publication::transaction);
+        RecordNodeConstruction record;
+        record.borrow(outer);
+        auto *list = record.make<SgExprListExp>();
+        list->append_expression(outer);
+        record.publish();
+        // Abandoning an inner transaction must restore its outer-owned borrow.
+      }
+      ROSE_ASSERT(SgNode::isLiveNode(outer) && outer->get_parent() == nullptr);
+      ROSE_ASSERT(SgExprListExp::numberOfNodes() == lists);
+      {
+        RecordNodeConstruction nested(
+            RecordNodeConstruction::Publication::transaction);
+        RecordNodeConstruction record;
+        record.make<SgIntVal>(9, std::string{});
+        record.preparePublish();
+        record.publish();
+        nested.preparePublish();
+        nested.publish();
+      }
+      ROSE_ASSERT(SgIntVal::numberOfNodes() == integers + 2);
+      // The enclosing rollback still owns the successfully published inner
+      // node.
+    }
+    ROSE_ASSERT(SgIntVal::numberOfNodes() == integers);
+    ROSE_ASSERT(SgExprListExp::numberOfNodes() == lists);
+  }
   requireRejectedRecordOwnership<SgCommonBlockObject>(
       "SgCommonBlockObject", "{}", "missing key: block_name");
   requireRejectedRecordOwnership<SgNamespaceDefinitionStatement>(
@@ -3812,6 +3878,9 @@ void requireRecordConstructionOwnership() {
     "fortran_directive_raw_text":"",
     "fortran_directive_logical_text":"",
     "fortran_directive_semantic_text":"",
+    "fortran_compiler_directive_sentinel":"",
+    "fortran_selected_output_text":null,
+    "fortran_selected_output_tokens":[],
     "cxx_pragma_payload_kind":0,
     "cxx_source_text":"",
     "cxx_top_level_macro_expansion":false
@@ -18562,6 +18631,219 @@ void requireQualifiedFunctionTypeContract() {
   }
 }
 
+void requireFortranSelectedSourceFields() {
+  using namespace Rose::AstJson;
+  const auto valid = parseJson(R"({"fortran_source_context":{
+    "root_occurrence":1,"root_entry":1,"root_exit":100,
+    "root_path":"/rex_json_source_context.f90","output_surface":1,
+    "inclusions":[{"kind":0,"parent_occurrence":1,
+      "directive_begin":10,"directive_end":20,"child_occurrence":2,
+      "child_entry":21,"child_exit":30,"physical_path":"/rex_json_child.inc",
+      "source_filename":"rex_json_child.inc"}]}})");
+  const auto parsed = fortranSourceContextFromJson(valid);
+  ROSE_ASSERT(parsed.root_occurrence == 1 && parsed.inclusions.size() == 1);
+  ROSE_ASSERT(parsed.output_surface ==
+              SgSourceFile::fortran_output_surface::selected_translation_unit);
+  ROSE_ASSERT(parsed.inclusions.front().kind ==
+              SgSourceFile::fortran_include_kind::native_include);
+  const auto reject = [](const JsonValue &properties,
+                         const std::string &diagnostic) {
+    const auto files = SgSourceFile::numberOfNodes();
+    const auto positions = Sg_File_Info::numberOfNodes();
+    bool rejected = false;
+    try {
+      (void)fortranSourceContextFromJson(properties);
+    } catch (const std::runtime_error &error) {
+      if (std::string(error.what()).find(diagnostic) == std::string::npos)
+        throw;
+      rejected = true;
+    }
+    ROSE_ASSERT(rejected && SgSourceFile::numberOfNodes() == files &&
+                Sg_File_Info::numberOfNodes() == positions);
+  };
+  reject(parseJson("{}"), "missing key: fortran_source_context");
+  for (const char *field : {"root_occurrence", "root_entry", "root_exit",
+                            "root_path", "output_surface", "inclusions"}) {
+    auto malformed = valid;
+    malformed.at("fortran_source_context").object.erase(field);
+    reject(malformed, std::string("missing key: ") + field);
+  }
+  for (bool child : {false, true}) {
+    const std::vector<std::string> fields =
+        child
+            ? std::vector<std::string>{"parent_occurrence", "directive_begin",
+                                       "directive_end",     "child_occurrence",
+                                       "child_entry",       "child_exit"}
+            : std::vector<std::string>{"root_occurrence", "root_entry",
+                                       "root_exit"};
+    for (const auto &field : fields) {
+      for (const char *value : {"-1", "4294967296"}) {
+        auto malformed = valid;
+        auto &object = child ? malformed.at("fortran_source_context")
+                                   .at("inclusions")
+                                   .array.front()
+                             : malformed.at("fortran_source_context");
+        object.object.at(field) = parseJson(value);
+        reject(malformed,
+               "Fortran source " + field + " is outside its unsigned range");
+      }
+    }
+  }
+  for (const char *field : {"kind", "parent_occurrence", "directive_begin",
+                            "directive_end", "child_occurrence", "child_entry",
+                            "child_exit", "physical_path", "source_filename"}) {
+    auto malformed = valid;
+    malformed.at("fortran_source_context")
+        .at("inclusions")
+        .array.front()
+        .object.erase(field);
+    reject(malformed, std::string("missing key: ") + field);
+  }
+  auto malformed = valid;
+  malformed.at("fortran_source_context").at("inclusions") = parseJson("null");
+  reject(malformed, "Fortran source inclusions is not an array");
+  malformed = valid;
+  malformed.at("fortran_source_context").at("output_surface") = parseJson("42");
+  reject(malformed, "Fortran source context has an invalid output_surface");
+  malformed = valid;
+  malformed.at("fortran_source_context")
+      .at("inclusions")
+      .array.front()
+      .at("kind") = parseJson("42");
+  reject(malformed, "Fortran source inclusion has an invalid kind");
+
+  auto holder = std::make_unique<SgNullStatement>();
+  SageInterface::setSourcePosition(holder.get());
+  auto *comment = new PreprocessingInfo(
+      PreprocessingInfo::F90StyleComment, "! retained source role",
+      "rex_json_source_context.f90", 1, 1, 1, PreprocessingInfo::before);
+  comment->setFortranSourceRole(PreprocessingInfo::FortranSourceRole::comment);
+  holder->addToAttachedPreprocessingInfo(comment);
+  NodeRecord record;
+  record.preprocessing =
+      parseJson(rawNodeProperties(holder.get(), {})).at("preprocessing");
+  const auto fields = preprocessingInfoFieldsFromJson(record);
+  ROSE_ASSERT(fields.size() == 1 &&
+              fields.front().fortran_source_role ==
+                  PreprocessingInfo::FortranSourceRole::comment);
+  auto restored = constructPreprocessingInfo(fields);
+  ROSE_ASSERT(restored.front()->getFortranSourceRole() ==
+              PreprocessingInfo::FortranSourceRole::comment);
+  for (const char *value : {"", "42", "true"}) {
+    auto invalid = record;
+    auto &entry = invalid.preprocessing.array.front();
+    if (*value == '\0')
+      entry.object.erase("fortran_source_role");
+    else
+      entry.at("fortran_source_role") = parseJson(value);
+    const std::string diagnostic =
+        *value == '\0' ? "missing key: fortran_source_role"
+        : *value == 't'
+            ? "not a number"
+            : "preprocessing entry has an invalid fortran_source_role";
+    const auto positions = Sg_File_Info::numberOfNodes();
+    bool rejected = false;
+    try {
+      (void)preparePreprocessingInfo(invalid);
+    } catch (const std::runtime_error &error) {
+      if (std::string(error.what()).find(diagnostic) == std::string::npos)
+        throw;
+      rejected = true;
+    }
+    ROSE_ASSERT(rejected && Sg_File_Info::numberOfNodes() == positions);
+  }
+
+  auto *file =
+      SageBuilder::buildGeneratedSourceFile("rex_json_selected_text.cpp");
+  std::unique_ptr<SgProject, DeleteFixtureAst> project(file->get_project());
+  auto *pragma =
+      SageBuilder::buildPragmaDeclaration("rex", file->get_globalScope());
+  file->get_globalScope()->append_statement(pragma);
+  NodeRecord pragma_record;
+  pragma_record.kind = "SgPragmaDeclaration";
+  pragma_record.flags = parseJson(rawNodeFlagsJson(pragma));
+  pragma_record.location = parseJson(rawLocationJson(pragma));
+  pragma_record.properties = parseJson(rawNodeProperties(pragma, {}));
+  ROSE_ASSERT(
+      pragma_record.properties.at("fortran_selected_output_text").kind ==
+      JsonValue::Kind::Null);
+  const auto rejectPragma = [](const NodeRecord &invalid,
+                               const std::string &diagnostic) {
+    auto partial = std::make_unique<SgPragma>("rex");
+    const auto declarations = SgPragmaDeclaration::numberOfNodes();
+    bool rejected = false;
+    try {
+      std::unique_ptr<SgNode, DeleteFixtureAst> unexpected(
+          createNodeFromRecord(invalid, nullptr, partial.get()));
+    } catch (const std::runtime_error &error) {
+      if (std::string(error.what()).find(diagnostic) == std::string::npos)
+        throw;
+      rejected = true;
+    }
+    ROSE_ASSERT(rejected && partial->get_parent() == nullptr &&
+                SgPragmaDeclaration::numberOfNodes() == declarations);
+  };
+  ROSE_ASSERT(pragma_record.properties.at("fortran_compiler_directive_sentinel")
+                  .asString()
+                  .empty());
+  for (const char *value : {"", "42"}) {
+    auto invalid = pragma_record;
+    if (*value == '\0')
+      invalid.properties.object.erase("fortran_compiler_directive_sentinel");
+    else
+      invalid.properties.at("fortran_compiler_directive_sentinel") =
+          parseJson(value);
+    rejectPragma(invalid,
+                 *value == '\0'
+                     ? "missing key: fortran_compiler_directive_sentinel"
+                     : "not a string");
+  }
+  for (const char *value : {"", "42", "\"bad\\u0000payload\""}) {
+    auto invalid = pragma_record;
+    if (*value == '\0')
+      invalid.properties.object.erase("fortran_selected_output_text");
+    else
+      invalid.properties.at("fortran_selected_output_text") = parseJson(value);
+    const std::string diagnostic =
+        *value == '\0'  ? "missing key: fortran_selected_output_text"
+        : *value == '4' ? "not a string"
+                        : "Fortran selected output text contains a NUL byte";
+    rejectPragma(invalid, diagnostic);
+  }
+  const std::vector<std::tuple<const char *, const char *, const char *>>
+      token_mutations{
+          {"", "null", "missing key: fortran_selected_output_tokens"},
+          {"null", "null", "Fortran selected output tokens is not an array"},
+          {R"([{"spelling":"x"}])", R"("x")",
+           "missing key: quoted_literal_offset"},
+          {R"([{"quoted_literal_offset":null}])", R"("x")",
+           "missing key: spelling"},
+          {R"([{"spelling":42,"quoted_literal_offset":null}])", "null",
+           "not a string"},
+          {R"([{"spelling":"x","quoted_literal_offset":"0"}])", R"("x")",
+           "Fortran selected token has a nonnumeric quoted_literal_offset"},
+          {R"([{"spelling":"x","quoted_literal_offset":4294967296}])", R"("x")",
+           "Fortran selected token has an invalid quoted_literal_offset"},
+          {R"([{"spelling":"other","quoted_literal_offset":null}])",
+           R"("expected")",
+           "Fortran selected output tokens have inconsistent payload"},
+          {R"([{"spelling":"x","quoted_literal_offset":null}])", "null",
+           "Fortran selected output tokens have inconsistent payload"},
+          {R"([{"spelling":"\"payload\"","quoted_literal_offset":20}])",
+           R"("\"payload\"")",
+           "Fortran selected output tokens have inconsistent payload"}};
+  for (const auto &[tokens, text, diagnostic] : token_mutations) {
+    auto invalid = pragma_record;
+    invalid.properties.at("fortran_selected_output_text") = parseJson(text);
+    if (*tokens == '\0')
+      invalid.properties.object.erase("fortran_selected_output_tokens");
+    else
+      invalid.properties.at("fortran_selected_output_tokens") =
+          parseJson(tokens);
+    rejectPragma(invalid, diagnostic);
+  }
+}
+
 void requireTokenStreamOwnership() {
   using namespace Rose::AstJson;
   const std::string filename = "rex_ast_json_token_stream.cpp";
@@ -18689,7 +18971,9 @@ void requireTargetAbiContract() {
   NodeRecord source;
   source.kind = "SgSourceFile";
   source.flags = parseJson(R"({"is_modified":false})");
-  source.properties = parseJson(R"({"standard":0,"gnu_standard":false})");
+  source.properties = parseJson(R"({"standard":0,"gnu_standard":false,
+    "fortran_source_context":{"root_occurrence":0,"root_entry":0,
+      "root_exit":0,"root_path":"","inclusions":[],"output_surface":0}})");
   const auto files = SgSourceFile::numberOfNodes();
   const auto globals = SgGlobal::numberOfNodes();
   const auto positions = Sg_File_Info::numberOfNodes();
@@ -20496,7 +20780,10 @@ std::string withValidFortranPragmaProperties(
          "\"fortran_directive_primary\":false,"
          "\"fortran_directive_raw_text\":\"\","
          "\"fortran_directive_logical_text\":\"\","
-         "\"fortran_directive_semantic_text\":\"\"" +
+         "\"fortran_directive_semantic_text\":\"\","
+         "\"fortran_compiler_directive_sentinel\":\"\","
+         "\"fortran_selected_output_text\":null,"
+         "\"fortran_selected_output_tokens\":[]" +
          (members.empty() ? "" : "," + members) + "}";
 }
 
@@ -21265,6 +21552,7 @@ int main() {
   requirePseudoDestructorCallableIdentity();
   requireGraphTypeExpressionConstruction();
   requireInitializerInputBeforeAllocation();
+  requireFortranSelectedSourceFields();
   requireTokenStreamOwnership();
   const auto typedefProperties = [](const std::string &base) {
     return withValidStatementProperties(
@@ -21515,7 +21803,7 @@ int main() {
   requireDeclarationConditionPredicatePreflight();
   requireExternalVariableCopyBinding();
   requireBaseSourceBindingRejection();
-  if (Rose::AstJson::kSchemaVersion != 251) {
+  if (Rose::AstJson::kSchemaVersion != 252) {
     throw std::runtime_error("update the required-fields schema contract");
   }
   {

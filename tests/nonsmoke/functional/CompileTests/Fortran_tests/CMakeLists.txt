@@ -1826,6 +1826,151 @@ rex_add_fortran_module_driver_pair(
   test2020_use_iso_c_binding_3.f90
   test2020_use_iso_c_binding_4.f90)
 
+# A single alias invocation supplies all IF/ELSE/END IF statements, so their
+# physical envelopes coincide while their selected lexical order differs.
+set(_macro_branch_source
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_macro_branch_source.F90)
+set(_macro_branch_base ${CMAKE_CURRENT_BINARY_DIR}/macro-branch-source)
+set(_macro_branch_oracle ${_macro_branch_base}/native-oracle)
+file(MAKE_DIRECTORY ${_macro_branch_oracle})
+add_test(NAME FORTRANTEST_rex_flang_macro_branch_source_native_oracle
+  WORKING_DIRECTORY ${_macro_branch_oracle}
+  COMMAND ${BASH_EXECUTABLE} -c [=[
+    set -eu
+    compiler=$1; source=$2; work=$3
+    rm -f -- "$work/oracle" "$work/oracle.out"
+    "$compiler" "$source" -o "$work/oracle"
+    "$work/oracle" > "$work/oracle.out"
+    test "$(tr -d '[:space:]' < "$work/oracle.out")" = 7
+  ]=] dummy ${CMAKE_Fortran_COMPILER} ${_macro_branch_source} ${_macro_branch_oracle})
+set_tests_properties(FORTRANTEST_rex_flang_macro_branch_source_native_oracle
+  PROPERTIES FIXTURES_SETUP rex_flang_macro_branch_native
+    LABELS "FORTRANTEST;rex;frontend;native-oracle" TIMEOUT 180)
+foreach(_macro_branch_checkpoint IN ITEMS native json)
+  set(_macro_branch_work ${_macro_branch_base}/${_macro_branch_checkpoint})
+  file(MAKE_DIRECTORY ${_macro_branch_work})
+  add_test(NAME FORTRANTEST_rex_flang_macro_branch_source_${_macro_branch_checkpoint}_runtime
+    WORKING_DIRECTORY ${_macro_branch_work}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      translator=$1; compiler=$2; source=$3; work=$4; oracle=$5; checkpoint=$6
+      output="$work/rose_rex_flang_macro_branch_source.F90"
+      rm -f -- "$output" "$work/translated" "$work/translated.out"
+      json_args=()
+      if test "$checkpoint" = json; then
+        json_args=(-rex:ast-json-checkpoint=all "-rex:ast-json-dir=$work/json")
+      fi
+      "$translator" -rose:fortran_std=f90 -rose:skipfinalCompileStep \
+        "${json_args[@]}" -outputdir "$work" -rose:output "$output" -c "$source"
+      "$compiler" "$output" -o "$work/translated"
+      "$work/translated" > "$work/translated.out"
+      cmp "$oracle/oracle.out" "$work/translated.out"
+    ]=] dummy $<TARGET_FILE:testTranslator> ${CMAKE_Fortran_COMPILER}
+      ${_macro_branch_source} ${_macro_branch_work} ${_macro_branch_oracle}
+      ${_macro_branch_checkpoint})
+  set_tests_properties(FORTRANTEST_rex_flang_macro_branch_source_${_macro_branch_checkpoint}_runtime
+    PROPERTIES FIXTURES_REQUIRED rex_flang_macro_branch_native
+      LABELS "FORTRANTEST;rex;frontend;ASTJSON;UNPARSER;runtime" TIMEOUT 180)
+endforeach()
+
+# The generic compiler directive owns its syntax; its trailing real comment
+# must remain one independently owned source record in every output policy.
+set(_compiler_inline_source
+  ${CMAKE_CURRENT_SOURCE_DIR}/rex_flang_compiler_inline_comment.F90)
+set(_compiler_inline_base ${CMAKE_CURRENT_BINARY_DIR}/compiler-inline-comment)
+set(_compiler_inline_oracle ${_compiler_inline_base}/native-oracle)
+file(MAKE_DIRECTORY ${_compiler_inline_oracle})
+add_test(NAME FORTRANTEST_rex_flang_compiler_inline_comment_native_oracle
+  WORKING_DIRECTORY ${_compiler_inline_oracle}
+  COMMAND ${BASH_EXECUTABLE} -c [=[
+    set -eu
+    compiler=$1; source=$2; work=$3
+    rm -f -- "$work/oracle" "$work/oracle.out"
+    "$compiler" "$source" -o "$work/oracle"
+    "$work/oracle" > "$work/oracle.out"
+    test "$(tr -d '[:space:]' < "$work/oracle.out")" = 10
+  ]=] dummy ${CMAKE_Fortran_COMPILER} ${_compiler_inline_source} ${_compiler_inline_oracle})
+set_tests_properties(FORTRANTEST_rex_flang_compiler_inline_comment_native_oracle
+  PROPERTIES FIXTURES_SETUP rex_flang_compiler_inline_native
+    LABELS "FORTRANTEST;rex;frontend;native-oracle" TIMEOUT 180)
+foreach(_compiler_inline_mode IN ITEMS preserve selected)
+  set(_compiler_inline_work ${_compiler_inline_base}/${_compiler_inline_mode})
+  file(MAKE_DIRECTORY ${_compiler_inline_work})
+  add_test(NAME FORTRANTEST_rex_flang_compiler_inline_comment_${_compiler_inline_mode}_contract
+    WORKING_DIRECTORY ${_compiler_inline_work}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      checker=$1; compiler=$2; source=$3; work=$4; oracle=$5; mode=$6
+      "$checker" "compiler-inline-$mode" "$source" "$work"
+      for surface in live copied restored; do
+        rm -f -- "$work/$surface" "$work/$surface.out"
+        "$compiler" "$work/$surface.F90" -o "$work/$surface"
+        "$work/$surface" > "$work/$surface.out"
+        cmp "$oracle/oracle.out" "$work/$surface.out"
+      done
+    ]=] dummy $<TARGET_FILE:rex_flang_source_position_contract>
+      ${CMAKE_Fortran_COMPILER} ${_compiler_inline_source} ${_compiler_inline_work}
+      ${_compiler_inline_oracle} ${_compiler_inline_mode})
+  set_tests_properties(FORTRANTEST_rex_flang_compiler_inline_comment_${_compiler_inline_mode}_contract
+    PROPERTIES FIXTURES_REQUIRED rex_flang_compiler_inline_native
+      LABELS "FORTRANTEST;rex;frontend;ASTJSON;UNPARSER;runtime" TIMEOUT 180)
+endforeach()
+
+# Both ordinary source predicates must preserve exact provenance and runtime
+# behavior through exact copying, raw JSON, and each Fortran output surface.
+foreach(_source_predicate IN ITEMS entry_inline_comment character_continuation_spaces)
+  if(_source_predicate STREQUAL "entry_inline_comment")
+    set(_source_predicate_kind entry)
+  else()
+    set(_source_predicate_kind character)
+  endif()
+  set(_source_predicate_name rex_flang_${_source_predicate})
+  set(_source_predicate_source
+    ${CMAKE_CURRENT_SOURCE_DIR}/${_source_predicate_name}.f90)
+  set(_source_predicate_base ${CMAKE_CURRENT_BINARY_DIR}/${_source_predicate_name})
+  set(_source_predicate_oracle ${_source_predicate_base}/native-oracle)
+  file(MAKE_DIRECTORY ${_source_predicate_oracle})
+  add_test(NAME ${_source_predicate_name}_native_oracle
+    WORKING_DIRECTORY ${_source_predicate_oracle}
+    COMMAND ${BASH_EXECUTABLE} -c [=[
+      set -eu
+      compiler=$1; source=$2; work=$3
+      rm -f -- "$work/oracle" "$work/oracle.out"
+      "$compiler" "$source" -o "$work/oracle"
+      "$work/oracle" > "$work/oracle.out"
+      test "$(tr -d '[:space:]' < "$work/oracle.out")" = 7
+    ]=] dummy ${CMAKE_Fortran_COMPILER} ${_source_predicate_source}
+      ${_source_predicate_oracle})
+  set_tests_properties(${_source_predicate_name}_native_oracle
+    PROPERTIES FIXTURES_SETUP ${_source_predicate_name}_native
+      LABELS "FORTRANTEST;rex;frontend;native-oracle" TIMEOUT 180)
+  foreach(_source_predicate_mode IN ITEMS preserve selected)
+    set(_source_predicate_work
+      ${_source_predicate_base}/${_source_predicate_mode})
+    file(MAKE_DIRECTORY ${_source_predicate_work})
+    add_test(NAME ${_source_predicate_name}_${_source_predicate_mode}_contract
+      WORKING_DIRECTORY ${_source_predicate_work}
+      COMMAND ${BASH_EXECUTABLE} -c [=[
+        set -eu
+        checker=$1; compiler=$2; source=$3; work=$4; oracle=$5; kind=$6; mode=$7
+        "$checker" "source-predicate-$kind-$mode" "$source" "$work"
+        for surface in live copied restored; do
+          rm -f -- "$work/$surface" "$work/$surface.out"
+          "$compiler" "$work/$surface.f90" -o "$work/$surface"
+          "$work/$surface" > "$work/$surface.out"
+          cmp "$oracle/oracle.out" "$work/$surface.out"
+        done
+      ]=] dummy $<TARGET_FILE:rex_flang_source_position_contract>
+        ${CMAKE_Fortran_COMPILER} ${_source_predicate_source}
+        ${_source_predicate_work} ${_source_predicate_oracle}
+        ${_source_predicate_kind} ${_source_predicate_mode})
+    set_tests_properties(${_source_predicate_name}_${_source_predicate_mode}_contract
+      PROPERTIES FIXTURES_REQUIRED ${_source_predicate_name}_native
+        LABELS "FORTRANTEST;rex;frontend;ASTJSON;UNPARSER;runtime" TIMEOUT 180
+        ENVIRONMENT "ROSE_TEST_OUTPUT_DIR=${_source_predicate_work}")
+  endforeach()
+endforeach()
+
 get_property(_fortran_registered_tests DIRECTORY PROPERTY TESTS)
 foreach(_test IN LISTS _fortran_registered_tests)
   if(_test MATCHES "^FORTRANTEST_" OR _test MATCHES "^fortran_")

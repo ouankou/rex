@@ -70,7 +70,8 @@ PreprocessingInfo::PreprocessingInfo(DirectiveType dt,
 }
 
 PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo)
-    : outputPlacement(prepInfo.outputPlacement), attachedOwner(nullptr) {
+    : outputPlacement(prepInfo.outputPlacement),
+      fortranSourceRole(prepInfo.fortranSourceRole), attachedOwner(nullptr) {
   ROSE_ASSERT(prepInfo.file_info != NULL);
   auto position = std::make_unique<Sg_File_Info>(*prepInfo.file_info);
   file_info = position.get();
@@ -93,6 +94,32 @@ PreprocessingInfo::PreprocessingInfo(const PreprocessingInfo &prepInfo)
 }
 
 PreprocessingInfo::~PreprocessingInfo() { delete file_info; }
+
+void PreprocessingInfo::setFortranSourceRole(FortranSourceRole role) {
+  if (role != fortranSourceRole &&
+      (attachedOwner != nullptr ||
+       fortranSourceRole != FortranSourceRole::none)) {
+    fprintf(stderr,
+            "REX_AST_INVARIANT[fortran-source-role]: source classification "
+            "cannot change after publication\n");
+    ROSE_ABORT();
+  }
+  switch (role) {
+  case FortranSourceRole::none:
+  case FortranSourceRole::comment:
+  case FortranSourceRole::layout:
+  case FortranSourceRole::cpp_control:
+  case FortranSourceRole::cpp_inactive:
+  case FortranSourceRole::disabled_directive:
+  case FortranSourceRole::lexical_control:
+    fortranSourceRole = role;
+    return;
+  }
+  fprintf(stderr,
+          "REX_AST_INVARIANT[fortran-source-role]: invalid source role=%d\n",
+          static_cast<int>(role));
+  ROSE_ABORT();
+}
 
 // Source columns are 1-based.
 int PreprocessingInfo::getColumnNumberOfEndOfString() const {

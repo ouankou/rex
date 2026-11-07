@@ -1,0 +1,3 @@
+!$omp end parallel ! REX_INCLUDE_REPEAT_END
+! REX_INCLUDE_REPEAT_OUTSIDE
+!$omp parallel ! REX_INCLUDE_REPEAT_BEGIN

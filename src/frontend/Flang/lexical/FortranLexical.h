@@ -35,6 +35,9 @@ public:
   const std::vector<Fortran::parser::ProvenanceRange> &
   inactiveProvenanceRanges() const;
   const std::vector<MacroExpansionProvenance> &macroExpansionProvenance() const;
+  const std::vector<SourceInclusionProvenance> &sourceInclusions() const;
+  const std::vector<SelectedDirectiveSource> &selectedDirectives() const;
+  const std::vector<TokenInvocationSource> &directiveSyntaxPrefixes() const;
   void EmitPreprocessedSource(llvm::raw_ostream &, bool lineDirectives) const;
   void DumpProvenance(llvm::raw_ostream &) const;
 

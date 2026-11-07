@@ -803,7 +803,10 @@ void UnparseFormat::format(SgLocatedNode *node, SgUnparse_Info &info,
     int v1 = (prevnode == 0) ? 0 : prevnode->variantT();
     switch (opt) {
     case FORMAT_AFTER_STMT:
-      if (v == V_SgFunctionDefinition || v == V_SgClassDefinition)
+      // ENTRY has no body: its line ends at this statement boundary, after
+      // the common unparser has emitted any source trailing comment.
+      if (v == V_SgFunctionDefinition || v == V_SgClassDefinition ||
+          v == V_SgEntryStatement)
         insert_newline(1); // DXN: changed from 2 to 1
       break;
     case FORMAT_BEFORE_STMT: {

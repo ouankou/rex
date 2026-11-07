@@ -20,6 +20,7 @@ class SgNameGroup;
 namespace Rose::builder {
 
 struct FlangDirectiveGroup;
+struct FlangSourceInclude;
 
 enum class SeparateShapeSourceProducerKind {
   dimension,
@@ -479,6 +480,7 @@ public:
   void Build(Fortran::parser::ArithmeticIfStmt &);
 
   void Done();
+  void FinishSourceIncludes(SgScopeStatement *scope);
 
   void BuildPrefix(std::list<Fortran::parser::PrefixSpec> &,
                    LanguageTranslation::FunctionModifierList &);
@@ -668,6 +670,12 @@ private:
   void MaybeInsertIncludeLine(const Fortran::parser::CharBlock &source);
   void MaybeInsertIncludeLine(const Fortran::parser::CharBlock &source,
                               SgScopeStatement *lexical_owner);
+  void FlushSourceIncludesBefore(unsigned int order,
+                                 SgScopeStatement *lexical_owner);
+  void MaterializeSourceInclude(const FlangSourceInclude &,
+                                SgScopeStatement *lexical_owner);
+  void MaterializeSourcePreprocessingInclude(const FlangSourceInclude &,
+                                             SgScopeStatement *lexical_owner);
   void
   PredeclareFortranExplicitEntities(Fortran::parser::SpecificationPart &spec);
   void ConsumePredeclaredFortranExplicitEntities(
@@ -735,6 +743,9 @@ private:
   StatementSourceFrame current_stmt_source_;
   std::vector<StatementSourceFrame> stmt_source_stack_;
   std::vector<MaterializedFortranInclude> materialized_fortran_includes_;
+  std::unordered_map<std::size_t, std::size_t> source_include_materializations_;
+  std::unordered_map<std::size_t, SgEmptyDeclaration *> cpp_include_anchors_;
+  std::size_t next_source_include_{0};
   std::vector<PendingTypedFortranDirective> pending_typed_directives_;
   std::vector<MaterializedTypedFortranDirective> materialized_typed_directives_;
   std::vector<LabelDoFrame> label_do_stack_;

@@ -570,6 +570,10 @@ void Grammar::setUpSupport() {
                               "= SgSourceFile::target_abi_info()",
                               NO_CONSTRUCTOR_PARAMETER, BUILD_ACCESS_FUNCTIONS,
                               NO_TRAVERSAL, NO_DELETE, COPY_DATA);
+  SourceFile.setDataPrototype(
+      "SgSourceFile::fortran_source_context", "fortran_source_context",
+      "= SgSourceFile::fortran_source_context()", NO_CONSTRUCTOR_PARAMETER,
+      BUILD_ACCESS_FUNCTIONS, NO_TRAVERSAL, NO_DELETE, COPY_DATA);
 
   SourceFile.setDataPrototype(
       "SgTokenPtrList", "token_list", "", NO_CONSTRUCTOR_PARAMETER,
