@@ -373,7 +373,10 @@ if(ENABLE-FORTRAN)
     ${ROSE_TOP_SRC_DIR}/src/frontend/Flang/builder)
   rose_force_system_include_dirs(rex_flang_builder_header_contract
     ${FLANG_INCLUDE_DIRS} ${LLVM_INCLUDE_DIRS})
-  target_link_libraries(rex_flang_builder_header_contract PRIVATE LLVMSupport)
+  # Link the same LLVM library as ROSE_DLL.  The static LLVMSupport package
+  # target carries LLVM's optional external link interface (zstd), which a
+  # REX build does not otherwise require.
+  target_link_libraries(rex_flang_builder_header_contract PRIVATE ${LLVM_LIBS})
   add_test(NAME rex_flang_builder_header_contract
     COMMAND rex_flang_builder_header_contract)
   set_tests_properties(rex_flang_builder_header_contract
